@@ -1,0 +1,16 @@
+<idea-plugin>
+    <id>com.github.idea-claude-code-gui</id>
+    <name>Claude Code GUI</name>
+    <vendor>Your Name</vendor>
+    <description>IntelliJ IDEA plugin for viewing Claude Code history with an intuitive GUI</description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- 注册右侧工具窗口 -->
+        <toolWindow id="CC-GUI"
+                    anchor="right"
+                    factoryClass="com.github.claudecodegui.CCGuiToolWindowFactorySimple"
+                    icon="/icons/cc-gui-icon.svg"/>
+    </extensions>
+</idea-plugin>

@@ -1,0 +1,58 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.intellij' version '1.17.0'
+}
+
+group 'com.github.idea-claude-code-gui'
+version '0.0.1'
+
+sourceCompatibility = 17
+targetCompatibility = 17
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.jetbrains:annotations:24.0.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+}
+
+// 配置 IntelliJ Platform 插件
+intellij {
+    version = '2023.3.2'  // 目标 IDEA 版本
+    type = 'IC'  // IC = IntelliJ IDEA Community Edition
+
+    // 下载源码和 JavaDoc
+    downloadSources = true
+
+    // 插件依赖（如果需要）
+    plugins = []
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+patchPluginXml {
+    sinceBuild = '233'
+    untilBuild = '252.*'  // 更新为支持2024.2版本
+
+    changeNotes = """
+        <ul>
+            <li>初始版本发布</li>
+            <li>添加 Vue.js 视图支持</li>
+            <li>实现右侧工具栏窗口</li>
+            <li>更新支持IDEA 2024.2版本</li>
+        </ul>
+    """
+}
+
+runIde {
+    // 启用 JCEF 支持
+    jvmArgs '-Djcef.sandbox.enable=false'
+}
+
+buildSearchableOptions {
+    enabled = false
+}
