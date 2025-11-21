@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.github.idea-claude-code-gui'
-version '0.0.1'
+version '0.0.2'
 
 sourceCompatibility = 17
 targetCompatibility = 17
@@ -60,17 +60,19 @@ buildSearchableOptions {
 }
 
 def claudeBridgeDir = file("claude-bridge")
-def claudeBridgePackDir = file("$buildDir/claude-bridge-pack/claude-bridge")
+def claudeBridgePackDir = file("$buildDir/claude-bridge-pack")
+def claudeBridgeArchive = new File(claudeBridgePackDir, "claude-bridge.zip")
 
-tasks.register('copyClaudeBridge', Copy) {
+tasks.register('packageClaudeBridge', Zip) {
     onlyIf { claudeBridgeDir.exists() }
+    archiveFileName = "claude-bridge.zip"
+    destinationDirectory = claudeBridgePackDir
     from(claudeBridgeDir)
-    into(claudeBridgePackDir)
     includeEmptyDirs = true
 }
 
 tasks.named("prepareSandbox") {
-    dependsOn("copyClaudeBridge")
+    dependsOn("packageClaudeBridge")
     doLast {
         if (!claudeBridgeDir.exists()) {
             throw new GradleException("claude-bridge 目录不存在，请确保已拉取并安装依赖。")
@@ -79,11 +81,17 @@ tasks.named("prepareSandbox") {
         def intellijExt = project.extensions.getByType(IntelliJPluginExtension)
         def pluginName = intellijExt.pluginName.getOrElse(project.name)
         def pluginDir = new File(sandboxRoot, "plugins/${pluginName}")
-        def target = new File(pluginDir, "claude-bridge")
-        project.delete(target)
+        def extractedDir = new File(pluginDir, "claude-bridge")
+        def archiveTarget = new File(pluginDir, "claude-bridge.zip")
+        project.delete(extractedDir)
+        project.delete(archiveTarget)
         project.copy {
-            from(claudeBridgePackDir)
-            into(target)
+            from(claudeBridgeArchive)
+            into(pluginDir)
         }
     }
+}
+
+tasks.named("buildPlugin") {
+    dependsOn("packageClaudeBridge")
 }

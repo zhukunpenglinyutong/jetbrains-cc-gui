@@ -7,11 +7,17 @@ import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.extensions.PluginId;
+import com.intellij.openapi.util.io.FileUtil;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.CodeSource;
@@ -20,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * Claude Agent SDK 桥接类
@@ -29,6 +37,8 @@ public class ClaudeSDKBridge {
 
     private static final String SDK_DIR_NAME = "claude-bridge";
     private static final String NODE_SCRIPT = "simple-query.js";
+    private static final String SDK_ARCHIVE_NAME = "claude-bridge.zip";
+    private static final String BRIDGE_VERSION_FILE = ".bridge-version";
     private static final String BRIDGE_PATH_PROPERTY = "claude.bridge.path";
     private static final String BRIDGE_PATH_ENV = "CLAUDE_BRIDGE_PATH";
     private static final String PLUGIN_ID = "com.github.idea-claude-code-gui";
@@ -36,6 +46,7 @@ public class ClaudeSDKBridge {
     private final Gson gson = new Gson();
     private String nodeExecutable = null;
     private File sdkTestDir = null;
+    private final Object bridgeExtractionLock = new Object();
 
     /**
      * SDK 消息回调接口
@@ -73,6 +84,12 @@ public class ClaudeSDKBridge {
         File configuredDir = resolveConfiguredBridgeDir();
         if (configuredDir != null) {
             sdkTestDir = configuredDir;
+            return sdkTestDir;
+        }
+
+        File embeddedDir = ensureEmbeddedBridgeExtracted();
+        if (embeddedDir != null) {
+            sdkTestDir = embeddedDir;
             return sdkTestDir;
         }
 
@@ -682,6 +699,102 @@ public class ClaudeSDKBridge {
 
     private boolean isRootDirectory(File dir) {
         return dir.getParentFile() == null;
+    }
+
+    private File ensureEmbeddedBridgeExtracted() {
+        try {
+            PluginId pluginId = PluginId.getId(PLUGIN_ID);
+            IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
+            if (descriptor == null) {
+                return null;
+            }
+
+            File pluginDir = descriptor.getPluginPath().toFile();
+            File archiveFile = new File(pluginDir, SDK_ARCHIVE_NAME);
+            if (!archiveFile.exists()) {
+                return null;
+            }
+
+            File extractedDir = new File(pluginDir, SDK_DIR_NAME);
+            String signature = descriptor.getVersion() + ":" + archiveFile.lastModified();
+            File versionFile = new File(extractedDir, BRIDGE_VERSION_FILE);
+
+            if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
+                return extractedDir;
+            }
+
+            synchronized (bridgeExtractionLock) {
+                if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
+                    return extractedDir;
+                }
+
+                System.out.println("未检测到已解压的 claude-bridge，开始解压: " + archiveFile.getAbsolutePath());
+                deleteDirectory(extractedDir);
+                unzipArchive(archiveFile, extractedDir);
+                Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
+            }
+
+            if (isValidBridgeDir(extractedDir)) {
+                System.out.println("✓ claude-bridge 解压完成: " + extractedDir.getAbsolutePath());
+                return extractedDir;
+            }
+
+            System.err.println("⚠️ claude-bridge 解压后结构无效: " + extractedDir.getAbsolutePath());
+        } catch (Exception e) {
+            System.err.println("⚠️ 自动解压 claude-bridge 失败: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private boolean bridgeSignatureMatches(File versionFile, String expectedSignature) {
+        if (versionFile == null || !versionFile.exists()) {
+            return false;
+        }
+        try {
+            String content = Files.readString(versionFile.toPath(), StandardCharsets.UTF_8).trim();
+            return expectedSignature.equals(content);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private void deleteDirectory(File dir) {
+        if (dir == null || !dir.exists()) {
+            return;
+        }
+        if (!FileUtil.delete(dir)) {
+            System.err.println("⚠️ 无法删除目录: " + dir.getAbsolutePath());
+        }
+    }
+
+    private void unzipArchive(File archiveFile, File targetDir) throws IOException {
+        Files.createDirectories(targetDir.toPath());
+        Path targetPath = targetDir.toPath();
+        byte[] buffer = new byte[8192];
+
+        try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(archiveFile)))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path resolvedPath = targetPath.resolve(entry.getName()).normalize();
+                if (!resolvedPath.startsWith(targetPath)) {
+                    throw new IOException("检测到不安全的 Zip 条目: " + entry.getName());
+                }
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(resolvedPath);
+                } else {
+                    Files.createDirectories(resolvedPath.getParent());
+                    try (FileOutputStream fos = new FileOutputStream(resolvedPath.toFile())) {
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            fos.write(buffer, 0, len);
+                        }
+                    }
+                }
+
+                zis.closeEntry();
+            }
+        }
     }
 
     // ============================================================================
