@@ -68,6 +68,7 @@ tasks.register('packageClaudeBridge', Zip) {
     archiveFileName = "claude-bridge.zip"
     destinationDirectory = claudeBridgePackDir
     from(claudeBridgeDir)
+    exclude("node_modules/.pnpm/**")
     includeEmptyDirs = true
 }
 

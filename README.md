@@ -10,12 +10,12 @@
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.2.zip 文件
+# 1.下载 idea-claude-code-gui-0.0.2_beta.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.2.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.2_beta.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.2.zip](https://github.com/zhukunpenglinyutong/idea-claude-code-gui/blob/main/idea-claude-code-gui-0.0.2.zip)
+插件下载：[idea-claude-code-gui-0.0.2_beta.zip](https://github.com/zhukunpenglinyutong/idea-claude-code-gui/blob/main/idea-claude-code-gui-0.0.2_beta.zip)
 
 ---
 
@@ -23,24 +23,29 @@
 
 **11月21日（v0.0.2）**
 
-> 安装包：[idea-claude-code-gui-0.0.2.zip](https://github.com/zhukunpenglinyutong/idea-claude-code-gui/blob/main/idea-claude-code-gui-0.0.2.zip)
+> 安装包：[idea-claude-code-gui-0.0.2_beta.zip](https://github.com/zhukunpenglinyutong/idea-claude-code-gui/blob/main/idea-claude-code-gui-0.0.2_beta.zip)
 
 完成简易的，GUI对话 权限控制功能
+
 <img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/5.png" />
 
 文件写入功能展示
+
 <img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/6.png" />
 
 
 **11月20日**
 
 完成简易的，GUI对话基础页面
+
 <img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/2.png" />
 
 完成简易的，GUI对话页面，历史消息渲染功能
+
 <img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/3.png" />
 
 完成简易的，GUI页面，对话 + 回复 功能（**完成 claude-bridge 核心**）
+
 <img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/4.png" />
 
 
