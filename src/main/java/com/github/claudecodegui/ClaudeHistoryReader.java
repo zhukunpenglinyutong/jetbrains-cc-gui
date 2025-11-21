@@ -246,22 +246,79 @@ public class ClaudeHistoryReader {
      * 从 content 提取文本
      */
     private String extractTextFromContent(Object content) {
+        // 处理 String 类型
         if (content instanceof String) {
             return (String) content;
-        } else if (content instanceof List) {
+        }
+        // 处理 List 类型（这是实际的格式）
+        else if (content instanceof List) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> contentList = (List<Map<String, Object>>) content;
-            // 从后向前查找最后一个 text 类型的项
-            for (int i = contentList.size() - 1; i >= 0; i--) {
-                Map<String, Object> item = contentList.get(i);
-                if ("text".equals(item.get("type"))) {
+            StringBuilder sb = new StringBuilder();
+
+            // 遍历所有内容项
+            for (Map<String, Object> item : contentList) {
+                String type = (String) item.get("type");
+
+                // 处理文本类型
+                if ("text".equals(type)) {
                     Object text = item.get("text");
                     if (text instanceof String) {
-                        return (String) text;
+                        if (sb.length() > 0) {
+                            sb.append(" ");
+                        }
+                        sb.append((String) text);
+                    }
+                }
+                // 处理工具使用类型
+                else if ("tool_use".equals(type)) {
+                    Object name = item.get("name");
+                    if (name instanceof String && sb.length() == 0) {
+                        // 如果还没有文本内容，显示工具使用信息
+                        sb.append("[使用工具: ").append(name).append("]");
+                    }
+                }
+                // 可以根据需要添加其他类型的处理
+            }
+
+            String result = sb.toString().trim();
+            return result.isEmpty() ? null : result;
+        }
+        // 处理 com.google.gson.JsonArray 类型（从 Gson 解析）
+        else if (content instanceof com.google.gson.JsonArray) {
+            com.google.gson.JsonArray contentArray = (com.google.gson.JsonArray) content;
+            StringBuilder sb = new StringBuilder();
+
+            for (int i = 0; i < contentArray.size(); i++) {
+                com.google.gson.JsonElement element = contentArray.get(i);
+                if (element.isJsonObject()) {
+                    com.google.gson.JsonObject item = element.getAsJsonObject();
+
+                    // 获取类型
+                    String type = item.has("type") && !item.get("type").isJsonNull()
+                        ? item.get("type").getAsString()
+                        : null;
+
+                    // 处理文本类型
+                    if ("text".equals(type) && item.has("text") && !item.get("text").isJsonNull()) {
+                        if (sb.length() > 0) {
+                            sb.append(" ");
+                        }
+                        sb.append(item.get("text").getAsString());
+                    }
+                    // 处理工具使用类型
+                    else if ("tool_use".equals(type) && item.has("name") && !item.get("name").isJsonNull()) {
+                        if (sb.length() == 0) {
+                            sb.append("[使用工具: ").append(item.get("name").getAsString()).append("]");
+                        }
                     }
                 }
             }
+
+            String result = sb.toString().trim();
+            return result.isEmpty() ? null : result;
         }
+
         return null;
     }
 

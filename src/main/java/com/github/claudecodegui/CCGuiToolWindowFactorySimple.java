@@ -3,23 +3,34 @@ package com.github.claudecodegui;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
+import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.ui.jcef.JBCefJSQuery;
+import org.cef.browser.CefBrowser;
+import org.cef.browser.CefFrame;
+import org.cef.handler.CefLoadHandlerAdapter;
 import org.jetbrains.annotations.NotNull;
+import com.google.gson.JsonObject;
+import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.LocalFileSystem;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.List;
+import java.io.File;
 
 /**
- * CC-GUI 工具窗口工厂类（简化版）
+ * 历史会话工具窗口工厂类（简化版）
  */
 public class CCGuiToolWindowFactorySimple implements ToolWindowFactory {
 
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         String projectPath = project.getBasePath();
-        CCGuiToolWindow ccGuiToolWindow = new CCGuiToolWindow(projectPath);
+        CCGuiToolWindow ccGuiToolWindow = new CCGuiToolWindow(project, projectPath);
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(
                 ccGuiToolWindow.getContent(),
@@ -33,8 +44,11 @@ public class CCGuiToolWindowFactorySimple implements ToolWindowFactory {
         private JPanel mainPanel;
         private ClaudeHistoryReader historyReader;
         private String projectPath;
+        private Project project;
+        private JBCefBrowser browser;
 
-        public CCGuiToolWindow(String projectPath) {
+        public CCGuiToolWindow(Project project, String projectPath) {
+            this.project = project;
             this.projectPath = projectPath;
             this.historyReader = new ClaudeHistoryReader();
             createUIComponents();
@@ -44,13 +58,34 @@ public class CCGuiToolWindowFactorySimple implements ToolWindowFactory {
             mainPanel = new JPanel(new BorderLayout());
 
             try {
-                JBCefBrowser browser = new JBCefBrowser();
+                browser = new JBCefBrowser();
+
+                // 创建 JavaScript 桥接
+                JBCefJSQuery jsQuery = JBCefJSQuery.create(browser);
+
+                // 处理来自 JavaScript 的消息
+                jsQuery.addHandler((msg) -> {
+                    handleJavaScriptMessage(msg);
+                    return new JBCefJSQuery.Response("ok");
+                });
 
                 // 获取当前项目的数据
                 String jsonData = historyReader.getProjectDataAsJson(projectPath);
 
                 // 生成HTML
                 String htmlContent = generateHtmlWithData(jsonData);
+
+                // 加载完成后注入 Java 桥接函数
+                browser.getJBCefClient().addLoadHandler(new CefLoadHandlerAdapter() {
+                    @Override
+                    public void onLoadEnd(CefBrowser browser, CefFrame frame, int httpStatusCode) {
+                        // 注入 Java 调用函数
+                        String injection = "window.sendToJava = function(msg) { " +
+                            jsQuery.inject("msg") +
+                            " };";
+                        browser.executeJavaScript(injection, browser.getURL(), 0);
+                    }
+                }, browser.getCefBrowser());
 
                 // 加载HTML
                 browser.loadHTML(htmlContent);
@@ -72,6 +107,126 @@ public class CCGuiToolWindowFactorySimple implements ToolWindowFactory {
 
                 mainPanel.add(new JScrollPane(textArea), BorderLayout.CENTER);
             }
+        }
+
+        /**
+         * 处理来自 JavaScript 的消息
+         */
+        private void handleJavaScriptMessage(String message) {
+            System.out.println("收到 JS 消息: " + message);
+
+            // 解析消息（格式：type:content）
+            String[] parts = message.split(":", 2);
+            if (parts.length < 1) return;
+
+            String type = parts[0];
+            String content = parts.length > 1 ? parts[1] : "";
+
+            switch (type) {
+                case "load_session":
+                    loadSessionById(content);
+                    break;
+                case "open_file":
+                    openFileInEditor(content);
+                    break;
+                case "back_to_list":
+                    // 返回会话列表（重新加载主页面）
+                    SwingUtilities.invokeLater(() -> {
+                        String jsonData = historyReader.getProjectDataAsJson(projectPath);
+                        String htmlContent = generateHtmlWithData(jsonData);
+                        browser.loadHTML(htmlContent);
+                    });
+                    break;
+            }
+        }
+
+        /**
+         * 通过 sessionId 加载会话
+         */
+        private void loadSessionById(String sessionId) {
+            System.out.println("请求加载会话: " + sessionId);
+
+            // 通过 SessionLoadService 通知 Claude Code GUI 加载会话
+            SessionLoadService.getInstance().requestLoadSession(sessionId, projectPath);
+
+            // 切换到 Claude Code GUI 工具窗口
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    ToolWindowManager toolWindowManager = ToolWindowManager.getInstance(project);
+                    ToolWindow claudeChatWindow = toolWindowManager.getToolWindow("Claude Code GUI");
+                    if (claudeChatWindow != null) {
+                        claudeChatWindow.activate(null);
+                    }
+                } catch (Exception e) {
+                    System.err.println("无法激活 Claude Code GUI 窗口: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        /**
+         * 在编辑器中打开文件
+         */
+        private void openFileInEditor(String filePath) {
+            System.out.println("请求打开文件: " + filePath);
+
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    // 检查文件是否存在
+                    File file = new File(filePath);
+                    if (!file.exists()) {
+                        System.err.println("文件不存在: " + filePath);
+                        return;
+                    }
+
+                    // 使用 LocalFileSystem 获取 VirtualFile
+                    VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByIoFile(file);
+                    if (virtualFile == null) {
+                        System.err.println("无法获取 VirtualFile: " + filePath);
+                        return;
+                    }
+
+                    // 在编辑器中打开文件
+                    FileEditorManager.getInstance(project).openFile(virtualFile, true);
+                    System.out.println("成功打开文件: " + filePath);
+
+                } catch (Exception e) {
+                    System.err.println("打开文件失败: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        /**
+         * 调用 JavaScript 函数
+         */
+        private void callJavaScript(String functionName, String... args) {
+            if (browser == null) return;
+
+            StringBuilder js = new StringBuilder();
+            js.append("if (typeof ").append(functionName).append(" === 'function') { ");
+            js.append(functionName).append("(");
+
+            for (int i = 0; i < args.length; i++) {
+                if (i > 0) js.append(", ");
+                js.append("'").append(args[i]).append("'");
+            }
+
+            js.append("); }");
+
+            browser.getCefBrowser().executeJavaScript(js.toString(), browser.getCefBrowser().getURL(), 0);
+        }
+
+        /**
+         * 转义 JavaScript 字符串
+         */
+        private String escapeJs(String str) {
+            return str
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
         }
 
         private String generateHtmlWithData(String jsonData) {
@@ -215,7 +370,7 @@ public class CCGuiToolWindowFactorySimple implements ToolWindowFactory {
 
             // 头部区域
             html.append("  <div class=\"header\">\n");
-            html.append("    <h1>🤖 Claude 项目历史</h1>\n");
+            html.append("    <h1>历史会话</h1>\n");
             html.append("    <div class=\"project-path\" v-if=\"data && data.currentProject\">\n");
             html.append("      {{ data.currentProject }}\n");
             html.append("    </div>\n");
@@ -227,7 +382,7 @@ public class CCGuiToolWindowFactorySimple implements ToolWindowFactory {
 
             // 内容区域
             html.append("  <div class=\"message-list\" v-if=\"data && data.sessions && data.sessions.length > 0\">\n");
-            html.append("    <div v-for=\"session in data.sessions\" :key=\"session.sessionId\" class=\"message-item\">\n");
+            html.append("    <div v-for=\"session in data.sessions\" :key=\"session.sessionId\" class=\"message-item\" @click=\"loadSession(session.sessionId)\">\n");
             html.append("      <div class=\"message-header\">\n");
             html.append("        <div class=\"message-title\">{{ session.title }}</div>\n");
             html.append("        <div class=\"message-time\">{{ timeAgo(session.lastTimestamp) }}</div>\n");
@@ -299,6 +454,14 @@ public class CCGuiToolWindowFactorySimple implements ToolWindowFactory {
             html.append("        interval = seconds / 60;\n");
             html.append("        if (interval > 1) return Math.floor(interval) + ' 分钟前';\n");
             html.append("        return Math.floor(seconds) + ' 秒前';\n");
+            html.append("      },\n");
+            html.append("      loadSession(sessionId) {\n");
+            html.append("        console.log('Loading session:', sessionId);\n");
+            html.append("        if (window.sendToJava) {\n");
+            html.append("          window.sendToJava('load_session:' + sessionId);\n");
+            html.append("        } else {\n");
+            html.append("          console.error('sendToJava not available');\n");
+            html.append("        }\n");
             html.append("      }\n");
             html.append("    },\n");
             html.append("    mounted() {\n");

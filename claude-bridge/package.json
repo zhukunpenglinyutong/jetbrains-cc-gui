@@ -1,0 +1,12 @@
+{
+  "name": "claude-sdk-test",
+  "version": "1.0.0",
+  "description": "Test Claude Agent SDK from Java",
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0"
+  },
+  "scripts": {
+    "test": "node simple-query.js"
+  }
+}

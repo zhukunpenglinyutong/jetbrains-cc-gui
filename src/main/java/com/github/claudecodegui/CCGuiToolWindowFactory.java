@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * CC-GUI 工具窗口工厂类（完整版，包含 JavaScript 桥接）
+ * 历史会话工具窗口工厂类（完整版，包含 JavaScript 桥接）
  */
 public class CCGuiToolWindowFactory implements ToolWindowFactory {
 
@@ -34,14 +34,14 @@ public class CCGuiToolWindowFactory implements ToolWindowFactory {
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(
                 ccGuiToolWindow.getContent(),
-                "CC-GUI",
+                "历史会话",
                 false
         );
         toolWindow.getContentManager().addContent(content);
     }
 
     /**
-     * CC-GUI 工具窗口内容类
+     * 历史会话工具窗口内容类
      */
     private static class CCGuiToolWindow {
         private JPanel mainPanel;
@@ -71,7 +71,7 @@ public class CCGuiToolWindowFactory implements ToolWindowFactory {
 
             } catch (Exception e) {
                 // 如果 JCEF 不可用，显示备用内容
-                JLabel label = new JLabel("CC-GUI - Claude Code GUI", SwingConstants.CENTER);
+                JLabel label = new JLabel("历史会话", SwingConstants.CENTER);
                 label.setFont(new Font("Microsoft YaHei", Font.BOLD, 24));
                 mainPanel.add(label, BorderLayout.CENTER);
 
@@ -158,7 +158,7 @@ public class CCGuiToolWindowFactory implements ToolWindowFactory {
                         createApp({
                             data() {
                                 return {
-                                    message: 'CC-GUI',
+                                    message: '历史会话',
                                     count: 0
                                 }
                             }

@@ -1,3 +1,5 @@
+import org.jetbrains.intellij.IntelliJPluginExtension
+
 plugins {
     id 'java'
     id 'org.jetbrains.intellij' version '1.17.0'
@@ -55,4 +57,33 @@ runIde {
 
 buildSearchableOptions {
     enabled = false
+}
+
+def claudeBridgeDir = file("claude-bridge")
+def claudeBridgePackDir = file("$buildDir/claude-bridge-pack/claude-bridge")
+
+tasks.register('copyClaudeBridge', Copy) {
+    onlyIf { claudeBridgeDir.exists() }
+    from(claudeBridgeDir)
+    into(claudeBridgePackDir)
+    includeEmptyDirs = true
+}
+
+tasks.named("prepareSandbox") {
+    dependsOn("copyClaudeBridge")
+    doLast {
+        if (!claudeBridgeDir.exists()) {
+            throw new GradleException("claude-bridge 目录不存在，请确保已拉取并安装依赖。")
+        }
+        def sandboxRoot = layout.buildDirectory.dir("idea-sandbox").get().asFile
+        def intellijExt = project.extensions.getByType(IntelliJPluginExtension)
+        def pluginName = intellijExt.pluginName.getOrElse(project.name)
+        def pluginDir = new File(sandboxRoot, "plugins/${pluginName}")
+        def target = new File(pluginDir, "claude-bridge")
+        project.delete(target)
+        project.copy {
+            from(claudeBridgePackDir)
+            into(target)
+        }
+    }
 }
