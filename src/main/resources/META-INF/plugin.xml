@@ -7,13 +7,7 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!-- 注册右侧工具窗口 - Claude 历史记录 -->
-        <toolWindow id="历史会话"
-                    anchor="right"
-                    factoryClass="com.github.claudecodegui.CCGuiToolWindowFactorySimple"
-                    icon="/icons/cc-gui-icon.svg"/>
-
-        <!-- 注册右侧工具窗口 - Claude Chat (SDK集成) -->
+        <!-- Claude Code GUI 工具窗口（包含历史记录功能） -->
         <toolWindow id="Claude Code GUI"
                     anchor="right"
                     factoryClass="com.github.claudecodegui.ClaudeSDKToolWindow"

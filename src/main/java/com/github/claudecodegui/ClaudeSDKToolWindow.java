@@ -168,21 +168,29 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
          * 处理来自 JavaScript 的消息
          */
         private void handleJavaScriptMessage(String message) {
-            System.out.println("收到 JS 消息: " + message);
+            System.out.println("[Backend] ========== 收到 JS 消息 ==========");
+            System.out.println("[Backend] 原始消息: " + message);
 
             // 解析消息（简单的格式：type:content）
             String[] parts = message.split(":", 2);
-            if (parts.length < 1) return;
+            if (parts.length < 1) {
+                System.err.println("[Backend] 错误: 消息格式无效");
+                return;
+            }
 
             String type = parts[0];
             String content = parts.length > 1 ? parts[1] : "";
+            System.out.println("[Backend] 消息类型: '" + type + "'");
+            System.out.println("[Backend] 消息内容: '" + content + "'");
 
             switch (type) {
                 case "send_message":
+                    System.out.println("[Backend] 处理: send_message");
                     sendMessageToClaude(content);
                     break;
 
                 case "interrupt_session":
+                    System.out.println("[Backend] 处理: interrupt_session");
                     session.interrupt().thenRun(() -> {
                         SwingUtilities.invokeLater(() -> {
                             callJavaScript("updateStatus", escapeJs("会话已中断"));
@@ -191,6 +199,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     break;
 
                 case "restart_session":
+                    System.out.println("[Backend] 处理: restart_session");
                     session.restart().thenRun(() -> {
                         SwingUtilities.invokeLater(() -> {
                             callJavaScript("updateStatus", escapeJs("会话已重启"));
@@ -199,17 +208,34 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     break;
 
                 case "create_new_session":
+                    System.out.println("[Backend] 处理: create_new_session");
                     createNewSession();
                     break;
 
                 case "open_file":
+                    System.out.println("[Backend] 处理: open_file");
                     openFileInEditor(content);
                     break;
 
                 case "permission_decision":
+                    System.out.println("[Backend] 处理: permission_decision");
                     handlePermissionDecision(content);
                     break;
+
+                case "load_history_data":
+                    System.out.println("[Backend] 处理: load_history_data");
+                    loadAndInjectHistoryData();
+                    break;
+
+                case "load_session":
+                    System.out.println("[Backend] 处理: load_session");
+                    loadHistorySession(content, project.getBasePath());
+                    break;
+
+                default:
+                    System.err.println("[Backend] 警告: 未知的消息类型: " + type);
             }
+            System.out.println("[Backend] ========== 消息处理完成 ==========");
         }
 
         /**
@@ -265,6 +291,79 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             });
 
             return userHome;
+        }
+
+        /**
+         * 加载并注入历史数据到前端
+         */
+        private void loadAndInjectHistoryData() {
+            System.out.println("[Backend] ========== 开始加载历史数据 ==========");
+
+            try {
+                String projectPath = project.getBasePath();
+                System.out.println("[Backend] 项目路径: " + projectPath);
+
+                ClaudeHistoryReader historyReader = new ClaudeHistoryReader();
+                System.out.println("[Backend] 创建 ClaudeHistoryReader 成功");
+
+                String historyJson = historyReader.getProjectDataAsJson(projectPath);
+                System.out.println("[Backend] 读取历史数据成功");
+                System.out.println("[Backend] JSON 长度: " + historyJson.length());
+                System.out.println("[Backend] JSON 预览 (前200字符): " + historyJson.substring(0, Math.min(200, historyJson.length())));
+
+                // 转义 JSON 字符串
+                String escapedJson = escapeJs(historyJson);
+                System.out.println("[Backend] JSON 转义成功，转义后长度: " + escapedJson.length());
+
+                // 调用 JavaScript 函数设置历史数据
+                SwingUtilities.invokeLater(() -> {
+                    System.out.println("[Backend] 准备执行 JavaScript 注入...");
+                    String jsCode = "console.log('[Backend->Frontend] Starting to inject history data');" +
+                        "if (window.setHistoryData) { " +
+                        "  console.log('[Backend->Frontend] setHistoryData is available'); " +
+                        "  try { " +
+                        "    var jsonStr = '" + escapedJson + "'; " +
+                        "    console.log('[Backend->Frontend] JSON string length:', jsonStr.length); " +
+                        "    var data = JSON.parse(jsonStr); " +
+                        "    console.log('[Backend->Frontend] JSON parsed successfully:', data); " +
+                        "    window.setHistoryData(data); " +
+                        "    console.log('[Backend->Frontend] setHistoryData called'); " +
+                        "  } catch(e) { " +
+                        "    console.error('[Backend->Frontend] Failed to parse/set history data:', e); " +
+                        "    console.error('[Backend->Frontend] Error message:', e.message); " +
+                        "    console.error('[Backend->Frontend] Error stack:', e.stack); " +
+                        "    window.setHistoryData({ success: false, error: '解析历史数据失败: ' + e.message }); " +
+                        "  } " +
+                        "} else { " +
+                        "  console.error('[Backend->Frontend] setHistoryData not available!'); " +
+                        "  console.log('[Backend->Frontend] Available window properties:', Object.keys(window).filter(k => k.includes('set') || k.includes('History'))); " +
+                        "}";
+
+                    System.out.println("[Backend] 执行 JavaScript 代码");
+                    browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
+                    System.out.println("[Backend] JavaScript 代码已提交执行");
+                });
+
+            } catch (Exception e) {
+                System.err.println("[Backend] ❌ 加载历史数据失败!");
+                System.err.println("[Backend] 错误信息: " + e.getMessage());
+                System.err.println("[Backend] 错误堆栈:");
+                e.printStackTrace();
+
+                // 发送错误信息到前端
+                SwingUtilities.invokeLater(() -> {
+                    String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
+                    String jsCode = "console.error('[Backend->Frontend] Error from backend:', '" + errorMsg + "'); " +
+                        "if (window.setHistoryData) { " +
+                        "  window.setHistoryData({ success: false, error: '" + errorMsg + "' }); " +
+                        "} else { " +
+                        "  console.error('[Backend->Frontend] Cannot report error - setHistoryData not available'); " +
+                        "}";
+                    browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
+                });
+            }
+
+            System.out.println("[Backend] ========== 历史数据加载流程结束 ==========");
         }
 
         /**
