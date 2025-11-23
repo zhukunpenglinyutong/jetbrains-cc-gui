@@ -18,7 +18,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { readFileSync, existsSync, statSync } from 'fs';
 import fs from 'fs';
 import { join, resolve } from 'path';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { readFile } from 'fs/promises';
 import { canUseTool } from './permission-handler.js';
 
@@ -179,10 +179,14 @@ async function sendMessage(message, resumeSessionId = null, cwd = null, permissi
     }
     console.log('[DEBUG] process.cwd() after chdir:', process.cwd());
 
-    process.env.TMPDIR = workingDirectory;
-    process.env.TEMP = workingDirectory;
-    process.env.TMP = workingDirectory;
-    console.log('[DEBUG] TMPDIR/TEMP/TMP set to:', workingDirectory);
+    // 注释掉错误的临时目录设置 - 这会导致 Claude SDK 在项目目录创建临时文件
+    // process.env.TMPDIR = workingDirectory;
+    // process.env.TEMP = workingDirectory;
+    // process.env.TMP = workingDirectory;
+
+    // 使用系统默认的临时目录，或者创建一个专门的临时目录
+    const systemTmpDir = tmpdir();
+    console.log('[DEBUG] Using system temp directory:', systemTmpDir);
 
     // 准备选项
     const options = {

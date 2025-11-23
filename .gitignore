@@ -46,3 +46,8 @@ bin/
 
 CLAUDE.md
 .npm-cache
+
+# Webview frontend artifacts
+node_modules/
+**/node_modules/
+webview/dist/

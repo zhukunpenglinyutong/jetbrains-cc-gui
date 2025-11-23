@@ -2,11 +2,9 @@ package com.github.claudecodegui.permission;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 
 import javax.swing.*;
-import java.awt.*;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
@@ -27,6 +25,7 @@ public class PermissionService {
 
     // 记忆用户选择
     private final Map<String, Integer> permissionMemory = new ConcurrentHashMap<>();
+    private volatile PermissionDecisionListener decisionListener;
 
     public enum PermissionResponse {
         ALLOW(1, "允许"),
@@ -40,6 +39,59 @@ public class PermissionService {
             this.value = value;
             this.description = description;
         }
+
+        public int getValue() {
+            return value;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public static PermissionResponse fromValue(int value) {
+            for (PermissionResponse response : values()) {
+                if (response.value == value) {
+                    return response;
+                }
+            }
+            return null;
+        }
+
+        public boolean isAllow() {
+            return this == ALLOW || this == ALLOW_ALWAYS;
+        }
+    }
+
+    public static class PermissionDecision {
+        private final String toolName;
+        private final JsonObject inputs;
+        private final PermissionResponse response;
+
+        public PermissionDecision(String toolName, JsonObject inputs, PermissionResponse response) {
+            this.toolName = toolName;
+            this.inputs = inputs;
+            this.response = response;
+        }
+
+        public String getToolName() {
+            return toolName;
+        }
+
+        public JsonObject getInputs() {
+            return inputs;
+        }
+
+        public PermissionResponse getResponse() {
+            return response;
+        }
+
+        public boolean isAllowed() {
+            return response != null && response.isAllow();
+        }
+    }
+
+    public interface PermissionDecisionListener {
+        void onDecision(PermissionDecision decision);
     }
 
     private PermissionService(Project project) {
@@ -58,6 +110,10 @@ public class PermissionService {
             instance = new PermissionService(project);
         }
         return instance;
+    }
+
+    public void setDecisionListener(PermissionDecisionListener listener) {
+        this.decisionListener = listener;
     }
 
     /**
@@ -133,7 +189,10 @@ public class PermissionService {
             // 检查是否有记忆的选择
             if (permissionMemory.containsKey(memoryKey)) {
                 int memorized = permissionMemory.get(memoryKey);
-                writeResponse(requestId, memorized == PermissionResponse.DENY.value ? false : true);
+                PermissionResponse rememberedResponse = PermissionResponse.fromValue(memorized);
+                boolean allow = rememberedResponse != PermissionResponse.DENY;
+                writeResponse(requestId, allow);
+                notifyDecision(toolName, inputs, rememberedResponse);
                 Files.delete(requestFile);
                 return;
             }
@@ -146,23 +205,27 @@ public class PermissionService {
             });
 
             int response = future.get(30, TimeUnit.SECONDS);
+            PermissionResponse decision = PermissionResponse.fromValue(response);
+            if (decision == null) {
+                decision = PermissionResponse.DENY;
+            }
 
-            // 处理响应
-            boolean allow = false;
-            switch (response) {
-                case 1: // 允许
+            boolean allow;
+            switch (decision) {
+                case ALLOW:
                     allow = true;
                     break;
-                case 2: // 允许且不再询问
+                case ALLOW_ALWAYS:
                     allow = true;
                     permissionMemory.put(memoryKey, PermissionResponse.ALLOW_ALWAYS.value);
                     break;
-                case 3: // 拒绝
-                case -1: // 关闭对话框
+                case DENY:
                 default:
                     allow = false;
                     break;
             }
+
+            notifyDecision(toolName, inputs, decision);
 
             // 写入响应
             writeResponse(requestId, allow);
@@ -197,7 +260,6 @@ public class PermissionService {
         // 创建选项
         Object[] options = {
             "允许",
-            "允许且不再询问",
             "拒绝"
         };
 
@@ -206,15 +268,17 @@ public class PermissionService {
             null,
             message.toString(),
             "权限请求 - " + toolName,
-            JOptionPane.YES_NO_CANCEL_OPTION,
+            JOptionPane.DEFAULT_OPTION,
             JOptionPane.QUESTION_MESSAGE,
             null,
             options,
             options[0]
         );
 
-        // 转换结果（JOptionPane返回0,1,2，我们需要1,2,3）
-        return result + 1;
+        if (result == 0) {
+            return PermissionResponse.ALLOW.getValue();
+        }
+        return PermissionResponse.DENY.getValue();
     }
 
     /**
@@ -252,6 +316,19 @@ public class PermissionService {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    private void notifyDecision(String toolName, JsonObject inputs, PermissionResponse response) {
+        PermissionDecisionListener listener = this.decisionListener;
+        if (listener == null || response == null) {
+            return;
+        }
+
+        try {
+            listener.onDecision(new PermissionDecision(toolName, inputs, response));
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

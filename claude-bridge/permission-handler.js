@@ -10,7 +10,9 @@ import { join, basename } from 'path';
 import { tmpdir } from 'os';
 
 // 通信目录
-const PERMISSION_DIR = join(tmpdir(), 'claude-permission');
+const PERMISSION_DIR = process.env.CLAUDE_PERMISSION_DIR
+  ? process.env.CLAUDE_PERMISSION_DIR
+  : join(tmpdir(), 'claude-permission');
 
 // 确保目录存在
 import { mkdirSync } from 'fs';

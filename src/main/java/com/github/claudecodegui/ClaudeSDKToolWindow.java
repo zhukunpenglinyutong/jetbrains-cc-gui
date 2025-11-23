@@ -11,6 +11,7 @@ import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefLoadHandlerAdapter;
 import org.jetbrains.annotations.NotNull;
+import com.intellij.ide.BrowserUtil;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -62,7 +63,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             this.mainPanel = new JPanel(new BorderLayout());
 
             // 启动权限服务
-            PermissionService.getInstance(project).start();
+            PermissionService permissionService = PermissionService.getInstance(project);
+            permissionService.start();
+            permissionService.setDecisionListener(decision -> {
+                if (decision != null &&
+                    decision.getResponse() == PermissionService.PermissionResponse.DENY) {
+                    interruptDueToPermissionDenial();
+                }
+            });
             System.out.println("[ClaudeChatWindow] Started permission service");
 
             // 先设置回调，再初始化会话信息
@@ -215,6 +223,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 case "open_file":
                     System.out.println("[Backend] 处理: open_file");
                     openFileInEditor(content);
+                    break;
+
+                case "open_browser":
+                    System.out.println("[Backend] 处理: open_browser");
+                    openBrowser(content);
                     break;
 
                 case "permission_decision":
@@ -540,6 +553,25 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             });
         }
 
+        private void interruptDueToPermissionDenial() {
+            session.interrupt().thenRun(() -> SwingUtilities.invokeLater(() -> {
+                callJavaScript("updateStatus", escapeJs("权限被拒，已中断会话"));
+            }));
+        }
+
+        /**
+         * 打开浏览器
+         */
+        private void openBrowser(String url) {
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    BrowserUtil.browse(url);
+                } catch (Exception e) {
+                    System.err.println("无法打开浏览器: " + e.getMessage());
+                }
+            });
+        }
+
         /**
          * 在编辑器中打开文件
          */
@@ -550,8 +582,19 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 try {
                     // 检查文件是否存在
                     File file = new File(filePath);
+                    
+                    // 如果文件不存在且是相对路径，尝试相对于项目根目录解析
+                    if (!file.exists() && !file.isAbsolute() && project.getBasePath() != null) {
+                        File projectFile = new File(project.getBasePath(), filePath);
+                        System.out.println("尝试相对于项目根目录解析: " + projectFile.getAbsolutePath());
+                        if (projectFile.exists()) {
+                            file = projectFile;
+                        }
+                    }
+                    
                     if (!file.exists()) {
                         System.err.println("文件不存在: " + filePath);
+                        callJavaScript("addErrorMessage", escapeJs("无法打开文件: 文件不存在 (" + filePath + ")"));
                         return;
                     }
 
@@ -615,6 +658,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 if (is != null) {
                     String html = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                     is.close();
+                    
+                    // 仅在旧版 HTML 中存在注入标记时才进行替换
+                    if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
+                        html = injectLocalLibraries(html);
+                    } else {
+                        System.out.println("✓ 检测到打包好的现代前端资源，无需额外注入库文件");
+                    }
+                    
                     return html;
                 }
             } catch (Exception e) {
@@ -955,6 +1006,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     decision.remember,
                     decision.rejectMessage
                 );
+                if (!decision.allow) {
+                    interruptDueToPermissionDenial();
+                }
             });
             dialog.show();
         }
@@ -974,10 +1028,80 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     decision.get("rejectMessage").getAsString() : "";
 
                 session.handlePermissionDecision(channelId, allow, remember, rejectMessage);
+                if (!allow) {
+                    interruptDueToPermissionDenial();
+                }
             } catch (Exception e) {
                 System.err.println("处理权限决策失败: " + e.getMessage());
                 e.printStackTrace();
             }
+        }
+
+        /**
+         * 将本地库文件内容注入到 HTML 中
+         */
+        private String injectLocalLibraries(String html) {
+            try {
+                // 读取本地库文件
+                String reactJs = loadResourceAsString("/libs/react.production.min.js");
+                String reactDomJs = loadResourceAsString("/libs/react-dom.production.min.js");
+                String babelJs = loadResourceAsString("/libs/babel.min.js");
+                String markedJs = loadResourceAsString("/libs/marked.min.js");
+                String codiconCss = loadResourceAsString("/libs/codicon.css");
+                
+                // 将字体文件转换为 base64 并嵌入到 CSS 中
+                String fontBase64 = loadResourceAsBase64("/libs/codicon.ttf");
+                codiconCss = codiconCss.replaceAll(
+                    "url\\(\"\\./codicon\\.ttf\\?[^\"]*\"\\)",
+                    "url(\"data:font/truetype;base64," + fontBase64 + "\")"
+                );
+                
+                // 构建要注入的库内容
+                StringBuilder injectedLibs = new StringBuilder();
+                injectedLibs.append("\n    <!-- React 和相关库 (本地版本) -->\n");
+                injectedLibs.append("    <script>/* React 18 */\n").append(reactJs).append("\n    </script>\n");
+                injectedLibs.append("    <script>/* ReactDOM 18 */\n").append(reactDomJs).append("\n    </script>\n");
+                injectedLibs.append("    <script>/* Babel Standalone */\n").append(babelJs).append("\n    </script>\n");
+                injectedLibs.append("    <script>/* Marked */\n").append(markedJs).append("\n    </script>\n");
+                injectedLibs.append("    <style>/* VS Code Codicons (含内嵌字体) */\n").append(codiconCss).append("\n    </style>");
+                
+                // 在标记位置注入库文件
+                html = html.replace("<!-- LOCAL_LIBRARY_INJECTION_POINT -->", injectedLibs.toString());
+                
+                System.out.println("✓ 成功注入本地库文件 (React + ReactDOM + Babel + Codicons)");
+            } catch (Exception e) {
+                System.err.println("✗ 注入本地库文件失败: " + e.getMessage());
+                e.printStackTrace();
+                // 如果注入失败，HTML 保持原样（但没有库文件，可能无法正常工作）
+            }
+            
+            return html;
+        }
+        
+        /**
+         * 从资源文件中读取内容为字符串
+         */
+        private String loadResourceAsString(String resourcePath) throws Exception {
+            java.io.InputStream is = getClass().getResourceAsStream(resourcePath);
+            if (is == null) {
+                throw new Exception("无法找到资源: " + resourcePath);
+            }
+            String content = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            is.close();
+            return content;
+        }
+        
+        /**
+         * 从资源文件中读取内容并转换为 base64
+         */
+        private String loadResourceAsBase64(String resourcePath) throws Exception {
+            java.io.InputStream is = getClass().getResourceAsStream(resourcePath);
+            if (is == null) {
+                throw new Exception("无法找到资源: " + resourcePath);
+            }
+            byte[] bytes = is.readAllBytes();
+            is.close();
+            return java.util.Base64.getEncoder().encodeToString(bytes);
         }
 
         public JPanel getContent() {

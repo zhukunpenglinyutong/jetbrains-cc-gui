@@ -22,9 +22,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.CodeSource;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -43,10 +47,15 @@ public class ClaudeSDKBridge {
     private static final String BRIDGE_PATH_ENV = "CLAUDE_BRIDGE_PATH";
     private static final String PLUGIN_ID = "com.github.idea-claude-code-gui";
     private static final String PLUGIN_DIR_NAME = "idea-claude-code-gui";
+    private static final String CLAUDE_TEMP_DIR_NAME = "claude-agent-tmp";
+    private static final String CLAUDE_PERMISSION_ENV = "CLAUDE_PERMISSION_DIR";
     private final Gson gson = new Gson();
     private String nodeExecutable = null;
     private File sdkTestDir = null;
     private final Object bridgeExtractionLock = new Object();
+    private final Map<String, Process> activeChannelProcesses = new ConcurrentHashMap<>();
+    private final Set<String> interruptedChannels = ConcurrentHashMap.newKeySet();
+    private volatile String cachedPermissionDir = null;
 
     /**
      * SDK 消息回调接口
@@ -423,89 +432,108 @@ public class ClaudeSDKBridge {
                 command.add(prompt);
 
                 // 创建进程
+                File processTempDir = prepareClaudeTempDir();
+                Set<String> existingTempMarkers = snapshotClaudeCwdFiles(processTempDir);
+
                 ProcessBuilder pb = new ProcessBuilder(command);
                 File workDir = findSdkTestDir();
                 pb.directory(workDir);
                 pb.redirectErrorStream(true);
+                Map<String, String> env = pb.environment();
+                if (processTempDir != null) {
+                    String tmpPath = processTempDir.getAbsolutePath();
+                    env.put("TMPDIR", tmpPath);
+                    env.put("TEMP", tmpPath);
+                    env.put("TMP", tmpPath);
+                    System.out.println("[ExecuteQueryStream] TMPDIR redirected to: " + tmpPath);
+                }
+                updateProcessEnvironment(pb);
 
-                Process process = pb.start();
+                Process process = null;
+                try {
+                    process = pb.start();
 
-                // 实时读取输出
-                try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    // 实时读取输出
+                    try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        output.append(line).append("\n");
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            output.append(line).append("\n");
 
-                        // 检测消息类型
-                        if (line.contains("[Message Type:")) {
-                            String type = extractBetween(line, "[Message Type:", "]");
-                            if (type != null) {
-                                callback.onMessage("type", type.trim());
+                            // 检测消息类型
+                            if (line.contains("[Message Type:")) {
+                                String type = extractBetween(line, "[Message Type:", "]");
+                                if (type != null) {
+                                    callback.onMessage("type", type.trim());
+                                }
+                            }
+
+                            // 检测助手回复
+                            if (line.contains("[Assistant]:")) {
+                                String content = line.substring(line.indexOf("[Assistant]:") + 12).trim();
+                                result.finalResult = content;
+                                callback.onMessage("assistant", content);
+                            }
+
+                            // 检测结果
+                            if (line.contains("[Result]")) {
+                                callback.onMessage("status", "完成");
+                            }
+
+                            // 提取 JSON
+                            if (line.contains("[JSON_START]")) {
+                                inJson = true;
+                                jsonBuffer.setLength(0);
+                                continue;
+                            }
+                            if (line.contains("[JSON_END]")) {
+                                inJson = false;
+                                continue;
+                            }
+                            if (inJson) {
+                                jsonBuffer.append(line).append("\n");
                             }
                         }
-
-                        // 检测助手回复
-                        if (line.contains("[Assistant]:")) {
-                            String content = line.substring(line.indexOf("[Assistant]:") + 12).trim();
-                            result.finalResult = content;
-                            callback.onMessage("assistant", content);
-                        }
-
-                        // 检测结果
-                        if (line.contains("[Result]")) {
-                            callback.onMessage("status", "完成");
-                        }
-
-                        // 提取 JSON
-                        if (line.contains("[JSON_START]")) {
-                            inJson = true;
-                            jsonBuffer.setLength(0);
-                            continue;
-                        }
-                        if (line.contains("[JSON_END]")) {
-                            inJson = false;
-                            continue;
-                        }
-                        if (inJson) {
-                            jsonBuffer.append(line).append("\n");
-                        }
                     }
-                }
 
-                // 等待进程结束
-                int exitCode = process.waitFor();
-                result.rawOutput = output.toString();
+                    // 等待进程结束
+                    int exitCode = process.waitFor();
+                    result.rawOutput = output.toString();
 
-                // 解析结果
-                if (jsonBuffer.length() > 0) {
-                    try {
-                        String jsonStr = jsonBuffer.toString().trim();
-                        JsonObject jsonResult = gson.fromJson(jsonStr, JsonObject.class);
-                        result.success = jsonResult.get("success").getAsBoolean();
+                    // 解析结果
+                    if (jsonBuffer.length() > 0) {
+                        try {
+                            String jsonStr = jsonBuffer.toString().trim();
+                            JsonObject jsonResult = gson.fromJson(jsonStr, JsonObject.class);
+                            result.success = jsonResult.get("success").getAsBoolean();
 
-                        if (result.success) {
-                            result.messageCount = jsonResult.get("messageCount").getAsInt();
-                            callback.onComplete(result);
-                        } else {
-                            result.error = jsonResult.has("error") ?
-                                jsonResult.get("error").getAsString() : "Unknown error";
+                            if (result.success) {
+                                result.messageCount = jsonResult.get("messageCount").getAsInt();
+                                callback.onComplete(result);
+                            } else {
+                                result.error = jsonResult.has("error") ?
+                                    jsonResult.get("error").getAsString() : "Unknown error";
+                                callback.onError(result.error);
+                            }
+                        } catch (Exception e) {
+                            result.success = false;
+                            result.error = "JSON 解析失败: " + e.getMessage();
                             callback.onError(result.error);
                         }
-                    } catch (Exception e) {
-                        result.success = false;
-                        result.error = "JSON 解析失败: " + e.getMessage();
-                        callback.onError(result.error);
-                    }
-                } else {
-                    result.success = exitCode == 0;
-                    if (result.success) {
-                        callback.onComplete(result);
                     } else {
-                        result.error = "进程退出码: " + exitCode;
-                        callback.onError(result.error);
+                        result.success = exitCode == 0;
+                        if (result.success) {
+                            callback.onComplete(result);
+                        } else {
+                            result.error = "进程退出码: " + exitCode;
+                            callback.onError(result.error);
+                        }
                     }
+
+                } finally {
+                    waitForProcessTermination(process);
+                    cleanupClaudeTempFiles(processTempDir, existingTempMarkers);
                 }
 
             } catch (Exception e) {
@@ -897,6 +925,9 @@ public class ClaudeSDKBridge {
 
                 System.out.println("[ClaudeSDKBridge] Executing command: " + String.join(" ", command));
 
+                File processTempDir = prepareClaudeTempDir();
+                Set<String> existingTempMarkers = snapshotClaudeCwdFiles(processTempDir);
+
                 // 创建进程
                 ProcessBuilder pb = new ProcessBuilder(command);
 
@@ -926,71 +957,98 @@ public class ClaudeSDKBridge {
                     env.put("PROJECT_PATH", cwd);  // 备用环境变量
                     System.out.println("[ProcessBuilder] Environment variables set: IDEA_PROJECT_PATH=" + cwd);
                 }
+                if (processTempDir != null) {
+                    String tmpPath = processTempDir.getAbsolutePath();
+                    env.put("TMPDIR", tmpPath);
+                    env.put("TEMP", tmpPath);
+                    env.put("TMP", tmpPath);
+                    System.out.println("[ProcessBuilder] TMPDIR redirected to: " + tmpPath);
+                }
 
                 pb.redirectErrorStream(true);
                 updateProcessEnvironment(pb);
 
-                Process process = pb.start();
+                Process process = null;
+                try {
+                    process = pb.start();
+                    if (channelId != null) {
+                        activeChannelProcesses.put(channelId, process);
+                        interruptedChannels.remove(channelId);
+                    }
 
-                // 流式读取输出
-                try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    try {
+                        // 流式读取输出
+                        try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        System.out.println("[SendMessage] " + line);
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                System.out.println("[SendMessage] " + line);
 
-                        // 解析不同类型的输出
-                        if (line.startsWith("[MESSAGE]")) {
-                            // 原始消息 JSON
-                            String jsonStr = line.substring("[MESSAGE]".length()).trim();
-                            try {
-                                JsonObject msg = gson.fromJson(jsonStr, JsonObject.class);
-                                result.messages.add(msg);
+                                // 解析不同类型的输出
+                                if (line.startsWith("[MESSAGE]")) {
+                                    // 原始消息 JSON
+                                    String jsonStr = line.substring("[MESSAGE]".length()).trim();
+                                    try {
+                                        JsonObject msg = gson.fromJson(jsonStr, JsonObject.class);
+                                        result.messages.add(msg);
 
-                                // 通知回调
-                                String type = msg.has("type") ? msg.get("type").getAsString() : "unknown";
-                                callback.onMessage(type, jsonStr);
+                                        // 通知回调
+                                        String type = msg.has("type") ? msg.get("type").getAsString() : "unknown";
+                                        callback.onMessage(type, jsonStr);
 
-                            } catch (Exception e) {
-                                System.err.println("Failed to parse message JSON: " + e.getMessage());
+                                    } catch (Exception e) {
+                                        System.err.println("Failed to parse message JSON: " + e.getMessage());
+                                    }
+
+                                } else if (line.startsWith("[CONTENT]")) {
+                                    // 助手内容片段
+                                    String content = line.substring("[CONTENT]".length()).trim();
+                                    assistantContent.append(content);
+                                    callback.onMessage("content", content);
+
+                                } else if (line.startsWith("[SESSION_ID]")) {
+                                    // 会话 ID
+                                    String capturedSessionId = line.substring("[SESSION_ID]".length()).trim();
+                                    callback.onMessage("session_id", capturedSessionId);
+
+                                } else if (line.startsWith("[MESSAGE_START]")) {
+                                    // 消息开始
+                                    callback.onMessage("message_start", "");
+
+                                } else if (line.startsWith("[MESSAGE_END]")) {
+                                    // 消息结束
+                                    callback.onMessage("message_end", "");
+                                }
                             }
+                        }
 
-                        } else if (line.startsWith("[CONTENT]")) {
-                            // 助手内容片段
-                            String content = line.substring("[CONTENT]".length()).trim();
-                            assistantContent.append(content);
-                            callback.onMessage("content", content);
+                        int exitCode = process.waitFor();
+                        boolean wasInterrupted = channelId != null && interruptedChannels.remove(channelId);
 
-                        } else if (line.startsWith("[SESSION_ID]")) {
-                            // 会话 ID
-                            String capturedSessionId = line.substring("[SESSION_ID]".length()).trim();
-                            callback.onMessage("session_id", capturedSessionId);
+                        result.success = exitCode == 0 && !wasInterrupted;
+                        result.finalResult = assistantContent.toString();
+                        result.messageCount = result.messages.size();
 
-                        } else if (line.startsWith("[MESSAGE_START]")) {
-                            // 消息开始
-                            callback.onMessage("message_start", "");
+                        if (wasInterrupted) {
+                            System.out.println("[SendMessage] Channel " + channelId + " was interrupted by user");
+                            callback.onComplete(result);
+                        } else if (result.success) {
+                            callback.onComplete(result);
+                        } else {
+                            callback.onError("Process exited with code: " + exitCode);
+                        }
 
-                        } else if (line.startsWith("[MESSAGE_END]")) {
-                            // 消息结束
-                            callback.onMessage("message_end", "");
+                        return result;
+                    } finally {
+                        if (channelId != null) {
+                            activeChannelProcesses.remove(channelId, process);
                         }
                     }
+                } finally {
+                    waitForProcessTermination(process);
+                    cleanupClaudeTempFiles(processTempDir, existingTempMarkers);
                 }
-
-                int exitCode = process.waitFor();
-
-                result.success = exitCode == 0;
-                result.finalResult = assistantContent.toString();
-                result.messageCount = result.messages.size();
-
-                if (result.success) {
-                    callback.onComplete(result);
-                } else {
-                    callback.onError("Process exited with code: " + exitCode);
-                }
-
-                return result;
 
             } catch (Exception e) {
                 result.success = false;
@@ -1005,27 +1063,31 @@ public class ClaudeSDKBridge {
      * 中断 channel
      */
     public void interruptChannel(String channelId) {
+        if (channelId == null) {
+            System.out.println("[Interrupt] ChannelId is null, nothing to interrupt");
+            return;
+        }
+
+        Process process = activeChannelProcesses.get(channelId);
+        if (process == null) {
+            System.out.println("[Interrupt] No active process found for channel: " + channelId);
+            return;
+        }
+
+        System.out.println("[Interrupt] Attempting to interrupt channel: " + channelId);
+        interruptedChannels.add(channelId);
+        process.destroy();
+
         try {
-            String node = findNodeExecutable();
-
-            // 构建命令
-            List<String> command = new ArrayList<>();
-            command.add(node);
-            command.add(CHANNEL_SCRIPT);
-            command.add("interrupt");
-            command.add(channelId);
-
-            // 创建进程
-            ProcessBuilder pb = new ProcessBuilder(command);
-            File workDir = findSdkTestDir();
-            pb.directory(workDir);
-            updateProcessEnvironment(pb);
-
-            Process process = pb.start();
-            process.waitFor();
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to interrupt channel: " + e.getMessage(), e);
+            if (!process.waitFor(3, TimeUnit.SECONDS)) {
+                System.out.println("[Interrupt] Force killing channel: " + channelId);
+                process.destroyForcibly();
+                process.waitFor(2, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            activeChannelProcesses.remove(channelId, process);
         }
     }
 
@@ -1109,6 +1171,98 @@ public class ClaudeSDKBridge {
         }
     }
 
+    private File prepareClaudeTempDir() {
+        String baseTemp = System.getProperty("java.io.tmpdir");
+        if (baseTemp == null || baseTemp.isEmpty()) {
+            return null;
+        }
+
+        Path tempPath = Paths.get(baseTemp, CLAUDE_TEMP_DIR_NAME);
+        try {
+            Files.createDirectories(tempPath);
+            return tempPath.toFile();
+        } catch (IOException e) {
+            System.err.println("[ClaudeSDKBridge] Failed to prepare temp dir: " + tempPath + ", reason: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private Set<String> snapshotClaudeCwdFiles(File tempDir) {
+        if (tempDir == null || !tempDir.exists()) {
+            return Collections.emptySet();
+        }
+        File[] existing = tempDir.listFiles((dir, name) ->
+            name.startsWith("claude-") && name.endsWith("-cwd"));
+        if (existing == null || existing.length == 0) {
+            return Collections.emptySet();
+        }
+        Set<String> snapshot = new HashSet<>();
+        for (File file : existing) {
+            snapshot.add(file.getName());
+        }
+        return snapshot;
+    }
+
+    private void cleanupClaudeTempFiles(File tempDir, Set<String> preserved) {
+        if (tempDir == null || !tempDir.exists()) {
+            return;
+        }
+        File[] leftovers = tempDir.listFiles((dir, name) ->
+            name.startsWith("claude-") && name.endsWith("-cwd"));
+        if (leftovers == null || leftovers.length == 0) {
+            return;
+        }
+        for (File file : leftovers) {
+            if (preserved != null && preserved.contains(file.getName())) {
+                continue;
+            }
+            try {
+                Files.deleteIfExists(file.toPath());
+            } catch (IOException e) {
+                System.err.println("[ClaudeSDKBridge] Failed to delete temp cwd file: " + file.getAbsolutePath());
+            }
+        }
+    }
+
+    private void waitForProcessTermination(Process process) {
+        if (process == null) {
+            return;
+        }
+        if (process.isAlive()) {
+            try {
+                process.waitFor(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private void configurePermissionEnv(Map<String, String> env) {
+        if (env == null) {
+            return;
+        }
+        String permissionDir = getPermissionDirectory();
+        if (permissionDir != null) {
+            env.putIfAbsent(CLAUDE_PERMISSION_ENV, permissionDir);
+        }
+    }
+
+    private String getPermissionDirectory() {
+        String cached = this.cachedPermissionDir;
+        if (cached != null) {
+            return cached;
+        }
+
+        Path dir = Paths.get(System.getProperty("java.io.tmpdir"), "claude-permission");
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            System.err.println("[ClaudeSDKBridge] Failed to prepare permission dir: " + dir + " (" + e.getMessage() + ")");
+        }
+        cachedPermissionDir = dir.toAbsolutePath().toString();
+        return cachedPermissionDir;
+    }
+
     /**
      * 更新进程的环境变量，确保 PATH 包含 Node.js 所在目录
      */
@@ -1159,5 +1313,6 @@ public class ClaudeSDKBridge {
         if (System.getProperty("os.name").toLowerCase().contains("win")) {
             env.put("Path", newPath.toString());
         }
+        configurePermissionEnv(env);
     }
 }

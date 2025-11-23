@@ -2,7 +2,7 @@
     <id>com.github.idea-claude-code-gui</id>
     <name>Claude Code GUI</name>
     <vendor>Your Name</vendor>
-    <description>IntelliJ IDEA plugin for viewing Claude Code history with an intuitive GUI</description>
+    <description>IDEA版 Claude Code GUI 插件</description>
 
     <depends>com.intellij.modules.platform</depends>
 

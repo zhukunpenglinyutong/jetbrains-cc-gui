@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.github.idea-claude-code-gui'
-version '0.0.2'
+version '0.0.3'
 
 sourceCompatibility = 17
 targetCompatibility = 17
@@ -43,7 +43,6 @@ patchPluginXml {
     changeNotes = """
         <ul>
             <li>初始版本发布</li>
-            <li>添加 Vue.js 视图支持</li>
             <li>实现右侧工具栏窗口</li>
             <li>更新支持IDEA 2024.2版本</li>
         </ul>

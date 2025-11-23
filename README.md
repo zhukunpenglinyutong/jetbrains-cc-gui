@@ -2,28 +2,44 @@
 
 本项目主要解决在IDEA中使用Claude Code 没有 GUI操作窗口的场景
 
-目前在实验阶段，成品尚未完成，代码会按天更新进度，目前版本为v0.0.2
+目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.3-beta
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
+
+<img width="600" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.3/2.png" />
 
 ---
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.2_beta.zip 文件
+# 1.下载 idea-claude-code-gui-0.0.3-beta 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.2_beta.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.3-beta 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.2_beta.zip](https://github.com/zhukunpenglinyutong/idea-claude-code-gui/blob/main/idea-claude-code-gui-0.0.2_beta.zip)
+插件下载：[idea-claude-code-gui-0.0.3-beta.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.3/idea-claude-code-gui-0.0.3-beta.zip)
 
 ---
 
 ### 目前进度
 
-**11月21日（v0.0.2）**
 
-> 安装包：[idea-claude-code-gui-0.0.2_beta.zip](https://github.com/zhukunpenglinyutong/idea-claude-code-gui/blob/main/idea-claude-code-gui-0.0.2_beta.zip)
+##### **11月23日（v0.0.3）**
+
+- [x] 解决一些核心交互阻塞流程
+- [x] 重构交互页面UI展示
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.3/1.png" />
+
+
+##### **11月22日**
+
+- [x] 改进临时目录与权限逻辑
+- [x] 拆分纯html，采用 Vite + React + TS 开发
+- [x] 将前端资源CDN下载本地打包，加快首屏速度
+
+
+##### **11月21日（v0.0.2）**
 
 完成简易的，GUI对话 权限控制功能
 
@@ -34,7 +50,7 @@
 <img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/6.png" />
 
 
-**11月20日**
+##### 11月20日
 
 完成简易的，GUI对话基础页面
 
@@ -49,9 +65,7 @@
 <img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/4.png" />
 
 
-**11月19日（v0.0.1）** - 实现历史记录读取功能
-
-> 安装包：[idea-claude-code-gui-0.0.1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.1/idea-claude-code-gui-0.0.1.zip)
+##### 11月19日（v0.0.1） - 实现历史记录读取功能
 
 <img width="400" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/1.png" />
 
@@ -59,6 +73,19 @@
 
 
 ## 本地开发调试
+
+### 0. Webview 前端（Vite + React）
+
+插件内嵌的聊天界面已经迁移到 `webview/` 目录，使用 Vite + React + TypeScript 进行组件化开发。
+
+```bash
+cd webview
+npm install          # 首次安装依赖
+npm run dev          # 本地开发预览（会启动 Vite Dev Server）
+npm run build        # 生成 dist/index.html 并自动同步到 src/main/resources/html/claude-chat.html
+```
+
+> `npm run build` 会自动执行 `scripts/copy-dist.mjs`，将打包结果复制到插件资源目录，IDEA 中的 JCEF 会直接加载这份纯静态 HTML。
 
 ### 1. 安装Node依赖
 

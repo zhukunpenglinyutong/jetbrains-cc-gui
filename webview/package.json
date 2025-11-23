@@ -1,0 +1,25 @@
+{
+  "name": "webview",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "postbuild": "node scripts/copy-dist.mjs",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.6",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^4.2.2",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4",
+    "vite-plugin-singlefile": "^2.3.0"
+  },
+  "dependencies": {
+    "marked": "^17.0.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}
