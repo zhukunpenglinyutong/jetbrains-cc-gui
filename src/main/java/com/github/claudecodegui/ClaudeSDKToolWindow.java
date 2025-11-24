@@ -38,7 +38,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(
             chatWindow.getContent(),
-            "Claude Chat",
+            "Claude Claude",
             false
         );
         toolWindow.getContentManager().addContent(content);
@@ -54,12 +54,19 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private JBCefBrowser browser;
         private ClaudeSession session; // 添加 Session 管理
         private ToolInterceptor toolInterceptor; // 工具拦截器
+        private CCSwitchSettingsService settingsService; // 配置服务
 
         public ClaudeChatWindow(Project project) {
             this.project = project;
             this.sdkBridge = new ClaudeSDKBridge();
             this.session = new ClaudeSession(sdkBridge); // 创建新会话
             this.toolInterceptor = new ToolInterceptor(project); // 创建工具拦截器
+            this.settingsService = new CCSwitchSettingsService(); // 创建配置服务
+            try {
+                this.settingsService.applyActiveProviderToClaudeSettings();
+            } catch (Exception e) {
+                System.err.println("[ClaudeChatWindow] Failed to sync active provider on startup: " + e.getMessage());
+            }
             this.mainPanel = new JPanel(new BorderLayout());
 
             // 启动权限服务
@@ -243,6 +250,36 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 case "load_session":
                     System.out.println("[Backend] 处理: load_session");
                     loadHistorySession(content, project.getBasePath());
+                    break;
+
+                case "get_providers":
+                    System.out.println("[Backend] 处理: get_providers");
+                    handleGetProviders();
+                    break;
+
+                case "add_provider":
+                    System.out.println("[Backend] 处理: add_provider");
+                    handleAddProvider(content);
+                    break;
+
+                case "update_provider":
+                    System.out.println("[Backend] 处理: update_provider");
+                    handleUpdateProvider(content);
+                    break;
+
+                case "delete_provider":
+                    System.out.println("[Backend] 处理: delete_provider");
+                    handleDeleteProvider(content);
+                    break;
+
+                case "switch_provider":
+                    System.out.println("[Backend] 处理: switch_provider");
+                    handleSwitchProvider(content);
+                    break;
+
+                case "get_active_provider":
+                    System.out.println("[Backend] 处理: get_active_provider");
+                    handleGetActiveProvider();
                     break;
 
                 default:
@@ -1102,6 +1139,149 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             byte[] bytes = is.readAllBytes();
             is.close();
             return java.util.Base64.getEncoder().encodeToString(bytes);
+        }
+
+        /**
+         * 获取所有供应商
+         */
+        private void handleGetProviders() {
+            try {
+                List<JsonObject> providers = settingsService.getClaudeProviders();
+                Gson gson = new Gson();
+                String providersJson = gson.toJson(providers);
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateProviders", escapeJs(providersJson));
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to get providers: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         * 添加供应商
+         */
+        private void handleAddProvider(String content) {
+            try {
+                Gson gson = new Gson();
+                JsonObject provider = gson.fromJson(content, JsonObject.class);
+                settingsService.addClaudeProvider(provider);
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateStatus", escapeJs("供应商添加成功"));
+                    handleGetProviders(); // 刷新列表
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to add provider: " + e.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("添加供应商失败: " + e.getMessage()));
+                });
+            }
+        }
+
+        /**
+         * 更新供应商
+         */
+        private void handleUpdateProvider(String content) {
+            try {
+                Gson gson = new Gson();
+                JsonObject data = gson.fromJson(content, JsonObject.class);
+                String id = data.get("id").getAsString();
+                JsonObject updates = data.getAsJsonObject("updates");
+
+                settingsService.updateClaudeProvider(id, updates);
+
+                boolean syncedActiveProvider = false;
+                JsonObject activeProvider = settingsService.getActiveClaudeProvider();
+                if (activeProvider != null &&
+                    activeProvider.has("id") &&
+                    id.equals(activeProvider.get("id").getAsString())) {
+                    settingsService.applyProviderToClaudeSettings(activeProvider);
+                    syncedActiveProvider = true;
+                }
+
+                final boolean finalSynced = syncedActiveProvider;
+                SwingUtilities.invokeLater(() -> {
+                    if (finalSynced) {
+                        callJavaScript("window.updateStatus", escapeJs("供应商更新成功，已同步到 ~/.claude/settings.json"));
+                    } else {
+                        callJavaScript("window.updateStatus", escapeJs("供应商更新成功"));
+                    }
+                    handleGetProviders(); // 刷新列表
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to update provider: " + e.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("更新供应商失败: " + e.getMessage()));
+                });
+            }
+        }
+
+        /**
+         * 删除供应商
+         */
+        private void handleDeleteProvider(String content) {
+            try {
+                Gson gson = new Gson();
+                JsonObject data = gson.fromJson(content, JsonObject.class);
+                String id = data.get("id").getAsString();
+
+                settingsService.deleteClaudeProvider(id);
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateStatus", escapeJs("供应商删除成功"));
+                    handleGetProviders(); // 刷新列表
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to delete provider: " + e.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("删除供应商失败: " + e.getMessage()));
+                });
+            }
+        }
+
+        /**
+         * 切换供应商
+         */
+        private void handleSwitchProvider(String content) {
+            try {
+                Gson gson = new Gson();
+                JsonObject data = gson.fromJson(content, JsonObject.class);
+                String id = data.get("id").getAsString();
+
+                settingsService.switchClaudeProvider(id);
+                settingsService.applyActiveProviderToClaudeSettings();
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("alert", escapeJs("✅ 供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
+                    callJavaScript("window.updateStatus", escapeJs("供应商切换成功，已同步到 ~/.claude/settings.json"));
+                    handleGetProviders(); // 刷新列表
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to switch provider: " + e.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("切换供应商失败: " + e.getMessage()));
+                });
+            }
+        }
+
+        /**
+         * 获取当前激活的供应商
+         */
+        private void handleGetActiveProvider() {
+            try {
+                JsonObject provider = settingsService.getActiveClaudeProvider();
+                Gson gson = new Gson();
+                String providerJson = gson.toJson(provider);
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateActiveProvider", escapeJs(providerJson));
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to get active provider: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
 
         public JPanel getContent() {

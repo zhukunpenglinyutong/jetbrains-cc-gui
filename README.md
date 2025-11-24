@@ -2,7 +2,7 @@
 
 本项目主要解决在IDEA中使用Claude Code 没有 GUI操作窗口的场景
 
-目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.3-beta
+目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.4-beta
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
@@ -12,16 +12,25 @@
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.3-beta 文件
+# 1.下载 idea-claude-code-gui-0.0.4-beta 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.3-beta 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.4-beta 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.3-beta.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.3/idea-claude-code-gui-0.0.3-beta.zip)
+插件下载：[idea-claude-code-gui-0.0.4-beta.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.4/idea-claude-code-gui-0.0.4.zip)
 
 ---
 
 ### 目前进度
+
+##### **11月24日（v0.0.4）**
+
+- [x] 实现简易版本cc-switch功能
+- [x] 解决一些小的交互问题
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.4/1.png" />
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.4/2.png" />
 
 
 ##### **11月23日（v0.0.3）**

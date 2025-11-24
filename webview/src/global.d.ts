@@ -9,6 +9,10 @@ declare global {
     setHistoryData?: (data: HistoryData) => void;
     clearMessages?: () => void;
     addErrorMessage?: (message: string) => void;
+    // 配置相关
+    updateProviders?: (jsonStr: string) => void;
+    updateActiveProvider?: (jsonStr: string) => void;
+    showError?: (message: string) => void;
   }
 }
 

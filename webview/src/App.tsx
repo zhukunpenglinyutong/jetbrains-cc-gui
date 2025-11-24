@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
+import SettingsView from './components/SettingsView';
 import {
   BashToolBlock,
   EditToolBlock,
@@ -19,7 +20,7 @@ import type {
   ToolResultBlock,
 } from './types';
 
-type ViewMode = 'chat' | 'history';
+type ViewMode = 'chat' | 'history' | 'settings';
 
 const DEFAULT_STATUS = '就绪';
 
@@ -346,7 +347,7 @@ const App = () => {
               </button>
               <button
                 className="icon-button"
-                onClick={() => console.log('Settings clicked')}
+                onClick={() => setCurrentView('settings')}
                 data-tooltip="设置"
               >
                 <span className="codicon codicon-settings-gear" />
@@ -356,7 +357,9 @@ const App = () => {
         </div>
       </div>
 
-      {currentView === 'chat' ? (
+      {currentView === 'settings' ? (
+        <SettingsView onClose={() => setCurrentView('chat')} />
+      ) : currentView === 'chat' ? (
         <div className="messages-container" ref={messagesContainerRef}>
           {messages.length === 0 && (
             <div

@@ -51,3 +51,5 @@ CLAUDE.md
 node_modules/
 **/node_modules/
 webview/dist/
+
+src/main/resources/html/*
