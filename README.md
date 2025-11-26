@@ -12,16 +12,25 @@
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.4-beta 文件
+# 1.下载 idea-claude-code-gui-0.0.5-beta 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.4-beta 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.5-beta 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.4-beta.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.4/idea-claude-code-gui-0.0.4.zip)
+插件下载：[idea-claude-code-gui-0.0.5-beta.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.5/idea-claude-code-gui-0.0.5-beta.zip)
 
 ---
 
 ### 目前进度
+
+##### **11月26日（v0.0.5）**
+
+- [x] 增加使用统计
+- [x] 解决Window下新建问题按钮失效问题
+- [x] 优化一些细节样式
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.5/1.png" />
+
 
 ##### **11月24日（v0.0.4）**
 
