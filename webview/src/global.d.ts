@@ -13,6 +13,7 @@ declare global {
     updateProviders?: (jsonStr: string) => void;
     updateActiveProvider?: (jsonStr: string) => void;
     showError?: (message: string) => void;
+    updateUsageStatistics?: (jsonStr: string) => void;
   }
 }
 

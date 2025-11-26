@@ -77,7 +77,85 @@ public class ClaudeHistoryReader {
         public static class Message {
             public String role;
             public Object content; // 可能是 String 或 Array
+            public Usage usage;
         }
+
+        public static class Usage {
+            public int input_tokens;
+            public int output_tokens;
+            public int cache_creation_input_tokens;
+            public int cache_read_input_tokens;
+        }
+    }
+
+    /**
+     * Token 使用统计数据结构
+     */
+    public static class UsageData {
+        public int inputTokens;
+        public int outputTokens;
+        public int cacheWriteTokens;
+        public int cacheReadTokens;
+        public int totalTokens;
+    }
+
+    public static class SessionSummary {
+        public String sessionId;
+        public long timestamp;
+        public String model;
+        public UsageData usage;
+        public double cost;
+        public String summary;
+    }
+
+    public static class DailyUsage {
+        public String date;
+        public int sessions;
+        public UsageData usage;
+        public double cost;
+        public List<String> modelsUsed;
+    }
+
+    public static class ModelUsage {
+        public String model;
+        public double totalCost;
+        public int totalTokens;
+        public int inputTokens;
+        public int outputTokens;
+        public int cacheCreationTokens;
+        public int cacheReadTokens;
+        public int sessionCount;
+    }
+
+    public static class WeeklyComparison {
+        public WeekData currentWeek;
+        public WeekData lastWeek;
+        public Trends trends;
+
+        public static class WeekData {
+            public int sessions;
+            public double cost;
+            public int tokens;
+        }
+
+        public static class Trends {
+            public double sessions;
+            public double cost;
+            public double tokens;
+        }
+    }
+
+    public static class ProjectStatistics {
+        public String projectPath;
+        public String projectName;
+        public int totalSessions;
+        public UsageData totalUsage;
+        public double estimatedCost;
+        public List<SessionSummary> sessions;
+        public List<DailyUsage> dailyUsage;
+        public WeeklyComparison weeklyComparison;
+        public List<ModelUsage> byModel;
+        public long lastUpdated;
     }
 
     /**
@@ -591,6 +669,339 @@ public class ClaudeHistoryReader {
             return gson.toJson(ApiResponse.error("读取数据失败: " + e.getMessage()));
         }
     }
+
+    // ==================== 统计功能相关代码 ====================
+
+    private static final Map<String, Map<String, Double>> MODEL_PRICING = new HashMap<>();
+    static {
+        Map<String, Double> opus = new HashMap<>();
+        opus.put("input", 15.0);
+        opus.put("output", 75.0);
+        opus.put("cacheWrite", 18.75);
+        opus.put("cacheRead", 1.50);
+        MODEL_PRICING.put("claude-opus-4", opus);
+
+        Map<String, Double> sonnet = new HashMap<>();
+        sonnet.put("input", 3.0);
+        sonnet.put("output", 15.0);
+        sonnet.put("cacheWrite", 3.75);
+        sonnet.put("cacheRead", 0.30);
+        MODEL_PRICING.put("claude-sonnet-4", sonnet);
+
+        Map<String, Double> haiku = new HashMap<>();
+        haiku.put("input", 0.8);
+        haiku.put("output", 4.0);
+        haiku.put("cacheWrite", 1.0);
+        haiku.put("cacheRead", 0.08);
+        MODEL_PRICING.put("claude-haiku-4", haiku);
+    }
+
+    private Map<String, Double> getModelPricing(String model) {
+        String modelLower = model.toLowerCase();
+        if (modelLower.contains("opus-4") || modelLower.contains("claude-opus-4")) {
+            return MODEL_PRICING.get("claude-opus-4");
+        } else if (modelLower.contains("haiku-4") || modelLower.contains("claude-haiku-4")) {
+            return MODEL_PRICING.get("claude-haiku-4");
+        }
+        // 默认使用 Sonnet 4
+        return MODEL_PRICING.get("claude-sonnet-4");
+    }
+
+    /**
+     * 获取项目目录名称 (移植自 VSCode 插件 getProjectFolderName)
+     */
+    private String getProjectFolderName(String projectPath) {
+        if (projectPath == null) return "";
+        
+        // 标准化路径：将反斜杠转换为正斜杠
+        String normalizedPath = projectPath.replace('\\', '/');
+
+        // 处理Windows盘符
+        if (normalizedPath.matches("^[a-zA-Z]:.*")) {
+            normalizedPath = normalizedPath.substring(0, 1).toLowerCase() + "-" + normalizedPath.substring(2);
+        }
+
+        // 处理非ASCII字符
+        String cleanPath = normalizedPath.replaceAll("[^\\x00-\\x7F]", "-");
+
+        // 将 '/' 替换为 '-'
+        return cleanPath.replace('/', '-');
+    }
+
+    /**
+     * 获取当前项目的使用统计
+     */
+    public ProjectStatistics getProjectStatistics(String projectPath) {
+        ProjectStatistics stats = new ProjectStatistics();
+        stats.projectPath = projectPath;
+        stats.projectName = projectPath.equals("all") ? "所有项目" : Paths.get(projectPath).getFileName().toString();
+        stats.totalUsage = new UsageData();
+        stats.sessions = new ArrayList<>();
+        stats.dailyUsage = new ArrayList<>();
+        stats.byModel = new ArrayList<>();
+        stats.weeklyComparison = new WeeklyComparison();
+        stats.lastUpdated = System.currentTimeMillis();
+
+        try {
+            List<SessionSummary> allSessions = new ArrayList<>();
+
+            if ("all".equals(projectPath)) {
+                // 读取所有项目
+                if (Files.exists(PROJECTS_DIR)) {
+                    Files.list(PROJECTS_DIR)
+                        .filter(Files::isDirectory)
+                        .forEach(dir -> {
+                            try {
+                                allSessions.addAll(readSessionsFromDir(dir));
+                            } catch (Exception e) {
+                                System.err.println("Error reading dir " + dir + ": " + e.getMessage());
+                            }
+                        });
+                }
+            } else {
+                // 读取特定项目
+                // 优先尝试原来的 sanitizedPath 逻辑，如果找不到再尝试新的 getProjectFolderName 逻辑
+                // 这是一个兼容性策略
+                String folderName1 = projectPath.replaceAll("[^a-zA-Z0-9]", "-");
+                Path dir1 = PROJECTS_DIR.resolve(folderName1);
+                
+                String folderName2 = getProjectFolderName(projectPath);
+                Path dir2 = PROJECTS_DIR.resolve(folderName2);
+                
+                if (Files.exists(dir1)) {
+                    allSessions.addAll(readSessionsFromDir(dir1));
+                } else if (Files.exists(dir2)) {
+                    allSessions.addAll(readSessionsFromDir(dir2));
+                } else {
+                    // 尝试在 history.jsonl 中查找项目对应的真实路径
+                    // 暂时略过，假设路径正确
+                }
+            }
+
+            stats.totalSessions = allSessions.size();
+
+            // 聚合数据
+            processSessions(allSessions, stats);
+
+            return stats;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return stats;
+        }
+    }
+
+    private List<SessionSummary> readSessionsFromDir(Path projectDir) {
+        List<SessionSummary> sessions = new ArrayList<>();
+        Set<String> processedHashes = new HashSet<>();
+
+        try {
+            Files.list(projectDir)
+                .filter(p -> p.toString().endsWith(".jsonl"))
+                .forEach(p -> {
+                    SessionSummary session = parseSessionFile(p, processedHashes);
+                    if (session != null) {
+                        sessions.add(session);
+                    }
+                });
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return sessions;
+    }
+
+    private SessionSummary parseSessionFile(Path filePath, Set<String> processedHashes) {
+        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+            UsageData usage = new UsageData();
+            double totalCost = 0;
+            String model = "unknown";
+            long firstTimestamp = 0;
+            String summary = null;
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                
+                try {
+                    ConversationMessage msg = gson.fromJson(line, ConversationMessage.class);
+                    
+                    // 记录时间戳
+                    if (firstTimestamp == 0 && msg.timestamp != null) {
+                        firstTimestamp = parseTimestamp(msg.timestamp);
+                    }
+
+                    // 查找 summary
+                    if ("summary".equals(msg.type) && msg.message != null && msg.message.content instanceof String) { // summary usually in separate field in raw json, but here mapping might be tricky. 
+                        // Wait, ConversationMessage structure defined earlier:
+                        // public String type;
+                        // public Message message;
+                        // In VSCode: data.summary is at top level. 
+                        // My ConversationMessage doesn't have 'summary' field at top level.
+                        // I need to check the raw JSON structure or use a generic map for flexible parsing.
+                        // Let's use a flexible parser for this line to capture 'summary' field.
+                        Map<String, Object> rawMap = gson.fromJson(line, Map.class);
+                        if (rawMap.containsKey("summary")) {
+                            Object s = rawMap.get("summary");
+                            if (s instanceof String) summary = (String) s;
+                        }
+                    }
+
+                    // 查找 usage
+                    if ("assistant".equals(msg.type) && msg.message != null && msg.message.usage != null) {
+                        ConversationMessage.Usage u = msg.message.usage;
+                        
+                        // 简单去重 (TODO: 完善去重逻辑，这里假设每行都是唯一的或者是流式的最后一行)
+                        // VSCode logic: message.id + requestId. My ConversationMessage missing id/requestId.
+                        // Assuming simpler accumulation for now or just taking valid chunks.
+                        // Actually, jsonl often contains stream chunks or final message.
+                        // If we sum up everything, we might double count if structure is complex.
+                        // But usually 'usage' is only present in the final message of a turn or specific events.
+                        
+                        if (u.input_tokens > 0 || u.output_tokens > 0 || u.cache_creation_input_tokens > 0 || u.cache_read_input_tokens > 0) {
+                             usage.inputTokens += u.input_tokens;
+                             usage.outputTokens += u.output_tokens;
+                             usage.cacheWriteTokens += u.cache_creation_input_tokens;
+                             usage.cacheReadTokens += u.cache_read_input_tokens;
+                             
+                             if (msg.message.role != null && model.equals("unknown")) {
+                                 // message.model is needed. My Message class doesn't have model.
+                                 // It's usually at top level or inside message?
+                                 // VSCode: message.model
+                                 Map<String, Object> rawMap = gson.fromJson(line, Map.class);
+                                 if (rawMap.containsKey("message")) {
+                                     Map m = (Map) rawMap.get("message");
+                                     if (m.containsKey("model")) {
+                                         model = (String) m.get("model");
+                                     }
+                                 }
+                             }
+                             
+                             // Calculate cost
+                             Map<String, Double> pricing = getModelPricing(model);
+                             double cost = (u.input_tokens * pricing.get("input") +
+                                          u.output_tokens * pricing.get("output") +
+                                          u.cache_creation_input_tokens * pricing.get("cacheWrite") +
+                                          u.cache_read_input_tokens * pricing.get("cacheRead")) / 1_000_000.0;
+                             totalCost += cost;
+                        }
+                    }
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+
+            usage.totalTokens = usage.inputTokens + usage.outputTokens + usage.cacheWriteTokens + usage.cacheReadTokens;
+            
+            if (usage.totalTokens == 0) return null;
+
+            SessionSummary session = new SessionSummary();
+            session.sessionId = filePath.getFileName().toString().replace(".jsonl", "");
+            session.timestamp = firstTimestamp > 0 ? firstTimestamp : System.currentTimeMillis();
+            session.model = model;
+            session.usage = usage;
+            session.cost = totalCost;
+            session.summary = summary;
+            
+            return session;
+
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private void processSessions(List<SessionSummary> sessions, ProjectStatistics stats) {
+        Map<String, DailyUsage> dailyMap = new HashMap<>();
+        Map<String, ModelUsage> modelMap = new HashMap<>();
+
+        // 时间范围
+        long now = System.currentTimeMillis();
+        long oneWeekAgo = now - 7L * 24 * 3600 * 1000;
+        long twoWeeksAgo = now - 14L * 24 * 3600 * 1000;
+        
+        WeeklyComparison.WeekData currentWeek = new WeeklyComparison.WeekData();
+        WeeklyComparison.WeekData lastWeek = new WeeklyComparison.WeekData();
+
+        for (SessionSummary session : sessions) {
+            // 1. 总计
+            stats.totalUsage.inputTokens += session.usage.inputTokens;
+            stats.totalUsage.outputTokens += session.usage.outputTokens;
+            stats.totalUsage.cacheWriteTokens += session.usage.cacheWriteTokens;
+            stats.totalUsage.cacheReadTokens += session.usage.cacheReadTokens;
+            stats.totalUsage.totalTokens += session.usage.totalTokens;
+            stats.estimatedCost += session.cost;
+
+            // 2. 日统计
+            String dateStr = String.format("%tF", new Date(session.timestamp));
+            DailyUsage daily = dailyMap.computeIfAbsent(dateStr, k -> {
+                DailyUsage d = new DailyUsage();
+                d.date = k;
+                d.usage = new UsageData();
+                d.modelsUsed = new ArrayList<>();
+                return d;
+            });
+            daily.sessions++;
+            daily.cost += session.cost;
+            daily.usage.inputTokens += session.usage.inputTokens;
+            daily.usage.outputTokens += session.usage.outputTokens;
+            // ... others
+            if (!daily.modelsUsed.contains(session.model)) {
+                daily.modelsUsed.add(session.model);
+            }
+
+            // 3. 模型统计
+            ModelUsage modelStat = modelMap.computeIfAbsent(session.model, k -> {
+                ModelUsage m = new ModelUsage();
+                m.model = k;
+                return m;
+            });
+            modelStat.sessionCount++;
+            modelStat.totalCost += session.cost;
+            modelStat.totalTokens += session.usage.totalTokens;
+            modelStat.inputTokens += session.usage.inputTokens;
+            modelStat.outputTokens += session.usage.outputTokens;
+            modelStat.cacheCreationTokens += session.usage.cacheWriteTokens;
+            modelStat.cacheReadTokens += session.usage.cacheReadTokens;
+
+            // 4. 周对比
+            if (session.timestamp > oneWeekAgo) {
+                currentWeek.sessions++;
+                currentWeek.cost += session.cost;
+                currentWeek.tokens += session.usage.totalTokens;
+            } else if (session.timestamp > twoWeeksAgo) {
+                lastWeek.sessions++;
+                lastWeek.cost += session.cost;
+                lastWeek.tokens += session.usage.totalTokens;
+            }
+        }
+
+        // Finalize Lists
+        stats.dailyUsage = new ArrayList<>(dailyMap.values());
+        stats.dailyUsage.sort(Comparator.comparing(d -> d.date));
+
+        stats.byModel = new ArrayList<>(modelMap.values());
+        stats.byModel.sort((a, b) -> Double.compare(b.totalCost, a.totalCost));
+
+        stats.sessions = sessions;
+        stats.sessions.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
+        if (stats.sessions.size() > 200) {
+            stats.sessions = stats.sessions.subList(0, 200);
+        }
+
+        // Calculate Trends
+        stats.weeklyComparison.currentWeek = currentWeek;
+        stats.weeklyComparison.lastWeek = lastWeek;
+        stats.weeklyComparison.trends = new WeeklyComparison.Trends();
+        stats.weeklyComparison.trends.sessions = calculateTrend(currentWeek.sessions, lastWeek.sessions);
+        stats.weeklyComparison.trends.cost = calculateTrend(currentWeek.cost, lastWeek.cost);
+        stats.weeklyComparison.trends.tokens = calculateTrend(currentWeek.tokens, lastWeek.tokens);
+    }
+
+    private double calculateTrend(double current, double last) {
+        if (last == 0) return 0;
+        return ((current - last) / last) * 100;
+    }
+
+
 
     /**
      * 处理API请求

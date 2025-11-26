@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { ProviderConfig } from '../types/provider';
+import UsageStatisticsSection from './UsageStatisticsSection';
 
 type SettingsTab = 'basic' | 'usage' | 'permissions' | 'mcp' | 'agents' | 'skills' | 'community';
 
@@ -15,11 +16,22 @@ const sendToJava = (message: string) => {
   }
 };
 
+// 自动折叠阈值（窗口宽度）
+const AUTO_COLLAPSE_THRESHOLD = 900;
+
 const SettingsView = ({ onClose }: SettingsViewProps) => {
   const [currentTab, setCurrentTab] = useState<SettingsTab>('basic');
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // 侧边栏响应式状态
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [manualCollapsed, setManualCollapsed] = useState<boolean | null>(null);
+
+  // 计算是否应该折叠：优先使用手动设置，否则根据窗口宽度自动判断
+  const isCollapsed = manualCollapsed !== null
+    ? manualCollapsed
+    : windowWidth < AUTO_COLLAPSE_THRESHOLD;
 
   // 编辑/添加表单状态
   const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null);
@@ -75,6 +87,36 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       window.showError = undefined;
     };
   }, []);
+
+  // 监听窗口大小变化
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+
+      // 如果窗口大小变化导致应该自动切换状态，重置手动设置
+      const shouldAutoCollapse = window.innerWidth < AUTO_COLLAPSE_THRESHOLD;
+      if (manualCollapsed !== null && manualCollapsed === shouldAutoCollapse) {
+        setManualCollapsed(null);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [manualCollapsed]);
+
+  // 手动切换侧边栏折叠状态
+  const toggleManualCollapse = () => {
+    if (manualCollapsed === null) {
+      // 如果当前是自动模式，切换到手动模式
+      setManualCollapsed(!isCollapsed);
+    } else {
+      // 如果已经是手动模式，切换状态
+      setManualCollapsed(!manualCollapsed);
+    }
+  };
 
   const loadProviders = () => {
     setLoading(true);
@@ -347,7 +389,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
           {/* 折叠按钮 */}
           <div
             className="sidebar-toggle"
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={toggleManualCollapse}
             title={isCollapsed ? '展开侧边栏' : '折叠侧边栏'}
           >
             <span className={`codicon ${isCollapsed ? 'codicon-chevron-right' : 'codicon-chevron-left'}`} />
@@ -606,13 +648,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
           {/* 使用统计 */}
           {currentTab === 'usage' && (
-            <div className="config-section">
+            <div className="config-section usage-section">
               <h3 className="section-title">使用统计</h3>
               <p className="section-desc">查看您的 Token 消耗、费用统计和使用趋势分析</p>
-              <div className="temp-notice">
-                <span className="codicon codicon-info" />
-                <p>使用统计功能即将推出...</p>
-              </div>
+              <UsageStatisticsSection />
             </div>
           )}
 
@@ -666,12 +705,19 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
           {/* 官方交流群 */}
           {currentTab === 'community' && (
-            <div className="config-section">
+            <div className="config-section community-section">
               <h3 className="section-title">官方交流群</h3>
               <p className="section-desc">扫描下方二维码加入官方微信交流群，获取最新资讯和技术支持</p>
-              <div className="temp-notice">
-                <span className="codicon codicon-comment-discussion" />
-                <p>交流群信息即将发布...</p>
+
+              <div className="qrcode-container">
+                <div className="qrcode-wrapper">
+                  <img
+                    src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/vscode/wxq.png"
+                    alt="官方微信交流群二维码"
+                    className="qrcode-image"
+                  />
+                  <p className="qrcode-tip">使用微信扫一扫加入交流群</p>
+                </div>
               </div>
             </div>
           )}

@@ -282,6 +282,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     handleGetActiveProvider();
                     break;
 
+                case "get_usage_statistics":
+                    System.out.println("[Backend] 处理: get_usage_statistics");
+                    handleGetUsageStatistics(content);
+                    break;
+
                 default:
                     System.err.println("[Backend] 警告: 未知的消息类型: " + type);
             }
@@ -1282,6 +1287,62 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 System.err.println("[Backend] Failed to get active provider: " + e.getMessage());
                 e.printStackTrace();
             }
+        }
+
+        /**
+         * 获取使用统计数据
+         */
+        private void handleGetUsageStatistics(String content) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    String projectPath = "all";
+                    // 解析请求内容
+                    // 简单处理：如果内容是 "current"，则使用当前项目路径
+                    // 否则如果是路径，则使用该路径
+                    // 默认为 "all"
+                    
+                    if (content != null && !content.isEmpty() && !content.equals("{}")) {
+                        // 尝试解析 JSON
+                         try {
+                            Gson gson = new Gson();
+                            JsonObject json = gson.fromJson(content, JsonObject.class);
+                            if (json.has("scope")) {
+                                String scope = json.get("scope").getAsString();
+                                if ("current".equals(scope)) {
+                                    projectPath = project.getBasePath();
+                                } else {
+                                    projectPath = "all";
+                                }
+                            }
+                        } catch (Exception e) {
+                            // 不是 JSON，按字符串处理
+                            if ("current".equals(content)) {
+                                projectPath = project.getBasePath();
+                            } else {
+                                projectPath = content;
+                            }
+                        }
+                    }
+                    
+                    System.out.println("[Backend] Getting usage statistics for path: " + projectPath);
+                    
+                    ClaudeHistoryReader reader = new ClaudeHistoryReader();
+                    ClaudeHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath);
+                    
+                    Gson gson = new Gson();
+                    String json = gson.toJson(stats);
+                    
+                    SwingUtilities.invokeLater(() -> {
+                        callJavaScript("window.updateUsageStatistics", escapeJs(json));
+                    });
+                } catch (Exception e) {
+                    System.err.println("[Backend] Failed to get usage statistics: " + e.getMessage());
+                    e.printStackTrace();
+                    SwingUtilities.invokeLater(() -> {
+                        callJavaScript("window.showError", escapeJs("获取统计数据失败: " + e.getMessage()));
+                    });
+                }
+            });
         }
 
         public JPanel getContent() {

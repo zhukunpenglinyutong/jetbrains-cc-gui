@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/SettingsView';
+import ConfirmDialog from './components/ConfirmDialog';
 import {
   BashToolBlock,
   EditToolBlock,
@@ -42,6 +43,7 @@ const App = () => {
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
+  const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -123,11 +125,18 @@ const App = () => {
       setStatus('当前会话为空，可以直接使用');
       return;
     }
-    if (window.confirm('当前会话已有消息，确定要创建新会话吗？')) {
-      sendBridgeMessage('create_new_session');
-      setMessages([]);
-      setStatus('正在创建新会话...');
-    }
+    setShowNewSessionConfirm(true);
+  };
+
+  const handleConfirmNewSession = () => {
+    setShowNewSessionConfirm(false);
+    sendBridgeMessage('create_new_session');
+    setMessages([]);
+    setStatus('正在创建新会话...');
+  };
+
+  const handleCancelNewSession = () => {
+    setShowNewSessionConfirm(false);
   };
 
   const toggleThinking = (messageIndex: number, blockIndex: number) => {
@@ -505,6 +514,16 @@ const App = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showNewSessionConfirm}
+        title="创建新会话"
+        message="当前会话已有消息，确定要创建新会话吗？"
+        confirmText="确定"
+        cancelText="取消"
+        onConfirm={handleConfirmNewSession}
+        onCancel={handleCancelNewSession}
+      />
     </>
   );
 };
