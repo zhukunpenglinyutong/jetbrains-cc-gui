@@ -15,12 +15,14 @@
  */
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { readFileSync, existsSync, statSync } from 'fs';
+import Anthropic from '@anthropic-ai/sdk';
+import { readFileSync, existsSync } from 'fs';
 import fs from 'fs';
 import { join, resolve } from 'path';
 import { homedir, tmpdir } from 'os';
 import { readFile } from 'fs/promises';
 import { canUseTool } from './permission-handler.js';
+import { randomUUID } from 'crypto';
 
 // 读取 Claude Code 配置
 function loadClaudeSettings() {
@@ -75,7 +77,63 @@ function setupApiKey() {
   return { apiKey, baseUrl, apiKeySource, baseUrlSource };
 }
 
-const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
+/**
+ * 获取系统临时目录前缀列表
+ * 支持 Windows、macOS 和 Linux
+ */
+function getTempPathPrefixes() {
+  const prefixes = [];
+
+  // 1. 使用 os.tmpdir() 获取系统临时目录
+  const systemTempDir = tmpdir();
+  if (systemTempDir) {
+    prefixes.push(normalizePathForComparison(systemTempDir));
+  }
+
+  // 2. Windows 特定环境变量
+  if (process.platform === 'win32') {
+    const winTempVars = ['TEMP', 'TMP', 'LOCALAPPDATA'];
+    for (const varName of winTempVars) {
+      const value = process.env[varName];
+      if (value) {
+        prefixes.push(normalizePathForComparison(value));
+        // Windows Temp 通常在 LOCALAPPDATA\Temp
+        if (varName === 'LOCALAPPDATA') {
+          prefixes.push(normalizePathForComparison(join(value, 'Temp')));
+        }
+      }
+    }
+    // Windows 默认临时路径
+    prefixes.push('c:\\windows\\temp');
+    prefixes.push('c:\\temp');
+  } else {
+    // Unix/macOS 临时路径前缀
+    prefixes.push('/tmp');
+    prefixes.push('/var/tmp');
+    prefixes.push('/private/tmp');
+
+    // 环境变量
+    if (process.env.TMPDIR) {
+      prefixes.push(normalizePathForComparison(process.env.TMPDIR));
+    }
+  }
+
+  // 去重
+  return [...new Set(prefixes)];
+}
+
+/**
+ * 规范化路径用于比较
+ * Windows: 转小写，使用正斜杠
+ */
+function normalizePathForComparison(pathValue) {
+  if (!pathValue) return '';
+  let normalized = pathValue.replace(/\\/g, '/');
+  if (process.platform === 'win32') {
+    normalized = normalized.toLowerCase();
+  }
+  return normalized;
+}
 
 function sanitizePath(candidate) {
   if (!candidate || typeof candidate !== 'string' || candidate.trim() === '') {
@@ -90,8 +148,15 @@ function sanitizePath(candidate) {
 
 function isTempDirectory(pathValue) {
   if (!pathValue) return false;
-  const dynamicTemp = process.env.TMPDIR ? [...TEMP_PATH_PREFIXES, process.env.TMPDIR] : TEMP_PATH_PREFIXES;
-  return dynamicTemp.some(tempPath => tempPath && pathValue.startsWith(tempPath));
+
+  const normalizedPath = normalizePathForComparison(pathValue);
+  const tempPrefixes = getTempPathPrefixes();
+
+  return tempPrefixes.some(tempPath => {
+    if (!tempPath) return false;
+    return normalizedPath.startsWith(tempPath) ||
+           normalizedPath === tempPath;
+  });
 }
 
 function selectWorkingDirectory(requestedCwd) {
@@ -288,6 +353,234 @@ async function sendMessage(message, resumeSessionId = null, cwd = null, permissi
 }
 
 /**
+ * 读取附件 JSON（通过环境变量 CLAUDE_ATTACHMENTS_FILE 指定路径）
+ */
+function loadAttachmentsFromEnv() {
+  try {
+    const filePath = process.env.CLAUDE_ATTACHMENTS_FILE;
+    if (!filePath) return [];
+    const content = fs.readFileSync(filePath, 'utf8');
+    const arr = JSON.parse(content);
+    if (Array.isArray(arr)) return arr;
+    return [];
+  } catch (e) {
+    console.error('[ATTACHMENTS] Failed to load attachments:', e.message);
+    return [];
+  }
+}
+
+/**
+ * 将一条消息追加到 JSONL 历史文件
+ * 添加必要的元数据字段以确保与历史记录读取器兼容
+ */
+function persistJsonlMessage(sessionId, cwd, obj) {
+  try {
+    const projectsDir = join(homedir(), '.claude', 'projects');
+    const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
+    const projectHistoryDir = join(projectsDir, sanitizedCwd);
+    fs.mkdirSync(projectHistoryDir, { recursive: true });
+    const sessionFile = join(projectHistoryDir, `${sessionId}.jsonl`);
+
+    // 添加必要的元数据字段以确保与 ClaudeHistoryReader 兼容
+    const enrichedObj = {
+      ...obj,
+      uuid: randomUUID(),
+      sessionId: sessionId,
+      timestamp: new Date().toISOString()
+    };
+
+    fs.appendFileSync(sessionFile, JSON.stringify(enrichedObj) + '\n', 'utf8');
+    console.log('[PERSIST] Message saved to:', sessionFile);
+  } catch (e) {
+    console.error('[PERSIST_ERROR]', e.message);
+  }
+}
+
+/**
+ * 加载会话历史消息（用于恢复会话时维护上下文）
+ * 返回 Anthropic Messages API 格式的消息数组
+ */
+function loadSessionHistory(sessionId, cwd) {
+  try {
+    const projectsDir = join(homedir(), '.claude', 'projects');
+    const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
+    const sessionFile = join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
+
+    if (!fs.existsSync(sessionFile)) {
+      return [];
+    }
+
+    const content = fs.readFileSync(sessionFile, 'utf8');
+    const lines = content.split('\n').filter(line => line.trim());
+    const messages = [];
+
+    for (const line of lines) {
+      try {
+        const msg = JSON.parse(line);
+        if (msg.type === 'user' && msg.message && msg.message.content) {
+          messages.push({
+            role: 'user',
+            content: msg.message.content
+          });
+        } else if (msg.type === 'assistant' && msg.message && msg.message.content) {
+          messages.push({
+            role: 'assistant',
+            content: msg.message.content
+          });
+        }
+      } catch (e) {
+        // 跳过解析失败的行
+      }
+    }
+
+    // 排除最后一条用户消息（因为我们在调用此函数前已经持久化了当前用户消息）
+    if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+      messages.pop();
+    }
+
+    return messages;
+  } catch (e) {
+    console.error('[LOAD_HISTORY_ERROR]', e.message);
+    return [];
+  }
+}
+
+/**
+ * 使用 Messages API 发送带附件的消息（多模态）
+ */
+async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null) {
+  try {
+    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
+    const { apiKey, baseUrl } = setupApiKey();
+
+    const workingDirectory = selectWorkingDirectory(cwd);
+    try { process.chdir(workingDirectory); } catch {}
+
+    const attachments = loadAttachmentsFromEnv();
+    const sessionId = (resumeSessionId && resumeSessionId !== '') ? resumeSessionId : randomUUID();
+    const imageBlocks = [];
+    const textBlocks = [];
+    for (const a of attachments) {
+      const mt = typeof a.mediaType === 'string' ? a.mediaType : '';
+      if (mt.startsWith('image/')) {
+        // 使用与 claude-code 相同的格式存储图片
+        imageBlocks.push({
+          type: 'image',
+          source: { type: 'base64', media_type: mt || 'image/png', data: a.data }
+        });
+      } else {
+        const name = a.fileName || '附件';
+        textBlocks.push({ type: 'text', text: `附件: ${name}` });
+      }
+    }
+
+    // 处理空消息情况 - 当用户只上传图片没有输入文字时
+    // 这确保历史记录可以正确显示摘要，不会被 isValidSession 过滤掉
+    let userText = message;
+    if (!userText || userText.trim() === '') {
+      const imageCount = imageBlocks.length;
+      const fileCount = textBlocks.length;
+      if (imageCount > 0 && fileCount > 0) {
+        userText = `[已上传 ${imageCount} 张图片和 ${fileCount} 个附件]`;
+      } else if (imageCount > 0) {
+        userText = `[已上传 ${imageCount} 张图片]`;
+      } else if (fileCount > 0) {
+        userText = `[已上传 ${fileCount} 个附件]`;
+      } else {
+        userText = '[已上传附件]';
+      }
+      console.log('[DEBUG] Empty message replaced with:', userText);
+    }
+
+    // 使用与 claude-code 相同的格式：完整保存 base64 图片数据
+    const userContent = [ ...imageBlocks, ...textBlocks, { type: 'text', text: userText } ];
+
+    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+
+    console.log('[MESSAGE_START]');
+    console.log('[SESSION_ID]', sessionId);
+    console.log('[DEBUG] Using Anthropic Messages API with content blocks:', JSON.stringify(userContent.map(b => b.type)));
+
+    // 持久化用户消息到 JSONL（使用与 claude-code 相同的格式，包含完整图片数据）
+    persistJsonlMessage(sessionId, cwd, {
+      type: 'user',
+      message: { content: userContent }
+    });
+
+    // 加载历史消息以维护会话上下文（如果是恢复会话）
+    let messagesForApi = [{ role: 'user', content: userContent }];
+    if (resumeSessionId && resumeSessionId !== '') {
+      const historyMessages = loadSessionHistory(sessionId, cwd);
+      if (historyMessages.length > 0) {
+        // 将历史消息添加到当前消息之前（不包含刚才持久化的用户消息）
+        messagesForApi = [...historyMessages, { role: 'user', content: userContent }];
+        console.log('[DEBUG] Loaded', historyMessages.length, 'history messages for session continuity');
+      }
+    }
+
+    // 使用流式 API，这样在处理期间可以持续输出进度，避免前端 loading 状态丢失
+    const stream = await client.messages.stream({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 2048,
+      messages: messagesForApi
+    });
+
+    // 收集流式响应内容
+    const contentBlocks = [];
+    let currentTextBlock = null;
+
+    // 流式处理响应
+    for await (const event of stream) {
+      if (event.type === 'content_block_start') {
+        if (event.content_block.type === 'text') {
+          currentTextBlock = { type: 'text', text: '' };
+        }
+      } else if (event.type === 'content_block_delta') {
+        if (event.delta.type === 'text_delta' && currentTextBlock) {
+          currentTextBlock.text += event.delta.text;
+          // 输出流式内容片段，保持前端 loading 状态活跃
+          console.log('[CONTENT_DELTA]', event.delta.text);
+        }
+      } else if (event.type === 'content_block_stop') {
+        if (currentTextBlock) {
+          contentBlocks.push(currentTextBlock);
+          currentTextBlock = null;
+        }
+      } else if (event.type === 'message_start') {
+        console.log('[DEBUG] Stream message started');
+      } else if (event.type === 'message_delta') {
+        // 消息状态更新
+        console.log('[DEBUG] Stream message delta');
+      }
+    }
+
+    // 获取完整响应
+    const finalMessage = await stream.finalMessage();
+    const respContent = finalMessage.content || contentBlocks;
+
+    // 输出为 Java 可解析的格式
+    const assistantMsg = {
+      type: 'assistant',
+      message: { content: respContent }
+    };
+    console.log('[MESSAGE]', JSON.stringify(assistantMsg));
+    // 持久化助手消息到 JSONL
+    persistJsonlMessage(sessionId, cwd, assistantMsg);
+    for (const block of respContent) {
+      if (block.type === 'text') {
+        console.log('[CONTENT]', block.text);
+      }
+    }
+
+    console.log('[MESSAGE_END]');
+    console.log(JSON.stringify({ success: true, sessionId }));
+  } catch (error) {
+    console.error('[SEND_ERROR]', error.message);
+    console.log(JSON.stringify({ success: false, error: error.message }));
+  }
+}
+
+/**
  * 获取会话历史消息
  * 从 ~/.claude/projects/ 目录读取
  */
@@ -368,6 +661,11 @@ process.on('unhandledRejection', (reason) => {
       case 'send':
         // send <message> [sessionId] [cwd] [permissionMode]
         await sendMessage(args[0], args[1], args[2], args[3]);
+        break;
+
+      case 'sendWithAttachments':
+        // sendWithAttachments <message> [sessionId] [cwd] [permissionMode]
+        await sendMessageWithAttachments(args[0], args[1], args[2], args[3]);
         break;
 
       case 'getSession':

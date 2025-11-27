@@ -17,9 +17,20 @@ const UsageStatisticsSection = () => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [projectScope, setProjectScope] = useState<ScopeType>('current');
-  const [dateRange] = useState<DateRangeType>('30d');
+  const [dateRange, setDateRange] = useState<DateRangeType>('30d');
   const [sessionPage, setSessionPage] = useState(1);
   const [sessionSortBy, setSessionSortBy] = useState<'cost' | 'time'>('cost');
+  const [tooltip, setTooltip] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    content: { date: string; cost: number; sessions: number };
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    content: { date: '', cost: 0, sessions: 0 }
+  });
   const sessionsPerPage = 20;
 
   useEffect(() => {
@@ -82,14 +93,66 @@ const UsageStatisticsSection = () => {
     return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   };
 
+  // 中文日期格式化
+  const formatChineseDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${month}月${day}日`;
+  };
+
+  // 相对时间格式化（用于最后更新时间）
+  const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diffMs = now - timestamp;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHour = Math.floor(diffMin / 60);
+
+    if (diffSec < 60) return '刚刚';
+    if (diffMin < 60) return `${diffMin}分钟前`;
+    if (diffHour < 24) return `${diffHour}小时前`;
+
+    return formatDate(timestamp);
+  };
+
+  // 趋势渲染函数
+  const renderTrend = (value: number) => {
+    if (value === 0) return <span className="trend neutral">→ 0% 较上周</span>;
+    const isUp = value > 0;
+    return (
+      <span className={`trend ${isUp ? 'up' : 'down'}`}>
+        {isUp ? '↑' : '↓'} {Math.abs(value).toFixed(1)}% 较上周
+      </span>
+    );
+  };
+
+  // 日期筛选函数
+  const filterByDateRange = <T extends { timestamp?: number; date?: string }>(
+    items: T[],
+    range: DateRangeType
+  ): T[] => {
+    if (range === 'all') return items;
+
+    const now = Date.now();
+    const cutoff = range === '7d'
+      ? now - 7 * 24 * 60 * 60 * 1000
+      : now - 30 * 24 * 60 * 60 * 1000;
+
+    return items.filter(item => {
+      const time = item.timestamp || new Date(item.date!).getTime();
+      return time >= cutoff;
+    });
+  };
+
   // 筛选和排序会话
-  const filteredSessions = statistics?.sessions.slice().sort((a, b) => {
+  const filteredSessions = filterByDateRange(statistics?.sessions || [], dateRange).slice().sort((a, b) => {
     if (sessionSortBy === 'cost') {
       return b.cost - a.cost;
     } else {
       return b.timestamp - a.timestamp;
     }
-  }) || [];
+  });
 
   const paginatedSessions = filteredSessions.slice(
     (sessionPage - 1) * sessionsPerPage,
@@ -159,26 +222,48 @@ const UsageStatisticsSection = () => {
     <div className="usage-statistics-section">
       {/* 控制栏 */}
       <div className="usage-controls">
-        <div className="scope-selector">
-          <button
-            className={`scope-btn ${projectScope === 'current' ? 'active' : ''}`}
-            onClick={() => handleScopeChange('current')}
-          >
-            <span className="codicon codicon-folder" />
-            当前项目
-          </button>
-          <button
-            className={`scope-btn ${projectScope === 'all' ? 'active' : ''}`}
-            onClick={() => handleScopeChange('all')}
-          >
-            <span className="codicon codicon-folder-library" />
-            所有项目
-          </button>
+        <div className="controls-left">
+          <div className="scope-selector">
+            <button
+              className={`scope-btn ${projectScope === 'current' ? 'active' : ''}`}
+              onClick={() => handleScopeChange('current')}
+            >
+              <span className="codicon codicon-folder" />
+              当前项目
+            </button>
+            <button
+              className={`scope-btn ${projectScope === 'all' ? 'active' : ''}`}
+              onClick={() => handleScopeChange('all')}
+            >
+              <span className="codicon codicon-folder-library" />
+              所有项目
+            </button>
+          </div>
+
+          <div className="date-range-selector">
+            <button
+              className={`range-btn ${dateRange === '7d' ? 'active' : ''}`}
+              onClick={() => setDateRange('7d')}
+            >
+              最近7天
+            </button>
+            <button
+              className={`range-btn ${dateRange === '30d' ? 'active' : ''}`}
+              onClick={() => setDateRange('30d')}
+            >
+              最近30天
+            </button>
+            <button
+              className={`range-btn ${dateRange === 'all' ? 'active' : ''}`}
+              onClick={() => setDateRange('all')}
+            >
+              全部时间
+            </button>
+          </div>
         </div>
 
-        <button onClick={handleRefresh} className="refresh-btn" disabled={loading}>
+        <button onClick={handleRefresh} className="refresh-btn icon-only" disabled={loading} title="刷新数据">
           <span className={`codicon codicon-refresh ${loading ? 'codicon-modifier-spin' : ''}`} />
-          刷新
         </button>
       </div>
 
@@ -219,21 +304,22 @@ const UsageStatisticsSection = () => {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="overview-tab">
-            {/* 项目信息 */}
-            <div className="project-info">
-              <h4>{statistics.projectName}</h4>
-              <p className="project-path">{statistics.projectPath}</p>
+            {/* 项目信息 - 简化版 */}
+            <div className="project-info-simple">
+              <span className="codicon codicon-folder" />
+              <span className="project-name">{statistics.projectName}</span>
             </div>
 
-            {/* 统计卡片 */}
+            {/* 统计卡片 - 带趋势指示器 */}
             <div className="stat-cards">
               <div className="stat-card cost-card">
                 <div className="stat-icon">
-                  <span className="codicon codicon-symbol-currency" />
+                  <span className="codicon codicon-credit-card" />
                 </div>
                 <div className="stat-content">
                   <div className="stat-label">总消费</div>
                   <div className="stat-value">{formatCost(statistics.estimatedCost)}</div>
+                  {statistics.weeklyComparison && renderTrend(statistics.weeklyComparison.trends.cost)}
                 </div>
               </div>
 
@@ -244,6 +330,7 @@ const UsageStatisticsSection = () => {
                 <div className="stat-content">
                   <div className="stat-label">总会话数</div>
                   <div className="stat-value">{statistics.totalSessions}</div>
+                  {statistics.weeklyComparison && renderTrend(statistics.weeklyComparison.trends.sessions)}
                 </div>
               </div>
 
@@ -254,6 +341,7 @@ const UsageStatisticsSection = () => {
                 <div className="stat-content">
                   <div className="stat-label">总Token数</div>
                   <div className="stat-value">{formatNumber(statistics.totalUsage.totalTokens)}</div>
+                  {statistics.weeklyComparison && renderTrend(statistics.weeklyComparison.trends.tokens)}
                 </div>
               </div>
 
@@ -272,48 +360,59 @@ const UsageStatisticsSection = () => {
               </div>
             </div>
 
-            {/* Token分解 */}
+            {/* Token分解 - 独立进度条形式 */}
             <div className="token-breakdown-section">
               <h4>Token 分解</h4>
-              <div className="token-breakdown">
-                <div className="token-bar">
-                  <div
-                    className="token-segment input"
-                    style={{ width: `${getTokenPercentage(statistics.totalUsage.inputTokens)}%` }}
-                    title={`输入: ${formatNumber(statistics.totalUsage.inputTokens)}`}
-                  />
-                  <div
-                    className="token-segment output"
-                    style={{ width: `${getTokenPercentage(statistics.totalUsage.outputTokens)}%` }}
-                    title={`输出: ${formatNumber(statistics.totalUsage.outputTokens)}`}
-                  />
-                  <div
-                    className="token-segment cache-write"
-                    style={{ width: `${getTokenPercentage(statistics.totalUsage.cacheWriteTokens)}%` }}
-                    title={`缓存写入: ${formatNumber(statistics.totalUsage.cacheWriteTokens)}`}
-                  />
-                  <div
-                    className="token-segment cache-read"
-                    style={{ width: `${getTokenPercentage(statistics.totalUsage.cacheReadTokens)}%` }}
-                    title={`缓存读取: ${formatNumber(statistics.totalUsage.cacheReadTokens)}`}
-                  />
+              <div className="token-breakdown-independent">
+                <div className="token-bar-item">
+                  <div className="token-bar-header">
+                    <span className="token-bar-label">输入</span>
+                    <span className="token-bar-value">{formatNumber(statistics.totalUsage.inputTokens)}</span>
+                  </div>
+                  <div className="token-bar-track">
+                    <div
+                      className="token-bar-fill input"
+                      style={{ width: `${getTokenPercentage(statistics.totalUsage.inputTokens)}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="token-legend">
-                  <div className="legend-item">
-                    <span className="legend-color input" />
-                    <span>输入: {formatNumber(statistics.totalUsage.inputTokens)}</span>
+
+                <div className="token-bar-item">
+                  <div className="token-bar-header">
+                    <span className="token-bar-label">输出</span>
+                    <span className="token-bar-value">{formatNumber(statistics.totalUsage.outputTokens)}</span>
                   </div>
-                  <div className="legend-item">
-                    <span className="legend-color output" />
-                    <span>输出: {formatNumber(statistics.totalUsage.outputTokens)}</span>
+                  <div className="token-bar-track">
+                    <div
+                      className="token-bar-fill output"
+                      style={{ width: `${getTokenPercentage(statistics.totalUsage.outputTokens)}%` }}
+                    />
                   </div>
-                  <div className="legend-item">
-                    <span className="legend-color cache-write" />
-                    <span>缓存写: {formatNumber(statistics.totalUsage.cacheWriteTokens)}</span>
+                </div>
+
+                <div className="token-bar-item">
+                  <div className="token-bar-header">
+                    <span className="token-bar-label">缓存写入</span>
+                    <span className="token-bar-value">{formatNumber(statistics.totalUsage.cacheWriteTokens)}</span>
                   </div>
-                  <div className="legend-item">
-                    <span className="legend-color cache-read" />
-                    <span>缓存读: {formatNumber(statistics.totalUsage.cacheReadTokens)}</span>
+                  <div className="token-bar-track">
+                    <div
+                      className="token-bar-fill cache-write"
+                      style={{ width: `${getTokenPercentage(statistics.totalUsage.cacheWriteTokens)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="token-bar-item">
+                  <div className="token-bar-header">
+                    <span className="token-bar-label">缓存读取</span>
+                    <span className="token-bar-value">{formatNumber(statistics.totalUsage.cacheReadTokens)}</span>
+                  </div>
+                  <div className="token-bar-track">
+                    <div
+                      className="token-bar-fill cache-read"
+                      style={{ width: `${getTokenPercentage(statistics.totalUsage.cacheReadTokens)}%` }}
+                    />
                   </div>
                 </div>
               </div>
@@ -383,12 +482,19 @@ const UsageStatisticsSection = () => {
           <div className="sessions-tab">
             <div className="sessions-header">
               <h4>会话列表 ({filteredSessions.length})</h4>
-              <div className="sort-controls">
-                <label>排序:</label>
-                <select value={sessionSortBy} onChange={(e) => setSessionSortBy(e.target.value as 'cost' | 'time')}>
-                  <option value="cost">按消费</option>
-                  <option value="time">按时间</option>
-                </select>
+              <div className="sort-buttons">
+                <button
+                  className={`sort-btn ${sessionSortBy === 'cost' ? 'active' : ''}`}
+                  onClick={() => setSessionSortBy('cost')}
+                >
+                  按消费
+                </button>
+                <button
+                  className={`sort-btn ${sessionSortBy === 'time' ? 'active' : ''}`}
+                  onClick={() => setSessionSortBy('time')}
+                >
+                  按时间
+                </button>
               </div>
             </div>
 
@@ -399,9 +505,12 @@ const UsageStatisticsSection = () => {
                     {(sessionPage - 1) * sessionsPerPage + index + 1}
                   </div>
                   <div className="session-info">
-                    <div className="session-id">{session.sessionId}</div>
+                    {/* 优先显示 summary 作为标题 */}
+                    <div className="session-title">
+                      {session.summary || session.sessionId}
+                    </div>
                     {session.summary && (
-                      <div className="session-summary">{session.summary}</div>
+                      <div className="session-id-small">{session.sessionId}</div>
                     )}
                     <div className="session-meta">
                       <span>{formatDate(session.timestamp)}</span>
@@ -447,26 +556,61 @@ const UsageStatisticsSection = () => {
             <h4>每日使用趋势</h4>
             <div className="timeline-chart">
               {filteredDailyUsage.length > 0 ? (
-                <div className="chart-container">
-                  {(() => {
-                    const maxCost = Math.max(...filteredDailyUsage.map(d => d.cost));
-                    return filteredDailyUsage.map((day) => {
-                      const height = maxCost > 0 ? (day.cost / maxCost) * 100 : 0;
-                      return (
-                        <div key={day.date} className="chart-bar-wrapper">
-                          <div className="chart-bar-container">
-                            <div
-                              className="chart-bar"
-                              style={{ height: `${height}%` }}
-                              title={`${day.date}\n消费: ${formatCost(day.cost)}\n会话: ${day.sessions}\nToken: ${formatNumber(day.usage.totalTokens)}`}
-                            />
+                (() => {
+                  const maxCost = Math.max(...filteredDailyUsage.map(d => d.cost));
+                  const yAxisValues = [0, maxCost * 0.25, maxCost * 0.5, maxCost * 0.75, maxCost];
+
+                  return (
+                    <div className="chart-with-axis">
+                      {/* Y轴标签 */}
+                      <div className="chart-y-axis">
+                        {yAxisValues.reverse().map((val, i) => (
+                          <div key={i} className="y-axis-label">
+                            {formatCost(val)}
                           </div>
-                          <div className="chart-label">{new Date(day.date).getDate()}</div>
+                        ))}
+                      </div>
+
+                      {/* 图表主体 */}
+                      <div className="chart-main">
+                        {/* 网格线 */}
+                        <div className="chart-grid">
+                          {[0, 1, 2, 3, 4].map(i => (
+                            <div key={i} className="chart-grid-line" style={{ bottom: `${i * 25}%` }} />
+                          ))}
                         </div>
-                      );
-                    });
-                  })()}
-                </div>
+
+                        {/* 柱状图 */}
+                        <div className="chart-bars">
+                          {filteredDailyUsage.map((day) => {
+                            const height = maxCost > 0 ? (day.cost / maxCost) * 100 : 0;
+                            return (
+                              <div key={day.date} className="chart-bar-wrapper">
+                                <div className="chart-bar-container">
+                                  <div
+                                    className="chart-bar"
+                                    style={{ height: `${height}%` }}
+                                    onMouseEnter={(e) => {
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setTooltip({
+                                        visible: true,
+                                        x: rect.left + rect.width / 2,
+                                        y: rect.top,
+                                        content: { date: day.date, cost: day.cost, sessions: day.sessions }
+                                      });
+                                    }}
+                                    onMouseLeave={() => setTooltip(prev => ({ ...prev, visible: false }))}
+                                  />
+                                </div>
+                                <div className="chart-label">{formatChineseDate(day.date)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
               ) : (
                 <div className="empty-timeline">
                   <span className="codicon codicon-info" />
@@ -477,6 +621,26 @@ const UsageStatisticsSection = () => {
           </div>
         )}
       </div>
+
+      {/* 自定义 Tooltip */}
+      {tooltip.visible && (
+        <div
+          className="chart-tooltip"
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
+          <div className="tooltip-date">{formatChineseDate(tooltip.content.date)}</div>
+          <div className="tooltip-cost">{formatCost(tooltip.content.cost)}</div>
+          <div className="tooltip-sessions">{tooltip.content.sessions} 次会话</div>
+        </div>
+      )}
+
+      {/* 最后更新时间 */}
+      {statistics.lastUpdated && (
+        <div className="last-updated">
+          <span className="codicon codicon-sync" />
+          <span>最后更新: {formatRelativeTime(statistics.lastUpdated)}</span>
+        </div>
+      )}
     </div>
   );
 };

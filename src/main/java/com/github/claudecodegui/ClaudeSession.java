@@ -217,24 +217,94 @@ public class ClaudeSession {
      * 发送消息（支持附件）
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments) {
+        // 规范化用户文本
+        String normalizedInput = (input != null) ? input.trim() : "";
         // 添加用户消息到历史
-        Message userMessage = new Message(Message.Type.USER, input);
+        Message userMessage = new Message(Message.Type.USER, normalizedInput);
+        try {
+            if (attachments != null && !attachments.isEmpty()) {
+                com.google.gson.JsonArray contentArr = new com.google.gson.JsonArray();
+
+                // 添加图片块（使用与 claude-code 相同的格式，包含完整 base64 数据）
+                for (Attachment att : attachments) {
+                    if (att == null) continue;
+                    String mt = (att.mediaType != null) ? att.mediaType : "";
+                    if (mt.startsWith("image/") && att.data != null) {
+                        // 图片块格式：{ type: "image", source: { type: "base64", media_type: "...", data: "..." } }
+                        com.google.gson.JsonObject imageBlock = new com.google.gson.JsonObject();
+                        imageBlock.addProperty("type", "image");
+                        com.google.gson.JsonObject source = new com.google.gson.JsonObject();
+                        source.addProperty("type", "base64");
+                        source.addProperty("media_type", mt);
+                        source.addProperty("data", att.data);
+                        imageBlock.add("source", source);
+                        contentArr.add(imageBlock);
+                    }
+                }
+
+                // 当用户未输入文本时，提供一个占位说明
+                String userDisplayText = normalizedInput;
+                if (userDisplayText.isEmpty()) {
+                    int imageCount = 0;
+                    java.util.List<String> names = new java.util.ArrayList<>();
+                    for (Attachment att : attachments) {
+                        if (att != null && att.fileName != null && !att.fileName.isEmpty()) {
+                            names.add(att.fileName);
+                        }
+                        String mt = (att != null && att.mediaType != null) ? att.mediaType : "";
+                        if (mt.startsWith("image/")) {
+                            imageCount++;
+                        }
+                    }
+                    String nameSummary;
+                    if (names.isEmpty()) {
+                        nameSummary = imageCount > 0 ? (imageCount + " 张图片") : (attachments.size() + " 个附件");
+                    } else {
+                        if (names.size() > 3) {
+                            nameSummary = String.join(", ", names.subList(0, 3)) + " 等";
+                        } else {
+                            nameSummary = String.join(", ", names);
+                        }
+                    }
+                    userDisplayText = "已上传附件: " + nameSummary;
+                }
+
+                // 添加文本块
+                com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
+                textBlock.addProperty("type", "text");
+                textBlock.addProperty("text", userDisplayText);
+                contentArr.add(textBlock);
+
+                com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+                messageObj.add("content", contentArr);
+                com.google.gson.JsonObject rawUser = new com.google.gson.JsonObject();
+                rawUser.add("message", messageObj);
+                userMessage.raw = rawUser;
+                userMessage.content = userDisplayText;
+            }
+        } catch (Exception e) {
+            System.err.println("[ClaudeSession] Failed to attach raw image blocks: " + e.getMessage());
+        }
         messages.add(userMessage);
         notifyMessageUpdate();
 
         // 更新摘要（第一条消息）
         if (summary == null) {
-            summary = input.length() > 45 ? input.substring(0, 45) + "..." : input;
+            String baseSummary = (userMessage.content != null && !userMessage.content.isEmpty())
+                ? userMessage.content
+                : normalizedInput;
+            summary = baseSummary.length() > 45 ? baseSummary.substring(0, 45) + "..." : baseSummary;
         }
 
         this.lastModifiedTime = System.currentTimeMillis();
         this.busy = true;
+        this.loading = true;  // 设置 loading 状态，前端显示"Claude 正在思考"
         updateState();
 
         return launchClaude().thenCompose(chId -> {
             CompletableFuture<Void> sendFuture = sdkBridge.sendMessage(
                 chId,
-                input,
+                normalizedInput,
                 sessionId,  // 传递当前 sessionId
                 cwd,        // 传递工作目录
                 attachments,
@@ -271,8 +341,8 @@ public class ClaudeSession {
                         } catch (Exception e) {
                             System.err.println("Failed to parse assistant message JSON: " + e.getMessage());
                         }
-                    } else if ("content".equals(type)) {
-                        // 处理流式内容片段（向后兼容）
+                    } else if ("content".equals(type) || "content_delta".equals(type)) {
+                        // 处理流式内容片段（content 向后兼容，content_delta 用于图片消息流式响应）
                         assistantContent.append(content);
 
                         if (currentAssistantMessage == null) {
@@ -290,6 +360,12 @@ public class ClaudeSession {
                             callback.onSessionIdReceived(content);
                         }
                         System.out.println("Captured session ID: " + content);
+                    } else if ("message_end".equals(type)) {
+                        // 消息结束时立即更新 loading 状态，避免延迟
+                        busy = false;
+                        loading = false;
+                        updateState();
+                        System.out.println("[ClaudeSession] Message end received, loading set to false");
                     } else if ("system".equals(type)) {
                         // 处理系统消息
                         System.out.println("System message: " + content);
@@ -299,6 +375,8 @@ public class ClaudeSession {
                 @Override
                 public void onError(String error) {
                     ClaudeSession.this.error = error;
+                    busy = false;
+                    loading = false;
                     Message errorMessage = new Message(Message.Type.ERROR, error);
                     messages.add(errorMessage);
                     notifyMessageUpdate();
@@ -308,6 +386,7 @@ public class ClaudeSession {
                 @Override
                 public void onComplete(ClaudeSDKBridge.SDKResult result) {
                     busy = false;
+                    loading = false;
                     lastModifiedTime = System.currentTimeMillis();
                     updateState();
                 }
@@ -317,6 +396,7 @@ public class ClaudeSession {
         }).exceptionally(ex -> {
             this.error = ex.getMessage();
             this.busy = false;
+            this.loading = false;
             updateState();
             return null;
         });

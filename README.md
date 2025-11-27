@@ -2,7 +2,7 @@
 
 本项目主要解决在IDEA中使用Claude Code 没有 GUI操作窗口的场景
 
-目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.4-beta
+目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.6（2025年11月27日更新）
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
@@ -17,11 +17,26 @@
 # 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.5-beta 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.5-beta.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.5/idea-claude-code-gui-0.0.5-beta.zip)
+插件下载：[idea-claude-code-gui-0.0.6.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.6/idea-claude-code-gui-0.0.6.zip)
 
 ---
 
 ### 目前进度
+
+##### **11月27日（v0.0.6）**
+
+- [x] 重构 输入框UI交互
+- [x] 输入框 支持发送图片
+- [x] 输入框 支持模型容量统计
+- [x] 优化 数据统计页面 UI样式
+- [x] 优化 设置页面侧边栏展示样式
+- [x] 重构 多平台兼容性问题
+- [x] 解决某些特殊情况下响应无法中断的BUG
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.6/1.png" />
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.6/3.png" />
+
 
 ##### **11月26日（v0.0.5）**
 
@@ -29,7 +44,7 @@
 - [x] 解决Window下新建问题按钮失效问题
 - [x] 优化一些细节样式
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.5/1.png" />
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.6/2.png" />
 
 
 ##### **11月24日（v0.0.4）**

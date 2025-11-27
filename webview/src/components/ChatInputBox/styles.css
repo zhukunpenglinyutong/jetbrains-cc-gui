@@ -1,0 +1,526 @@
+/**
+ * ChatInputBox 组件样式
+ * 功能: 004-refactor-input-box
+ */
+
+/* ============================================================
+   CSS 变量
+   ============================================================ */
+.chat-input-box {
+  --input-bg: #1e1e1e;
+  --input-border: #3e3e42;
+  --input-focus-border: #007fd4;
+  --input-placeholder: #666;
+  --dropdown-bg: #252526;
+  --dropdown-border: #454545;
+  --dropdown-hover: #2a2d2e;
+  --dropdown-selected: #094771;
+  --button-bg: transparent;
+  --button-hover: rgba(255, 255, 255, 0.1);
+  --button-primary: #007fd4;
+  --button-disabled: #555;
+  --text-primary: #cccccc;
+  --text-secondary: #888888;
+  --text-muted: #666666;
+  --progress-bg: rgba(255, 255, 255, 0.15);
+  --progress-fill: #4fc3f7;
+  --attachment-bg: #2d2d2d;
+  --attachment-border: #404040;
+  --error-color: #f44336;
+  --success-color: #4caf50;
+}
+
+/* ============================================================
+   容器布局
+   ============================================================ */
+.chat-input-box {
+  display: flex;
+  flex-direction: column;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.chat-input-box:focus-within {
+  border-color: var(--input-focus-border);
+}
+
+/* ============================================================
+   附件列表区域
+   ============================================================ */
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--input-border);
+}
+
+.attachment-list:empty {
+  display: none;
+}
+
+.attachment-item {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--attachment-bg);
+  border: 1px solid var(--attachment-border);
+  cursor: pointer;
+}
+
+.attachment-item:hover .attachment-remove {
+  opacity: 1;
+}
+
+.attachment-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+}
+
+.attachment-file-icon {
+  font-size: 20px;
+  color: var(--text-secondary);
+}
+
+.attachment-file-name {
+  font-size: 8px;
+  color: var(--text-muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  margin-top: 2px;
+}
+
+.attachment-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 10px;
+}
+
+.attachment-remove:hover {
+  background: var(--error-color);
+}
+
+/* ============================================================
+   输入区域
+   ============================================================ */
+.input-editable-wrapper {
+  position: relative;
+  padding: 10px 12px;
+  min-height: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.input-editable {
+  min-height: calc(1.5em * 3);
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.input-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--input-placeholder);
+  pointer-events: none;
+}
+
+.input-editable:focus {
+  outline: none;
+}
+
+/* ============================================================
+   底部工具栏
+   ============================================================ */
+.button-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-top: 1px solid var(--input-border);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.button-area-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.button-area-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ============================================================
+   选择器样式
+   ============================================================ */
+.selector-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--button-bg);
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.selector-button:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+.selector-button .codicon {
+  font-size: 14px;
+}
+
+.selector-dropdown {
+  position: fixed;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  min-width: 140px;
+  padding: 4px 0;
+}
+
+.selector-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: background 0.1s;
+}
+
+.selector-option:hover {
+  background: var(--dropdown-hover);
+}
+
+.selector-option.selected {
+  background: var(--dropdown-selected);
+}
+
+.selector-option .codicon {
+  font-size: 14px;
+  width: 16px;
+}
+
+.selector-option .check-mark {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--success-color);
+}
+
+/* 选择器轻提示 */
+.selector-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 1001;
+  animation: toast-fade 1.5s ease-in-out;
+}
+
+@keyframes toast-fade {
+  0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+}
+
+/* ============================================================
+   使用量指示器
+   ============================================================ */
+.token-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.token-indicator-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.token-indicator-ring {
+  transform: rotate(-90deg);
+}
+
+.token-indicator-bg {
+  fill: none;
+  stroke: var(--progress-bg);
+  stroke-width: 1.5;
+}
+
+.token-indicator-fill {
+  fill: none;
+  stroke: var(--progress-fill);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s;
+}
+
+/* 使用量悬浮气泡 */
+.token-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 1002;
+}
+
+.token-indicator:hover .token-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ============================================================
+   附件按钮
+   ============================================================ */
+.attach-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--button-bg);
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.attach-button:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+.attach-button .codicon {
+  font-size: 16px;
+}
+
+.attach-input {
+  display: none;
+}
+
+/* ============================================================
+   发送/停止按钮
+   ============================================================ */
+.submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--button-primary);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.submit-button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.submit-button:disabled {
+  background: var(--button-disabled);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.submit-button .codicon {
+  font-size: 14px;
+}
+
+.stop-button {
+  background: var(--error-color);
+}
+
+.stop-button:hover {
+  background: #d32f2f;
+}
+
+/* ============================================================
+   下拉菜单
+   ============================================================ */
+.completion-dropdown {
+  position: fixed;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+  max-height: 300px;
+  overflow-y: auto;
+  min-width: 280px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.dropdown-item:hover,
+.dropdown-item.active {
+  background: var(--dropdown-hover);
+}
+
+.dropdown-item.selected {
+  background: var(--dropdown-selected);
+}
+
+.dropdown-item-icon {
+  font-size: 16px;
+  color: var(--text-secondary);
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.dropdown-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.dropdown-item-label {
+  color: var(--text-primary);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-item-description {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.dropdown-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.dropdown-loading {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* ============================================================
+   图片预览对话框
+   ============================================================ */
+.image-preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  cursor: zoom-out;
+}
+
+.image-preview-content {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.image-preview-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: background 0.15s;
+}
+
+.image-preview-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

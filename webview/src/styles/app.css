@@ -1115,7 +1115,10 @@
         }
 
         .settings-sidebar.collapsed .sidebar-item.warning .codicon-warning {
-            display: none;
+            position: absolute;
+            right: 4px;
+            top: 6px;
+            font-size: 10px;
         }
 
         .sidebar-toggle {
@@ -1734,6 +1737,22 @@
     margin-bottom: 16px;
     gap: 12px;
     flex-wrap: wrap;
+}
+
+.controls-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.refresh-btn.icon-only {
+    padding: 6px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .scope-selector {
@@ -2376,6 +2395,310 @@
     margin-bottom: 16px;
 }
 
+/* 日期范围筛选器样式 */
+.date-range-selector {
+    display: flex;
+    gap: 4px;
+    background: #252526;
+    padding: 3px;
+    border-radius: 6px;
+    border: 1px solid #3e3e42;
+}
+
+.range-btn {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #858585;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.range-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #cccccc;
+}
+
+.range-btn.active {
+    background: #007fd4;
+    color: #ffffff;
+}
+
+/* 趋势指示器样式 */
+.trend {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 0;
+    margin-top: 4px;
+}
+
+.trend.up {
+    color: #4caf50;
+}
+
+.trend.down {
+    color: #f44336;
+}
+
+.trend.neutral {
+    color: #9e9e9e;
+}
+
+/* 排序按钮组样式 */
+.sort-buttons {
+    display: flex;
+    gap: 4px;
+    background: #252526;
+    padding: 3px;
+    border-radius: 6px;
+    border: 1px solid #3e3e42;
+}
+
+.sort-btn {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #858585;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sort-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #cccccc;
+}
+
+.sort-btn.active {
+    background: #007fd4;
+    color: #ffffff;
+}
+
+/* 自定义Tooltip样式 */
+.chart-tooltip {
+    position: fixed;
+    z-index: 1000;
+    background: #2d2d2d;
+    border: 1px solid #3e3e42;
+    border-radius: 6px;
+    padding: 10px 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    margin-top: -8px;
+}
+
+.chart-tooltip::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid #2d2d2d;
+}
+
+.tooltip-date {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e0e0e0;
+    margin-bottom: 6px;
+}
+
+.tooltip-cost {
+    font-size: 14px;
+    font-weight: 600;
+    color: #4caf50;
+    margin-bottom: 4px;
+}
+
+.tooltip-sessions {
+    font-size: 12px;
+    color: #858585;
+}
+
+/* 项目信息简化样式 */
+.project-info-simple {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #252526;
+    border-radius: 6px;
+    border: 1px solid #333;
+}
+
+.project-info-simple .codicon {
+    font-size: 18px;
+    color: #007fd4;
+}
+
+.project-info-simple .project-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+/* 独立Token进度条样式 */
+.token-breakdown-independent {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #252526;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.token-bar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.token-bar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.token-bar-label {
+    font-size: 13px;
+    color: #cccccc;
+}
+
+.token-bar-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.token-bar-track {
+    width: 100%;
+    height: 8px;
+    background: #1e1e1e;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.token-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.token-bar-fill.input {
+    background: #3b82f6;
+}
+
+.token-bar-fill.output {
+    background: #10b981;
+}
+
+.token-bar-fill.cache-write {
+    background: #f59e0b;
+}
+
+.token-bar-fill.cache-read {
+    background: #8b5cf6;
+}
+
+/* 会话标题样式 */
+.session-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #e0e0e0;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.session-id-small {
+    font-size: 11px;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+/* 图表增强样式 - Y轴和网格线 */
+.chart-with-axis {
+    display: flex;
+    gap: 12px;
+    height: 280px;
+}
+
+.chart-y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 60px;
+    padding: 0 8px 24px 0;
+    flex-shrink: 0;
+}
+
+.y-axis-label {
+    font-size: 11px;
+    color: #858585;
+    text-align: right;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.chart-main {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+}
+
+.chart-grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    pointer-events: none;
+}
+
+.chart-grid-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.chart-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: calc(100% - 24px);
+    gap: 4px;
+    position: relative;
+    z-index: 1;
+}
+
+/* 最后更新时间样式 */
+.last-updated {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px;
+    margin-top: 16px;
+    border-top: 1px solid #333;
+    font-size: 12px;
+    color: #666;
+}
+
+.last-updated .codicon {
+    font-size: 12px;
+}
+
 /* 官方交流群样式 */
 .community-section {
     max-width: 600px;
@@ -2782,3 +3105,75 @@
         font-size: 12px;
     }
 }
+        .message-image-block img,
+        .message .markdown-content img {
+            max-width: 480px;
+            max-height: 360px;
+            width: auto;
+            height: auto;
+            border-radius: 4px;
+            display: inline-block;
+            cursor: zoom-in;
+        }
+
+        /* 用户上传图片的样式 */
+        .message-image-block.user-image {
+            display: inline-block;
+            margin: 4px 4px 4px 0;
+        }
+
+        .message-image-block.user-image img {
+            border: 1px solid #3e3e42;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .message-image-block.user-image:hover img {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 图片预览遮罩层 */
+        .image-preview-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.2s ease-out;
+            cursor: pointer;
+        }
+
+        .image-preview-content {
+            max-width: 90vw;
+            max-height: 90vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            cursor: default;
+        }
+
+        .image-preview-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .image-preview-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }

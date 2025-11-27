@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import com.github.claudecodegui.model.DeleteResult;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -12,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,11 +57,25 @@ public class CCSwitchSettingsService {
     }
 
     /**
+     * 获取配置目录 Path 对象
+     */
+    private Path getConfigDir() {
+        String homeDir = System.getProperty("user.home");
+        return Paths.get(homeDir, CONFIG_DIR_NAME);
+    }
+
+    /**
+     * 获取配置文件 Path 对象
+     */
+    private Path getConfigFilePath() {
+        return getConfigDir().resolve(CONFIG_FILE_NAME);
+    }
+
+    /**
      * 确保配置目录存在
      */
     private void ensureConfigDirectory() throws IOException {
-        String homeDir = System.getProperty("user.home");
-        Path configDir = Paths.get(homeDir, CONFIG_DIR_NAME);
+        Path configDir = getConfigDir();
         if (!Files.exists(configDir)) {
             Files.createDirectories(configDir);
             System.out.println("[CCSwitchSettings] Created config directory: " + configDir);
@@ -389,40 +406,105 @@ public class CCSwitchSettingsService {
     }
 
     /**
-     * 删除供应商
+     * 删除供应商（返回 DeleteResult 提供详细错误信息）
+     * @param id 供应商 ID
+     * @return DeleteResult 包含操作结果和错误详情
      */
-    public void deleteClaudeProvider(String id) throws IOException {
-        JsonObject config = readConfig();
+    public DeleteResult deleteClaudeProvider(String id) {
+        Path configFilePath = null;
+        Path backupFilePath = null;
 
-        if (!config.has("claude")) {
-            throw new IllegalArgumentException("No claude configuration found");
-        }
+        try {
+            JsonObject config = readConfig();
+            configFilePath = getConfigFilePath();
+            backupFilePath = getConfigDir().resolve(BACKUP_FILE_NAME);
 
-        JsonObject claude = config.getAsJsonObject("claude");
-        JsonObject providers = claude.getAsJsonObject("providers");
-
-        if (!providers.has(id)) {
-            throw new IllegalArgumentException("Provider with id '" + id + "' not found");
-        }
-
-        // 删除供应商
-        providers.remove(id);
-
-        // 如果删除的是当前激活的供应商，切换到第一个可用的供应商
-        String currentId = claude.has("current") ? claude.get("current").getAsString() : null;
-        if (id.equals(currentId)) {
-            if (providers.size() > 0) {
-                String firstKey = providers.keySet().iterator().next();
-                claude.addProperty("current", firstKey);
-                System.out.println("[CCSwitchSettings] Switched to provider: " + firstKey);
-            } else {
-                claude.addProperty("current", "");
-                System.out.println("[CCSwitchSettings] No remaining providers");
+            if (!config.has("claude")) {
+                return DeleteResult.failure(
+                    DeleteResult.ErrorType.FILE_NOT_FOUND,
+                    "No claude configuration found",
+                    configFilePath.toString(),
+                    "请先添加至少一个供应商配置"
+                );
             }
-        }
 
-        writeConfig(config);
-        System.out.println("[CCSwitchSettings] Deleted provider: " + id);
+            JsonObject claude = config.getAsJsonObject("claude");
+            JsonObject providers = claude.getAsJsonObject("providers");
+
+            if (!providers.has(id)) {
+                return DeleteResult.failure(
+                    DeleteResult.ErrorType.FILE_NOT_FOUND,
+                    "Provider with id '" + id + "' not found",
+                    null,
+                    "请检查供应商 ID 是否正确"
+                );
+            }
+
+            // 创建配置备份（用于回滚）
+            try {
+                Files.copy(configFilePath, backupFilePath, StandardCopyOption.REPLACE_EXISTING);
+                System.out.println("[CCSwitchSettings] Created backup: " + backupFilePath);
+            } catch (IOException e) {
+                System.err.println("[CCSwitchSettings] Warning: Failed to create backup: " + e.getMessage());
+                // 备份失败不阻止删除操作，但记录警告
+            }
+
+            // 删除供应商
+            providers.remove(id);
+
+            // 如果删除的是当前激活的供应商，切换到第一个可用的供应商
+            String currentId = claude.has("current") ? claude.get("current").getAsString() : null;
+            if (id.equals(currentId)) {
+                if (providers.size() > 0) {
+                    String firstKey = providers.keySet().iterator().next();
+                    claude.addProperty("current", firstKey);
+                    System.out.println("[CCSwitchSettings] Switched to provider: " + firstKey);
+                } else {
+                    claude.addProperty("current", "");
+                    System.out.println("[CCSwitchSettings] No remaining providers");
+                }
+            }
+
+            // 写入配置
+            writeConfig(config);
+            System.out.println("[CCSwitchSettings] Deleted provider: " + id);
+
+            // 删除成功后移除备份
+            try {
+                Files.deleteIfExists(backupFilePath);
+            } catch (IOException e) {
+                // 忽略备份文件删除失败
+            }
+
+            return DeleteResult.success(id);
+
+        } catch (IOException e) {
+            // 尝试从备份恢复
+            if (backupFilePath != null && configFilePath != null) {
+                try {
+                    if (Files.exists(backupFilePath)) {
+                        Files.copy(backupFilePath, configFilePath, StandardCopyOption.REPLACE_EXISTING);
+                        System.out.println("[CCSwitchSettings] Restored from backup after failure");
+                    }
+                } catch (IOException restoreEx) {
+                    System.err.println("[CCSwitchSettings] Failed to restore backup: " + restoreEx.getMessage());
+                }
+            }
+
+            return DeleteResult.fromException(e, configFilePath != null ? configFilePath.toString() : null);
+        }
+    }
+
+    /**
+     * 删除供应商（兼容旧接口，抛出异常）
+     * @deprecated 使用 {@link #deleteClaudeProvider(String)} 获取详细错误信息
+     */
+    @Deprecated
+    public void deleteClaudeProviderWithException(String id) throws IOException {
+        DeleteResult result = deleteClaudeProvider(id);
+        if (!result.isSuccess()) {
+            throw new IOException(result.getUserFriendlyMessage());
+        }
     }
 
     /**

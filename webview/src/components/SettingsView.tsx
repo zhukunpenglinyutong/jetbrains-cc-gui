@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import type { ProviderConfig } from '../types/provider';
 import UsageStatisticsSection from './UsageStatisticsSection';
+import AlertDialog from './AlertDialog';
+import type { AlertType } from './AlertDialog';
+import ConfirmDialog from './ConfirmDialog';
 
 type SettingsTab = 'basic' | 'usage' | 'permissions' | 'mcp' | 'agents' | 'skills' | 'community';
 
@@ -46,6 +49,30 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   const [jsonConfig, setJsonConfig] = useState('');
   const [jsonError, setJsonError] = useState('');
 
+  // 页面内弹窗状态
+  const [alertDialog, setAlertDialog] = useState<{
+    isOpen: boolean;
+    type: AlertType;
+    title: string;
+    message: string;
+  }>({ isOpen: false, type: 'info', title: '', message: '' });
+
+  // 确认删除弹窗状态
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    provider: ProviderConfig | null;
+  }>({ isOpen: false, provider: null });
+
+  // 显示页面内弹窗的帮助函数
+  const showAlert = (type: AlertType, title: string, message: string) => {
+    console.log('[SettingsView] showAlert called:', { type, title, message });
+    setAlertDialog({ isOpen: true, type, title, message });
+  };
+
+  const closeAlert = () => {
+    setAlertDialog({ ...alertDialog, isOpen: false });
+  };
+
   useEffect(() => {
     // 设置全局回调
     window.updateProviders = (jsonStr: string) => {
@@ -74,7 +101,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     };
 
     window.showError = (message: string) => {
-      alert(message);
+      console.log('[SettingsView] window.showError called:', message);
+      showAlert('error', '操作失败', message);
       setLoading(false);
     };
 
@@ -227,23 +255,35 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   };
 
   const handleDeleteProvider = (provider: ProviderConfig) => {
+    console.log('[SettingsView] handleDeleteProvider called:', provider.id, provider.name);
+
     if (providers.length === 1) {
-      alert('至少需要保留一个供应商配置');
+      showAlert('warning', '无法删除', '至少需要保留一个供应商配置');
       return;
     }
 
     if (provider.isActive) {
-      alert('无法删除当前使用的供应商。请先切换到其他供应商后再删除。');
+      showAlert('warning', '无法删除', '无法删除当前使用的供应商。请先切换到其他供应商后再删除。');
       return;
     }
 
-    if (!confirm(`确定要删除供应商"${provider.name}"吗？\n\n此操作无法撤销。`)) {
-      return;
-    }
+    // 显示确认弹窗
+    setDeleteConfirm({ isOpen: true, provider });
+  };
 
+  const confirmDeleteProvider = () => {
+    const provider = deleteConfirm.provider;
+    if (!provider) return;
+
+    console.log('[SettingsView] confirmDeleteProvider - sending delete_provider:', provider.id);
     const data = { id: provider.id };
     sendToJava(`delete_provider:${JSON.stringify(data)}`);
     setLoading(true);
+    setDeleteConfirm({ isOpen: false, provider: null });
+  };
+
+  const cancelDeleteProvider = () => {
+    setDeleteConfirm({ isOpen: false, provider: null });
   };
 
   // Field Change Handlers
@@ -361,20 +401,22 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
               <span className="codicon codicon-warning" />
             </div>
             <div
-              className={`sidebar-item ${currentTab === 'agents' ? 'active' : ''}`}
+              className={`sidebar-item warning ${currentTab === 'agents' ? 'active' : ''}`}
               onClick={() => setCurrentTab('agents')}
               title={isCollapsed ? 'Agents' : ''}
             >
               <span className="codicon codicon-robot" />
               <span className="sidebar-item-text">Agents</span>
+              <span className="codicon codicon-warning" />
             </div>
             <div
-              className={`sidebar-item ${currentTab === 'skills' ? 'active' : ''}`}
+              className={`sidebar-item warning ${currentTab === 'skills' ? 'active' : ''}`}
               onClick={() => setCurrentTab('skills')}
               title={isCollapsed ? 'Skills' : ''}
             >
               <span className="codicon codicon-book" />
               <span className="sidebar-item-text">Skills</span>
+              <span className="codicon codicon-warning" />
             </div>
             <div
               className={`sidebar-item ${currentTab === 'community' ? 'active' : ''}`}
@@ -723,6 +765,26 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
           )}
         </div>
       </div>
+
+      {/* 页面内弹窗 */}
+      <AlertDialog
+        isOpen={alertDialog.isOpen}
+        type={alertDialog.type}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        onClose={closeAlert}
+      />
+
+      {/* 删除确认弹窗 */}
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="确认删除"
+        message={`确定要删除供应商"${deleteConfirm.provider?.name || ''}"吗？\n\n此操作无法撤销。`}
+        confirmText="删除"
+        cancelText="取消"
+        onConfirm={confirmDeleteProvider}
+        onCancel={cancelDeleteProvider}
+      />
     </div>
   );
 };

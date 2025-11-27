@@ -9,6 +9,11 @@ import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.util.io.FileUtil;
 
+import com.github.claudecodegui.model.NodeDetectionResult;
+import com.github.claudecodegui.model.PathCheckResult;
+import com.github.claudecodegui.util.PathUtils;
+import com.github.claudecodegui.util.PlatformUtils;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
@@ -56,6 +61,26 @@ public class ClaudeSDKBridge {
     private final Map<String, Process> activeChannelProcesses = new ConcurrentHashMap<>();
     private final Set<String> interruptedChannels = ConcurrentHashMap.newKeySet();
     private volatile String cachedPermissionDir = null;
+
+    // Windows 常见 Node.js 安装路径
+    private static final String[] WINDOWS_NODE_PATHS = {
+        // 官方安装程序默认路径
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Program Files (x86)\\nodejs\\node.exe",
+        // Chocolatey
+        "C:\\ProgramData\\chocolatey\\bin\\node.exe",
+        // Scoop
+        "%USERPROFILE%\\scoop\\apps\\nodejs\\current\\node.exe",
+        "%USERPROFILE%\\scoop\\apps\\nodejs-lts\\current\\node.exe",
+        // nvm-windows
+        "%APPDATA%\\nvm\\current\\node.exe",
+        // fnm
+        "%USERPROFILE%\\.fnm\\node-versions\\default\\installation\\node.exe",
+        // volta
+        "%USERPROFILE%\\.volta\\bin\\node.exe",
+        // 用户自定义安装
+        "%LOCALAPPDATA%\\Programs\\nodejs\\node.exe"
+    };
 
     /**
      * SDK 消息回调接口
@@ -163,19 +188,76 @@ public class ClaudeSDKBridge {
             return nodeExecutable;
         }
 
-        // 先尝试使用 which/where 命令查找（最可靠）
+        NodeDetectionResult result = detectNodeWithDetails();
+        if (result.isFound()) {
+            nodeExecutable = result.getNodePath();
+            return nodeExecutable;
+        }
+
+        // 如果都找不到，最后回退
+        System.err.println("⚠️ 无法自动检测 Node.js 路径，使用默认值 'node'");
+        System.err.println(result.getUserFriendlyMessage());
+        nodeExecutable = "node";
+        return nodeExecutable;
+    }
+
+    /**
+     * 检测 Node.js 并返回详细结果
+     * @return NodeDetectionResult 包含检测详情
+     */
+    public NodeDetectionResult detectNodeWithDetails() {
+        List<String> triedPaths = new ArrayList<>();
         System.out.println("正在查找 Node.js...");
+        System.out.println("  操作系统: " + System.getProperty("os.name"));
+        System.out.println("  平台类型: " + (PlatformUtils.isWindows() ? "Windows" :
+            (PlatformUtils.isMac() ? "macOS" : "Linux/Unix")));
+
+        // 1. 尝试使用系统命令查找 (where/which)
+        NodeDetectionResult cmdResult = detectNodeViaSystemCommand(triedPaths);
+        if (cmdResult != null && cmdResult.isFound()) {
+            return cmdResult;
+        }
+
+        // 2. 尝试已知安装路径
+        NodeDetectionResult knownPathResult = detectNodeViaKnownPaths(triedPaths);
+        if (knownPathResult != null && knownPathResult.isFound()) {
+            return knownPathResult;
+        }
+
+        // 3. 尝试 PATH 环境变量
+        NodeDetectionResult pathResult = detectNodeViaPath(triedPaths);
+        if (pathResult != null && pathResult.isFound()) {
+            return pathResult;
+        }
+
+        // 4. 最后回退：直接尝试 "node"
+        NodeDetectionResult fallbackResult = detectNodeViaFallback(triedPaths);
+        if (fallbackResult != null && fallbackResult.isFound()) {
+            return fallbackResult;
+        }
+
+        return NodeDetectionResult.failure("在所有已知路径中均未找到 Node.js", triedPaths);
+    }
+
+    /**
+     * 通过系统命令 (where/which) 检测 Node.js
+     */
+    private NodeDetectionResult detectNodeViaSystemCommand(List<String> triedPaths) {
         try {
-            String os = System.getProperty("os.name").toLowerCase();
-            String whichCommand = os.contains("win") ? "where" : "which";
+            ProcessBuilder pb;
+            String methodDesc;
 
-            ProcessBuilder pb = new ProcessBuilder(whichCommand, "node");
-
-            // 对于 macOS/Linux，使用 shell 执行以获取完整环境
-            if (!os.contains("win")) {
+            if (PlatformUtils.isWindows()) {
+                // Windows: 使用 where 命令
+                pb = new ProcessBuilder("where", "node");
+                methodDesc = "Windows where 命令";
+            } else {
+                // macOS/Linux: 使用 bash -l -c 'which node' 获取完整 shell 环境
                 pb = new ProcessBuilder("/bin/bash", "-l", "-c", "which node");
+                methodDesc = "Unix which 命令";
             }
 
+            System.out.println("  尝试方法: " + methodDesc);
             Process process = pb.start();
 
             try (BufferedReader reader = new BufferedReader(
@@ -183,92 +265,168 @@ public class ClaudeSDKBridge {
                 String path = reader.readLine();
                 if (path != null && !path.isEmpty()) {
                     path = path.trim();
-                    // 验证这个路径确实可用
-                    File nodeFile = new File(path);
-                    if (nodeFile.exists() && nodeFile.canExecute()) {
-                        nodeExecutable = path;
-                        System.out.println("✓ 通过 " + whichCommand + " 找到 Node.js: " + nodeExecutable);
-                        return nodeExecutable;
+                    triedPaths.add(path);
+
+                    // 验证路径可用
+                    String version = verifyNodePath(path);
+                    if (version != null) {
+                        System.out.println("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
+                        return NodeDetectionResult.success(
+                            path, version,
+                            PlatformUtils.isWindows() ?
+                                NodeDetectionResult.DetectionMethod.WHERE_COMMAND :
+                                NodeDetectionResult.DetectionMethod.WHICH_COMMAND,
+                            triedPaths
+                        );
                     }
                 }
+            }
+
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
             }
         } catch (Exception e) {
-            System.out.println("  which/where 命令查找失败: " + e.getMessage());
+            System.out.println("  系统命令查找失败: " + e.getMessage());
         }
+        return null;
+    }
 
-        // 如果 which/where 失败，再尝试常见路径
+    /**
+     * 通过已知安装路径检测 Node.js
+     */
+    private NodeDetectionResult detectNodeViaKnownPaths(List<String> triedPaths) {
         String userHome = System.getProperty("user.home");
+        List<String> pathsToCheck = new ArrayList<>();
 
-        // 动态查找 NVM 管理的 Node.js 版本
-        List<String> dynamicPaths = new ArrayList<>();
-        File nvmDir = new File(userHome + "/.nvm/versions/node");
-        if (nvmDir.exists() && nvmDir.isDirectory()) {
-            File[] versionDirs = nvmDir.listFiles();
-            if (versionDirs != null) {
-                // 按版本号倒序排序，优先使用较新的版本
-                java.util.Arrays.sort(versionDirs, (a, b) -> b.getName().compareTo(a.getName()));
-                for (File versionDir : versionDirs) {
-                    if (versionDir.isDirectory()) {
-                        String nodePath = versionDir.getAbsolutePath() + "/bin/node";
-                        dynamicPaths.add(nodePath);
-                        System.out.println("  发现 NVM Node.js: " + nodePath);
+        if (PlatformUtils.isWindows()) {
+            // Windows 路径：展开环境变量并添加
+            System.out.println("  正在检查 Windows 常见安装路径...");
+            for (String templatePath : WINDOWS_NODE_PATHS) {
+                String expandedPath = expandWindowsEnvVars(templatePath);
+                pathsToCheck.add(expandedPath);
+            }
+
+            // 动态查找 nvm-windows 版本
+            String nvmHome = PlatformUtils.getEnvIgnoreCase("NVM_HOME");
+            if (nvmHome == null) {
+                nvmHome = System.getenv("APPDATA") + "\\nvm";
+            }
+            File nvmDir = new File(nvmHome);
+            if (nvmDir.exists() && nvmDir.isDirectory()) {
+                File[] versionDirs = nvmDir.listFiles(File::isDirectory);
+                if (versionDirs != null) {
+                    java.util.Arrays.sort(versionDirs, (a, b) -> b.getName().compareTo(a.getName()));
+                    for (File versionDir : versionDirs) {
+                        if (versionDir.getName().startsWith("v")) {
+                            String nodePath = versionDir.getAbsolutePath() + "\\node.exe";
+                            pathsToCheck.add(nodePath);
+                            System.out.println("  发现 nvm-windows Node.js: " + nodePath);
+                        }
                     }
                 }
             }
+        } else {
+            // macOS/Linux 路径
+            System.out.println("  正在检查 Unix/macOS 常见安装路径...");
+
+            // 动态查找 NVM 管理的版本
+            File nvmDir = new File(userHome + "/.nvm/versions/node");
+            if (nvmDir.exists() && nvmDir.isDirectory()) {
+                File[] versionDirs = nvmDir.listFiles();
+                if (versionDirs != null) {
+                    java.util.Arrays.sort(versionDirs, (a, b) -> b.getName().compareTo(a.getName()));
+                    for (File versionDir : versionDirs) {
+                        if (versionDir.isDirectory()) {
+                            String nodePath = versionDir.getAbsolutePath() + "/bin/node";
+                            pathsToCheck.add(nodePath);
+                            System.out.println("  发现 NVM Node.js: " + nodePath);
+                        }
+                    }
+                }
+            }
+
+            // 添加常见 Unix/macOS 路径
+            pathsToCheck.add("/usr/local/bin/node");           // Homebrew (macOS Intel)
+            pathsToCheck.add("/opt/homebrew/bin/node");        // Homebrew (Apple Silicon)
+            pathsToCheck.add("/usr/bin/node");                 // Linux 系统
+            pathsToCheck.add(userHome + "/.volta/bin/node");   // Volta
+            pathsToCheck.add(userHome + "/.fnm/aliases/default/bin/node"); // fnm
         }
 
-        // 添加其他常见路径
-        dynamicPaths.add("/usr/local/bin/node");           // Homebrew (macOS Intel)
-        dynamicPaths.add("/opt/homebrew/bin/node");        // Homebrew (Apple Silicon)
-        dynamicPaths.add("/usr/bin/node");                 // Linux
-        dynamicPaths.add(userHome + "/.volta/bin/node");   // Volta
+        // 遍历检查每个路径
+        for (String path : pathsToCheck) {
+            triedPaths.add(path);
 
-        String[] possiblePaths = dynamicPaths.toArray(new String[0]);
+            File nodeFile = new File(path);
+            if (!nodeFile.exists()) {
+                System.out.println("  跳过不存在: " + path);
+                continue;
+            }
 
-        for (String path : possiblePaths) {
-            try {
+            // Windows 不检查 canExecute()，因为行为不一致
+            if (!PlatformUtils.isWindows() && !nodeFile.canExecute()) {
+                System.out.println("  跳过无执行权限: " + path);
+                continue;
+            }
 
-                // 先检查文件是否存在（只对绝对路径检查）
-                if (path.startsWith("/")) {
-                    File nodeFile = new File(path);
-                    if (!nodeFile.exists()) {
-                        System.out.println("  跳过不存在的路径: " + path);
-                        continue;
-                    }
-                    if (!nodeFile.canExecute()) {
-                        System.out.println("  跳过无执行权限的路径: " + path);
-                        continue;
-                    }
-                }
-
-                // 尝试执行 node --version
-                ProcessBuilder pb = new ProcessBuilder(path, "--version");
-                Process process = pb.start();
-
-                // 读取版本信息
-                String version = null;
-                try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                    version = reader.readLine();
-                }
-
-                int exitCode = process.waitFor();
-
-                if (exitCode == 0 && version != null) {
-                    nodeExecutable = path;
-                    System.out.println("✓ 找到 Node.js: " + path + " (" + version + ")");
-                    return nodeExecutable;
-                } else {
-                    System.out.println("  路径无效: " + path + " (exitCode: " + exitCode + ")");
-                }
-            } catch (Exception e) {
-                System.out.println("  检查路径失败: " + path + " - " + e.getMessage());
-                // 继续尝试下一个路径
+            String version = verifyNodePath(path);
+            if (version != null) {
+                System.out.println("✓ 在已知路径找到 Node.js: " + path + " (" + version + ")");
+                return NodeDetectionResult.success(path, version,
+                    NodeDetectionResult.DetectionMethod.KNOWN_PATH, triedPaths);
             }
         }
 
-        // 最后尝试使用 "node" (依赖 PATH)
-        System.out.println("  尝试使用 PATH 中的 'node'");
+        return null;
+    }
+
+    /**
+     * 通过 PATH 环境变量检测 Node.js
+     */
+    private NodeDetectionResult detectNodeViaPath(List<String> triedPaths) {
+        System.out.println("  正在检查 PATH 环境变量...");
+
+        // 使用平台兼容的方式获取 PATH
+        String pathEnv = PlatformUtils.isWindows() ?
+            PlatformUtils.getEnvIgnoreCase("PATH") :
+            System.getenv("PATH");
+
+        if (pathEnv == null || pathEnv.isEmpty()) {
+            System.out.println("  PATH 环境变量为空");
+            return null;
+        }
+
+        String[] paths = pathEnv.split(File.pathSeparator);
+        String nodeFileName = PlatformUtils.isWindows() ? "node.exe" : "node";
+
+        for (String dir : paths) {
+            if (dir == null || dir.isEmpty()) continue;
+
+            File nodeFile = new File(dir, nodeFileName);
+            String nodePath = nodeFile.getAbsolutePath();
+            triedPaths.add(nodePath);
+
+            if (!nodeFile.exists()) continue;
+
+            String version = verifyNodePath(nodePath);
+            if (version != null) {
+                System.out.println("✓ 在 PATH 中找到 Node.js: " + nodePath + " (" + version + ")");
+                return NodeDetectionResult.success(nodePath, version,
+                    NodeDetectionResult.DetectionMethod.PATH_VARIABLE, triedPaths);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 回退检测：直接尝试执行 "node"
+     */
+    private NodeDetectionResult detectNodeViaFallback(List<String> triedPaths) {
+        System.out.println("  尝试直接调用 'node'（回退方案）...");
+        triedPaths.add("node (direct call)");
+
         try {
             ProcessBuilder pb = new ProcessBuilder("node", "--version");
             Process process = pb.start();
@@ -279,20 +437,79 @@ public class ClaudeSDKBridge {
                 version = reader.readLine();
             }
 
-            int exitCode = process.waitFor();
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return null;
+            }
+
+            int exitCode = process.exitValue();
             if (exitCode == 0 && version != null) {
-                nodeExecutable = "node";
-                System.out.println("✓ 使用 PATH 中的 node (" + version + ")");
-                return nodeExecutable;
+                version = version.trim();
+                System.out.println("✓ 直接调用 node 成功 (" + version + ")");
+                return NodeDetectionResult.success("node", version,
+                    NodeDetectionResult.DetectionMethod.FALLBACK, triedPaths);
             }
         } catch (Exception e) {
-            System.out.println("  PATH 中的 node 也不可用: " + e.getMessage());
+            System.out.println("  直接调用 'node' 失败: " + e.getMessage());
         }
 
-        // 如果都找不到，最后回退
-        System.err.println("⚠️ 无法自动检测 Node.js 路径，使用默认值 'node'");
-        nodeExecutable = "node";
-        return nodeExecutable;
+        return null;
+    }
+
+    /**
+     * 验证 Node.js 路径是否可用
+     * @param path Node.js 路径
+     * @return 版本号（如果可用），否则返回 null
+     */
+    private String verifyNodePath(String path) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(path, "--version");
+            Process process = pb.start();
+
+            String version = null;
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                version = reader.readLine();
+            }
+
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return null;
+            }
+
+            int exitCode = process.exitValue();
+            if (exitCode == 0 && version != null) {
+                return version.trim();
+            }
+        } catch (Exception e) {
+            System.out.println("    验证失败 [" + path + "]: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 展开 Windows 环境变量
+     * 例如: %USERPROFILE%\\.nvm -> C:\Users\xxx\.nvm
+     */
+    private String expandWindowsEnvVars(String path) {
+        if (path == null) return null;
+
+        String result = path;
+
+        // 展开常见环境变量
+        result = result.replace("%USERPROFILE%", System.getProperty("user.home", ""));
+        result = result.replace("%APPDATA%", System.getenv("APPDATA") != null ?
+            System.getenv("APPDATA") : "");
+        result = result.replace("%LOCALAPPDATA%", System.getenv("LOCALAPPDATA") != null ?
+            System.getenv("LOCALAPPDATA") : "");
+        result = result.replace("%ProgramFiles%", System.getenv("ProgramFiles") != null ?
+            System.getenv("ProgramFiles") : "C:\\Program Files");
+        result = result.replace("%ProgramFiles(x86)%", System.getenv("ProgramFiles(x86)") != null ?
+            System.getenv("ProgramFiles(x86)") : "C:\\Program Files (x86)");
+
+        return result;
     }
 
     /**
@@ -606,6 +823,44 @@ public class ClaudeSDKBridge {
     }
 
     /**
+     * 清理所有活动的子进程
+     * 应在插件卸载或 IDEA 关闭时调用
+     */
+    public void cleanupAllProcesses() {
+        System.out.println("[ClaudeSDKBridge] Cleaning up all active processes...");
+        int count = 0;
+
+        for (Map.Entry<String, Process> entry : activeChannelProcesses.entrySet()) {
+            String channelId = entry.getKey();
+            Process process = entry.getValue();
+
+            if (process != null && process.isAlive()) {
+                System.out.println("[ClaudeSDKBridge] Terminating process for channel: " + channelId);
+                PlatformUtils.terminateProcess(process);
+                count++;
+            }
+        }
+
+        activeChannelProcesses.clear();
+        interruptedChannels.clear();
+
+        System.out.println("[ClaudeSDKBridge] Cleanup complete. Terminated " + count + " processes.");
+    }
+
+    /**
+     * 获取当前活动进程数量
+     */
+    public int getActiveProcessCount() {
+        int count = 0;
+        for (Process process : activeChannelProcesses.values()) {
+            if (process != null && process.isAlive()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
      * 提取字符串中两个标记之间的内容
      */
     private String extractBetween(String text, String start, String end) {
@@ -790,8 +1045,12 @@ public class ClaudeSDKBridge {
         if (dir == null || !dir.exists()) {
             return;
         }
-        if (!FileUtil.delete(dir)) {
-            System.err.println("⚠️ 无法删除目录: " + dir.getAbsolutePath());
+        // 使用带重试机制的目录删除，处理 Windows 文件锁定问题
+        if (!PlatformUtils.deleteDirectoryWithRetry(dir, 3)) {
+            // 如果重试失败，回退到 IntelliJ 的 FileUtil
+            if (!FileUtil.delete(dir)) {
+                System.err.println("⚠️ 无法删除目录: " + dir.getAbsolutePath());
+            }
         }
     }
 
@@ -897,6 +1156,36 @@ public class ClaudeSDKBridge {
             StringBuilder assistantContent = new StringBuilder();
 
             try {
+                // 为附件创建临时 JSON 文件，传递给 Node 侧进行多模态处理
+                File attachmentsFile = null;
+                if (attachments != null && !attachments.isEmpty()) {
+                    try {
+                        File processTempDir = prepareClaudeTempDir();
+                        if (processTempDir == null) {
+                            processTempDir = new File(System.getProperty("java.io.tmpdir"));
+                        }
+                        String fileName = "attachments-" + System.currentTimeMillis() + ".json";
+                        attachmentsFile = new File(processTempDir, fileName);
+                        java.util.List<java.util.Map<String, String>> serializable = new java.util.ArrayList<>();
+                        for (ClaudeSession.Attachment att : attachments) {
+                            if (att == null) continue;
+                            java.util.Map<String, String> obj = new java.util.HashMap<>();
+                            obj.put("fileName", att.fileName);
+                            obj.put("mediaType", att.mediaType);
+                            obj.put("data", att.data);
+                            serializable.add(obj);
+                        }
+                        String json = gson.toJson(serializable);
+                        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(attachmentsFile)) {
+                            fos.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        }
+                        System.out.println("[ClaudeSDKBridge] Wrote attachments file: " + attachmentsFile.getAbsolutePath());
+                    } catch (Exception e) {
+                        System.err.println("[ClaudeSDKBridge] Failed to prepare attachments file: " + e.getMessage());
+                        attachmentsFile = null;
+                    }
+                }
+
                 String node = findNodeExecutable();
                 File workDir = findSdkTestDir();
 
@@ -906,7 +1195,12 @@ public class ClaudeSDKBridge {
                 List<String> command = new ArrayList<>();
                 command.add(node);
                 command.add(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath()); // 使用绝对路径
-                command.add("send");
+                // 根据是否存在附件选择不同的命令
+                if (attachmentsFile != null) {
+                    command.add("sendWithAttachments");
+                } else {
+                    command.add("send");
+                }
                 command.add(message);
 
                 // 重要：即使 sessionId 为 null，也要传递占位符，以保持参数顺序
@@ -964,6 +1258,10 @@ public class ClaudeSDKBridge {
                     env.put("TMP", tmpPath);
                     System.out.println("[ProcessBuilder] TMPDIR redirected to: " + tmpPath);
                 }
+                // 传递附件文件路径到 Node
+                if (attachmentsFile != null) {
+                    env.put("CLAUDE_ATTACHMENTS_FILE", attachmentsFile.getAbsolutePath());
+                }
 
                 pb.redirectErrorStream(true);
                 updateProcessEnvironment(pb);
@@ -1006,6 +1304,12 @@ public class ClaudeSDKBridge {
                                     String content = line.substring("[CONTENT]".length()).trim();
                                     assistantContent.append(content);
                                     callback.onMessage("content", content);
+
+                                } else if (line.startsWith("[CONTENT_DELTA]")) {
+                                    // 流式内容片段（用于图片消息等流式响应）
+                                    String delta = line.substring("[CONTENT_DELTA]".length()).trim();
+                                    assistantContent.append(delta);
+                                    callback.onMessage("content_delta", delta);
 
                                 } else if (line.startsWith("[SESSION_ID]")) {
                                     // 会话 ID
@@ -1061,6 +1365,7 @@ public class ClaudeSDKBridge {
 
     /**
      * 中断 channel
+     * 使用平台感知的进程终止方法，确保在 Windows 上正确终止子进程树
      */
     public void interruptChannel(String channelId) {
         if (channelId == null) {
@@ -1076,18 +1381,32 @@ public class ClaudeSDKBridge {
 
         System.out.println("[Interrupt] Attempting to interrupt channel: " + channelId);
         interruptedChannels.add(channelId);
-        process.destroy();
 
+        // 使用平台感知的进程终止方法
+        // Windows: 使用 taskkill /F /T 终止进程树
+        // Unix: 使用标准的 destroy/destroyForcibly
+        PlatformUtils.terminateProcess(process);
+
+        // 等待进程完全终止
         try {
-            if (!process.waitFor(3, TimeUnit.SECONDS)) {
-                System.out.println("[Interrupt] Force killing channel: " + channelId);
-                process.destroyForcibly();
-                process.waitFor(2, TimeUnit.SECONDS);
+            if (process.isAlive()) {
+                boolean terminated = process.waitFor(3, TimeUnit.SECONDS);
+                if (!terminated) {
+                    System.out.println("[Interrupt] Process still alive, force killing channel: " + channelId);
+                    process.destroyForcibly();
+                    process.waitFor(2, TimeUnit.SECONDS);
+                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
             activeChannelProcesses.remove(channelId, process);
+            // 验证进程确实已终止
+            if (process.isAlive()) {
+                System.err.println("[Interrupt] Warning: Process may still be alive for channel: " + channelId);
+            } else {
+                System.out.println("[Interrupt] Successfully terminated channel: " + channelId);
+            }
         }
     }
 
@@ -1216,10 +1535,13 @@ public class ClaudeSDKBridge {
             if (preserved != null && preserved.contains(file.getName())) {
                 continue;
             }
-            try {
-                Files.deleteIfExists(file.toPath());
-            } catch (IOException e) {
-                System.err.println("[ClaudeSDKBridge] Failed to delete temp cwd file: " + file.getAbsolutePath());
+            // 使用带重试机制的删除，处理 Windows 文件锁定问题
+            if (!PlatformUtils.deleteWithRetry(file, 3)) {
+                try {
+                    Files.deleteIfExists(file.toPath());
+                } catch (IOException e) {
+                    System.err.println("[ClaudeSDKBridge] Failed to delete temp cwd file: " + file.getAbsolutePath());
+                }
             }
         }
     }
@@ -1265,13 +1587,16 @@ public class ClaudeSDKBridge {
 
     /**
      * 更新进程的环境变量，确保 PATH 包含 Node.js 所在目录
+     * 支持 Windows (Path) 和 Unix (PATH) 环境变量命名
      */
     private void updateProcessEnvironment(ProcessBuilder pb) {
         Map<String, String> env = pb.environment();
-        String path = env.get("PATH");
-        if (path == null) {
-            path = env.get("Path"); // Windows
-        }
+
+        // 使用 PlatformUtils 获取 PATH 环境变量（大小写不敏感）
+        String path = PlatformUtils.isWindows() ?
+            PlatformUtils.getEnvIgnoreCase("PATH") :
+            env.get("PATH");
+
         if (path == null) {
             path = "";
         }
@@ -1284,35 +1609,71 @@ public class ClaudeSDKBridge {
         if (node != null && !node.equals("node")) {
             File nodeFile = new File(node);
             String nodeDir = nodeFile.getParent();
-            if (nodeDir != null) {
-                if (!path.contains(nodeDir)) {
-                    newPath.append(separator).append(nodeDir);
+            if (nodeDir != null && !pathContains(path, nodeDir)) {
+                newPath.append(separator).append(nodeDir);
+            }
+        }
+
+        // 2. 根据平台添加常用路径
+        if (PlatformUtils.isWindows()) {
+            // Windows 常用路径
+            String[] windowsPaths = {
+                System.getenv("ProgramFiles") + "\\nodejs",
+                System.getenv("APPDATA") + "\\npm",
+                System.getenv("LOCALAPPDATA") + "\\Programs\\nodejs"
+            };
+            for (String p : windowsPaths) {
+                if (p != null && !p.contains("null") && !pathContains(path, p)) {
+                    newPath.append(separator).append(p);
+                }
+            }
+        } else {
+            // macOS/Linux 常用路径
+            String[] unixPaths = {
+                "/usr/local/bin",
+                "/opt/homebrew/bin",
+                "/usr/bin",
+                "/bin",
+                "/usr/sbin",
+                "/sbin",
+                System.getProperty("user.home") + "/.nvm/current/bin"
+            };
+            for (String p : unixPaths) {
+                if (!pathContains(path, p)) {
+                    newPath.append(separator).append(p);
                 }
             }
         }
 
-        // 2. 添加常用路径 (macOS/Linux)
-        String[] commonPaths = {
-            "/usr/local/bin",
-            "/opt/homebrew/bin",
-            "/usr/bin",
-            "/bin",
-            "/usr/sbin",
-            "/sbin",
-            System.getProperty("user.home") + "/.nvm/current/bin"
-        };
-        
-        for (String p : commonPaths) {
-            if (!path.contains(p)) {
-                newPath.append(separator).append(p);
-            }
+        // 3. 设置 PATH 环境变量
+        // Windows 需要同时设置 PATH 和 Path（某些程序只识别其中一个）
+        String newPathStr = newPath.toString();
+        if (PlatformUtils.isWindows()) {
+            // 先移除可能存在的旧值，避免重复
+            env.remove("PATH");
+            env.remove("Path");
+            env.remove("path");
+            // 同时设置多种大小写形式确保兼容性
+            env.put("PATH", newPathStr);
+            env.put("Path", newPathStr);
+        } else {
+            env.put("PATH", newPathStr);
         }
 
-        env.put("PATH", newPath.toString());
-        // Windows 兼容
-        if (System.getProperty("os.name").toLowerCase().contains("win")) {
-            env.put("Path", newPath.toString());
-        }
         configurePermissionEnv(env);
+    }
+
+    /**
+     * 检查 PATH 中是否已包含指定路径
+     * Windows 下进行大小写不敏感比较
+     */
+    private boolean pathContains(String pathEnv, String targetPath) {
+        if (pathEnv == null || targetPath == null) {
+            return false;
+        }
+        if (PlatformUtils.isWindows()) {
+            return pathEnv.toLowerCase().contains(targetPath.toLowerCase());
+        }
+        return pathEnv.contains(targetPath);
     }
 }

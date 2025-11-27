@@ -53,3 +53,7 @@ node_modules/
 webview/dist/
 
 src/main/resources/html/*
+
+.specify
+.claude
+specs

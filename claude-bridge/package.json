@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "@anthropic-ai/sdk": "^0.25.0",
     "zod": "^3.25.76"
   },
   "scripts": {

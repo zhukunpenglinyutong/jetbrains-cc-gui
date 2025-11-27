@@ -18,6 +18,7 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.github.claudecodegui.permission.PermissionDialog;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
+import com.github.claudecodegui.model.DeleteResult;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
@@ -55,6 +56,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private ClaudeSession session; // 添加 Session 管理
         private ToolInterceptor toolInterceptor; // 工具拦截器
         private CCSwitchSettingsService settingsService; // 配置服务
+        private String currentModel = "claude-sonnet-4-5";
+        private static final java.util.Map<String, Integer> MODEL_CONTEXT_LIMITS = new java.util.HashMap<>();
+        static {
+            MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
+            MODEL_CONTEXT_LIMITS.put("claude-opus-4-5-20251101", 200_000);
+        }
 
         public ClaudeChatWindow(Project project) {
             this.project = project;
@@ -204,6 +211,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     sendMessageToClaude(content);
                     break;
 
+                case "send_message_with_attachments":
+                    System.out.println("[Backend] 处理: send_message_with_attachments");
+                    try {
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
+                        com.google.gson.JsonObject payload = gson.fromJson(content, com.google.gson.JsonObject.class);
+                        String text = payload != null && payload.has("text") && !payload.get("text").isJsonNull()
+                            ? payload.get("text").getAsString()
+                            : "";
+                        java.util.List<com.github.claudecodegui.ClaudeSession.Attachment> atts = new java.util.ArrayList<>();
+                        if (payload != null && payload.has("attachments") && payload.get("attachments").isJsonArray()) {
+                            com.google.gson.JsonArray arr = payload.getAsJsonArray("attachments");
+                            for (int i = 0; i < arr.size(); i++) {
+                                com.google.gson.JsonObject a = arr.get(i).getAsJsonObject();
+                                String fileName = a.has("fileName") && !a.get("fileName").isJsonNull() ? a.get("fileName").getAsString() : ("attachment-" + System.currentTimeMillis());
+                                String mediaType = a.has("mediaType") && !a.get("mediaType").isJsonNull() ? a.get("mediaType").getAsString() : "application/octet-stream";
+                                String data = a.has("data") && !a.get("data").isJsonNull() ? a.get("data").getAsString() : "";
+                                atts.add(new com.github.claudecodegui.ClaudeSession.Attachment(fileName, mediaType, data));
+                            }
+                        }
+                        sendMessageToClaudeWithAttachments(text, atts);
+                    } catch (Exception e) {
+                        System.err.println("[Backend] 解析附件负载失败: " + e.getMessage());
+                        sendMessageToClaude(content);
+                    }
+                    break;
+
                 case "interrupt_session":
                     System.out.println("[Backend] 处理: interrupt_session");
                     session.interrupt().thenRun(() -> {
@@ -285,6 +318,26 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 case "get_usage_statistics":
                     System.out.println("[Backend] 处理: get_usage_statistics");
                     handleGetUsageStatistics(content);
+                    break;
+
+                case "list_files":
+                    System.out.println("[Backend] 处理: list_files");
+                    handleListFiles(content);
+                    break;
+
+                case "get_commands":
+                    System.out.println("[Backend] 处理: get_commands");
+                    handleGetCommands(content);
+                    break;
+
+                case "set_mode":
+                    System.out.println("[Backend] 处理: set_mode");
+                    handleSetMode(content);
+                    break;
+
+                case "set_model":
+                    System.out.println("[Backend] 处理: set_model");
+                    handleSetModel(content);
                     break;
 
                 default:
@@ -495,9 +548,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         String escapedJson = escapeJs(messagesJson);
 
                         // 调用 JavaScript 更新消息
-                        callJavaScript("updateMessages", escapedJson);
-                    });
-                }
+                    callJavaScript("updateMessages", escapedJson);
+                });
+                System.out.println("[Backend] Pushing usage update from messages (real-time), messageCount=" + messages.size());
+                pushUsageUpdateFromMessages(messages);
+            }
 
                 @Override
                 public void onStateChange(boolean busy, boolean loading, String error) {
@@ -533,6 +588,56 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             });
         }
 
+        private void pushUsageUpdateFromMessages(java.util.List<ClaudeSession.Message> messages) {
+            try {
+                com.google.gson.JsonObject lastUsage = null;
+                for (int i = messages.size() - 1; i >= 0; i--) {
+                    ClaudeSession.Message msg = messages.get(i);
+                    if (msg.type != ClaudeSession.Message.Type.ASSISTANT) continue;
+                    if (msg.raw == null) continue;
+                    if (!msg.raw.has("message")) continue;
+                    com.google.gson.JsonObject message = msg.raw.getAsJsonObject("message");
+                    if (!message.has("usage")) continue;
+                    lastUsage = message.getAsJsonObject("usage");
+                    break;
+                }
+
+                int inputTokens = 0;
+                int outputTokens = 0;
+                int cacheWriteTokens = 0;
+                int cacheReadTokens = 0;
+                if (lastUsage != null) {
+                    inputTokens = lastUsage.has("input_tokens") ? lastUsage.get("input_tokens").getAsInt() : 0;
+                    outputTokens = lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
+                    cacheWriteTokens = lastUsage.has("cache_creation_input_tokens") ? lastUsage.get("cache_creation_input_tokens").getAsInt() : 0;
+                    cacheReadTokens = lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
+                    System.out.println("[Backend] Last assistant usage -> input:" + inputTokens + ", output:" + outputTokens + ", cacheWrite:" + cacheWriteTokens + ", cacheRead:" + cacheReadTokens);
+                }
+
+                int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens;
+                int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
+                int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
+                System.out.println("[Backend] 上下文=" + usedTokens + ", maxContext=" + maxTokens + ", percentage=" + percentage + "%");
+
+                com.google.gson.Gson gson = new com.google.gson.Gson();
+                com.google.gson.JsonObject usageUpdate = new com.google.gson.JsonObject();
+                usageUpdate.addProperty("percentage", percentage);
+                usageUpdate.addProperty("totalTokens", usedTokens);
+                usageUpdate.addProperty("limit", maxTokens);
+                usageUpdate.addProperty("usedTokens", usedTokens);
+                usageUpdate.addProperty("maxTokens", maxTokens);
+                String usageJson = gson.toJson(usageUpdate);
+
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    System.out.println("[Backend] Calling window.onUsageUpdate with payload length=" + usageJson.length());
+                    String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + escapeJs(usageJson) + "'); }";
+                    browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to push usage update: " + e.getMessage());
+            }
+        }
+
         /**
          * 创建新会话
          */
@@ -557,6 +662,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             // 更新 UI
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("updateStatus", escapeJs("新会话已创建，可以开始提问"));
+                // 新建会话后，重置使用量为 0%
+                int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 272_000);
+                com.google.gson.Gson gson = new com.google.gson.Gson();
+                com.google.gson.JsonObject usageUpdate = new com.google.gson.JsonObject();
+                usageUpdate.addProperty("percentage", 0);
+                usageUpdate.addProperty("totalTokens", 0);
+                usageUpdate.addProperty("limit", maxTokens);
+                usageUpdate.addProperty("usedTokens", 0);
+                usageUpdate.addProperty("maxTokens", maxTokens);
+                String usageJson = gson.toJson(usageUpdate);
+                String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + escapeJs(usageJson) + "'); }";
+                browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
             });
         }
 
@@ -587,6 +704,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
                 // 使用 Session 发送消息
                 session.send(prompt).exceptionally(ex -> {
+                    SwingUtilities.invokeLater(() -> {
+                        callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
+                    });
+                    return null;
+                });
+            });
+        }
+
+        /**
+         * 发送带附件的消息到 Claude（使用 Session）
+         */
+        private void sendMessageToClaudeWithAttachments(String prompt, java.util.List<com.github.claudecodegui.ClaudeSession.Attachment> attachments) {
+            CompletableFuture.runAsync(() -> {
+                String currentWorkingDir = determineWorkingDirectory();
+                String previousCwd = session.getCwd();
+                if (!currentWorkingDir.equals(previousCwd)) {
+                    session.setCwd(currentWorkingDir);
+                    System.out.println("[ClaudeChatWindow] Updated working directory: " + currentWorkingDir);
+                    SwingUtilities.invokeLater(() -> {
+                        callJavaScript("updateStatus", escapeJs("工作目录: " + currentWorkingDir));
+                    });
+                }
+
+                session.setPermissionMode("default");
+
+                session.send(prompt, attachments).exceptionally(ex -> {
                     SwingUtilities.invokeLater(() -> {
                         callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
                     });
@@ -1227,23 +1370,55 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
          * 删除供应商
          */
         private void handleDeleteProvider(String content) {
+            System.out.println("[Backend] ========== handleDeleteProvider START ==========");
+            System.out.println("[Backend] Received content: " + content);
+
             try {
                 Gson gson = new Gson();
                 JsonObject data = gson.fromJson(content, JsonObject.class);
+                System.out.println("[Backend] Parsed JSON data: " + data);
+
+                if (!data.has("id")) {
+                    System.err.println("[Backend] ERROR: Missing 'id' field in request");
+                    SwingUtilities.invokeLater(() -> {
+                        callJavaScript("window.showError", escapeJs("删除失败: 请求中缺少供应商 ID"));
+                    });
+                    return;
+                }
+
                 String id = data.get("id").getAsString();
+                System.out.println("[Backend] Deleting provider with ID: " + id);
 
-                settingsService.deleteClaudeProvider(id);
+                // 使用新的 DeleteResult 返回值，获取详细错误信息
+                DeleteResult result = settingsService.deleteClaudeProvider(id);
+                System.out.println("[Backend] Delete result - success: " + result.isSuccess());
 
-                SwingUtilities.invokeLater(() -> {
-                    callJavaScript("window.updateStatus", escapeJs("供应商删除成功"));
-                    handleGetProviders(); // 刷新列表
-                });
+                if (result.isSuccess()) {
+                    System.out.println("[Backend] Delete successful, refreshing provider list");
+                    SwingUtilities.invokeLater(() -> {
+                        callJavaScript("window.updateStatus", escapeJs("供应商删除成功"));
+                        handleGetProviders(); // 刷新列表
+                    });
+                } else {
+                    // 删除失败，显示详细错误信息
+                    String errorMsg = result.getUserFriendlyMessage();
+                    System.err.println("[Backend] Delete provider failed: " + errorMsg);
+                    System.err.println("[Backend] Error type: " + result.getErrorType());
+                    System.err.println("[Backend] Error details: " + result.getErrorMessage());
+                    SwingUtilities.invokeLater(() -> {
+                        System.out.println("[Backend] Calling window.showError with: " + errorMsg);
+                        callJavaScript("window.showError", escapeJs(errorMsg));
+                    });
+                }
             } catch (Exception e) {
-                System.err.println("[Backend] Failed to delete provider: " + e.getMessage());
+                System.err.println("[Backend] Exception in handleDeleteProvider: " + e.getMessage());
+                e.printStackTrace();
                 SwingUtilities.invokeLater(() -> {
                     callJavaScript("window.showError", escapeJs("删除供应商失败: " + e.getMessage()));
                 });
             }
+
+            System.out.println("[Backend] ========== handleDeleteProvider END ==========");
         }
 
         /**
@@ -1300,7 +1475,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     // 简单处理：如果内容是 "current"，则使用当前项目路径
                     // 否则如果是路径，则使用该路径
                     // 默认为 "all"
-                    
+
                     if (content != null && !content.isEmpty() && !content.equals("{}")) {
                         // 尝试解析 JSON
                          try {
@@ -1323,17 +1498,45 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                             }
                         }
                     }
-                    
+
                     System.out.println("[Backend] Getting usage statistics for path: " + projectPath);
-                    
+
                     ClaudeHistoryReader reader = new ClaudeHistoryReader();
                     ClaudeHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath);
-                    
+
                     Gson gson = new Gson();
                     String json = gson.toJson(stats);
-                    
+
+                    // 计算使用百分比
+                    // 基于 token 使用量计算，假设月度限额为 500 万 tokens
+                    int totalTokens = 0;
+                    if (stats != null && stats.totalUsage != null) {
+                        totalTokens = stats.totalUsage.inputTokens + stats.totalUsage.outputTokens;
+                    }
+                    final int MONTHLY_TOKEN_LIMIT = 5_000_000; // 500 万 tokens
+                    int percentage = Math.min(100, (int) ((totalTokens * 100.0) / MONTHLY_TOKEN_LIMIT));
+
+                    // 创建用量更新数据
+                    JsonObject usageUpdate = new JsonObject();
+                    usageUpdate.addProperty("percentage", percentage);
+                    usageUpdate.addProperty("totalTokens", totalTokens);
+                    usageUpdate.addProperty("limit", MONTHLY_TOKEN_LIMIT);
+                    if (stats != null) {
+                        usageUpdate.addProperty("estimatedCost", stats.estimatedCost);
+                    }
+                    String usageJson = gson.toJson(usageUpdate);
+
+                    // 为 lambda 捕获创建最终变量快照
+                    final int tokensFinal = totalTokens;
+                    final int limitFinal = MONTHLY_TOKEN_LIMIT;
+                    final int percentageFinal = percentage;
+                    final String statsJsonFinal = json;
+
                     SwingUtilities.invokeLater(() -> {
-                        callJavaScript("window.updateUsageStatistics", escapeJs(json));
+                        // 发送完整统计数据（用于统计视图）
+                        System.out.println("[Backend] updateUsageStatistics: tokens=" + tokensFinal + ", limit=" + limitFinal + ", percentage=" + percentageFinal + "% (not pushing onUsageUpdate)");
+                        callJavaScript("window.updateUsageStatistics", escapeJs(statsJsonFinal));
+                        // 不在这里调用 window.onUsageUpdate，避免覆盖聊天输入框的实时进度
                     });
                 } catch (Exception e) {
                     System.err.println("[Backend] Failed to get usage statistics: " + e.getMessage());
@@ -1343,6 +1546,278 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     });
                 }
             });
+        }
+
+        /**
+         * 处理文件列表请求
+         */
+        private void handleListFiles(String content) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    String query = "";
+                    if (content != null && !content.isEmpty()) {
+                        try {
+                            Gson gson = new Gson();
+                            JsonObject json = gson.fromJson(content, JsonObject.class);
+                            if (json.has("query")) {
+                                query = json.get("query").getAsString();
+                            }
+                        } catch (Exception e) {
+                            // content 可能是纯字符串
+                            query = content;
+                        }
+                    }
+
+                    // 优先使用当前会话的工作目录，其次项目根目录，最后用户主目录
+                    String basePath = session != null && session.getCwd() != null && !session.getCwd().isEmpty()
+                        ? session.getCwd()
+                        : (project.getBasePath() != null ? project.getBasePath() : System.getProperty("user.home"));
+
+                    java.util.List<JsonObject> files = new java.util.ArrayList<>();
+                    File baseDir = new File(basePath);
+
+                    // 递归收集文件（限制深度和数量）
+                    collectFiles(baseDir, basePath, files, query.toLowerCase(), 0, 3, 200);
+
+                    // 如果没有结果且查询为空，提供顶层后备列表，避免前端空白
+                    if (files.isEmpty() && (query == null || query.isEmpty())) {
+                        File[] children = baseDir.listFiles();
+                        if (children != null) {
+                            int added = 0;
+                            for (File child : children) {
+                                if (added >= 20) break;
+                                String name = child.getName();
+                                if (name.startsWith(".") || name.equals("node_modules") || name.equals("dist") || name.equals("out")) {
+                                    continue;
+                                }
+                                JsonObject fileObj = new JsonObject();
+                                fileObj.addProperty("name", name);
+                                String rel = child.getAbsolutePath().substring(basePath.length());
+                                if (rel.startsWith(File.separator)) rel = rel.substring(1);
+                                rel = rel.replace("\\", "/");
+                                fileObj.addProperty("path", rel);
+                                fileObj.addProperty("type", child.isDirectory() ? "directory" : "file");
+                                if (child.isFile()) {
+                                    int dotIndex = name.lastIndexOf('.');
+                                    if (dotIndex > 0) {
+                                        fileObj.addProperty("extension", name.substring(dotIndex + 1));
+                                    }
+                                }
+                                files.add(fileObj);
+                                added++;
+                            }
+                        }
+                    }
+
+                    // 目录优先排序，然后按名称排序
+                    files.sort((a, b) -> {
+                        boolean aDir = "directory".equals(a.get("type").getAsString());
+                        boolean bDir = "directory".equals(b.get("type").getAsString());
+                        if (aDir != bDir) return aDir ? -1 : 1;
+                        return a.get("name").getAsString().compareToIgnoreCase(b.get("name").getAsString());
+                    });
+
+                    Gson gson = new Gson();
+                    JsonObject result = new JsonObject();
+                    result.add("files", gson.toJsonTree(files));
+                    String resultJson = gson.toJson(result);
+
+                    SwingUtilities.invokeLater(() -> {
+                        // 使用统一的 JS 调用封装，避免某些环境下注入差异
+                        callJavaScript("window.onFileListResult", escapeJs(resultJson));
+                    });
+                } catch (Exception e) {
+                    System.err.println("[Backend] Failed to list files: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        /**
+         * 递归收集文件
+         */
+        private void collectFiles(File dir, String basePath, java.util.List<JsonObject> files,
+                                  String query, int depth, int maxDepth, int maxFiles) {
+            if (depth > maxDepth || files.size() >= maxFiles) return;
+            if (!dir.isDirectory()) return;
+
+            File[] children = dir.listFiles();
+            if (children == null) return;
+
+            for (File child : children) {
+                if (files.size() >= maxFiles) break;
+
+                String name = child.getName();
+                // 跳过隐藏文件和常见的忽略目录
+                if (name.startsWith(".") ||
+                    name.equals("node_modules") ||
+                    name.equals("target") ||
+                    name.equals("build") ||
+                    name.equals("dist") ||
+                    name.equals("out") ||
+                    name.equals("__pycache__")) {
+                    continue;
+                }
+
+                String relativePath = child.getAbsolutePath().substring(basePath.length());
+                if (relativePath.startsWith(File.separator)) {
+                    relativePath = relativePath.substring(1);
+                }
+                // 统一使用正斜杠
+                relativePath = relativePath.replace("\\", "/");
+
+                // 检查是否匹配查询
+                if (!query.isEmpty() &&
+                    !name.toLowerCase().contains(query) &&
+                    !relativePath.toLowerCase().contains(query)) {
+                    // 如果是目录，仍然递归搜索
+                    if (child.isDirectory()) {
+                        collectFiles(child, basePath, files, query, depth + 1, maxDepth, maxFiles);
+                    }
+                    continue;
+                }
+
+                JsonObject fileObj = new JsonObject();
+                fileObj.addProperty("name", name);
+                fileObj.addProperty("path", relativePath);
+                fileObj.addProperty("type", child.isDirectory() ? "directory" : "file");
+
+                if (child.isFile()) {
+                    int dotIndex = name.lastIndexOf('.');
+                    if (dotIndex > 0) {
+                        fileObj.addProperty("extension", name.substring(dotIndex + 1));
+                    }
+                }
+
+                files.add(fileObj);
+
+                // 递归处理目录
+                if (child.isDirectory()) {
+                    collectFiles(child, basePath, files, query, depth + 1, maxDepth, maxFiles);
+                }
+            }
+        }
+
+        /**
+         * 处理获取命令列表请求
+         */
+        private void handleGetCommands(String content) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    String query = "";
+                    if (content != null && !content.isEmpty()) {
+                        try {
+                            Gson gson = new Gson();
+                            JsonObject json = gson.fromJson(content, JsonObject.class);
+                            if (json.has("query")) {
+                                query = json.get("query").getAsString();
+                            }
+                        } catch (Exception e) {
+                            query = content;
+                        }
+                    }
+
+                    // 默认命令列表
+                    java.util.List<JsonObject> commands = new java.util.ArrayList<>();
+
+                    addCommand(commands, "/help", "显示帮助信息", query);
+                    addCommand(commands, "/clear", "清空对话历史", query);
+                    addCommand(commands, "/new", "创建新会话", query);
+                    addCommand(commands, "/history", "查看历史记录", query);
+                    addCommand(commands, "/model", "切换模型", query);
+                    addCommand(commands, "/settings", "打开设置", query);
+                    addCommand(commands, "/compact", "压缩对话上下文", query);
+
+                    Gson gson = new Gson();
+                    JsonObject result = new JsonObject();
+                    result.add("commands", gson.toJsonTree(commands));
+                    String resultJson = gson.toJson(result);
+
+                    SwingUtilities.invokeLater(() -> {
+                        String js = "if (window.onCommandListResult) { window.onCommandListResult('" + escapeJs(resultJson) + "'); }";
+                        browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
+                    });
+                } catch (Exception e) {
+                    System.err.println("[Backend] Failed to get commands: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        /**
+         * 添加命令到列表
+         */
+        private void addCommand(java.util.List<JsonObject> commands, String label, String description, String query) {
+            if (query.isEmpty() ||
+                label.toLowerCase().contains(query.toLowerCase()) ||
+                description.toLowerCase().contains(query.toLowerCase())) {
+                JsonObject cmd = new JsonObject();
+                cmd.addProperty("label", label);
+                cmd.addProperty("description", description);
+                commands.add(cmd);
+            }
+        }
+
+        /**
+         * 处理设置模式请求
+         */
+        private void handleSetMode(String content) {
+            try {
+                String mode = content;
+                if (content != null && !content.isEmpty()) {
+                    try {
+                        Gson gson = new Gson();
+                        JsonObject json = gson.fromJson(content, JsonObject.class);
+                        if (json.has("mode")) {
+                            mode = json.get("mode").getAsString();
+                        }
+                    } catch (Exception e) {
+                        // content 本身就是 mode
+                    }
+                }
+
+                System.out.println("[Backend] Setting permission mode to: " + mode);
+                session.setPermissionMode(mode);
+
+                final String finalMode = mode;
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateStatus", escapeJs("权限模式已设置为: " + finalMode));
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to set mode: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         * 处理设置模型请求
+         */
+        private void handleSetModel(String content) {
+            try {
+                String model = content;
+                if (content != null && !content.isEmpty()) {
+                    try {
+                        Gson gson = new Gson();
+                        JsonObject json = gson.fromJson(content, JsonObject.class);
+                        if (json.has("model")) {
+                            model = json.get("model").getAsString();
+                        }
+                    } catch (Exception e) {
+                        // content 本身就是 model
+                    }
+                }
+
+                System.out.println("[Backend] Setting model to: " + model);
+                this.currentModel = model;
+
+                final String finalModel = model;
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateStatus", escapeJs("模型已设置为: " + finalModel));
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to set model: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
 
         public JPanel getContent() {

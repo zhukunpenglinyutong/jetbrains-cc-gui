@@ -3,6 +3,8 @@ package com.github.claudecodegui;
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 
+import com.github.claudecodegui.util.PathUtils;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -164,15 +166,41 @@ public class ClaudeHistoryReader {
     public List<SessionInfo> readProjectSessions(String projectPath) throws IOException {
         List<SessionInfo> sessions = new ArrayList<>();
 
+        System.out.println("[ClaudeHistoryReader] ========== readProjectSessions START ==========");
+        System.out.println("[ClaudeHistoryReader] Original projectPath: " + projectPath);
+
         if (projectPath == null || projectPath.isEmpty()) {
+            System.out.println("[ClaudeHistoryReader] projectPath is null or empty, returning empty list");
             return sessions;
         }
 
         // 转换项目路径为安全的目录名（与 VSCode 扩展逻辑一致）
-        String sanitizedPath = projectPath.replaceAll("[^a-zA-Z0-9]", "-");
+        // 使用 PathUtils 处理跨平台路径规范化
+        String sanitizedPath = PathUtils.sanitizePath(projectPath);
         Path projectDir = PROJECTS_DIR.resolve(sanitizedPath);
 
+        System.out.println("[ClaudeHistoryReader] Sanitized path: " + sanitizedPath);
+        System.out.println("[ClaudeHistoryReader] PROJECTS_DIR: " + PROJECTS_DIR);
+        System.out.println("[ClaudeHistoryReader] Looking for project dir: " + projectDir);
+        System.out.println("[ClaudeHistoryReader] Project dir exists: " + Files.exists(projectDir));
+
+        // 列出 PROJECTS_DIR 下的所有目录，帮助调试
+        if (Files.exists(PROJECTS_DIR)) {
+            try {
+                System.out.println("[ClaudeHistoryReader] Available project directories:");
+                Files.list(PROJECTS_DIR)
+                    .filter(Files::isDirectory)
+                    .limit(10)  // 只显示前10个
+                    .forEach(dir -> System.out.println("[ClaudeHistoryReader]   - " + dir.getFileName()));
+            } catch (IOException e) {
+                System.err.println("[ClaudeHistoryReader] Failed to list project directories: " + e.getMessage());
+            }
+        } else {
+            System.out.println("[ClaudeHistoryReader] PROJECTS_DIR does not exist: " + PROJECTS_DIR);
+        }
+
         if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
+            System.out.println("[ClaudeHistoryReader] Project directory not found, returning empty list");
             return sessions;
         }
 
@@ -585,7 +613,8 @@ public class ClaudeHistoryReader {
         }
 
         // 将路径转换为文件系统安全的名称
-        String sanitizedPath = projectPath.replace("/", "-");
+        // 使用 PathUtils 处理跨平台路径规范化（支持 Windows 反斜杠）
+        String sanitizedPath = PathUtils.sanitizePath(projectPath);
         Path projectDir = PROJECTS_DIR.resolve(sanitizedPath);
 
         if (Files.exists(projectDir) && Files.isDirectory(projectDir)) {
@@ -709,23 +738,12 @@ public class ClaudeHistoryReader {
 
     /**
      * 获取项目目录名称 (移植自 VSCode 插件 getProjectFolderName)
+     * 使用 PathUtils.sanitizePath() 实现跨平台兼容
      */
     private String getProjectFolderName(String projectPath) {
         if (projectPath == null) return "";
-        
-        // 标准化路径：将反斜杠转换为正斜杠
-        String normalizedPath = projectPath.replace('\\', '/');
-
-        // 处理Windows盘符
-        if (normalizedPath.matches("^[a-zA-Z]:.*")) {
-            normalizedPath = normalizedPath.substring(0, 1).toLowerCase() + "-" + normalizedPath.substring(2);
-        }
-
-        // 处理非ASCII字符
-        String cleanPath = normalizedPath.replaceAll("[^\\x00-\\x7F]", "-");
-
-        // 将 '/' 替换为 '-'
-        return cleanPath.replace('/', '-');
+        // 使用统一的路径处理工具，确保 Windows 和 Unix 路径格式一致
+        return PathUtils.sanitizePath(projectPath);
     }
 
     /**

@@ -3,6 +3,8 @@ import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/SettingsView';
 import ConfirmDialog from './components/ConfirmDialog';
+import { ChatInputBox } from './components/ChatInputBox';
+import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
 import {
   BashToolBlock,
   EditToolBlock,
@@ -11,7 +13,7 @@ import {
   TaskExecutionBlock,
   TodoListBlock,
 } from './components/toolBlocks';
-import { BackIcon, ClawdIcon, SendIcon, StopIcon } from './components/Icons';
+import { BackIcon, ClawdIcon } from './components/Icons';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -37,7 +39,6 @@ const sendBridgeMessage = (event: string, payload = '') => {
 
 const App = () => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([]);
-  const [inputMessage, setInputMessage] = useState('');
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [loading, setLoading] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
@@ -45,8 +46,14 @@ const App = () => {
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
 
+  // ChatInputBox 相关状态
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-5');
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
+  const [usagePercentage, setUsagePercentage] = useState(0);
+  const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
+  const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
+
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     window.updateMessages = (json) => {
@@ -64,6 +71,34 @@ const App = () => {
     window.clearMessages = () => setMessages([]);
     window.addErrorMessage = (message) =>
       setMessages((prev) => [...prev, { type: 'error', content: message }]);
+
+    // ChatInputBox 相关回调
+    window.onUsageUpdate = (json) => {
+      try {
+        console.log('[Frontend] onUsageUpdate raw:', json);
+        const data = JSON.parse(json);
+        if (typeof data.percentage === 'number') {
+          console.log('[Frontend] onUsageUpdate parsed percentage:', data.percentage, 'totalTokens:', data.totalTokens, 'limit:', data.limit);
+          setUsagePercentage(data.percentage);
+          const used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
+          const max = typeof data.maxTokens === 'number' ? data.maxTokens : (typeof data.limit === 'number' ? data.limit : undefined);
+          setUsageUsedTokens(used);
+          setUsageMaxTokens(max);
+        }
+      } catch (error) {
+        console.error('[Frontend] Failed to parse usage update:', error);
+      }
+    };
+
+    window.onModeChanged = (mode) => {
+      if (mode === 'default' || mode === 'plan' || mode === 'bypassPermissions') {
+        setPermissionMode(mode);
+      }
+    };
+
+    window.onModelChanged = (modelId) => {
+      setSelectedModel(modelId);
+    };
   }, []);
 
   useEffect(() => {
@@ -83,28 +118,122 @@ const App = () => {
     return () => clearTimeout(timer);
   }, [currentView]);
 
+  // 定期获取使用统计
+  useEffect(() => {
+    const requestUsageStats = () => {
+      if (window.sendToJava) {
+        console.log('[Frontend] Requesting get_usage_statistics (scope=current)');
+        sendBridgeMessage('get_usage_statistics', JSON.stringify({ scope: 'current' }));
+      }
+    };
+
+    // 初始请求
+    const initTimer = setTimeout(requestUsageStats, 500);
+
+    // 每 60 秒更新一次
+    const intervalId = setInterval(requestUsageStats, 60000);
+
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(intervalId);
+    };
+  }, []);
+
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (!inputRef.current) {
+  /**
+   * 处理消息发送（来自 ChatInputBox）
+   */
+  const handleSubmit = (content: string, attachments?: Attachment[]) => {
+    const text = content.trim();
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!text && !hasAttachments) {
       return;
     }
-    const textarea = inputRef.current;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-  }, [inputMessage]);
+    if (loading) {
+      return;
+    }
 
-  const sendMessage = () => {
-    const message = inputMessage.trim();
-    if (!message || loading) {
+    // 构建用户消息的内容块（用于前端显示）
+    const userContentBlocks: ClaudeContentBlock[] = [];
+
+    if (hasAttachments) {
+      // 添加图片块
+      for (const att of attachments || []) {
+        if (att.mediaType?.startsWith('image/')) {
+          userContentBlocks.push({
+            type: 'image',
+            src: `data:${att.mediaType};base64,${att.data}`,
+            mediaType: att.mediaType,
+          });
+        } else {
+          // 非图片附件显示文件名
+          userContentBlocks.push({
+            type: 'text',
+            text: `[附件: ${att.fileName}]`,
+          });
+        }
+      }
+    }
+
+    // 添加文本块
+    if (text) {
+      userContentBlocks.push({ type: 'text', text });
+    } else if (userContentBlocks.length === 0) {
+      // 如果既没有附件也没有文本，不发送
       return;
     }
-    sendBridgeMessage('send_message', message);
-    setInputMessage('');
+
+    // 立即在前端添加用户消息（包含图片预览）
+    const userMessage: ClaudeMessage = {
+      type: 'user',
+      content: text || (hasAttachments ? '[已上传附件]' : ''),
+      raw: {
+        message: {
+          content: userContentBlocks,
+        },
+      },
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    if (hasAttachments) {
+      try {
+        const payload = JSON.stringify({
+          text,
+          attachments: (attachments || []).map(a => ({
+            fileName: a.fileName,
+            mediaType: a.mediaType,
+            data: a.data,
+          }))
+        });
+        sendBridgeMessage('send_message_with_attachments', payload);
+      } catch (error) {
+        console.error('[Frontend] Failed to serialize attachments payload', error);
+        sendBridgeMessage('send_message', text);
+      }
+    } else {
+      sendBridgeMessage('send_message', text);
+    }
+  };
+
+  /**
+   * 处理模式选择
+   */
+  const handleModeSelect = (mode: PermissionMode) => {
+    setPermissionMode(mode);
+    sendBridgeMessage('set_mode', mode);
+  };
+
+  /**
+   * 处理模型选择
+   */
+  const handleModelSelect = (modelId: string) => {
+    setSelectedModel(modelId);
+    sendBridgeMessage('set_model', modelId);
   };
 
   const interruptSession = () => {
@@ -133,6 +262,11 @@ const App = () => {
     sendBridgeMessage('create_new_session');
     setMessages([]);
     setStatus('正在创建新会话...');
+    // 重置使用量显示为 0%
+    setUsagePercentage(0);
+    setUsageUsedTokens(0);
+    // 保留 maxTokens，等待后端推送；如果此前已知模型，可按默认 272K 预估
+    setUsageMaxTokens((prev) => prev ?? 272000);
   };
 
   const handleCancelNewSession = () => {
@@ -149,13 +283,6 @@ const App = () => {
 
   const isThinkingExpanded = (messageIndex: number, blockIndex: number) =>
     Boolean(expandedThinking[`${messageIndex}_${blockIndex}`]);
-
-  const handleKeydown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      sendMessage();
-    }
-  };
 
   const loadHistorySession = (sessionId: string) => {
     sendBridgeMessage('load_session', sessionId);
@@ -197,7 +324,11 @@ const App = () => {
     }
     if (message.type === 'user' || message.type === 'error') {
       const text = getMessageText(message);
-      return Boolean(text && text.trim() && text !== '(空消息)');
+      if (text && text.trim() && text !== '(空消息)') {
+        return true;
+      }
+      const rawBlocks = normalizeBlocks(message.raw);
+      return Array.isArray(rawBlocks) && rawBlocks.length > 0;
     }
     return true;
   };
@@ -216,7 +347,7 @@ const App = () => {
           return;
         }
         const candidate = entry as Record<string, unknown>;
-        const type = candidate.type;
+        const type = candidate.type as string | undefined;
         if (type === 'text') {
           blocks.push({
             type: 'text',
@@ -225,9 +356,9 @@ const App = () => {
         } else if (type === 'thinking') {
           const thinking =
             typeof candidate.thinking === 'string'
-              ? candidate.thinking
+              ? (candidate.thinking as string)
               : typeof candidate.text === 'string'
-                ? candidate.text
+                ? (candidate.text as string)
                 : '';
           blocks.push({
             type: 'thinking',
@@ -237,10 +368,37 @@ const App = () => {
         } else if (type === 'tool_use') {
           blocks.push({
             type: 'tool_use',
-            id: typeof candidate.id === 'string' ? candidate.id : undefined,
-            name: typeof candidate.name === 'string' ? candidate.name : 'Unknown',
+            id: typeof candidate.id === 'string' ? (candidate.id as string) : undefined,
+            name: typeof candidate.name === 'string' ? (candidate.name as string) : 'Unknown',
             input: (candidate.input as Record<string, unknown>) ?? {},
           });
+        } else if (type === 'image') {
+          const source = (candidate as any).source;
+          let src: string | undefined;
+          let mediaType: string | undefined;
+
+          // 支持两种格式：
+          // 1. 后端/历史格式: { type: 'image', source: { type: 'base64', media_type: '...', data: '...' } }
+          // 2. 前端直接格式: { type: 'image', src: 'data:...', mediaType: '...' }
+          if (source && typeof source === 'object') {
+            const st = source.type;
+            if (st === 'base64' && typeof source.data === 'string') {
+              const mt = typeof source.media_type === 'string' ? source.media_type : 'image/png';
+              src = `data:${mt};base64,${source.data}`;
+              mediaType = mt;
+            } else if (st === 'url' && typeof source.url === 'string') {
+              src = source.url;
+              mediaType = source.media_type;
+            }
+          } else if (typeof candidate.src === 'string') {
+            // 前端直接添加的格式
+            src = candidate.src as string;
+            mediaType = candidate.mediaType as string | undefined;
+          }
+
+          if (src) {
+            blocks.push({ type: 'image', src, mediaType });
+          }
         }
       });
       return blocks;
@@ -408,12 +566,42 @@ const App = () => {
                   {message.type === 'assistant' ? null : message.type === 'user' ? 'You' : message.type}
                 </div>
                 <div className="message-content">
-                  {message.type === 'user' || message.type === 'error' ? (
+                  {message.type === 'error' ? (
                     <MarkdownBlock content={getMessageText(message)} />
                   ) : (
                     getContentBlocks(message).map((block, blockIndex) => (
                       <div key={`${messageIndex}-${blockIndex}`} className="content-block">
                         {block.type === 'text' && <MarkdownBlock content={block.text ?? ''} />}
+                        {block.type === 'image' && block.src && (
+                          <div
+                            className={`message-image-block ${message.type === 'user' ? 'user-image' : ''}`}
+                            onClick={() => {
+                              // 打开图片预览
+                              const previewRoot = document.getElementById('image-preview-root');
+                              if (previewRoot && block.src) {
+                                previewRoot.innerHTML = `
+                                  <div class="image-preview-overlay" onclick="this.remove()">
+                                    <img src="${block.src}" alt="预览" class="image-preview-content" onclick="event.stopPropagation()" />
+                                    <div class="image-preview-close" onclick="this.parentElement.remove()">×</div>
+                                  </div>
+                                `;
+                              }
+                            }}
+                            style={{ cursor: 'pointer' }}
+                            title="点击预览大图"
+                          >
+                            <img
+                              src={block.src}
+                              alt="用户上传的图片"
+                              style={{
+                                maxWidth: message.type === 'user' ? '200px' : '100%',
+                                maxHeight: message.type === 'user' ? '150px' : 'auto',
+                                borderRadius: '8px',
+                                objectFit: 'contain',
+                              }}
+                            />
+                          </div>
+                        )}
 
                         {block.type === 'thinking' && (
                           <div className="thinking-block">
@@ -480,41 +668,23 @@ const App = () => {
       )}
 
       {currentView === 'chat' && (
-        <div className="input-area">
-          <div className="input-container">
-            <textarea
-              id="messageInput"
-              ref={inputRef}
-              value={inputMessage}
-              onChange={(event) => setInputMessage(event.target.value)}
-              onKeyDown={handleKeydown}
-              placeholder="输入消息... (Shift+Enter 换行, Enter 发送)"
-              rows={1}
-              disabled={loading}
-            />
-            <div className="input-footer">
-              <div className="input-tools-left" />
-              <div className="input-actions">
-                {loading ? (
-                  <button className="action-button stop-button" onClick={interruptSession} title="中断生成">
-                    <StopIcon />
-                  </button>
-                ) : (
-                  <button
-                    className="action-button send-button"
-                    onClick={sendMessage}
-                    disabled={!inputMessage.trim()}
-                    title="发送消息"
-                  >
-                    <SendIcon />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <ChatInputBox
+          isLoading={loading}
+          selectedModel={selectedModel}
+          permissionMode={permissionMode}
+          usagePercentage={usagePercentage}
+          usageUsedTokens={usageUsedTokens}
+          usageMaxTokens={usageMaxTokens}
+          showUsage={true}
+          onSubmit={handleSubmit}
+          onStop={interruptSession}
+          onModeSelect={handleModeSelect}
+          onModelSelect={handleModelSelect}
+        />
       )}
 
+      <div id="image-preview-root" />
+    
       <ConfirmDialog
         isOpen={showNewSessionConfirm}
         title="创建新会话"
@@ -529,4 +699,3 @@ const App = () => {
 };
 
 export default App;
-
