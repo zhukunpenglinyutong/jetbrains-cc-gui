@@ -564,7 +564,7 @@ export const ChatInputBox = ({
         <div
           ref={editableRef}
           className="input-editable"
-          contentEditable={!disabled && !isLoading}
+          contentEditable={!disabled}
           data-placeholder={placeholder}
           onInput={handleInput}
           onKeyDown={handleKeyDown}
@@ -573,7 +573,10 @@ export const ChatInputBox = ({
             const inputType = (e.nativeEvent as unknown as { inputType?: string }).inputType;
             if (inputType === 'insertParagraph') {
               e.preventDefault();
-              handleSubmit();
+              // 只有在非加载状态时才允许提交
+              if (!isLoading) {
+                handleSubmit();
+              }
             }
           }}
           onCompositionStart={handleCompositionStart}
