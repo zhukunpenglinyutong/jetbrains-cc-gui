@@ -9,7 +9,7 @@ interface EditToolBlockProps {
 }
 
 const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   if (!input) {
     return null;
@@ -34,31 +34,13 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
     <div className="task-container">
       <div className="task-header" onClick={() => setExpanded((prev) => !prev)}>
         <div className="task-title-section">
-          <div
-            className="task-icon-wrapper"
-            style={{
-              width: '20px',
-              height: '20px',
-              background: 'rgba(100, 181, 246, 0.15)',
-              marginRight: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '4px',
-            }}
-          >
-            <span className="codicon codicon-edit" style={{ color: '#64b5f6', fontSize: '12px' }} />
-          </div>
-          <span style={{ fontWeight: 600, fontSize: '13px', color: '#90caf9' }}>修改</span>
-          <span
-            style={{
-              color: '#ccc',
-              marginLeft: '8px',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
-            {getFileName(filePath) || filePath}
+          <span className="codicon codicon-edit" style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }} />
+
+          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
+            编辑文件
           </span>
+          <span style={{ color: '#858585', marginLeft: '12px' }}>{getFileName(filePath) || filePath}</span>
+          
           {(oldLines.length > 0 || newLines.length > 0) && (
             <span
               style={{
@@ -74,10 +56,14 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
             </span>
           )}
         </div>
-        <span
-          className={`codicon codicon-chevron-${expanded ? 'up' : 'down'}`}
-          style={{ color: '#858585' }}
-        />
+        
+        <div style={{ 
+            width: '8px', 
+            height: '8px', 
+            borderRadius: '50%', 
+            backgroundColor: '#4caf50',
+            marginRight: '4px'
+        }} />
       </div>
 
       {expanded && (

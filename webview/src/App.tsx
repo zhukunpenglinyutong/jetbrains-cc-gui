@@ -3,6 +3,7 @@ import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/SettingsView';
 import ConfirmDialog from './components/ConfirmDialog';
+import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import { ChatInputBox } from './components/ChatInputBox';
 import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
 import {
@@ -14,6 +15,8 @@ import {
   TodoListBlock,
 } from './components/toolBlocks';
 import { BackIcon, ClawdIcon } from './components/Icons';
+import { ToastContainer, type ToastMessage } from './components/Toast';
+import WaitingIndicator from './components/WaitingIndicator';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -37,14 +40,29 @@ const sendBridgeMessage = (event: string, payload = '') => {
   }
 };
 
+const formatTime = (timestamp?: string) => {
+  if (!timestamp) return '';
+  try {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch (e) {
+    return '';
+  }
+};
+
 const App = () => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([]);
-  const [status, setStatus] = useState(DEFAULT_STATUS);
+  const [_status, setStatus] = useState(DEFAULT_STATUS); // Internal state, displayed via toast
   const [loading, setLoading] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // 权限弹窗状态
+  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
+  const [currentPermissionRequest, setCurrentPermissionRequest] = useState<PermissionRequest | null>(null);
 
   // ChatInputBox 相关状态
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-5');
@@ -54,6 +72,19 @@ const App = () => {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Toast helper functions
+  const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
+    // Don't show toast for default status
+    if (message === DEFAULT_STATUS || !message) return;
+
+    const id = `toast-${Date.now()}-${Math.random()}`;
+    setToasts((prev) => [...prev, { id, message, type }]);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
 
   useEffect(() => {
     window.updateMessages = (json) => {
@@ -65,7 +96,11 @@ const App = () => {
       }
     };
 
-    window.updateStatus = (text) => setStatus(text);
+    window.updateStatus = (text) => {
+      setStatus(text);
+      // Show toast notification for status changes
+      addToast(text);
+    };
     window.showLoading = (value) => setLoading(isTruthy(value));
     window.setHistoryData = (data) => setHistoryData(data);
     window.clearMessages = () => setMessages([]);
@@ -98,6 +133,18 @@ const App = () => {
 
     window.onModelChanged = (modelId) => {
       setSelectedModel(modelId);
+    };
+
+    // 权限弹窗回调
+    window.showPermissionDialog = (json) => {
+      try {
+        const request = JSON.parse(json) as PermissionRequest;
+        console.log('[Frontend] showPermissionDialog:', request);
+        setCurrentPermissionRequest(request);
+        setPermissionDialogOpen(true);
+      } catch (error) {
+        console.error('[Frontend] Failed to parse permission request:', error);
+      }
     };
   }, []);
 
@@ -192,6 +239,7 @@ const App = () => {
     const userMessage: ClaudeMessage = {
       type: 'user',
       content: text || (hasAttachments ? '[已上传附件]' : ''),
+      timestamp: new Date().toISOString(),
       raw: {
         message: {
           content: userContentBlocks,
@@ -238,20 +286,20 @@ const App = () => {
 
   const interruptSession = () => {
     sendBridgeMessage('interrupt_session');
-    setStatus('已发送中断请求');
+    // 移除通知：已发送中断请求
   };
 
   // const restartSession = () => {
   //   if (window.confirm('确定要重启会话吗？这将清空当前对话历史。')) {
   //     sendBridgeMessage('restart_session');
   //     setMessages([]);
-  //     setStatus('正在重启会话...');
+  //     addToast('正在重启会话...', 'info');
   //   }
   // };
 
   const createNewSession = () => {
     if (messages.length === 0) {
-      setStatus('当前会话为空，可以直接使用');
+      // 移除通知：当前会话为空，可以直接使用
       return;
     }
     setShowNewSessionConfirm(true);
@@ -261,7 +309,7 @@ const App = () => {
     setShowNewSessionConfirm(false);
     sendBridgeMessage('create_new_session');
     setMessages([]);
-    setStatus('正在创建新会话...');
+    // 移除通知：正在创建新会话...
     // 重置使用量显示为 0%
     setUsagePercentage(0);
     setUsageUsedTokens(0);
@@ -271,6 +319,51 @@ const App = () => {
 
   const handleCancelNewSession = () => {
     setShowNewSessionConfirm(false);
+  };
+
+  /**
+   * 处理权限批准（允许一次）
+   */
+  const handlePermissionApprove = (channelId: string) => {
+    console.log('[Frontend] Permission approved once:', { channelId });
+    sendBridgeMessage('permission_decision', JSON.stringify({
+      channelId,
+      allow: true,
+      remember: false,
+      rejectMessage: null,
+    }));
+    setPermissionDialogOpen(false);
+    setCurrentPermissionRequest(null);
+  };
+
+  /**
+   * 处理权限批准（总是允许）
+   */
+  const handlePermissionApproveAlways = (channelId: string) => {
+    console.log('[Frontend] Permission approved always:', { channelId });
+    sendBridgeMessage('permission_decision', JSON.stringify({
+      channelId,
+      allow: true,
+      remember: true,
+      rejectMessage: null,
+    }));
+    setPermissionDialogOpen(false);
+    setCurrentPermissionRequest(null);
+  };
+
+  /**
+   * 处理权限拒绝
+   */
+  const handlePermissionSkip = (channelId: string) => {
+    console.log('[Frontend] Permission denied:', { channelId });
+    sendBridgeMessage('permission_decision', JSON.stringify({
+      channelId,
+      allow: false,
+      remember: false,
+      rejectMessage: 'User denied the permission request',
+    }));
+    setPermissionDialogOpen(false);
+    setCurrentPermissionRequest(null);
   };
 
   const toggleThinking = (messageIndex: number, blockIndex: number) => {
@@ -319,16 +412,44 @@ const App = () => {
   };
 
   const shouldShowMessage = (message: ClaudeMessage) => {
+    // 过滤 isMeta 消息（如 "Caveat: The messages below were generated..."）
+    if (message.raw && typeof message.raw === 'object' && 'isMeta' in message.raw && message.raw.isMeta === true) {
+      return false;
+    }
+
+    // 过滤命令消息（包含 <command-name> 或 <local-command-stdout> 标签）
+    const text = getMessageText(message);
+    if (text && (
+      text.includes('<command-name>') ||
+      text.includes('<local-command-stdout>') ||
+      text.includes('<local-command-stderr>') ||
+      text.includes('<command-message>') ||
+      text.includes('<command-args>')
+    )) {
+      return false;
+    }
+
     if (message.type === 'assistant') {
       return true;
     }
     if (message.type === 'user' || message.type === 'error') {
-      const text = getMessageText(message);
-      if (text && text.trim() && text !== '(空消息)') {
+      // 检查是否有有效的文本内容
+      if (text && text.trim() && text !== '(空消息)' && text !== '(无法解析内容)') {
         return true;
       }
+      // 检查是否有有效的内容块（如图片等）
       const rawBlocks = normalizeBlocks(message.raw);
-      return Array.isArray(rawBlocks) && rawBlocks.length > 0;
+      if (Array.isArray(rawBlocks) && rawBlocks.length > 0) {
+        // 确保至少有一个非空的内容块
+        return rawBlocks.some(block => {
+          if (block.type === 'text') {
+            return block.text && block.text.trim().length > 0;
+          }
+          // 图片、工具使用等其他类型的块都应该显示
+          return true;
+        });
+      }
+      return false;
     }
     return true;
   };
@@ -369,7 +490,7 @@ const App = () => {
           blocks.push({
             type: 'tool_use',
             id: typeof candidate.id === 'string' ? (candidate.id as string) : undefined,
-            name: typeof candidate.name === 'string' ? (candidate.name as string) : 'Unknown',
+            name: typeof candidate.name === 'string' ? (candidate.name as string) : '未知工具',
             input: (candidate.input as Record<string, unknown>) ?? {},
           });
         } else if (type === 'image') {
@@ -409,6 +530,12 @@ const App = () => {
         return null;
       }
       if (typeof content === 'string') {
+        // 过滤空字符串和命令消息
+        if (!content.trim() ||
+            content.includes('<command-name>') ||
+            content.includes('<local-command-stdout>')) {
+          return null;
+        }
         return [{ type: 'text' as const, text: content }];
       }
       if (Array.isArray(content)) {
@@ -418,22 +545,35 @@ const App = () => {
       return null;
     };
 
-    return (
-      pickContent(raw.message?.content ?? raw.content) ?? [
-        { type: 'text' as const, text: '(无法解析内容)' },
-      ]
-    );
+    const contentBlocks = pickContent(raw.message?.content ?? raw.content);
+
+    // 如果无法解析内容，尝试从其他字段获取
+    if (!contentBlocks) {
+      // 尝试从 raw.text 或其他可能的字段获取
+      if (typeof raw === 'object') {
+        if ('text' in raw && typeof raw.text === 'string' && raw.text.trim()) {
+          return [{ type: 'text' as const, text: raw.text }];
+        }
+        // 如果实在没有内容，返回 null 而不是显示"(无法解析内容)"
+        // 这样 shouldShowMessage 会过滤掉这条消息
+      }
+      return null;
+    }
+
+    return contentBlocks;
   };
 
   const getContentBlocks = (message: ClaudeMessage): ClaudeContentBlock[] => {
     const rawBlocks = normalizeBlocks(message.raw);
-    if (rawBlocks) {
+    if (rawBlocks && rawBlocks.length > 0) {
       return rawBlocks;
     }
-    if (message.content) {
+    if (message.content && message.content.trim()) {
       return [{ type: 'text', text: message.content }];
     }
-    return [{ type: 'text', text: '(空消息)' }];
+    // 如果没有任何内容，返回空数组而不是显示"(空消息)"
+    // shouldShowMessage 会过滤掉这些消息
+    return [];
   };
 
   const findToolResult = (toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
@@ -478,6 +618,7 @@ const App = () => {
 
   return (
     <>
+      <ToastContainer messages={toasts} onDismiss={dismissToast} />
       <div className="header">
         <div className="header-left">
           {currentView === 'history' ? (
@@ -497,7 +638,6 @@ const App = () => {
               {sessionTitle}
             </div>
           )}
-          <span className="status-indicator">{status !== DEFAULT_STATUS ? status : ''}</span>
         </div>
         <div className="header-right">
           {currentView === 'chat' && (
@@ -562,9 +702,16 @@ const App = () => {
 
             return (
               <div key={messageIndex} className={`message ${message.type}`}>
-                <div className="message-role-label">
-                  {message.type === 'assistant' ? null : message.type === 'user' ? 'You' : message.type}
-                </div>
+                {message.type === 'user' && message.timestamp && (
+                  <div className="message-timestamp-header">
+                    {formatTime(message.timestamp)}
+                  </div>
+                )}
+                {message.type !== 'assistant' && message.type !== 'user' && (
+                  <div className="message-role-label">
+                    {message.type}
+                  </div>
+                )}
                 <div className="message-content">
                   {message.type === 'error' ? (
                     <MarkdownBlock content={getMessageText(message)} />
@@ -661,30 +808,32 @@ const App = () => {
             );
           })}
 
-          {loading && <div className="loading show">Claude 正在思考</div>}
+          {loading && <WaitingIndicator />}
         </div>
       ) : (
         <HistoryView historyData={historyData} onLoadSession={loadHistorySession} />
       )}
 
       {currentView === 'chat' && (
-        <ChatInputBox
-          isLoading={loading}
-          selectedModel={selectedModel}
-          permissionMode={permissionMode}
-          usagePercentage={usagePercentage}
-          usageUsedTokens={usageUsedTokens}
-          usageMaxTokens={usageMaxTokens}
-          showUsage={true}
-          onSubmit={handleSubmit}
-          onStop={interruptSession}
-          onModeSelect={handleModeSelect}
-          onModelSelect={handleModelSelect}
-        />
+        <div className="input-area">
+          <ChatInputBox
+            isLoading={loading}
+            selectedModel={selectedModel}
+            permissionMode={permissionMode}
+            usagePercentage={usagePercentage}
+            usageUsedTokens={usageUsedTokens}
+            usageMaxTokens={usageMaxTokens}
+            showUsage={true}
+            onSubmit={handleSubmit}
+            onStop={interruptSession}
+            onModeSelect={handleModeSelect}
+            onModelSelect={handleModelSelect}
+          />
+        </div>
       )}
 
       <div id="image-preview-root" />
-    
+
       <ConfirmDialog
         isOpen={showNewSessionConfirm}
         title="创建新会话"
@@ -693,6 +842,14 @@ const App = () => {
         cancelText="取消"
         onConfirm={handleConfirmNewSession}
         onCancel={handleCancelNewSession}
+      />
+
+      <PermissionDialog
+        isOpen={permissionDialogOpen}
+        request={currentPermissionRequest}
+        onApprove={handlePermissionApprove}
+        onSkip={handlePermissionSkip}
+        onApproveAlways={handlePermissionApproveAlways}
       />
     </>
   );

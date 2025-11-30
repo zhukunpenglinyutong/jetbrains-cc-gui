@@ -170,7 +170,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 8px;
-  border-top: 1px solid var(--input-border);
+  border-top: none;
   background: rgba(0, 0, 0, 0.1);
 }
 
@@ -213,14 +213,13 @@
 }
 
 .selector-dropdown {
-  position: fixed;
   background: var(--dropdown-bg);
   border: 1px solid var(--dropdown-border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
   min-width: 140px;
   padding: 4px 0;
+  white-space: nowrap;
 }
 
 .selector-option {

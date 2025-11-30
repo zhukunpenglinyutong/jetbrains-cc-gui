@@ -73,6 +73,12 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setAlertDialog({ ...alertDialog, isOpen: false });
   };
 
+  // 显示切换成功弹窗
+  const showSwitchSuccess = (message: string) => {
+    console.log('[SettingsView] showSwitchSuccess called:', message);
+    showAlert('success', '切换成功', message);
+  };
+
   useEffect(() => {
     // 设置全局回调
     window.updateProviders = (jsonStr: string) => {
@@ -106,6 +112,11 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       setLoading(false);
     };
 
+    window.showSwitchSuccess = (message: string) => {
+      console.log('[SettingsView] window.showSwitchSuccess called:', message);
+      showSwitchSuccess(message);
+    };
+
     // 加载供应商列表
     loadProviders();
 
@@ -113,6 +124,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       window.updateProviders = undefined;
       window.updateActiveProvider = undefined;
       window.showError = undefined;
+      window.showSwitchSuccess = undefined;
     };
   }, []);
 

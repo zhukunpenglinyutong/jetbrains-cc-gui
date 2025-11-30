@@ -25,8 +25,12 @@ import com.google.gson.JsonObject;
 import javax.swing.*;
 import java.awt.*;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Claude SDK 聊天工具窗口
@@ -79,13 +83,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             // 启动权限服务
             PermissionService permissionService = PermissionService.getInstance(project);
             permissionService.start();
-            permissionService.setDecisionListener(decision -> {
-                if (decision != null &&
-                    decision.getResponse() == PermissionService.PermissionResponse.DENY) {
-                    interruptDueToPermissionDenial();
+            // 注意：不再设置 decisionListener，因为我们在 handlePermissionDecision 中已经处理了中断逻辑
+            // 设置 decisionListener 会导致重复中断
+
+            // 设置前端弹窗显示器
+            permissionService.setDialogShower(new PermissionService.PermissionDialogShower() {
+                @Override
+                public CompletableFuture<Integer> showPermissionDialog(String toolName, JsonObject inputs) {
+                    return showFrontendPermissionDialog(toolName, inputs);
                 }
             });
-            System.out.println("[ClaudeChatWindow] Started permission service");
+
+            System.out.println("[ClaudeChatWindow] Started permission service with frontend dialog");
 
             // 先设置回调，再初始化会话信息
             setupSessionCallbacks();
@@ -241,7 +250,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     System.out.println("[Backend] 处理: interrupt_session");
                     session.interrupt().thenRun(() -> {
                         SwingUtilities.invokeLater(() -> {
-                            callJavaScript("updateStatus", escapeJs("会话已中断"));
+                            // 移除通知：会话已中断
                         });
                     });
                     break;
@@ -250,7 +259,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     System.out.println("[Backend] 处理: restart_session");
                     session.restart().thenRun(() -> {
                         SwingUtilities.invokeLater(() -> {
-                            callJavaScript("updateStatus", escapeJs("会话已重启"));
+                            // 移除通知：会话已重启
                         });
                     });
                     break;
@@ -393,10 +402,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             System.out.println("[ClaudeChatWindow] WARNING: Using user home directory as fallback: " + userHome);
             System.out.println("[ClaudeChatWindow] Files will be written to: " + userHome);
 
-            // 显示警告
-            SwingUtilities.invokeLater(() -> {
-                callJavaScript("updateStatus", escapeJs("警告: 工作目录设置为 " + userHome));
-            });
+            // 移除通知：警告工作目录
 
             return userHome;
         }
@@ -483,8 +489,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             // 清空当前消息
             callJavaScript("clearMessages");
 
-            // 更新状态
-            callJavaScript("updateStatus", escapeJs("正在加载历史会话..."));
+            // 移除通知：正在加载历史会话...
 
             // 创建新的 Session 并设置会话信息
             session = new ClaudeSession(sdkBridge);
@@ -501,12 +506,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             // 从服务器加载会话消息
             session.loadFromServer().thenRun(() -> {
                 SwingUtilities.invokeLater(() -> {
-                    callJavaScript("updateStatus", escapeJs("会话已加载，可以继续提问"));
+                    // 移除通知：会话已加载，可以继续提问
                 });
             }).exceptionally(ex -> {
                 SwingUtilities.invokeLater(() -> {
                     callJavaScript("addErrorMessage", escapeJs("加载会话失败: " + ex.getMessage()));
-                    callJavaScript("updateStatus", escapeJs("加载失败"));
+                    // 移除通知：加载失败
                 });
                 return null;
             });
@@ -561,20 +566,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
                         if (error != null) {
                             callJavaScript("updateStatus", escapeJs("错误: " + error));
-                        } else if (busy) {
-                            callJavaScript("updateStatus", escapeJs("正在处理..."));
-                        } else if (loading) {
-                            callJavaScript("updateStatus", escapeJs("加载中..."));
-                        } else {
-                            callJavaScript("updateStatus", escapeJs("就绪"));
                         }
+                        // 移除通知：正在处理...、加载中...、就绪
                     });
                 }
 
                 @Override
                 public void onSessionIdReceived(String sessionId) {
                     SwingUtilities.invokeLater(() -> {
-                        callJavaScript("updateStatus", escapeJs("会话 ID: " + sessionId));
+                        // 移除通知：会话 ID
                         System.out.println("Session ID: " + sessionId);
                     });
                 }
@@ -644,8 +644,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private void createNewSession() {
             System.out.println("Creating new session...");
 
-            // 更新状态
-            callJavaScript("updateStatus", escapeJs("正在创建新会话..."));
+            // 移除通知：正在创建新会话...
 
             // 创建新的 Session 实例（不设置 sessionId，让 SDK 自动生成）
             session = new ClaudeSession(sdkBridge);
@@ -656,8 +655,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             session.setSessionInfo(null, workingDirectory);  // sessionId 为 null 表示新会话
             System.out.println("New session created with cwd: " + workingDirectory);
 
-            // 在UI中显示当前工作目录
-            callJavaScript("updateStatus", escapeJs("工作目录: " + workingDirectory));
+            // 移除通知：工作目录
 
             // 更新 UI
             SwingUtilities.invokeLater(() -> {
@@ -691,9 +689,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 if (!currentWorkingDir.equals(previousCwd)) {
                     session.setCwd(currentWorkingDir);
                     System.out.println("[ClaudeChatWindow] Updated working directory: " + currentWorkingDir);
-                    SwingUtilities.invokeLater(() -> {
-                        callJavaScript("updateStatus", escapeJs("工作目录: " + currentWorkingDir));
-                    });
+                    // 移除通知：工作目录
                 }
 
                 // 使用 default 模式，会触发权限请求
@@ -722,9 +718,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 if (!currentWorkingDir.equals(previousCwd)) {
                     session.setCwd(currentWorkingDir);
                     System.out.println("[ClaudeChatWindow] Updated working directory: " + currentWorkingDir);
-                    SwingUtilities.invokeLater(() -> {
-                        callJavaScript("updateStatus", escapeJs("工作目录: " + currentWorkingDir));
-                    });
+                    // 移除通知：工作目录
                 }
 
                 session.setPermissionMode("default");
@@ -740,7 +734,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
         private void interruptDueToPermissionDenial() {
             session.interrupt().thenRun(() -> SwingUtilities.invokeLater(() -> {
-                callJavaScript("updateStatus", escapeJs("权限被拒，已中断会话"));
+                // 移除通知：权限被拒，已中断会话
             }));
         }
 
@@ -1145,7 +1139,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         // 中断会话
                         function interruptSession() {
                             window.sendToJava('interrupt_session:');
-                            updateStatus('已发送中断请求');
+                            // 移除通知：已发送中断请求
                         }
 
                         // 重启会话
@@ -1153,7 +1147,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                             if (confirm('确定要重启会话吗？这将清空当前对话历史。')) {
                                 window.sendToJava('restart_session:');
                                 clearMessages();
-                                updateStatus('正在重启会话...');
+                                // 移除通知：正在重启会话...
                             }
                         }
 
@@ -1176,26 +1170,123 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 """;
         }
 
+        // 存储待处理的权限请求（用于 PermissionService）
+        private final Map<String, CompletableFuture<Integer>> pendingPermissionRequests = new ConcurrentHashMap<>();
+
         /**
-         * 显示权限请求对话框
+         * 显示前端权限对话框（供 PermissionService 调用）
+         */
+        private CompletableFuture<Integer> showFrontendPermissionDialog(String toolName, JsonObject inputs) {
+            String channelId = UUID.randomUUID().toString();
+            CompletableFuture<Integer> future = new CompletableFuture<>();
+
+            // 存储 future，等待前端返回决策
+            pendingPermissionRequests.put(channelId, future);
+
+            try {
+                // 构建权限请求数据
+                Gson gson = new Gson();
+                JsonObject requestData = new JsonObject();
+                requestData.addProperty("channelId", channelId);
+                requestData.addProperty("toolName", toolName);
+                requestData.add("inputs", inputs);
+
+                String requestJson = gson.toJson(requestData);
+                String escapedJson = escapeJs(requestJson);
+
+                System.out.println("[Backend] PermissionService 权限请求数据: " + requestJson);
+
+                // 通过 JavaScript 桥接触发前端弹窗（带重试逻辑）
+                SwingUtilities.invokeLater(() -> {
+                    // 使用重试逻辑，确保前端已加载
+                    String jsCode = "(function retryShowDialog(retries) { " +
+                        "  if (window.showPermissionDialog) { " +
+                        "    console.log('[Backend->Frontend] Showing permission dialog from PermissionService'); " +
+                        "    window.showPermissionDialog('" + escapedJson + "'); " +
+                        "  } else if (retries > 0) { " +
+                        "    console.log('[Backend->Frontend] waiting for showPermissionDialog, retries=' + retries); " +
+                        "    setTimeout(function() { retryShowDialog(retries - 1); }, 200); " +
+                        "  } else { " +
+                        "    console.error('[Backend->Frontend] window.showPermissionDialog not available after retries!'); " +
+                        "  } " +
+                        "})(30);"; // 最多重试30次，每次200ms，总共6秒
+
+                    browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
+                    System.out.println("[Backend] 已触发前端权限弹窗 (PermissionService)");
+                });
+
+                // 设置超时处理
+                CompletableFuture.delayedExecutor(35, TimeUnit.SECONDS).execute(() -> {
+                    if (!future.isDone()) {
+                        System.err.println("[Backend] 权限请求超时: " + channelId);
+                        pendingPermissionRequests.remove(channelId);
+                        future.complete(PermissionService.PermissionResponse.DENY.getValue());
+                    }
+                });
+
+            } catch (Exception e) {
+                System.err.println("[Backend] 显示前端权限弹窗失败: " + e.getMessage());
+                e.printStackTrace();
+                pendingPermissionRequests.remove(channelId);
+                future.complete(PermissionService.PermissionResponse.DENY.getValue());
+            }
+
+            return future;
+        }
+
+        /**
+         * 显示权限请求对话框（通过前端 WebView）
          */
         private void showPermissionDialog(PermissionRequest request) {
-            System.out.println("显示权限请求对话框: " + request.getToolName());
+            System.out.println("[Backend] 显示权限请求对话框: " + request.getToolName());
 
-            PermissionDialog dialog = new PermissionDialog(project, request);
-            dialog.setDecisionCallback(decision -> {
-                // 处理权限决策
-                session.handlePermissionDecision(
-                    decision.channelId,
-                    decision.allow,
-                    decision.remember,
-                    decision.rejectMessage
-                );
-                if (!decision.allow) {
-                    interruptDueToPermissionDenial();
+            try {
+                // 构建权限请求数据
+                Gson gson = new Gson();
+                JsonObject requestData = new JsonObject();
+                requestData.addProperty("channelId", request.getChannelId());
+                requestData.addProperty("toolName", request.getToolName());
+
+                // 转换 inputs 为 JsonObject
+                JsonObject inputsJson = gson.toJsonTree(request.getInputs()).getAsJsonObject();
+                requestData.add("inputs", inputsJson);
+
+                // 添加 suggestions（如果有）
+                if (request.getSuggestions() != null) {
+                    requestData.add("suggestions", request.getSuggestions());
                 }
-            });
-            dialog.show();
+
+                String requestJson = gson.toJson(requestData);
+                String escapedJson = escapeJs(requestJson);
+
+                System.out.println("[Backend] 权限请求数据: " + requestJson);
+
+                // 通过 JavaScript 桥接触发前端弹窗
+                SwingUtilities.invokeLater(() -> {
+                    String jsCode = "if (window.showPermissionDialog) { " +
+                        "  console.log('[Backend->Frontend] Showing permission dialog'); " +
+                        "  window.showPermissionDialog('" + escapedJson + "'); " +
+                        "} else { " +
+                        "  console.error('[Backend->Frontend] window.showPermissionDialog not available!'); " +
+                        "}";
+
+                    browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
+                    System.out.println("[Backend] 已触发前端权限弹窗");
+                });
+
+            } catch (Exception e) {
+                System.err.println("[Backend] 显示权限弹窗失败: " + e.getMessage());
+                e.printStackTrace();
+
+                // 如果前端弹窗失败，自动拒绝权限请求
+                session.handlePermissionDecision(
+                    request.getChannelId(),
+                    false,
+                    false,
+                    "Failed to show permission dialog: " + e.getMessage()
+                );
+                interruptDueToPermissionDenial();
+            }
         }
 
         /**
@@ -1209,15 +1300,48 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 String channelId = decision.get("channelId").getAsString();
                 boolean allow = decision.get("allow").getAsBoolean();
                 boolean remember = decision.get("remember").getAsBoolean();
-                String rejectMessage = decision.has("rejectMessage") ?
-                    decision.get("rejectMessage").getAsString() : "";
+                // 修复：检查 rejectMessage 是否为 null 或 JsonNull
+                String rejectMessage = "";
+                if (decision.has("rejectMessage") && !decision.get("rejectMessage").isJsonNull()) {
+                    rejectMessage = decision.get("rejectMessage").getAsString();
+                }
 
-                session.handlePermissionDecision(channelId, allow, remember, rejectMessage);
-                if (!allow) {
-                    interruptDueToPermissionDenial();
+                System.out.println("[Backend] 收到权限决策: channelId=" + channelId + ", allow=" + allow + ", remember=" + remember);
+
+                // 检查是否是 PermissionService 的请求
+                CompletableFuture<Integer> pendingFuture = pendingPermissionRequests.remove(channelId);
+                if (pendingFuture != null) {
+                    // 这是来自 PermissionService 的请求
+                    System.out.println("[Backend] 处理 PermissionService 权限决策");
+                    int responseValue;
+                    if (allow) {
+                        responseValue = remember ?
+                            PermissionService.PermissionResponse.ALLOW_ALWAYS.getValue() :
+                            PermissionService.PermissionResponse.ALLOW.getValue();
+                    } else {
+                        responseValue = PermissionService.PermissionResponse.DENY.getValue();
+                    }
+                    pendingFuture.complete(responseValue);
+
+                    if (!allow) {
+                        interruptDueToPermissionDenial();
+                    }
+                } else {
+                    // 这是来自 ClaudeSession 的请求
+                    System.out.println("[Backend] 处理 ClaudeSession 权限决策");
+                    if (remember) {
+                        // 总是允许/拒绝
+                        session.handlePermissionDecisionAlways(channelId, allow);
+                    } else {
+                        // 仅此次允许/拒绝
+                        session.handlePermissionDecision(channelId, allow, false, rejectMessage);
+                    }
+                    if (!allow) {
+                        interruptDueToPermissionDenial();
+                    }
                 }
             } catch (Exception e) {
-                System.err.println("处理权限决策失败: " + e.getMessage());
+                System.err.println("[Backend] 处理权限决策失败: " + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -1317,7 +1441,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 settingsService.addClaudeProvider(provider);
 
                 SwingUtilities.invokeLater(() -> {
-                    callJavaScript("window.updateStatus", escapeJs("供应商添加成功"));
+                    // 移除通知：供应商添加成功
                     handleGetProviders(); // 刷新列表
                 });
             } catch (Exception e) {
@@ -1351,11 +1475,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
                 final boolean finalSynced = syncedActiveProvider;
                 SwingUtilities.invokeLater(() -> {
-                    if (finalSynced) {
-                        callJavaScript("window.updateStatus", escapeJs("供应商更新成功，已同步到 ~/.claude/settings.json"));
-                    } else {
-                        callJavaScript("window.updateStatus", escapeJs("供应商更新成功"));
-                    }
+                    // 移除通知：供应商更新成功
                     handleGetProviders(); // 刷新列表
                 });
             } catch (Exception e) {
@@ -1396,7 +1516,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 if (result.isSuccess()) {
                     System.out.println("[Backend] Delete successful, refreshing provider list");
                     SwingUtilities.invokeLater(() -> {
-                        callJavaScript("window.updateStatus", escapeJs("供应商删除成功"));
+                        // 移除通知：供应商删除成功
                         handleGetProviders(); // 刷新列表
                     });
                 } else {
@@ -1434,8 +1554,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 settingsService.applyActiveProviderToClaudeSettings();
 
                 SwingUtilities.invokeLater(() -> {
-                    callJavaScript("alert", escapeJs("✅ 供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
-                    callJavaScript("window.updateStatus", escapeJs("供应商切换成功，已同步到 ~/.claude/settings.json"));
+                    // 使用 WebView 弹窗替代系统 alert
+                    callJavaScript("window.showSwitchSuccess", escapeJs("供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
                     handleGetProviders(); // 刷新列表
                 });
             } catch (Exception e) {
@@ -1779,10 +1899,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 System.out.println("[Backend] Setting permission mode to: " + mode);
                 session.setPermissionMode(mode);
 
-                final String finalMode = mode;
-                SwingUtilities.invokeLater(() -> {
-                    callJavaScript("window.updateStatus", escapeJs("权限模式已设置为: " + finalMode));
-                });
+                // 移除通知：权限模式已设置
             } catch (Exception e) {
                 System.err.println("[Backend] Failed to set mode: " + e.getMessage());
                 e.printStackTrace();
@@ -1810,10 +1927,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 System.out.println("[Backend] Setting model to: " + model);
                 this.currentModel = model;
 
-                final String finalModel = model;
-                SwingUtilities.invokeLater(() -> {
-                    callJavaScript("window.updateStatus", escapeJs("模型已设置为: " + finalModel));
-                });
+                // 更新 session 的模型
+                if (session != null) {
+                    session.setModel(model);
+                }
+
+                // 移除通知：模型已设置
             } catch (Exception e) {
                 System.err.println("[Backend] Failed to set model: " + e.getMessage());
                 e.printStackTrace();

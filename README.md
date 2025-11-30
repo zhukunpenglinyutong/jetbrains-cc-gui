@@ -2,26 +2,40 @@
 
 本项目主要解决在IDEA中使用Claude Code 没有 GUI操作窗口的场景
 
-目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.6（2025年11月27日更新）
+目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.7（2025年11月30日更新）
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
-<img width="600" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.3/2.png" />
+<img width="350" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/1.png" />
 
 ---
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.5-beta 文件
+# 1.下载 idea-claude-code-gui-0.0.7 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.5-beta 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.7 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.6.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.6/idea-claude-code-gui-0.0.6.zip)
+插件下载：[idea-claude-code-gui-0.0.7.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/idea-claude-code-gui-0.0.7.zip)
 
 ---
 
 ### 目前进度
+
+##### **11月30日（v0.0.7）**
+
+- [x] P0: 支持选择 Opus4.5 进行提问
+- [x] P0: 将权限弹窗由系统弹窗改为页面内弹窗，并且增加了允许且不再询问的功能
+- [x] P1: 重构展示区域UI效果
+- [x] P3: 优化顶部按钮展示问题
+- [x] P3: 优化Loding样式
+- [x] P5: 优化样式细节
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/2.png" />
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/1.png" />
+
 
 ##### **11月27日（v0.0.6）**
 
@@ -184,3 +198,13 @@ Non-Bundled Plugins:
   com.example.claudeagent (1.0-SNAPSHOT)
 Kotlin: 252.27397.103-IJ
 ```
+
+---
+
+## License
+
+AGPL-3.0
+
+## Star History
+
+[![Star History](https://api.star-history.com/svg?repos=zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)](https://www.star-history.com/#zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)

@@ -41,49 +41,32 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
       <div
         className="task-header"
         onClick={() => setExpanded((prev) => !prev)}
-        style={{ borderBottom: expanded ? '1px solid #333' : undefined }}
+        style={{ 
+          borderBottom: expanded ? '1px solid #333' : undefined,
+          background: '#1e1e1e',
+        }}
       >
         <div className="task-title-section">
-          <div
-            className="task-icon-wrapper"
-            style={{
-              width: '20px',
-              height: '20px',
-              background: 'rgba(100, 181, 246, 0.15)',
-              marginRight: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '4px',
-            }}
-          >
-            <span
-              className="codicon codicon-terminal"
-              style={{ color: '#64b5f6', fontSize: '12px' }}
-            />
-          </div>
-          <span style={{ fontWeight: 600, fontSize: '13px', color: '#90caf9' }}>命令行</span>
-          {description && (
-            <span style={{ color: '#858585', marginLeft: '8px', fontStyle: 'italic', fontSize: '12px' }}>
-              {description}
-            </span>
-          )}
+          <span
+            className="codicon codicon-terminal"
+            style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }}
+          />
+
+          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
+            运行命令
+          </span>
+          <span style={{ color: '#858585', fontStyle: 'normal', marginLeft: '12px' }}>{description}</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {status !== 'pending' && (
-            <div
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: isError ? '#ff6b6b' : '#89d185',
-              }}
-            />
-          )}
-          <span
-            className={`codicon codicon-chevron-${expanded ? 'up' : 'down'}`}
-            style={{ color: '#858585' }}
+          <div
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: isError ? '#ff6b6b' : (status === 'pending' ? '#858585' : '#4caf50'),
+              marginRight: '4px'
+            }}
           />
         </div>
       </div>

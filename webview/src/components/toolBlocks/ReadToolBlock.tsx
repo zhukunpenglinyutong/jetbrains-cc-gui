@@ -27,6 +27,10 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
     lineInfo = `第 ${startLine}-${endLine} 行`;
   }
 
+  const isDirectory = filePath === '.' || filePath?.endsWith('/');
+  const iconClass = isDirectory ? 'codicon-folder' : 'codicon-file-code';
+  const actionText = isDirectory ? '读取目录' : '读取文件';
+
   // Get all input parameters for the expanded view
   const params = Object.entries(input).filter(([key]) => key !== 'file_path' && key !== 'target_file' && key !== 'path');
 
@@ -35,45 +39,32 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
       <div
         className="task-header"
         onClick={() => setExpanded((prev) => !prev)}
-        style={{ borderBottom: expanded ? '1px solid #333' : undefined }}
+        style={{ 
+          borderBottom: expanded ? '1px solid #333' : undefined,
+        }}
       >
         <div className="task-title-section">
-          <div
-            className="task-icon-wrapper"
-            style={{
-              width: '20px',
-              height: '20px',
-              background: 'rgba(100, 181, 246, 0.15)',
-              marginRight: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '4px',
-            }}
-          >
-            <span className="codicon codicon-eye" style={{ color: '#64b5f6', fontSize: '12px' }} />
-          </div>
-          <span style={{ fontWeight: 600, fontSize: '13px', color: '#90caf9' }}>读取</span>
+          <span className={`codicon ${iconClass}`} style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }} />
+
+          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
+            {actionText}
+          </span>
+          <span style={{ color: '#858585', marginLeft: '12px' }}>{fileName || filePath}</span>
+          
           {lineInfo && (
             <span style={{ color: '#858585', marginLeft: '8px', fontSize: '12px' }}>
               {lineInfo}
             </span>
           )}
-          <span
-            style={{
-              color: '#ccc',
-              marginLeft: '8px',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
-            {fileName || filePath}
-          </span>
         </div>
 
-        <span
-          className={`codicon codicon-chevron-${expanded ? 'up' : 'down'}`}
-          style={{ color: '#858585' }}
-        />
+        <div style={{ 
+            width: '8px', 
+            height: '8px', 
+            borderRadius: '50%', 
+            backgroundColor: '#4caf50',
+            marginRight: '4px'
+        }} />
       </div>
 
       {expanded && params.length > 0 && (

@@ -29,6 +29,7 @@ export interface ClaudeMessage {
   type: ClaudeRole;
   content?: string;
   raw?: ClaudeRawMessage | string;
+  timestamp?: string;
   [key: string]: unknown;
 }
 

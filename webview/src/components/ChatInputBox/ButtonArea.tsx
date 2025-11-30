@@ -1,6 +1,9 @@
 import { useCallback, useRef } from 'react';
-import type { ButtonAreaProps, PermissionMode } from './types';
-import { ModeSelect, ModelSelect } from './selectors';
+// TODO: 临时隐藏模式选择器,后续恢复
+// import type { ButtonAreaProps, PermissionMode } from './types';
+import type { ButtonAreaProps } from './types';
+// import { ModeSelect, ModelSelect } from './selectors';
+import { ModelSelect } from './selectors';
 import { TokenIndicator } from './TokenIndicator';
 
 /**
@@ -12,7 +15,8 @@ export const ButtonArea = ({
   hasInputContent = false,
   isLoading = false,
   selectedModel = 'claude-sonnet-4-5',
-  permissionMode = 'default',
+  // TODO: 临时隐藏模式选择器,后续恢复
+  // permissionMode = 'default',
   usagePercentage = 0,
   usageUsedTokens,
   usageMaxTokens,
@@ -20,7 +24,8 @@ export const ButtonArea = ({
   onSubmit,
   onStop,
   onAddAttachment,
-  onModeSelect,
+  // TODO: 临时隐藏模式选择器,后续恢复
+  // onModeSelect,
   onModelSelect,
 }: ButtonAreaProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,10 +68,11 @@ export const ButtonArea = ({
 
   /**
    * 处理模式选择
+   * TODO: 临时隐藏模式选择器,后续恢复
    */
-  const handleModeSelect = useCallback((mode: PermissionMode) => {
-    onModeSelect?.(mode);
-  }, [onModeSelect]);
+  // const handleModeSelect = useCallback((mode: PermissionMode) => {
+  //   onModeSelect?.(mode);
+  // }, [onModeSelect]);
 
   /**
    * 处理模型选择
@@ -79,7 +85,8 @@ export const ButtonArea = ({
     <div className="button-area">
       {/* 左侧：选择器 */}
       <div className="button-area-left">
-        <ModeSelect value={permissionMode} onChange={handleModeSelect} />
+        {/* TODO: 临时隐藏模式选择器,后续恢复 */}
+        {/* <ModeSelect value={permissionMode} onChange={handleModeSelect} /> */}
         <ModelSelect value={selectedModel} onChange={handleModelSelect} />
       </div>
 

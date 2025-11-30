@@ -18,20 +18,29 @@ const TaskExecutionBlock = ({ input }: TaskExecutionBlockProps) => {
     <div className="task-container">
       <div className="task-header" onClick={() => setExpanded((prev) => !prev)}>
         <div className="task-title-section">
-          <span style={{ fontWeight: 600, fontSize: '13px', color: '#ccc' }}>任务</span>
-          {typeof subagentType === 'string' && (
-            <span className="task-type-badge">{subagentType}</span>
+          <span className="codicon codicon-tools" style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }} />
+
+          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
+            任务
+          </span>
+          {typeof subagentType === 'string' && subagentType && (
+            <span style={{ color: '#858585', marginLeft: '12px' }}>{subagentType}</span>
           )}
+          
           {typeof description === 'string' && (
-            <span className="task-summary-text" title={description}>
+            <span className="task-summary-text" title={description} style={{ marginLeft: '8px', color: '#858585', fontWeight: 'normal' }}>
               {description}
             </span>
           )}
         </div>
-        <span
-          className={`codicon codicon-chevron-${expanded ? 'up' : 'down'}`}
-          style={{ color: '#858585' }}
-        />
+        
+        <div style={{ 
+            width: '8px', 
+            height: '8px', 
+            borderRadius: '50%', 
+            backgroundColor: '#4caf50',
+            marginRight: '4px'
+        }} />
       </div>
 
       {expanded && (

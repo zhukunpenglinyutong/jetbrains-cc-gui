@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { ToolInput } from '../../types';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
-import { openFile } from '../../utils/bridge';
 
 const CODICON_MAP: Record<string, string> = {
   read: 'codicon-eye',
@@ -14,24 +13,64 @@ const CODICON_MAP: Record<string, string> = {
   webfetch: 'codicon-globe',
   websearch: 'codicon-search',
   delete: 'codicon-trash',
+  augmentcontextengine: 'codicon-symbol-class', // Added based on Picture 2
 };
 
 const getToolDisplayName = (name?: string) => {
   if (!name) {
     return '工具调用';
   }
-  const map: Record<string, string> = {
-    Read: '读取',
-    Edit: '编辑',
-    Write: '写入',
-    Bash: '执行命令',
-    Grep: '搜索',
-    Glob: '查找文件',
-    Task: '执行任务',
-    WebFetch: '获取网页',
-    WebSearch: '网络搜索',
+
+  // 中文映射表
+  const chineseNameMap: Record<string, string> = {
+    'augmentcontextengine': '上下文引擎',
+    'task': '任务',
+    'read': '读取文件',
+    'read_file': '读取文件',
+    'edit': '编辑文件',
+    'edit_file': '编辑文件',
+    'write': '写入文件',
+    'write_to_file': '写入文件',
+    'replace_string': '替换字符串',
+    'bash': '运行命令',
+    'run_terminal_cmd': '运行命令',
+    'execute_command': '执行命令',
+    'executecommand': '执行命令',
+    'grep': '搜索',
+    'glob': '文件匹配',
+    'webfetch': '网页获取',
+    'websearch': '网页搜索',
+    'delete': '删除',
+    'explore': '探索',
+    'createdirectory': '创建目录',
+    'movefile': '移动文件',
+    'copyfile': '复制文件',
+    'list': '列出文件',
+    'search': '搜索',
+    'find': '查找文件',
+    'todowrite': '任务列表',
   };
-  return map[name] ?? name;
+
+  const lowerName = name.toLowerCase();
+  if (chineseNameMap[lowerName]) {
+    return chineseNameMap[lowerName];
+  }
+
+  // If it's snake_case, replace underscores with spaces and capitalize
+  if (name.includes('_')) {
+    return name
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  // If it's CamelCase (starts with uppercase), split by capital letters
+  // e.g. WebSearch -> Web Search
+  if (/^[A-Z]/.test(name)) {
+    return name.replace(/([A-Z])/g, ' $1').trim();
+  }
+
+  return name;
 };
 
 const pickFilePath = (input: ToolInput) =>
@@ -55,8 +94,8 @@ interface GenericToolBlockProps {
 }
 
 const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
-  // Tools that should be collapsible (Grep and Glob)
-  const isCollapsible = ['grep', 'glob'].includes((name ?? '').toLowerCase());
+  // Tools that should be collapsible (Grep, Glob, and Write)
+  const isCollapsible = ['grep', 'glob', 'write', 'save-file'].includes((name ?? '').toLowerCase());
   const [expanded, setExpanded] = useState(false);
 
   if (!input) {
@@ -91,43 +130,29 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
         onClick={isCollapsible ? () => setExpanded((prev) => !prev) : undefined}
         style={{
           cursor: isCollapsible ? 'pointer' : 'default',
-          borderBottom: expanded && isCollapsible ? '1px solid #333' : undefined
+          borderBottom: expanded && isCollapsible ? '1px solid #333' : undefined,
         }}
       >
         <div className="task-title-section">
-          <div
-            className="task-icon-wrapper"
-            style={{ background: 'rgba(100, 181, 246, 0.15)' }}
-          >
-            <span className={`codicon ${codicon}`} style={{ color: '#64b5f6' }} />
-          </div>
-          <span style={{ fontWeight: 600, fontSize: '13px', color: '#90caf9' }}>
+          <span className={`codicon ${codicon}`} style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }} />
+
+          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
             {displayName}
           </span>
-          {summary &&
-            (filePath ? (
-              <a
-                className="tool-file-link"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  openFile(filePath);
-                }}
-              >
-                {summary}
-              </a>
-            ) : (
-              <span className="task-summary-text" title={summary}>
+          {summary && (
+              <span className="task-summary-text" title={summary} style={{ marginLeft: '12px', color: '#858585' }}>
                 {summary}
               </span>
-            ))}
+            )}
         </div>
-        {isCollapsible && (
-          <span
-            className={`codicon codicon-chevron-${expanded ? 'up' : 'down'}`}
-            style={{ color: '#858585' }}
-          />
-        )}
+        
+        <div style={{ 
+            width: '8px', 
+            height: '8px', 
+            borderRadius: '50%', 
+            backgroundColor: '#4caf50',
+            marginRight: '4px'
+        }} />
       </div>
       {shouldShowDetails && (
         <div className="task-details">

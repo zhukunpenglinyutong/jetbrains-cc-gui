@@ -207,8 +207,9 @@ function selectWorkingDirectory(requestedCwd) {
  * @param {string} resumeSessionId - 要恢复的会话ID
  * @param {string} cwd - 工作目录
  * @param {string} permissionMode - 权限模式（可选）
+ * @param {string} model - 模型名称（可选）
  */
-async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null) {
+async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null) {
   try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
@@ -220,6 +221,7 @@ async function sendMessage(message, resumeSessionId = null, cwd = null, permissi
       resumeSessionId,
       cwd,
       permissionMode,
+      model,
       IDEA_PROJECT_PATH: process.env.IDEA_PROJECT_PATH,
       PROJECT_PATH: process.env.PROJECT_PATH
     });
@@ -257,7 +259,7 @@ async function sendMessage(message, resumeSessionId = null, cwd = null, permissi
     const options = {
       cwd: workingDirectory,
       permissionMode: permissionMode || 'default', // 使用传入的权限模式，如果没有则默认
-      model: 'sonnet',
+      model: model || 'sonnet', // 使用传入的模型，如果没有则默认为 sonnet
       maxTurns: 100,
       additionalDirectories: Array.from(
         new Set(
@@ -448,7 +450,7 @@ function loadSessionHistory(sessionId, cwd) {
 /**
  * 使用 Messages API 发送带附件的消息（多模态）
  */
-async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null) {
+async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null) {
   try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     const { apiKey, baseUrl } = setupApiKey();
@@ -520,7 +522,7 @@ async function sendMessageWithAttachments(message, resumeSessionId = null, cwd =
 
     // 使用流式 API，这样在处理期间可以持续输出进度，避免前端 loading 状态丢失
     const stream = await client.messages.stream({
-      model: 'claude-sonnet-4-5',
+      model: model || 'claude-sonnet-4-5', // 使用传入的模型，如果没有则默认为 claude-sonnet-4-5
       max_tokens: 2048,
       messages: messagesForApi
     });
@@ -659,13 +661,13 @@ process.on('unhandledRejection', (reason) => {
   try {
     switch (command) {
       case 'send':
-        // send <message> [sessionId] [cwd] [permissionMode]
-        await sendMessage(args[0], args[1], args[2], args[3]);
+        // send <message> [sessionId] [cwd] [permissionMode] [model]
+        await sendMessage(args[0], args[1], args[2], args[3], args[4]);
         break;
 
       case 'sendWithAttachments':
-        // sendWithAttachments <message> [sessionId] [cwd] [permissionMode]
-        await sendMessageWithAttachments(args[0], args[1], args[2], args[3]);
+        // sendWithAttachments <message> [sessionId] [cwd] [permissionMode] [model]
+        await sendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4]);
         break;
 
       case 'getSession':

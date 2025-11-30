@@ -13,6 +13,7 @@ declare global {
     updateProviders?: (jsonStr: string) => void;
     updateActiveProvider?: (jsonStr: string) => void;
     showError?: (message: string) => void;
+    showSwitchSuccess?: (message: string) => void;
     updateUsageStatistics?: (jsonStr: string) => void;
     // 输入框补全相关 (004-refactor-input-box)
     onFileListResult?: (json: string) => void;
@@ -20,6 +21,8 @@ declare global {
     onUsageUpdate?: (json: string) => void;
     onModeChanged?: (mode: string) => void;
     onModelChanged?: (modelId: string) => void;
+    // 权限弹窗相关
+    showPermissionDialog?: (json: string) => void;
   }
 }
 

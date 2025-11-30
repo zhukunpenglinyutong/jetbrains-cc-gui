@@ -19,14 +19,26 @@ public class PermissionManager {
 
     private PermissionMode mode = PermissionMode.DEFAULT;
     private final Map<String, PermissionRequest> pendingRequests = new ConcurrentHashMap<>();
-    private final Map<String, Boolean> toolPermissionMemory = new ConcurrentHashMap<>(); // 记住工具权限决策
+    private final Map<String, Boolean> toolPermissionMemory = new ConcurrentHashMap<>(); // 记住工具权限决策（工具+参数）
+    private final Map<String, Boolean> toolOnlyPermissionMemory = new ConcurrentHashMap<>(); // 工具级别权限记忆（仅工具名）
     private Consumer<PermissionRequest> onPermissionRequestedCallback;
 
     /**
      * 创建新的权限请求
      */
     public PermissionRequest createRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions) {
-        // 检查是否有记忆的权限决策
+        // 首先检查工具级别的权限记忆（总是允许）
+        if (toolOnlyPermissionMemory.containsKey(toolName)) {
+            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions);
+            if (toolOnlyPermissionMemory.get(toolName)) {
+                request.accept();
+            } else {
+                request.reject("Previously denied by user", true);
+            }
+            return request;
+        }
+
+        // 检查是否有记忆的权限决策（工具+参数）
         String memoryKey = toolName + ":" + generateInputHash(inputs);
         if (toolPermissionMemory.containsKey(memoryKey)) {
             // 自动处理基于记忆的决策
@@ -81,6 +93,25 @@ public class PermissionManager {
             request.accept();
         } else {
             request.reject(rejectMessage != null ? rejectMessage : "Denied by user", true);
+        }
+    }
+
+    /**
+     * 处理权限决策（总是允许 - 按工具类型）
+     */
+    public void handlePermissionDecisionAlways(String channelId, boolean allow) {
+        PermissionRequest request = pendingRequests.remove(channelId);
+        if (request == null || request.isResolved()) {
+            return;
+        }
+
+        // 保存工具级别的权限记忆
+        toolOnlyPermissionMemory.put(request.getToolName(), allow);
+
+        if (allow) {
+            request.accept();
+        } else {
+            request.reject("Denied by user", true);
         }
     }
 

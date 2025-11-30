@@ -105,9 +105,13 @@ export const ChatInputBox = ({
 
   /**
    * 获取输入框纯文本内容
+   * 注意：在某些浏览器/环境（如 JCEF）中，innerText 可能在末尾包含换行符
+   * 这里统一去除末尾的换行符，确保获取的内容干净
    */
   const getTextContent = useCallback(() => {
-    return editableRef.current?.innerText || '';
+    const text = editableRef.current?.innerText || '';
+    // 去除末尾的换行符（\n, \r, \r\n）
+    return text.replace(/[\r\n]+$/, '');
   }, []);
 
   /**

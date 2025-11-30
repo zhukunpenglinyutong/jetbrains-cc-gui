@@ -1129,17 +1129,18 @@ public class ClaudeSDKBridge {
         List<ClaudeSession.Attachment> attachments,
         MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, attachments, null, callback);
+        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, callback);
     }
 
     /**
-     * 在已有 channel 中发送消息（流式响应，支持权限模式）
+     * 在已有 channel 中发送消息（流式响应，支持权限模式和模型选择）
      * @param channelId 频道 ID
      * @param message 消息内容
      * @param sessionId 会话 ID（用于恢复上下文）
      * @param cwd 工作目录
      * @param attachments 附件列表（可选）
      * @param permissionMode 权限模式（可选）
+     * @param model 模型名称（可选）
      * @param callback 流式回调
      */
     public CompletableFuture<SDKResult> sendMessage(
@@ -1149,6 +1150,7 @@ public class ClaudeSDKBridge {
         String cwd,
         List<ClaudeSession.Attachment> attachments,
         String permissionMode,
+        String model,
         MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -1210,11 +1212,20 @@ public class ClaudeSDKBridge {
                 // cwd 参数（如果有）
                 if (cwd != null) {
                     command.add(cwd);
+                } else {
+                    command.add(""); // 占位符，保持参数顺序
                 }
 
                 // 权限模式参数（如果有）
                 if (permissionMode != null) {
                     command.add(permissionMode);
+                } else {
+                    command.add(""); // 占位符，保持参数顺序
+                }
+
+                // 模型参数（如果有）
+                if (model != null && !model.isEmpty()) {
+                    command.add(model);
                 }
 
                 System.out.println("[ClaudeSDKBridge] Executing command: " + String.join(" ", command));

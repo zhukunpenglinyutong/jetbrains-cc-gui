@@ -15,7 +15,11 @@ const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const html = useMemo(() => {
     try {
-      return marked.parse(content);
+      // 去除内容末尾的换行符，避免产生额外空白
+      const trimmedContent = content.replace(/[\r\n]+$/, '');
+      // marked.parse 返回的 HTML 末尾可能有换行符，也需要去除
+      const parsed = marked.parse(trimmedContent);
+      return typeof parsed === 'string' ? parsed.trim() : parsed;
     } catch (error) {
       console.error('[MarkdownBlock] Failed to parse markdown', error);
       return content;

@@ -47,6 +47,9 @@ public class ClaudeSession {
     // 权限模式（传递给SDK）
     private String permissionMode = "default";
 
+    // 模型名称（传递给SDK）
+    private String model = "claude-sonnet-4-5";
+
     /**
      * 消息类
      */
@@ -309,6 +312,7 @@ public class ClaudeSession {
                 cwd,        // 传递工作目录
                 attachments,
                 permissionMode, // 传递权限模式
+                model,      // 传递模型
                 new ClaudeSDKBridge.MessageCallback() {
                 private final StringBuilder assistantContent = new StringBuilder();
                 private Message currentAssistantMessage = null;
@@ -481,8 +485,55 @@ public class ClaudeSession {
     private Message parseServerMessage(JsonObject msg) {
         String type = msg.has("type") ? msg.get("type").getAsString() : null;
 
+        // 过滤 isMeta 消息（如 "Caveat: The messages below were generated..."）
+        if (msg.has("isMeta") && msg.get("isMeta").getAsBoolean()) {
+            return null;
+        }
+
+        // 过滤命令消息（包含 <command-name> 或 <local-command-stdout> 标签）
+        if (msg.has("message") && msg.get("message").isJsonObject()) {
+            JsonObject message = msg.getAsJsonObject("message");
+            if (message.has("content")) {
+                JsonElement contentElement = message.get("content");
+                String contentStr = null;
+
+                if (contentElement.isJsonPrimitive()) {
+                    contentStr = contentElement.getAsString();
+                } else if (contentElement.isJsonArray()) {
+                    // 检查数组中的文本内容
+                    JsonArray contentArray = contentElement.getAsJsonArray();
+                    for (int i = 0; i < contentArray.size(); i++) {
+                        JsonElement element = contentArray.get(i);
+                        if (element.isJsonObject()) {
+                            JsonObject block = element.getAsJsonObject();
+                            if (block.has("type") && "text".equals(block.get("type").getAsString()) &&
+                                block.has("text")) {
+                                contentStr = block.get("text").getAsString();
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // 如果内容包含命令标签，过滤掉
+                if (contentStr != null && (
+                    contentStr.contains("<command-name>") ||
+                    contentStr.contains("<local-command-stdout>") ||
+                    contentStr.contains("<local-command-stderr>") ||
+                    contentStr.contains("<command-message>") ||
+                    contentStr.contains("<command-args>")
+                )) {
+                    return null;
+                }
+            }
+        }
+
         if ("user".equals(type)) {
             String content = extractMessageContent(msg);
+            // 如果内容为空或只包含空白字符，不展示
+            if (content == null || content.trim().isEmpty()) {
+                return null;
+            }
             return new Message(Message.Type.USER, content, msg);
         } else if ("assistant".equals(type)) {
             String content = extractMessageContent(msg);
@@ -497,6 +548,10 @@ public class ClaudeSession {
      */
     private String extractMessageContent(JsonObject msg) {
         if (!msg.has("message")) {
+            // 尝试直接从顶层获取 content（某些消息格式可能不同）
+            if (msg.has("content")) {
+                return extractContentFromElement(msg.get("content"));
+            }
             return "";
         }
 
@@ -507,7 +562,13 @@ public class ClaudeSession {
 
         // 获取content元素
         com.google.gson.JsonElement contentElement = message.get("content");
+        return extractContentFromElement(contentElement);
+    }
 
+    /**
+     * 从 JsonElement 中提取内容
+     */
+    private String extractContentFromElement(com.google.gson.JsonElement contentElement) {
         // 字符串格式
         if (contentElement.isJsonPrimitive()) {
             return contentElement.getAsString();
@@ -517,6 +578,7 @@ public class ClaudeSession {
         if (contentElement.isJsonArray()) {
             JsonArray contentArray = contentElement.getAsJsonArray();
             StringBuilder sb = new StringBuilder();
+            boolean hasContent = false;
 
             for (int i = 0; i < contentArray.size(); i++) {
                 com.google.gson.JsonElement element = contentArray.get(i);
@@ -533,6 +595,7 @@ public class ClaudeSession {
                             sb.append("\n");
                         }
                         sb.append(text);
+                        hasContent = true;
                     } else if ("tool_use".equals(blockType) && block.has("name") && !block.get("name").isJsonNull()) {
                         // 工具使用消息
                         String toolName = block.get("name").getAsString();
@@ -540,17 +603,59 @@ public class ClaudeSession {
                             sb.append("\n");
                         }
                         sb.append("[使用工具: ").append(toolName).append("]");
+                        hasContent = true;
+                    } else if ("tool_result".equals(blockType)) {
+                        // 工具结果 - 不展示，因为对用户没有实际意义
+                        // 工具结果通常很长，且已经在 assistant 的响应中体现
+                        // 这里跳过不处理
                     } else if ("thinking".equals(blockType) && block.has("thinking") && !block.get("thinking").isJsonNull()) {
                         // 思考过程 - 添加一个简短提示
                         if (sb.length() > 0) {
                             sb.append("\n");
                         }
                         sb.append("[思考过程]");
+                        hasContent = true;
+                    } else if ("image".equals(blockType)) {
+                        // 图片消息
+                        if (sb.length() > 0) {
+                            sb.append("\n");
+                        }
+                        sb.append("[图片]");
+                        hasContent = true;
+                    }
+                } else if (element.isJsonPrimitive()) {
+                    // 某些情况下，数组元素可能直接是字符串
+                    String text = element.getAsString();
+                    if (text != null && !text.trim().isEmpty()) {
+                        if (sb.length() > 0) {
+                            sb.append("\n");
+                        }
+                        sb.append(text);
+                        hasContent = true;
                     }
                 }
             }
 
+            // 如果没有提取到任何内容，记录调试信息
+            if (!hasContent && contentArray.size() > 0) {
+                System.err.println("[ClaudeSession] Warning: Content array has " + contentArray.size() +
+                    " elements but no content was extracted. First element: " +
+                    (contentArray.size() > 0 ? contentArray.get(0).toString() : "N/A"));
+            }
+
             return sb.toString();
+        }
+
+        // 对象格式（某些特殊情况）
+        if (contentElement.isJsonObject()) {
+            JsonObject contentObj = contentElement.getAsJsonObject();
+            // 尝试提取 text 字段
+            if (contentObj.has("text") && !contentObj.get("text").isJsonNull()) {
+                return contentObj.get("text").getAsString();
+            }
+            // 记录无法解析的对象格式
+            System.err.println("[ClaudeSession] Warning: Content is an object but has no 'text' field: " +
+                contentObj.toString());
         }
 
         return "";
@@ -608,6 +713,21 @@ public class ClaudeSession {
      */
     public String getPermissionMode() {
         return permissionMode;
+    }
+
+    /**
+     * 设置模型
+     */
+    public void setModel(String model) {
+        this.model = model;
+        System.out.println("[ClaudeSession] Model updated to: " + model);
+    }
+
+    /**
+     * 获取模型
+     */
+    public String getModel() {
+        return model;
     }
 
     /**
@@ -737,5 +857,12 @@ public class ClaudeSession {
      */
     public void handlePermissionDecision(String channelId, boolean allow, boolean remember, String rejectMessage) {
         permissionManager.handlePermissionDecision(channelId, allow, remember, rejectMessage);
+    }
+
+    /**
+     * 处理权限决策（总是允许）
+     */
+    public void handlePermissionDecisionAlways(String channelId, boolean allow) {
+        permissionManager.handlePermissionDecisionAlways(channelId, allow);
     }
 }

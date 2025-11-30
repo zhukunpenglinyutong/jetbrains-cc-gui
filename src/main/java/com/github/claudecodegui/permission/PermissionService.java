@@ -23,8 +23,10 @@ public class PermissionService {
     private Thread watchThread;
     private boolean running = false;
 
-    // 记忆用户选择
+    // 记忆用户选择（工具+参数级别）
     private final Map<String, Integer> permissionMemory = new ConcurrentHashMap<>();
+    // 工具级别权限记忆（仅工具名 -> 是否总是允许）
+    private final Map<String, Boolean> toolOnlyPermissionMemory = new ConcurrentHashMap<>();
     private volatile PermissionDecisionListener decisionListener;
 
     public enum PermissionResponse {
@@ -94,6 +96,21 @@ public class PermissionService {
         void onDecision(PermissionDecision decision);
     }
 
+    /**
+     * 权限对话框显示器接口 - 用于显示前端弹窗
+     */
+    public interface PermissionDialogShower {
+        /**
+         * 显示权限对话框并返回用户决策
+         * @param toolName 工具名称
+         * @param inputs 输入参数
+         * @return CompletableFuture<Integer> 返回 PermissionResponse 的值
+         */
+        CompletableFuture<Integer> showPermissionDialog(String toolName, JsonObject inputs);
+    }
+
+    private volatile PermissionDialogShower dialogShower;
+
     private PermissionService(Project project) {
         this.project = project;
         // 使用临时目录进行通信
@@ -114,6 +131,13 @@ public class PermissionService {
 
     public void setDecisionListener(PermissionDecisionListener listener) {
         this.decisionListener = listener;
+    }
+
+    /**
+     * 设置权限对话框显示器（用于显示前端弹窗）
+     */
+    public void setDialogShower(PermissionDialogShower shower) {
+        this.dialogShower = shower;
     }
 
     /**
@@ -169,10 +193,21 @@ public class PermissionService {
         }
     }
 
+    // 记录正在处理的请求文件，避免重复处理
+    private final Set<String> processingRequests = ConcurrentHashMap.newKeySet();
+
     /**
      * 处理权限请求
      */
     private void handlePermissionRequest(Path requestFile) {
+        String fileName = requestFile.getFileName().toString();
+
+        // 检查是否正在处理该请求
+        if (!processingRequests.add(fileName)) {
+            System.out.println("[PermissionService] 请求已在处理中，跳过: " + fileName);
+            return;
+        }
+
         try {
             Thread.sleep(100); // 等待文件写入完成
 
@@ -183,24 +218,106 @@ public class PermissionService {
             String toolName = request.get("toolName").getAsString();
             JsonObject inputs = request.get("inputs").getAsJsonObject();
 
-            // 生成内存键
+            // 首先检查工具级别的权限记忆（总是允许）
+            if (toolOnlyPermissionMemory.containsKey(toolName)) {
+                boolean allow = toolOnlyPermissionMemory.get(toolName);
+                System.out.println("[PermissionService] 使用工具级别权限记忆: " + toolName + " -> " + (allow ? "允许" : "拒绝"));
+                writeResponse(requestId, allow);
+                notifyDecision(toolName, inputs, allow ? PermissionResponse.ALLOW_ALWAYS : PermissionResponse.DENY);
+                Files.deleteIfExists(requestFile);
+                processingRequests.remove(fileName);
+                return;
+            }
+
+            // 生成内存键（工具+参数）
             String memoryKey = toolName + ":" + inputs.toString().hashCode();
 
-            // 检查是否有记忆的选择
+            // 检查是否有记忆的选择（工具+参数级别）
             if (permissionMemory.containsKey(memoryKey)) {
                 int memorized = permissionMemory.get(memoryKey);
                 PermissionResponse rememberedResponse = PermissionResponse.fromValue(memorized);
                 boolean allow = rememberedResponse != PermissionResponse.DENY;
                 writeResponse(requestId, allow);
                 notifyDecision(toolName, inputs, rememberedResponse);
-                Files.delete(requestFile);
+                Files.deleteIfExists(requestFile);
+                processingRequests.remove(fileName);
                 return;
             }
 
-            // 显示对话框
+            // 如果有前端弹窗显示器，使用异步方式
+            if (dialogShower != null) {
+                System.out.println("[PermissionService] 使用前端弹窗显示权限请求 (异步): " + toolName);
+
+                // 立即删除请求文件，避免重复处理
+                try {
+                    Files.deleteIfExists(requestFile);
+                    System.out.println("[PermissionService] 已删除请求文件: " + fileName);
+                } catch (Exception e) {
+                    System.err.println("[PermissionService] 删除请求文件失败: " + e.getMessage());
+                }
+
+                final String memKey = memoryKey;
+                final String tool = toolName;
+
+                // 异步调用前端弹窗
+                CompletableFuture<Integer> future = dialogShower.showPermissionDialog(toolName, inputs);
+
+                // 异步处理结果
+                future.thenAccept(response -> {
+                    try {
+                        PermissionResponse decision = PermissionResponse.fromValue(response);
+                        if (decision == null) {
+                            decision = PermissionResponse.DENY;
+                        }
+
+                        boolean allow;
+                        switch (decision) {
+                            case ALLOW:
+                                allow = true;
+                                break;
+                            case ALLOW_ALWAYS:
+                                allow = true;
+                                // 保存到工具级别权限记忆（按工具类型，不是按参数）
+                                toolOnlyPermissionMemory.put(tool, true);
+                                System.out.println("[PermissionService] 已记住工具权限: " + tool + " -> 总是允许");
+                                break;
+                            case DENY:
+                            default:
+                                allow = false;
+                                break;
+                        }
+
+                        notifyDecision(toolName, inputs, decision);
+                        writeResponse(requestId, allow);
+
+                        System.out.println("[PermissionService] 前端弹窗处理完成: allow=" + allow);
+                    } catch (Exception e) {
+                        System.err.println("[PermissionService] 处理前端弹窗结果失败: " + e.getMessage());
+                        e.printStackTrace();
+                    } finally {
+                        processingRequests.remove(fileName);
+                    }
+                }).exceptionally(ex -> {
+                    System.err.println("[PermissionService] 前端弹窗异常: " + ex.getMessage());
+                    try {
+                        writeResponse(requestId, false);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    notifyDecision(toolName, inputs, PermissionResponse.DENY);
+                    processingRequests.remove(fileName);
+                    return null;
+                });
+
+                // 异步处理，直接返回，不阻塞
+                return;
+            }
+
+            // 降级方案：使用系统弹窗（同步阻塞）
+            System.out.println("[PermissionService] 使用系统弹窗显示权限请求: " + toolName);
             CompletableFuture<Integer> future = new CompletableFuture<>();
             SwingUtilities.invokeLater(() -> {
-                int response = showPermissionDialog(toolName, inputs);
+                int response = showSystemPermissionDialog(toolName, inputs);
                 future.complete(response);
             });
 
@@ -239,9 +356,9 @@ public class PermissionService {
     }
 
     /**
-     * 显示权限对话框
+     * 显示系统权限对话框（JOptionPane）- 降级方案
      */
-    private int showPermissionDialog(String toolName, JsonObject inputs) {
+    private int showSystemPermissionDialog(String toolName, JsonObject inputs) {
         // 构建消息内容
         StringBuilder message = new StringBuilder();
         message.append("Claude 请求执行以下操作：\n\n");
