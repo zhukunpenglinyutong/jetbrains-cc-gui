@@ -1158,16 +1158,11 @@ public class ClaudeSDKBridge {
             StringBuilder assistantContent = new StringBuilder();
 
             try {
-                // 为附件创建临时 JSON 文件，传递给 Node 侧进行多模态处理
-                File attachmentsFile = null;
-                if (attachments != null && !attachments.isEmpty()) {
+                // 将附件序列化为 JSON，稍后通过 stdin 传递给 Node.js
+                String attachmentsJson = null;
+                boolean hasAttachments = attachments != null && !attachments.isEmpty();
+                if (hasAttachments) {
                     try {
-                        File processTempDir = prepareClaudeTempDir();
-                        if (processTempDir == null) {
-                            processTempDir = new File(System.getProperty("java.io.tmpdir"));
-                        }
-                        String fileName = "attachments-" + System.currentTimeMillis() + ".json";
-                        attachmentsFile = new File(processTempDir, fileName);
                         java.util.List<java.util.Map<String, String>> serializable = new java.util.ArrayList<>();
                         for (ClaudeSession.Attachment att : attachments) {
                             if (att == null) continue;
@@ -1177,14 +1172,11 @@ public class ClaudeSDKBridge {
                             obj.put("data", att.data);
                             serializable.add(obj);
                         }
-                        String json = gson.toJson(serializable);
-                        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(attachmentsFile)) {
-                            fos.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                        }
-                        System.out.println("[ClaudeSDKBridge] Wrote attachments file: " + attachmentsFile.getAbsolutePath());
+                        attachmentsJson = gson.toJson(serializable);
+                        System.out.println("[ClaudeSDKBridge] Prepared attachments JSON (" + attachmentsJson.length() + " bytes) for stdin");
                     } catch (Exception e) {
-                        System.err.println("[ClaudeSDKBridge] Failed to prepare attachments file: " + e.getMessage());
-                        attachmentsFile = null;
+                        System.err.println("[ClaudeSDKBridge] Failed to serialize attachments: " + e.getMessage());
+                        hasAttachments = false;
                     }
                 }
 
@@ -1198,7 +1190,7 @@ public class ClaudeSDKBridge {
                 command.add(node);
                 command.add(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath()); // 使用绝对路径
                 // 根据是否存在附件选择不同的命令
-                if (attachmentsFile != null) {
+                if (hasAttachments) {
                     command.add("sendWithAttachments");
                 } else {
                     command.add("send");
@@ -1269,20 +1261,33 @@ public class ClaudeSDKBridge {
                     env.put("TMP", tmpPath);
                     System.out.println("[ProcessBuilder] TMPDIR redirected to: " + tmpPath);
                 }
-                // 传递附件文件路径到 Node
-                if (attachmentsFile != null) {
-                    env.put("CLAUDE_ATTACHMENTS_FILE", attachmentsFile.getAbsolutePath());
+                // 如果有附件，设置环境变量告知 Node.js 从 stdin 读取
+                if (hasAttachments) {
+                    env.put("CLAUDE_USE_STDIN", "true");
+                    System.out.println("[ProcessBuilder] CLAUDE_USE_STDIN=true (will write attachments to stdin)");
                 }
 
                 pb.redirectErrorStream(true);
                 updateProcessEnvironment(pb);
 
                 Process process = null;
+                final String finalAttachmentsJson = attachmentsJson; // 用于 lambda
                 try {
                     process = pb.start();
                     if (channelId != null) {
                         activeChannelProcesses.put(channelId, process);
                         interruptedChannels.remove(channelId);
+                    }
+
+                    // 如果有附件，通过 stdin 写入 JSON 数据
+                    if (hasAttachments && finalAttachmentsJson != null) {
+                        try (java.io.OutputStream stdin = process.getOutputStream()) {
+                            stdin.write(finalAttachmentsJson.getBytes(StandardCharsets.UTF_8));
+                            stdin.flush();
+                            System.out.println("[ClaudeSDKBridge] Wrote " + finalAttachmentsJson.length() + " bytes to stdin");
+                        } catch (Exception e) {
+                            System.err.println("[ClaudeSDKBridge] Failed to write attachments to stdin: " + e.getMessage());
+                        }
                     }
 
                     try {
