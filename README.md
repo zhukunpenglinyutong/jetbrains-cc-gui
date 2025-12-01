@@ -17,7 +17,7 @@
 # 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.7-beta2.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.7-beta2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7-beta2/idea-claude-code-gui-0.0.7-beta2.zip)
+插件下载：[idea-claude-code-gui-0.0.7-beta2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/idea-claude-code-gui-0.0.7-beta2.zip)
 
 ---
 
