@@ -2,26 +2,31 @@
 
 本项目主要解决在IDEA中使用Claude Code 没有 GUI操作窗口的场景
 
-目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.7（2025年11月30日更新）
+目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.7-beta2（2025年11月30日更新）
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
-<img width="350" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/1.png" />
+<img width="350" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7-beta2/1.png" />
 
 ---
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.7 文件
+# 1.下载 idea-claude-code-gui-0.0.7-beta2.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.7 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.7-beta2.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.7.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/idea-claude-code-gui-0.0.7.zip)
+插件下载：[idea-claude-code-gui-0.0.7-beta2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7-beta2/idea-claude-code-gui-0.0.7-beta2.zip)
 
 ---
 
 ### 目前进度
+
+##### **12月1日（v0.0.7-beta2）**
+
+- [x] P0: 重构代码 channel-manager.js 和 ClaudeSDKBridge.java 主代码
+- [x] P1: 解决某些三方API兼容性问题
 
 ##### **11月30日（v0.0.7）**
 
@@ -32,9 +37,9 @@
 - [x] P3: 优化Loding样式
 - [x] P5: 优化样式细节
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/2.png" />
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7-beta2/2.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/1.png" />
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7-beta2/1.png" />
 
 
 ##### **11月27日（v0.0.6）**
