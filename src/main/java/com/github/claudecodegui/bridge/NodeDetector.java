@@ -205,6 +205,36 @@ public class NodeDetector {
                 }
             }
 
+            // 动态查找 Homebrew 版本特定的 Node.js (node@18, node@20, node@22 等)
+            // Apple Silicon: /opt/homebrew/opt/node@XX/bin/node
+            // Intel Mac: /usr/local/opt/node@XX/bin/node
+            String[] homebrewOptDirs = {"/opt/homebrew/opt", "/usr/local/opt"};
+            for (String optDir : homebrewOptDirs) {
+                File optFile = new File(optDir);
+                if (optFile.exists() && optFile.isDirectory()) {
+                    File[] nodeDirs = optFile.listFiles((dir, name) ->
+                        name.equals("node") || name.startsWith("node@"));
+                    if (nodeDirs != null) {
+                        // 按版本号降序排序，优先使用较新版本
+                        java.util.Arrays.sort(nodeDirs, (a, b) -> {
+                            // node@22 > node@20 > node@18 > node
+                            String aName = a.getName();
+                            String bName = b.getName();
+                            int aVersion = aName.equals("node") ? 0 :
+                                parseNodeVersion(aName.substring(5));
+                            int bVersion = bName.equals("node") ? 0 :
+                                parseNodeVersion(bName.substring(5));
+                            return Integer.compare(bVersion, aVersion);
+                        });
+                        for (File nodeDir : nodeDirs) {
+                            String nodePath = nodeDir.getAbsolutePath() + "/bin/node";
+                            pathsToCheck.add(nodePath);
+                            System.out.println("  发现 Homebrew Node.js: " + nodePath);
+                        }
+                    }
+                }
+            }
+
             // 添加常见 Unix/macOS 路径
             pathsToCheck.add("/usr/local/bin/node");           // Homebrew (macOS Intel)
             pathsToCheck.add("/opt/homebrew/bin/node");        // Homebrew (Apple Silicon)
@@ -369,6 +399,26 @@ public class NodeDetector {
             System.getenv("ProgramFiles(x86)") : "C:\\Program Files (x86)");
 
         return result;
+    }
+
+    /**
+     * 解析 Node.js 版本号
+     * 例如: "20" -> 20, "18" -> 18
+     */
+    private int parseNodeVersion(String version) {
+        if (version == null || version.isEmpty()) {
+            return 0;
+        }
+        try {
+            // 处理可能的小数点版本，如 "20.1" -> 取主版本号 20
+            int dotIndex = version.indexOf('.');
+            if (dotIndex > 0) {
+                version = version.substring(0, dotIndex);
+            }
+            return Integer.parseInt(version);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /**
