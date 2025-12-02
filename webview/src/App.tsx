@@ -73,6 +73,13 @@ const App = () => {
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // 初始化主题
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    const theme = (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+  }, []);
+
   // Toast helper functions
   const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
     // Don't show toast for default status

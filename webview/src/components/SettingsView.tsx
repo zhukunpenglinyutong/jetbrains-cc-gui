@@ -33,8 +33,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
   // 计算是否应该折叠：优先使用手动设置，否则根据窗口宽度自动判断
   const isCollapsed = manualCollapsed !== null
-    ? manualCollapsed
-    : windowWidth < AUTO_COLLAPSE_THRESHOLD;
+      ? manualCollapsed
+      : windowWidth < AUTO_COLLAPSE_THRESHOLD;
 
   // 编辑/添加表单状态
   const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null);
@@ -43,7 +43,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   const [apiUrl, setApiUrl] = useState('');
   const [providerName, setProviderName] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
-  
+
   // UI 状态
   const [showApiKey, setShowApiKey] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
@@ -62,6 +62,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     isOpen: boolean;
     provider: ProviderConfig | null;
   }>({ isOpen: false, provider: null });
+
+  // 主题状态
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    // 从 localStorage 读取主题设置
+    const savedTheme = localStorage.getItem('theme');
+    return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
+  });
 
   // 显示页面内弹窗的帮助函数
   const showAlert = (type: AlertType, title: string, message: string) => {
@@ -98,7 +105,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
         if (activeProvider) {
           // 更新列表中的激活状态
           setProviders((prev) =>
-            prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
+              prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
           );
         }
       } catch (error) {
@@ -158,6 +165,14 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     }
   };
 
+  // 主题切换处理
+  useEffect(() => {
+    // 应用主题到 document.documentElement
+    document.documentElement.setAttribute('data-theme', theme);
+    // 保存到 localStorage
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
   const loadProviders = () => {
     setLoading(true);
     sendToJava('get_providers:');
@@ -172,7 +187,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || 'https://api.anthropic.com');
     setShowApiKey(false);
     setJsonError('');
-    
+
     // Initialize JSON Config
     const config = {
       env: {
@@ -192,7 +207,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setApiUrl('');
     setShowApiKey(false);
     setJsonError('');
-    
+
     // Initialize JSON Config
     const config = {
       env: {
@@ -205,7 +220,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
   const handleSaveProvider = () => {
     if (!editingProvider && !isAdding) return;
-    
+
     // 检查 JSON 格式
     if (jsonError) {
       alert('配置 JSON 格式错误，请修正后再保存');
@@ -213,8 +228,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     }
 
     if (!providerName) {
-        alert('请输入供应商名称');
-        return;
+      alert('请输入供应商名称');
+      return;
     }
 
     const updates = {
@@ -229,19 +244,19 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     };
 
     if (isAdding) {
-        // 添加新供应商
-        const newProvider = {
-            id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
-            ...updates
-        };
-        sendToJava(`add_provider:${JSON.stringify(newProvider)}`);
+      // 添加新供应商
+      const newProvider = {
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+        ...updates
+      };
+      sendToJava(`add_provider:${JSON.stringify(newProvider)}`);
     } else if (editingProvider) {
-        // 更新现有供应商
-        const data = {
-          id: editingProvider.id,
-          updates,
-        };
-        sendToJava(`update_provider:${JSON.stringify(data)}`);
+      // 更新现有供应商
+      const data = {
+        id: editingProvider.id,
+        updates,
+      };
+      sendToJava(`update_provider:${JSON.stringify(data)}`);
     }
 
     setEditingProvider(null);
@@ -308,7 +323,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       setJsonConfig(JSON.stringify(config, null, 2));
       setJsonError('');
     } catch (e) {
-      // If JSON is currently invalid, we can't verify/update safely, 
+      // If JSON is currently invalid, we can't verify/update safely,
       // but we could just reconstruct it if we wanted strict sync.
       // For now, we'll just leave it alone if it's broken.
     }
@@ -330,7 +345,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const newValue = e.target.value;
     setJsonConfig(newValue);
     setJsonError('');
-    
+
     try {
       const config = JSON.parse(newValue);
       if (config && typeof config === 'object') {
@@ -362,442 +377,599 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   };
 
   return (
-    <div className="settings-page">
-      {/* 顶部标题栏 */}
-      <div className="settings-header">
-        <div className="header-left">
-          <button className="back-btn" onClick={onClose}>
-            <span className="codicon codicon-arrow-left" />
-          </button>
-          <h2 className="settings-title">设置</h2>
-        </div>
-      </div>
-
-      {/* 主体内容 */}
-      <div className="settings-main">
-        {/* 侧边栏 */}
-        <div className={`settings-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
-          <div className="sidebar-items">
-            <div
-              className={`sidebar-item ${currentTab === 'basic' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('basic')}
-              title={isCollapsed ? '基础配置' : ''}
-            >
-              <span className="codicon codicon-settings-gear" />
-              <span className="sidebar-item-text">基础配置</span>
-            </div>
-            <div
-              className={`sidebar-item ${currentTab === 'usage' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('usage')}
-              title={isCollapsed ? '使用统计' : ''}
-            >
-              <span className="codicon codicon-graph" />
-              <span className="sidebar-item-text">使用统计</span>
-            </div>
-            <div
-              className={`sidebar-item warning ${currentTab === 'permissions' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('permissions')}
-              title={isCollapsed ? '权限配置' : ''}
-            >
-              <span className="codicon codicon-shield" />
-              <span className="sidebar-item-text">权限配置</span>
-              <span className="codicon codicon-warning" />
-            </div>
-            <div
-              className={`sidebar-item warning ${currentTab === 'mcp' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('mcp')}
-              title={isCollapsed ? 'MCP服务器' : ''}
-            >
-              <span className="codicon codicon-server" />
-              <span className="sidebar-item-text">MCP服务器</span>
-              <span className="codicon codicon-warning" />
-            </div>
-            <div
-              className={`sidebar-item warning ${currentTab === 'agents' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('agents')}
-              title={isCollapsed ? 'Agents' : ''}
-            >
-              <span className="codicon codicon-robot" />
-              <span className="sidebar-item-text">Agents</span>
-              <span className="codicon codicon-warning" />
-            </div>
-            <div
-              className={`sidebar-item warning ${currentTab === 'skills' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('skills')}
-              title={isCollapsed ? 'Skills' : ''}
-            >
-              <span className="codicon codicon-book" />
-              <span className="sidebar-item-text">Skills</span>
-              <span className="codicon codicon-warning" />
-            </div>
-            <div
-              className={`sidebar-item ${currentTab === 'community' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('community')}
-              title={isCollapsed ? '官方交流群' : ''}
-            >
-              <span className="codicon codicon-comment-discussion" />
-              <span className="sidebar-item-text">官方交流群</span>
-            </div>
-          </div>
-
-          {/* 折叠按钮 */}
-          <div
-            className="sidebar-toggle"
-            onClick={toggleManualCollapse}
-            title={isCollapsed ? '展开侧边栏' : '折叠侧边栏'}
-          >
-            <span className={`codicon ${isCollapsed ? 'codicon-chevron-right' : 'codicon-chevron-left'}`} />
+      <div className="settings-page">
+        {/* 顶部标题栏 */}
+        <div className="settings-header">
+          <div className="header-left">
+            <button className="back-btn" onClick={onClose}>
+              <span className="codicon codicon-arrow-left" />
+            </button>
+            <h2 className="settings-title">设置</h2>
           </div>
         </div>
 
-        {/* 内容区域 */}
-        <div className="settings-content">
-          {/* 基础配置 */}
-          {currentTab === 'basic' && (
-            <div className="config-section">
-              <h3 className="section-title">基础配置</h3>
-              <p className="section-desc">配置API密钥、模型选择、代理等基础设置</p>
+        {/* 主体内容 */}
+        <div className="settings-main">
+          {/* 侧边栏 */}
+          <div className={`settings-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+            <div className="sidebar-items">
+              <div
+                  className={`sidebar-item ${currentTab === 'basic' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('basic')}
+                  title={isCollapsed ? '基础配置' : ''}
+              >
+                <span className="codicon codicon-settings-gear" />
+                <span className="sidebar-item-text">基础配置</span>
+              </div>
+              <div
+                  className={`sidebar-item ${currentTab === 'usage' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('usage')}
+                  title={isCollapsed ? '使用统计' : ''}
+              >
+                <span className="codicon codicon-graph" />
+                <span className="sidebar-item-text">使用统计</span>
+              </div>
+              <div
+                  className={`sidebar-item warning ${currentTab === 'permissions' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('permissions')}
+                  title={isCollapsed ? '权限配置' : ''}
+              >
+                <span className="codicon codicon-shield" />
+                <span className="sidebar-item-text">权限配置</span>
+                <span className="codicon codicon-warning" />
+              </div>
+              <div
+                  className={`sidebar-item warning ${currentTab === 'mcp' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('mcp')}
+                  title={isCollapsed ? 'MCP服务器' : ''}
+              >
+                <span className="codicon codicon-server" />
+                <span className="sidebar-item-text">MCP服务器</span>
+                <span className="codicon codicon-warning" />
+              </div>
+              <div
+                  className={`sidebar-item warning ${currentTab === 'agents' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('agents')}
+                  title={isCollapsed ? 'Agents' : ''}
+              >
+                <span className="codicon codicon-robot" />
+                <span className="sidebar-item-text">Agents</span>
+                <span className="codicon codicon-warning" />
+              </div>
+              <div
+                  className={`sidebar-item warning ${currentTab === 'skills' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('skills')}
+                  title={isCollapsed ? 'Skills' : ''}
+              >
+                <span className="codicon codicon-book" />
+                <span className="sidebar-item-text">Skills</span>
+                <span className="codicon codicon-warning" />
+              </div>
+              <div
+                  className={`sidebar-item ${currentTab === 'community' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('community')}
+                  title={isCollapsed ? '官方交流群' : ''}
+              >
+                <span className="codicon codicon-comment-discussion" />
+                <span className="sidebar-item-text">官方交流群</span>
+              </div>
+            </div>
 
-              {loading && (
-                <div className="temp-notice">
-                  <span className="codicon codicon-loading codicon-modifier-spin" />
-                  <p>加载中...</p>
-                </div>
-              )}
+            {/* 折叠按钮 */}
+            <div
+                className="sidebar-toggle"
+                onClick={toggleManualCollapse}
+                title={isCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+            >
+              <span className={`codicon ${isCollapsed ? 'codicon-chevron-right' : 'codicon-chevron-left'}`} />
+            </div>
+          </div>
 
-              {!loading && !editingProvider && !isAdding && providers.length === 0 && (
-                <div className="temp-notice">
-                  <span className="codicon codicon-info" />
-                  <p>暂无供应商配置</p>
-                  <button 
-                    className="btn-primary" 
-                    style={{ marginTop: '16px' }}
-                    onClick={handleAddProvider}
-                  >
-                    <span className="codicon codicon-add" />
-                    添加供应商
-                  </button>
-                </div>
-              )}
+          {/* 内容区域 */}
+          <div className="settings-content">
+            {/* 基础配置 */}
+            {currentTab === 'basic' && (
+                <div className="config-section">
+                  <h3 className="section-title">基础配置</h3>
+                  <p className="section-desc">配置API密钥、模型选择、代理等基础设置</p>
 
-              {!loading && !editingProvider && !isAdding && providers.length > 0 && (
-                <div className="provider-list-container">
-                  <div className="provider-list-header">
-                    <div>
-                        <h4>供应商列表</h4>
-                        <small>当前共 {providers.length} 个供应商</small>
-                    </div>
-                    <button className="btn-small btn-primary" onClick={handleAddProvider}>
-                        <span className="codicon codicon-add" />
-                        添加
-                    </button>
-                  </div>
-
-                  {providers.map((provider) => (
-                    <div key={provider.id} className={`provider-card ${provider.isActive ? 'active' : ''}`}>
-                      <div className="provider-card-header">
-                        <div className="provider-info">
-                          <h5 className="provider-name">
-                            {provider.name}
-                            {provider.isActive && <span className="active-badge">使用中</span>}
-                          </h5>
-                          {provider.websiteUrl && (
-                            <a
-                              href={provider.websiteUrl}
-                              className="provider-url"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {provider.websiteUrl}
-                            </a>
-                          )}
+                  {/* 主题切换 - 现代卡片设计 */}
+                  {/* 只在非编辑/添加状态下显示 */}
+                  {!editingProvider && !isAdding && (
+                      <div style={{ marginBottom: '24px' }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          marginBottom: '12px'
+                        }}>
+                    <span className="codicon codicon-symbol-color" style={{
+                      fontSize: '16px',
+                      color: 'var(--accent-primary)'
+                    }} />
+                          <span style={{
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: 'var(--text-secondary)'
+                          }}>
+                      界面主题
+                    </span>
                         </div>
-                        <div className="provider-actions">
-                          {!provider.isActive && (
-                            <button
-                              className="btn-small btn-primary"
-                              onClick={() => handleSwitchProvider(provider.id)}
-                            >
-                              <span className="codicon codicon-play" />
-                              启用
-                            </button>
-                          )}
-                          <button className="btn-small" onClick={() => handleEditProvider(provider)}>
-                            <span className="codicon codicon-edit" />
-                            编辑
-                          </button>
-                          <button
-                            className="btn-small btn-danger"
-                            onClick={() => handleDeleteProvider(provider)}
-                            disabled={providers.length === 1}
+
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr',
+                          gap: '12px'
+                        }}>
+                          {/* 亮色主题卡片 */}
+                          <div
+                              onClick={() => setTheme('light')}
+                              style={{
+                                padding: '16px',
+                                background: 'var(--bg-secondary)',
+                                border: `2px solid ${theme === 'light' ? 'var(--accent-primary)' : 'var(--border-secondary)'}`,
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                position: 'relative',
+                                boxShadow: theme === 'light' ? '0 0 0 3px rgba(0, 120, 212, 0.1)' : 'none'
+                              }}
                           >
-                            <span className="codicon codicon-trash" />
-                            删除
-                          </button>
+                            {theme === 'light' && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '8px',
+                                  right: '8px',
+                                  width: '20px',
+                                  height: '20px',
+                                  borderRadius: '50%',
+                                  background: 'var(--accent-primary)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}>
+                        <span className="codicon codicon-check" style={{
+                          fontSize: '12px',
+                          color: '#ffffff'
+                        }} />
+                                </div>
+                            )}
+
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '8px',
+                              background: 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)',
+                              border: '1px solid #e0e0e0',
+                              marginBottom: '12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                      <span className="codicon codicon-circle-large-outline" style={{
+                        fontSize: '20px',
+                        color: '#666666'
+                      }} />
+                            </div>
+
+                            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
+                              亮色主题
+                            </div>
+                            <div style={{
+                              fontSize: '11px',
+                              color: 'var(--text-tertiary)',
+                              lineHeight: '1.4'
+                            }}>
+                              清爽明亮，适合白天使用
+                            </div>
+                          </div>
+
+                          {/* 暗色主题卡片 */}
+                          <div
+                              onClick={() => setTheme('dark')}
+                              style={{
+                                padding: '16px',
+                                background: 'var(--bg-secondary)',
+                                border: `2px solid ${theme === 'dark' ? 'var(--accent-primary)' : 'var(--border-secondary)'}`,
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                position: 'relative',
+                                boxShadow: theme === 'dark' ? '0 0 0 3px rgba(0, 120, 212, 0.1)' : 'none'
+                              }}
+                          >
+                            {theme === 'dark' && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '8px',
+                                  right: '8px',
+                                  width: '20px',
+                                  height: '20px',
+                                  borderRadius: '50%',
+                                  background: 'var(--accent-primary)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}>
+                        <span className="codicon codicon-check" style={{
+                          fontSize: '12px',
+                          color: '#ffffff'
+                        }} />
+                                </div>
+                            )}
+
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '8px',
+                              background: 'linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%)',
+                              border: '1px solid #404040',
+                              marginBottom: '12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                      <span className="codicon codicon-circle-large-filled" style={{
+                        fontSize: '20px',
+                        color: '#cccccc'
+                      }} />
+                            </div>
+
+                            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
+                              暗色主题
+                            </div>
+                            <div style={{
+                              fontSize: '11px',
+                              color: 'var(--text-tertiary)',
+                              lineHeight: '1.4'
+                            }}>
+                              护眼舒适，适合夜间使用
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                  )}
 
-              {!loading && (editingProvider || isAdding) && (
-                <div className="config-form">
-                  <h4>{isAdding ? '添加供应商' : `编辑供应商: ${editingProvider?.name}`}</h4>
-                  <p className="section-desc">
-                    {isAdding ? '配置新的供应商信息' : '更新配置后将立即应用到当前供应商。'}
-                  </p>
+                  {loading && (
+                      <div className="temp-notice">
+                        <span className="codicon codicon-loading codicon-modifier-spin" />
+                        <p>加载中...</p>
+                      </div>
+                  )}
 
-                  <div className="form-group">
-                    <label htmlFor="providerName">
-                      供应商名称
-                      <span className="required">*</span>
-                    </label>
-                    <input
-                      id="providerName"
-                      type="text"
-                      className="form-input"
-                      placeholder="例如：Claude官方"
-                      value={providerName}
-                      onChange={(e) => setProviderName(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="websiteUrl">官网链接</label>
-                    <div className="input-with-link">
-                      <input
-                        id="websiteUrl"
-                        type="text"
-                        className="form-input"
-                        placeholder="https://"
-                        value={websiteUrl}
-                        onChange={(e) => setWebsiteUrl(e.target.value)}
-                      />
-                      {websiteUrl && isValidUrl(websiteUrl) && (
-                        <a
-                          href={websiteUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="link-btn"
-                          title="访问官网"
+                  {!loading && !editingProvider && !isAdding && providers.length === 0 && (
+                      <div className="temp-notice">
+                        <span className="codicon codicon-info" />
+                        <p>暂无供应商配置</p>
+                        <button
+                            className="btn-primary"
+                            style={{ marginTop: '16px' }}
+                            onClick={handleAddProvider}
                         >
-                          <span className="codicon codicon-link-external" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
+                          <span className="codicon codicon-add" />
+                          添加供应商
+                        </button>
+                      </div>
+                  )}
 
-                  <div className="form-group">
-                    <label htmlFor="apiKey">
-                      API Key
-                      <span className="required">*</span>
-                    </label>
-                    <div className="input-with-visibility">
-                      <input
-                        id="apiKey"
-                        type={showApiKey ? 'text' : 'password'}
-                        className="form-input"
-                        placeholder="sk-ant-..."
-                        value={apiKey}
-                        onChange={handleApiKeyChange}
-                      />
-                      <button
-                        type="button"
-                        className="visibility-toggle"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        title={showApiKey ? '隐藏' : '显示'}
-                      >
-                        <span className={`codicon ${showApiKey ? 'codicon-eye-closed' : 'codicon-eye'}`} />
-                      </button>
-                    </div>
-                    <small className="form-hint">
-                      请输入您的API Key
-                    </small>
-                  </div>
+                  {!loading && !editingProvider && !isAdding && providers.length > 0 && (
+                      <div className="provider-list-container">
+                        <div className="provider-list-header">
+                          <div>
+                            <h4>供应商列表</h4>
+                            <small>当前共 {providers.length} 个供应商</small>
+                          </div>
+                          <button className="btn-small btn-primary" onClick={handleAddProvider}>
+                            <span className="codicon codicon-add" />
+                            添加
+                          </button>
+                        </div>
 
-                  <div className="form-group">
-                    <label htmlFor="apiUrl">
-                      请求地址 (API Endpoint)
-                      <span className="required">*</span>
-                    </label>
-                    <input
-                      id="apiUrl"
-                      type="text"
-                      className="form-input"
-                      placeholder="https://api.anthropic.com"
-                      value={apiUrl}
-                      onChange={handleApiUrlChange}
-                    />
-                    <small className="form-hint">
-                      <span className="codicon codicon-info" style={{ fontSize: '12px', marginRight: '4px' }} />
-                      填写兼容 Claude API 的服务端口地址
-                    </small>
-                  </div>
+                        {providers.map((provider) => (
+                            <div key={provider.id} className={`provider-card ${provider.isActive ? 'active' : ''}`}>
+                              <div className="provider-card-header">
+                                <div className="provider-info">
+                                  <h5 className="provider-name">
+                                    {provider.name}
+                                    {provider.isActive && <span className="active-badge">使用中</span>}
+                                  </h5>
+                                  {provider.websiteUrl && (
+                                      <a
+                                          href={provider.websiteUrl}
+                                          className="provider-url"
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                      >
+                                        {provider.websiteUrl}
+                                      </a>
+                                  )}
+                                </div>
+                                <div className="provider-actions">
+                                  {!provider.isActive && (
+                                      <button
+                                          className="btn-small btn-primary"
+                                          onClick={() => handleSwitchProvider(provider.id)}
+                                      >
+                                        <span className="codicon codicon-play" />
+                                        启用
+                                      </button>
+                                  )}
+                                  <button className="btn-small" onClick={() => handleEditProvider(provider)}>
+                                    <span className="codicon codicon-edit" />
+                                    编辑
+                                  </button>
+                                  <button
+                                      className="btn-small btn-danger"
+                                      onClick={() => handleDeleteProvider(provider)}
+                                      disabled={providers.length === 1}
+                                  >
+                                    <span className="codicon codicon-trash" />
+                                    删除
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                        ))}
+                      </div>
+                  )}
 
-                  <details className="advanced-section">
-                    <summary className="advanced-toggle">
-                      <span className="codicon codicon-chevron-right" />
-                      高级选项
-                    </summary>
-                    <div style={{ padding: '10px 0', color: '#858585', fontSize: '13px' }}>
-                      暂无高级选项
-                    </div>
-                  </details>
+                  {!loading && (editingProvider || isAdding) && (
+                      <div className="config-form">
+                        <h4>{isAdding ? '添加供应商' : `编辑供应商: ${editingProvider?.name}`}</h4>
+                        <p className="section-desc">
+                          {isAdding ? '配置新的供应商信息' : '更新配置后将立即应用到当前供应商。'}
+                        </p>
 
-                  <details className="advanced-section" open>
-                    <summary className="advanced-toggle">
-                      <span className="codicon codicon-chevron-right" />
-                      配置 JSON
-                    </summary>
-                    <div className="json-config-section">
-                      <div className="json-editor-wrapper">
+                        <div className="form-group">
+                          <label htmlFor="providerName">
+                            供应商名称
+                            <span className="required">*</span>
+                          </label>
+                          <input
+                              id="providerName"
+                              type="text"
+                              className="form-input"
+                              placeholder="例如：Claude官方"
+                              value={providerName}
+                              onChange={(e) => setProviderName(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label htmlFor="websiteUrl">官网链接</label>
+                          <div className="input-with-link">
+                            <input
+                                id="websiteUrl"
+                                type="text"
+                                className="form-input"
+                                placeholder="https://"
+                                value={websiteUrl}
+                                onChange={(e) => setWebsiteUrl(e.target.value)}
+                            />
+                            {websiteUrl && isValidUrl(websiteUrl) && (
+                                <a
+                                    href={websiteUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="link-btn"
+                                    title="访问官网"
+                                >
+                                  <span className="codicon codicon-link-external" />
+                                </a>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="form-group">
+                          <label htmlFor="apiKey">
+                            API Key
+                            <span className="required">*</span>
+                          </label>
+                          <div className="input-with-visibility">
+                            <input
+                                id="apiKey"
+                                type={showApiKey ? 'text' : 'password'}
+                                className="form-input"
+                                placeholder="sk-ant-..."
+                                value={apiKey}
+                                onChange={handleApiKeyChange}
+                            />
+                            <button
+                                type="button"
+                                className="visibility-toggle"
+                                onClick={() => setShowApiKey(!showApiKey)}
+                                title={showApiKey ? '隐藏' : '显示'}
+                            >
+                              <span className={`codicon ${showApiKey ? 'codicon-eye-closed' : 'codicon-eye'}`} />
+                            </button>
+                          </div>
+                          <small className="form-hint">
+                            请输入您的API Key
+                          </small>
+                        </div>
+
+                        <div className="form-group">
+                          <label htmlFor="apiUrl">
+                            请求地址 (API Endpoint)
+                            <span className="required">*</span>
+                          </label>
+                          <input
+                              id="apiUrl"
+                              type="text"
+                              className="form-input"
+                              placeholder="https://api.anthropic.com"
+                              value={apiUrl}
+                              onChange={handleApiUrlChange}
+                          />
+                          <small className="form-hint">
+                            <span className="codicon codicon-info" style={{ fontSize: '12px', marginRight: '4px' }} />
+                            填写兼容 Claude API 的服务端口地址
+                          </small>
+                        </div>
+
+                        <details className="advanced-section">
+                          <summary className="advanced-toggle">
+                            <span className="codicon codicon-chevron-right" />
+                            高级选项
+                          </summary>
+                          <div style={{ padding: '10px 0', color: '#858585', fontSize: '13px' }}>
+                            暂无高级选项
+                          </div>
+                        </details>
+
+                        <details className="advanced-section" open>
+                          <summary className="advanced-toggle">
+                            <span className="codicon codicon-chevron-right" />
+                            配置 JSON
+                          </summary>
+                          <div className="json-config-section">
+                            <div className="json-editor-wrapper">
                         <textarea
-                          className="json-editor"
-                          value={jsonConfig}
-                          onChange={handleJsonChange}
-                          placeholder={`{
+                            className="json-editor"
+                            value={jsonConfig}
+                            onChange={handleJsonChange}
+                            placeholder={`{
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "",
     "ANTHROPIC_BASE_URL": ""
   }
 }`}
                         />
-                        {jsonError && (
-                          <p className="json-error">
-                            <span className="codicon codicon-error" />
-                            {jsonError}
-                          </p>
-                        )}
+                              {jsonError && (
+                                  <p className="json-error">
+                                    <span className="codicon codicon-error" />
+                                    {jsonError}
+                                  </p>
+                              )}
+                            </div>
+                          </div>
+                        </details>
+
+                        <div className="form-actions" style={{ justifyContent: 'flex-end', marginTop: '24px', borderTop: '1px solid #3e3e42', paddingTop: '16px' }}>
+                          {!isAdding && (
+                              <button
+                                  className="btn-small btn-danger"
+                                  style={{ marginRight: 'auto' }}
+                                  onClick={() => editingProvider && handleDeleteProvider(editingProvider)}
+                                  disabled={providers.length === 1}
+                              >
+                                <span className="codicon codicon-trash" />
+                                删除供应商
+                              </button>
+                          )}
+
+                          <button className="btn-secondary" onClick={handleCancelEdit}>
+                            <span className="codicon codicon-close" />
+                            取消
+                          </button>
+                          <button className="btn-primary" onClick={handleSaveProvider}>
+                            <span className="codicon codicon-save" />
+                            {isAdding ? '确认添加' : '保存更改'}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </details>
+                  )}
+                </div>
+            )}
 
-                  <div className="form-actions" style={{ justifyContent: 'flex-end', marginTop: '24px', borderTop: '1px solid #3e3e42', paddingTop: '16px' }}>
-                    {!isAdding && (
-                        <button 
-                        className="btn-small btn-danger"
-                        style={{ marginRight: 'auto' }}
-                        onClick={() => editingProvider && handleDeleteProvider(editingProvider)}
-                        disabled={providers.length === 1}
-                        >
-                        <span className="codicon codicon-trash" />
-                        删除供应商
-                        </button>
-                    )}
+            {/* 使用统计 */}
+            {currentTab === 'usage' && (
+                <div className="config-section usage-section">
+                  <h3 className="section-title">使用统计</h3>
+                  <p className="section-desc">查看您的 Token 消耗、费用统计和使用趋势分析</p>
+                  <UsageStatisticsSection />
+                </div>
+            )}
 
-                    <button className="btn-secondary" onClick={handleCancelEdit}>
-                      <span className="codicon codicon-close" />
-                      取消
-                    </button>
-                    <button className="btn-primary" onClick={handleSaveProvider}>
-                      <span className="codicon codicon-save" />
-                      {isAdding ? '确认添加' : '保存更改'}
-                    </button>
+            {/* 权限配置 */}
+            {currentTab === 'permissions' && (
+                <div className="config-section">
+                  <h3 className="section-title">权限配置</h3>
+                  <p className="section-desc">管理 Claude Code 的文件访问和操作权限</p>
+                  <div className="temp-notice">
+                    <span className="codicon codicon-shield" />
+                    <p>权限配置功能即将推出...</p>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+            )}
 
-          {/* 使用统计 */}
-          {currentTab === 'usage' && (
-            <div className="config-section usage-section">
-              <h3 className="section-title">使用统计</h3>
-              <p className="section-desc">查看您的 Token 消耗、费用统计和使用趋势分析</p>
-              <UsageStatisticsSection />
-            </div>
-          )}
-
-          {/* 权限配置 */}
-          {currentTab === 'permissions' && (
-            <div className="config-section">
-              <h3 className="section-title">权限配置</h3>
-              <p className="section-desc">管理 Claude Code 的文件访问和操作权限</p>
-              <div className="temp-notice">
-                <span className="codicon codicon-shield" />
-                <p>权限配置功能即将推出...</p>
-              </div>
-            </div>
-          )}
-
-          {/* MCP服务器 */}
-          {currentTab === 'mcp' && (
-            <div className="config-section">
-              <h3 className="section-title">MCP服务器</h3>
-              <p className="section-desc">配置和管理 Model Context Protocol 服务器</p>
-              <div className="temp-notice">
-                <span className="codicon codicon-server" />
-                <p>MCP服务器配置功能即将推出...</p>
-              </div>
-            </div>
-          )}
-
-          {/* Agents */}
-          {currentTab === 'agents' && (
-            <div className="config-section">
-              <h3 className="section-title">Agents</h3>
-              <p className="section-desc">管理和配置AI代理</p>
-              <div className="temp-notice">
-                <span className="codicon codicon-robot" />
-                <p>Agents配置功能即将推出...</p>
-              </div>
-            </div>
-          )}
-
-          {/* Skills */}
-          {currentTab === 'skills' && (
-            <div className="config-section">
-              <h3 className="section-title">Skills</h3>
-              <p className="section-desc">管理和配置技能模块</p>
-              <div className="temp-notice">
-                <span className="codicon codicon-book" />
-                <p>Skills配置功能即将推出...</p>
-              </div>
-            </div>
-          )}
-
-          {/* 官方交流群 */}
-          {currentTab === 'community' && (
-            <div className="config-section community-section">
-              <h3 className="section-title">官方交流群</h3>
-              <p className="section-desc">扫描下方二维码加入官方微信交流群，获取最新资讯和技术支持</p>
-
-              <div className="qrcode-container">
-                <div className="qrcode-wrapper">
-                  <img
-                    src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/vscode/wxq.png"
-                    alt="官方微信交流群二维码"
-                    className="qrcode-image"
-                  />
-                  <p className="qrcode-tip">使用微信扫一扫加入交流群</p>
+            {/* MCP服务器 */}
+            {currentTab === 'mcp' && (
+                <div className="config-section">
+                  <h3 className="section-title">MCP服务器</h3>
+                  <p className="section-desc">配置和管理 Model Context Protocol 服务器</p>
+                  <div className="temp-notice">
+                    <span className="codicon codicon-server" />
+                    <p>MCP服务器配置功能即将推出...</p>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+            )}
+
+            {/* Agents */}
+            {currentTab === 'agents' && (
+                <div className="config-section">
+                  <h3 className="section-title">Agents</h3>
+                  <p className="section-desc">管理和配置AI代理</p>
+                  <div className="temp-notice">
+                    <span className="codicon codicon-robot" />
+                    <p>Agents配置功能即将推出...</p>
+                  </div>
+                </div>
+            )}
+
+            {/* Skills */}
+            {currentTab === 'skills' && (
+                <div className="config-section">
+                  <h3 className="section-title">Skills</h3>
+                  <p className="section-desc">管理和配置技能模块</p>
+                  <div className="temp-notice">
+                    <span className="codicon codicon-book" />
+                    <p>Skills配置功能即将推出...</p>
+                  </div>
+                </div>
+            )}
+
+            {/* 官方交流群 */}
+            {currentTab === 'community' && (
+                <div className="config-section community-section">
+                  <h3 className="section-title">官方交流群</h3>
+                  <p className="section-desc">扫描下方二维码加入官方微信交流群，获取最新资讯和技术支持</p>
+
+                  <div className="qrcode-container">
+                    <div className="qrcode-wrapper">
+                      <img
+                          src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/vscode/wxq.png"
+                          alt="官方微信交流群二维码"
+                          className="qrcode-image"
+                      />
+                      <p className="qrcode-tip">使用微信扫一扫加入交流群</p>
+                    </div>
+                  </div>
+                </div>
+            )}
+          </div>
         </div>
+
+        {/* 页面内弹窗 */}
+        <AlertDialog
+            isOpen={alertDialog.isOpen}
+            type={alertDialog.type}
+            title={alertDialog.title}
+            message={alertDialog.message}
+            onClose={closeAlert}
+        />
+
+        {/* 删除确认弹窗 */}
+        <ConfirmDialog
+            isOpen={deleteConfirm.isOpen}
+            title="确认删除"
+            message={`确定要删除供应商"${deleteConfirm.provider?.name || ''}"吗？\n\n此操作无法撤销。`}
+            confirmText="删除"
+            cancelText="取消"
+            onConfirm={confirmDeleteProvider}
+            onCancel={cancelDeleteProvider}
+        />
       </div>
-
-      {/* 页面内弹窗 */}
-      <AlertDialog
-        isOpen={alertDialog.isOpen}
-        type={alertDialog.type}
-        title={alertDialog.title}
-        message={alertDialog.message}
-        onClose={closeAlert}
-      />
-
-      {/* 删除确认弹窗 */}
-      <ConfirmDialog
-        isOpen={deleteConfirm.isOpen}
-        title="确认删除"
-        message={`确定要删除供应商"${deleteConfirm.provider?.name || ''}"吗？\n\n此操作无法撤销。`}
-        confirmText="删除"
-        cancelText="取消"
-        onConfirm={confirmDeleteProvider}
-        onCancel={cancelDeleteProvider}
-      />
-    </div>
   );
 };
 
