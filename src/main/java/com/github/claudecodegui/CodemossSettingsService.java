@@ -638,4 +638,204 @@ public class CodemossSettingsService {
             writeConfig(config);
         }
     }
+
+    // ==================== MCP 服务器管理 ====================
+
+    private static final String CLAUDE_CONFIG_FILE_NAME = ".claude.json";
+
+    /**
+     * 获取 Claude 配置文件路径 (~/.claude.json)
+     */
+    private Path getClaudeConfigPath() {
+        String homeDir = System.getProperty("user.home");
+        return Paths.get(homeDir, CLAUDE_CONFIG_FILE_NAME);
+    }
+
+    /**
+     * 读取 Claude 配置文件
+     */
+    private JsonObject readClaudeConfig() throws IOException {
+        Path configPath = getClaudeConfigPath();
+        File configFile = configPath.toFile();
+
+        if (!configFile.exists()) {
+            JsonObject emptyConfig = new JsonObject();
+            emptyConfig.add("mcpServers", new JsonObject());
+            return emptyConfig;
+        }
+
+        try (FileReader reader = new FileReader(configFile)) {
+            return JsonParser.parseReader(reader).getAsJsonObject();
+        } catch (Exception e) {
+            System.err.println("[CodemossSettings] Failed to read ~/.claude.json: " + e.getMessage());
+            JsonObject emptyConfig = new JsonObject();
+            emptyConfig.add("mcpServers", new JsonObject());
+            return emptyConfig;
+        }
+    }
+
+    /**
+     * 写入 Claude 配置文件
+     */
+    private void writeClaudeConfig(JsonObject config) throws IOException {
+        Path configPath = getClaudeConfigPath();
+        try (FileWriter writer = new FileWriter(configPath.toFile())) {
+            gson.toJson(config, writer);
+            System.out.println("[CodemossSettings] Synced to Claude config: " + configPath);
+        }
+    }
+
+    /**
+     * 获取所有 MCP 服务器
+     * 直接从 ~/.claude.json 读取
+     */
+    public List<JsonObject> getMcpServers() throws IOException {
+        List<JsonObject> result = new ArrayList<>();
+        JsonObject claudeConfig = readClaudeConfig();
+
+        if (claudeConfig.has("mcpServers") && !claudeConfig.get("mcpServers").isJsonNull()) {
+            JsonObject mcpServers = claudeConfig.getAsJsonObject("mcpServers");
+            for (String key : mcpServers.keySet()) {
+                JsonObject spec = mcpServers.getAsJsonObject(key);
+                // 转换为前端需要的完整格式
+                JsonObject server = new JsonObject();
+                server.addProperty("id", key);
+                server.addProperty("name", key);
+                server.add("server", spec);
+
+                // 默认 apps（前端需要）
+                JsonObject apps = new JsonObject();
+                apps.addProperty("claude", true);
+                apps.addProperty("codex", false);
+                apps.addProperty("gemini", false);
+                server.add("apps", apps);
+
+                server.addProperty("enabled", true);
+                result.add(server);
+            }
+            System.out.println("[CodemossSettings] Loaded " + result.size() + " MCP servers from ~/.claude.json");
+        }
+
+        return result;
+    }
+
+    /**
+     * 添加或更新 MCP 服务器
+     * 直接写入 ~/.claude.json
+     */
+    public void upsertMcpServer(JsonObject server) throws IOException {
+        if (!server.has("id")) {
+            throw new IllegalArgumentException("Server must have an id");
+        }
+
+        String id = server.get("id").getAsString();
+
+        // 验证服务器配置
+        java.util.Map<String, Object> validation = validateMcpServer(server);
+        if (!(boolean) validation.get("valid")) {
+            @SuppressWarnings("unchecked")
+            List<String> errors = (List<String>) validation.get("errors");
+            throw new IllegalArgumentException("Invalid server configuration: " + String.join(", ", errors));
+        }
+
+        // 读取 Claude 配置
+        JsonObject claudeConfig = readClaudeConfig();
+
+        // 初始化 mcpServers
+        if (!claudeConfig.has("mcpServers")) {
+            claudeConfig.add("mcpServers", new JsonObject());
+        }
+        JsonObject mcpServers = claudeConfig.getAsJsonObject("mcpServers");
+
+        // 提取服务器规格（只保存 server 部分到 .claude.json）
+        if (!server.has("server")) {
+            throw new IllegalArgumentException("Server must have a 'server' spec");
+        }
+        JsonObject serverSpec = server.getAsJsonObject("server");
+
+        // 添加或更新服务器
+        mcpServers.add(id, serverSpec);
+
+        // 写入 Claude 配置
+        writeClaudeConfig(claudeConfig);
+
+        System.out.println("[CodemossSettings] Upserted MCP server to ~/.claude.json: " + id);
+    }
+
+    /**
+     * 删除 MCP 服务器
+     * 直接从 ~/.claude.json 删除
+     */
+    public boolean deleteMcpServer(String id) throws IOException {
+        JsonObject claudeConfig = readClaudeConfig();
+
+        if (!claudeConfig.has("mcpServers") || claudeConfig.get("mcpServers").isJsonNull()) {
+            System.out.println("[CodemossSettings] No MCP servers found in ~/.claude.json");
+            return false;
+        }
+
+        JsonObject mcpServers = claudeConfig.getAsJsonObject("mcpServers");
+        if (!mcpServers.has(id)) {
+            System.out.println("[CodemossSettings] MCP server not found: " + id);
+            return false;
+        }
+
+        // 删除服务器
+        mcpServers.remove(id);
+
+        // 写入 Claude 配置
+        writeClaudeConfig(claudeConfig);
+
+        System.out.println("[CodemossSettings] Deleted MCP server from ~/.claude.json: " + id);
+        return true;
+    }
+
+    /**
+     * 验证 MCP 服务器配置
+     */
+    public java.util.Map<String, Object> validateMcpServer(JsonObject server) {
+        List<String> errors = new ArrayList<>();
+
+        // 验证 ID
+        if (!server.has("id") || server.get("id").isJsonNull() || server.get("id").getAsString().trim().isEmpty()) {
+            errors.add("服务器 ID 不能为空");
+        }
+
+        // 验证服务器规格
+        if (!server.has("server") || server.get("server").isJsonNull()) {
+            errors.add("服务器配置不能为空");
+        } else {
+            JsonObject spec = server.getAsJsonObject("server");
+            String type = spec.has("type") && !spec.get("type").isJsonNull()
+                ? spec.get("type").getAsString()
+                : "stdio";
+
+            if ("stdio".equals(type)) {
+                if (!spec.has("command") || spec.get("command").isJsonNull() ||
+                    spec.get("command").getAsString().trim().isEmpty()) {
+                    errors.add("stdio 类型需要指定 command");
+                }
+            } else if ("http".equals(type) || "sse".equals(type)) {
+                if (!spec.has("url") || spec.get("url").isJsonNull() ||
+                    spec.get("url").getAsString().trim().isEmpty()) {
+                    errors.add(type + " 类型需要指定 url");
+                }
+                if (spec.has("url") && !spec.get("url").isJsonNull()) {
+                    String url = spec.get("url").getAsString();
+                    try {
+                        new java.net.URL(url);
+                    } catch (Exception e) {
+                        errors.add("URL 格式无效");
+                    }
+                }
+            } else {
+                errors.add("不支持的连接类型: " + type);
+            }
+        }
+
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("valid", errors.isEmpty());
+        result.put("errors", errors);
+        return result;
 }
+    }

@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.github.idea-claude-code-gui'
-version '0.0.8'
+version '0.0.8-iteration1'
 
 sourceCompatibility = 17
 targetCompatibility = 17
@@ -62,6 +62,29 @@ def claudeBridgeDir = file("claude-bridge")
 def claudeBridgePackDir = file("$buildDir/claude-bridge-pack")
 def claudeBridgeArchive = new File(claudeBridgePackDir, "claude-bridge.zip")
 
+// 自动构建 webview
+tasks.register('buildWebview', Exec) {
+    workingDir file('webview')
+
+    // 根据操作系统选择命令
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        commandLine 'cmd', '/c', 'npm', 'run', 'build'
+    } else {
+        commandLine 'npm', 'run', 'build'
+    }
+
+    // 只在 webview 目录存在时执行
+    onlyIf { file('webview').exists() }
+
+    // 输出构建信息
+    doFirst {
+        println "Building webview..."
+    }
+    doLast {
+        println "Webview build completed."
+    }
+}
+
 tasks.register('packageClaudeBridge', Zip) {
     onlyIf { claudeBridgeDir.exists() }
     archiveFileName = "claude-bridge.zip"
@@ -72,7 +95,7 @@ tasks.register('packageClaudeBridge', Zip) {
 }
 
 tasks.named("prepareSandbox") {
-    dependsOn("packageClaudeBridge")
+    dependsOn("buildWebview", "packageClaudeBridge")
     doLast {
         if (!claudeBridgeDir.exists()) {
             throw new GradleException("claude-bridge 目录不存在，请确保已拉取并安装依赖。")

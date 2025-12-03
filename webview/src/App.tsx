@@ -434,33 +434,58 @@ const App = () => {
     setCurrentView('chat');
   };
 
+  // 文案本地化映射
+  const localizeMessage = (text: string): string => {
+    const messageMap: Record<string, string> = {
+      'Request interrupted by user': '请求已被用户中断',
+    };
+
+    // 检查是否有完全匹配的映射
+    if (messageMap[text]) {
+      return messageMap[text];
+    }
+
+    // 检查是否包含需要映射的关键词
+    for (const [key, value] of Object.entries(messageMap)) {
+      if (text.includes(key)) {
+        return text.replace(key, value);
+      }
+    }
+
+    return text;
+  };
+
   const getMessageText = (message: ClaudeMessage) => {
+    let text = '';
+
     if (message.content) {
-      return message.content;
+      text = message.content;
+    } else {
+      const raw = message.raw;
+      if (!raw) {
+        return '(空消息)';
+      }
+      if (typeof raw === 'string') {
+        text = raw;
+      } else if (typeof raw.content === 'string') {
+        text = raw.content;
+      } else if (Array.isArray(raw.content)) {
+        text = raw.content
+          .filter((block) => block && block.type === 'text')
+          .map((block) => block.text ?? '')
+          .join('\n');
+      } else if (raw.message?.content && Array.isArray(raw.message.content)) {
+        text = raw.message.content
+          .filter((block) => block && block.type === 'text')
+          .map((block) => block.text ?? '')
+          .join('\n');
+      } else {
+        return '(空消息)';
+      }
     }
-    const raw = message.raw;
-    if (!raw) {
-      return '(空消息)';
-    }
-    if (typeof raw === 'string') {
-      return raw;
-    }
-    if (typeof raw.content === 'string') {
-      return raw.content;
-    }
-    if (Array.isArray(raw.content)) {
-      return raw.content
-        .filter((block) => block && block.type === 'text')
-        .map((block) => block.text ?? '')
-        .join('\n');
-    }
-    if (raw.message?.content && Array.isArray(raw.message.content)) {
-      return raw.message.content
-        .filter((block) => block && block.type === 'text')
-        .map((block) => block.text ?? '')
-        .join('\n');
-    }
-    return '(空消息)';
+
+    // 应用本地化
+    return localizeMessage(text);
   };
 
   const shouldShowMessage = (message: ClaudeMessage) => {
@@ -522,9 +547,10 @@ const App = () => {
         const candidate = entry as Record<string, unknown>;
         const type = candidate.type as string | undefined;
         if (type === 'text') {
+          const rawText = typeof candidate.text === 'string' ? candidate.text : '';
           blocks.push({
             type: 'text',
-            text: typeof candidate.text === 'string' ? candidate.text : '',
+            text: localizeMessage(rawText),
           });
         } else if (type === 'thinking') {
           const thinking =
@@ -588,7 +614,7 @@ const App = () => {
             content.includes('<local-command-stdout>')) {
           return null;
         }
-        return [{ type: 'text' as const, text: content }];
+        return [{ type: 'text' as const, text: localizeMessage(content) }];
       }
       if (Array.isArray(content)) {
         const result = buildBlocksFromArray(content);
@@ -604,7 +630,7 @@ const App = () => {
       // 尝试从 raw.text 或其他可能的字段获取
       if (typeof raw === 'object') {
         if ('text' in raw && typeof raw.text === 'string' && raw.text.trim()) {
-          return [{ type: 'text' as const, text: raw.text }];
+          return [{ type: 'text' as const, text: localizeMessage(raw.text) }];
         }
         // 如果实在没有内容，返回 null 而不是显示"(无法解析内容)"
         // 这样 shouldShowMessage 会过滤掉这条消息
@@ -621,7 +647,7 @@ const App = () => {
       return rawBlocks;
     }
     if (message.content && message.content.trim()) {
-      return [{ type: 'text', text: message.content }];
+      return [{ type: 'text', text: localizeMessage(message.content) }];
     }
     // 如果没有任何内容，返回空数组而不是显示"(空消息)"
     // shouldShowMessage 会过滤掉这些消息
@@ -671,49 +697,51 @@ const App = () => {
   return (
     <>
       <ToastContainer messages={toasts} onDismiss={dismissToast} />
-      <div className="header">
-        <div className="header-left">
-          {currentView === 'history' ? (
-            <button className="back-button" onClick={() => setCurrentView('chat')} data-tooltip="返回聊天">
-              <BackIcon /> 返回
-            </button>
-          ) : (
-            <div
-              className="session-title"
-              style={{
-                fontWeight: 600,
-                fontSize: '14px',
-                paddingLeft: '8px',
-              }}
-            >
-              {sessionTitle}
-            </div>
-          )}
-        </div>
-        <div className="header-right">
-          {currentView === 'chat' && (
-            <>
-              <button className="icon-button" onClick={createNewSession} data-tooltip="新会话">
-                <span className="codicon codicon-plus" />
+      {currentView !== 'settings' && (
+        <div className="header">
+          <div className="header-left">
+            {currentView === 'history' ? (
+              <button className="back-button" onClick={() => setCurrentView('chat')} data-tooltip="返回聊天">
+                <BackIcon /> 返回
               </button>
-              <button
-                className="icon-button"
-                onClick={() => setCurrentView('history')}
-                data-tooltip="历史记录"
+            ) : (
+              <div
+                className="session-title"
+                style={{
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  paddingLeft: '8px',
+                }}
               >
-                <span className="codicon codicon-history" />
-              </button>
-              <button
-                className="icon-button"
-                onClick={() => setCurrentView('settings')}
-                data-tooltip="设置"
-              >
-                <span className="codicon codicon-settings-gear" />
-              </button>
-            </>
-          )}
+                {sessionTitle}
+              </div>
+            )}
+          </div>
+          <div className="header-right">
+            {currentView === 'chat' && (
+              <>
+                <button className="icon-button" onClick={createNewSession} data-tooltip="新会话">
+                  <span className="codicon codicon-plus" />
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() => setCurrentView('history')}
+                  data-tooltip="历史记录"
+                >
+                  <span className="codicon codicon-history" />
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() => setCurrentView('settings')}
+                  data-tooltip="设置"
+                >
+                  <span className="codicon codicon-settings-gear" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {currentView === 'settings' ? (
         <SettingsView onClose={() => setCurrentView('chat')} />

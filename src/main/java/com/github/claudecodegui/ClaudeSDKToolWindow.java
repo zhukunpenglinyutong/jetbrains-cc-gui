@@ -451,6 +451,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	                    handleSetNodePath(content);
 	                    break;
 
+	                // MCP 服务器管理
+	                case "get_mcp_servers":
+	                    System.out.println("[Backend] 处理: get_mcp_servers");
+	                    handleGetMcpServers();
+	                    break;
+
+	                case "add_mcp_server":
+	                    System.out.println("[Backend] 处理: add_mcp_server");
+	                    handleAddMcpServer(content);
+	                    break;
+
+	                case "update_mcp_server":
+	                    System.out.println("[Backend] 处理: update_mcp_server");
+	                    handleUpdateMcpServer(content);
+	                    break;
+
+	                case "delete_mcp_server":
+	                    System.out.println("[Backend] 处理: delete_mcp_server");
+	                    handleDeleteMcpServer(content);
+	                    break;
+
+	                case "validate_mcp_server":
+	                    System.out.println("[Backend] 处理: validate_mcp_server");
+	                    handleValidateMcpServer(content);
+	                    break;
+
                 default:
                     System.err.println("[Backend] 警告: 未知的消息类型: " + type);
             }
@@ -2155,7 +2181,126 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	    	    }
 	    	    System.out.println("[Backend] ========== handleSetNodePath END ==========");
 	    	}
-	    	
+
+	    	// ==================== MCP 服务器管理 Handler ====================
+
+	    	/**
+	    	 * 获取所有 MCP 服务器
+	    	 */
+	    	private void handleGetMcpServers() {
+	    	    try {
+	    	        List<JsonObject> servers = settingsService.getMcpServers();
+	    	        Gson gson = new Gson();
+	    	        String serversJson = gson.toJson(servers);
+
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.updateMcpServers", escapeJs(serversJson));
+	    	        });
+	    	    } catch (Exception e) {
+	    	        System.err.println("[Backend] Failed to get MCP servers: " + e.getMessage());
+	    	        e.printStackTrace();
+	    	    }
+	    	}
+
+	    	/**
+	    	 * 添加 MCP 服务器
+	    	 */
+	    	private void handleAddMcpServer(String content) {
+	    	    try {
+	    	        Gson gson = new Gson();
+	    	        JsonObject server = gson.fromJson(content, JsonObject.class);
+
+	    	        settingsService.upsertMcpServer(server);
+
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.mcpServerAdded", escapeJs(content));
+	    	            // 刷新服务器列表
+	    	            handleGetMcpServers();
+	    	        });
+	    	    } catch (Exception e) {
+	    	        System.err.println("[Backend] Failed to add MCP server: " + e.getMessage());
+	    	        e.printStackTrace();
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.showError", escapeJs("添加 MCP 服务器失败: " + e.getMessage()));
+	    	        });
+	    	    }
+	    	}
+
+	    	/**
+	    	 * 更新 MCP 服务器
+	    	 */
+	    	private void handleUpdateMcpServer(String content) {
+	    	    try {
+	    	        Gson gson = new Gson();
+	    	        JsonObject server = gson.fromJson(content, JsonObject.class);
+
+	    	        settingsService.upsertMcpServer(server);
+
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.mcpServerUpdated", escapeJs(content));
+	    	            // 刷新服务器列表
+	    	            handleGetMcpServers();
+	    	        });
+	    	    } catch (Exception e) {
+	    	        System.err.println("[Backend] Failed to update MCP server: " + e.getMessage());
+	    	        e.printStackTrace();
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.showError", escapeJs("更新 MCP 服务器失败: " + e.getMessage()));
+	    	        });
+	    	    }
+	    	}
+
+	    	/**
+	    	 * 删除 MCP 服务器
+	    	 */
+	    	private void handleDeleteMcpServer(String content) {
+	    	    try {
+	    	        Gson gson = new Gson();
+	    	        JsonObject json = gson.fromJson(content, JsonObject.class);
+	    	        String serverId = json.get("id").getAsString();
+
+	    	        boolean success = settingsService.deleteMcpServer(serverId);
+
+	    	        if (success) {
+	    	            SwingUtilities.invokeLater(() -> {
+	    	                callJavaScript("window.mcpServerDeleted", escapeJs(serverId));
+	    	                // 刷新服务器列表
+	    	                handleGetMcpServers();
+	    	            });
+	    	        } else {
+	    	            SwingUtilities.invokeLater(() -> {
+	    	                callJavaScript("window.showError", escapeJs("删除 MCP 服务器失败: 服务器不存在"));
+	    	            });
+	    	        }
+	    	    } catch (Exception e) {
+	    	        System.err.println("[Backend] Failed to delete MCP server: " + e.getMessage());
+	    	        e.printStackTrace();
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.showError", escapeJs("删除 MCP 服务器失败: " + e.getMessage()));
+	    	        });
+	    	    }
+	    	}
+
+	    	/**
+	    	 * 验证 MCP 服务器配置
+	    	 */
+	    	private void handleValidateMcpServer(String content) {
+	    	    try {
+	    	        Gson gson = new Gson();
+	    	        JsonObject server = gson.fromJson(content, JsonObject.class);
+
+	    	        Map<String, Object> validation = settingsService.validateMcpServer(server);
+	    	        String validationJson = gson.toJson(validation);
+
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.mcpServerValidated", escapeJs(validationJson));
+	    	        });
+	    	    } catch (Exception e) {
+	    	        System.err.println("[Backend] Failed to validate MCP server: " + e.getMessage());
+	    	        e.printStackTrace();
+	    	    }
+	    	}
+
 	    	public JPanel getContent() {
 	    	    return mainPanel;
 	    	}

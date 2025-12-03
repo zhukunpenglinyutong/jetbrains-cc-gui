@@ -24,6 +24,12 @@ declare global {
     onModelChanged?: (modelId: string) => void;
     // 权限弹窗相关
     showPermissionDialog?: (json: string) => void;
+    // MCP 服务器相关
+    updateMcpServers?: (jsonStr: string) => void;
+    mcpServerAdded?: (jsonStr: string) => void;
+    mcpServerUpdated?: (jsonStr: string) => void;
+    mcpServerDeleted?: (serverId: string) => void;
+    mcpServerValidated?: (jsonStr: string) => void;
   }
 }
 

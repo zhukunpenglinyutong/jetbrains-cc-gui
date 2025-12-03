@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { ProviderConfig } from '../types/provider';
 import UsageStatisticsSection from './UsageStatisticsSection';
+import { McpSettingsSection } from './mcp/McpSettingsSection';
 import AlertDialog from './AlertDialog';
 import type { AlertType } from './AlertDialog';
 import ConfirmDialog from './ConfirmDialog';
@@ -438,21 +439,20 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                 <span className="sidebar-item-text">使用统计</span>
               </div>
               <div
+                  className={`sidebar-item ${currentTab === 'mcp' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('mcp')}
+                  title={isCollapsed ? 'MCP服务器' : ''}
+              >
+                <span className="codicon codicon-server" />
+                <span className="sidebar-item-text">MCP服务器</span>
+              </div>
+              <div
                   className={`sidebar-item warning ${currentTab === 'permissions' ? 'active' : ''}`}
                   onClick={() => setCurrentTab('permissions')}
                   title={isCollapsed ? '权限配置' : ''}
               >
                 <span className="codicon codicon-shield" />
                 <span className="sidebar-item-text">权限配置</span>
-                <span className="codicon codicon-warning" />
-              </div>
-              <div
-                  className={`sidebar-item warning ${currentTab === 'mcp' ? 'active' : ''}`}
-                  onClick={() => setCurrentTab('mcp')}
-                  title={isCollapsed ? 'MCP服务器' : ''}
-              >
-                <span className="codicon codicon-server" />
-                <span className="sidebar-item-text">MCP服务器</span>
                 <span className="codicon codicon-warning" />
               </div>
               <div
@@ -1005,10 +1005,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                 <div className="config-section">
                   <h3 className="section-title">MCP服务器</h3>
                   <p className="section-desc">配置和管理 Model Context Protocol 服务器</p>
-                  <div className="temp-notice">
-                    <span className="codicon codicon-server" />
-                    <p>MCP服务器配置功能即将推出...</p>
-                  </div>
+                  <McpSettingsSection />
                 </div>
             )}
 

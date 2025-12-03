@@ -12,22 +12,34 @@
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.8.zip 文件
+# 1.下载 idea-claude-code-gui-0.0.8-iteration1.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.8.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.8-iteration1.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.8.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/idea-claude-code-gui-0.0.8.zip)
+插件下载：[idea-claude-code-gui-0.0.8-iteration1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/idea-claude-code-gui-0.0.8-iteration1.zip)
 
 ---
 
 ### 目前进度
 
+##### **12月3日（v0.0.8-iteration1）**
+
+- [x] P0（feat）支持基础版本的MCP
+- [x] P1（fix）解决输入框光标无法快捷移动的问题
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/4.png" />
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/5.png" />
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/6.png" />
+
+
 ##### **12月2日（v0.0.8）**
 
 - [x] P0（feat）增加主动调整Node路径的功能，用以适配五花八门的Node路径
 - [x] P1（feat）增加白色主题
-- [x] P1（feat）将配置功能与cc-switch解耦，防止规则改变导致渠道丢失
+- [x] P1（feat）将渠道配置功能与cc-switch解耦，防止规则改变导致渠道丢失
 - [x] P1（feat）增加各种错误情况下的提示功能，减少空白展示情况
 - [x] P1（feat）优化@文件功能（回车发送问题还未解决）
 - [x] P2（fix）解决 运行命令 右侧小圆点总是展示置灰的问题

@@ -30,3 +30,13 @@ export const openBrowser = (url?: string) => {
   sendBridgeEvent('open_browser', url);
 };
 
+/**
+ * Send message to Java backend with object payload
+ * @param message Message type
+ * @param payload Payload object
+ */
+export const sendToJava = (message: string, payload: any = {}) => {
+  const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  sendBridgeEvent(message, payloadStr);
+};
+

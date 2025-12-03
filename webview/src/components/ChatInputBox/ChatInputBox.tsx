@@ -254,6 +254,142 @@ export const ChatInputBox = ({
   ]);
 
   /**
+   * 处理 Mac 风格的光标移动和文本选择
+   */
+  const handleMacCursorMovement = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!editableRef.current) return false;
+
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return false;
+
+    const range = selection.getRangeAt(0);
+    const isShift = e.shiftKey;
+
+    // Cmd + 左箭头：移动到行首（或选择到行首）
+    if (e.key === 'ArrowLeft' && e.metaKey) {
+      e.preventDefault();
+
+      const node = range.startContainer;
+      const offset = range.startOffset;
+
+      // 找到当前行的开始位置
+      let lineStartOffset = 0;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || '';
+        // 从当前位置向前查找换行符
+        for (let i = offset - 1; i >= 0; i--) {
+          if (text[i] === '\n') {
+            lineStartOffset = i + 1;
+            break;
+          }
+        }
+      }
+
+      const newRange = document.createRange();
+      newRange.setStart(node, lineStartOffset);
+
+      if (isShift) {
+        // Shift: 选择到行首
+        newRange.setEnd(range.endContainer, range.endOffset);
+      } else {
+        // 无 Shift: 移动光标到行首
+        newRange.collapse(true);
+      }
+
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      return true;
+    }
+
+    // Cmd + 右箭头：移动到行尾（或选择到行尾）
+    if (e.key === 'ArrowRight' && e.metaKey) {
+      e.preventDefault();
+
+      const node = range.endContainer;
+      const offset = range.endOffset;
+
+      // 找到当前行的结束位置
+      let lineEndOffset = node.textContent?.length || 0;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || '';
+        // 从当前位置向后查找换行符
+        for (let i = offset; i < text.length; i++) {
+          if (text[i] === '\n') {
+            lineEndOffset = i;
+            break;
+          }
+        }
+      }
+
+      const newRange = document.createRange();
+
+      if (isShift) {
+        // Shift: 选择到行尾
+        newRange.setStart(range.startContainer, range.startOffset);
+        newRange.setEnd(node, lineEndOffset);
+      } else {
+        // 无 Shift: 移动光标到行尾
+        newRange.setStart(node, lineEndOffset);
+        newRange.collapse(true);
+      }
+
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      return true;
+    }
+
+    // Cmd + 上箭头：移动到文本开头（或选择到开头）
+    if (e.key === 'ArrowUp' && e.metaKey) {
+      e.preventDefault();
+
+      const firstNode = editableRef.current.firstChild || editableRef.current;
+      const newRange = document.createRange();
+
+      if (isShift) {
+        // Shift: 选择到开头
+        newRange.setStart(firstNode, 0);
+        newRange.setEnd(range.endContainer, range.endOffset);
+      } else {
+        // 无 Shift: 移动光标到开头
+        newRange.setStart(firstNode, 0);
+        newRange.collapse(true);
+      }
+
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      return true;
+    }
+
+    // Cmd + 下箭头：移动到文本末尾（或选择到末尾）
+    if (e.key === 'ArrowDown' && e.metaKey) {
+      e.preventDefault();
+
+      const lastNode = editableRef.current.lastChild || editableRef.current;
+      const lastOffset = lastNode.nodeType === Node.TEXT_NODE
+        ? (lastNode.textContent?.length || 0)
+        : lastNode.childNodes.length;
+
+      const newRange = document.createRange();
+
+      if (isShift) {
+        // Shift: 选择到末尾
+        newRange.setStart(range.startContainer, range.startOffset);
+        newRange.setEnd(lastNode, lastOffset);
+      } else {
+        // 无 Shift: 移动光标到末尾
+        newRange.setStart(lastNode, lastOffset);
+        newRange.collapse(true);
+      }
+
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      return true;
+    }
+
+    return false;
+  }, []);
+
+  /**
    * 处理键盘事件
    */
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -273,6 +409,23 @@ export const ChatInputBox = ({
       'isComposing:', isComposing,
       'nativeIsComposing:', e.nativeEvent.isComposing,
       'isIMEComposing:', isIMEComposing);
+
+    // 优先处理 Mac 风格的光标移动和文本选择
+    if (handleMacCursorMovement(e)) {
+      return;
+    }
+
+    // 允许其他光标移动快捷键（Home/End/Ctrl+A/Ctrl+E）
+    const isCursorMovementKey =
+      e.key === 'Home' ||
+      e.key === 'End' ||
+      ((e.key === 'a' || e.key === 'A') && e.ctrlKey && !e.metaKey) || // Ctrl+A (Linux/Windows)
+      ((e.key === 'e' || e.key === 'E') && e.ctrlKey && !e.metaKey);   // Ctrl+E (Linux/Windows)
+
+    if (isCursorMovementKey) {
+      // 允许默认的光标移动行为
+      return;
+    }
 
     // 优先处理补全菜单的键盘事件
     if (fileCompletion.isOpen) {
@@ -356,6 +509,30 @@ export const ChatInputBox = ({
         (ev as unknown as { which?: number }).which === 13;
 
       const shift = (ev as KeyboardEvent).shiftKey === true;
+
+      // Mac 风格的光标移动快捷键（已在 React 事件中处理，这里不需要处理）
+      const isMacCursorMovement =
+        (ev.key === 'ArrowLeft' && ev.metaKey) ||
+        (ev.key === 'ArrowRight' && ev.metaKey) ||
+        (ev.key === 'ArrowUp' && ev.metaKey) ||
+        (ev.key === 'ArrowDown' && ev.metaKey);
+
+      if (isMacCursorMovement) {
+        // Mac 快捷键已在 React 事件中处理
+        return;
+      }
+
+      // 允许其他光标移动快捷键（Home/End/Ctrl+A/Ctrl+E）
+      const isCursorMovementKey =
+        ev.key === 'Home' ||
+        ev.key === 'End' ||
+        ((ev.key === 'a' || ev.key === 'A') && ev.ctrlKey && !ev.metaKey) ||
+        ((ev.key === 'e' || ev.key === 'E') && ev.ctrlKey && !ev.metaKey);
+
+      if (isCursorMovementKey) {
+        // 允许默认的光标移动行为
+        return;
+      }
 
       // 补全菜单打开时，不在原生事件中处理（React onKeyDown 已处理，避免重复）
       if (fileCompletion.isOpen || commandCompletion.isOpen) {
@@ -462,7 +639,7 @@ export const ChatInputBox = ({
   }, []);
 
   /**
-   * 处理粘贴事件 - 检测图片
+   * 处理粘贴事件 - 检测图片和纯文本
    */
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     console.log('[ChatInputBox] handlePaste called');
@@ -474,11 +651,14 @@ export const ChatInputBox = ({
       return;
     }
 
+    // 检查是否有图片或文件
+    let hasImageOrFile = false;
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       console.log('[ChatInputBox] Item', i, 'type:', item.type, 'kind:', item.kind);
 
       if (item.type.startsWith('image/') || item.kind === 'file') {
+        hasImageOrFile = true;
         e.preventDefault();
         const blob = item.getAsFile();
         console.log('[ChatInputBox] Got blob:', blob ? 'yes' : 'no', 'size:', blob?.size);
@@ -520,7 +700,20 @@ export const ChatInputBox = ({
         return;
       }
     }
-  }, [generateId]);
+
+    // 如果没有图片或文件，强制粘贴为纯文本（去除样式）
+    if (!hasImageOrFile) {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain');
+      console.log('[ChatInputBox] Pasting plain text, length:', text.length);
+
+      // 使用 document.execCommand 插入纯文本（保持光标位置）
+      document.execCommand('insertText', false, text);
+
+      // 触发 input 事件以更新状态
+      handleInput();
+    }
+  }, [generateId, handleInput]);
 
   /**
    * 处理添加附件

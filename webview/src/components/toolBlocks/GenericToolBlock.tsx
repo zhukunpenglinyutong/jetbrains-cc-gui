@@ -94,8 +94,10 @@ interface GenericToolBlockProps {
 }
 
 const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
-  // Tools that should be collapsible (Grep, Glob, and Write)
-  const isCollapsible = ['grep', 'glob', 'write', 'save-file'].includes((name ?? '').toLowerCase());
+  // Tools that should be collapsible (Grep, Glob, Write, and MCP tools)
+  const lowerName = (name ?? '').toLowerCase();
+  const isMcpTool = lowerName.startsWith('mcp__');
+  const isCollapsible = ['grep', 'glob', 'write', 'save-file'].includes(lowerName) || isMcpTool;
   const [expanded, setExpanded] = useState(false);
 
   if (!input) {
