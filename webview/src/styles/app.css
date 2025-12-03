@@ -812,7 +812,8 @@ body {
 }
 
 .markdown-content th {
-    background-color: #252526;
+    background-color: var(--background-tertiary);
+    font-weight: 600;
 }
 
 /* Thinking Block - Minimalist */
@@ -1528,7 +1529,7 @@ body {
 }
 
 .sidebar-toggle {
-    display: flex;
+    display: none; /* 隐藏侧边栏展开/收起按钮 */
     align-items: center;
     justify-content: center;
     padding: 8px;
@@ -3946,3 +3947,392 @@ body {
         .image-preview-close:hover {
             background: rgba(255, 255, 255, 0.2);
         }
+
+/* ==================== 亮色模式适配 ==================== */
+[data-theme="light"] .markdown-content pre {
+    background-color: #f5f5f5;
+}
+
+[data-theme="light"] .markdown-content code {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .message.user .markdown-content pre {
+    background-color: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .message.user .markdown-content code {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="light"] .tool-block {
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .tool-name {
+    color: #0078d4;
+}
+
+[data-theme="light"] .tool-icon {
+    color: #106ebe;
+}
+
+[data-theme="light"] .tool-summary {
+    color: #666666;
+}
+
+[data-theme="light"] .tool-file-link {
+    color: #107c10;
+}
+
+[data-theme="light"] .tool-params {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* 权限弹窗亮色模式适配 */
+[data-theme="light"] .permission-dialog-overlay {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .permission-dialog-v2 {
+    background: #ffffff;
+    border: 1px solid #d0d0d0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .permission-dialog-v2-details-toggle {
+    background: #f5f5f5;
+}
+
+[data-theme="light"] .permission-dialog-v2-details-toggle:hover {
+    background: #e8e8e8;
+}
+
+[data-theme="light"] .permission-dialog-v2-details {
+    background: #f9f9f9;
+}
+
+[data-theme="light"] .permission-dialog-v2-param .param-key {
+    color: #0078d4;
+}
+
+[data-theme="light"] .permission-dialog-v2-param .param-value {
+    color: #a31515;
+}
+
+[data-theme="light"] .permission-dialog-v2-option {
+    background: #f5f5f5;
+}
+
+[data-theme="light"] .permission-dialog-v2-option:hover {
+    background: #e8e8e8;
+    border-color: #a0a0a0;
+}
+
+[data-theme="light"] .permission-dialog-v2-option.selected {
+    background: #0078d4;
+    border-color: #0078d4;
+}
+
+[data-theme="light"] .permission-dialog-v2-option.selected:hover {
+    background: #106ebe;
+    border-color: #106ebe;
+}
+
+/* 任务列表亮色模式适配 - 加深颜色 */
+[data-theme="light"] .todo-container {
+    background: #f5f5f5;
+    border: 1px solid #c0c0c0;
+}
+
+[data-theme="light"] .todo-header {
+    color: #1a1a1a;
+    font-weight: 600;
+}
+
+[data-theme="light"] .todo-header-icon {
+    color: #0078d4;
+}
+
+[data-theme="light"] .todo-item {
+    color: #1a1a1a;
+}
+
+[data-theme="light"] .todo-item.completed {
+    color: #666666;
+}
+
+[data-theme="light"] .status-pending .codicon {
+    color: #666666;
+}
+
+[data-theme="light"] .status-in-progress .codicon {
+    color: #0078d4;
+}
+
+[data-theme="light"] .status-completed .codicon {
+    color: #107c10;
+}
+
+/* 工具块标题样式 - 支持亮色/暗色主题 */
+.tool-title-icon {
+    color: var(--text-primary);
+    font-size: 16px;
+    margin-right: 6px;
+}
+
+.tool-title-text {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.tool-title-summary {
+    color: var(--text-tertiary);
+    margin-left: 12px;
+}
+
+/* 亮色模式下工具块摘要使用更深的颜色 */
+[data-theme="light"] .tool-title-summary {
+    color: #444444;
+}
+
+/* Bash命令块样式 */
+.bash-tool-header {
+    border-bottom: none;
+    background: var(--bg-primary);
+}
+
+.bash-tool-header.expanded {
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.bash-tool-icon {
+    color: var(--text-primary);
+    font-size: 16px;
+    margin-right: 6px;
+}
+
+.bash-tool-title {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.bash-tool-description {
+    color: var(--text-tertiary);
+    font-style: normal;
+    margin-left: 12px;
+}
+
+.bash-tool-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+.bash-tool-status.pending {
+    background-color: var(--text-tertiary);
+}
+
+.bash-tool-status.completed {
+    background-color: var(--color-success);
+}
+
+.bash-tool-status.error {
+    background-color: var(--color-error);
+}
+
+.bash-tool-content {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+    position: relative;
+}
+
+.bash-tool-line {
+    position: absolute;
+    left: 21px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--border-primary);
+    z-index: 0;
+}
+
+.bash-command-block {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.bash-output-block {
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    display: flex;
+    gap: 6px;
+}
+
+.bash-output-block.normal {
+    color: var(--text-tertiary);
+}
+
+.bash-output-block.error {
+    color: var(--color-error);
+}
+
+/* 亮色模式下 Bash 块的额外适配 */
+[data-theme="light"] .bash-command-block {
+    background: #f5f5f5;
+    border: 1px solid #d0d0d0;
+}
+
+/* ==================== 配置信息展示组件 ==================== */
+.config-info-display {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.config-info-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-secondary);
+}
+
+.config-info-loading,
+.config-info-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 24px;
+    justify-content: center;
+    color: var(--text-tertiary);
+    font-size: 13px;
+}
+
+.config-info-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.config-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.config-info-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.config-info-label .codicon {
+    font-size: 14px;
+}
+
+.config-info-value {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding-left: 20px;
+}
+
+.config-info-value-with-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 20px;
+}
+
+.config-info-code {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+    background: var(--color-code-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.config-info-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.config-info-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.config-info-toggle .codicon {
+    font-size: 14px;
+}
+
+.config-info-badge {
+    display: inline-block;
+    background: var(--accent-primary);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+/* 响应式设计 */
+@media (min-width: 768px) {
+    .config-info-item {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .config-info-label {
+        flex: 0 0 150px;
+    }
+
+    .config-info-value,
+    .config-info-value-with-action {
+        flex: 1;
+        padding-left: 0;
+    }
+}
+
+/* 亮色主题适配 */
+[data-theme="light"] .config-info-display {
+    background: #f8f8f8;
+    border-color: #d0d0d0;
+}
+
+[data-theme="light"] .config-info-code {
+    background: rgba(0, 0, 0, 0.05);
+}

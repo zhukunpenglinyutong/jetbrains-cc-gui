@@ -17,14 +17,11 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
   const command = (input.command as string | undefined) ?? '';
   const description = (input.description as string | undefined) ?? '';
 
-  let status: 'pending' | 'completed' | 'error' = 'pending';
   let isError = false;
   let output = '';
 
   if (result) {
-    status = 'completed';
     if (result.is_error) {
-      status = 'error';
       isError = true;
     }
 
@@ -39,88 +36,33 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
   return (
     <div className="task-container">
       <div
-        className="task-header"
+        className={`task-header bash-tool-header ${expanded ? 'expanded' : ''}`}
         onClick={() => setExpanded((prev) => !prev)}
-        style={{ 
-          borderBottom: expanded ? '1px solid #333' : undefined,
-          background: '#1e1e1e',
-        }}
       >
         <div className="task-title-section">
-          <span
-            className="codicon codicon-terminal"
-            style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }}
-          />
-
-          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
-            运行命令
-          </span>
-          <span style={{ color: '#858585', fontStyle: 'normal', marginLeft: '12px' }}>{description}</span>
+          <span className="codicon codicon-terminal bash-tool-icon" />
+          <span className="bash-tool-title">运行命令</span>
+          <span className="bash-tool-description">{description}</span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: isError ? '#ff6b6b' : (status === 'pending' ? '#858585' : '#4caf50'),
-              marginRight: '4px'
-            }}
-          />
-        </div>
+        <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--color-success)',
+            marginRight: '4px'
+        }} />
       </div>
 
       {expanded && (
         <div className="task-details" style={{ padding: 0, border: 'none' }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              background: '#1e1e1e',
-              position: 'relative',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                left: '21px',
-                top: 0,
-                bottom: 0,
-                width: '1px',
-                backgroundColor: '#333',
-                zIndex: 0,
-              }}
-            />
+          <div className="bash-tool-content">
+            <div className="bash-tool-line" />
             <div className="task-content-wrapper" style={{ paddingLeft: '40px', position: 'relative', zIndex: 1 }}>
-              <div
-                style={{
-                  background: '#252526',
-                  border: '1px solid #333',
-                  borderRadius: '6px',
-                  padding: '10px 12px',
-                  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
-                  fontSize: '13px',
-                  color: '#cccccc',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                }}
-              >
-                {command}
-              </div>
+              <div className="bash-command-block">{command}</div>
 
               {output && (
-                <div
-                  style={{
-                    marginTop: '8px',
-                    fontFamily: "'JetBrains Mono', 'Consolas', monospace",
-                    fontSize: '12px',
-                    color: isError ? '#ff6b6b' : '#858585',
-                    whiteSpace: 'pre-wrap',
-                    display: 'flex',
-                    gap: '6px',
-                  }}
-                >
+                <div className={`bash-output-block ${isError ? 'error' : 'normal'}`}>
                   {isError && (
                     <span className="codicon codicon-error" style={{ fontSize: '14px', marginTop: '1px' }} />
                   )}

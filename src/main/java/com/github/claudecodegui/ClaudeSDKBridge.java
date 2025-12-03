@@ -435,6 +435,7 @@ public class ClaudeSDKBridge {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
+            final boolean[] hadSendError = {false};
 
             try {
                 // 序列化附件
@@ -519,6 +520,10 @@ public class ClaudeSDKBridge {
 
                             String line;
                             while ((line = reader.readLine()) != null) {
+                                // 打印权限调试日志
+                                if (line.contains("[PERM_DEBUG]") || line.contains("[DEBUG]")) {
+                                    System.out.println("[Node.js] " + line);
+                                }
                                 if (line.startsWith("[MESSAGE]")) {
                                     String jsonStr = line.substring("[MESSAGE]".length()).trim();
                                     try {
@@ -529,6 +534,21 @@ public class ClaudeSDKBridge {
                                     } catch (Exception e) {
                                         // JSON 解析失败，跳过
                                     }
+                                } else if (line.startsWith("[SEND_ERROR]")) {
+                                    String jsonStr = line.substring("[SEND_ERROR]".length()).trim();
+                                    String errorMessage = jsonStr;
+                                    try {
+                                        JsonObject obj = gson.fromJson(jsonStr, JsonObject.class);
+                                        if (obj.has("error")) {
+                                            errorMessage = obj.get("error").getAsString();
+                                        }
+                                    } catch (Exception ignored) {
+                                        // 如果不是 JSON，则直接使用原始字符串
+                                    }
+                                    hadSendError[0] = true;
+                                    result.success = false;
+                                    result.error = errorMessage;
+                                    callback.onError(errorMessage);
                                 } else if (line.startsWith("[CONTENT]")) {
                                     String content = line.substring("[CONTENT]".length()).trim();
                                     assistantContent.append(content);
@@ -548,19 +568,36 @@ public class ClaudeSDKBridge {
                             }
                         }
 
-                        int exitCode = process.waitFor();
+	                        // 设置60秒超时等待进程结束的逻辑存在严重问题，先恢复为无限等待进程结束
+	                        // boolean finished = process.waitFor(60, TimeUnit.SECONDS);
+	                        // if (!finished) {
+	                        //     System.out.println("[ClaudeSDKBridge] Process timeout after 60 seconds, force killing...");
+	                        //     process.destroyForcibly();
+	                        //     result.success = false;
+	                        //     result.error = "响应超时（60s），已自动终止本次请求，请检查您的配置，或者在终端运行claude 测试是否可以正常使用";
+	                        //     callback.onError("响应超时（60s），已自动终止本次请求，请检查您的配置，或者在终端运行claude 测试是否可以正常使用");
+	                        //     return result;
+	                        // }
+	                        process.waitFor();
+
+                        int exitCode = process.exitValue();
                         boolean wasInterrupted = processManager.wasInterrupted(channelId);
 
-                        result.success = exitCode == 0 && !wasInterrupted;
                         result.finalResult = assistantContent.toString();
                         result.messageCount = result.messages.size();
 
                         if (wasInterrupted) {
                             callback.onComplete(result);
-                        } else if (result.success) {
-                            callback.onComplete(result);
-                        } else {
-                            callback.onError("Process exited with code: " + exitCode);
+                        } else if (!hadSendError[0]) {
+                            result.success = exitCode == 0 && !wasInterrupted;
+                            if (result.success) {
+                                callback.onComplete(result);
+                            } else {
+                                String errorMsg = "Process exited with code: " + exitCode;
+                                result.success = false;
+                                result.error = errorMsg;
+                                callback.onError(errorMsg);
+                            }
                         }
 
                         return result;

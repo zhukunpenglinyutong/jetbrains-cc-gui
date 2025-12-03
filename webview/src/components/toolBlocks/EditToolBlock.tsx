@@ -34,12 +34,12 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
     <div className="task-container">
       <div className="task-header" onClick={() => setExpanded((prev) => !prev)}>
         <div className="task-title-section">
-          <span className="codicon codicon-edit" style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }} />
+          <span className="codicon codicon-edit tool-title-icon" />
 
-          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
+          <span className="tool-title-text">
             编辑文件
           </span>
-          <span style={{ color: '#858585', marginLeft: '12px' }}>{getFileName(filePath) || filePath}</span>
+          <span className="tool-title-summary">{getFileName(filePath) || filePath}</span>
           
           {(oldLines.length > 0 || newLines.length > 0) && (
             <span
@@ -56,18 +56,18 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
             </span>
           )}
         </div>
-        
-        <div style={{ 
-            width: '8px', 
-            height: '8px', 
-            borderRadius: '50%', 
-            backgroundColor: '#4caf50',
+
+        <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--color-success)',
             marginRight: '4px'
         }} />
       </div>
 
       {expanded && (
-        <div className="task-details" style={{ padding: 0, borderTop: '1px solid #333' }}>
+        <div className="task-details" style={{ padding: 0, borderTop: '1px solid var(--border-primary)' }}>
           <div
             style={{
               fontFamily: "'JetBrains Mono', 'Consolas', monospace",

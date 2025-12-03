@@ -3,7 +3,7 @@ import { useCallback, useRef } from 'react';
 // import type { ButtonAreaProps, PermissionMode } from './types';
 import type { ButtonAreaProps } from './types';
 // import { ModeSelect, ModelSelect } from './selectors';
-import { ModelSelect } from './selectors';
+import { ModelSelect, ProviderSelect } from './selectors';
 import { TokenIndicator } from './TokenIndicator';
 
 /**
@@ -87,6 +87,7 @@ export const ButtonArea = ({
       <div className="button-area-left">
         {/* TODO: 临时隐藏模式选择器,后续恢复 */}
         {/* <ModeSelect value={permissionMode} onChange={handleModeSelect} /> */}
+        <ProviderSelect value="claude" />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} />
       </div>
 

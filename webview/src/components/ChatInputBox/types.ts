@@ -176,6 +176,25 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5' },
 ];
 
+/**
+ * AI 提供商信息
+ */
+export interface ProviderInfo {
+  id: string;
+  label: string;
+  icon: string;
+  enabled: boolean;
+}
+
+/**
+ * 预定义提供商列表
+ */
+export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
+  { id: 'claude', label: 'Claude', icon: 'codicon-terminal', enabled: true },
+  { id: 'codex', label: 'Codex', icon: 'codicon-terminal', enabled: false },
+  { id: 'gemini', label: 'Gemini', icon: 'codicon-terminal', enabled: false },
+];
+
 // ============================================================
 // 使用量类型
 // ============================================================

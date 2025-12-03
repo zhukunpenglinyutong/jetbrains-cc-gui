@@ -34,7 +34,12 @@ const isTruthy = (value: unknown) => value === true || value === 'true';
 
 const sendBridgeMessage = (event: string, payload = '') => {
   if (window.sendToJava) {
-    window.sendToJava(`${event}:${payload}`);
+    const message = `${event}:${payload}`;
+    // 对权限相关消息添加详细日志
+    if (event.includes('permission')) {
+      console.log('[PERM_DEBUG][BRIDGE] Sending to Java:', message);
+    }
+    window.sendToJava(message);
   } else {
     console.warn('[Frontend] sendToJava is not ready yet');
   }
@@ -58,6 +63,7 @@ const App = () => {
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
+  const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // 权限弹窗状态
@@ -144,13 +150,18 @@ const App = () => {
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
+      console.log('[PERM_DEBUG][FRONTEND] showPermissionDialog called');
+      console.log('[PERM_DEBUG][FRONTEND] Raw JSON:', json);
       try {
         const request = JSON.parse(json) as PermissionRequest;
-        console.log('[Frontend] showPermissionDialog:', request);
+        console.log('[PERM_DEBUG][FRONTEND] Parsed request:', request);
+        console.log('[PERM_DEBUG][FRONTEND] channelId:', request.channelId);
+        console.log('[PERM_DEBUG][FRONTEND] toolName:', request.toolName);
         setCurrentPermissionRequest(request);
         setPermissionDialogOpen(true);
+        console.log('[PERM_DEBUG][FRONTEND] Dialog state set to open');
       } catch (error) {
-        console.error('[Frontend] Failed to parse permission request:', error);
+        console.error('[PERM_DEBUG][FRONTEND] ERROR: Failed to parse permission request:', error);
       }
     };
   }, []);
@@ -305,6 +316,12 @@ const App = () => {
   // };
 
   const createNewSession = () => {
+    // 如果正在对话中，提示用户新建会话会中断对话
+    if (loading) {
+      setShowInterruptConfirm(true);
+      return;
+    }
+
     if (messages.length === 0) {
       // 移除通知：当前会话为空，可以直接使用
       return;
@@ -328,17 +345,37 @@ const App = () => {
     setShowNewSessionConfirm(false);
   };
 
+  const handleConfirmInterrupt = () => {
+    setShowInterruptConfirm(false);
+    // 中断当前对话
+    interruptSession();
+    // 直接创建新会话，不再弹出第二个确认框
+    sendBridgeMessage('create_new_session');
+    setMessages([]);
+    setUsagePercentage(0);
+    setUsageUsedTokens(0);
+    setUsageMaxTokens((prev) => prev ?? 272000);
+  };
+
+  const handleCancelInterrupt = () => {
+    setShowInterruptConfirm(false);
+  };
+
   /**
    * 处理权限批准（允许一次）
    */
   const handlePermissionApprove = (channelId: string) => {
-    console.log('[Frontend] Permission approved once:', { channelId });
-    sendBridgeMessage('permission_decision', JSON.stringify({
+    console.log('[PERM_DEBUG][FRONTEND] handlePermissionApprove called');
+    console.log('[PERM_DEBUG][FRONTEND] channelId:', channelId);
+    const payload = JSON.stringify({
       channelId,
       allow: true,
       remember: false,
       rejectMessage: null,
-    }));
+    });
+    console.log('[PERM_DEBUG][FRONTEND] Sending decision payload:', payload);
+    sendBridgeMessage('permission_decision', payload);
+    console.log('[PERM_DEBUG][FRONTEND] Decision sent, closing dialog');
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
   };
@@ -347,13 +384,17 @@ const App = () => {
    * 处理权限批准（总是允许）
    */
   const handlePermissionApproveAlways = (channelId: string) => {
-    console.log('[Frontend] Permission approved always:', { channelId });
-    sendBridgeMessage('permission_decision', JSON.stringify({
+    console.log('[PERM_DEBUG][FRONTEND] handlePermissionApproveAlways called');
+    console.log('[PERM_DEBUG][FRONTEND] channelId:', channelId);
+    const payload = JSON.stringify({
       channelId,
       allow: true,
       remember: true,
       rejectMessage: null,
-    }));
+    });
+    console.log('[PERM_DEBUG][FRONTEND] Sending decision payload:', payload);
+    sendBridgeMessage('permission_decision', payload);
+    console.log('[PERM_DEBUG][FRONTEND] Decision sent, closing dialog');
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
   };
@@ -362,13 +403,17 @@ const App = () => {
    * 处理权限拒绝
    */
   const handlePermissionSkip = (channelId: string) => {
-    console.log('[Frontend] Permission denied:', { channelId });
-    sendBridgeMessage('permission_decision', JSON.stringify({
+    console.log('[PERM_DEBUG][FRONTEND] handlePermissionSkip called');
+    console.log('[PERM_DEBUG][FRONTEND] channelId:', channelId);
+    const payload = JSON.stringify({
       channelId,
       allow: false,
       remember: false,
       rejectMessage: 'User denied the permission request',
-    }));
+    });
+    console.log('[PERM_DEBUG][FRONTEND] Sending decision payload:', payload);
+    sendBridgeMessage('permission_decision', payload);
+    console.log('[PERM_DEBUG][FRONTEND] Decision sent, closing dialog');
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
   };
@@ -638,7 +683,6 @@ const App = () => {
               style={{
                 fontWeight: 600,
                 fontSize: '14px',
-                color: '#e0e0e0',
                 paddingLeft: '8px',
               }}
             >
@@ -849,6 +893,16 @@ const App = () => {
         cancelText="取消"
         onConfirm={handleConfirmNewSession}
         onCancel={handleCancelNewSession}
+      />
+
+      <ConfirmDialog
+        isOpen={showInterruptConfirm}
+        title="创建新会话"
+        message="当前正在对话中，创建新会话将中断当前对话，是否继续？"
+        confirmText="确定"
+        cancelText="取消"
+        onConfirm={handleConfirmInterrupt}
+        onCancel={handleCancelInterrupt}
       />
 
       <PermissionDialog

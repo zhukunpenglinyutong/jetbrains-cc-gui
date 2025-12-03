@@ -280,6 +280,11 @@
   color: var(--success-color);
 }
 
+.selector-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
 /* 选择器轻提示 */
 .selector-toast {
   position: fixed;

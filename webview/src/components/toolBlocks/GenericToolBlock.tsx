@@ -130,27 +130,27 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
         onClick={isCollapsible ? () => setExpanded((prev) => !prev) : undefined}
         style={{
           cursor: isCollapsible ? 'pointer' : 'default',
-          borderBottom: expanded && isCollapsible ? '1px solid #333' : undefined,
+          borderBottom: expanded && isCollapsible ? '1px solid var(--border-primary)' : undefined,
         }}
       >
         <div className="task-title-section">
-          <span className={`codicon ${codicon}`} style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }} />
+          <span className={`codicon ${codicon} tool-title-icon`} />
 
-          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
+          <span className="tool-title-text">
             {displayName}
           </span>
           {summary && (
-              <span className="task-summary-text" title={summary} style={{ marginLeft: '12px', color: '#858585' }}>
+              <span className="task-summary-text tool-title-summary" title={summary}>
                 {summary}
               </span>
             )}
         </div>
-        
-        <div style={{ 
-            width: '8px', 
-            height: '8px', 
-            borderRadius: '50%', 
-            backgroundColor: '#4caf50',
+
+        <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--color-success)',
             marginRight: '4px'
         }} />
       </div>

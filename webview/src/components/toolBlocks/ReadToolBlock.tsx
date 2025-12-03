@@ -39,30 +39,30 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
       <div
         className="task-header"
         onClick={() => setExpanded((prev) => !prev)}
-        style={{ 
-          borderBottom: expanded ? '1px solid #333' : undefined,
+        style={{
+          borderBottom: expanded ? '1px solid var(--border-primary)' : undefined,
         }}
       >
         <div className="task-title-section">
-          <span className={`codicon ${iconClass}`} style={{ color: '#cccccc', fontSize: '16px', marginRight: '6px' }} />
+          <span className={`codicon ${iconClass} tool-title-icon`} />
 
-          <span style={{ fontWeight: 500, fontSize: '13px', color: '#ffffff' }}>
+          <span className="tool-title-text">
             {actionText}
           </span>
-          <span style={{ color: '#858585', marginLeft: '12px' }}>{fileName || filePath}</span>
-          
+          <span className="tool-title-summary">{fileName || filePath}</span>
+
           {lineInfo && (
-            <span style={{ color: '#858585', marginLeft: '8px', fontSize: '12px' }}>
+            <span className="tool-title-summary" style={{ marginLeft: '8px', fontSize: '12px' }}>
               {lineInfo}
             </span>
           )}
         </div>
 
-        <div style={{ 
-            width: '8px', 
-            height: '8px', 
-            borderRadius: '50%', 
-            backgroundColor: '#4caf50',
+        <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--color-success)',
             marginRight: '4px'
         }} />
       </div>

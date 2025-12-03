@@ -14,6 +14,7 @@ declare global {
     updateActiveProvider?: (jsonStr: string) => void;
     showError?: (message: string) => void;
     showSwitchSuccess?: (message: string) => void;
+	  updateNodePath?: (path: string) => void;
     updateUsageStatistics?: (jsonStr: string) => void;
     // 输入框补全相关 (004-refactor-input-box)
     onFileListResult?: (json: string) => void;
@@ -27,4 +28,3 @@ declare global {
 }
 
 export {};
-

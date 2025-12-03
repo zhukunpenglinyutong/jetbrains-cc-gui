@@ -42,6 +42,7 @@ export const ChatInputBox = ({
   // 输入框引用和状态
   const editableRef = useRef<HTMLDivElement>(null);
   const submittedOnEnterRef = useRef(false);
+  const completionSelectedRef = useRef(false); // 标记补全菜单刚选中项目，防止回车同时发送消息
   const [isComposing, setIsComposing] = useState(false);
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
@@ -276,12 +277,28 @@ export const ChatInputBox = ({
     // 优先处理补全菜单的键盘事件
     if (fileCompletion.isOpen) {
       const handled = fileCompletion.handleKeyDown(e.nativeEvent);
-      if (handled) return;
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+        // 如果是回车键选中，标记防止后续发送消息
+        if (e.key === 'Enter') {
+          completionSelectedRef.current = true;
+        }
+        return;
+      }
     }
 
     if (commandCompletion.isOpen) {
       const handled = commandCompletion.handleKeyDown(e.nativeEvent);
-      if (handled) return;
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+        // 如果是回车键选中，标记防止后续发送消息
+        if (e.key === 'Enter') {
+          completionSelectedRef.current = true;
+        }
+        return;
+      }
     }
 
     // Enter 发送（非 Shift 组合，非 IME 组合）
@@ -305,6 +322,11 @@ export const ChatInputBox = ({
 
     if (isEnterKey && !e.shiftKey) {
       e.preventDefault();
+      // 如果刚刚在补全菜单中选中了项目，不发送消息
+      if (completionSelectedRef.current) {
+        completionSelectedRef.current = false;
+        return;
+      }
       if (submittedOnEnterRef.current) {
         submittedOnEnterRef.current = false;
         return;
@@ -335,14 +357,9 @@ export const ChatInputBox = ({
 
       const shift = (ev as KeyboardEvent).shiftKey === true;
 
-      // 补全菜单优先处理
-      if (fileCompletion.isOpen) {
-        const handled = fileCompletion.handleKeyDown(ev);
-        if (handled) return;
-      }
-      if (commandCompletion.isOpen) {
-        const handled = commandCompletion.handleKeyDown(ev);
-        if (handled) return;
+      // 补全菜单打开时，不在原生事件中处理（React onKeyDown 已处理，避免重复）
+      if (fileCompletion.isOpen || commandCompletion.isOpen) {
+        return;
       }
 
       if (isEnterKey && !shift && !isComposing) {
@@ -360,6 +377,11 @@ export const ChatInputBox = ({
       const shift = (ev as KeyboardEvent).shiftKey === true;
       if (isEnterKey && !shift) {
         ev.preventDefault();
+        // 如果刚刚在补全菜单中选中了项目，不发送消息
+        if (completionSelectedRef.current) {
+          completionSelectedRef.current = false;
+          return;
+        }
         if (submittedOnEnterRef.current) {
           submittedOnEnterRef.current = false;
           return;
@@ -380,7 +402,16 @@ export const ChatInputBox = ({
       const type = (ev as InputEvent).inputType;
       if (type === 'insertParagraph') {
         ev.preventDefault();
-        handleSubmit();
+	        // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
+	        if (completionSelectedRef.current) {
+	          completionSelectedRef.current = false;
+	          return;
+	        }
+	        // 补全菜单打开时不发送消息
+	        if (fileCompletion.isOpen || commandCompletion.isOpen) {
+	          return;
+	        }
+	        handleSubmit();
       }
     };
 
@@ -577,10 +608,19 @@ export const ChatInputBox = ({
             const inputType = (e.nativeEvent as unknown as { inputType?: string }).inputType;
             if (inputType === 'insertParagraph') {
               e.preventDefault();
-              // 只有在非加载状态时才允许提交
-              if (!isLoading) {
-                handleSubmit();
-              }
+	              // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
+	              if (completionSelectedRef.current) {
+	                completionSelectedRef.current = false;
+	                return;
+	              }
+	              // 补全菜单打开时不发送消息
+	              if (fileCompletion.isOpen || commandCompletion.isOpen) {
+	                return;
+	              }
+	              // 只有在非加载状态时才允许提交
+	              if (!isLoading) {
+	                handleSubmit();
+	              }
             }
           }}
           onCompositionStart={handleCompositionStart}

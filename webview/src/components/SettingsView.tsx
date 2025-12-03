@@ -4,8 +4,9 @@ import UsageStatisticsSection from './UsageStatisticsSection';
 import AlertDialog from './AlertDialog';
 import type { AlertType } from './AlertDialog';
 import ConfirmDialog from './ConfirmDialog';
+import ConfigInfoDisplay from './ConfigInfoDisplay';
 
-type SettingsTab = 'basic' | 'usage' | 'permissions' | 'mcp' | 'agents' | 'skills' | 'community';
+type SettingsTab = 'basic' | 'providers' | 'usage' | 'permissions' | 'mcp' | 'agents' | 'skills' | 'community';
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -64,11 +65,15 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   }>({ isOpen: false, provider: null });
 
   // 主题状态
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    // 从 localStorage 读取主题设置
-    const savedTheme = localStorage.getItem('theme');
-    return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
-  });
+	  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+	    // 从 localStorage 读取主题设置
+	    const savedTheme = localStorage.getItem('theme');
+	    return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
+	  });
+
+	  // Node.js 路径（手动指定时使用）
+	  const [nodePath, setNodePath] = useState('');
+	  const [savingNodePath, setSavingNodePath] = useState(false);
 
   // 显示页面内弹窗的帮助函数
   const showAlert = (type: AlertType, title: string, message: string) => {
@@ -86,54 +91,63 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     showAlert('success', '切换成功', message);
   };
 
-  useEffect(() => {
-    // 设置全局回调
-    window.updateProviders = (jsonStr: string) => {
-      try {
-        const providersList: ProviderConfig[] = JSON.parse(jsonStr);
-        setProviders(providersList);
-        setLoading(false);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse providers:', error);
-        setLoading(false);
-      }
-    };
-
-    window.updateActiveProvider = (jsonStr: string) => {
-      try {
-        const activeProvider: ProviderConfig = JSON.parse(jsonStr);
-        if (activeProvider) {
-          // 更新列表中的激活状态
-          setProviders((prev) =>
-              prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
-          );
-        }
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse active provider:', error);
-      }
-    };
-
-    window.showError = (message: string) => {
-      console.log('[SettingsView] window.showError called:', message);
-      showAlert('error', '操作失败', message);
-      setLoading(false);
-    };
-
-    window.showSwitchSuccess = (message: string) => {
-      console.log('[SettingsView] window.showSwitchSuccess called:', message);
-      showSwitchSuccess(message);
-    };
-
-    // 加载供应商列表
-    loadProviders();
-
-    return () => {
-      window.updateProviders = undefined;
-      window.updateActiveProvider = undefined;
-      window.showError = undefined;
-      window.showSwitchSuccess = undefined;
-    };
-  }, []);
+	  useEffect(() => {
+	    // 设置全局回调
+	    window.updateProviders = (jsonStr: string) => {
+	      try {
+	        const providersList: ProviderConfig[] = JSON.parse(jsonStr);
+	        setProviders(providersList);
+	        setLoading(false);
+	      } catch (error) {
+	        console.error('[SettingsView] Failed to parse providers:', error);
+	        setLoading(false);
+	      }
+	    };
+	
+	    window.updateActiveProvider = (jsonStr: string) => {
+	      try {
+	        const activeProvider: ProviderConfig = JSON.parse(jsonStr);
+	        if (activeProvider) {
+	          // 更新列表中的激活状态
+	          setProviders((prev) =>
+	              prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
+	          );
+	        }
+	      } catch (error) {
+	        console.error('[SettingsView] Failed to parse active provider:', error);
+	      }
+	    };
+	
+	    window.showError = (message: string) => {
+	      console.log('[SettingsView] window.showError called:', message);
+	      showAlert('error', '操作失败', message);
+	      setLoading(false);
+	    };
+	
+	    window.showSwitchSuccess = (message: string) => {
+	      console.log('[SettingsView] window.showSwitchSuccess called:', message);
+	      showSwitchSuccess(message);
+	    };
+	
+	    window.updateNodePath = (path: string) => {
+	      console.log('[SettingsView] window.updateNodePath called:', path);
+	      setNodePath(path || '');
+	      setSavingNodePath(false);
+	    };
+	
+	    // 加载供应商列表
+	    loadProviders();
+	    // 加载 Node.js 路径
+	    sendToJava('get_node_path:');
+	
+	    return () => {
+	      window.updateProviders = undefined;
+	      window.updateActiveProvider = undefined;
+	      window.showError = undefined;
+	      window.showSwitchSuccess = undefined;
+	      window.updateNodePath = undefined;
+	    };
+	  }, []);
 
   // 监听窗口大小变化
   useEffect(() => {
@@ -177,6 +191,12 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setLoading(true);
     sendToJava('get_providers:');
   };
+	
+	  const handleSaveNodePath = () => {
+	    setSavingNodePath(true);
+	    const payload = { path: (nodePath || '').trim() };
+	    sendToJava(`set_node_path:${JSON.stringify(payload)}`);
+	  };
 
   const handleEditProvider = (provider: ProviderConfig) => {
     setEditingProvider(provider);
@@ -402,6 +422,14 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                 <span className="sidebar-item-text">基础配置</span>
               </div>
               <div
+                  className={`sidebar-item ${currentTab === 'providers' ? 'active' : ''}`}
+                  onClick={() => setCurrentTab('providers')}
+                  title={isCollapsed ? '供应商管理' : ''}
+              >
+                <span className="codicon codicon-vm-connect" />
+                <span className="sidebar-item-text">供应商管理</span>
+              </div>
+              <div
                   className={`sidebar-item ${currentTab === 'usage' ? 'active' : ''}`}
                   onClick={() => setCurrentTab('usage')}
                   title={isCollapsed ? '使用统计' : ''}
@@ -471,164 +499,243 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             {currentTab === 'basic' && (
                 <div className="config-section">
                   <h3 className="section-title">基础配置</h3>
-                  <p className="section-desc">配置API密钥、模型选择、代理等基础设置</p>
+                  <p className="section-desc">配置页面主题和 Node.js 运行环境</p>
 
                   {/* 主题切换 - 现代卡片设计 */}
-                  {/* 只在非编辑/添加状态下显示 */}
-                  {!editingProvider && !isAdding && (
-                      <div style={{ marginBottom: '24px' }}>
+                  <div style={{ marginBottom: '24px' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '12px'
+                    }}>
+                      <span className="codicon codicon-symbol-color" style={{
+                        fontSize: '16px',
+                        color: 'var(--accent-primary)'
+                      }} />
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: 'var(--text-secondary)'
+                      }}>
+                        界面主题
+                      </span>
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '12px'
+                    }}>
+                      {/* 亮色主题卡片 */}
+                      <div
+                          onClick={() => setTheme('light')}
+                          style={{
+                            padding: '16px',
+                            background: 'var(--bg-secondary)',
+                            border: `2px solid ${theme === 'light' ? 'var(--accent-primary)' : 'var(--border-secondary)'}`,
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            position: 'relative',
+                            boxShadow: theme === 'light' ? '0 0 0 3px rgba(0, 120, 212, 0.1)' : 'none'
+                          }}
+                      >
+                        {theme === 'light' && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '8px',
+                              right: '8px',
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              background: 'var(--accent-primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <span className="codicon codicon-check" style={{
+                                fontSize: '12px',
+                                color: '#ffffff'
+                              }} />
+                            </div>
+                        )}
+
                         <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)',
+                          border: '1px solid #e0e0e0',
+                          marginBottom: '12px',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '8px',
-                          marginBottom: '12px'
+                          justifyContent: 'center'
                         }}>
-                    <span className="codicon codicon-symbol-color" style={{
-                      fontSize: '16px',
-                      color: 'var(--accent-primary)'
-                    }} />
-                          <span style={{
-                            fontSize: '14px',
-                            fontWeight: 600,
-                            color: 'var(--text-secondary)'
-                          }}>
-                      界面主题
-                    </span>
+                          <span className="codicon codicon-symbol-color" style={{
+                            fontSize: '20px',
+                            color: '#666666'
+                          }} />
                         </div>
 
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
+                          亮色主题
+                        </div>
                         <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: '12px'
+                          fontSize: '11px',
+                          color: 'var(--text-tertiary)',
+                          lineHeight: '1.4'
                         }}>
-                          {/* 亮色主题卡片 */}
-                          <div
-                              onClick={() => setTheme('light')}
-                              style={{
-                                padding: '16px',
-                                background: 'var(--bg-secondary)',
-                                border: `2px solid ${theme === 'light' ? 'var(--accent-primary)' : 'var(--border-secondary)'}`,
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                position: 'relative',
-                                boxShadow: theme === 'light' ? '0 0 0 3px rgba(0, 120, 212, 0.1)' : 'none'
-                              }}
-                          >
-                            {theme === 'light' && (
-                                <div style={{
-                                  position: 'absolute',
-                                  top: '8px',
-                                  right: '8px',
-                                  width: '20px',
-                                  height: '20px',
-                                  borderRadius: '50%',
-                                  background: 'var(--accent-primary)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}>
-                        <span className="codicon codicon-check" style={{
-                          fontSize: '12px',
-                          color: '#ffffff'
-                        }} />
-                                </div>
-                            )}
-
-                            <div style={{
-                              width: '40px',
-                              height: '40px',
-                              borderRadius: '8px',
-                              background: 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)',
-                              border: '1px solid #e0e0e0',
-                              marginBottom: '12px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}>
-                      <span className="codicon codicon-circle-large-outline" style={{
-                        fontSize: '20px',
-                        color: '#666666'
-                      }} />
-                            </div>
-
-                            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
-                              亮色主题
-                            </div>
-                            <div style={{
-                              fontSize: '11px',
-                              color: 'var(--text-tertiary)',
-                              lineHeight: '1.4'
-                            }}>
-                              清爽明亮，适合白天使用
-                            </div>
-                          </div>
-
-                          {/* 暗色主题卡片 */}
-                          <div
-                              onClick={() => setTheme('dark')}
-                              style={{
-                                padding: '16px',
-                                background: 'var(--bg-secondary)',
-                                border: `2px solid ${theme === 'dark' ? 'var(--accent-primary)' : 'var(--border-secondary)'}`,
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                position: 'relative',
-                                boxShadow: theme === 'dark' ? '0 0 0 3px rgba(0, 120, 212, 0.1)' : 'none'
-                              }}
-                          >
-                            {theme === 'dark' && (
-                                <div style={{
-                                  position: 'absolute',
-                                  top: '8px',
-                                  right: '8px',
-                                  width: '20px',
-                                  height: '20px',
-                                  borderRadius: '50%',
-                                  background: 'var(--accent-primary)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}>
-                        <span className="codicon codicon-check" style={{
-                          fontSize: '12px',
-                          color: '#ffffff'
-                        }} />
-                                </div>
-                            )}
-
-                            <div style={{
-                              width: '40px',
-                              height: '40px',
-                              borderRadius: '8px',
-                              background: 'linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%)',
-                              border: '1px solid #404040',
-                              marginBottom: '12px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}>
-                      <span className="codicon codicon-circle-large-filled" style={{
-                        fontSize: '20px',
-                        color: '#cccccc'
-                      }} />
-                            </div>
-
-                            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
-                              暗色主题
-                            </div>
-                            <div style={{
-                              fontSize: '11px',
-                              color: 'var(--text-tertiary)',
-                              lineHeight: '1.4'
-                            }}>
-                              护眼舒适，适合夜间使用
-                            </div>
-                          </div>
+                          清爽明亮，适合白天使用
                         </div>
                       </div>
-                  )}
+
+                      {/* 暗色主题卡片 */}
+                      <div
+                          onClick={() => setTheme('dark')}
+                          style={{
+                            padding: '16px',
+                            background: 'var(--bg-secondary)',
+                            border: `2px solid ${theme === 'dark' ? 'var(--accent-primary)' : 'var(--border-secondary)'}`,
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            position: 'relative',
+                            boxShadow: theme === 'dark' ? '0 0 0 3px rgba(0, 120, 212, 0.1)' : 'none'
+                          }}
+                      >
+                        {theme === 'dark' && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '8px',
+                              right: '8px',
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              background: 'var(--accent-primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <span className="codicon codicon-check" style={{
+                                fontSize: '12px',
+                                color: '#ffffff'
+                              }} />
+                            </div>
+                        )}
+
+                        <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%)',
+                          border: '1px solid #404040',
+                          marginBottom: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <span className="codicon codicon-symbol-event" style={{
+                            fontSize: '20px',
+                            color: '#cccccc'
+                          }} />
+                        </div>
+
+                        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
+                          暗色主题
+                        </div>
+                        <div style={{
+                          fontSize: '11px',
+                          color: 'var(--text-tertiary)',
+                          lineHeight: '1.4'
+                        }}>
+                          护眼舒适，适合夜间使用
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Node.js 路径配置 */}
+                  <div style={{ marginBottom: '24px' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '8px'
+                    }}>
+                      <span className="codicon codicon-terminal" style={{
+                        fontSize: '16px',
+                        color: 'var(--accent-primary)'
+                      }} />
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: 'var(--text-secondary)'
+                      }}>
+                        Node.js 路径
+                      </span>
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      alignItems: 'stretch',
+                      marginBottom: '4px'
+                    }}>
+                      <input
+                        type="text"
+                        className="form-input node-path-input"
+                        placeholder="例如 C:\\Program Files\\nodejs\\node.exe 或 /usr/local/bin/node"
+                        value={nodePath}
+                        onChange={(e) => setNodePath(e.target.value)}
+                        style={{
+                          flex: '1 1 300px',
+                          minWidth: '200px'
+                        }}
+                      />
+                      <button
+                        className="btn-secondary"
+                        onClick={handleSaveNodePath}
+                        disabled={savingNodePath}
+                        style={{
+                          flex: '0 0 auto',
+                          minWidth: '80px'
+                        }}
+                      >
+                        {savingNodePath && (
+                          <span
+                            className="codicon codicon-loading codicon-modifier-spin"
+                            style={{ marginRight: 4 }}
+                          />
+                        )}
+                        保存
+                      </button>
+                    </div>
+                    <small className="form-hint">
+                      <span
+                        className="codicon codicon-info"
+                        style={{ fontSize: '12px', marginRight: '4px' }}
+                      />
+                      在终端中运行 <code>node -p &quot;process.execPath&quot;</code> 获取实际的 Node.js 可执行文件路径。
+                      为空时插件会自动尝试检测 Node.js。
+                    </small>
+                  </div>
+
+                  {/* 当前配置信息展示 */}
+                  <div style={{ marginTop: '32px' }}>
+                    <ConfigInfoDisplay
+                      provider={providers.find(p => p.isActive) || null}
+                      loading={loading}
+                    />
+                  </div>
+                </div>
+            )}
+
+            {/* 供应商管理 */}
+            {currentTab === 'providers' && (
+                <div className="config-section">
+                  <h3 className="section-title">供应商管理</h3>
+                  <p className="section-desc">管理 Claude API 供应商配置，切换不同的 API 服务提供商</p>
 
                   {loading && (
                       <div className="temp-notice">

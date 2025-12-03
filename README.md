@@ -2,26 +2,46 @@
 
 本项目主要解决在IDEA中使用Claude Code 没有 GUI操作窗口的场景
 
-目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.7-beta2（2025年11月30日更新）
+目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.8（2025年12月3日更新）
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
-<img width="350" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7-beta2/1.png" />
+<img width="350" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/1.png" />
 
 ---
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.7-beta2.zip 文件
+# 1.下载 idea-claude-code-gui-0.0.8.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.7-beta2.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.8.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.7-beta2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/idea-claude-code-gui-0.0.7-beta2.zip)
+插件下载：[idea-claude-code-gui-0.0.8.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/idea-claude-code-gui-0.0.8.zip)
 
 ---
 
 ### 目前进度
+
+##### **12月2日（v0.0.8）**
+
+- [x] P0（feat）增加主动调整Node路径的功能，用以适配五花八门的Node路径
+- [x] P1（feat）增加白色主题
+- [x] P1（feat）将配置功能与cc-switch解耦，防止规则改变导致渠道丢失
+- [x] P1（feat）增加各种错误情况下的提示功能，减少空白展示情况
+- [x] P1（feat）优化@文件功能（回车发送问题还未解决）
+- [x] P2（fix）解决 运行命令 右侧小圆点总是展示置灰的问题
+- [x] P2（fix）解决对话超时后，新建对话，原来的对话还在执行，点停止按钮也没反应
+- [x] P2（UX）优化多处其他UI以及交互细节
+- [x] P3（chore）插件兼容23.2版本IDEA版本
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/1.png" />
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/2.png" />
+
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/3.png" />
+
+---
 
 ##### **12月1日（v0.0.7-beta2）**
 
@@ -37,9 +57,9 @@
 - [x] P3: 优化Loding样式
 - [x] P5: 优化样式细节
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7-beta2/2.png" />
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/2.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7-beta2/1.png" />
+<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/1.png" />
 
 
 ##### **11月27日（v0.0.6）**

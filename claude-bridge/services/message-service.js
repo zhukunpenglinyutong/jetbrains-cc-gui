@@ -7,7 +7,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import { randomUUID } from 'crypto';
 
-import { setupApiKey, isCustomBaseUrl } from '../config/api-config.js';
+import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../config/api-config.js';
 import { selectWorkingDirectory } from '../utils/path-utils.js';
 import { mapModelIdToSdkName, getClaudeCliPath } from '../utils/model-utils.js';
 import { AsyncStream } from '../utils/async-stream.js';
@@ -23,8 +23,116 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
  * @param {string} permissionMode - 权限模式（可选）
  * @param {string} model - 模型名称（可选）
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null) {
-  try {
+	function buildConfigErrorPayload(error) {
+			  try {
+			    const rawError = error?.message || String(error);
+			    const errorName = error?.name || 'Error';
+			    const errorStack = error?.stack || null;
+	
+			    // 之前这里对 AbortError / "Claude Code process aborted by user" 做了超时提示
+			    // 现在统一走错误处理逻辑，但仍然在 details 中记录是否为超时/中断类错误，方便排查
+			    const isAbortError =
+			      errorName === 'AbortError' ||
+			      rawError.includes('Claude Code process aborted by user') ||
+			      rawError.includes('The operation was aborted');
+	
+		    const settings = loadClaudeSettings();
+	    const env = settings?.env || {};
+
+    const settingsApiKey =
+      env.ANTHROPIC_AUTH_TOKEN !== undefined && env.ANTHROPIC_AUTH_TOKEN !== null
+        ? env.ANTHROPIC_AUTH_TOKEN
+        : env.ANTHROPIC_API_KEY !== undefined && env.ANTHROPIC_API_KEY !== null
+          ? env.ANTHROPIC_API_KEY
+          : null;
+
+    const settingsBaseUrl =
+      env.ANTHROPIC_BASE_URL !== undefined && env.ANTHROPIC_BASE_URL !== null
+        ? env.ANTHROPIC_BASE_URL
+        : null;
+
+    const envApiKey = process.env.ANTHROPIC_API_KEY ?? null;
+    const envBaseUrl = process.env.ANTHROPIC_BASE_URL ?? null;
+
+    let keySource = '未配置';
+    let rawKey = null;
+
+    if (settingsApiKey !== null) {
+      rawKey = String(settingsApiKey);
+      if (env.ANTHROPIC_AUTH_TOKEN !== undefined && env.ANTHROPIC_AUTH_TOKEN !== null) {
+        keySource = '~/.claude/settings.json: ANTHROPIC_AUTH_TOKEN';
+      } else if (env.ANTHROPIC_API_KEY !== undefined && env.ANTHROPIC_API_KEY !== null) {
+        keySource = '~/.claude/settings.json: ANTHROPIC_API_KEY';
+      } else {
+        keySource = '~/.claude/settings.json';
+      }
+    } else if (envApiKey !== null) {
+      rawKey = String(envApiKey);
+      keySource = '环境变量 ANTHROPIC_API_KEY';
+    }
+
+    const keyPreview = rawKey && rawKey.length > 0
+      ? `${rawKey.substring(0, 10)}...（长度 ${rawKey.length} 字符）`
+      : '未配置（值为空或缺失）';
+
+		    let baseUrl = settingsBaseUrl || envBaseUrl || 'https://api.anthropic.com';
+		    let baseUrlSource;
+		    if (settingsBaseUrl) {
+		      baseUrlSource = '~/.claude/settings.json: ANTHROPIC_BASE_URL';
+		    } else if (envBaseUrl) {
+		      baseUrlSource = '环境变量 ANTHROPIC_BASE_URL';
+		    } else {
+		      baseUrlSource = '默认值（https://api.anthropic.com）';
+		    }
+		
+		    const heading = isAbortError
+		      ? 'Claude Code 运行被中断（可能是响应超时或用户取消）：'
+		      : 'Claude Code 出现错误：';
+		
+		    const tailLine = isAbortError
+		      ? '提示：如果你没有手动中断请求，这通常是由于响应超时、网络问题或后端服务异常导致的。你也可以检查 ~/.claude/settings.json 中的配置是否正确。'
+		      : '请检查 ~/.claude/settings.json 或插件设置中的 Claude Code 配置，确认 API Key 与 Base URL 是否正确。';
+		
+		    const userMessage = [
+	      heading,
+	      `- 错误信息: ${rawError}`,
+	      `- 当前 API Key 来源: ${keySource}`,
+	      `- 当前 API Key 预览: ${keyPreview}`,
+	      `- 当前 Base URL: ${baseUrl}（来源: ${baseUrlSource}）`,
+	      '',
+	      tailLine
+	    ].join('\n');
+
+	    return {
+	      success: false,
+	      error: userMessage,
+	      details: {
+	        rawError,
+	        errorName,
+	        errorStack,
+	        isAbortError,
+	        keySource,
+	        keyPreview,
+	        baseUrl,
+	        baseUrlSource
+	      }
+	    };
+  } catch (innerError) {
+    const rawError = error?.message || String(error);
+    return {
+      success: false,
+      error: rawError,
+      details: {
+        rawError,
+        buildErrorFailed: String(innerError)
+      }
+    };
+  }
+}
+
+	export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null) {
+	  let timeoutId;
+	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
@@ -72,21 +180,33 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     // 获取系统安装的 Claude CLI 路径
     const claudeCliPath = getClaudeCliPath();
 
-    // 准备选项
-    const options = {
-      cwd: workingDirectory,
-      permissionMode: permissionMode || 'default',
-      model: sdkModelName,
-      maxTurns: 100,
-      additionalDirectories: Array.from(
-        new Set(
-          [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
-        )
-      ),
-      canUseTool: permissionMode === 'default' ? canUseTool : undefined,
-      pathToClaudeCodeExecutable: claudeCliPath,
-      settingSources: ['user', 'project', 'local']
-    };
+	    // 准备选项
+	    const effectivePermissionMode = permissionMode || 'default';
+	    const shouldUseCanUseTool = effectivePermissionMode === 'default';
+	    console.log('[PERM_DEBUG] permissionMode:', permissionMode);
+	    console.log('[PERM_DEBUG] effectivePermissionMode:', effectivePermissionMode);
+	    console.log('[PERM_DEBUG] shouldUseCanUseTool:', shouldUseCanUseTool);
+	    console.log('[PERM_DEBUG] canUseTool function defined:', typeof canUseTool);
+
+	    const options = {
+	      cwd: workingDirectory,
+	      permissionMode: effectivePermissionMode,
+	      model: sdkModelName,
+	      maxTurns: 100,
+	      additionalDirectories: Array.from(
+	        new Set(
+	          [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
+	        )
+	      ),
+	      canUseTool: shouldUseCanUseTool ? canUseTool : undefined,
+	      pathToClaudeCodeExecutable: claudeCliPath,
+	      settingSources: ['user', 'project', 'local']
+	    };
+	    console.log('[PERM_DEBUG] options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
+
+		// 使用 AbortController 实现 60 秒超时控制（已发现严重问题，暂时禁用自动超时，仅保留正常查询逻辑）
+		// const abortController = new AbortController();
+		// options.abortController = abortController;
 
     if (claudeCliPath) {
       console.log('[DEBUG] Using system Claude CLI:', claudeCliPath);
@@ -102,30 +222,21 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       console.log('[RESUMING]', resumeSessionId);
     }
 
-    console.log('[DEBUG] Query started, waiting for messages...');
-
-    // 调用 query 函数，添加超时处理
-    let queryTimeoutId;
-    const queryPromise = query({
-      prompt: message,
-      options: options
-    });
-
-    // 设置60秒超时
-    const timeoutPromise = new Promise((_, reject) => {
-      queryTimeoutId = setTimeout(() => {
-        console.log('[DEBUG] Query timeout after 60 seconds');
-        reject(new Error('Claude Code process aborted by user'));
-      }, 60000);
-    });
-
-    // 等待 query 完成或超时
-    const result = await Promise.race([queryPromise, timeoutPromise])
-      .finally(() => {
-        if (queryTimeoutId) clearTimeout(queryTimeoutId);
-      });
-
-    console.log('[DEBUG] Starting message loop...');
+	    console.log('[DEBUG] Query started, waiting for messages...');
+	
+	    // 调用 query 函数
+	    const result = query({
+	      prompt: message,
+	      options
+	    });
+	
+		// 设置 60 秒超时，超时后通过 AbortController 取消查询（已发现严重问题，暂时注释掉自动超时逻辑）
+		// timeoutId = setTimeout(() => {
+		//   console.log('[DEBUG] Query timeout after 60 seconds, aborting...');
+		//   abortController.abort();
+		// }, 60000);
+	
+	    console.log('[DEBUG] Starting message loop...');
 
     let currentSessionId = resumeSessionId;
 
@@ -163,20 +274,20 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
     console.log(`[DEBUG] Message loop completed. Total messages: ${messageCount}`);
 
-    console.log('[MESSAGE_END]');
-    console.log(JSON.stringify({
-      success: true,
-      sessionId: currentSessionId
-    }));
-
-  } catch (error) {
-    console.error('[SEND_ERROR]', error.message);
-    console.log(JSON.stringify({
-      success: false,
-      error: error.message
-    }));
-  }
-}
+	    console.log('[MESSAGE_END]');
+	    console.log(JSON.stringify({
+	      success: true,
+	      sessionId: currentSessionId
+	    }));
+	
+	  } catch (error) {
+	    const payload = buildConfigErrorPayload(error);
+	    console.error('[SEND_ERROR]', JSON.stringify(payload));
+	    console.log(JSON.stringify(payload));
+	  } finally {
+	    if (timeoutId) clearTimeout(timeoutId);
+	  }
+	}
 
 /**
  * 使用 Anthropic SDK 发送消息（用于第三方 API 代理的回退方案）
@@ -351,8 +462,9 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 /**
  * 使用 Claude Agent SDK 发送带附件的消息（多模态）
  */
-export async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, stdinData = null) {
-  try {
+	export async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, stdinData = null) {
+	  let timeoutId;
+	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
     const { baseUrl } = setupApiKey();
@@ -391,9 +503,52 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     inputStream.enqueue(userMessage);
     inputStream.done();
 
+    // 规范化 permissionMode：空字符串或 null 都视为 'default'
+    // 参见 docs/multimodal-permission-bug.md
+    const normalizedPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
+    console.log('[PERM_DEBUG] (withAttachments) permissionMode:', permissionMode);
+    console.log('[PERM_DEBUG] (withAttachments) normalizedPermissionMode:', normalizedPermissionMode);
+
+    // PreToolUse hook 用于权限控制（替代 canUseTool，因为在 AsyncIterable 模式下 canUseTool 不被调用）
+    // 参见 docs/multimodal-permission-bug.md
+    const preToolUseHook = async (input) => {
+      console.log('[PERM_DEBUG] (withAttachments) PreToolUse hook called:', input.tool_name);
+
+      // 非 default 模式下自动允许所有工具
+      if (normalizedPermissionMode !== 'default') {
+        console.log('[PERM_DEBUG] (withAttachments) Auto-approve (non-default mode)');
+        return { decision: 'approve' };
+      }
+
+      // 调用 canUseTool 进行权限检查
+      console.log('[PERM_DEBUG] (withAttachments) Calling canUseTool...');
+      try {
+        const result = await canUseTool(input.tool_name, input.tool_input);
+        console.log('[PERM_DEBUG] (withAttachments) canUseTool returned:', result.behavior);
+
+        if (result.behavior === 'allow') {
+          return { decision: 'approve' };
+        } else if (result.behavior === 'deny') {
+          return {
+            decision: 'block',
+            reason: result.message || 'Permission denied'
+          };
+        }
+        return {};
+      } catch (error) {
+        console.error('[PERM_DEBUG] (withAttachments) canUseTool error:', error.message);
+        return {
+          decision: 'block',
+          reason: 'Permission check failed: ' + error.message
+        };
+      }
+    };
+
+    // 注意：根据 SDK 文档，如果不指定 matcher，则该 Hook 会匹配所有工具
+    // 这里统一使用一个全局 PreToolUse Hook，由 Hook 内部决定哪些工具自动放行
     const options = {
       cwd: workingDirectory,
-      permissionMode: permissionMode || 'default',
+      permissionMode: normalizedPermissionMode,
       model: sdkModelName,
       maxTurns: 100,
       additionalDirectories: Array.from(
@@ -401,65 +556,82 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
           [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
         )
       ),
-      canUseTool: permissionMode === 'default' ? canUseTool : undefined,
+      // 同时设置 canUseTool 和 hooks，确保至少一个生效
+      // 在 AsyncIterable 模式下 canUseTool 可能不被调用，所以必须配置 PreToolUse hook
+      canUseTool: normalizedPermissionMode === 'default' ? canUseTool : undefined,
+      hooks: normalizedPermissionMode === 'default' ? {
+        PreToolUse: [{
+          hooks: [preToolUseHook]
+        }]
+      } : undefined,
       pathToClaudeCodeExecutable: claudeCliPath,
       settingSources: ['user', 'project', 'local']
     };
+    console.log('[PERM_DEBUG] (withAttachments) options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
+    console.log('[PERM_DEBUG] (withAttachments) options.hooks:', options.hooks ? 'SET (PreToolUse)' : 'NOT SET');
+    console.log('[PERM_DEBUG] (withAttachments) options.permissionMode:', options.permissionMode);
 
-    if (resumeSessionId && resumeSessionId !== '') {
-      options.resume = resumeSessionId;
-      console.log('[RESUMING]', resumeSessionId);
-    }
+	    // 之前这里通过 AbortController + 30 秒自动超时来中断带附件的请求
+	    // 这会导致在配置正确的情况下仍然出现 "Claude Code process aborted by user" 的误导性错误
+	    // 为保持与纯文本 sendMessage 一致，这里暂时禁用自动超时逻辑，改由 IDE 侧中断控制
+	    // const abortController = new AbortController();
+	    // options.abortController = abortController;
 
-    let queryTimeoutId;
-    const queryPromise = query({
-      prompt: inputStream,
-      options: options
-    });
+	    if (resumeSessionId && resumeSessionId !== '') {
+	      options.resume = resumeSessionId;
+	      console.log('[RESUMING]', resumeSessionId);
+	    }
+	
+		    const result = query({
+		      prompt: inputStream,
+		      options
+		    });
 
-    const timeoutPromise = new Promise((_, reject) => {
-      queryTimeoutId = setTimeout(() => {
-        reject(new Error('Claude Code process aborted by user'));
-      }, 60000);
-    });
+	    // 如需再次启用自动超时，可在此处通过 AbortController 实现，并确保给出清晰的“响应超时”提示
+	    // timeoutId = setTimeout(() => {
+	    //   console.log('[DEBUG] Query with attachments timeout after 30 seconds, aborting...');
+	    //   abortController.abort();
+	    // }, 30000);
+	
+		    let currentSessionId = resumeSessionId;
+		
+		    for await (const msg of result) {
+	    	      console.log('[MESSAGE]', JSON.stringify(msg));
+	    	
+	    	      if (msg.type === 'assistant') {
+	    	        const content = msg.message?.content;
+	    	        if (Array.isArray(content)) {
+	    	          for (const block of content) {
+	    	            if (block.type === 'text') {
+	    	              console.log('[CONTENT]', block.text);
+	    	            } else if (block.type === 'tool_use') {
+	    	              console.log('[DEBUG] Tool use payload (withAttachments):', JSON.stringify(block));
+	    	            } else if (block.type === 'tool_result') {
+	    	              console.log('[DEBUG] Tool result payload (withAttachments):', JSON.stringify(block));
+	    	            }
+	    	          }
+	    	        } else if (typeof content === 'string') {
+	    	          console.log('[CONTENT]', content);
+	    	        }
+	    	      }
+	    	
+	    	      if (msg.type === 'system' && msg.session_id) {
+	    	        currentSessionId = msg.session_id;
+	    	        console.log('[SESSION_ID]', msg.session_id);
+	    	      }
+	    	    }
 
-    const result = await Promise.race([queryPromise, timeoutPromise])
-      .finally(() => {
-        if (queryTimeoutId) clearTimeout(queryTimeoutId);
-      });
-
-    let currentSessionId = resumeSessionId;
-
-    for await (const msg of result) {
-      console.log('[MESSAGE]', JSON.stringify(msg));
-
-      if (msg.type === 'assistant') {
-        const content = msg.message?.content;
-        if (Array.isArray(content)) {
-          for (const block of content) {
-            if (block.type === 'text') {
-              console.log('[CONTENT]', block.text);
-            }
-          }
-        } else if (typeof content === 'string') {
-          console.log('[CONTENT]', content);
-        }
-      }
-
-      if (msg.type === 'system' && msg.session_id) {
-        currentSessionId = msg.session_id;
-        console.log('[SESSION_ID]', msg.session_id);
-      }
-    }
-
-    console.log('[MESSAGE_END]');
-    console.log(JSON.stringify({
-      success: true,
-      sessionId: currentSessionId
-    }));
-
-  } catch (error) {
-    console.error('[SEND_ERROR]', error.message);
-    console.log(JSON.stringify({ success: false, error: error.message }));
-  }
-}
+	    console.log('[MESSAGE_END]');
+	    console.log(JSON.stringify({
+	      success: true,
+	      sessionId: currentSessionId
+	    }));
+	
+	  } catch (error) {
+	    const payload = buildConfigErrorPayload(error);
+	    console.error('[SEND_ERROR]', JSON.stringify(payload));
+	    console.log(JSON.stringify(payload));
+	  } finally {
+	    if (timeoutId) clearTimeout(timeoutId);
+	  }
+	}

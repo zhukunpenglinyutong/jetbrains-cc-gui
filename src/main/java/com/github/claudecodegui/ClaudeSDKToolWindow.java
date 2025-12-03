@@ -7,6 +7,7 @@ import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.ui.jcef.JBCefJSQuery;
+import com.intellij.ide.util.PropertiesComponent;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefLoadHandlerAdapter;
@@ -59,7 +60,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private JBCefBrowser browser;
         private ClaudeSession session; // 添加 Session 管理
         private ToolInterceptor toolInterceptor; // 工具拦截器
-        private CCSwitchSettingsService settingsService; // 配置服务
+        private CodemossSettingsService settingsService; // 配置服务
+        private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
         private String currentModel = "claude-sonnet-4-5";
         private static final java.util.Map<String, Integer> MODEL_CONTEXT_LIMITS = new java.util.HashMap<>();
         static {
@@ -72,13 +74,26 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             this.sdkBridge = new ClaudeSDKBridge();
             this.session = new ClaudeSession(sdkBridge); // 创建新会话
             this.toolInterceptor = new ToolInterceptor(project); // 创建工具拦截器
-            this.settingsService = new CCSwitchSettingsService(); // 创建配置服务
+            this.settingsService = new CodemossSettingsService(); // 创建配置服务
             try {
                 this.settingsService.applyActiveProviderToClaudeSettings();
             } catch (Exception e) {
                 System.err.println("[ClaudeChatWindow] Failed to sync active provider on startup: " + e.getMessage());
             }
             this.mainPanel = new JPanel(new BorderLayout());
+
+            // 在环境检查前，尝试加载用户手动配置的 Node.js 路径
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
+                if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
+                    String path = savedNodePath.trim();
+                    System.out.println("[ClaudeChatWindow] Using manually configured Node.js path: " + path);
+                    sdkBridge.setNodeExecutable(path);
+                }
+            } catch (Exception e) {
+                System.err.println("[ClaudeChatWindow] Failed to load manual Node.js path: " + e.getMessage());
+            }
 
             // 启动权限服务
             PermissionService permissionService = PermissionService.getInstance(project);
@@ -114,12 +129,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             // 首先检查环境
             if (!sdkBridge.checkEnvironment()) {
                 showErrorPanel("环境检查失败",
-                    "无法找到 Node.js 或 claude-bridge 目录。\n\n" +
+                    "无法找到 Node.js\n\n" +
                     "请确保:\n" +
-                    "1. Node.js 已安装 (运行: node --version)\n" +
-                    "2. claude-bridge 目录存在\n" +
-                    "3. 已运行: cd claude-bridge && npm install\n\n" +
-                    "Node.js 路径: " + sdkBridge.getNodeExecutable());
+                    " Node.js 已安装 (可以在终端运行: node --version)\n" +
+                    "如果自动检测 Node.js 失败，可以在终端运行以下命令获取 Node.js 路径，并粘贴到下面的输入框中:\n" +
+                    "    node -p \"process.execPath\"\n\n" +
+                    "当前检测到的 Node.js 路径: " + sdkBridge.getNodeExecutable());
                 return;
             }
 
@@ -161,9 +176,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 showErrorPanel("无法加载聊天界面",
                     e.getMessage() + "\n\n" +
                     "请确保:\n" +
-                    "1. Node.js 已安装 (运行: node --version)\n" +
+                    "1. Node.js 已安装 (可以在终端运行: node --version)\n" +
                     "2. claude-bridge 目录存在\n" +
                     "3. 已运行: cd claude-bridge && npm install\n\n" +
+                    "如果自动检测 Node.js 失败，可以在终端运行以下命令获取 Node.js 路径，并粘贴到下面的输入框中:\n" +
+                    "    node -p \"process.execPath\"\n\n" +
                     "检测到的 Node.js 路径: " + sdkBridge.getNodeExecutable());
             }
         }
@@ -192,6 +209,80 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             errorPanel.add(titleLabel, BorderLayout.NORTH);
             errorPanel.add(new JScrollPane(textArea), BorderLayout.CENTER);
 
+            // 底部：手动指定 Node.js 路径的输入框和按钮
+            JPanel bottomPanel = new JPanel();
+            bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
+            bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 20, 20));
+            bottomPanel.setBackground(new Color(30, 30, 30));
+
+            JLabel nodeLabel = new JLabel("Node.js 路径（可选：手动指定）:");
+            nodeLabel.setForeground(Color.WHITE);
+
+            JTextField nodeField = new JTextField();
+            nodeField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+
+            // 预填充为已保存的路径或当前检测到的路径
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
+                if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
+                    nodeField.setText(savedNodePath.trim());
+                } else {
+                    String currentNode = sdkBridge.getNodeExecutable();
+                    if (currentNode != null) {
+                        nodeField.setText(currentNode);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[ClaudeChatWindow] Failed to preload Node.js path: " + e.getMessage());
+            }
+
+            JButton saveAndRetryButton = new JButton("保存并重试");
+            saveAndRetryButton.addActionListener(e -> {
+                String manualPath = nodeField.getText();
+                if (manualPath != null) {
+                    manualPath = manualPath.trim();
+                }
+
+                try {
+                    PropertiesComponent props = PropertiesComponent.getInstance();
+
+                    if (manualPath == null || manualPath.isEmpty()) {
+                        // 清除手动配置，恢复自动检测
+                        props.unsetValue(NODE_PATH_PROPERTY_KEY);
+                        sdkBridge.setNodeExecutable(null);
+                        System.out.println("[ClaudeChatWindow] Cleared manual Node.js path, fallback to auto-detection");
+                    } else {
+                        // 保存并应用手动路径
+                        props.setValue(NODE_PATH_PROPERTY_KEY, manualPath);
+                        sdkBridge.setNodeExecutable(manualPath);
+                        System.out.println("[ClaudeChatWindow] Saved manual Node.js path: " + manualPath);
+                    }
+
+                    // 重新尝试环境检查和界面初始化
+                    SwingUtilities.invokeLater(() -> {
+                        mainPanel.removeAll();
+                        createUIComponents();
+                        mainPanel.revalidate();
+                        mainPanel.repaint();
+                    });
+
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(mainPanel,
+                        "保存或应用 Node.js 路径时出错: " + ex.getMessage(),
+                        "错误",
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            });
+
+            bottomPanel.add(nodeLabel);
+            bottomPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+            bottomPanel.add(nodeField);
+            bottomPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+            bottomPanel.add(saveAndRetryButton);
+
+            errorPanel.add(bottomPanel, BorderLayout.SOUTH);
+
             mainPanel.add(errorPanel, BorderLayout.CENTER);
         }
 
@@ -199,8 +290,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
          * 处理来自 JavaScript 的消息
          */
         private void handleJavaScriptMessage(String message) {
-            System.out.println("[Backend] ========== 收到 JS 消息 ==========");
-            System.out.println("[Backend] 原始消息: " + message);
+            // System.out.println("[Backend] ========== 收到 JS 消息 ==========");
+            // System.out.println("[Backend] 原始消息: " + message);
 
             // 解析消息（简单的格式：type:content）
             String[] parts = message.split(":", 2);
@@ -211,8 +302,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
             String type = parts[0];
             String content = parts.length > 1 ? parts[1] : "";
-            System.out.println("[Backend] 消息类型: '" + type + "'");
-            System.out.println("[Backend] 消息内容: '" + content + "'");
+            // System.out.println("[Backend] 消息类型: '" + type + "'");
+            // System.out.println("[Backend] 消息内容: '" + content + "'");
 
             switch (type) {
                 case "send_message":
@@ -280,7 +371,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     break;
 
                 case "permission_decision":
-                    System.out.println("[Backend] 处理: permission_decision");
+                    System.out.println("[PERM_DEBUG][BRIDGE_RECV] Received permission_decision from JS");
+                    System.out.println("[PERM_DEBUG][BRIDGE_RECV] Content: " + content);
                     handlePermissionDecision(content);
                     break;
 
@@ -345,14 +437,24 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     break;
 
                 case "set_model":
-                    System.out.println("[Backend] 处理: set_model");
-                    handleSetModel(content);
-                    break;
+	                    System.out.println("[Backend] 处理: set_model");
+	                    handleSetModel(content);
+	                    break;
+
+	                case "get_node_path":
+	                    System.out.println("[Backend] 处理: get_node_path");
+	                    handleGetNodePath();
+	                    break;
+
+	                case "set_node_path":
+	                    System.out.println("[Backend] 处理: set_node_path");
+	                    handleSetNodePath(content);
+	                    break;
 
                 default:
                     System.err.println("[Backend] 警告: 未知的消息类型: " + type);
             }
-            System.out.println("[Backend] ========== 消息处理完成 ==========");
+            // System.out.println("[Backend] ========== 消息处理完成 ==========");
         }
 
         /**
@@ -524,7 +626,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             session.setCallback(new ClaudeSession.SessionCallback() {
                 @Override
                 public void onMessageUpdate(List<ClaudeSession.Message> messages) {
-                    System.out.println("[ClaudeChatWindow] onMessageUpdate called with " + messages.size() + " messages");
+                    // System.out.println("[ClaudeChatWindow] onMessageUpdate called with " + messages.size() + " messages");
                     SwingUtilities.invokeLater(() -> {
                         // 将消息列表转换为 JSON
                         com.google.gson.Gson gson = new com.google.gson.Gson();
@@ -544,9 +646,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                             }
 
                             messagesArray.add(msgObj);
-                            System.out.println("[ClaudeChatWindow] Message: type=" + msg.type +
-                                ", content.length=" + (msg.content != null ? msg.content.length() : 0) +
-                                ", hasRaw=" + (msg.raw != null));
+                            // System.out.println("[ClaudeChatWindow] Message: type=" + msg.type +
+                            //     ", content.length=" + (msg.content != null ? msg.content.length() : 0) +
+                            //     ", hasRaw=" + (msg.raw != null));
                         }
 
                         String messagesJson = gson.toJson(messagesArray);
@@ -555,7 +657,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         // 调用 JavaScript 更新消息
                     callJavaScript("updateMessages", escapedJson);
                 });
-                System.out.println("[Backend] Pushing usage update from messages (real-time), messageCount=" + messages.size());
+                // System.out.println("[Backend] Pushing usage update from messages (real-time), messageCount=" + messages.size());
                 pushUsageUpdateFromMessages(messages);
             }
 
@@ -611,13 +713,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     outputTokens = lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
                     cacheWriteTokens = lastUsage.has("cache_creation_input_tokens") ? lastUsage.get("cache_creation_input_tokens").getAsInt() : 0;
                     cacheReadTokens = lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
-                    System.out.println("[Backend] Last assistant usage -> input:" + inputTokens + ", output:" + outputTokens + ", cacheWrite:" + cacheWriteTokens + ", cacheRead:" + cacheReadTokens);
+                    // System.out.println("[Backend] Last assistant usage -> input:" + inputTokens + ", output:" + outputTokens + ", cacheWrite:" + cacheWriteTokens + ", cacheRead:" + cacheReadTokens);
                 }
 
                 int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens;
                 int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
                 int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
-                System.out.println("[Backend] 上下文=" + usedTokens + ", maxContext=" + maxTokens + ", percentage=" + percentage + "%");
+                // System.out.println("[Backend] 上下文=" + usedTokens + ", maxContext=" + maxTokens + ", percentage=" + percentage + "%");
 
                 com.google.gson.Gson gson = new com.google.gson.Gson();
                 com.google.gson.JsonObject usageUpdate = new com.google.gson.JsonObject();
@@ -629,7 +731,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 String usageJson = gson.toJson(usageUpdate);
 
                 javax.swing.SwingUtilities.invokeLater(() -> {
-                    System.out.println("[Backend] Calling window.onUsageUpdate with payload length=" + usageJson.length());
+                    // System.out.println("[Backend] Calling window.onUsageUpdate with payload length=" + usageJson.length());
                     String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + escapeJs(usageJson) + "'); }";
                     browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
                 });
@@ -1179,9 +1281,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private CompletableFuture<Integer> showFrontendPermissionDialog(String toolName, JsonObject inputs) {
             String channelId = UUID.randomUUID().toString();
             CompletableFuture<Integer> future = new CompletableFuture<>();
+            long startTime = System.currentTimeMillis();
+
+            System.out.println("[PERM_DEBUG][FRONTEND_DIALOG] Starting showFrontendPermissionDialog");
+            System.out.println("[PERM_DEBUG][FRONTEND_DIALOG] channelId=" + channelId + ", toolName=" + toolName);
 
             // 存储 future，等待前端返回决策
             pendingPermissionRequests.put(channelId, future);
+            System.out.println("[PERM_DEBUG][FRONTEND_DIALOG] Added to pendingPermissionRequests, size=" + pendingPermissionRequests.size());
 
             try {
                 // 构建权限请求数据
@@ -1194,38 +1301,41 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 String requestJson = gson.toJson(requestData);
                 String escapedJson = escapeJs(requestJson);
 
-                System.out.println("[Backend] PermissionService 权限请求数据: " + requestJson);
+                System.out.println("[PERM_DEBUG][FRONTEND_DIALOG] Request JSON: " + requestJson);
 
                 // 通过 JavaScript 桥接触发前端弹窗（带重试逻辑）
                 SwingUtilities.invokeLater(() -> {
+                    System.out.println("[PERM_DEBUG][FRONTEND_DIALOG] Executing JS on EDT");
                     // 使用重试逻辑，确保前端已加载
                     String jsCode = "(function retryShowDialog(retries) { " +
+                        "  console.log('[PERM_DEBUG][JS] retryShowDialog called, retries=' + retries); " +
                         "  if (window.showPermissionDialog) { " +
-                        "    console.log('[Backend->Frontend] Showing permission dialog from PermissionService'); " +
+                        "    console.log('[PERM_DEBUG][JS] Calling showPermissionDialog'); " +
                         "    window.showPermissionDialog('" + escapedJson + "'); " +
                         "  } else if (retries > 0) { " +
-                        "    console.log('[Backend->Frontend] waiting for showPermissionDialog, retries=' + retries); " +
+                        "    console.log('[PERM_DEBUG][JS] Waiting for showPermissionDialog, retries=' + retries); " +
                         "    setTimeout(function() { retryShowDialog(retries - 1); }, 200); " +
                         "  } else { " +
-                        "    console.error('[Backend->Frontend] window.showPermissionDialog not available after retries!'); " +
+                        "    console.error('[PERM_DEBUG][JS] FAILED: showPermissionDialog not available after all retries!'); " +
                         "  } " +
                         "})(30);"; // 最多重试30次，每次200ms，总共6秒
 
                     browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
-                    System.out.println("[Backend] 已触发前端权限弹窗 (PermissionService)");
+                    System.out.println("[PERM_DEBUG][FRONTEND_DIALOG] JS executed, waiting for user response");
                 });
 
                 // 设置超时处理
                 CompletableFuture.delayedExecutor(35, TimeUnit.SECONDS).execute(() -> {
                     if (!future.isDone()) {
-                        System.err.println("[Backend] 权限请求超时: " + channelId);
+                        long elapsed = System.currentTimeMillis() - startTime;
+                        System.err.println("[PERM_DEBUG][FRONTEND_DIALOG] TIMEOUT after " + elapsed + "ms, channelId=" + channelId);
                         pendingPermissionRequests.remove(channelId);
                         future.complete(PermissionService.PermissionResponse.DENY.getValue());
                     }
                 });
 
             } catch (Exception e) {
-                System.err.println("[Backend] 显示前端权限弹窗失败: " + e.getMessage());
+                System.err.println("[PERM_DEBUG][FRONTEND_DIALOG] ERROR: " + e.getMessage());
                 e.printStackTrace();
                 pendingPermissionRequests.remove(channelId);
                 future.complete(PermissionService.PermissionResponse.DENY.getValue());
@@ -1293,6 +1403,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
          * 处理来自JavaScript的权限决策消息
          */
         private void handlePermissionDecision(String jsonContent) {
+            System.out.println("[PERM_DEBUG][HANDLE_DECISION] Received decision from JS: " + jsonContent);
             try {
                 Gson gson = new Gson();
                 JsonObject decision = gson.fromJson(jsonContent, JsonObject.class);
@@ -1306,13 +1417,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     rejectMessage = decision.get("rejectMessage").getAsString();
                 }
 
-                System.out.println("[Backend] 收到权限决策: channelId=" + channelId + ", allow=" + allow + ", remember=" + remember);
+                System.out.println("[PERM_DEBUG][HANDLE_DECISION] Parsed: channelId=" + channelId + ", allow=" + allow + ", remember=" + remember);
+                System.out.println("[PERM_DEBUG][HANDLE_DECISION] pendingPermissionRequests size before: " + pendingPermissionRequests.size());
 
                 // 检查是否是 PermissionService 的请求
                 CompletableFuture<Integer> pendingFuture = pendingPermissionRequests.remove(channelId);
+                System.out.println("[PERM_DEBUG][HANDLE_DECISION] pendingFuture found: " + (pendingFuture != null));
+
                 if (pendingFuture != null) {
                     // 这是来自 PermissionService 的请求
-                    System.out.println("[Backend] 处理 PermissionService 权限决策");
+                    System.out.println("[PERM_DEBUG][HANDLE_DECISION] Processing as PermissionService request");
                     int responseValue;
                     if (allow) {
                         responseValue = remember ?
@@ -1321,14 +1435,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     } else {
                         responseValue = PermissionService.PermissionResponse.DENY.getValue();
                     }
+                    System.out.println("[PERM_DEBUG][HANDLE_DECISION] Completing future with value: " + responseValue);
                     pendingFuture.complete(responseValue);
 
                     if (!allow) {
+                        System.out.println("[PERM_DEBUG][HANDLE_DECISION] Permission denied, interrupting");
                         interruptDueToPermissionDenial();
                     }
                 } else {
                     // 这是来自 ClaudeSession 的请求
-                    System.out.println("[Backend] 处理 ClaudeSession 权限决策");
+                    System.out.println("[PERM_DEBUG][HANDLE_DECISION] Processing as ClaudeSession request");
                     if (remember) {
                         // 总是允许/拒绝
                         session.handlePermissionDecisionAlways(channelId, allow);
@@ -1337,11 +1453,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         session.handlePermissionDecision(channelId, allow, false, rejectMessage);
                     }
                     if (!allow) {
+                        System.out.println("[PERM_DEBUG][HANDLE_DECISION] Permission denied, interrupting");
                         interruptDueToPermissionDenial();
                     }
                 }
+                System.out.println("[PERM_DEBUG][HANDLE_DECISION] Decision handling complete");
             } catch (Exception e) {
-                System.err.println("[Backend] 处理权限决策失败: " + e.getMessage());
+                System.err.println("[PERM_DEBUG][HANDLE_DECISION] ERROR: " + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -1619,7 +1737,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         }
                     }
 
-                    System.out.println("[Backend] Getting usage statistics for path: " + projectPath);
+                    // System.out.println("[Backend] Getting usage statistics for path: " + projectPath);
 
                     ClaudeHistoryReader reader = new ClaudeHistoryReader();
                     ClaudeHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath);
@@ -1654,7 +1772,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
                     SwingUtilities.invokeLater(() -> {
                         // 发送完整统计数据（用于统计视图）
-                        System.out.println("[Backend] updateUsageStatistics: tokens=" + tokensFinal + ", limit=" + limitFinal + ", percentage=" + percentageFinal + "% (not pushing onUsageUpdate)");
+                        // System.out.println("[Backend] updateUsageStatistics: tokens=" + tokensFinal + ", limit=" + limitFinal + ", percentage=" + percentageFinal + "% (not pushing onUsageUpdate)");
                         callJavaScript("window.updateUsageStatistics", escapeJs(statsJsonFinal));
                         // 不在这里调用 window.onUsageUpdate，避免覆盖聊天输入框的实时进度
                     });
@@ -1707,7 +1825,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                             for (File child : children) {
                                 if (added >= 20) break;
                                 String name = child.getName();
-                                if (name.startsWith(".") || name.equals("node_modules") || name.equals("dist") || name.equals("out")) {
+                                // 跳过大型忽略目录，保留普通隐藏文件
+                                if (name.equals(".git") || name.equals(".svn") || name.equals(".hg") ||
+                                    name.equals("node_modules") || name.equals("dist") || name.equals("out")) {
                                     continue;
                                 }
                                 JsonObject fileObj = new JsonObject();
@@ -1729,12 +1849,37 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         }
                     }
 
-                    // 目录优先排序，然后按名称排序
+                    // 排序：按照 IDE 文件树顺序
+                    // 1. 路径深度优先（浅层在前）
+                    // 2. 同一父目录下的项目聚在一起
+                    // 3. 目录优先于文件
+                    // 4. 按名称自然排序
                     files.sort((a, b) -> {
+                        String aPath = a.get("path").getAsString();
+                        String bPath = b.get("path").getAsString();
                         boolean aDir = "directory".equals(a.get("type").getAsString());
                         boolean bDir = "directory".equals(b.get("type").getAsString());
+                        String aName = a.get("name").getAsString();
+                        String bName = b.get("name").getAsString();
+
+                        // 计算路径深度
+                        int aDepth = aPath.split("/").length;
+                        int bDepth = bPath.split("/").length;
+
+                        // 1. 浅层优先
+                        if (aDepth != bDepth) return aDepth - bDepth;
+
+                        // 2. 同一父目录下分组
+                        String aParent = aPath.contains("/") ? aPath.substring(0, aPath.lastIndexOf('/')) : "";
+                        String bParent = bPath.contains("/") ? bPath.substring(0, bPath.lastIndexOf('/')) : "";
+                        int parentCompare = aParent.compareToIgnoreCase(bParent);
+                        if (parentCompare != 0) return parentCompare;
+
+                        // 3. 目录优先
                         if (aDir != bDir) return aDir ? -1 : 1;
-                        return a.get("name").getAsString().compareToIgnoreCase(b.get("name").getAsString());
+
+                        // 4. 按名称自然排序
+                        return aName.compareToIgnoreCase(bName);
                     });
 
                     Gson gson = new Gson();
@@ -1768,8 +1913,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 if (files.size() >= maxFiles) break;
 
                 String name = child.getName();
-                // 跳过隐藏文件和常见的忽略目录
-                if (name.startsWith(".") ||
+                // 跳过常见的忽略目录（保留普通隐藏文件/文件夹，但跳过 .git 等大型目录）
+                if (name.equals(".git") ||
+                    name.equals(".svn") ||
+                    name.equals(".hg") ||
                     name.equals("node_modules") ||
                     name.equals("target") ||
                     name.equals("build") ||
@@ -1939,8 +2086,78 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             }
         }
 
-        public JPanel getContent() {
-            return mainPanel;
-        }
+	    	private void handleGetNodePath() {
+	    	    try {
+	    	        PropertiesComponent props = PropertiesComponent.getInstance();
+	    	        String saved = props.getValue(NODE_PATH_PROPERTY_KEY);
+	    	        String effectivePath;
+	    	        if (saved != null && !saved.trim().isEmpty()) {
+	    	            effectivePath = saved.trim();
+	    	        } else {
+	    	            // 如果没有手动配置，则返回当前检测到的 Node 路径（可能为空字符串）
+	    	            String detected = sdkBridge.getNodeExecutable();
+	    	            effectivePath = detected != null ? detected : "";
+	    	        }
+	    	        final String pathToSend = effectivePath != null ? effectivePath : "";
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.updateNodePath", escapeJs(pathToSend));
+	    	        });
+	    	    } catch (Exception e) {
+	    	        System.err.println("[Backend] Failed to get Node.js path: " + e.getMessage());
+	    	        e.printStackTrace();
+	    	    }
+	    	}
+	    	
+	    	private void handleSetNodePath(String content) {
+	    	    System.out.println("[Backend] ========== handleSetNodePath START ==========");
+	    	    System.out.println("[Backend] Received content: " + content);
+	    	    try {
+	    	        Gson gson = new Gson();
+	    	        JsonObject json = gson.fromJson(content, JsonObject.class);
+	    	        String path = null;
+	    	        if (json != null && json.has("path") && !json.get("path").isJsonNull()) {
+	    	            path = json.get("path").getAsString();
+	    	        }
+	    	
+	    	        if (path != null) {
+	    	            path = path.trim();
+	    	        }
+	    	
+	    	        PropertiesComponent props = PropertiesComponent.getInstance();
+	    	        String effectivePath;
+	    	        if (path == null || path.isEmpty()) {
+	    	            // 清除手动配置，恢复自动检测
+	    	            props.unsetValue(NODE_PATH_PROPERTY_KEY);
+	    	            sdkBridge.setNodeExecutable(null);
+	    	            System.out.println("[Backend] Cleared manual Node.js path from settings (auto-detection will be used)");
+	    	            String detected = sdkBridge.getNodeExecutable();
+	    	            effectivePath = detected != null ? detected : "";
+	    	        } else {
+	    	            props.setValue(NODE_PATH_PROPERTY_KEY, path);
+	    	            sdkBridge.setNodeExecutable(path);
+	    	            System.out.println("[Backend] Updated manual Node.js path from settings: " + path);
+	    	            effectivePath = path;
+	    	        }
+	    	
+	    	        final String finalPath = effectivePath != null ? effectivePath : "";
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            // 更新前端显示的 Node.js 路径
+	    	            callJavaScript("window.updateNodePath", escapeJs(finalPath));
+	    	            // 使用现有的成功提示通道，给出保存成功信息
+	    	            callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存。\n\n如果环境检查仍然失败，请关闭并重新打开工具窗口后重试。"));
+	    	        });
+	    	    } catch (Exception e) {
+	    	        System.err.println("[Backend] Failed to set Node.js path: " + e.getMessage());
+	    	        e.printStackTrace();
+	    	        SwingUtilities.invokeLater(() -> {
+	    	            callJavaScript("window.showError", escapeJs("保存 Node.js 路径失败: " + e.getMessage()));
+	    	        });
+	    	    }
+	    	    System.out.println("[Backend] ========== handleSetNodePath END ==========");
+	    	}
+	    	
+	    	public JPanel getContent() {
+	    	    return mainPanel;
+	    	}
     }
 }
