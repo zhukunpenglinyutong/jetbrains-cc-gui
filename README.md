@@ -2,7 +2,7 @@
 
 本项目主要解决在IDEA中使用Claude Code 没有 GUI操作窗口的场景
 
-目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.8（2025年12月3日更新）
+目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.8（2025年12月4日更新）
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
@@ -12,12 +12,12 @@
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.8-iteration1.zip 文件
+# 1.下载 idea-claude-code-gui-0.0.8-iteration2.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.8-iteration1.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.8-iteration2.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.8-iteration1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/idea-claude-code-gui-0.0.8-iteration1.zip)
+插件下载：[idea-claude-code-gui-0.0.8-iteration2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/idea-claude-code-gui-0.0.8-iteration2.zip)
 
 ---
 
@@ -27,6 +27,7 @@
 
 - [x] P2（feat）支持文件信息点击跳转功能
 - [x] P2（fix）解决DIFF组件统计不精准的问题
+- [x] P3（UI）解决渠道删除按钮背景颜色问题
 
 ##### **12月3日（v0.0.8-iteration1）**
 
