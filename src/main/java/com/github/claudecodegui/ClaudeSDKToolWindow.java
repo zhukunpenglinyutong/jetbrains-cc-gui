@@ -1,5 +1,7 @@
 package com.github.claudecodegui;
 
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
@@ -885,11 +887,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private void openFileInEditor(String filePath) {
             System.out.println("请求打开文件: " + filePath);
 
-            SwingUtilities.invokeLater(() -> {
+            // 使用 ApplicationManager.invokeLater 并指定 NON_MODAL 来确保在正确的上下文中执行
+            ApplicationManager.getApplication().invokeLater(() -> {
                 try {
                     // 检查文件是否存在
                     File file = new File(filePath);
-                    
+
                     // 如果文件不存在且是相对路径，尝试相对于项目根目录解析
                     if (!file.exists() && !file.isAbsolute() && project.getBasePath() != null) {
                         File projectFile = new File(project.getBasePath(), filePath);
@@ -898,7 +901,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                             file = projectFile;
                         }
                     }
-                    
+
                     if (!file.exists()) {
                         System.err.println("文件不存在: " + filePath);
                         callJavaScript("addErrorMessage", escapeJs("无法打开文件: 文件不存在 (" + filePath + ")"));
@@ -920,7 +923,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     System.err.println("打开文件失败: " + e.getMessage());
                     e.printStackTrace();
                 }
-            });
+            }, ModalityState.NON_MODAL);
         }
 
         /**

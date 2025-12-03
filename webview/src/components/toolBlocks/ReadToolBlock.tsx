@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ToolInput } from '../../types';
+import { openFile } from '../../utils/bridge';
 import { getFileName } from '../../utils/helpers';
 
 interface ReadToolBlockProps {
@@ -31,6 +32,13 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
   const iconClass = isDirectory ? 'codicon-folder' : 'codicon-file-code';
   const actionText = isDirectory ? '读取目录' : '读取文件';
 
+  const handleFileClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止冒泡，避免触发展开/折叠
+    if (filePath && !isDirectory) {
+      openFile(filePath);
+    }
+  };
+
   // Get all input parameters for the expanded view
   const params = Object.entries(input).filter(([key]) => key !== 'file_path' && key !== 'target_file' && key !== 'path');
 
@@ -49,7 +57,13 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
           <span className="tool-title-text">
             {actionText}
           </span>
-          <span className="tool-title-summary">{fileName || filePath}</span>
+          <span
+            className={`tool-title-summary ${!isDirectory ? 'clickable-file' : ''}`}
+            onClick={!isDirectory ? handleFileClick : undefined}
+            title={!isDirectory ? `点击打开 ${filePath}` : undefined}
+          >
+            {fileName || filePath}
+          </span>
 
           {lineInfo && (
             <span className="tool-title-summary" style={{ marginLeft: '8px', fontSize: '12px' }}>

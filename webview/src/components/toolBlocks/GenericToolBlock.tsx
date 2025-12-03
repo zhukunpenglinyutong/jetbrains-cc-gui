@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ToolInput } from '../../types';
+import { openFile } from '../../utils/bridge';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
 
 const CODICON_MAP: Record<string, string> = {
@@ -125,6 +126,16 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
 
   const shouldShowDetails = otherParams.length > 0 && (!isCollapsible || expanded);
 
+  // 判断是否为文件路径（非目录）
+  const isFilePath = filePath && !filePath.endsWith('/') && filePath !== '.';
+
+  const handleFileClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isFilePath) {
+      openFile(filePath);
+    }
+  };
+
   return (
     <div className="task-container">
       <div
@@ -142,7 +153,11 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
             {displayName}
           </span>
           {summary && (
-              <span className="task-summary-text tool-title-summary" title={summary}>
+              <span
+                className={`task-summary-text tool-title-summary ${isFilePath ? 'clickable-file' : ''}`}
+                title={isFilePath ? `点击打开 ${filePath}` : summary}
+                onClick={isFilePath ? handleFileClick : undefined}
+              >
                 {summary}
               </span>
             )}

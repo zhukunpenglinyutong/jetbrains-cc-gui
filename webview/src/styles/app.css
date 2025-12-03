@@ -1800,12 +1800,12 @@ body {
 }
 
 .btn-small:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-hover);
     border-color: var(--border-hover);
 }
 
 .btn-small:active {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--bg-active);
 }
 
 .btn-small.btn-primary {
@@ -1819,12 +1819,13 @@ body {
 }
 
 .btn-small.btn-danger {
+    background: transparent;
     border-color: var(--color-danger);
     color: var(--color-danger);
 }
 
 .btn-small.btn-danger:hover {
-    background: rgba(211, 47, 47, 0.1);
+    background: rgba(211, 47, 47, 0.15);
     border-color: var(--color-error);
     color: var(--color-error);
 }
@@ -4094,9 +4095,32 @@ body {
     margin-left: 12px;
 }
 
+/* 可点击的文件名样式 */
+.clickable-file {
+    cursor: pointer;
+    color: var(--color-link);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 2px;
+    transition: text-decoration-color 0.15s ease;
+}
+
+.clickable-file:hover {
+    text-decoration-color: var(--color-link);
+}
+
 /* 亮色模式下工具块摘要使用更深的颜色 */
 [data-theme="light"] .tool-title-summary {
     color: #444444;
+}
+
+/* 亮色模式下可点击文件名样式 */
+[data-theme="light"] .clickable-file {
+    color: var(--color-link);
+}
+
+[data-theme="light"] .clickable-file:hover {
+    text-decoration-color: var(--color-link);
 }
 
 /* Bash命令块样式 */

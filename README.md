@@ -23,10 +23,15 @@
 
 ### 目前进度
 
+##### **12月4日（v0.0.8-iteration2）**
+
+- [x] P2（feat）支持文件信息点击跳转功能
+- [x] P2（fix）解决DIFF组件统计不精准的问题
+
 ##### **12月3日（v0.0.8-iteration1）**
 
 - [x] P0（feat）支持基础版本的MCP
-- [x] P1（fix）解决输入框光标无法快捷移动的问题
+- [x] P0（fix）解决输入框光标无法快捷移动的问题
 
 <img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/4.png" />
 
