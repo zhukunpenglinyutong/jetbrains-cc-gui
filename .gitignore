@@ -44,7 +44,6 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-CLAUDE.md
 .npm-cache
 
 # Webview frontend artifacts

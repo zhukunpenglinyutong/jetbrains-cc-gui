@@ -67,7 +67,7 @@
   background: var(--input-bg);
   border: 1px solid var(--input-border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .chat-input-box:focus-within {
@@ -164,7 +164,7 @@
    ============================================================ */
 .input-editable-wrapper {
   position: relative;
-  padding: 10px 12px;
+  padding: 6px 8px;
   min-height: 20px;
   max-height: 240px;
   overflow-y: auto;
@@ -197,7 +197,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 4px 4px;
   border-top: none;
   background: rgba(0, 0, 0, 0.1);
 }

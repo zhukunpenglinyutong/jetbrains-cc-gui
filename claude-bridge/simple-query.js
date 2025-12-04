@@ -3,6 +3,10 @@
 /**
  * 简单的 Claude Agent SDK 测试脚本
  * 用于测试 Java 与 Claude SDK 的交互
+ *
+ * 支持两种输入方式：
+ * 1. 命令行参数: node simple-query.js "prompt"
+ * 2. stdin 输入 (设置 CLAUDE_USE_STDIN=true): echo '{"prompt":"hello"}' | node simple-query.js
  */
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
@@ -10,12 +14,53 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-// 从命令行参数获取提示词，如果没有则使用默认值
-const userPrompt = process.argv[2] || 'Hello, what is 2+2?';
+/**
+ * 从 stdin 读取 JSON 输入
+ */
+async function readStdinInput() {
+  if (process.env.CLAUDE_USE_STDIN !== 'true') {
+    return null;
+  }
 
-console.log('Starting Claude Agent SDK test...');
-console.log('Prompt:', userPrompt);
-console.log('---');
+  return new Promise((resolve) => {
+    let data = '';
+    const timeout = setTimeout(() => {
+      resolve(null);
+    }, 5000);
+
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      data += chunk;
+    });
+    process.stdin.on('end', () => {
+      clearTimeout(timeout);
+      if (data.trim()) {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          console.error('[STDIN] Failed to parse JSON:', e.message);
+          resolve(null);
+        }
+      } else {
+        resolve(null);
+      }
+    });
+    process.stdin.on('error', () => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+    process.stdin.resume();
+  });
+}
+
+// 获取用户提示词（支持 stdin 和命令行参数）
+async function getUserPrompt() {
+  const stdinData = await readStdinInput();
+  if (stdinData && stdinData.prompt) {
+    return stdinData.prompt;
+  }
+  return process.argv[2] || 'Hello, what is 2+2?';
+}
 
 // 读取 Claude Code 配置
 function loadClaudeSettings() {
@@ -28,7 +73,10 @@ function loadClaudeSettings() {
   }
 }
 
-async function runQuery() {
+async function runQuery(userPrompt) {
+  console.log('Starting Claude Agent SDK test...');
+  console.log('Prompt:', userPrompt);
+  console.log('---');
   try {
     // 加载 Claude Code 配置
     const settings = loadClaudeSettings();
@@ -192,4 +240,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // 运行查询
-runQuery();
+(async () => {
+  const userPrompt = await getUserPrompt();
+  await runQuery(userPrompt);
+})();

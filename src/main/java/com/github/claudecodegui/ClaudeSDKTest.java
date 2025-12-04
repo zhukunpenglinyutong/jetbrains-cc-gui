@@ -95,22 +95,37 @@ public class ClaudeSDKTest {
         boolean inJson = false;
 
         try {
+            // 构建 stdin 输入 JSON，避免命令行参数中特殊字符导致解析错误
+            JsonObject stdinInput = new JsonObject();
+            stdinInput.addProperty("prompt", prompt);
+            String stdinJson = gson.toJson(stdinInput);
+
             // 构建命令
             List<String> command = new ArrayList<>();
             command.add("node");
             command.add(NODE_SCRIPT);
-            command.add(prompt);
+            // 不再通过命令行参数传递 prompt
 
             // 创建进程
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(new File(SDK_DIR));
             pb.redirectErrorStream(true); // 合并 stderr 到 stdout
+            // 设置环境变量启用 stdin 输入
+            pb.environment().put("CLAUDE_USE_STDIN", "true");
 
             System.out.println("执行命令: " + String.join(" ", command));
             System.out.println("工作目录: " + pb.directory().getAbsolutePath());
             System.out.println("---");
 
             Process process = pb.start();
+
+            // 通过 stdin 写入 prompt
+            try (java.io.OutputStream stdin = process.getOutputStream()) {
+                stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
+                stdin.flush();
+            } catch (Exception e) {
+                System.err.println("[ClaudeSDKTest] Failed to write stdin: " + e.getMessage());
+            }
 
             // 读取输出
             try (BufferedReader reader = new BufferedReader(

@@ -2,11 +2,19 @@ import { useState, useEffect } from 'react';
 
 interface WaitingIndicatorProps {
   size?: number;
+  /** 开始加载的时间戳（毫秒），用于在视图切换后保持计时连续 */
+  startTime?: number;
 }
 
-export const WaitingIndicator = ({ size = 18 }: WaitingIndicatorProps) => {
+export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps) => {
   const [dotCount, setDotCount] = useState(1);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
+    // 如果提供了开始时间，计算已经过去的秒数
+    if (startTime) {
+      return Math.floor((Date.now() - startTime) / 1000);
+    }
+    return 0;
+  });
 
   // 省略号动画
   useEffect(() => {
@@ -19,13 +27,18 @@ export const WaitingIndicator = ({ size = 18 }: WaitingIndicatorProps) => {
   // 计时器：记录当前思考轮次已经经过的秒数
   useEffect(() => {
     const timer = setInterval(() => {
-      setElapsedSeconds(prev => prev + 1);
+      if (startTime) {
+        // 使用外部传入的开始时间计算，避免视图切换后重置
+        setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+      } else {
+        setElapsedSeconds(prev => prev + 1);
+      }
     }, 1000);
 
     return () => {
       clearInterval(timer);
     };
-  }, []);
+  }, [startTime]);
 
   const dots = '.'.repeat(dotCount);
 

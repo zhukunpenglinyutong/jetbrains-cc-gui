@@ -5,13 +5,15 @@
  * 支持持久化 channel 的多轮对话（简化版）
  *
  * 命令:
- *   send <message> [sessionId] [cwd] - 发送消息（如果有 sessionId 则恢复会话）
+ *   send - 发送消息（参数通过 stdin JSON 传递）
+ *   sendWithAttachments - 发送带附件的消息（参数通过 stdin JSON 传递）
  *   getSession <sessionId> [cwd] - 获取会话历史消息
  *
  * 设计说明：
  * - 不维护全局状态（每次调用是独立进程）
  * - sessionId 由调用方（Java）维护
  * - 每次调用时通过 resume 参数恢复会话
+ * - 消息和其他参数通过 stdin 以 JSON 格式传递，避免命令行特殊字符问题
  */
 
 // 服务模块
@@ -46,17 +48,40 @@ process.on('unhandledRejection', (reason) => {
 (async () => {
   try {
     switch (command) {
-      case 'send':
-        // send <message> [sessionId] [cwd] [permissionMode] [model]
-        await sendMessage(args[0], args[1], args[2], args[3], args[4]);
-        break;
-
-      case 'sendWithAttachments':
-        // sendWithAttachments <message> [sessionId] [cwd] [permissionMode] [model]
-        // 先尝试从 stdin 读取附件数据（如果设置了 CLAUDE_USE_STDIN=true）
+      case 'send': {
+        // 从 stdin 读取参数（JSON 格式）
         const stdinData = await readStdinData();
-        await sendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);
+        if (stdinData && stdinData.message !== undefined) {
+          // 新方式：从 stdin 读取所有参数
+          const { message, sessionId, cwd, permissionMode, model } = stdinData;
+          await sendMessage(message, sessionId || '', cwd || '', permissionMode || '', model || '');
+        } else {
+          // 兼容旧方式：从命令行参数读取
+          await sendMessage(args[0], args[1], args[2], args[3], args[4]);
+        }
         break;
+      }
+
+      case 'sendWithAttachments': {
+        // 从 stdin 读取参数和附件（JSON 格式）
+        const stdinData = await readStdinData();
+        if (stdinData && stdinData.message !== undefined) {
+          // 新方式：从 stdin 读取所有参数
+          const { message, sessionId, cwd, permissionMode, model, attachments } = stdinData;
+          await sendMessageWithAttachments(
+            message,
+            sessionId || '',
+            cwd || '',
+            permissionMode || '',
+            model || '',
+            attachments ? { attachments } : null
+          );
+        } else {
+          // 兼容旧方式：从命令行参数读取
+          await sendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);
+        }
+        break;
+      }
 
       case 'getSession':
         // getSession <sessionId> [cwd]

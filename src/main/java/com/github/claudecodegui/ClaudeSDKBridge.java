@@ -152,18 +152,33 @@ public class ClaudeSDKBridge {
         try {
             String node = nodeDetector.findNodeExecutable();
 
+            // 构建 stdin 输入 JSON，避免命令行参数中特殊字符导致解析错误
+            JsonObject stdinInput = new JsonObject();
+            stdinInput.addProperty("prompt", prompt);
+            String stdinJson = gson.toJson(stdinInput);
+
             List<String> command = new ArrayList<>();
             command.add(node);
             command.add(NODE_SCRIPT);
-            command.add(prompt);
+            // 不再通过命令行参数传递 prompt
 
             ProcessBuilder pb = new ProcessBuilder(command);
             File workDir = directoryResolver.findSdkDir();
             pb.directory(workDir);
             pb.redirectErrorStream(true);
             envConfigurator.updateProcessEnvironment(pb, node);
+            // 设置环境变量启用 stdin 输入
+            pb.environment().put("CLAUDE_USE_STDIN", "true");
 
             Process process = pb.start();
+
+            // 通过 stdin 写入 prompt
+            try (java.io.OutputStream stdin = process.getOutputStream()) {
+                stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
+                stdin.flush();
+            } catch (Exception e) {
+                System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
+            }
 
             try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -254,10 +269,15 @@ public class ClaudeSDKBridge {
             try {
                 String node = nodeDetector.findNodeExecutable();
 
+                // 构建 stdin 输入 JSON，避免命令行参数中特殊字符导致解析错误
+                JsonObject stdinInput = new JsonObject();
+                stdinInput.addProperty("prompt", prompt);
+                String stdinJson = gson.toJson(stdinInput);
+
                 List<String> command = new ArrayList<>();
                 command.add(node);
                 command.add(NODE_SCRIPT);
-                command.add(prompt);
+                // 不再通过命令行参数传递 prompt
 
                 File processTempDir = processManager.prepareClaudeTempDir();
                 Set<String> existingTempMarkers = processManager.snapshotClaudeCwdFiles(processTempDir);
@@ -270,10 +290,20 @@ public class ClaudeSDKBridge {
                 Map<String, String> env = pb.environment();
                 envConfigurator.configureTempDir(env, processTempDir);
                 envConfigurator.updateProcessEnvironment(pb, node);
+                // 设置环境变量启用 stdin 输入
+                env.put("CLAUDE_USE_STDIN", "true");
 
                 Process process = null;
                 try {
                     process = pb.start();
+
+                    // 通过 stdin 写入 prompt
+                    try (java.io.OutputStream stdin = process.getOutputStream()) {
+                        stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
+                        stdin.flush();
+                    } catch (Exception e) {
+                        System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
+                    }
 
                     try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -461,17 +491,23 @@ public class ClaudeSDKBridge {
                 String node = nodeDetector.findNodeExecutable();
                 File workDir = directoryResolver.findSdkDir();
 
+                // 构建 stdin 输入 JSON，避免命令行参数中特殊字符导致解析错误
+                JsonObject stdinInput = new JsonObject();
+                stdinInput.addProperty("message", message);
+                stdinInput.addProperty("sessionId", sessionId != null ? sessionId : "");
+                stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+                stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
+                stdinInput.addProperty("model", model != null ? model : "");
+                if (hasAttachments && attachmentsJson != null) {
+                    stdinInput.add("attachments", gson.fromJson(attachmentsJson, JsonArray.class));
+                }
+                String stdinJson = gson.toJson(stdinInput);
+
                 List<String> command = new ArrayList<>();
                 command.add(node);
                 command.add(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath());
                 command.add(hasAttachments ? "sendWithAttachments" : "send");
-                command.add(message);
-                command.add(sessionId != null ? sessionId : "");
-                command.add(cwd != null ? cwd : "");
-                command.add(permissionMode != null ? permissionMode : "");
-                if (model != null && !model.isEmpty()) {
-                    command.add(model);
-                }
+                // 不再传递 message 等参数到命令行，改用 stdin
 
                 File processTempDir = processManager.prepareClaudeTempDir();
                 Set<String> existingTempMarkers = processManager.snapshotClaudeCwdFiles(processTempDir);
@@ -493,25 +529,23 @@ public class ClaudeSDKBridge {
                 Map<String, String> env = pb.environment();
                 envConfigurator.configureProjectPath(env, cwd);
                 envConfigurator.configureTempDir(env, processTempDir);
-                envConfigurator.configureAttachmentEnv(env, hasAttachments);
+                // 始终使用 stdin 传递参数
+                env.put("CLAUDE_USE_STDIN", "true");
 
                 pb.redirectErrorStream(true);
                 envConfigurator.updateProcessEnvironment(pb, node);
 
                 Process process = null;
-                final String finalAttachmentsJson = attachmentsJson;
                 try {
                     process = pb.start();
                     processManager.registerProcess(channelId, process);
 
-                    // 写入附件数据
-                    if (hasAttachments && finalAttachmentsJson != null) {
-                        try (java.io.OutputStream stdin = process.getOutputStream()) {
-                            stdin.write(finalAttachmentsJson.getBytes(StandardCharsets.UTF_8));
-                            stdin.flush();
-                        } catch (Exception e) {
-                            // stdin 写入失败，不影响主流程
-                        }
+                    // 通过 stdin 写入所有参数（包括消息和附件）
+                    try (java.io.OutputStream stdin = process.getOutputStream()) {
+                        stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
+                        stdin.flush();
+                    } catch (Exception e) {
+                        System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
                     }
 
                     try {

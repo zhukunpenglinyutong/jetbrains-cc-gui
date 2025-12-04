@@ -27,6 +27,7 @@ export const ChatInputBox = ({
   attachments: externalAttachments,
   placeholder = '@引用文件，shift + enter 换行',
   disabled = false,
+  value,
   onSubmit,
   onStop,
   onInput,
@@ -496,6 +497,30 @@ export const ChatInputBox = ({
       }
     }
   }, [isComposing, handleSubmit, fileCompletion, commandCompletion]);
+
+  // 受控模式：当外部 value 改变时更新输入框内容
+  useEffect(() => {
+    if (value === undefined) return;
+    if (!editableRef.current) return;
+
+    const currentText = getTextContent();
+    // 仅当外部值与当前值不同时更新，避免光标跳动
+    if (currentText !== value) {
+      editableRef.current.innerText = value;
+      setHasContent(!!value.trim());
+      adjustHeight();
+
+      // 将光标移到末尾
+      if (value) {
+        const range = document.createRange();
+        const selection = window.getSelection();
+        range.selectNodeContents(editableRef.current);
+        range.collapse(false); // false = 折叠到末尾
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+    }
+  }, [value, getTextContent, adjustHeight]);
 
   // 原生事件捕获，兼容 JCEF/IME 的特殊行为
   useEffect(() => {

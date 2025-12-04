@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.github.idea-claude-code-gui'
-version '0.0.8-iteration3_show'
+version '0.0.9'
 
 sourceCompatibility = 17
 targetCompatibility = 17

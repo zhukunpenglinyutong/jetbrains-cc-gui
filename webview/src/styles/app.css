@@ -129,6 +129,7 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
+    border-left: 1px solid var(--border-primary);
 }
 
 /* New Header Styles */
@@ -1100,7 +1101,7 @@ body {
 
 /* Input Area Styles */
 .input-area {
-    padding: 18px 16px 16px;
+    padding: 9px 8px 8px;
     background: var(--bg-primary);
     border-top: 1px solid var(--bg-tertiary);
     flex-shrink: 0;

@@ -61,6 +61,7 @@ const App = () => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([]);
   const [_status, setStatus] = useState(DEFAULT_STATUS); // Internal state, displayed via toast
   const [loading, setLoading] = useState(false);
+  const [loadingStartTime, setLoadingStartTime] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
@@ -79,6 +80,7 @@ const App = () => {
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
+  const [inputValue, setInputValue] = useState('');
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
@@ -118,7 +120,16 @@ const App = () => {
       // Show toast notification for status changes
       addToast(text);
     };
-    window.showLoading = (value) => setLoading(isTruthy(value));
+    window.showLoading = (value) => {
+      const isLoading = isTruthy(value);
+      setLoading(isLoading);
+      // 开始加载时记录时间，结束时清除
+      if (isLoading) {
+        setLoadingStartTime(Date.now());
+      } else {
+        setLoadingStartTime(null);
+      }
+    };
     window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
     window.setHistoryData = (data) => setHistoryData(data);
     window.clearMessages = () => setMessages([]);
@@ -294,6 +305,9 @@ const App = () => {
     } else {
       sendBridgeMessage('send_message', text);
     }
+
+    // 清空输入框状态
+    setInputValue('');
   };
 
   /**
@@ -899,7 +913,7 @@ const App = () => {
           )}
 
           {/* Loading indicator */}
-          {loading && !isThinking && <WaitingIndicator />}
+          {loading && !isThinking && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
         </div>
 
         {/* 滚动控制按钮 */}
@@ -919,8 +933,10 @@ const App = () => {
             usageUsedTokens={usageUsedTokens}
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
+            value={inputValue}
             onSubmit={handleSubmit}
             onStop={interruptSession}
+            onInput={setInputValue}
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
           />

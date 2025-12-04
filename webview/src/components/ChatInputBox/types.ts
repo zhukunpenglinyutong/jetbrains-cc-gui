@@ -190,9 +190,9 @@ export interface ProviderInfo {
  * 预定义提供商列表
  */
 export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
-  { id: 'claude', label: 'Claude', icon: 'codicon-terminal', enabled: true },
-  { id: 'codex', label: 'Codex', icon: 'codicon-terminal', enabled: false },
-  { id: 'gemini', label: 'Gemini', icon: 'codicon-terminal', enabled: false },
+  { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
+  { id: 'codex', label: 'Codex Cli', icon: 'codicon-terminal', enabled: false },
+  { id: 'gemini', label: 'Gemini Cli', icon: 'codicon-terminal', enabled: false },
 ];
 
 // ============================================================
@@ -239,6 +239,8 @@ export interface ChatInputBoxProps {
   placeholder?: string;
   /** 是否禁用 */
   disabled?: boolean;
+  /** 受控模式：输入框内容 */
+  value?: string;
 
   // 事件回调
   /** 提交消息 */
