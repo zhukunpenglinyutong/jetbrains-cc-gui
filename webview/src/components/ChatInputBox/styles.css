@@ -220,13 +220,13 @@
 .selector-button {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 3px;
+  padding: 4px 6px;
   background: var(--button-bg);
   border: none;
   border-radius: 4px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
@@ -466,6 +466,18 @@
 
 .dropdown-item.selected {
   background: var(--dropdown-selected);
+}
+
+/* 禁用状态（目录） */
+.dropdown-item.disabled {
+  cursor: default;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.dropdown-item.disabled:hover,
+.dropdown-item.disabled.active {
+  background: transparent;
 }
 
 .dropdown-item-icon {

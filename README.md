@@ -12,16 +12,25 @@
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.8-iteration2.zip 文件
+# 1.下载 idea-claude-code-gui-0.0.8-iteration3.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.8-iteration2.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.8-iteration3.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.8-iteration2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/idea-claude-code-gui-0.0.8-iteration2.zip)
+插件下载：[idea-claude-code-gui-0.0.8-iteration3.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/idea-claude-code-gui-0.0.8-iteration3_show.zip)
 
 ---
 
 ### 目前进度
+
+##### **12月4日（v0.0.8-iteration3）**
+
+- [x] P0：修改配置页面，之前只能展示两个字段，现在可以配置和展示多个字段
+- [x] P1：增加回到顶部，或者回到底部 按钮功能
+- [x] P3：打开历史会话自动定位到最底部
+- [x] P3：优化文件夹可点击效果
+- [x] P3：优化输入框工具切换icon
+- [x] P3：取消MD区域文件可点击功能
 
 ##### **12月4日（v0.0.8-iteration2）**
 

@@ -256,6 +256,10 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
           for (const block of content) {
             if (block.type === 'text') {
               console.log('[CONTENT]', block.text);
+            } else if (block.type === 'thinking') {
+              // 输出思考过程（用于实时显示）
+              const thinkingText = block.thinking || block.text || '';
+              console.log('[THINKING]', thinkingText);
             } else if (block.type === 'tool_use') {
               console.log('[DEBUG] Tool use payload:', JSON.stringify(block));
             }

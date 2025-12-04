@@ -363,29 +363,23 @@ public class CodemossSettingsService {
             throw new IllegalArgumentException("Provider cannot be null");
         }
 
-        JsonObject envConfig = extractEnvConfig(provider);
-        if (envConfig == null) {
-            throw new IllegalArgumentException("Provider is missing env configuration");
+        if (!provider.has("settingsConfig") || provider.get("settingsConfig").isJsonNull()) {
+            throw new IllegalArgumentException("Provider is missing settingsConfig");
         }
 
+        JsonObject settingsConfig = provider.getAsJsonObject("settingsConfig");
         JsonObject claudeSettings = readClaudeSettings();
-        JsonObject claudeEnv = claudeSettings.has("env") && claudeSettings.get("env").isJsonObject()
-            ? claudeSettings.getAsJsonObject("env")
-            : new JsonObject();
 
-        String apiKey = envConfig.has("ANTHROPIC_AUTH_TOKEN") && !envConfig.get("ANTHROPIC_AUTH_TOKEN").isJsonNull()
-            ? envConfig.get("ANTHROPIC_AUTH_TOKEN").getAsString()
-            : null;
-        String baseUrl = envConfig.has("ANTHROPIC_BASE_URL") && !envConfig.get("ANTHROPIC_BASE_URL").isJsonNull()
-            ? envConfig.get("ANTHROPIC_BASE_URL").getAsString()
-            : null;
+        // 同步所有 settingsConfig 中的字段到 claudeSettings
+        for (String key : settingsConfig.keySet()) {
+            if (settingsConfig.get(key).isJsonNull()) {
+                claudeSettings.remove(key);
+            } else {
+                claudeSettings.add(key, settingsConfig.get(key));
+            }
+        }
 
-        setOrRemove(claudeEnv, "ANTHROPIC_AUTH_TOKEN", apiKey);
-        setOrRemove(claudeEnv, "ANTHROPIC_API_KEY", apiKey);
-        setOrRemove(claudeEnv, "ANTHROPIC_BASE_URL", baseUrl);
-
-        claudeSettings.add("env", claudeEnv);
-
+        // 确保 codemossProviderId 字段存在
         if (provider.has("id") && !provider.get("id").isJsonNull()) {
             claudeSettings.addProperty("codemossProviderId", provider.get("id").getAsString());
         }

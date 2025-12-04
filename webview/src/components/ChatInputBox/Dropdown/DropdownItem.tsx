@@ -41,11 +41,16 @@ export const DropdownItem = ({
     );
   }
 
+  // 目录不可选择
+  const isDirectory = item.type === 'directory';
+  const isDisabled = isDirectory;
+
   return (
     <div
-      className={`dropdown-item ${isActive ? 'active' : ''}`}
-      onClick={onClick}
-      onMouseEnter={onMouseEnter}
+      className={`dropdown-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
+      onClick={isDisabled ? undefined : onClick}
+      onMouseEnter={isDisabled ? undefined : onMouseEnter}
+      style={isDisabled ? { cursor: 'default' } : undefined}
     >
       <span className={`dropdown-item-icon codicon ${getIconClass()}`} />
       <div className="dropdown-item-content">

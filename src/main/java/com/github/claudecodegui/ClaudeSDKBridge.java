@@ -557,6 +557,9 @@ public class ClaudeSDKBridge {
                                     String delta = line.substring("[CONTENT_DELTA]".length()).trim();
                                     assistantContent.append(delta);
                                     callback.onMessage("content_delta", delta);
+                                } else if (line.startsWith("[THINKING]")) {
+                                    String thinkingContent = line.substring("[THINKING]".length()).trim();
+                                    callback.onMessage("thinking", thinkingContent);
                                 } else if (line.startsWith("[SESSION_ID]")) {
                                     String capturedSessionId = line.substring("[SESSION_ID]".length()).trim();
                                     callback.onMessage("session_id", capturedSessionId);

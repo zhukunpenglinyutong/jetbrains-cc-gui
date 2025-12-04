@@ -195,8 +195,9 @@ export function useCompletionDropdown<T>({
     if (!state.isOpen) return false;
 
     const { items } = state;
+    // 过滤可选择的项（排除分隔线、标题和目录）
     const selectableCount = items.filter(
-      i => i.type !== 'separator' && i.type !== 'section-header'
+      i => i.type !== 'separator' && i.type !== 'section-header' && i.type !== 'directory'
     ).length;
 
     switch (e.key) {

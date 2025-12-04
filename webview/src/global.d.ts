@@ -6,6 +6,7 @@ declare global {
     updateMessages?: (json: string) => void;
     updateStatus?: (status: string) => void;
     showLoading?: (show: boolean | string) => void;
+    showThinkingStatus?: (show: boolean | string) => void;
     setHistoryData?: (data: HistoryData) => void;
     clearMessages?: () => void;
     addErrorMessage?: (message: string) => void;

@@ -14,9 +14,11 @@ import {
   TaskExecutionBlock,
   TodoListBlock,
 } from './components/toolBlocks';
-import { BackIcon, ClawdIcon } from './components/Icons';
+import { BackIcon } from './components/Icons';
+import { Claude } from '@lobehub/icons';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
+import { ScrollControl } from './components/ScrollControl';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -59,6 +61,7 @@ const App = () => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([]);
   const [_status, setStatus] = useState(DEFAULT_STATUS); // Internal state, displayed via toast
   const [loading, setLoading] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
@@ -78,6 +81,7 @@ const App = () => {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const inputAreaRef = useRef<HTMLDivElement | null>(null);
 
   // 初始化主题
   useEffect(() => {
@@ -115,6 +119,7 @@ const App = () => {
       addToast(text);
     };
     window.showLoading = (value) => setLoading(isTruthy(value));
+    window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
     window.setHistoryData = (data) => setHistoryData(data);
     window.clearMessages = () => setMessages([]);
     window.addErrorMessage = (message) =>
@@ -206,7 +211,12 @@ const App = () => {
 
   useEffect(() => {
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      // 使用 requestAnimationFrame 确保 DOM 已完全渲染
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      });
     }
   }, [messages]);
 
@@ -746,7 +756,8 @@ const App = () => {
       {currentView === 'settings' ? (
         <SettingsView onClose={() => setCurrentView('chat')} />
       ) : currentView === 'chat' ? (
-        <div className="messages-container" ref={messagesContainerRef}>
+        <>
+          <div className="messages-container" ref={messagesContainerRef}>
           {messages.length === 0 && (
             <div
               style={{
@@ -759,17 +770,7 @@ const App = () => {
                 gap: '16px',
               }}
             >
-              <div
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <ClawdIcon />
-              </div>
+              <Claude.Color size={64} />
               <div>给 Claude Code 发送消息</div>
             </div>
           )}
@@ -887,14 +888,29 @@ const App = () => {
             );
           })}
 
-          {loading && <WaitingIndicator />}
+          {/* Thinking indicator */}
+          {isThinking && (
+            <div className="message assistant">
+              <div className="thinking-status">
+                <span className="thinking-status-icon">🤔</span>
+                <span className="thinking-status-text">思考中...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Loading indicator */}
+          {loading && !isThinking && <WaitingIndicator />}
         </div>
+
+        {/* 滚动控制按钮 */}
+        <ScrollControl containerRef={messagesContainerRef} inputAreaRef={inputAreaRef} />
+      </>
       ) : (
         <HistoryView historyData={historyData} onLoadSession={loadHistorySession} />
       )}
 
       {currentView === 'chat' && (
-        <div className="input-area">
+        <div className="input-area" ref={inputAreaRef}>
           <ChatInputBox
             isLoading={loading}
             selectedModel={selectedModel}

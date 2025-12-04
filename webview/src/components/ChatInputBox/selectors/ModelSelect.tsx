@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Claude } from '@lobehub/icons';
 import { AVAILABLE_MODELS } from '../types';
 
 interface ModelSelectProps {
@@ -69,7 +70,7 @@ export const ModelSelect = ({ value, onChange }: ModelSelectProps) => {
         onClick={handleToggle}
         title={`当前模型: ${currentModel.label}`}
       >
-        <span className="codicon codicon-hubot" />
+        <Claude.Color size={12} />
         <span>{currentModel.label}</span>
         <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
       </button>
@@ -92,7 +93,7 @@ export const ModelSelect = ({ value, onChange }: ModelSelectProps) => {
               className={`selector-option ${model.id === value ? 'selected' : ''}`}
               onClick={() => handleSelect(model.id)}
             >
-              <span className="codicon codicon-hubot" />
+              <Claude.Color size={16} />
               <span>{model.label}</span>
               {model.id === value && (
                 <span className="codicon codicon-check check-mark" />

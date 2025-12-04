@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.github.idea-claude-code-gui'
-version '0.0.8-iteration2'
+version '0.0.8-iteration3_show'
 
 sourceCompatibility = 17
 targetCompatibility = 17
@@ -38,13 +38,13 @@ tasks.withType(JavaCompile) {
 
 patchPluginXml {
     sinceBuild = '233'
-    untilBuild = '252.*'  // 更新为支持2024.2版本
+    untilBuild = '252.*'
 
     changeNotes = """
         <ul>
             <li>初始版本发布</li>
             <li>实现右侧工具栏窗口</li>
-            <li>更新支持IDEA 2024.2版本</li>
+            <li>最小支持IDEA 2023.3版本</li>
         </ul>
     """
 }

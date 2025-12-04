@@ -204,16 +204,16 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setIsAdding(false);
     setProviderName(provider.name || '');
     setWebsiteUrl(provider.websiteUrl || '');
-    setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || '');
+    setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');
     setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || 'https://api.anthropic.com');
     setShowApiKey(false);
     setJsonError('');
 
-    // Initialize JSON Config
-    const config = {
+    // Initialize JSON Config - 保留完整的 settingsConfig
+    const config = provider.settingsConfig || {
       env: {
-        ANTHROPIC_AUTH_TOKEN: provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || '',
-        ANTHROPIC_BASE_URL: provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
+        ANTHROPIC_AUTH_TOKEN: '',
+        ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
       }
     };
     setJsonConfig(JSON.stringify(config, null, 2));
@@ -253,15 +253,19 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       return;
     }
 
+    // 解析 JSON 配置
+    let parsedConfig;
+    try {
+      parsedConfig = JSON.parse(jsonConfig || '{}');
+    } catch (e) {
+      alert('配置 JSON 格式错误，请修正后再保存');
+      return;
+    }
+
     const updates = {
       name: providerName,
       websiteUrl: websiteUrl,
-      settingsConfig: {
-        env: {
-          ANTHROPIC_AUTH_TOKEN: apiKey,
-          ANTHROPIC_BASE_URL: apiUrl,
-        },
-      },
+      settingsConfig: parsedConfig, // 使用完整的 JSON 配置
     };
 
     if (isAdding) {
@@ -371,8 +375,11 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       const config = JSON.parse(newValue);
       if (config && typeof config === 'object') {
         if (config.env) {
+          // 优先使用 ANTHROPIC_AUTH_TOKEN，其次是 ANTHROPIC_API_KEY
           if (config.env.ANTHROPIC_AUTH_TOKEN !== undefined) {
             setApiKey(config.env.ANTHROPIC_AUTH_TOKEN);
+          } else if (config.env.ANTHROPIC_API_KEY !== undefined) {
+            setApiKey(config.env.ANTHROPIC_API_KEY);
           }
           if (config.env.ANTHROPIC_BASE_URL !== undefined) {
             setApiUrl(config.env.ANTHROPIC_BASE_URL);
@@ -930,6 +937,9 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                             配置 JSON
                           </summary>
                           <div className="json-config-section">
+                            <p className="section-desc" style={{ marginBottom: '12px', fontSize: '12px', color: '#999' }}>
+                              此处可配置完整的 settings.json 内容，支持所有字段（如 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等）
+                            </p>
                             <div className="json-editor-wrapper">
                         <textarea
                             className="json-editor"
@@ -937,9 +947,14 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                             onChange={handleJsonChange}
                             placeholder={`{
   "env": {
+    "ANTHROPIC_API_KEY": "",
     "ANTHROPIC_AUTH_TOKEN": "",
     "ANTHROPIC_BASE_URL": ""
-  }
+  },
+  "model": "opus",
+  "alwaysThinkingEnabled": false,
+  "ccSwitchProviderId": "default",
+  "codemossProviderId": ""
 }`}
                         />
                               {jsonError && (

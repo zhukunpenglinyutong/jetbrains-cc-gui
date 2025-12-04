@@ -715,6 +715,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         showPermissionDialog(request);
                     });
                 }
+
+                @Override
+                public void onThinkingStatusChanged(boolean isThinking) {
+                    SwingUtilities.invokeLater(() -> {
+                        callJavaScript("showThinkingStatus", String.valueOf(isThinking));
+                        System.out.println("[ClaudeChatWindow] Thinking status changed: " + isThinking);
+                    });
+                }
             });
         }
 

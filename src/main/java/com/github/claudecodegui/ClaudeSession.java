@@ -83,6 +83,7 @@ public class ClaudeSession {
         void onStateChange(boolean busy, boolean loading, String error);
         void onSessionIdReceived(String sessionId);
         void onPermissionRequested(PermissionRequest request);
+        void onThinkingStatusChanged(boolean isThinking);
     }
 
     private SessionCallback callback;
@@ -316,6 +317,7 @@ public class ClaudeSession {
                 new ClaudeSDKBridge.MessageCallback() {
                 private final StringBuilder assistantContent = new StringBuilder();
                 private Message currentAssistantMessage = null;
+                private boolean isThinking = false;
 
                 @Override
                 public void onMessage(String type, String content) {
@@ -333,7 +335,7 @@ public class ClaudeSession {
                             } else {
                                 currentAssistantMessage.raw = mergedRaw;
                             }
-                            
+
                             String aggregatedText = extractMessageContent(mergedRaw);
                             assistantContent.setLength(0);
                             if (aggregatedText != null) {
@@ -345,8 +347,27 @@ public class ClaudeSession {
                         } catch (Exception e) {
                             System.err.println("Failed to parse assistant message JSON: " + e.getMessage());
                         }
+                    } else if ("thinking".equals(type)) {
+                        // 处理思考过程
+                        if (!isThinking) {
+                            isThinking = true;
+                            // 通知前端开始思考
+                            if (callback != null) {
+                                callback.onThinkingStatusChanged(true);
+                            }
+                            System.out.println("[ClaudeSession] Thinking started");
+                        }
                     } else if ("content".equals(type) || "content_delta".equals(type)) {
                         // 处理流式内容片段（content 向后兼容，content_delta 用于图片消息流式响应）
+                        // 如果之前在思考，现在开始输出内容，说明思考完成
+                        if (isThinking) {
+                            isThinking = false;
+                            if (callback != null) {
+                                callback.onThinkingStatusChanged(false);
+                            }
+                            System.out.println("[ClaudeSession] Thinking completed");
+                        }
+
                         assistantContent.append(content);
 
                         if (currentAssistantMessage == null) {
@@ -366,6 +387,12 @@ public class ClaudeSession {
                         System.out.println("Captured session ID: " + content);
                     } else if ("message_end".equals(type)) {
                         // 消息结束时立即更新 loading 状态，避免延迟
+                        if (isThinking) {
+                            isThinking = false;
+                            if (callback != null) {
+                                callback.onThinkingStatusChanged(false);
+                            }
+                        }
                         busy = false;
                         loading = false;
                         updateState();

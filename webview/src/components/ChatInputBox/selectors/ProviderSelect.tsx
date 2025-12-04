@@ -1,10 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Claude, OpenAI, Gemini } from '@lobehub/icons';
 import { AVAILABLE_PROVIDERS } from '../types';
 
 interface ProviderSelectProps {
   value: string;
   onChange?: (providerId: string) => void;
 }
+
+/**
+ * 提供商图标映射
+ */
+const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: number }) => {
+  switch (providerId) {
+    case 'claude':
+      return <Claude.Avatar size={size} />;
+    case 'codex':
+      return <OpenAI.Avatar size={size} />;
+    case 'gemini':
+      return <Gemini.Avatar size={size} />;
+    default:
+      return <Claude.Avatar size={size} />;
+  }
+};
 
 /**
  * ProviderSelect - AI 提供商选择器组件
@@ -95,7 +112,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
           onClick={handleToggle}
           title={`当前提供商: ${currentProvider.label}`}
         >
-          <span className={`codicon ${currentProvider.icon}`} />
+          <ProviderIcon providerId={currentProvider.id} size={12} />
           <span>{currentProvider.label}</span>
           <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
         </button>
@@ -122,7 +139,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
                   cursor: provider.enabled ? 'pointer' : 'not-allowed',
                 }}
               >
-                <span className={`codicon ${provider.icon}`} />
+                <ProviderIcon providerId={provider.id} size={16} />
                 <span>{provider.label}</span>
                 {provider.id === value && (
                   <span className="codicon codicon-check check-mark" />

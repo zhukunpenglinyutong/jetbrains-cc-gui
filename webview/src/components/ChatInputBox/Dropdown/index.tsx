@@ -109,6 +109,10 @@ export const CompletionDropdown = ({
    * 处理选择
    */
   const handleSelect = useCallback((item: DropdownItemData, index: number) => {
+    // 目录不可选择
+    if (item.type === 'directory') {
+      return;
+    }
     onSelect?.(item, index);
   }, [onSelect]);
 
@@ -119,9 +123,9 @@ export const CompletionDropdown = ({
     onMouseEnter?.(index);
   }, [onMouseEnter]);
 
-  // 过滤可选择的项（排除分隔线和标题）
+  // 过滤可选择的项（排除分隔线、标题和目录）
   const selectableItems = items.filter(
-    item => item.type !== 'separator' && item.type !== 'section-header'
+    item => item.type !== 'separator' && item.type !== 'section-header' && item.type !== 'directory'
   );
 
   return (
@@ -152,7 +156,7 @@ export const CompletionDropdown = ({
                 isActive={isActive}
                 onClick={() => handleSelect(item, selectableIndex)}
                 onMouseEnter={() => {
-                  if (item.type !== 'separator' && item.type !== 'section-header') {
+                  if (item.type !== 'separator' && item.type !== 'section-header' && item.type !== 'directory') {
                     handleMouseEnter(selectableIndex);
                   }
                 }}
