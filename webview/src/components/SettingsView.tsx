@@ -6,6 +6,8 @@ import AlertDialog from './AlertDialog';
 import type { AlertType } from './AlertDialog';
 import ConfirmDialog from './ConfirmDialog';
 import ConfigInfoDisplay from './ConfigInfoDisplay';
+import { ToastContainer, type ToastMessage } from './Toast';
+import { copyToClipboard } from '../utils/helpers';
 
 type SettingsTab = 'basic' | 'providers' | 'usage' | 'permissions' | 'mcp' | 'agents' | 'skills' | 'community';
 
@@ -75,6 +77,19 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 	  // Node.js 路径（手动指定时使用）
 	  const [nodePath, setNodePath] = useState('');
 	  const [savingNodePath, setSavingNodePath] = useState(false);
+
+	  // Toast 状态管理
+	  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Toast 辅助函数
+  const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
+    const id = `toast-${Date.now()}-${Math.random()}`;
+    setToasts((prev) => [...prev, { id, message, type }]);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
 
   // 显示页面内弹窗的帮助函数
   const showAlert = (type: AlertType, title: string, message: string) => {
@@ -788,14 +803,21 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                                     {provider.isActive && <span className="active-badge">使用中</span>}
                                   </h5>
                                   {provider.websiteUrl && (
-                                      <a
-                                          href={provider.websiteUrl}
+                                      <span
                                           className="provider-url"
-                                          target="_blank"
-                                          rel="noopener noreferrer"
+                                          style={{ cursor: 'pointer' }}
+                                          onClick={async () => {
+                                            const success = await copyToClipboard(provider.websiteUrl!);
+                                            if (success) {
+                                              addToast('链接已复制，请到浏览器打开', 'success');
+                                            } else {
+                                              addToast('复制失败，请手动复制', 'error');
+                                            }
+                                          }}
+                                          title="点击复制链接"
                                       >
                                         {provider.websiteUrl}
-                                      </a>
+                                      </span>
                                   )}
                                 </div>
                                 <div className="provider-actions">
@@ -861,15 +883,21 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                                 onChange={(e) => setWebsiteUrl(e.target.value)}
                             />
                             {websiteUrl && isValidUrl(websiteUrl) && (
-                                <a
-                                    href={websiteUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    type="button"
                                     className="link-btn"
-                                    title="访问官网"
+                                    title="复制链接"
+                                    onClick={async () => {
+                                      const success = await copyToClipboard(websiteUrl);
+                                      if (success) {
+                                        addToast('链接已复制，请到浏览器打开', 'success');
+                                      } else {
+                                        addToast('复制失败，请手动复制', 'error');
+                                      }
+                                    }}
                                 >
-                                  <span className="codicon codicon-link-external" />
-                                </a>
+                                  <span className="codicon codicon-copy" />
+                                </button>
                             )}
                           </div>
                         </div>
@@ -1088,6 +1116,9 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             onConfirm={confirmDeleteProvider}
             onCancel={cancelDeleteProvider}
         />
+
+        {/* Toast 通知 */}
+        <ToastContainer messages={toasts} onDismiss={dismissToast} />
       </div>
   );
 };

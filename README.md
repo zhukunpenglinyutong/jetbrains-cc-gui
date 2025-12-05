@@ -23,25 +23,23 @@
 
 ### 目前进度
 
-##### **12月4日（v0.0.8-iteration3）**
-
-- [x] P0：修改配置页面，之前只能展示两个字段，现在可以配置和展示多个字段
-- [x] P1：增加回到顶部，或者回到底部 按钮功能
-- [x] P3：打开历史会话自动定位到最底部
-- [x] P3：优化文件夹可点击效果
-- [x] P3：优化输入框工具切换icon
-- [x] P3：取消MD区域文件可点击功能
-
-##### **12月4日（v0.0.8-iteration2）**
-
-- [x] P2（feat）支持文件信息点击跳转功能
-- [x] P2（fix）解决DIFF组件统计不精准的问题
-- [x] P3（UI）解决渠道删除按钮背景颜色问题
-
-##### **12月3日（v0.0.8-iteration1）**
+##### **12月5日（v0.0.9）**
 
 - [x] P0（feat）支持基础版本的MCP
+- [x] P0（fix）解决window下，输入某些字符导致错误的问题
+- [x] P0（fix）解决window下，使用node安装claude路径无法识别的问题
 - [x] P0（fix）解决输入框光标无法快捷移动的问题
+- [x] P0（fix）修改配置页面，之前只能展示两个字段，现在可以配置和展示多个字段
+- [x] P1（feat）增加回到顶部，或者回到底部 按钮功能
+- [x] P2（feat）支持文件信息点击跳转功能
+- [x] P2（UI）优化权限弹窗样式
+- [x] P2（fix）解决DIFF组件统计不精准的问题
+- [x] P3（fix）打开历史会话自动定位到最底部
+- [x] P3（fix）优化文件夹可点击效果
+- [x] P3（fix）优化输入框工具切换icon
+- [x] P3（fix）取消MD区域文件可点击功能
+- [x] P3（UI）解决渠道删除按钮背景颜色问题
+- [x] P3（fix）将点击供应商链接调跳转改为复制链接，以防止出现问题
 
 <img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/4.png" />
 
@@ -163,7 +161,6 @@
 
 <img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/4.png" />
 
-
 ##### 11月19日（v0.0.1） - 实现历史记录读取功能
 
 <img width="400" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/1.png" />
@@ -220,10 +217,6 @@ cd claude-bridge
 
 # 生成的插件包会在 build/distributions/ 目录下（包体大约40MB）
 ```
-
-
-
-
 
 ### 开发环境
 

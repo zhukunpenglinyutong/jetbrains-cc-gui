@@ -466,6 +466,8 @@ public class ClaudeSDKBridge {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
             final boolean[] hadSendError = {false};
+            // 记录 Node.js 进程中最后一条错误日志，方便在 "Process exited with code" 时附加具体原因
+            final String[] lastNodeError = {null};
 
             try {
                 // 序列化附件
@@ -554,7 +556,15 @@ public class ClaudeSDKBridge {
 
                             String line;
                             while ((line = reader.readLine()) != null) {
-                                // 打印权限调试日志
+                                // 先捕获并输出 Node.js 侧的错误日志，便于在 IDE 日志中直接看到具体原因
+                                if (line.startsWith("[UNCAUGHT_ERROR]")
+                                        || line.startsWith("[UNHANDLED_REJECTION]")
+                                        || line.startsWith("[COMMAND_ERROR]")) {
+                                    System.err.println("[Node.js ERROR] " + line);
+                                    lastNodeError[0] = line;
+                                }
+
+                                // 打印权限/调试日志
                                 if (line.contains("[PERM_DEBUG]") || line.contains("[DEBUG]")) {
                                     System.out.println("[Node.js] " + line);
                                 }
@@ -631,6 +641,10 @@ public class ClaudeSDKBridge {
                                 callback.onComplete(result);
                             } else {
                                 String errorMsg = "Process exited with code: " + exitCode;
+                                // 如果 Node.js 侧有明确的错误日志，将其附加到错误消息中，提升可读性
+                                if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
+                                    errorMsg = errorMsg + " | Last node error: " + lastNodeError[0];
+                                }
                                 result.success = false;
                                 result.error = errorMsg;
                                 callback.onError(errorMsg);

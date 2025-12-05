@@ -5,6 +5,8 @@ import { McpServerDialog } from './McpServerDialog';
 import { McpPresetDialog } from './McpPresetDialog';
 import { McpHelpDialog } from './McpHelpDialog';
 import { McpConfirmDialog } from './McpConfirmDialog';
+import { ToastContainer, type ToastMessage } from '../Toast';
+import { copyToClipboard } from '../../utils/helpers';
 
 /**
  * MCP 服务器设置组件
@@ -23,6 +25,19 @@ export function McpSettingsSection() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [editingServer, setEditingServer] = useState<McpServer | null>(null);
   const [deletingServer, setDeletingServer] = useState<McpServer | null>(null);
+
+  // Toast 状态管理
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Toast 辅助函数
+  const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
+    const id = `toast-${Date.now()}-${Math.random()}`;
+    setToasts((prev) => [...prev, { id, message, type }]);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
 
   // 服务器图标颜色
   const iconColors = [
@@ -196,8 +211,13 @@ export function McpSettingsSection() {
     setShowPresetDialog(false);
   };
 
-  const openUrl = (url: string) => {
-    window.open(url, '_blank');
+  const handleCopyUrl = async (url: string) => {
+    const success = await copyToClipboard(url);
+    if (success) {
+      addToast('链接已复制，请到浏览器打开', 'success');
+    } else {
+      addToast('复制失败，请手动复制', 'error');
+    }
   };
 
   return (
@@ -312,8 +332,8 @@ export function McpSettingsSection() {
                     {server.homepage && (
                       <button
                         className="action-btn"
-                        onClick={() => openUrl(server.homepage!)}
-                        title="访问主页"
+                        onClick={() => handleCopyUrl(server.homepage!)}
+                        title="复制主页链接"
                       >
                         <span className="codicon codicon-home"></span>
                         主页
@@ -322,8 +342,8 @@ export function McpSettingsSection() {
                     {server.docs && (
                       <button
                         className="action-btn"
-                        onClick={() => openUrl(server.docs!)}
-                        title="查看文档"
+                        onClick={() => handleCopyUrl(server.docs!)}
+                        title="复制文档链接"
                       >
                         <span className="codicon codicon-book"></span>
                         文档
@@ -404,6 +424,9 @@ export function McpSettingsSection() {
           onCancel={cancelDelete}
         />
       )}
+
+      {/* Toast 通知 */}
+      <ToastContainer messages={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

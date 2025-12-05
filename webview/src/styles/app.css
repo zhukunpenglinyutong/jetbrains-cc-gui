@@ -2151,6 +2151,8 @@ body {
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2493,6 +2495,169 @@ body {
 
 .permission-dialog-v2-input:focus {
     border-color: #007fd4;
+}
+
+/* Permission Dialog V3 Styles - 新设计 */
+.permission-dialog-v3 {
+    background: #1a1a1a;
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    min-width: 340px;
+    max-width: 420px;
+    padding: 16px;
+    animation: slideUp 0.2s ease-out;
+}
+
+.permission-dialog-v3-title {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.permission-dialog-v3-subtitle {
+    margin: 0 0 14px 0;
+    font-size: 12px;
+    color: #888888;
+}
+
+.permission-dialog-v3-command-box {
+    background: #0d0d0d;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+
+.permission-dialog-v3-command-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid #333333;
+}
+
+.permission-dialog-v3-command-header .command-path {
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    color: #e0e0e0;
+}
+
+.permission-dialog-v3-command-header .command-arrow {
+    color: #4ade80;
+    margin-right: 6px;
+}
+
+.permission-dialog-v3-command-header .command-toggle {
+    background: none;
+    border: none;
+    color: #888888;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.permission-dialog-v3-command-header .command-toggle:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.permission-dialog-v3-command-header .command-toggle .codicon {
+    font-size: 14px;
+}
+
+.permission-dialog-v3-command-content {
+    max-height: 54px; /* 约3行的高度 */
+    overflow-y: auto;
+    padding: 10px 12px;
+}
+
+.permission-dialog-v3-command-content pre {
+    margin: 0;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #c084fc;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* 自定义滚动条 */
+.permission-dialog-v3-command-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.permission-dialog-v3-command-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.permission-dialog-v3-command-content::-webkit-scrollbar-thumb {
+    background: #444444;
+    border-radius: 2px;
+}
+
+.permission-dialog-v3-command-content::-webkit-scrollbar-thumb:hover {
+    background: #555555;
+}
+
+.permission-dialog-v3-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.permission-dialog-v3-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+}
+
+.permission-dialog-v3-option:hover {
+    background: #333333;
+    border-color: #444444;
+}
+
+.permission-dialog-v3-option.selected {
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #000000;
+}
+
+.permission-dialog-v3-option.selected:hover {
+    background: #f0f0f0;
+    border-color: #f0f0f0;
+}
+
+.permission-dialog-v3-option .option-text {
+    font-weight: 500;
+}
+
+.permission-dialog-v3-option .option-key {
+    font-size: 11px;
+    font-weight: 400;
+    color: #888888;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.permission-dialog-v3-option.selected .option-key {
+    color: #666666;
+    background: rgba(0, 0, 0, 0.08);
 }
 
 /* Usage Statistics Section Styles */
@@ -4073,6 +4238,77 @@ body {
 [data-theme="light"] .permission-dialog-v2-option.selected:hover {
     background: #106ebe;
     border-color: #106ebe;
+}
+
+/* Permission Dialog V3 亮色模式适配 */
+[data-theme="light"] .permission-dialog-v3 {
+    background: #ffffff;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .permission-dialog-v3-title {
+    color: #1a1a1a;
+}
+
+[data-theme="light"] .permission-dialog-v3-subtitle {
+    color: #666666;
+}
+
+[data-theme="light"] .permission-dialog-v3-command-box {
+    background: #1a1a1a;
+    border: 1px solid #333333;
+}
+
+[data-theme="light"] .permission-dialog-v3-command-header {
+    border-bottom: 1px solid #333333;
+}
+
+[data-theme="light"] .permission-dialog-v3-command-header .command-path {
+    color: #e0e0e0;
+}
+
+[data-theme="light"] .permission-dialog-v3-command-header .command-toggle {
+    color: #888888;
+}
+
+[data-theme="light"] .permission-dialog-v3-command-header .command-toggle:hover {
+    color: #ffffff;
+}
+
+[data-theme="light"] .permission-dialog-v3-command-content pre {
+    color: #c084fc;
+}
+
+[data-theme="light"] .permission-dialog-v3-option {
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    color: #1a1a1a;
+}
+
+[data-theme="light"] .permission-dialog-v3-option:hover {
+    background: #ebebeb;
+    border-color: #d0d0d0;
+}
+
+[data-theme="light"] .permission-dialog-v3-option.selected {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+    color: #ffffff;
+}
+
+[data-theme="light"] .permission-dialog-v3-option.selected:hover {
+    background: #333333;
+    border-color: #333333;
+}
+
+[data-theme="light"] .permission-dialog-v3-option .option-key {
+    color: #666666;
+    background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .permission-dialog-v3-option.selected .option-key {
+    color: #aaaaaa;
+    background: rgba(255, 255, 255, 0.15);
 }
 
 /* 任务列表亮色模式适配 - 加深颜色 */

@@ -4,4 +4,9 @@
 必须使用 stdin + JSON 方式传递用户消息和其他可能包含特殊字符的数据。
 详见 /docs/cmdline-argument-escaping-bug.md
 
-⚠️ **重要**claude sdk 文档在  /docs/claude-agent-sdk.md
+⚠️ **重要**：Claude SDK 文档在 /docs/claude-agent-sdk.md
+
+⚠️ **重要**：**禁止**尝试查找系统安装的 Claude CLI 路径！
+必须使用 SDK 内置的 cli.js（不传递 `pathToClaudeCodeExecutable` 选项）。
+在 Windows 上 `where claude` 返回的路径可能无法直接 spawn，会导致 ENOENT 错误。
+详见 /docs/windows-cli-path-bug.md

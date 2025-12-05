@@ -139,7 +139,12 @@ async function runQuery(userPrompt) {
         maxTurns: 1, // 限制为1轮对话，快速测试
         // 不加载任何文件系统设置
         settingSources: [],
-        abortController: abortController
+        abortController: abortController,
+        // 使用 Claude Code 预设的系统提示，确保 Claude 知道当前工作目录
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code'
+        }
       }
     });
 

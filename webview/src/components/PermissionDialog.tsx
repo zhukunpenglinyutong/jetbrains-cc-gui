@@ -22,18 +22,16 @@ const PermissionDialog = ({
   onSkip,
   onApproveAlways,
 }: PermissionDialogProps) => {
-  const [showDetails, setShowDetails] = useState(false);
+  const [showCommand, setShowCommand] = useState(true); // 默认展开命令
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
     if (isOpen) {
-      setShowDetails(false);
+      setShowCommand(true); // 每次打开时默认展开
       setSelectedIndex(0);
 
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          handleSkip();
-        } else if (e.key === '1') {
+        if (e.key === '1') {
           handleApprove();
         } else if (e.key === '2') {
           handleApproveAlways();
@@ -87,33 +85,41 @@ const PermissionDialog = ({
     return String(value);
   };
 
-  // 获取重要的输入参数
-  const getImportantInputs = () => {
-    const important: Array<{ key: string; value: string }> = [];
-    const priorityKeys = ['file_path', 'path', 'command', 'content', 'text', 'message'];
-
-    // 先添加优先级高的参数
-    priorityKeys.forEach(key => {
-      if (request.inputs[key] !== undefined) {
-        important.push({ key, value: formatInputValue(request.inputs[key]) });
-      }
-    });
-
-    // 添加其他参数（最多显示5个）
-    Object.entries(request.inputs).forEach(([key, value]) => {
-      if (!priorityKeys.includes(key) && important.length < 5) {
-        important.push({ key, value: formatInputValue(value) });
-      }
-    });
-
-    return important;
+  // 获取命令或主要操作内容
+  const getCommandContent = (): string => {
+    // 根据工具类型获取主要内容
+    if (request.inputs.command) {
+      return request.inputs.command;
+    }
+    if (request.inputs.content) {
+      return request.inputs.content;
+    }
+    if (request.inputs.text) {
+      return request.inputs.text;
+    }
+    // 对于其他工具，格式化所有输入
+    return Object.entries(request.inputs)
+      .map(([key, value]) => `${key}: ${formatInputValue(value)}`)
+      .join('\n');
   };
 
-  const importantInputs = getImportantInputs();
+  // 获取工作目录
+  const getWorkingDirectory = (): string => {
+    if (request.inputs.cwd) {
+      return request.inputs.cwd;
+    }
+    if (request.inputs.file_path) {
+      return request.inputs.file_path;
+    }
+    if (request.inputs.path) {
+      return request.inputs.path;
+    }
+    return '~';
+  };
 
-  // 工具名称映射
-  const getToolDisplayName = (toolName: string): string => {
-    const toolNameMap: Record<string, string> = {
+  // 工具名称映射到标题
+  const getToolTitle = (toolName: string): string => {
+    const toolTitleMap: Record<string, string> = {
       'Write': '写入文件',
       'Edit': '编辑文件',
       'Read': '读取文件',
@@ -123,61 +129,66 @@ const PermissionDialog = ({
       'WebSearch': '网页搜索',
       'WebFetch': '获取网页',
     };
-    return toolNameMap[toolName] || toolName;
+    return toolTitleMap[toolName] || `执行 ${toolName}`;
   };
 
+  const commandContent = getCommandContent();
+  const workingDirectory = getWorkingDirectory();
+
   return (
-    <div className="permission-dialog-overlay" onClick={handleSkip}>
-      <div className="permission-dialog-v2" onClick={(e) => e.stopPropagation()}>
-        <h3 className="permission-dialog-v2-title">
-          是否允许执行 {getToolDisplayName(request.toolName)}?
-        </h3>
+    <div className="permission-dialog-overlay">
+      <div className="permission-dialog-v3">
+        {/* 标题区域 */}
+        <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
+        <p className="permission-dialog-v3-subtitle">来自外部进程的请求</p>
 
-        {/* 可折叠的详情区域 */}
-        <button
-          className="permission-dialog-v2-details-toggle"
-          onClick={() => setShowDetails(!showDetails)}
-        >
-          <span>详情</span>
-          <span className={`codicon codicon-chevron-${showDetails ? 'up' : 'down'}`} />
-        </button>
-
-        {showDetails && importantInputs.length > 0 && (
-          <div className="permission-dialog-v2-details">
-            {importantInputs.map(({ key, value }) => (
-              <div key={key} className="permission-dialog-v2-param">
-                <span className="param-key">{key}:</span>
-                <span className="param-value">{value}</span>
-              </div>
-            ))}
+        {/* 命令/内容区域 */}
+        <div className="permission-dialog-v3-command-box">
+          <div className="permission-dialog-v3-command-header">
+            <span className="command-path">
+              <span className="command-arrow">→</span> ~ {workingDirectory}
+            </span>
+            <button
+              className="command-toggle"
+              onClick={() => setShowCommand(!showCommand)}
+              title={showCommand ? '收起' : '展开'}
+            >
+              <span className={`codicon codicon-chevron-${showCommand ? 'up' : 'down'}`} />
+            </button>
           </div>
-        )}
+
+          {showCommand && (
+            <div className="permission-dialog-v3-command-content">
+              <pre>{commandContent}</pre>
+            </div>
+          )}
+        </div>
 
         {/* 选项按钮列表 */}
-        <div className="permission-dialog-v2-options">
+        <div className="permission-dialog-v3-options">
           <button
-            className={`permission-dialog-v2-option ${selectedIndex === 0 ? 'selected' : ''}`}
+            className={`permission-dialog-v3-option ${selectedIndex === 0 ? 'selected' : ''}`}
             onClick={handleApprove}
             onMouseEnter={() => setSelectedIndex(0)}
           >
+            <span className="option-text">允许</span>
             <span className="option-key">1</span>
-            <span className="option-text">批准</span>
           </button>
           <button
-            className={`permission-dialog-v2-option ${selectedIndex === 1 ? 'selected' : ''}`}
+            className={`permission-dialog-v3-option ${selectedIndex === 1 ? 'selected' : ''}`}
             onClick={handleApproveAlways}
             onMouseEnter={() => setSelectedIndex(1)}
           >
-            <span className="option-key">2</span>
             <span className="option-text">总是允许</span>
+            <span className="option-key">2</span>
           </button>
           <button
-            className={`permission-dialog-v2-option ${selectedIndex === 2 ? 'selected' : ''}`}
+            className={`permission-dialog-v3-option ${selectedIndex === 2 ? 'selected' : ''}`}
             onClick={handleSkip}
             onMouseEnter={() => setSelectedIndex(2)}
           >
-            <span className="option-key">3</span>
             <span className="option-text">拒绝</span>
+            <span className="option-key">3</span>
           </button>
         </div>
       </div>

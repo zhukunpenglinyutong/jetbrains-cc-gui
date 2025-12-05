@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto';
 
 import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../config/api-config.js';
 import { selectWorkingDirectory } from '../utils/path-utils.js';
-import { mapModelIdToSdkName, getClaudeCliPath } from '../utils/model-utils.js';
+import { mapModelIdToSdkName } from '../utils/model-utils.js';
 import { AsyncStream } from '../utils/async-stream.js';
 import { canUseTool } from '../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
@@ -177,10 +177,9 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
     const sdkModelName = mapModelIdToSdkName(model);
     console.log('[DEBUG] Model mapping:', model, '->', sdkModelName);
 
-    // 获取系统安装的 Claude CLI 路径
-    const claudeCliPath = getClaudeCliPath();
-
 	    // 准备选项
+	    // 注意：不再传递 pathToClaudeCodeExecutable，让 SDK 自动使用内置 cli.js
+	    // 这样可以避免 Windows 下系统 CLI 路径问题（ENOENT 错误）
 	    const effectivePermissionMode = permissionMode || 'default';
 	    const shouldUseCanUseTool = effectivePermissionMode === 'default';
 	    console.log('[PERM_DEBUG] permissionMode:', permissionMode);
@@ -199,8 +198,14 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 	        )
 	      ),
 	      canUseTool: shouldUseCanUseTool ? canUseTool : undefined,
-	      pathToClaudeCodeExecutable: claudeCliPath,
-	      settingSources: ['user', 'project', 'local']
+	      // 不传递 pathToClaudeCodeExecutable，SDK 将自动使用内置 cli.js
+	      settingSources: ['user', 'project', 'local'],
+	      // 使用 Claude Code 预设系统提示，让 Claude 知道当前工作目录
+	      // 这是修复路径问题的关键：没有 systemPrompt 时 Claude 不知道 cwd
+	      systemPrompt: {
+	        type: 'preset',
+	        preset: 'claude_code'
+	      }
 	    };
 	    console.log('[PERM_DEBUG] options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
 
@@ -208,11 +213,7 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 		// const abortController = new AbortController();
 		// options.abortController = abortController;
 
-    if (claudeCliPath) {
-      console.log('[DEBUG] Using system Claude CLI:', claudeCliPath);
-    } else {
-      console.log('[DEBUG] Using SDK built-in Claude CLI');
-    }
+    console.log('[DEBUG] Using SDK built-in Claude CLI (cli.js)');
 
     console.log('[DEBUG] Options:', JSON.stringify(options, null, 2));
 
@@ -242,6 +243,7 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 
     // 流式输出
     let messageCount = 0;
+    try {
     for await (const msg of result) {
       messageCount++;
       console.log(`[DEBUG] Received message #${messageCount}, type: ${msg.type}`);
@@ -274,6 +276,29 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
         currentSessionId = msg.session_id;
         console.log('[SESSION_ID]', msg.session_id);
       }
+    }
+    } catch (loopError) {
+      // 捕获 for await 循环中的错误（包括 SDK 内部 spawn 子进程失败等）
+      console.error('[DEBUG] Error in message loop:', loopError.message);
+      console.error('[DEBUG] Error name:', loopError.name);
+      console.error('[DEBUG] Error stack:', loopError.stack);
+      // 检查是否是子进程相关错误
+      if (loopError.code) {
+        console.error('[DEBUG] Error code:', loopError.code);
+      }
+      if (loopError.errno) {
+        console.error('[DEBUG] Error errno:', loopError.errno);
+      }
+      if (loopError.syscall) {
+        console.error('[DEBUG] Error syscall:', loopError.syscall);
+      }
+      if (loopError.path) {
+        console.error('[DEBUG] Error path:', loopError.path);
+      }
+      if (loopError.spawnargs) {
+        console.error('[DEBUG] Error spawnargs:', JSON.stringify(loopError.spawnargs));
+      }
+      throw loopError; // 重新抛出让外层 catch 处理
     }
 
     console.log(`[DEBUG] Message loop completed. Total messages: ${messageCount}`);
@@ -500,7 +525,8 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     };
 
     const sdkModelName = mapModelIdToSdkName(model);
-    const claudeCliPath = getClaudeCliPath();
+    // 不再查找系统 CLI，使用 SDK 内置 cli.js
+    console.log('[DEBUG] (withAttachments) Using SDK built-in Claude CLI (cli.js)');
 
     // 创建输入流并放入用户消息
     const inputStream = new AsyncStream();
@@ -568,8 +594,14 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
           hooks: [preToolUseHook]
         }]
       } : undefined,
-      pathToClaudeCodeExecutable: claudeCliPath,
-      settingSources: ['user', 'project', 'local']
+      // 不传递 pathToClaudeCodeExecutable，SDK 将自动使用内置 cli.js
+      settingSources: ['user', 'project', 'local'],
+      // 使用 Claude Code 预设系统提示，让 Claude 知道当前工作目录
+      // 这是修复路径问题的关键：没有 systemPrompt 时 Claude 不知道 cwd
+      systemPrompt: {
+        type: 'preset',
+        preset: 'claude_code'
+      }
     };
     console.log('[PERM_DEBUG] (withAttachments) options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
     console.log('[PERM_DEBUG] (withAttachments) options.hooks:', options.hooks ? 'SET (PreToolUse)' : 'NOT SET');
@@ -598,10 +630,11 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    // }, 30000);
 	
 		    let currentSessionId = resumeSessionId;
-		
+
+		    try {
 		    for await (const msg of result) {
 	    	      console.log('[MESSAGE]', JSON.stringify(msg));
-	    	
+
 	    	      if (msg.type === 'assistant') {
 	    	        const content = msg.message?.content;
 	    	        if (Array.isArray(content)) {
@@ -618,11 +651,23 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    	          console.log('[CONTENT]', content);
 	    	        }
 	    	      }
-	    	
+
 	    	      if (msg.type === 'system' && msg.session_id) {
 	    	        currentSessionId = msg.session_id;
 	    	        console.log('[SESSION_ID]', msg.session_id);
 	    	      }
+	    	    }
+	    	    } catch (loopError) {
+	    	      // 捕获 for await 循环中的错误
+	    	      console.error('[DEBUG] Error in message loop (withAttachments):', loopError.message);
+	    	      console.error('[DEBUG] Error name:', loopError.name);
+	    	      console.error('[DEBUG] Error stack:', loopError.stack);
+	    	      if (loopError.code) console.error('[DEBUG] Error code:', loopError.code);
+	    	      if (loopError.errno) console.error('[DEBUG] Error errno:', loopError.errno);
+	    	      if (loopError.syscall) console.error('[DEBUG] Error syscall:', loopError.syscall);
+	    	      if (loopError.path) console.error('[DEBUG] Error path:', loopError.path);
+	    	      if (loopError.spawnargs) console.error('[DEBUG] Error spawnargs:', JSON.stringify(loopError.spawnargs));
+	    	      throw loopError;
 	    	    }
 
 	    console.log('[MESSAGE_END]');
