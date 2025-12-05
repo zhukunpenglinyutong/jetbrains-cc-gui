@@ -232,15 +232,55 @@ public class BridgeDirectoryResolver {
 
     private File ensureEmbeddedBridgeExtracted() {
         try {
+            System.out.println("[BridgeResolver] 尝试查找内嵌的 claude-bridge.zip...");
+
             PluginId pluginId = PluginId.getId(PLUGIN_ID);
             IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
             if (descriptor == null) {
-                return null;
+                System.out.println("[BridgeResolver] 无法通过 PluginId 获取插件描述符: " + PLUGIN_ID);
+
+                // 尝试通过遍历所有插件来查找
+                for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
+                    String id = plugin.getPluginId().getIdString();
+                    String name = plugin.getName();
+                    // 匹配插件 ID 或名称
+                    if (id.contains("claude") || id.contains("Claude") ||
+                        (name != null && (name.contains("Claude") || name.contains("claude")))) {
+                        System.out.println("[BridgeResolver] 找到候选插件: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
+                        File candidateDir = plugin.getPluginPath().toFile();
+                        File candidateArchive = new File(candidateDir, SDK_ARCHIVE_NAME);
+                        if (candidateArchive.exists()) {
+                            System.out.println("[BridgeResolver] 在候选插件中找到 claude-bridge.zip: " + candidateArchive.getAbsolutePath());
+                            descriptor = plugin;
+                            break;
+                        }
+                    }
+                }
+
+                if (descriptor == null) {
+                    System.out.println("[BridgeResolver] 未能通过任何方式找到插件描述符");
+                    return null;
+                }
             }
 
             File pluginDir = descriptor.getPluginPath().toFile();
+            System.out.println("[BridgeResolver] 插件目录: " + pluginDir.getAbsolutePath());
+
             File archiveFile = new File(pluginDir, SDK_ARCHIVE_NAME);
+            System.out.println("[BridgeResolver] 查找压缩包: " + archiveFile.getAbsolutePath() + " (存在: " + archiveFile.exists() + ")");
+
             if (!archiveFile.exists()) {
+                // 尝试在 lib 目录下查找
+                File libDir = new File(pluginDir, "lib");
+                if (libDir.exists()) {
+                    System.out.println("[BridgeResolver] 检查 lib 目录: " + libDir.getAbsolutePath());
+                    File[] files = libDir.listFiles();
+                    if (files != null) {
+                        for (File f : files) {
+                            System.out.println("[BridgeResolver]   - " + f.getName());
+                        }
+                    }
+                }
                 return null;
             }
 

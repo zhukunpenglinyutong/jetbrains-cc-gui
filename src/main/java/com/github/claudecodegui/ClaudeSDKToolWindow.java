@@ -499,35 +499,23 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         /**
          * 确定合适的工作目录
          * 优先级：
-         * 1. 当前打开文件的目录
-         * 2. 项目根目录
-         * 3. 用户主目录
+         * 1. 项目根目录（IDEA 打开的文件夹）- 这是最重要的，确保历史记录能正确关联
+         * 2. 用户主目录（作为最后的 fallback）
+         *
+         * 注意：不再使用"当前打开文件的目录"，因为这会导致 Claude Code 的历史记录
+         * 无法正确关联到 IDEA 项目。例如：用户打开 C:\project，但正在编辑
+         * C:\project\src\sub\file.java，如果使用文件目录，历史会保存到
+         * C--project-src-sub，而不是 C--project。
          */
         private String determineWorkingDirectory() {
-            // 1. 尝试获取当前打开文件的目录
-            try {
-                FileEditorManager editorManager = FileEditorManager.getInstance(project);
-                VirtualFile[] openFiles = editorManager.getOpenFiles();
-                if (openFiles != null && openFiles.length > 0) {
-                    VirtualFile currentFile = editorManager.getSelectedFiles()[0];
-                    if (currentFile != null && currentFile.getParent() != null) {
-                        String currentFileDir = currentFile.getParent().getPath();
-                        System.out.println("[ClaudeChatWindow] Using current file directory: " + currentFileDir);
-                        return currentFileDir;
-                    }
-                }
-            } catch (Exception e) {
-                System.err.println("[ClaudeChatWindow] Failed to get current file directory: " + e.getMessage());
-            }
-
-            // 2. 尝试使用项目根目录
+            // 1. 优先使用项目根目录（IDEA 打开的文件夹）
             String projectPath = project.getBasePath();
             if (projectPath != null && new File(projectPath).exists()) {
                 System.out.println("[ClaudeChatWindow] Using project base path: " + projectPath);
                 return projectPath;
             }
 
-            // 3. 最后使用用户主目录
+            // 2. 最后使用用户主目录
             String userHome = System.getProperty("user.home");
             System.out.println("[ClaudeChatWindow] WARNING: Using user home directory as fallback: " + userHome);
             System.out.println("[ClaudeChatWindow] Files will be written to: " + userHome);
