@@ -1,0 +1,83 @@
+.configSection {
+  max-width: 600px;
+  padding-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.sectionDesc {
+  color: var(--text-tertiary);
+  margin: 0 0 24px 0;
+  font-size: 13px;
+}
+
+.qrcodeContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px 0;
+  margin-top: 20px;
+}
+
+.qrcodeWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.qrcodeImage {
+  width: 280px;
+  height: 280px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+.qrcodeTip {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* 响应式适配 - 480px */
+@media (max-width: 480px) {
+  .sectionTitle {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .sectionDesc {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .qrcodeContainer {
+    padding: 24px 0;
+  }
+
+  .qrcodeWrapper {
+    padding: 20px;
+  }
+
+  .qrcodeImage {
+    width: 240px;
+    height: 240px;
+  }
+
+  .qrcodeTip {
+    font-size: 13px;
+  }
+}

@@ -1,0 +1,252 @@
+.configSection {
+  max-width: 800px;
+  padding-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.sectionDesc {
+  color: var(--text-tertiary);
+  margin: 0 0 24px 0;
+  font-size: 13px;
+}
+
+.themeSection {
+  margin-bottom: 24px;
+}
+
+.fieldHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  .codicon {
+    font-size: 16px;
+    color: var(--accent-primary);
+  }
+}
+
+.fieldLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.themeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.themeCard {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+
+  &:hover {
+    border-color: var(--border-hover);
+  }
+
+  &.active {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
+  }
+}
+
+.checkBadge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .codicon {
+    font-size: 12px;
+    color: #ffffff;
+  }
+}
+
+.themeIconLight {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  border: 1px solid #e0e0e0;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .codicon {
+    font-size: 20px;
+    color: #666666;
+  }
+}
+
+.themeIconDark {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%);
+  border: 1px solid #404040;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .codicon {
+    font-size: 20px;
+    color: #cccccc;
+  }
+}
+
+.themeCardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.themeCardDesc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.nodePathSection {
+  margin-bottom: 24px;
+}
+
+.nodePathInputWrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 4px;
+}
+
+.nodePathInput {
+  flex: 1 1 300px;
+  min-width: 200px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+  }
+
+  &::placeholder {
+    color: var(--text-placeholder);
+  }
+}
+
+.saveBtn {
+  flex: 0 0 auto;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--border-hover);
+  }
+
+  &:active {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
+.formHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+
+  .codicon {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  code {
+    background: var(--color-code-bg);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 11px;
+  }
+}
+
+/* 响应式适配 */
+@media (max-width: 480px) {
+  .sectionTitle {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .sectionDesc {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .themeGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .nodePathInput {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+
+  .formHint {
+    font-size: 11px;
+  }
+
+  .saveBtn {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}

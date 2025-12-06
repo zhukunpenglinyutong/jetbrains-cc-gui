@@ -40,7 +40,7 @@
 
 ---
 
-更多迭代进度请阅读 [diedai.md](diedai.md)
+更多迭代进度请阅读 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 

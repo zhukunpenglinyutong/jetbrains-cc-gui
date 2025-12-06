@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
-import SettingsView from './components/SettingsView';
+import SettingsView from './components/settings';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import { ChatInputBox } from './components/ChatInputBox';

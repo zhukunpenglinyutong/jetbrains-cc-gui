@@ -1,0 +1,149 @@
+.sidebar {
+  width: 200px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  padding: 8px 0;
+  overflow-y: auto;
+  transition: width 0.2s ease;
+  display: flex;
+  flex-direction: column;
+
+  &.collapsed {
+    width: 60px;
+
+    .sidebarItem {
+      justify-content: center;
+      padding: 10px 8px;
+    }
+
+    .sidebarItemText {
+      display: none;
+    }
+
+    .sidebarItem.warning .codicon-warning {
+      position: absolute;
+      right: 4px;
+      top: 6px;
+      font-size: 10px;
+    }
+  }
+}
+
+.sidebarItems {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebarItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+  position: relative;
+  white-space: nowrap;
+
+  .codicon:first-child {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+
+  &.active {
+    background: var(--accent-primary);
+    color: #ffffff;
+    font-weight: 600;
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #ffffff;
+    }
+  }
+
+  &.warning .codicon-warning {
+    position: absolute;
+    right: 16px;
+    color: #d7ba7d;
+    font-size: 14px;
+  }
+}
+
+.sidebarItemText {
+  // 默认显示
+}
+
+.sidebarToggle {
+  display: none; /* 隐藏侧边栏展开/收起按钮 */
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  margin: 8px 8px 0 8px;
+  cursor: pointer;
+  color: #999;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+  border-top: 1px solid #333;
+  margin-top: auto;
+  flex-shrink: 0;
+
+  .codicon {
+    font-size: 16px;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+}
+
+/* 响应式适配 - 480px 小屏幕 */
+@media (max-width: 480px) {
+  .sidebar {
+    width: 60px;
+    padding: 8px 0;
+  }
+
+  .sidebarItem {
+    flex-direction: column;
+    padding: 12px 8px;
+    gap: 4px;
+    font-size: 10px;
+    text-align: center;
+
+    .codicon:first-child {
+      font-size: 16px;
+    }
+
+    &.warning .codicon-warning {
+      position: static;
+      font-size: 10px;
+    }
+  }
+}
+
+/* 超小屏幕 360px */
+@media (max-width: 360px) {
+  .sidebar {
+    width: 50px;
+  }
+
+  .sidebarItem {
+    padding: 10px 4px;
+    font-size: 9px;
+
+    .codicon:first-child {
+      font-size: 16px;
+    }
+  }
+}

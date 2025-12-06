@@ -1,0 +1,72 @@
+.configSection {
+  min-width: 400px;
+  padding-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.sectionDesc {
+  color: var(--text-tertiary);
+  margin: 0 0 24px 0;
+  font-size: 13px;
+}
+
+.configInfoWrapper {
+  margin-top: 20px;
+  margin-bottom: 24px;
+}
+
+.tempNotice {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+
+  .codicon {
+    font-size: 48px;
+    opacity: 0.5;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+/* 响应式适配 */
+@media (max-width: 480px) {
+  .configSection {
+    min-width: auto;
+  }
+
+  .sectionTitle {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .sectionDesc {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .tempNotice {
+    padding: 32px 16px;
+
+    .codicon {
+      font-size: 36px;
+    }
+
+    p {
+      font-size: 12px;
+    }
+  }
+}
