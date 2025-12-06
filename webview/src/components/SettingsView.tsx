@@ -5,7 +5,8 @@ import { McpSettingsSection } from './mcp/McpSettingsSection';
 import AlertDialog from './AlertDialog';
 import type { AlertType } from './AlertDialog';
 import ConfirmDialog from './ConfirmDialog';
-import ConfigInfoDisplay, { type ClaudeConfig } from './ConfigInfoDisplay';
+import ConfigInfoDisplay, { type ClaudeConfig } from './settings/ConfigInfoDisplay';
+import ProviderList from './settings/ProviderList';
 import { ToastContainer, type ToastMessage } from './Toast';
 import { copyToClipboard } from '../utils/helpers';
 import ProviderDialog from './ProviderDialog';
@@ -66,7 +67,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   }>({ isOpen: false, provider: null });
 
   // 主题状态
-	  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
 	    // 从 localStorage 读取主题设置
 	    const savedTheme = localStorage.getItem('theme');
 	    return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
@@ -422,7 +423,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
           </div>
 
           {/* 内容区域 */}
-          <div className="settings-content">
+          <div className={`settings-content ${currentTab === 'providers' ? 'provider-settings-content' : ''}`}>
             {/* 基础配置 */}
             {currentTab === 'basic' && (
                 <div className="config-section">
@@ -653,7 +654,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
             {/* 供应商管理 */}
             {currentTab === 'providers' && (
-                <div className="config-section">
+                <div className="config-section provider-config-section" style={{ minWidth: '400px' }}>
                   <h3 className="section-title">供应商管理</h3>
                   <p className="section-desc">管理 Claude API 供应商配置，切换不同的 API 服务提供商</p>
 
@@ -664,6 +665,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                       loading={claudeConfigLoading}
                       providers={providers.map(p => ({ id: p.id, name: p.name, isActive: p.isActive }))}
                       onSwitchProvider={handleSwitchProvider}
+                      addToast={addToast}
                     />
                   </div>
 
@@ -674,86 +676,21 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                       </div>
                   )}
 
-                  {!loading && providers.length === 0 && (
-                      <div className="temp-notice">
-                        <span className="codicon codicon-info" />
-                        <p>暂无供应商配置</p>
-                        <button
-                            className="btn-primary"
-                            style={{ marginTop: '16px' }}
-                            onClick={handleAddProvider}
-                        >
-                          <span className="codicon codicon-add" />
-                          添加供应商
-                        </button>
-                      </div>
-                  )}
-
-                  {!loading && providers.length > 0 && (
-                      <div className="provider-list-container">
-                        <div className="provider-list-header">
-                          <div>
-                            <h4>供应商列表</h4>
-                            <small>当前共 {providers.length} 个供应商</small>
-                          </div>
-                          <button className="btn-small btn-primary" onClick={handleAddProvider}>
-                            <span className="codicon codicon-add" />
-                            添加
-                          </button>
-                        </div>
-
-                        {providers.map((provider) => (
-                            <div key={provider.id} className={`provider-card ${provider.isActive ? 'active' : ''}`}>
-                              <div className="provider-card-header">
-                                <div className="provider-info">
-                                  <h5 className="provider-name">
-                                    {provider.name}
-                                    {provider.isActive && <span className="active-badge">使用中</span>}
-                                  </h5>
-                                  {provider.websiteUrl && (
-                                      <span
-                                          className="provider-url"
-                                          style={{ cursor: 'pointer' }}
-                                          onClick={async () => {
-                                            const success = await copyToClipboard(provider.websiteUrl!);
-                                            if (success) {
-                                              addToast('链接已复制，请到浏览器打开', 'success');
-                                            } else {
-                                              addToast('复制失败，请手动复制', 'error');
-                                            }
-                                          }}
-                                          title="点击复制链接"
-                                      >
-                                        {provider.websiteUrl}
-                                      </span>
-                                  )}
-                                </div>
-                                <div className="provider-actions">
-                                  {!provider.isActive && (
-                                    <button
-                                        className="btn-small btn-primary"
-                                        onClick={() => handleSwitchProvider(provider.id)}
-                                    >
-                                      <span className="codicon codicon-play" />
-                                      启用
-                                    </button>
-                                  )}
-                                  <button className="btn-small" onClick={() => handleEditProvider(provider)}>
-                                    <span className="codicon codicon-edit" />
-                                    编辑
-                                  </button>
-                                  <button
-                                      className="btn-small btn-danger"
-                                      onClick={() => handleDeleteProvider(provider)}
-                                  >
-                                    <span className="codicon codicon-trash" />
-                                    删除
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                        ))}
-                      </div>
+                  {!loading && (
+                      <ProviderList
+                        providers={providers}
+                        onAdd={handleAddProvider}
+                        onEdit={handleEditProvider}
+                        onDelete={handleDeleteProvider}
+                        onSwitch={handleSwitchProvider}
+                        addToast={addToast}
+                        emptyState={
+                          <>
+                            <span className="codicon codicon-info" />
+                            <p>暂无供应商配置</p>
+                          </>
+                        }
+                      />
                   )}
 
                 </div>

@@ -13,6 +13,7 @@
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
+    "less": "^4.4.2",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
     "vite-plugin-singlefile": "^2.3.0"

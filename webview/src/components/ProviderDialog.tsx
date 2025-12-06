@@ -55,12 +55,13 @@ export default function ProviderDialog({
         setProviderName(provider.name || '');
         setWebsiteUrl(provider.websiteUrl || '');
         setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');
-        setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || 'https://api.anthropic.com');
-        
+        // 编辑模式下不填充默认值，避免覆盖用户实际使用的第三方代理 URL
+        setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '');
+
         const config = provider.settingsConfig || {
           env: {
             ANTHROPIC_AUTH_TOKEN: '',
-            ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+            ANTHROPIC_BASE_URL: '',
           }
         };
         setJsonConfig(JSON.stringify(config, null, 2));
