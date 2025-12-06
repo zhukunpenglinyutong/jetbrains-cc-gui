@@ -13,6 +13,7 @@ declare global {
     // 配置相关
     updateProviders?: (jsonStr: string) => void;
     updateActiveProvider?: (jsonStr: string) => void;
+    updateCurrentClaudeConfig?: (jsonStr: string) => void;
     showError?: (message: string) => void;
     showSwitchSuccess?: (message: string) => void;
 	  updateNodePath?: (path: string) => void;

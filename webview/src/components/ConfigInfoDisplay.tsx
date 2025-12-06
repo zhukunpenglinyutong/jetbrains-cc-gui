@@ -1,25 +1,54 @@
 import { useState } from 'react';
-import type { ProviderConfig } from '../types/provider';
+
+/**
+ * Claude CLI 当前配置信息
+ */
+export interface ClaudeConfig {
+  apiKey: string;
+  baseUrl: string;
+  providerId?: string;
+  providerName?: string;
+}
+
+/**
+ * 供应商配置
+ */
+export interface ProviderOption {
+  id: string;
+  name: string;
+  isActive?: boolean;
+}
 
 interface ConfigInfoDisplayProps {
-  provider: ProviderConfig | null;
+  config: ClaudeConfig | null;
   loading?: boolean;
+  providers?: ProviderOption[];
+  onSwitchProvider?: (id: string) => void;
 }
 
 /**
  * 配置信息展示组件
- * 用于展示当前的 API 配置信息
+ * 用于展示当前 ~/.claude/settings.json 的配置信息
  */
-const ConfigInfoDisplay = ({ provider, loading = false }: ConfigInfoDisplayProps) => {
+const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchProvider }: ConfigInfoDisplayProps) => {
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // 获取当前激活的供应商
+  const activeProvider = providers.find(p => p.isActive);
+  // 获取可切换的供应商（非激活状态的）
+  const switchableProviders = providers.filter(p => !p.isActive);
+  // 是否有可切换的供应商
+  const hasSwitchableProviders = switchableProviders.length > 0;
 
   if (loading) {
     return (
       <div className="config-info-display">
         <div className="config-info-header">
-          <span className="codicon codicon-info" style={{ fontSize: '16px', color: 'var(--accent-primary)' }} />
-          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            当前应用的配置          </span>
+          <span className="codicon codicon-info" />
+          <span className="config-info-title">
+            当前 Claude CLI 配置
+          </span>
         </div>
         <div className="config-info-loading">
           <span className="codicon codicon-loading codicon-modifier-spin" />
@@ -29,13 +58,14 @@ const ConfigInfoDisplay = ({ provider, loading = false }: ConfigInfoDisplayProps
     );
   }
 
-  if (!provider) {
+  if (!config || (!config.apiKey && !config.baseUrl)) {
     return (
       <div className="config-info-display">
         <div className="config-info-header">
-          <span className="codicon codicon-info" style={{ fontSize: '16px', color: 'var(--accent-primary)' }} />
-          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            当前应用的配置          </span>
+          <span className="codicon codicon-info" />
+          <span className="config-info-title">
+            当前 Claude CLI 配置
+          </span>
         </div>
         <div className="config-info-empty">
           <span className="codicon codicon-warning" />
@@ -45,19 +75,8 @@ const ConfigInfoDisplay = ({ provider, loading = false }: ConfigInfoDisplayProps
     );
   }
 
-  const apiKey = provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || '';
-  const baseUrl = provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '';
-
-  // API Key 来源判断
-  const getApiKeySource = () => {
-    if (!apiKey) {
-      return '未配置';
-    }
-    if (apiKey.startsWith('sk-ant-')) {
-      return 'Claude 官方';
-    }
-    return '第三方供应商';
-  };
+  const apiKey = config.apiKey || '';
+  const baseUrl = config.baseUrl || '';
 
   // API Key 预览（显示前后各几位，中间用省略号）
   const getApiKeyPreview = () => {
@@ -73,26 +92,59 @@ const ConfigInfoDisplay = ({ provider, loading = false }: ConfigInfoDisplayProps
     return `${apiKey.slice(0, 8)}${'•'.repeat(8)}${apiKey.slice(-4)}`;
   };
 
+  const handleSwitchClick = (providerId: string) => {
+    if (onSwitchProvider) {
+      onSwitchProvider(providerId);
+    }
+    setShowDropdown(false);
+  };
+
   return (
     <div className="config-info-display">
       <div className="config-info-header">
-        <span className="codicon codicon-info" style={{ fontSize: '16px', color: 'var(--accent-primary)' }} />
-        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-          当前应用的配置        </span>
+        <div className="config-info-header-left">
+          <span className="codicon codicon-info" />
+          <span className="config-info-title">
+            当前 Claude CLI 配置
+          </span>
+          {activeProvider && (
+            <span className="config-info-provider-badge">
+              {activeProvider.name}
+            </span>
+          )}
+        </div>
+        {hasSwitchableProviders && onSwitchProvider && (
+          <div className="config-info-switch-wrapper">
+            <button
+              type="button"
+              className="config-info-switch-btn"
+              onClick={() => setShowDropdown(!showDropdown)}
+              title="切换供应商"
+            >
+              <span className="codicon codicon-arrow-swap" />
+              <span>切换</span>
+              <span className={`codicon codicon-chevron-${showDropdown ? 'up' : 'down'}`} />
+            </button>
+            {showDropdown && (
+              <div className="config-info-dropdown">
+                {switchableProviders.map(provider => (
+                  <button
+                    key={provider.id}
+                    type="button"
+                    className="config-info-dropdown-item"
+                    onClick={() => handleSwitchClick(provider.id)}
+                  >
+                    <span className="codicon codicon-server" />
+                    <span>{provider.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="config-info-body">
-        {/* API Key 来源 */}
-        <div className="config-info-item">
-          <div className="config-info-label">
-            <span className="codicon codicon-key" />
-            <span>API Key 来源</span>
-          </div>
-          <div className="config-info-value">
-            {getApiKeySource()}
-          </div>
-        </div>
-
         {/* API Key 预览 */}
         <div className="config-info-item">
           <div className="config-info-label">
@@ -126,20 +178,6 @@ const ConfigInfoDisplay = ({ provider, loading = false }: ConfigInfoDisplayProps
             <code className="config-info-code">
               {baseUrl || '未配置'}
             </code>
-          </div>
-        </div>
-
-        {/* 供应商名称 */}
-        <div className="config-info-item">
-          <div className="config-info-label">
-            <span className="codicon codicon-server" />
-            <span>供应商</span>
-          </div>
-          <div className="config-info-value">
-            {provider.name}
-            {provider.isActive && (
-              <span className="config-info-badge">使用中</span>
-            )}
           </div>
         </div>
       </div>

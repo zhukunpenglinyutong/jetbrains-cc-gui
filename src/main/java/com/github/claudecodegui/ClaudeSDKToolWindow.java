@@ -393,6 +393,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     handleGetProviders();
                     break;
 
+                case "get_current_claude_config":
+                    System.out.println("[Backend] 处理: get_current_claude_config");
+                    handleGetCurrentClaudeConfig();
+                    break;
+
                 case "add_provider":
                     System.out.println("[Backend] 处理: add_provider");
                     handleAddProvider(content);
@@ -1575,6 +1580,24 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         }
 
         /**
+         * 获取当前 Claude CLI 配置 (~/.claude/settings.json)
+         */
+        private void handleGetCurrentClaudeConfig() {
+            try {
+                JsonObject config = settingsService.getCurrentClaudeConfig();
+                Gson gson = new Gson();
+                String configJson = gson.toJson(config);
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateCurrentClaudeConfig", escapeJs(configJson));
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to get current claude config: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        /**
          * 添加供应商
          */
         private void handleAddProvider(String content) {
@@ -1699,7 +1722,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 SwingUtilities.invokeLater(() -> {
                     // 使用 WebView 弹窗替代系统 alert
                     callJavaScript("window.showSwitchSuccess", escapeJs("供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
-                    handleGetProviders(); // 刷新列表
+                    handleGetProviders(); // 刷新供应商列表
+                    handleGetCurrentClaudeConfig(); // 刷新 Claude CLI 配置显示
                 });
             } catch (Exception e) {
                 System.err.println("[Backend] Failed to switch provider: " + e.getMessage());

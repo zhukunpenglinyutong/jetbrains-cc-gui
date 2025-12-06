@@ -10,3 +10,5 @@
 必须使用 SDK 内置的 cli.js（不传递 `pathToClaudeCodeExecutable` 选项）。
 在 Windows 上 `where claude` 返回的路径可能无法直接 spawn，会导致 ENOENT 错误。
 详见 /docs/windows-cli-path-bug.md
+
+⚠️ **重要**：使用 Tailwind CSS 来修改代码，并且尽量别把代码写到app.css中，因为app.css文件太长了

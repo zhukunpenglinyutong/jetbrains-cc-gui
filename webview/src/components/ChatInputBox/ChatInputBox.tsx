@@ -47,6 +47,7 @@ export const ChatInputBox = ({
   const [isComposing, setIsComposing] = useState(false);
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
+  const lastCompositionEndTimeRef = useRef<number>(0);
 
   // 触发检测 Hook
   const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
@@ -455,8 +456,12 @@ export const ChatInputBox = ({
       }
     }
 
+    // 检查是否刚刚结束组合输入（防止 IME 确认时的回车误触）
+    // 如果 compositionend 和 keydown 间隔很短，说明这个 keydown 可能是 IME 确认的回车
+    const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
+
     // Enter 发送（非 Shift 组合，非 IME 组合）
-    if (isEnterKey && !e.shiftKey && !isIMEComposing) {
+    if (isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing) {
       console.log('[ChatInputBox] Enter pressed, calling handleSubmit');
       e.preventDefault();
       submittedOnEnterRef.current = true;
@@ -486,14 +491,7 @@ export const ChatInputBox = ({
         return;
       }
       if (!fileCompletion.isOpen && !commandCompletion.isOpen) {
-        if (isComposing) {
-          // 组合输入刚结束的时序下，延迟到下一个tick再发送
-          window.setTimeout(() => {
-            handleSubmit();
-          }, 0);
-        } else {
-          handleSubmit();
-        }
+        // 不在 keyup 中处理发送逻辑，统一由 keydown 处理，避免 IME 状态下的误发送
       }
     }
   }, [isComposing, handleSubmit, fileCompletion, commandCompletion]);
@@ -564,7 +562,10 @@ export const ChatInputBox = ({
         return;
       }
 
-      if (isEnterKey && !shift && !isComposing) {
+      // 检查是否刚刚结束组合输入
+      const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
+
+      if (isEnterKey && !shift && !isComposing && !isRecentlyComposing) {
         ev.preventDefault();
         submittedOnEnterRef.current = true;
         handleSubmit();
@@ -589,13 +590,7 @@ export const ChatInputBox = ({
           return;
         }
         if (!fileCompletion.isOpen && !commandCompletion.isOpen) {
-          if (isComposing) {
-            window.setTimeout(() => {
-              handleSubmit();
-            }, 0);
-          } else {
-            handleSubmit();
-          }
+          // 不在 keyup 中处理发送逻辑，统一由 keydown 处理
         }
       }
     };
@@ -644,6 +639,7 @@ export const ChatInputBox = ({
    * 处理 IME 组合结束
    */
   const handleCompositionEnd = useCallback(() => {
+    lastCompositionEndTimeRef.current = Date.now();
     // 使用 setTimeout 延迟重置，确保在 keydown 之后执行
     // 这可以防止在某些环境下 compositionend 和 keydown 的时序问题
     compositionTimeoutRef.current = window.setTimeout(() => {
@@ -835,10 +831,10 @@ export const ChatInputBox = ({
 	              if (fileCompletion.isOpen || commandCompletion.isOpen) {
 	                return;
 	              }
-	              // 只有在非加载状态时才允许提交
-	              if (!isLoading) {
-	                handleSubmit();
-	              }
+	              // 只有在非加载状态且非输入法组合状态时才允许提交
+              if (!isLoading && !isComposing) {
+                handleSubmit();
+              }
             }
           }}
           onCompositionStart={handleCompositionStart}

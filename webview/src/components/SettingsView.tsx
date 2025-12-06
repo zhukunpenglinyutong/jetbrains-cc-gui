@@ -5,9 +5,10 @@ import { McpSettingsSection } from './mcp/McpSettingsSection';
 import AlertDialog from './AlertDialog';
 import type { AlertType } from './AlertDialog';
 import ConfirmDialog from './ConfirmDialog';
-import ConfigInfoDisplay from './ConfigInfoDisplay';
+import ConfigInfoDisplay, { type ClaudeConfig } from './ConfigInfoDisplay';
 import { ToastContainer, type ToastMessage } from './Toast';
 import { copyToClipboard } from '../utils/helpers';
+import ProviderDialog from './ProviderDialog';
 
 type SettingsTab = 'basic' | 'providers' | 'usage' | 'permissions' | 'mcp' | 'agents' | 'skills' | 'community';
 
@@ -31,6 +32,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Claude CLI 当前配置（来自 ~/.claude/settings.json）
+  const [claudeConfig, setClaudeConfig] = useState<ClaudeConfig | null>(null);
+  const [claudeConfigLoading, setClaudeConfigLoading] = useState(false);
+
   // 侧边栏响应式状态
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [manualCollapsed, setManualCollapsed] = useState<boolean | null>(null);
@@ -40,18 +45,11 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       ? manualCollapsed
       : windowWidth < AUTO_COLLAPSE_THRESHOLD;
 
-  // 编辑/添加表单状态
-  const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [apiUrl, setApiUrl] = useState('');
-  const [providerName, setProviderName] = useState('');
-  const [websiteUrl, setWebsiteUrl] = useState('');
-
-  // UI 状态
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [jsonConfig, setJsonConfig] = useState('');
-  const [jsonError, setJsonError] = useState('');
+  // 供应商弹窗状态
+  const [providerDialog, setProviderDialog] = useState<{
+    isOpen: boolean;
+    provider: ProviderConfig | null; // null 表示添加模式
+  }>({ isOpen: false, provider: null });
 
   // 页面内弹窗状态
   const [alertDialog, setAlertDialog] = useState<{
@@ -119,7 +117,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 	        setLoading(false);
 	      }
 	    };
-	
+
 	    window.updateActiveProvider = (jsonStr: string) => {
 	      try {
 	        const activeProvider: ProviderConfig = JSON.parse(jsonStr);
@@ -133,32 +131,47 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 	        console.error('[SettingsView] Failed to parse active provider:', error);
 	      }
 	    };
-	
+
+	    // Claude CLI 配置回调
+	    window.updateCurrentClaudeConfig = (jsonStr: string) => {
+	      try {
+	        const config: ClaudeConfig = JSON.parse(jsonStr);
+	        setClaudeConfig(config);
+	        setClaudeConfigLoading(false);
+	      } catch (error) {
+	        console.error('[SettingsView] Failed to parse claude config:', error);
+	        setClaudeConfigLoading(false);
+	      }
+	    };
+
 	    window.showError = (message: string) => {
 	      console.log('[SettingsView] window.showError called:', message);
 	      showAlert('error', '操作失败', message);
 	      setLoading(false);
 	    };
-	
+
 	    window.showSwitchSuccess = (message: string) => {
 	      console.log('[SettingsView] window.showSwitchSuccess called:', message);
 	      showSwitchSuccess(message);
 	    };
-	
+
 	    window.updateNodePath = (path: string) => {
 	      console.log('[SettingsView] window.updateNodePath called:', path);
 	      setNodePath(path || '');
 	      setSavingNodePath(false);
 	    };
-	
+
 	    // 加载供应商列表
 	    loadProviders();
+	    // 加载 Claude CLI 当前配置
+	    loadClaudeConfig();
 	    // 加载 Node.js 路径
 	    sendToJava('get_node_path:');
-	
+
 	    return () => {
 	      window.updateProviders = undefined;
 	      window.updateActiveProvider = undefined;
+	      window.updateCurrentClaudeConfig = undefined;
 	      window.showError = undefined;
 	      window.showSwitchSuccess = undefined;
 	      window.updateNodePath = undefined;
@@ -207,6 +220,11 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setLoading(true);
     sendToJava('get_providers:');
   };
+
+  const loadClaudeConfig = () => {
+    setClaudeConfigLoading(true);
+    sendToJava('get_current_claude_config:');
+  };
 	
 	  const handleSaveNodePath = () => {
 	    setSavingNodePath(true);
@@ -215,73 +233,45 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 	  };
 
   const handleEditProvider = (provider: ProviderConfig) => {
-    setEditingProvider(provider);
-    setIsAdding(false);
-    setProviderName(provider.name || '');
-    setWebsiteUrl(provider.websiteUrl || '');
-    setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');
-    setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || 'https://api.anthropic.com');
-    setShowApiKey(false);
-    setJsonError('');
-
-    // Initialize JSON Config - 保留完整的 settingsConfig
-    const config = provider.settingsConfig || {
-      env: {
-        ANTHROPIC_AUTH_TOKEN: '',
-        ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
-      }
-    };
-    setJsonConfig(JSON.stringify(config, null, 2));
+    setProviderDialog({ isOpen: true, provider });
   };
 
   const handleAddProvider = () => {
-    setIsAdding(true);
-    setEditingProvider(null);
-    setProviderName('');
-    setWebsiteUrl('');
-    setApiKey('');
-    setApiUrl('');
-    setShowApiKey(false);
-    setJsonError('');
-
-    // Initialize JSON Config
-    const config = {
-      env: {
-        ANTHROPIC_AUTH_TOKEN: '',
-        ANTHROPIC_BASE_URL: '',
-      }
-    };
-    setJsonConfig(JSON.stringify(config, null, 2));
+    setProviderDialog({ isOpen: true, provider: null });
   };
 
-  const handleSaveProvider = () => {
-    if (!editingProvider && !isAdding) return;
+  const handleCloseProviderDialog = () => {
+    setProviderDialog({ isOpen: false, provider: null });
+  };
 
-    // 检查 JSON 格式
-    if (jsonError) {
-      alert('配置 JSON 格式错误，请修正后再保存');
-      return;
-    }
-
-    if (!providerName) {
-      alert('请输入供应商名称');
+  const handleSaveProviderFromDialog = (data: {
+    providerName: string;
+    websiteUrl: string;
+    apiKey: string;
+    apiUrl: string;
+    jsonConfig: string;
+  }) => {
+    if (!data.providerName) {
+      showAlert('warning', '提示', '请输入供应商名称');
       return;
     }
 
     // 解析 JSON 配置
     let parsedConfig;
     try {
-      parsedConfig = JSON.parse(jsonConfig || '{}');
+      parsedConfig = JSON.parse(data.jsonConfig || '{}');
     } catch (e) {
-      alert('配置 JSON 格式错误，请修正后再保存');
+      showAlert('error', '错误', '配置 JSON 格式错误，请修正后再保存');
       return;
     }
 
     const updates = {
-      name: providerName,
-      websiteUrl: websiteUrl,
-      settingsConfig: parsedConfig, // 使用完整的 JSON 配置
+      name: data.providerName,
+      websiteUrl: data.websiteUrl,
+      settingsConfig: parsedConfig,
     };
+
+    const isAdding = !providerDialog.provider;
 
     if (isAdding) {
       // 添加新供应商
@@ -290,29 +280,20 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
         ...updates
       };
       sendToJava(`add_provider:${JSON.stringify(newProvider)}`);
-    } else if (editingProvider) {
+      addToast('供应商添加成功', 'success');
+    } else {
       // 更新现有供应商
-      const data = {
-        id: editingProvider.id,
+      if (!providerDialog.provider) return;
+      const updateData = {
+        id: providerDialog.provider.id,
         updates,
       };
-      sendToJava(`update_provider:${JSON.stringify(data)}`);
+      sendToJava(`update_provider:${JSON.stringify(updateData)}`);
+      addToast('供应商更新成功', 'success');
     }
 
-    setEditingProvider(null);
-    setIsAdding(false);
+    setProviderDialog({ isOpen: false, provider: null });
     setLoading(true);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingProvider(null);
-    setIsAdding(false);
-    setProviderName('');
-    setWebsiteUrl('');
-    setApiKey('');
-    setApiUrl('');
-    setJsonConfig('');
-    setJsonError('');
   };
 
   const handleSwitchProvider = (id: string) => {
@@ -324,17 +305,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   const handleDeleteProvider = (provider: ProviderConfig) => {
     console.log('[SettingsView] handleDeleteProvider called:', provider.id, provider.name);
 
-    if (providers.length === 1) {
-      showAlert('warning', '无法删除', '至少需要保留一个供应商配置');
-      return;
-    }
-
-    if (provider.isActive) {
-      showAlert('warning', '无法删除', '无法删除当前使用的供应商。请先切换到其他供应商后再删除。');
-      return;
-    }
-
-    // 显示确认弹窗
+    // 显示确认弹窗（无任何限制）
     setDeleteConfirm({ isOpen: true, provider });
   };
 
@@ -345,78 +316,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     console.log('[SettingsView] confirmDeleteProvider - sending delete_provider:', provider.id);
     const data = { id: provider.id };
     sendToJava(`delete_provider:${JSON.stringify(data)}`);
+    addToast('供应商删除成功', 'success');
     setLoading(true);
     setDeleteConfirm({ isOpen: false, provider: null });
   };
 
   const cancelDeleteProvider = () => {
     setDeleteConfirm({ isOpen: false, provider: null });
-  };
-
-  // Field Change Handlers
-  const updateJsonFromFields = (newApiKey: string, newApiUrl: string) => {
-    try {
-      const config = JSON.parse(jsonConfig || '{}');
-      if (!config.env) config.env = {};
-      config.env.ANTHROPIC_AUTH_TOKEN = newApiKey;
-      config.env.ANTHROPIC_BASE_URL = newApiUrl;
-      setJsonConfig(JSON.stringify(config, null, 2));
-      setJsonError('');
-    } catch (e) {
-      // If JSON is currently invalid, we can't verify/update safely,
-      // but we could just reconstruct it if we wanted strict sync.
-      // For now, we'll just leave it alone if it's broken.
-    }
-  };
-
-  const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setApiKey(newValue);
-    updateJsonFromFields(newValue, apiUrl);
-  };
-
-  const handleApiUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setApiUrl(newValue);
-    updateJsonFromFields(apiKey, newValue);
-  };
-
-  const handleJsonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    setJsonConfig(newValue);
-    setJsonError('');
-
-    try {
-      const config = JSON.parse(newValue);
-      if (config && typeof config === 'object') {
-        if (config.env) {
-          // 优先使用 ANTHROPIC_AUTH_TOKEN，其次是 ANTHROPIC_API_KEY
-          if (config.env.ANTHROPIC_AUTH_TOKEN !== undefined) {
-            setApiKey(config.env.ANTHROPIC_AUTH_TOKEN);
-          } else if (config.env.ANTHROPIC_API_KEY !== undefined) {
-            setApiKey(config.env.ANTHROPIC_API_KEY);
-          }
-          if (config.env.ANTHROPIC_BASE_URL !== undefined) {
-            setApiUrl(config.env.ANTHROPIC_BASE_URL);
-          }
-        }
-      }
-    } catch (err) {
-      if (err instanceof Error) {
-        setJsonError(err.message);
-      } else {
-        setJsonError('Invalid JSON');
-      }
-    }
-  };
-
-  const isValidUrl = (url: string) => {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
   };
 
   return (
@@ -742,14 +648,6 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                       为空时插件会自动尝试检测 Node.js。
                     </small>
                   </div>
-
-                  {/* 当前配置信息展示 */}
-                  <div style={{ marginTop: '32px' }}>
-                    <ConfigInfoDisplay
-                      provider={providers.find(p => p.isActive) || null}
-                      loading={loading}
-                    />
-                  </div>
                 </div>
             )}
 
@@ -759,6 +657,16 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                   <h3 className="section-title">供应商管理</h3>
                   <p className="section-desc">管理 Claude API 供应商配置，切换不同的 API 服务提供商</p>
 
+                  {/* 当前 Claude CLI 配置信息展示 */}
+                  <div style={{ marginTop: '20px', marginBottom: '24px' }}>
+                    <ConfigInfoDisplay
+                      config={claudeConfig}
+                      loading={claudeConfigLoading}
+                      providers={providers.map(p => ({ id: p.id, name: p.name, isActive: p.isActive }))}
+                      onSwitchProvider={handleSwitchProvider}
+                    />
+                  </div>
+
                   {loading && (
                       <div className="temp-notice">
                         <span className="codicon codicon-loading codicon-modifier-spin" />
@@ -766,7 +674,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                       </div>
                   )}
 
-                  {!loading && !editingProvider && !isAdding && providers.length === 0 && (
+                  {!loading && providers.length === 0 && (
                       <div className="temp-notice">
                         <span className="codicon codicon-info" />
                         <p>暂无供应商配置</p>
@@ -781,7 +689,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                       </div>
                   )}
 
-                  {!loading && !editingProvider && !isAdding && providers.length > 0 && (
+                  {!loading && providers.length > 0 && (
                       <div className="provider-list-container">
                         <div className="provider-list-header">
                           <div>
@@ -822,13 +730,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                                 </div>
                                 <div className="provider-actions">
                                   {!provider.isActive && (
-                                      <button
-                                          className="btn-small btn-primary"
-                                          onClick={() => handleSwitchProvider(provider.id)}
-                                      >
-                                        <span className="codicon codicon-play" />
-                                        启用
-                                      </button>
+                                    <button
+                                        className="btn-small btn-primary"
+                                        onClick={() => handleSwitchProvider(provider.id)}
+                                    >
+                                      <span className="codicon codicon-play" />
+                                      启用
+                                    </button>
                                   )}
                                   <button className="btn-small" onClick={() => handleEditProvider(provider)}>
                                     <span className="codicon codicon-edit" />
@@ -837,7 +745,6 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                                   <button
                                       className="btn-small btn-danger"
                                       onClick={() => handleDeleteProvider(provider)}
-                                      disabled={providers.length === 1}
                                   >
                                     <span className="codicon codicon-trash" />
                                     删除
@@ -849,176 +756,6 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                       </div>
                   )}
 
-                  {!loading && (editingProvider || isAdding) && (
-                      <div className="config-form">
-                        <h4>{isAdding ? '添加供应商' : `编辑供应商: ${editingProvider?.name}`}</h4>
-                        <p className="section-desc">
-                          {isAdding ? '配置新的供应商信息' : '更新配置后将立即应用到当前供应商。'}
-                        </p>
-
-                        <div className="form-group">
-                          <label htmlFor="providerName">
-                            供应商名称
-                            <span className="required">*</span>
-                          </label>
-                          <input
-                              id="providerName"
-                              type="text"
-                              className="form-input"
-                              placeholder="例如：Claude官方"
-                              value={providerName}
-                              onChange={(e) => setProviderName(e.target.value)}
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label htmlFor="websiteUrl">官网链接</label>
-                          <div className="input-with-link">
-                            <input
-                                id="websiteUrl"
-                                type="text"
-                                className="form-input"
-                                placeholder="https://"
-                                value={websiteUrl}
-                                onChange={(e) => setWebsiteUrl(e.target.value)}
-                            />
-                            {websiteUrl && isValidUrl(websiteUrl) && (
-                                <button
-                                    type="button"
-                                    className="link-btn"
-                                    title="复制链接"
-                                    onClick={async () => {
-                                      const success = await copyToClipboard(websiteUrl);
-                                      if (success) {
-                                        addToast('链接已复制，请到浏览器打开', 'success');
-                                      } else {
-                                        addToast('复制失败，请手动复制', 'error');
-                                      }
-                                    }}
-                                >
-                                  <span className="codicon codicon-copy" />
-                                </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="form-group">
-                          <label htmlFor="apiKey">
-                            API Key
-                            <span className="required">*</span>
-                          </label>
-                          <div className="input-with-visibility">
-                            <input
-                                id="apiKey"
-                                type={showApiKey ? 'text' : 'password'}
-                                className="form-input"
-                                placeholder="sk-ant-..."
-                                value={apiKey}
-                                onChange={handleApiKeyChange}
-                            />
-                            <button
-                                type="button"
-                                className="visibility-toggle"
-                                onClick={() => setShowApiKey(!showApiKey)}
-                                title={showApiKey ? '隐藏' : '显示'}
-                            >
-                              <span className={`codicon ${showApiKey ? 'codicon-eye-closed' : 'codicon-eye'}`} />
-                            </button>
-                          </div>
-                          <small className="form-hint">
-                            请输入您的API Key
-                          </small>
-                        </div>
-
-                        <div className="form-group">
-                          <label htmlFor="apiUrl">
-                            请求地址 (API Endpoint)
-                            <span className="required">*</span>
-                          </label>
-                          <input
-                              id="apiUrl"
-                              type="text"
-                              className="form-input"
-                              placeholder="https://api.anthropic.com"
-                              value={apiUrl}
-                              onChange={handleApiUrlChange}
-                          />
-                          <small className="form-hint">
-                            <span className="codicon codicon-info" style={{ fontSize: '12px', marginRight: '4px' }} />
-                            填写兼容 Claude API 的服务端口地址
-                          </small>
-                        </div>
-
-                        <details className="advanced-section">
-                          <summary className="advanced-toggle">
-                            <span className="codicon codicon-chevron-right" />
-                            高级选项
-                          </summary>
-                          <div style={{ padding: '10px 0', color: '#858585', fontSize: '13px' }}>
-                            暂无高级选项
-                          </div>
-                        </details>
-
-                        <details className="advanced-section" open>
-                          <summary className="advanced-toggle">
-                            <span className="codicon codicon-chevron-right" />
-                            配置 JSON
-                          </summary>
-                          <div className="json-config-section">
-                            <p className="section-desc" style={{ marginBottom: '12px', fontSize: '12px', color: '#999' }}>
-                              此处可配置完整的 settings.json 内容，支持所有字段（如 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等）
-                            </p>
-                            <div className="json-editor-wrapper">
-                        <textarea
-                            className="json-editor"
-                            value={jsonConfig}
-                            onChange={handleJsonChange}
-                            placeholder={`{
-  "env": {
-    "ANTHROPIC_API_KEY": "",
-    "ANTHROPIC_AUTH_TOKEN": "",
-    "ANTHROPIC_BASE_URL": ""
-  },
-  "model": "opus",
-  "alwaysThinkingEnabled": false,
-  "ccSwitchProviderId": "default",
-  "codemossProviderId": ""
-}`}
-                        />
-                              {jsonError && (
-                                  <p className="json-error">
-                                    <span className="codicon codicon-error" />
-                                    {jsonError}
-                                  </p>
-                              )}
-                            </div>
-                          </div>
-                        </details>
-
-                        <div className="form-actions" style={{ justifyContent: 'flex-end', marginTop: '24px', borderTop: '1px solid #3e3e42', paddingTop: '16px' }}>
-                          {!isAdding && (
-                              <button
-                                  className="btn-small btn-danger"
-                                  style={{ marginRight: 'auto' }}
-                                  onClick={() => editingProvider && handleDeleteProvider(editingProvider)}
-                                  disabled={providers.length === 1}
-                              >
-                                <span className="codicon codicon-trash" />
-                                删除供应商
-                              </button>
-                          )}
-
-                          <button className="btn-secondary" onClick={handleCancelEdit}>
-                            <span className="codicon codicon-close" />
-                            取消
-                          </button>
-                          <button className="btn-primary" onClick={handleSaveProvider}>
-                            <span className="codicon codicon-save" />
-                            {isAdding ? '确认添加' : '保存更改'}
-                          </button>
-                        </div>
-                      </div>
-                  )}
                 </div>
             )}
 
@@ -1115,6 +852,18 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             cancelText="取消"
             onConfirm={confirmDeleteProvider}
             onCancel={cancelDeleteProvider}
+        />
+
+        {/* 供应商添加/编辑弹窗 */}
+        <ProviderDialog
+            isOpen={providerDialog.isOpen}
+            provider={providerDialog.provider}
+            onClose={handleCloseProviderDialog}
+            onSave={handleSaveProviderFromDialog}
+            onDelete={handleDeleteProvider}
+            canDelete={true}
+            copyToClipboard={copyToClipboard}
+            addToast={addToast}
         />
 
         {/* Toast 通知 */}

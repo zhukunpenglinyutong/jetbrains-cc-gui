@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 
 import com.github.claudecodegui.model.DeleteResult;
 
@@ -17,16 +19,17 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * Codemoss 配置文件服务
  * 用于读写 ~/.codemoss/config.json
- * 支持从旧的 ~/.cc-switch/config.json 迁移配置
+ * 如果不存在则从 ~/.claude/settings.json 导入
  */
 public class CodemossSettingsService {
 
     private static final String CONFIG_DIR_NAME = ".codemoss";
-    private static final String OLD_CONFIG_DIR_NAME = ".cc-switch";
     private static final String CONFIG_FILE_NAME = "config.json";
     private static final String BACKUP_FILE_NAME = "config.json.bak";
     private static final int CONFIG_VERSION = 2;
@@ -35,7 +38,6 @@ public class CodemossSettingsService {
     private static final String CLAUDE_SETTINGS_FILE_NAME = "settings.json";
 
     private final Gson gson;
-    private boolean migrationChecked = false;
 
     public CodemossSettingsService() {
         this.gson = new GsonBuilder().setPrettyPrinting().create();
@@ -47,14 +49,6 @@ public class CodemossSettingsService {
     public String getConfigPath() {
         String homeDir = System.getProperty("user.home");
         return Paths.get(homeDir, CONFIG_DIR_NAME, CONFIG_FILE_NAME).toString();
-    }
-
-    /**
-     * 获取旧配置文件路径（.cc-switch/config.json）
-     */
-    private String getOldConfigPath() {
-        String homeDir = System.getProperty("user.home");
-        return Paths.get(homeDir, OLD_CONFIG_DIR_NAME, CONFIG_FILE_NAME).toString();
     }
 
     /**
@@ -92,72 +86,11 @@ public class CodemossSettingsService {
     }
 
     /**
-     * 检查并执行从旧配置的迁移
-     * 迁移规则：
-     * 1. 如果 .codemoss/config.json 已存在，不迁移（防止覆盖）
-     * 2. 如果 .cc-switch/config.json 不存在，不迁移
-     * 3. 只有当新配置不存在且旧配置存在时才迁移
-     * 4. 迁移时不删除旧配置文件
-     * @return true 如果执行了迁移，false 如果未迁移
-     */
-    public boolean migrateFromOldConfigIfNeeded() {
-        if (migrationChecked) {
-            return false;
-        }
-        migrationChecked = true;
-
-        String newConfigPath = getConfigPath();
-        String oldConfigPath = getOldConfigPath();
-        File newConfigFile = new File(newConfigPath);
-        File oldConfigFile = new File(oldConfigPath);
-
-        // 如果新配置已存在，不需要迁移
-        if (newConfigFile.exists()) {
-            System.out.println("[CodemossSettings] Config already exists, skipping migration: " + newConfigPath);
-            return false;
-        }
-
-        // 如果旧配置不存在，无法迁移
-        if (!oldConfigFile.exists()) {
-            System.out.println("[CodemossSettings] No old config found, skipping migration: " + oldConfigPath);
-            return false;
-        }
-
-        // 执行迁移
-        try {
-            System.out.println("[CodemossSettings] Migrating config from: " + oldConfigPath);
-            
-            // 读取旧配置
-            JsonObject oldConfig;
-            try (FileReader reader = new FileReader(oldConfigFile)) {
-                oldConfig = JsonParser.parseReader(reader).getAsJsonObject();
-            }
-
-            // 确保新配置目录存在
-            ensureConfigDirectory();
-
-            // 写入新配置（保持相同格式）
-            try (FileWriter writer = new FileWriter(newConfigPath)) {
-                gson.toJson(oldConfig, writer);
-            }
-
-            System.out.println("[CodemossSettings] Migration completed successfully to: " + newConfigPath);
-            System.out.println("[CodemossSettings] Old config preserved at: " + oldConfigPath);
-            return true;
-
-        } catch (Exception e) {
-            System.err.println("[CodemossSettings] Migration failed: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    /**
-     * 读取配置文件（自动执行迁移检查）
+     * 读取配置文件
+     * 优先读取 ~/.codemoss/config.json
+     * 如果不存在，则尝试从 ~/.claude/settings.json 导入
      */
     public JsonObject readConfig() throws IOException {
-        // 首次读取时检查是否需要迁移
-        migrateFromOldConfigIfNeeded();
 
         String configPath = getConfigPath();
         File configFile = new File(configPath);
@@ -196,6 +129,17 @@ public class CodemossSettingsService {
         }
     }
 
+    private void backupConfig() {
+        try {
+            Path configPath = getConfigFilePath();
+            if (Files.exists(configPath)) {
+                Files.copy(configPath, Paths.get(getBackupPath()), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception e) {
+            System.err.println("[CodemossSettings] Failed to backup config: " + e.getMessage());
+        }
+    }
+
     private Path getClaudeSettingsPath() {
         String homeDir = System.getProperty("user.home");
         return Paths.get(homeDir, CLAUDE_DIR_NAME, CLAUDE_SETTINGS_FILE_NAME);
@@ -223,9 +167,60 @@ public class CodemossSettingsService {
         }
     }
 
+    /**
+     * 获取当前 Claude CLI 使用的配置 (~/.claude/settings.json)
+     * 用于在设置页面展示当前应用的配置
+     */
+    public JsonObject getCurrentClaudeConfig() throws IOException {
+        JsonObject claudeSettings = readClaudeSettings();
+        JsonObject result = new JsonObject();
+
+        // 提取 env 中的关键配置
+        if (claudeSettings.has("env")) {
+            JsonObject env = claudeSettings.getAsJsonObject("env");
+            String apiKey = env.has("ANTHROPIC_AUTH_TOKEN") ? env.get("ANTHROPIC_AUTH_TOKEN").getAsString() : "";
+            String baseUrl = env.has("ANTHROPIC_BASE_URL") ? env.get("ANTHROPIC_BASE_URL").getAsString() : "";
+
+            result.addProperty("apiKey", apiKey);
+            result.addProperty("baseUrl", baseUrl);
+        } else {
+            result.addProperty("apiKey", "");
+            result.addProperty("baseUrl", "");
+        }
+
+        // 如果有 codemossProviderId，尝试获取供应商名称
+        if (claudeSettings.has("codemossProviderId")) {
+            String providerId = claudeSettings.get("codemossProviderId").getAsString();
+            result.addProperty("providerId", providerId);
+
+            // 尝试从 codemoss 配置中获取供应商名称
+            try {
+                JsonObject config = readConfig();
+                if (config.has("claude")) {
+                    JsonObject claude = config.getAsJsonObject("claude");
+                    if (claude.has("providers")) {
+                        JsonObject providers = claude.getAsJsonObject("providers");
+                        if (providers.has(providerId)) {
+                            JsonObject provider = providers.getAsJsonObject(providerId);
+                            if (provider.has("name")) {
+                                result.addProperty("providerName", provider.get("name").getAsString());
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // 忽略错误，供应商名称是可选的
+            }
+        }
+
+        return result;
+    }
+
     private void writeClaudeSettings(JsonObject settings) throws IOException {
         Path settingsPath = getClaudeSettingsPath();
-        Files.createDirectories(settingsPath.getParent());
+        if (!Files.exists(settingsPath.getParent())) {
+            Files.createDirectories(settingsPath.getParent());
+        }
         try (FileWriter writer = new FileWriter(settingsPath.toFile())) {
             gson.toJson(settings, writer);
             System.out.println("[CodemossSettings] Synced settings to: " + settingsPath);
@@ -233,45 +228,21 @@ public class CodemossSettingsService {
     }
 
     /**
-     * 创建默认配置
+     * 创建默认配置（空配置，不从其他地方导入）
      */
     private JsonObject createDefaultConfig() {
         JsonObject config = new JsonObject();
         config.addProperty("version", CONFIG_VERSION);
 
-        // Claude 配置
+        // Claude 配置 - 空的供应商列表
         JsonObject claude = new JsonObject();
         JsonObject providers = new JsonObject();
-        JsonObject defaultProvider = createDefaultProvider();
-        providers.add("default", defaultProvider);
-        claude.add("providers", providers);
-        claude.addProperty("current", "default");
 
+        claude.addProperty("current", "");
+        claude.add("providers", providers);
         config.add("claude", claude);
 
         return config;
-    }
-
-    /**
-     * 创建默认供应商
-     */
-    private JsonObject createDefaultProvider() {
-        JsonObject provider = new JsonObject();
-        provider.addProperty("id", "default");
-        provider.addProperty("name", "Claude官方");
-        provider.addProperty("websiteUrl", "https://api.anthropic.com");
-        provider.addProperty("category", "official");
-        provider.addProperty("createdAt", System.currentTimeMillis());
-
-        JsonObject settingsConfig = new JsonObject();
-        JsonObject env = new JsonObject();
-        env.addProperty("ANTHROPIC_AUTH_TOKEN", "");
-        env.addProperty("ANTHROPIC_BASE_URL", "https://api.anthropic.com");
-        settingsConfig.add("env", env);
-
-        provider.add("settingsConfig", settingsConfig);
-
-        return provider;
     }
 
     private JsonObject extractEnvConfig(JsonObject provider) {
@@ -390,7 +361,8 @@ public class CodemossSettingsService {
     public void applyActiveProviderToClaudeSettings() throws IOException {
         JsonObject activeProvider = getActiveClaudeProvider();
         if (activeProvider == null) {
-            throw new IllegalStateException("No active provider configured");
+            System.out.println("[CodemossSettings] No active provider to sync to .claude/settings.json");
+            return;
         }
         applyProviderToClaudeSettings(activeProvider);
     }
@@ -428,16 +400,11 @@ public class CodemossSettingsService {
             provider.addProperty("createdAt", System.currentTimeMillis());
         }
 
-        // 添加供应商
+        // 添加供应商（不自动设为 current，用户需要手动点击"启用"按钮来激活）
         providers.add(id, provider);
 
-        // 如果没有当前供应商，设置为新添加的
-        if (!claude.has("current") || claude.get("current").getAsString().isEmpty()) {
-            claude.addProperty("current", id);
-        }
-
         writeConfig(config);
-        System.out.println("[CodemossSettings] Added provider: " + id);
+        System.out.println("[CodemossSettings] Added provider: " + id + " (not activated, user needs to manually switch)");
     }
 
     /**
@@ -583,240 +550,128 @@ public class CodemossSettingsService {
         if (!config.has("claude")) {
             throw new IllegalArgumentException("No claude configuration found");
         }
-
+        
         JsonObject claude = config.getAsJsonObject("claude");
         JsonObject providers = claude.getAsJsonObject("providers");
-
+        
         if (!providers.has(id)) {
             throw new IllegalArgumentException("Provider with id '" + id + "' not found");
         }
-
+        
         claude.addProperty("current", id);
         writeConfig(config);
         System.out.println("[CodemossSettings] Switched to provider: " + id);
     }
 
     /**
-     * 备份配置文件
-     */
-    private void backupConfig() {
-        try {
-            String configPath = getConfigPath();
-            String backupPath = getBackupPath();
-            File configFile = new File(configPath);
-
-            if (configFile.exists()) {
-                Files.copy(configFile.toPath(), Paths.get(backupPath),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                System.out.println("[CodemossSettings] Backed up config to: " + backupPath);
-            }
-        } catch (Exception e) {
-            System.err.println("[CodemossSettings] Failed to backup config: " + e.getMessage());
-            // 备份失败不应该影响主流程
-        }
-    }
-
-    /**
-     * 初始化配置（确保配置文件存在，自动执行迁移检查）
-     */
-    public void initialize() throws IOException {
-        // 首先检查是否需要迁移
-        migrateFromOldConfigIfNeeded();
-
-        String configPath = getConfigPath();
-        File configFile = new File(configPath);
-
-        if (!configFile.exists()) {
-            System.out.println("[CodemossSettings] Initializing config file: " + configPath);
-            JsonObject config = createDefaultConfig();
-            writeConfig(config);
-        }
-    }
-
-    // ==================== MCP 服务器管理 ====================
-
-    private static final String CLAUDE_CONFIG_FILE_NAME = ".claude.json";
-
-    /**
-     * 获取 Claude 配置文件路径 (~/.claude.json)
-     */
-    private Path getClaudeConfigPath() {
-        String homeDir = System.getProperty("user.home");
-        return Paths.get(homeDir, CLAUDE_CONFIG_FILE_NAME);
-    }
-
-    /**
-     * 读取 Claude 配置文件
-     */
-    private JsonObject readClaudeConfig() throws IOException {
-        Path configPath = getClaudeConfigPath();
-        File configFile = configPath.toFile();
-
-        if (!configFile.exists()) {
-            JsonObject emptyConfig = new JsonObject();
-            emptyConfig.add("mcpServers", new JsonObject());
-            return emptyConfig;
-        }
-
-        try (FileReader reader = new FileReader(configFile)) {
-            return JsonParser.parseReader(reader).getAsJsonObject();
-        } catch (Exception e) {
-            System.err.println("[CodemossSettings] Failed to read ~/.claude.json: " + e.getMessage());
-            JsonObject emptyConfig = new JsonObject();
-            emptyConfig.add("mcpServers", new JsonObject());
-            return emptyConfig;
-        }
-    }
-
-    /**
-     * 写入 Claude 配置文件
-     */
-    private void writeClaudeConfig(JsonObject config) throws IOException {
-        Path configPath = getClaudeConfigPath();
-        try (FileWriter writer = new FileWriter(configPath.toFile())) {
-            gson.toJson(config, writer);
-            System.out.println("[CodemossSettings] Synced to Claude config: " + configPath);
-        }
-    }
-
-    /**
      * 获取所有 MCP 服务器
-     * 直接从 ~/.claude.json 读取
      */
     public List<JsonObject> getMcpServers() throws IOException {
+        JsonObject config = readConfig();
         List<JsonObject> result = new ArrayList<>();
-        JsonObject claudeConfig = readClaudeConfig();
-
-        if (claudeConfig.has("mcpServers") && !claudeConfig.get("mcpServers").isJsonNull()) {
-            JsonObject mcpServers = claudeConfig.getAsJsonObject("mcpServers");
-            for (String key : mcpServers.keySet()) {
-                JsonObject spec = mcpServers.getAsJsonObject(key);
-                // 转换为前端需要的完整格式
-                JsonObject server = new JsonObject();
-                server.addProperty("id", key);
-                server.addProperty("name", key);
-                server.add("server", spec);
-
-                // 默认 apps（前端需要）
-                JsonObject apps = new JsonObject();
-                apps.addProperty("claude", true);
-                apps.addProperty("codex", false);
-                apps.addProperty("gemini", false);
-                server.add("apps", apps);
-
-                server.addProperty("enabled", true);
-                result.add(server);
+        
+        if (config.has("mcpServers")) {
+            JsonArray servers = config.getAsJsonArray("mcpServers");
+            for (JsonElement elem : servers) {
+                if (elem.isJsonObject()) {
+                    result.add(elem.getAsJsonObject());
+                }
             }
-            System.out.println("[CodemossSettings] Loaded " + result.size() + " MCP servers from ~/.claude.json");
         }
-
         return result;
     }
 
     /**
-     * 添加或更新 MCP 服务器
-     * 直接写入 ~/.claude.json
+     * 更新或插入 MCP 服务器
      */
     public void upsertMcpServer(JsonObject server) throws IOException {
         if (!server.has("id")) {
             throw new IllegalArgumentException("Server must have an id");
         }
-
+        
+        JsonObject config = readConfig();
+        JsonArray servers;
+        
+        if (config.has("mcpServers")) {
+            servers = config.getAsJsonArray("mcpServers");
+        } else {
+            servers = new JsonArray();
+            config.add("mcpServers", servers);
+        }
+        
         String id = server.get("id").getAsString();
-
-        // 验证服务器配置
-        java.util.Map<String, Object> validation = validateMcpServer(server);
-        if (!(boolean) validation.get("valid")) {
-            @SuppressWarnings("unchecked")
-            List<String> errors = (List<String>) validation.get("errors");
-            throw new IllegalArgumentException("Invalid server configuration: " + String.join(", ", errors));
+        boolean found = false;
+        
+        // 查找并更新
+        for (int i = 0; i < servers.size(); i++) {
+            JsonObject s = servers.get(i).getAsJsonObject();
+            if (s.has("id") && s.get("id").getAsString().equals(id)) {
+                servers.set(i, server); // 替换
+                found = true;
+                break;
+            }
         }
-
-        // 读取 Claude 配置
-        JsonObject claudeConfig = readClaudeConfig();
-
-        // 初始化 mcpServers
-        if (!claudeConfig.has("mcpServers")) {
-            claudeConfig.add("mcpServers", new JsonObject());
+        
+        if (!found) {
+            servers.add(server);
         }
-        JsonObject mcpServers = claudeConfig.getAsJsonObject("mcpServers");
-
-        // 提取服务器规格（只保存 server 部分到 .claude.json）
-        if (!server.has("server")) {
-            throw new IllegalArgumentException("Server must have a 'server' spec");
-        }
-        JsonObject serverSpec = server.getAsJsonObject("server");
-
-        // 添加或更新服务器
-        mcpServers.add(id, serverSpec);
-
-        // 写入 Claude 配置
-        writeClaudeConfig(claudeConfig);
-
-        System.out.println("[CodemossSettings] Upserted MCP server to ~/.claude.json: " + id);
+        
+        writeConfig(config);
+        System.out.println("[CodemossSettings] Upserted MCP server: " + id);
     }
 
     /**
      * 删除 MCP 服务器
-     * 直接从 ~/.claude.json 删除
      */
-    public boolean deleteMcpServer(String id) throws IOException {
-        JsonObject claudeConfig = readClaudeConfig();
-
-        if (!claudeConfig.has("mcpServers") || claudeConfig.get("mcpServers").isJsonNull()) {
-            System.out.println("[CodemossSettings] No MCP servers found in ~/.claude.json");
+    public boolean deleteMcpServer(String serverId) throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has("mcpServers")) {
             return false;
         }
-
-        JsonObject mcpServers = claudeConfig.getAsJsonObject("mcpServers");
-        if (!mcpServers.has(id)) {
-            System.out.println("[CodemossSettings] MCP server not found: " + id);
-            return false;
+        
+        JsonArray servers = config.getAsJsonArray("mcpServers");
+        boolean removed = false;
+        JsonArray newServers = new JsonArray();
+        
+        for (JsonElement elem : servers) {
+            JsonObject s = elem.getAsJsonObject();
+            if (s.has("id") && s.get("id").getAsString().equals(serverId)) {
+                removed = true;
+            } else {
+                newServers.add(s);
+            }
         }
-
-        // 删除服务器
-        mcpServers.remove(id);
-
-        // 写入 Claude 配置
-        writeClaudeConfig(claudeConfig);
-
-        System.out.println("[CodemossSettings] Deleted MCP server from ~/.claude.json: " + id);
-        return true;
+        
+        if (removed) {
+            config.add("mcpServers", newServers);
+            writeConfig(config);
+            System.out.println("[CodemossSettings] Deleted MCP server: " + serverId);
+        }
+        
+        return removed;
     }
 
-    /**
-     * 验证 MCP 服务器配置
-     */
-    public java.util.Map<String, Object> validateMcpServer(JsonObject server) {
+    public Map<String, Object> validateMcpServer(JsonObject server) {
         List<String> errors = new ArrayList<>();
-
-        // 验证 ID
-        if (!server.has("id") || server.get("id").isJsonNull() || server.get("id").getAsString().trim().isEmpty()) {
-            errors.add("服务器 ID 不能为空");
+        
+        if (!server.has("name") || server.get("name").getAsString().isEmpty()) {
+            errors.add("服务器名称不能为空");
         }
-
-        // 验证服务器规格
-        if (!server.has("server") || server.get("server").isJsonNull()) {
-            errors.add("服务器配置不能为空");
-        } else {
-            JsonObject spec = server.getAsJsonObject("server");
-            String type = spec.has("type") && !spec.get("type").isJsonNull()
-                ? spec.get("type").getAsString()
-                : "stdio";
-
+        
+        if (server.has("server")) {
+            JsonObject serverSpec = server.getAsJsonObject("server");
+            String type = serverSpec.has("type") ? serverSpec.get("type").getAsString() : "stdio";
+            
             if ("stdio".equals(type)) {
-                if (!spec.has("command") || spec.get("command").isJsonNull() ||
-                    spec.get("command").getAsString().trim().isEmpty()) {
-                    errors.add("stdio 类型需要指定 command");
+                if (!serverSpec.has("command") || serverSpec.get("command").getAsString().isEmpty()) {
+                    errors.add("命令不能为空");
                 }
             } else if ("http".equals(type) || "sse".equals(type)) {
-                if (!spec.has("url") || spec.get("url").isJsonNull() ||
-                    spec.get("url").getAsString().trim().isEmpty()) {
-                    errors.add(type + " 类型需要指定 url");
-                }
-                if (spec.has("url") && !spec.get("url").isJsonNull()) {
-                    String url = spec.get("url").getAsString();
-                    try {
+                if (!serverSpec.has("url") || serverSpec.get("url").getAsString().isEmpty()) {
+                    errors.add("URL 不能为空");
+                } else {
+                    String url = serverSpec.get("url").getAsString();
+                     try {
                         new java.net.URL(url);
                     } catch (Exception e) {
                         errors.add("URL 格式无效");
@@ -825,11 +680,13 @@ public class CodemossSettingsService {
             } else {
                 errors.add("不支持的连接类型: " + type);
             }
+        } else {
+            errors.add("缺少服务器配置详情");
         }
 
-        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        Map<String, Object> result = new HashMap<>();
         result.put("valid", errors.isEmpty());
         result.put("errors", errors);
         return result;
-}
     }
+}
