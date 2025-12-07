@@ -38,7 +38,7 @@ tasks.withType(JavaCompile) {
 
 patchPluginXml {
     sinceBuild = '233'
-    untilBuild = '252.*'
+    untilBuild = '253.*'
 
     changeNotes = """
         <ul>
