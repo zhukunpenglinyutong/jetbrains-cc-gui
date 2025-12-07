@@ -5482,3 +5482,1026 @@ body {
         height: 18px;
     }
 }
+
+/* ==================== Skills 设置样式 ==================== */
+.skills-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Skills 头部 - 复用 MCP 头部样式 */
+.skills-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.skills-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.skills-header .header-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.skills-header .help-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    color: var(--text-white);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.skills-header .help-btn:hover {
+    opacity: 0.8;
+}
+
+.skills-header .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.skills-header .refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.skills-header .refresh-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+}
+
+.skills-header .refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.skills-header .refresh-btn .spinning {
+    animation: spin 1s linear infinite;
+}
+
+/* Skill 列表 */
+.skill-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Skill 卡片 */
+.skill-card {
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+    transition: all 0.15s ease;
+}
+
+.skill-card:hover {
+    border-color: var(--accent-primary);
+}
+
+.skill-card.disabled {
+    opacity: 0.6;
+}
+
+.skill-card.disabled .card-header {
+    background: transparent;
+}
+
+/* Skill 图标 */
+.skill-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+/* Skill 名称 */
+.skill-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Skill 版本标签 */
+.skill-version {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+    margin-left: 8px;
+}
+
+/* 路径显示样式 */
+.info-value.path {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--color-code-bg);
+    word-break: break-all;
+}
+
+/* ===== Skill 弹窗样式 ===== */
+.skill-dialog-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.skill-dialog {
+    background: var(--vscode-editor-background, var(--bg-primary));
+    border: 1px solid var(--vscode-panel-border, var(--border-primary));
+    border-radius: 8px;
+    width: 90%;
+    max-width: 560px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease-out;
+}
+
+.skill-dialog .dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--vscode-panel-border, var(--border-primary));
+}
+
+.skill-dialog .dialog-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--vscode-foreground, var(--text-primary));
+}
+
+.skill-dialog .close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.skill-dialog .close-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.skill-dialog .dialog-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.skill-dialog .dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--vscode-panel-border, var(--border-primary));
+}
+
+/* 表单样式 */
+.skill-dialog .form-section {
+    margin-bottom: 20px;
+}
+
+.skill-dialog .form-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 12px 0;
+}
+
+.skill-dialog .form-section.collapsible {
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    padding: 0;
+}
+
+.skill-dialog .form-section.collapsible summary {
+    padding: 12px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.skill-dialog .form-section.collapsible summary:hover {
+    color: var(--text-primary);
+}
+
+.skill-dialog .collapsible-content {
+    padding: 0 14px 14px 14px;
+}
+
+.skill-dialog .form-group {
+    margin-bottom: 16px;
+}
+
+.skill-dialog .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.skill-dialog .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.skill-dialog .form-group label .required {
+    color: var(--color-error);
+}
+
+.skill-dialog .form-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.skill-dialog .form-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.skill-dialog .form-input.error {
+    border-color: var(--color-error);
+}
+
+.skill-dialog .form-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.skill-dialog textarea.form-input {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.skill-dialog .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.skill-dialog .error-text {
+    display: block;
+    font-size: 11px;
+    color: var(--color-error);
+    margin-top: 4px;
+}
+
+.skill-dialog .hint {
+    display: block;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+}
+
+.skill-dialog .form-group.inline {
+    display: flex;
+    align-items: center;
+}
+
+.skill-dialog .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.skill-dialog .toggle-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* 帮助弹窗样式 */
+.skill-dialog.help-dialog {
+    max-width: 600px;
+}
+
+.skill-dialog .help-content {
+    line-height: 1.6;
+}
+
+.skill-dialog .help-section {
+    margin-bottom: 24px;
+}
+
+.skill-dialog .help-section:last-child {
+    margin-bottom: 0;
+}
+
+.skill-dialog .help-section h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 10px 0;
+}
+
+.skill-dialog .help-section h4 .codicon {
+    color: var(--accent-primary);
+}
+
+.skill-dialog .help-section p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 10px 0;
+}
+
+.skill-dialog .help-section ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.skill-dialog .help-section li {
+    margin-bottom: 6px;
+}
+
+.skill-dialog .help-section a {
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
+.skill-dialog .help-section a:hover {
+    text-decoration: underline;
+}
+
+.skill-dialog .code-block {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-size: 12px;
+    padding: 12px;
+    border-radius: 6px;
+    background: var(--color-code-bg);
+    color: var(--text-primary);
+    overflow-x: auto;
+    margin: 10px 0;
+}
+
+/* 确认弹窗样式 */
+.skill-dialog.confirm-dialog {
+    max-width: 400px;
+}
+
+.skill-dialog .confirm-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 20px 0;
+}
+
+.skill-dialog .warning-icon {
+    font-size: 48px;
+    color: var(--color-warning);
+    margin-bottom: 16px;
+}
+
+.skill-dialog .confirm-message p {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin: 0;
+    white-space: pre-line;
+}
+
+/* 按钮样式 */
+.skill-dialog .btn-primary,
+.skill-dialog .btn-secondary,
+.skill-dialog .btn-danger {
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.skill-dialog .btn-primary {
+    background: var(--accent-primary);
+    color: var(--text-white);
+    border: none;
+}
+
+.skill-dialog .btn-primary:hover {
+    background: var(--accent-primary-hover);
+}
+
+.skill-dialog .btn-secondary {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+}
+
+.skill-dialog .btn-secondary:hover {
+    background: var(--bg-hover);
+}
+
+.skill-dialog .btn-danger {
+    background: var(--color-danger);
+    color: var(--text-white);
+    border: none;
+}
+
+.skill-dialog .btn-danger:hover {
+    opacity: 0.9;
+}
+
+/* ==================== Skills 新版 UI 样式 ==================== */
+
+/* Skills 工具栏 */
+.skills-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+/* 筛选标签 */
+.filter-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-secondary);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border-primary);
+}
+
+.filter-tabs .tab-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.filter-tabs .tab-item:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.filter-tabs .tab-item.active {
+    background: var(--accent-primary);
+    color: var(--text-white);
+}
+
+.filter-tabs .tab-item .count-badge {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.filter-tabs .tab-item.active .count-badge {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* 右侧工具栏 */
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 搜索框 */
+.search-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    transition: border-color 0.15s ease;
+}
+
+.search-box:focus-within {
+    border-color: var(--accent-primary);
+}
+
+.search-box .codicon {
+    color: var(--text-tertiary);
+    font-size: 14px;
+}
+
+.search-box .search-input {
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    width: 140px;
+}
+
+.search-box .search-input::placeholder {
+    color: var(--text-placeholder);
+}
+
+/* 图标按钮 */
+.icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.icon-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.icon-btn.primary {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--text-white);
+}
+
+.icon-btn.primary:hover:not(:disabled) {
+    background: var(--accent-primary-hover);
+    border-color: var(--accent-primary-hover);
+}
+
+.icon-btn .codicon {
+    font-size: 14px;
+}
+
+.icon-btn .spinning {
+    animation: spin 1s linear infinite;
+}
+
+/* 新版 Skill 卡片 */
+.skill-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.15s ease;
+}
+
+.skill-card:hover {
+    border-color: var(--border-hover);
+}
+
+.skill-card.expanded {
+    border-color: var(--accent-primary);
+}
+
+.skill-card .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.skill-card .card-header:hover {
+    background: var(--bg-hover);
+}
+
+/* Skill 图标包装器 */
+.skill-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+.skill-icon-wrapper .codicon {
+    color: #ffffff;
+    font-size: 16px;
+}
+
+/* Skill 信息区域 */
+.skill-card .skill-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.skill-card .skill-header-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.skill-card .skill-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* 作用域标识 */
+.scope-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.scope-badge.global {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3B82F6;
+}
+
+.scope-badge.local {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10B981;
+}
+
+.scope-badge .codicon {
+    font-size: 10px;
+}
+
+/* Skill 路径 */
+.skill-card .skill-path {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 展开指示器 */
+.skill-card .expand-indicator {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.skill-card .expand-indicator .codicon {
+    font-size: 12px;
+    transition: transform 0.15s ease;
+}
+
+/* 卡片展开内容 */
+.skill-card .card-content {
+    padding: 14px;
+    border-top: 1px solid var(--border-primary);
+    animation: slideDown 0.15s ease;
+}
+
+/* 描述容器 */
+.skill-card .description-container {
+    margin-bottom: 12px;
+}
+
+.skill-card .description-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
+}
+
+.skill-card .description-content {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.skill-card .description-placeholder {
+    font-size: 13px;
+    color: var(--text-tertiary);
+    font-style: italic;
+    margin-bottom: 12px;
+}
+
+/* 操作按钮区域 */
+.skill-card .actions-section {
+    display: flex;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-primary);
+}
+
+.skill-card .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.skill-card .action-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.skill-card .action-btn.edit-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.skill-card .action-btn.delete-btn:hover {
+    background: rgba(211, 47, 47, 0.1);
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+}
+
+.skill-card .action-btn .codicon {
+    font-size: 12px;
+}
+
+/* 空状态和加载状态 */
+.skills-settings-section .empty-state,
+.skills-settings-section .loading-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-tertiary);
+}
+
+.skills-settings-section .empty-state .codicon,
+.skills-settings-section .loading-state .codicon {
+    font-size: 48px;
+    opacity: 0.5;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.skills-settings-section .empty-state p,
+.skills-settings-section .loading-state p {
+    margin: 0 0 8px 0;
+}
+
+.skills-settings-section .empty-state .hint {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+/* 响应式适配 - Skills */
+@media (max-width: 600px) {
+    .skills-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-tabs {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .filter-tabs .tab-item {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .toolbar-right {
+        justify-content: flex-end;
+    }
+
+    .search-box .search-input {
+        width: 100px;
+    }
+}
+
+@media (max-width: 480px) {
+    .skills-header {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .skills-header .header-right {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .skill-dialog .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .skill-card .card-header {
+        padding: 10px 12px;
+    }
+
+    .skill-icon-wrapper {
+        width: 28px;
+        height: 28px;
+    }
+
+    .skill-icon-wrapper .codicon {
+        font-size: 14px;
+    }
+
+    .skill-card .skill-name {
+        font-size: 13px;
+    }
+
+    .scope-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+
+    .skill-card .actions-section {
+        flex-direction: column;
+    }
+
+    .skill-card .action-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ==================== Skills 启用/停用相关样式 ==================== */
+
+/* 筛选标签分隔符 */
+.filter-tabs .filter-separator {
+    width: 1px;
+    height: 20px;
+    background: var(--border-primary);
+    margin: 0 4px;
+}
+
+/* 启用状态筛选标签 */
+.filter-tabs .tab-item.enabled-filter {
+    gap: 4px;
+}
+
+.filter-tabs .tab-item.enabled-filter .codicon {
+    font-size: 12px;
+}
+
+/* 启用/停用切换开关 */
+.skill-card .toggle-switch {
+    position: static;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    border: 2px solid transparent;
+    background: var(--bg-tertiary);
+}
+
+.skill-card .toggle-switch:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.skill-card .toggle-switch.enabled {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10B981;
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+.skill-card .toggle-switch.enabled:hover {
+    background: rgba(16, 185, 129, 0.3);
+    border-color: #10B981;
+}
+
+.skill-card .toggle-switch.disabled {
+    background: rgba(156, 163, 175, 0.15);
+    color: var(--text-tertiary);
+    border-color: rgba(156, 163, 175, 0.3);
+}
+
+.skill-card .toggle-switch.disabled:hover {
+    background: rgba(156, 163, 175, 0.25);
+    color: var(--text-secondary);
+    border-color: var(--text-tertiary);
+}
+
+.skill-card .toggle-switch.loading {
+    cursor: wait;
+    opacity: 0.7;
+}
+
+.skill-card .toggle-switch .codicon {
+    font-size: 14px;
+}
+
+/* 停用状态卡片样式 */
+.skill-card.disabled {
+    opacity: 0.7;
+}
+
+.skill-card.disabled .skill-name {
+    color: var(--text-tertiary);
+}
+
+.skill-card.disabled .skill-path {
+    opacity: 0.7;
+}
+
+/* 名称淡化 */
+.skill-card .skill-name.muted {
+    color: var(--text-tertiary);
+}
+
+/* 状态标识 */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.status-badge.disabled {
+    background: rgba(156, 163, 175, 0.15);
+    color: var(--text-tertiary);
+}
+

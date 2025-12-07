@@ -550,14 +550,14 @@ public class CodemossSettingsService {
         if (!config.has("claude")) {
             throw new IllegalArgumentException("No claude configuration found");
         }
-        
+
         JsonObject claude = config.getAsJsonObject("claude");
         JsonObject providers = claude.getAsJsonObject("providers");
-        
+
         if (!providers.has(id)) {
             throw new IllegalArgumentException("Provider with id '" + id + "' not found");
         }
-        
+
         claude.addProperty("current", id);
         writeConfig(config);
         System.out.println("[CodemossSettings] Switched to provider: " + id);
@@ -569,7 +569,7 @@ public class CodemossSettingsService {
     public List<JsonObject> getMcpServers() throws IOException {
         JsonObject config = readConfig();
         List<JsonObject> result = new ArrayList<>();
-        
+
         if (config.has("mcpServers")) {
             JsonArray servers = config.getAsJsonArray("mcpServers");
             for (JsonElement elem : servers) {
@@ -588,20 +588,20 @@ public class CodemossSettingsService {
         if (!server.has("id")) {
             throw new IllegalArgumentException("Server must have an id");
         }
-        
+
         JsonObject config = readConfig();
         JsonArray servers;
-        
+
         if (config.has("mcpServers")) {
             servers = config.getAsJsonArray("mcpServers");
         } else {
             servers = new JsonArray();
             config.add("mcpServers", servers);
         }
-        
+
         String id = server.get("id").getAsString();
         boolean found = false;
-        
+
         // 查找并更新
         for (int i = 0; i < servers.size(); i++) {
             JsonObject s = servers.get(i).getAsJsonObject();
@@ -611,11 +611,11 @@ public class CodemossSettingsService {
                 break;
             }
         }
-        
+
         if (!found) {
             servers.add(server);
         }
-        
+
         writeConfig(config);
         System.out.println("[CodemossSettings] Upserted MCP server: " + id);
     }
@@ -628,11 +628,11 @@ public class CodemossSettingsService {
         if (!config.has("mcpServers")) {
             return false;
         }
-        
+
         JsonArray servers = config.getAsJsonArray("mcpServers");
         boolean removed = false;
         JsonArray newServers = new JsonArray();
-        
+
         for (JsonElement elem : servers) {
             JsonObject s = elem.getAsJsonObject();
             if (s.has("id") && s.get("id").getAsString().equals(serverId)) {
@@ -641,27 +641,27 @@ public class CodemossSettingsService {
                 newServers.add(s);
             }
         }
-        
+
         if (removed) {
             config.add("mcpServers", newServers);
             writeConfig(config);
             System.out.println("[CodemossSettings] Deleted MCP server: " + serverId);
         }
-        
+
         return removed;
     }
 
     public Map<String, Object> validateMcpServer(JsonObject server) {
         List<String> errors = new ArrayList<>();
-        
+
         if (!server.has("name") || server.get("name").getAsString().isEmpty()) {
             errors.add("服务器名称不能为空");
         }
-        
+
         if (server.has("server")) {
             JsonObject serverSpec = server.getAsJsonObject("server");
             String type = serverSpec.has("type") ? serverSpec.get("type").getAsString() : "stdio";
-            
+
             if ("stdio".equals(type)) {
                 if (!serverSpec.has("command") || serverSpec.get("command").getAsString().isEmpty()) {
                     errors.add("命令不能为空");
@@ -688,5 +688,181 @@ public class CodemossSettingsService {
         result.put("valid", errors.isEmpty());
         result.put("errors", errors);
         return result;
+    }
+
+    // ==================== Skills 管理 ====================
+
+    /**
+     * 获取所有 Skills 配置
+     * 从 ~/.codemoss/config.json 读取
+     */
+    public List<JsonObject> getSkills() throws IOException {
+        List<JsonObject> result = new ArrayList<>();
+        JsonObject config = readConfig();
+
+        if (!config.has("skills")) {
+            return result;
+        }
+
+        JsonObject skills = config.getAsJsonObject("skills");
+        for (String key : skills.keySet()) {
+            JsonObject skill = skills.getAsJsonObject(key);
+            // 确保 ID 存在
+            if (!skill.has("id")) {
+                skill.addProperty("id", key);
+            }
+            result.add(skill);
+        }
+
+        System.out.println("[CodemossSettings] Loaded " + result.size() + " skills");
+        return result;
+    }
+
+    /**
+     * 添加或更新 Skill
+     */
+    public void upsertSkill(JsonObject skill) throws IOException {
+        if (!skill.has("id")) {
+            throw new IllegalArgumentException("Skill must have an id");
+        }
+
+        String id = skill.get("id").getAsString();
+
+        // 验证 Skill 配置
+        java.util.Map<String, Object> validation = validateSkill(skill);
+        if (!(boolean) validation.get("valid")) {
+            @SuppressWarnings("unchecked")
+            List<String> errors = (List<String>) validation.get("errors");
+            throw new IllegalArgumentException("Invalid skill configuration: " + String.join(", ", errors));
+        }
+
+        JsonObject config = readConfig();
+
+        // 确保 skills 节点存在
+        if (!config.has("skills")) {
+            config.add("skills", new JsonObject());
+        }
+
+        JsonObject skills = config.getAsJsonObject("skills");
+
+        // 添加或更新 Skill
+        skills.add(id, skill);
+
+        // 写入配置
+        writeConfig(config);
+
+        // 同步到 Claude settings
+        syncSkillsToClaudeSettings();
+
+        System.out.println("[CodemossSettings] Upserted skill: " + id);
+    }
+
+    /**
+     * 删除 Skill
+     */
+    public boolean deleteSkill(String id) throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("skills")) {
+            System.out.println("[CodemossSettings] No skills found");
+            return false;
+        }
+
+        JsonObject skills = config.getAsJsonObject("skills");
+        if (!skills.has(id)) {
+            System.out.println("[CodemossSettings] Skill not found: " + id);
+            return false;
+        }
+
+        // 删除 Skill
+        skills.remove(id);
+
+        // 写入配置
+        writeConfig(config);
+
+        // 同步到 Claude settings
+        syncSkillsToClaudeSettings();
+
+        System.out.println("[CodemossSettings] Deleted skill: " + id);
+        return true;
+    }
+
+    /**
+     * 验证 Skill 配置
+     * Skills 是包含 SKILL.md 文件的文件夹，ID 必须是 hyphen-case 格式
+     */
+    public java.util.Map<String, Object> validateSkill(JsonObject skill) {
+        List<String> errors = new ArrayList<>();
+
+        // 验证 ID（必须是 hyphen-case：小写字母、数字、连字符）
+        if (!skill.has("id") || skill.get("id").isJsonNull() ||
+                skill.get("id").getAsString().trim().isEmpty()) {
+            errors.add("Skill ID 不能为空");
+        } else {
+            String id = skill.get("id").getAsString();
+            // Skill ID 格式：只允许小写字母、数字、连字符（hyphen-case）
+            if (!id.matches("^[a-z0-9-]+$")) {
+                errors.add("Skill ID 只能包含小写字母、数字和连字符（hyphen-case）");
+            }
+        }
+
+        // 验证名称
+        if (!skill.has("name") || skill.get("name").isJsonNull() ||
+                skill.get("name").getAsString().trim().isEmpty()) {
+            errors.add("Skill 名称不能为空");
+        }
+
+        // 验证路径（必须是包含 SKILL.md 的文件夹路径）
+        if (!skill.has("path") || skill.get("path").isJsonNull() ||
+                skill.get("path").getAsString().trim().isEmpty()) {
+            errors.add("Skill 路径不能为空");
+        }
+
+        // 验证类型（目前只支持 local）
+        if (skill.has("type") && !skill.get("type").isJsonNull()) {
+            String type = skill.get("type").getAsString();
+            if (!"local".equals(type)) {
+                errors.add("不支持的 Skill 类型: " + type + "（目前只支持 local）");
+            }
+        }
+
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("valid", errors.isEmpty());
+        result.put("errors", errors);
+        return result;
+    }
+
+    /**
+     * 同步 Skills 到 Claude settings.json
+     * 将启用的 Skills 转换为 SDK plugins 格式
+     */
+    public void syncSkillsToClaudeSettings() throws IOException {
+        List<JsonObject> skills = getSkills();
+        JsonObject claudeSettings = readClaudeSettings();
+
+        // 构建 plugins 数组
+        com.google.gson.JsonArray plugins = new com.google.gson.JsonArray();
+        for (JsonObject skill : skills) {
+            // 只同步启用的 Skills
+            boolean enabled = !skill.has("enabled") || skill.get("enabled").isJsonNull() ||
+                    skill.get("enabled").getAsBoolean();
+            if (!enabled) {
+                continue;
+            }
+
+            // 转换为 SDK 的 SdkPluginConfig 格式
+            JsonObject plugin = new JsonObject();
+            plugin.addProperty("type", "local");
+            plugin.addProperty("path", skill.get("path").getAsString());
+            plugins.add(plugin);
+        }
+
+        // 更新 plugins 字段
+        claudeSettings.add("plugins", plugins);
+
+        // 写入 Claude settings
+        writeClaudeSettings(claudeSettings);
+
+        System.out.println("[CodemossSettings] Synced " + plugins.size() + " enabled skills to Claude settings");
     }
 }
