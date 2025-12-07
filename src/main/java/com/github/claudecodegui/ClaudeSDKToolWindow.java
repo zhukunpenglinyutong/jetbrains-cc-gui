@@ -483,6 +483,31 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	                    System.out.println("[Backend] 处理: validate_mcp_server");
 	                    handleValidateMcpServer(content);
 	                    break;
+                    // Skills 管理
+                    case "get_all_skills":
+                        System.out.println("[Backend] 处理: get_all_skills");
+                        handleGetAllSkills();
+                        break;
+
+                    case "import_skill":
+                        System.out.println("[Backend] 处理: import_skill");
+                        handleImportSkill(content);
+                        break;
+
+                    case "delete_skill":
+                        System.out.println("[Backend] 处理: delete_skill");
+                        handleDeleteSkillNew(content);
+                        break;
+
+                    case "open_skill":
+                        System.out.println("[Backend] 处理: open_skill");
+                        handleOpenSkill(content);
+                        break;
+
+                    case "toggle_skill":
+                        System.out.println("[Backend] 处理: toggle_skill");
+                        handleToggleSkill(content);
+                        break;
 
                 default:
                     System.err.println("[Backend] 警告: 未知的消息类型: " + type);
@@ -969,14 +994,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 if (is != null) {
                     String html = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                     is.close();
-                    
+
                     // 仅在旧版 HTML 中存在注入标记时才进行替换
                     if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
                         html = injectLocalLibraries(html);
                     } else {
                         System.out.println("✓ 检测到打包好的现代前端资源，无需额外注入库文件");
                     }
-                    
+
                     return html;
                 }
             } catch (Exception e) {
@@ -1505,14 +1530,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 String babelJs = loadResourceAsString("/libs/babel.min.js");
                 String markedJs = loadResourceAsString("/libs/marked.min.js");
                 String codiconCss = loadResourceAsString("/libs/codicon.css");
-                
+
                 // 将字体文件转换为 base64 并嵌入到 CSS 中
                 String fontBase64 = loadResourceAsBase64("/libs/codicon.ttf");
                 codiconCss = codiconCss.replaceAll(
                     "url\\(\"\\./codicon\\.ttf\\?[^\"]*\"\\)",
                     "url(\"data:font/truetype;base64," + fontBase64 + "\")"
                 );
-                
+
                 // 构建要注入的库内容
                 StringBuilder injectedLibs = new StringBuilder();
                 injectedLibs.append("\n    <!-- React 和相关库 (本地版本) -->\n");
@@ -1521,20 +1546,20 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 injectedLibs.append("    <script>/* Babel Standalone */\n").append(babelJs).append("\n    </script>\n");
                 injectedLibs.append("    <script>/* Marked */\n").append(markedJs).append("\n    </script>\n");
                 injectedLibs.append("    <style>/* VS Code Codicons (含内嵌字体) */\n").append(codiconCss).append("\n    </style>");
-                
+
                 // 在标记位置注入库文件
                 html = html.replace("<!-- LOCAL_LIBRARY_INJECTION_POINT -->", injectedLibs.toString());
-                
+
                 System.out.println("✓ 成功注入本地库文件 (React + ReactDOM + Babel + Codicons)");
             } catch (Exception e) {
                 System.err.println("✗ 注入本地库文件失败: " + e.getMessage());
                 e.printStackTrace();
                 // 如果注入失败，HTML 保持原样（但没有库文件，可能无法正常工作）
             }
-            
+
             return html;
         }
-        
+
         /**
          * 从资源文件中读取内容为字符串
          */
@@ -1547,7 +1572,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             is.close();
             return content;
         }
-        
+
         /**
          * 从资源文件中读取内容并转换为 base64
          */
@@ -2156,7 +2181,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	    	        e.printStackTrace();
 	    	    }
 	    	}
-	    	
+
 	    	private void handleSetNodePath(String content) {
 	    	    System.out.println("[Backend] ========== handleSetNodePath START ==========");
 	    	    System.out.println("[Backend] Received content: " + content);
@@ -2167,11 +2192,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	    	        if (json != null && json.has("path") && !json.get("path").isJsonNull()) {
 	    	            path = json.get("path").getAsString();
 	    	        }
-	    	
+
 	    	        if (path != null) {
 	    	            path = path.trim();
 	    	        }
-	    	
+
 	    	        PropertiesComponent props = PropertiesComponent.getInstance();
 	    	        String effectivePath;
 	    	        if (path == null || path.isEmpty()) {
@@ -2187,7 +2212,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	    	            System.out.println("[Backend] Updated manual Node.js path from settings: " + path);
 	    	            effectivePath = path;
 	    	        }
-	    	
+
 	    	        final String finalPath = effectivePath != null ? effectivePath : "";
 	    	        SwingUtilities.invokeLater(() -> {
 	    	            // 更新前端显示的 Node.js 路径
@@ -2323,6 +2348,182 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	    	        e.printStackTrace();
 	    	    }
 	    	}
+
+        // ==================== Skills Handler ====================
+
+        /**
+         * 获取所有 Skills (全局 + 本地)
+         */
+        private void handleGetAllSkills() {
+            try {
+                String workspaceRoot = project.getBasePath();
+                JsonObject skills = SkillService.getAllSkills(workspaceRoot);
+                Gson gson = new Gson();
+                String skillsJson = gson.toJson(skills);
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateSkills", escapeJs(skillsJson));
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to get all skills: " + e.getMessage());
+                e.printStackTrace();
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.updateSkills", escapeJs("{\"global\":{},\"local\":{}}"));
+                });
+            }
+        }
+
+        /**
+         * 导入 Skill（显示文件选择对话框）
+         */
+        private void handleImportSkill(String content) {
+            try {
+                Gson gson = new Gson();
+                JsonObject json = gson.fromJson(content, JsonObject.class);
+                String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
+
+                // 显示文件选择对话框（在 EDT 线程中）
+                SwingUtilities.invokeLater(() -> {
+                    javax.swing.JFileChooser chooser = new javax.swing.JFileChooser();
+                    chooser.setDialogTitle("选择 Skill 文件或文件夹");
+                    chooser.setFileSelectionMode(javax.swing.JFileChooser.FILES_AND_DIRECTORIES);
+                    chooser.setMultiSelectionEnabled(true);
+
+                    int result = chooser.showOpenDialog(mainPanel);
+                    if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+                        java.io.File[] selectedFiles = chooser.getSelectedFiles();
+                        java.util.List<String> paths = new java.util.ArrayList<>();
+                        for (java.io.File file : selectedFiles) {
+                            paths.add(file.getAbsolutePath());
+                        }
+
+                        // 在后台线程中执行导入
+                        CompletableFuture.runAsync(() -> {
+                            try {
+                                String workspaceRoot = project.getBasePath();
+                                JsonObject importResult = SkillService.importSkills(paths, scope, workspaceRoot);
+                                String resultJson = new Gson().toJson(importResult);
+
+                                SwingUtilities.invokeLater(() -> {
+                                    callJavaScript("window.skillImportResult", escapeJs(resultJson));
+                                });
+                            } catch (Exception e) {
+                                System.err.println("[Backend] Import skill failed: " + e.getMessage());
+                                JsonObject errorResult = new JsonObject();
+                                errorResult.addProperty("success", false);
+                                errorResult.addProperty("error", e.getMessage());
+                                SwingUtilities.invokeLater(() -> {
+                                    callJavaScript("window.skillImportResult", escapeJs(new Gson().toJson(errorResult)));
+                                });
+                            }
+                        });
+                    }
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to handle import skill: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         * 删除 Skill（新版本，支持启用/停用状态）
+         */
+        private void handleDeleteSkillNew(String content) {
+            try {
+                Gson gson = new Gson();
+                JsonObject json = gson.fromJson(content, JsonObject.class);
+                String skillName = json.get("name").getAsString();
+                String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
+                boolean enabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
+                String workspaceRoot = project.getBasePath();
+
+                JsonObject result = SkillService.deleteSkill(skillName, scope, enabled, workspaceRoot);
+                String resultJson = gson.toJson(result);
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.skillDeleteResult", escapeJs(resultJson));
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to delete skill: " + e.getMessage());
+                e.printStackTrace();
+                JsonObject errorResult = new JsonObject();
+                errorResult.addProperty("success", false);
+                errorResult.addProperty("error", e.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.skillDeleteResult", escapeJs(new Gson().toJson(errorResult)));
+                });
+            }
+        }
+
+        /**
+         * 启用/停用 Skill
+         */
+        private void handleToggleSkill(String content) {
+            try {
+                Gson gson = new Gson();
+                JsonObject json = gson.fromJson(content, JsonObject.class);
+                String skillName = json.get("name").getAsString();
+                String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
+                boolean currentEnabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
+                String workspaceRoot = project.getBasePath();
+
+                // 调用 toggleSkill，它会根据当前状态决定是启用还是停用
+                JsonObject result = SkillService.toggleSkill(skillName, scope, currentEnabled, workspaceRoot);
+                String resultJson = gson.toJson(result);
+
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.skillToggleResult", escapeJs(resultJson));
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to toggle skill: " + e.getMessage());
+                e.printStackTrace();
+                JsonObject errorResult = new JsonObject();
+                errorResult.addProperty("success", false);
+                errorResult.addProperty("error", e.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.skillToggleResult", escapeJs(new Gson().toJson(errorResult)));
+                });
+            }
+        }
+
+        /**
+         * 在编辑器中打开 Skill
+         */
+        private void handleOpenSkill(String content) {
+            try {
+                Gson gson = new Gson();
+                JsonObject json = gson.fromJson(content, JsonObject.class);
+                String skillPath = json.get("path").getAsString();
+
+                java.io.File skillFile = new java.io.File(skillPath);
+                String targetPath = skillPath;
+
+                // 如果是目录，尝试打开 skill.md 或 SKILL.md
+                if (skillFile.isDirectory()) {
+                    java.io.File skillMd = new java.io.File(skillFile, "skill.md");
+                    if (!skillMd.exists()) {
+                        skillMd = new java.io.File(skillFile, "SKILL.md");
+                    }
+                    if (skillMd.exists()) {
+                        targetPath = skillMd.getAbsolutePath();
+                    }
+                }
+
+                // 在 IDEA 中打开文件
+                final String fileToOpen = targetPath;
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByPath(fileToOpen);
+                    if (virtualFile != null) {
+                        FileEditorManager.getInstance(project).openFile(virtualFile, true);
+                    } else {
+                        System.err.println("[Backend] Cannot find file: " + fileToOpen);
+                    }
+                });
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to open skill: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
 
 	    	public JPanel getContent() {
 	    	    return mainPanel;

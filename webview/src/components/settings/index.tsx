@@ -15,6 +15,7 @@ import ProviderManageSection from './ProviderManageSection';
 import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
 import CommunitySection from './CommunitySection';
+import { SkillsSettingsSection } from '../skills';
 
 import styles from './style.module.less';
 
@@ -400,7 +401,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
           {currentTab === 'agents' && <PlaceholderSection type="agents" />}
 
           {/* Skills */}
-          {currentTab === 'skills' && <PlaceholderSection type="skills" />}
+          {currentTab === 'skills' && <SkillsSettingsSection />}
 
           {/* 官方交流群 */}
           {currentTab === 'community' && <CommunitySection />}

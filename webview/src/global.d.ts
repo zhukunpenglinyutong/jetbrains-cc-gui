@@ -32,6 +32,11 @@ declare global {
     mcpServerUpdated?: (jsonStr: string) => void;
     mcpServerDeleted?: (serverId: string) => void;
     mcpServerValidated?: (jsonStr: string) => void;
+    // Skills 相关
+    updateSkills?: (jsonStr: string) => void;
+    skillImportResult?: (jsonStr: string) => void;
+    skillDeleteResult?: (jsonStr: string) => void;
+    skillToggleResult?: (jsonStr: string) => void;
   }
 }
 
