@@ -7,11 +7,11 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import { randomUUID } from 'crypto';
 
-import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../config/api-config.js';
-import { selectWorkingDirectory } from '../utils/path-utils.js';
-import { mapModelIdToSdkName } from '../utils/model-utils.js';
-import { AsyncStream } from '../utils/async-stream.js';
-import { canUseTool } from '../permission-handler.js';
+import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
+import { selectWorkingDirectory } from '../../utils/path-utils.js';
+import { mapModelIdToSdkName } from '../../utils/model-utils.js';
+import { AsyncStream } from '../../utils/async-stream.js';
+import { canUseTool } from '../../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 

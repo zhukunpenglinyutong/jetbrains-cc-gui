@@ -20,6 +20,7 @@ export const ChatInputBox = ({
   isLoading = false,
   selectedModel = 'claude-sonnet-4-5',
   permissionMode = 'default',
+  currentProvider = 'claude',
   usagePercentage = 0,
   usageUsedTokens,
   usageMaxTokens,
@@ -35,6 +36,7 @@ export const ChatInputBox = ({
   onRemoveAttachment,
   onModeSelect,
   onModelSelect,
+  onProviderSelect,
 }: ChatInputBoxProps) => {
   // 内部附件状态（如果外部未提供）
   const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
@@ -851,6 +853,7 @@ export const ChatInputBox = ({
         isLoading={isLoading}
         selectedModel={selectedModel}
         permissionMode={permissionMode}
+        currentProvider={currentProvider}
         usagePercentage={usagePercentage}
         usageUsedTokens={usageUsedTokens}
         usageMaxTokens={usageMaxTokens}
@@ -860,6 +863,7 @@ export const ChatInputBox = ({
         onAddAttachment={handleAddAttachment}
         onModeSelect={handleModeSelect}
         onModelSelect={handleModelSelect}
+        onProviderSelect={onProviderSelect}
       />
 
       {/* @ 文件引用下拉菜单 */}

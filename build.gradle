@@ -58,9 +58,10 @@ buildSearchableOptions {
     enabled = false
 }
 
-def claudeBridgeDir = file("claude-bridge")
-def claudeBridgePackDir = file("$buildDir/claude-bridge-pack")
-def claudeBridgeArchive = new File(claudeBridgePackDir, "claude-bridge.zip")
+// 统一的 AI Bridge（合并 Claude 和 Codex）
+def aiBridgeDir = file("ai-bridge")
+def aiBridgePackDir = file("$buildDir/ai-bridge-pack")
+def aiBridgeArchive = new File(aiBridgePackDir, "ai-bridge.zip")
 
 // 自动构建 webview
 tasks.register('buildWebview', Exec) {
@@ -85,36 +86,38 @@ tasks.register('buildWebview', Exec) {
     }
 }
 
-tasks.register('packageClaudeBridge', Zip) {
-    onlyIf { claudeBridgeDir.exists() }
-    archiveFileName = "claude-bridge.zip"
-    destinationDirectory = claudeBridgePackDir
-    from(claudeBridgeDir)
+tasks.register('packageAiBridge', Zip) {
+    onlyIf { aiBridgeDir.exists() }
+    archiveFileName = "ai-bridge.zip"
+    destinationDirectory = aiBridgePackDir
+    from(aiBridgeDir)
     exclude("node_modules/.pnpm/**")
     includeEmptyDirs = true
 }
 
 tasks.named("prepareSandbox") {
-    dependsOn("buildWebview", "packageClaudeBridge")
+    dependsOn("buildWebview", "packageAiBridge")
     doLast {
-        if (!claudeBridgeDir.exists()) {
-            throw new GradleException("claude-bridge 目录不存在，请确保已拉取并安装依赖。")
+        if (!aiBridgeDir.exists()) {
+            throw new GradleException("ai-bridge 目录不存在，请确保已拉取并安装依赖。")
         }
         def sandboxRoot = layout.buildDirectory.dir("idea-sandbox").get().asFile
         def intellijExt = project.extensions.getByType(IntelliJPluginExtension)
         def pluginName = intellijExt.pluginName.getOrElse(project.name)
         def pluginDir = new File(sandboxRoot, "plugins/${pluginName}")
-        def extractedDir = new File(pluginDir, "claude-bridge")
-        def archiveTarget = new File(pluginDir, "claude-bridge.zip")
+
+        // 部署 ai-bridge
+        def extractedDir = new File(pluginDir, "ai-bridge")
+        def archiveTarget = new File(pluginDir, "ai-bridge.zip")
         project.delete(extractedDir)
         project.delete(archiveTarget)
         project.copy {
-            from(claudeBridgeArchive)
+            from(aiBridgeArchive)
             into(pluginDir)
         }
     }
 }
 
 tasks.named("buildPlugin") {
-    dependsOn("packageClaudeBridge")
+    dependsOn("packageAiBridge")
 }

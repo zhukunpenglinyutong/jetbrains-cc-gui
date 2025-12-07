@@ -5,6 +5,7 @@ import SettingsView from './components/settings';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import { ChatInputBox } from './components/ChatInputBox';
+import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
 import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
 import {
   BashToolBlock,
@@ -15,7 +16,7 @@ import {
   TodoListBlock,
 } from './components/toolBlocks';
 import { BackIcon } from './components/Icons';
-import { Claude } from '@lobehub/icons';
+import { Claude, OpenAI } from '@lobehub/icons';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
 import { ScrollControl } from './components/ScrollControl';
@@ -75,12 +76,17 @@ const App = () => {
   const [currentPermissionRequest, setCurrentPermissionRequest] = useState<PermissionRequest | null>(null);
 
   // ChatInputBox 相关状态
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-5');
+  const [currentProvider, setCurrentProvider] = useState('claude');
+  const [selectedClaudeModel, setSelectedClaudeModel] = useState(CLAUDE_MODELS[0].id);
+  const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [inputValue, setInputValue] = useState('');
+
+  // 根据当前提供商选择显示的模型
+  const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
@@ -91,6 +97,46 @@ const App = () => {
     const theme = (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
   }, []);
+
+  // 从 LocalStorage 加载模型选择状态
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('model-selection-state');
+      if (saved) {
+        const state = JSON.parse(saved);
+
+        // 验证并恢复提供商
+        if (['claude', 'codex'].includes(state.provider)) {
+          setCurrentProvider(state.provider);
+        }
+
+        // 验证并恢复 Claude 模型
+        if (CLAUDE_MODELS.find(m => m.id === state.claudeModel)) {
+          setSelectedClaudeModel(state.claudeModel);
+        }
+
+        // 验证并恢复 Codex 模型
+        if (CODEX_MODELS.find(m => m.id === state.codexModel)) {
+          setSelectedCodexModel(state.codexModel);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load model selection state:', error);
+    }
+  }, []);
+
+  // 保存模型选择状态到 LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('model-selection-state', JSON.stringify({
+        provider: currentProvider,
+        claudeModel: selectedClaudeModel,
+        codexModel: selectedCodexModel,
+      }));
+    } catch (error) {
+      console.error('Failed to save model selection state:', error);
+    }
+  }, [currentProvider, selectedClaudeModel, selectedCodexModel]);
 
   // Toast helper functions
   const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
@@ -161,7 +207,12 @@ const App = () => {
     };
 
     window.onModelChanged = (modelId) => {
-      setSelectedModel(modelId);
+      // 根据当前提供商更新对应的模型状态
+      if (currentProvider === 'claude') {
+        setSelectedClaudeModel(modelId);
+      } else if (currentProvider === 'codex') {
+        setSelectedCodexModel(modelId);
+      }
     };
 
     // 权限弹窗回调
@@ -180,7 +231,7 @@ const App = () => {
         console.error('[PERM_DEBUG][FRONTEND] ERROR: Failed to parse permission request:', error);
       }
     };
-  }, []);
+  }, [currentProvider]);
 
   useEffect(() => {
     if (currentView !== 'history') {
@@ -322,8 +373,24 @@ const App = () => {
    * 处理模型选择
    */
   const handleModelSelect = (modelId: string) => {
-    setSelectedModel(modelId);
+    if (currentProvider === 'claude') {
+      setSelectedClaudeModel(modelId);
+    } else if (currentProvider === 'codex') {
+      setSelectedCodexModel(modelId);
+    }
     sendBridgeMessage('set_model', modelId);
+  };
+
+  /**
+   * 处理提供商选择
+   */
+  const handleProviderSelect = (providerId: string) => {
+    setCurrentProvider(providerId);
+    sendBridgeMessage('set_provider', providerId);
+
+    // 切换 provider 时,同时发送对应的模型
+    const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
+    sendBridgeMessage('set_model', newModel);
   };
 
   const interruptSession = () => {
@@ -720,6 +787,32 @@ const App = () => {
 
   return (
     <>
+      <style>{`
+        .version-tag {
+          position: absolute;
+          top: -2px;
+          right: -54px;
+          background: rgba(139, 92, 246, 0.1);
+          border: 1px solid rgba(139, 92, 246, 0.5);
+          color: #ddd6fe;
+          font-size: 10px;
+          padding: 2px 8px;
+          border-radius: 4px;
+          font-weight: 500;
+          white-space: nowrap;
+          box-shadow: 0 0 10px rgba(139, 92, 246, 0.15);
+          backdrop-filter: blur(4px);
+          z-index: 10;
+        }
+        
+        [data-theme="light"] .version-tag {
+          background: rgba(139, 92, 246, 0.1);
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          color: #6d28d9;
+          box-shadow: none;
+          backdrop-filter: none;
+        }
+      `}</style>
       <ToastContainer messages={toasts} onDismiss={dismissToast} />
       {currentView !== 'settings' && (
         <div className="header">
@@ -784,8 +877,17 @@ const App = () => {
                 gap: '16px',
               }}
             >
-              <Claude.Color size={64} />
-              <div>给 Claude Code 发送消息</div>
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                {currentProvider === 'codex' ? (
+                  <OpenAI.Avatar size={64} />
+                ) : (
+                  <Claude.Color size={58} />
+                )}
+                <span className="version-tag">
+                  v0.0.9
+                </span>
+              </div>
+              <div>给 {currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code'} 发送消息</div>
             </div>
           )}
 
@@ -929,6 +1031,7 @@ const App = () => {
             isLoading={loading}
             selectedModel={selectedModel}
             permissionMode={permissionMode}
+            currentProvider={currentProvider}
             usagePercentage={usagePercentage}
             usageUsedTokens={usageUsedTokens}
             usageMaxTokens={usageMaxTokens}
@@ -939,6 +1042,7 @@ const App = () => {
             onInput={setInputValue}
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
+            onProviderSelect={handleProviderSelect}
           />
         </div>
       )}

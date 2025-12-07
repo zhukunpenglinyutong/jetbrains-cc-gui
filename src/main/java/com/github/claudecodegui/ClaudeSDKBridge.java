@@ -508,6 +508,7 @@ public class ClaudeSDKBridge {
                 List<String> command = new ArrayList<>();
                 command.add(node);
                 command.add(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath());
+                command.add("claude");  // provider
                 command.add(hasAttachments ? "sendWithAttachments" : "send");
                 // 不再传递 message 等参数到命令行，改用 stdin
 
@@ -680,6 +681,7 @@ public class ClaudeSDKBridge {
             List<String> command = new ArrayList<>();
             command.add(node);
             command.add(CHANNEL_SCRIPT);
+            command.add("claude");  // provider
             command.add("getSession");
             command.add(sessionId);
             command.add(cwd != null ? cwd : "");

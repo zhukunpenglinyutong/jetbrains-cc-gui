@@ -25,13 +25,13 @@ import com.github.claudecodegui.util.PlatformUtils;
 
 /**
  * Bridge 目录解析器
- * 负责查找和管理 claude-bridge 目录
+ * 负责查找和管理 ai-bridge 目录（统一的 Claude 和 Codex SDK 桥接）
  */
 public class BridgeDirectoryResolver {
 
-    private static final String SDK_DIR_NAME = "claude-bridge";
-    private static final String NODE_SCRIPT = "simple-query.js";
-    private static final String SDK_ARCHIVE_NAME = "claude-bridge.zip";
+    private static final String SDK_DIR_NAME = "ai-bridge";
+    private static final String NODE_SCRIPT = "channel-manager.js";
+    private static final String SDK_ARCHIVE_NAME = "ai-bridge.zip";
     private static final String BRIDGE_VERSION_FILE = ".bridge-version";
     private static final String BRIDGE_PATH_PROPERTY = "claude.bridge.path";
     private static final String BRIDGE_PATH_ENV = "CLAUDE_BRIDGE_PATH";
@@ -61,7 +61,7 @@ public class BridgeDirectoryResolver {
             return cachedSdkDir;
         }
 
-        System.out.println("正在查找 claude-bridge 目录...");
+        System.out.println("正在查找 ai-bridge 目录...");
 
         // 可能的位置列表
         List<File> possibleDirs = new ArrayList<>();
@@ -97,13 +97,13 @@ public class BridgeDirectoryResolver {
         for (File dir : possibleDirs) {
             if (isValidBridgeDir(dir)) {
                 cachedSdkDir = dir;
-                System.out.println("✓ 找到 claude-bridge 目录: " + cachedSdkDir.getAbsolutePath());
+                System.out.println("✓ 找到 ai-bridge 目录: " + cachedSdkDir.getAbsolutePath());
                 return cachedSdkDir;
             }
         }
 
         // 如果都找不到，打印调试信息
-        System.err.println("⚠️ 无法找到 claude-bridge 目录，已尝试以下位置：");
+        System.err.println("⚠️ 无法找到 ai-bridge 目录，已尝试以下位置：");
         for (File dir : possibleDirs) {
             System.err.println("  - " + dir.getAbsolutePath() + " (存在: " + dir.exists() + ")");
         }
@@ -232,7 +232,7 @@ public class BridgeDirectoryResolver {
 
     private File ensureEmbeddedBridgeExtracted() {
         try {
-            System.out.println("[BridgeResolver] 尝试查找内嵌的 claude-bridge.zip...");
+            System.out.println("[BridgeResolver] 尝试查找内嵌的 ai-bridge.zip...");
 
             PluginId pluginId = PluginId.getId(PLUGIN_ID);
             IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
@@ -250,7 +250,7 @@ public class BridgeDirectoryResolver {
                         File candidateDir = plugin.getPluginPath().toFile();
                         File candidateArchive = new File(candidateDir, SDK_ARCHIVE_NAME);
                         if (candidateArchive.exists()) {
-                            System.out.println("[BridgeResolver] 在候选插件中找到 claude-bridge.zip: " + candidateArchive.getAbsolutePath());
+                            System.out.println("[BridgeResolver] 在候选插件中找到 ai-bridge.zip: " + candidateArchive.getAbsolutePath());
                             descriptor = plugin;
                             break;
                         }
@@ -297,20 +297,20 @@ public class BridgeDirectoryResolver {
                     return extractedDir;
                 }
 
-                System.out.println("未检测到已解压的 claude-bridge，开始解压: " + archiveFile.getAbsolutePath());
+                System.out.println("未检测到已解压的 ai-bridge，开始解压: " + archiveFile.getAbsolutePath());
                 deleteDirectory(extractedDir);
                 unzipArchive(archiveFile, extractedDir);
                 Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
             }
 
             if (isValidBridgeDir(extractedDir)) {
-                System.out.println("✓ claude-bridge 解压完成: " + extractedDir.getAbsolutePath());
+                System.out.println("✓ ai-bridge 解压完成: " + extractedDir.getAbsolutePath());
                 return extractedDir;
             }
 
-            System.err.println("⚠️ claude-bridge 解压后结构无效: " + extractedDir.getAbsolutePath());
+            System.err.println("⚠️ ai-bridge 解压后结构无效: " + extractedDir.getAbsolutePath());
         } catch (Exception e) {
-            System.err.println("⚠️ 自动解压 claude-bridge 失败: " + e.getMessage());
+            System.err.println("⚠️ 自动解压 ai-bridge 失败: " + e.getMessage());
         }
         return null;
     }

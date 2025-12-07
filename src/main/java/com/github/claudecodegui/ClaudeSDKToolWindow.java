@@ -57,7 +57,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
      */
     private static class ClaudeChatWindow {
         private final JPanel mainPanel;
-        private final ClaudeSDKBridge sdkBridge;
+        private final ClaudeSDKBridge claudeSDKBridge;
+        private final CodexSDKBridge codexSDKBridge;
         private final Project project;
         private JBCefBrowser browser;
         private ClaudeSession session; // 添加 Session 管理
@@ -65,6 +66,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private CodemossSettingsService settingsService; // 配置服务
         private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
         private String currentModel = "claude-sonnet-4-5";
+        private String currentProvider = "claude"; // 当前提供商
         private static final java.util.Map<String, Integer> MODEL_CONTEXT_LIMITS = new java.util.HashMap<>();
         static {
             MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
@@ -73,8 +75,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
         public ClaudeChatWindow(Project project) {
             this.project = project;
-            this.sdkBridge = new ClaudeSDKBridge();
-            this.session = new ClaudeSession(sdkBridge); // 创建新会话
+            this.claudeSDKBridge = new ClaudeSDKBridge();
+            this.codexSDKBridge = new CodexSDKBridge();
+            this.session = new ClaudeSession(claudeSDKBridge, codexSDKBridge); // 创建新会话
             this.toolInterceptor = new ToolInterceptor(project); // 创建工具拦截器
             this.settingsService = new CodemossSettingsService(); // 创建配置服务
             try {
@@ -91,7 +94,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
                     String path = savedNodePath.trim();
                     System.out.println("[ClaudeChatWindow] Using manually configured Node.js path: " + path);
-                    sdkBridge.setNodeExecutable(path);
+                    claudeSDKBridge.setNodeExecutable(path);
                 }
             } catch (Exception e) {
                 System.err.println("[ClaudeChatWindow] Failed to load manual Node.js path: " + e.getMessage());
@@ -129,14 +132,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
         private void createUIComponents() {
             // 首先检查环境
-            if (!sdkBridge.checkEnvironment()) {
+            if (!claudeSDKBridge.checkEnvironment()) {
                 showErrorPanel("环境检查失败",
                     "无法找到 Node.js\n\n" +
                     "请确保:\n" +
                     " Node.js 已安装 (可以在终端运行: node --version)\n" +
                     "如果自动检测 Node.js 失败，可以在终端运行以下命令获取 Node.js 路径，并粘贴到下面的输入框中:\n" +
                     "    node -p \"process.execPath\"\n\n" +
-                    "当前检测到的 Node.js 路径: " + sdkBridge.getNodeExecutable());
+                    "当前检测到的 Node.js 路径: " + claudeSDKBridge.getNodeExecutable());
                 return;
             }
 
@@ -183,7 +186,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     "3. 已运行: cd claude-bridge && npm install\n\n" +
                     "如果自动检测 Node.js 失败，可以在终端运行以下命令获取 Node.js 路径，并粘贴到下面的输入框中:\n" +
                     "    node -p \"process.execPath\"\n\n" +
-                    "检测到的 Node.js 路径: " + sdkBridge.getNodeExecutable());
+                    "检测到的 Node.js 路径: " + claudeSDKBridge.getNodeExecutable());
             }
         }
 
@@ -230,7 +233,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
                     nodeField.setText(savedNodePath.trim());
                 } else {
-                    String currentNode = sdkBridge.getNodeExecutable();
+                    String currentNode = claudeSDKBridge.getNodeExecutable();
                     if (currentNode != null) {
                         nodeField.setText(currentNode);
                     }
@@ -252,12 +255,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     if (manualPath == null || manualPath.isEmpty()) {
                         // 清除手动配置，恢复自动检测
                         props.unsetValue(NODE_PATH_PROPERTY_KEY);
-                        sdkBridge.setNodeExecutable(null);
+                        claudeSDKBridge.setNodeExecutable(null);
                         System.out.println("[ClaudeChatWindow] Cleared manual Node.js path, fallback to auto-detection");
                     } else {
                         // 保存并应用手动路径
                         props.setValue(NODE_PATH_PROPERTY_KEY, manualPath);
-                        sdkBridge.setNodeExecutable(manualPath);
+                        claudeSDKBridge.setNodeExecutable(manualPath);
                         System.out.println("[ClaudeChatWindow] Saved manual Node.js path: " + manualPath);
                     }
 
@@ -447,6 +450,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	                    System.out.println("[Backend] 处理: set_model");
 	                    handleSetModel(content);
 	                    break;
+
+                case "set_provider":
+                    System.out.println("[Backend] 处理: set_provider");
+                    handleSetProvider(content);
+                    break;
 
 	                case "get_node_path":
 	                    System.out.println("[Backend] 处理: get_node_path");
@@ -640,7 +648,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             // 移除通知：正在加载历史会话...
 
             // 创建新的 Session 并设置会话信息
-            session = new ClaudeSession(sdkBridge);
+            session = new ClaudeSession(claudeSDKBridge, codexSDKBridge);
             setupSessionCallbacks();
 
             // 如果历史会话没有projectPath或无效，使用智能方法确定
@@ -803,7 +811,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             // 移除通知：正在创建新会话...
 
             // 创建新的 Session 实例（不设置 sessionId，让 SDK 自动生成）
-            session = new ClaudeSession(sdkBridge);
+            session = new ClaudeSession(claudeSDKBridge, codexSDKBridge);
             setupSessionCallbacks();
 
             // 智能确定工作目录
@@ -2160,6 +2168,39 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             }
         }
 
+        /**
+         * 处理设置提供商请求
+         */
+        private void handleSetProvider(String content) {
+            try {
+                String provider = content;
+                if (content != null && !content.isEmpty()) {
+                    try {
+                        Gson gson = new Gson();
+                        JsonObject json = gson.fromJson(content, JsonObject.class);
+                        if (json.has("provider")) {
+                            provider = json.get("provider").getAsString();
+                        }
+                    } catch (Exception e) {
+                        // content 本身就是 provider
+                    }
+                }
+
+                System.out.println("[Backend] Setting provider to: " + provider);
+                this.currentProvider = provider;
+
+                // 更新 session 的提供商
+                if (session != null) {
+                    session.setProvider(provider);
+                }
+
+                // 移除通知：提供商已设置
+            } catch (Exception e) {
+                System.err.println("[Backend] Failed to set provider: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
 	    	private void handleGetNodePath() {
 	    	    try {
 	    	        PropertiesComponent props = PropertiesComponent.getInstance();
@@ -2169,7 +2210,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	    	            effectivePath = saved.trim();
 	    	        } else {
 	    	            // 如果没有手动配置，则返回当前检测到的 Node 路径（可能为空字符串）
-	    	            String detected = sdkBridge.getNodeExecutable();
+	    	            String detected = claudeSDKBridge.getNodeExecutable();
 	    	            effectivePath = detected != null ? detected : "";
 	    	        }
 	    	        final String pathToSend = effectivePath != null ? effectivePath : "";
@@ -2202,13 +2243,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	    	        if (path == null || path.isEmpty()) {
 	    	            // 清除手动配置，恢复自动检测
 	    	            props.unsetValue(NODE_PATH_PROPERTY_KEY);
-	    	            sdkBridge.setNodeExecutable(null);
+	    	            claudeSDKBridge.setNodeExecutable(null);
 	    	            System.out.println("[Backend] Cleared manual Node.js path from settings (auto-detection will be used)");
-	    	            String detected = sdkBridge.getNodeExecutable();
+	    	            String detected = claudeSDKBridge.getNodeExecutable();
 	    	            effectivePath = detected != null ? detected : "";
 	    	        } else {
 	    	            props.setValue(NODE_PATH_PROPERTY_KEY, path);
-	    	            sdkBridge.setNodeExecutable(path);
+	    	            claudeSDKBridge.setNodeExecutable(path);
 	    	            System.out.println("[Backend] Updated manual Node.js path from settings: " + path);
 	    	            effectivePath = path;
 	    	        }

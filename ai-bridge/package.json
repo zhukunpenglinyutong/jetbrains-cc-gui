@@ -1,0 +1,16 @@
+{
+  "name": "ai-bridge",
+  "version": "1.0.0",
+  "description": "Unified bridge for Claude and Codex SDKs from Java",
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "@anthropic-ai/sdk": "^0.25.0",
+    "@openai/codex-sdk": "^0.65.0",
+    "zod": "^3.25.76"
+  },
+  "scripts": {
+    "test:claude": "node channel-manager.js claude send",
+    "test:codex": "node channel-manager.js codex send"
+  }
+}

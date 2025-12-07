@@ -39,7 +39,8 @@ public class ClaudeSession {
     private long lastModifiedTime = System.currentTimeMillis();
     private String cwd = null;
     // SDK 桥接
-    private final ClaudeSDKBridge sdkBridge;
+    private final ClaudeSDKBridge claudeSDKBridge;
+    private final CodexSDKBridge codexSDKBridge;
 
     // 权限管理
     private final PermissionManager permissionManager = new PermissionManager();
@@ -49,6 +50,9 @@ public class ClaudeSession {
 
     // 模型名称（传递给SDK）
     private String model = "claude-sonnet-4-5";
+
+    // AI 提供商（claude 或 codex）
+    private String provider = "claude";
 
     /**
      * 消息类
@@ -88,8 +92,9 @@ public class ClaudeSession {
 
     private SessionCallback callback;
 
-    public ClaudeSession(ClaudeSDKBridge sdkBridge) {
-        this.sdkBridge = sdkBridge;
+    public ClaudeSession(ClaudeSDKBridge claudeSDKBridge, CodexSDKBridge codexSDKBridge) {
+        this.claudeSDKBridge = claudeSDKBridge;
+        this.codexSDKBridge = codexSDKBridge;
 
         // 设置权限管理器回调
         permissionManager.setOnPermissionRequestedCallback(request -> {
@@ -183,8 +188,13 @@ public class ClaudeSession {
                     sessionId = null;
                 }
 
-                // 调用 SDK 启动 channel
-                JsonObject result = sdkBridge.launchChannel(channelId, sessionId, cwd);
+                // 根据 provider 选择 SDK
+                JsonObject result;
+                if ("codex".equals(provider)) {
+                    result = codexSDKBridge.launchChannel(channelId, sessionId, cwd);
+                } else {
+                    result = claudeSDKBridge.launchChannel(channelId, sessionId, cwd);
+                }
 
                 // 检查 sessionId 是否存在且不为 null
                 if (result.has("sessionId") && !result.get("sessionId").isJsonNull()) {
@@ -205,7 +215,7 @@ public class ClaudeSession {
                 this.error = e.getMessage();
                 this.channelId = null;
                 updateState();
-                throw new RuntimeException("Failed to launch Claude: " + e.getMessage(), e);
+                throw new RuntimeException("Failed to launch: " + e.getMessage(), e);
             }
         });
     }
@@ -306,15 +316,72 @@ public class ClaudeSession {
         updateState();
 
         return launchClaude().thenCompose(chId -> {
-            CompletableFuture<Void> sendFuture = sdkBridge.sendMessage(
-                chId,
-                normalizedInput,
-                sessionId,  // 传递当前 sessionId
-                cwd,        // 传递工作目录
-                attachments,
-                permissionMode, // 传递权限模式
-                model,      // 传递模型
-                new ClaudeSDKBridge.MessageCallback() {
+            // 根据 provider 选择 SDK
+            CompletableFuture<Void> sendFuture;
+            if ("codex".equals(provider)) {
+                sendFuture = codexSDKBridge.sendMessage(
+                    chId,
+                    normalizedInput,
+                    sessionId,  // 传递当前 sessionId
+                    cwd,        // 传递工作目录
+                    attachments,
+                    permissionMode, // 传递权限模式
+                    model,      // 传递模型
+                    new CodexSDKBridge.MessageCallback() {
+                    private final StringBuilder assistantContent = new StringBuilder();
+                    private Message currentAssistantMessage = null;
+
+                    @Override
+                    public void onMessage(String type, String content) {
+                        // Codex 的简化处理（主要是 content_delta）
+                        if ("content_delta".equals(type)) {
+                            assistantContent.append(content);
+
+                            if (currentAssistantMessage == null) {
+                                currentAssistantMessage = new Message(Message.Type.ASSISTANT, assistantContent.toString());
+                                messages.add(currentAssistantMessage);
+                            } else {
+                                currentAssistantMessage.content = assistantContent.toString();
+                            }
+
+                            notifyMessageUpdate();
+                        } else if ("message_end".equals(type)) {
+                            busy = false;
+                            loading = false;
+                            updateState();
+                            System.out.println("[ClaudeSession] Codex message end received");
+                        }
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        ClaudeSession.this.error = error;
+                        busy = false;
+                        loading = false;
+                        Message errorMessage = new Message(Message.Type.ERROR, error);
+                        messages.add(errorMessage);
+                        notifyMessageUpdate();
+                        updateState();
+                    }
+
+                    @Override
+                    public void onComplete(CodexSDKBridge.SDKResult result) {
+                        busy = false;
+                        loading = false;
+                        lastModifiedTime = System.currentTimeMillis();
+                        updateState();
+                    }
+                }).thenApply(result -> (Void) null);
+            } else {
+                sendFuture = claudeSDKBridge.sendMessage(
+                    chId,
+                    normalizedInput,
+                    sessionId,  // 传递当前 sessionId
+                    cwd,        // 传递工作目录
+                    attachments,
+                    permissionMode, // 传递权限模式
+                    model,      // 传递模型
+                    new ClaudeSDKBridge.MessageCallback() {
                 private final StringBuilder assistantContent = new StringBuilder();
                 private Message currentAssistantMessage = null;
                 private boolean isThinking = false;
@@ -422,6 +489,7 @@ public class ClaudeSession {
                     updateState();
                 }
             }).thenApply(result -> (Void) null);
+            }
 
             return sendFuture;
         }).exceptionally(ex -> {
@@ -443,7 +511,11 @@ public class ClaudeSession {
 
         return CompletableFuture.runAsync(() -> {
             try {
-                sdkBridge.interruptChannel(channelId);
+                if ("codex".equals(provider)) {
+                    codexSDKBridge.interruptChannel(channelId);
+                } else {
+                    claudeSDKBridge.interruptChannel(channelId);
+                }
                 this.busy = false;
                 updateState();
             } catch (Exception e) {
@@ -479,7 +551,12 @@ public class ClaudeSession {
         return CompletableFuture.runAsync(() -> {
             try {
                 System.out.println("[ClaudeSession] Loading session from server: sessionId=" + sessionId + ", cwd=" + cwd);
-                List<JsonObject> serverMessages = sdkBridge.getSessionMessages(sessionId, cwd);
+                List<JsonObject> serverMessages;
+                if ("codex".equals(provider)) {
+                    serverMessages = codexSDKBridge.getSessionMessages(sessionId, cwd);
+                } else {
+                    serverMessages = claudeSDKBridge.getSessionMessages(sessionId, cwd);
+                }
                 System.out.println("[ClaudeSession] Received " + serverMessages.size() + " messages from server");
 
                 messages.clear();
@@ -755,6 +832,21 @@ public class ClaudeSession {
      */
     public String getModel() {
         return model;
+    }
+
+    /**
+     * 设置AI提供商
+     */
+    public void setProvider(String provider) {
+        this.provider = provider;
+        System.out.println("[ClaudeSession] Provider updated to: " + provider);
+    }
+
+    /**
+     * 获取AI提供商
+     */
+    public String getProvider() {
+        return provider;
     }
 
     /**

@@ -6,7 +6,6 @@ interface SidebarItem {
   key: SettingsTab;
   icon: string;
   label: string;
-  warning?: boolean;
 }
 
 const sidebarItems: SidebarItem[] = [
@@ -14,9 +13,9 @@ const sidebarItems: SidebarItem[] = [
   { key: 'providers', icon: 'codicon-vm-connect', label: '供应商管理' },
   { key: 'usage', icon: 'codicon-graph', label: '使用统计' },
   { key: 'mcp', icon: 'codicon-server', label: 'MCP服务器' },
-  { key: 'permissions', icon: 'codicon-shield', label: '权限配置', warning: true },
-  { key: 'agents', icon: 'codicon-robot', label: 'Agents', warning: true },
-  { key: 'skills', icon: 'codicon-book', label: 'Skills', warning: true },
+  { key: 'permissions', icon: 'codicon-shield', label: '权限配置' },
+  { key: 'agents', icon: 'codicon-robot', label: 'Agents' },
+  { key: 'skills', icon: 'codicon-book', label: 'Skills' },
   { key: 'community', icon: 'codicon-comment-discussion', label: '官方交流群' },
 ];
 
@@ -39,13 +38,12 @@ const SettingsSidebar = ({
         {sidebarItems.map((item) => (
           <div
             key={item.key}
-            className={`${styles.sidebarItem} ${currentTab === item.key ? styles.active : ''} ${item.warning ? styles.warning : ''}`}
+            className={`${styles.sidebarItem} ${currentTab === item.key ? styles.active : ''}`}
             onClick={() => onTabChange(item.key)}
             title={isCollapsed ? item.label : ''}
           >
             <span className={`codicon ${item.icon}`} />
             <span className={styles.sidebarItemText}>{item.label}</span>
-            {item.warning && <span className="codicon codicon-warning" />}
           </div>
         ))}
       </div>

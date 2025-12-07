@@ -5,6 +5,7 @@ import type { ButtonAreaProps } from './types';
 // import { ModeSelect, ModelSelect } from './selectors';
 import { ModelSelect, ProviderSelect } from './selectors';
 import { TokenIndicator } from './TokenIndicator';
+import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 
 /**
  * ButtonArea - 底部工具栏组件
@@ -17,6 +18,7 @@ export const ButtonArea = ({
   selectedModel = 'claude-sonnet-4-5',
   // TODO: 临时隐藏模式选择器,后续恢复
   // permissionMode = 'default',
+  currentProvider = 'claude',
   usagePercentage = 0,
   usageUsedTokens,
   usageMaxTokens,
@@ -27,8 +29,12 @@ export const ButtonArea = ({
   // TODO: 临时隐藏模式选择器,后续恢复
   // onModeSelect,
   onModelSelect,
+  onProviderSelect,
 }: ButtonAreaProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 根据当前提供商选择模型列表
+  const availableModels = currentProvider === 'codex' ? CODEX_MODELS : CLAUDE_MODELS;
 
   /**
    * 处理附件按钮点击
@@ -81,14 +87,21 @@ export const ButtonArea = ({
     onModelSelect?.(modelId);
   }, [onModelSelect]);
 
+  /**
+   * 处理提供商选择
+   */
+  const handleProviderSelect = useCallback((providerId: string) => {
+    onProviderSelect?.(providerId);
+  }, [onProviderSelect]);
+
   return (
     <div className="button-area">
       {/* 左侧：选择器 */}
       <div className="button-area-left">
         {/* TODO: 临时隐藏模式选择器,后续恢复 */}
         {/* <ModeSelect value={permissionMode} onChange={handleModeSelect} /> */}
-        <ProviderSelect value="claude" />
-        <ModelSelect value={selectedModel} onChange={handleModelSelect} />
+        <ProviderSelect value={currentProvider} onChange={handleProviderSelect} />
+        <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />
       </div>
 
       {/* 右侧：工具按钮 */}

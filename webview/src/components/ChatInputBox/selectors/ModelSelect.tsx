@@ -1,22 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Claude } from '@lobehub/icons';
+import { Claude, OpenAI, Gemini } from '@lobehub/icons';
 import { AVAILABLE_MODELS } from '../types';
+import type { ModelInfo } from '../types';
 
 interface ModelSelectProps {
   value: string;
   onChange: (modelId: string) => void;
+  models?: ModelInfo[];  // 新增: 可选的动态模型列表
+  currentProvider?: string;  // 当前提供商类型
 }
 
 /**
- * ModelSelect - 模型选择器组件
- * 支持 Sonnet 4.5、Opus 4.5 等模型切换
+ * 模型图标组件 - 根据提供商类型显示不同图标
  */
-export const ModelSelect = ({ value, onChange }: ModelSelectProps) => {
+const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }) => {
+  switch (provider) {
+    case 'codex':
+      return <OpenAI.Avatar size={size} />;
+    case 'gemini':
+      return <Gemini.Color size={size} />;
+    case 'claude':
+    default:
+      return <Claude.Color size={size} />;
+  }
+};
+
+/**
+ * ModelSelect - 模型选择器组件
+ * 支持 Sonnet 4.5、Opus 4.5 等模型切换，以及 Codex 模型
+ */
+export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude' }: ModelSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentModel = AVAILABLE_MODELS.find(m => m.id === value) || AVAILABLE_MODELS[0];
+  const currentModel = models.find(m => m.id === value) || models[0];
 
   /**
    * 切换下拉菜单
@@ -70,7 +88,7 @@ export const ModelSelect = ({ value, onChange }: ModelSelectProps) => {
         onClick={handleToggle}
         title={`当前模型: ${currentModel.label}`}
       >
-        <Claude.Color size={12} />
+        <ModelIcon provider={currentProvider} size={12} />
         <span>{currentModel.label}</span>
         <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
       </button>
@@ -87,14 +105,19 @@ export const ModelSelect = ({ value, onChange }: ModelSelectProps) => {
             zIndex: 10000,
           }}
         >
-          {AVAILABLE_MODELS.map((model) => (
+          {models.map((model) => (
             <div
               key={model.id}
               className={`selector-option ${model.id === value ? 'selected' : ''}`}
               onClick={() => handleSelect(model.id)}
             >
-              <Claude.Color size={16} />
-              <span>{model.label}</span>
+              <ModelIcon provider={currentProvider} size={16} />
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <span>{model.label}</span>
+                {model.description && (
+                  <span className="model-description">{model.description}</span>
+                )}
+              </div>
               {model.id === value && (
                 <span className="codicon codicon-check check-mark" />
               )}

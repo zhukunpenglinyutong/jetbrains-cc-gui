@@ -169,12 +169,38 @@ export interface ModelInfo {
 }
 
 /**
- * 预定义模型列表
+ * Claude 模型列表
  */
-export const AVAILABLE_MODELS: ModelInfo[] = [
+export const CLAUDE_MODELS: ModelInfo[] = [
   { id: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
   { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5' },
 ];
+
+/**
+ * Codex 模型列表
+ */
+export const CODEX_MODELS: ModelInfo[] = [
+  {
+    id: 'gpt-5.1-codex',
+    label: 'gpt-5.1-codex',
+    description: '针对codex进行了优化'
+  },
+  {
+    id: 'gpt-5.1-codex-mini',
+    label: 'gpt-5.1-codex-mini',
+    description: '针对codex进行了优化。更便宜、更快，但性能较差'
+  },
+  {
+    id: 'gpt-5.1',
+    label: 'gpt-5.1',
+    description: '具有广泛的世界知识和强大的一般推理能力'
+  },
+];
+
+/**
+ * 预定义模型列表（向后兼容）
+ */
+export const AVAILABLE_MODELS = CLAUDE_MODELS;
 
 /**
  * AI 提供商信息
@@ -191,7 +217,7 @@ export interface ProviderInfo {
  */
 export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
-  { id: 'codex', label: 'Codex Cli', icon: 'codicon-terminal', enabled: false },
+  { id: 'codex', label: 'Codex Cli', icon: 'codicon-terminal', enabled: true },
   { id: 'gemini', label: 'Gemini Cli', icon: 'codicon-terminal', enabled: false },
 ];
 
@@ -225,6 +251,8 @@ export interface ChatInputBoxProps {
   selectedModel?: string;
   /** 当前模式 */
   permissionMode?: PermissionMode;
+  /** 当前提供商 */
+  currentProvider?: string;
   /** 使用量百分比 */
   usagePercentage?: number;
   /** 已用上下文token */
@@ -257,6 +285,8 @@ export interface ChatInputBoxProps {
   onModeSelect?: (mode: PermissionMode) => void;
   /** 切换模型 */
   onModelSelect?: (modelId: string) => void;
+  /** 切换提供商 */
+  onProviderSelect?: (providerId: string) => void;
 }
 
 /**
@@ -273,6 +303,8 @@ export interface ButtonAreaProps {
   selectedModel?: string;
   /** 当前模式 */
   permissionMode?: PermissionMode;
+  /** 当前提供商 */
+  currentProvider?: string;
   /** 使用量百分比 */
   usagePercentage?: number;
   /** 已用上下文token */
@@ -288,6 +320,7 @@ export interface ButtonAreaProps {
   onAddAttachment?: (files: FileList) => void;
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
+  onProviderSelect?: (providerId: string) => void;
 }
 
 /**
