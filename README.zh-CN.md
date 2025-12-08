@@ -22,19 +22,20 @@
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.9-feat1.zip 文件
+# 1.下载 idea-claude-code-gui-0.0.9-beta1.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.9-feat1.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.9-beta1.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.9-feat1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-feat1.zip)
+插件下载：[idea-claude-code-gui-0.0.9-beta1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta1.zip)
 
 ---
 
 ### 目前进度
 
-##### **12月6日（v0.0.9-feat1）**
+##### **12月8日（v0.0.9-beta1）**
 
+- [x] P0（feat）实现从cc-switch导入供应商配置的功能
 - [x] P0（fix）解决在某些特定情况下，异常覆盖.claude/setting.json为官方默认配置的问题
 - [x] P1（feat）首次非常细化，重构 供应商页面 UI交互
 

@@ -28,6 +28,7 @@ export default function ProviderList({
   const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
   const [editingCcSwitchProvider, setEditingCcSwitchProvider] = useState<ProviderConfig | null>(null);
   const [convertingProvider, setConvertingProvider] = useState<ProviderConfig | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const importMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function ProviderList({
     };
 
     const handleImportPreview = (event: CustomEvent) => {
+      setIsImporting(false); // 收到结果，关闭loading
       const data = event.detail;
       if (data && data.providers) {
         setImportPreviewData(data.providers);
@@ -75,6 +77,7 @@ export default function ProviderList({
     };
 
     const handleBackendNotification = (event: CustomEvent) => {
+      setIsImporting(false); // 收到通知（可能是错误），关闭loading
       const data = event.detail;
       if (data && data.message) {
         addToast(data.message, data.type || 'info');
@@ -145,7 +148,7 @@ export default function ProviderList({
     <div className={styles.container}>
       {/* 导入弹窗 */}
       {showImportDialog && (
-        <ImportConfirmDialog 
+        <ImportConfirmDialog
           providers={importPreviewData}
           existingProviders={providers}
           onConfirm={(selectedProviders) => {
@@ -154,6 +157,16 @@ export default function ProviderList({
           }}
           onCancel={() => setShowImportDialog(false)}
         />
+      )}
+
+      {/* 导入加载中 */}
+      {isImporting && (
+        <div className={styles.loadingOverlay}>
+          <div className={styles.loadingContent}>
+            <span className="codicon codicon-loading codicon-modifier-spin" />
+            <span>正在读取 cc-switch 配置...</span>
+          </div>
+        </div>
       )}
 
       {/* 编辑警告弹窗 */}
@@ -249,15 +262,16 @@ export default function ProviderList({
             
             {importMenuOpen && (
               <div className={styles.importMenu}>
-                <div 
+                <div
                   className={styles.importMenuItem}
                   onClick={() => {
                     setImportMenuOpen(false);
+                    setIsImporting(true); // 开始加载
                     sendToJava('preview_cc_switch_import');
                   }}
                 >
                   <span className="codicon codicon-arrow-swap" />
-                  从cc-switch导入
+                  从cc-switch导入/更新
                 </div>
                 <div 
                   className={styles.importMenuItem}
@@ -267,7 +281,7 @@ export default function ProviderList({
                   }}
                 >
                   <span className="codicon codicon-arrow-swap" />
-                  从cc-switch CLI导入
+                  从cc-switch CLI导入/更新
                 </div>
                 <div 
                   className={styles.importMenuItem}
@@ -277,7 +291,7 @@ export default function ProviderList({
                   }}
                 >
                   <span className="codicon codicon-arrow-swap" />
-                  从Claude Code Router导入
+                  从Claude Code Router导入/更新
                 </div>
               </div>
             )}

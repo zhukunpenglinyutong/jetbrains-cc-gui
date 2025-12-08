@@ -71,28 +71,68 @@ try {
             // 解析 settings_config JSON
             const settingsConfig = row.settings_config ? JSON.parse(row.settings_config) : {};
 
-            // 构造供应商配置对象
+            // 从 settings_config 中提取配置
+            // 支持两种格式：
+            // 1. 新格式（env 包含环境变量）: { env: { ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN } }
+            // 2. 旧格式（直接包含配置）: { base_url, api_key, model, ... }
+
+            let baseUrl = null;
+            let apiKey = null;
+
+            if (settingsConfig.env) {
+                // 新格式: 从 env 对象中提取
+                const env = settingsConfig.env;
+                if (env.ANTHROPIC_BASE_URL) {
+                    baseUrl = env.ANTHROPIC_BASE_URL;
+                }
+                if (env.ANTHROPIC_AUTH_TOKEN) {
+                    apiKey = env.ANTHROPIC_AUTH_TOKEN;
+                }
+                // 也检查其他常见的环境变量名
+                if (!apiKey && env.ANTHROPIC_API_KEY) {
+                    apiKey = env.ANTHROPIC_API_KEY;
+                }
+            }
+
+            // 旧格式: 直接从 settingsConfig 提取
+            if (!baseUrl && settingsConfig.base_url) {
+                baseUrl = settingsConfig.base_url;
+            }
+            if (!apiKey && settingsConfig.api_key) {
+                apiKey = settingsConfig.api_key;
+            }
+
+            // 基于 cc-switch 原始 settings_config 构造 settingsConfig，
+            // 尽量保留 cc-switch 中的所有字段（包括 model、alwaysThinkingEnabled 等）
+            const mergedSettingsConfig = {
+                ...settingsConfig,
+                env: {
+                    ...(settingsConfig.env || {}),
+                },
+            };
+
+            // 构造供应商配置对象（使用插件期望的格式）
             const provider = {
                 id: row.id,
                 name: row.name || row.id,
-                source: 'cc-switch'
+                source: 'cc-switch',
+                settingsConfig: mergedSettingsConfig,
             };
 
-            // 从 settings_config 中提取配置
-            if (settingsConfig.base_url) {
-                provider.baseUrl = settingsConfig.base_url;
+            // 设置 env 字段
+            if (baseUrl) {
+                provider.settingsConfig.env.ANTHROPIC_BASE_URL = baseUrl;
             }
-            if (settingsConfig.api_key) {
-                provider.apiKey = settingsConfig.api_key;
+            if (apiKey) {
+                provider.settingsConfig.env.ANTHROPIC_AUTH_TOKEN = apiKey;
             }
-            if (settingsConfig.model) {
-                provider.model = settingsConfig.model;
+
+            // 同时保留顶层字段用于前端预览显示
+            if (baseUrl) {
+                provider.baseUrl = baseUrl;
             }
-            if (settingsConfig.max_tokens) {
-                provider.maxTokens = settingsConfig.max_tokens;
-            }
-            if (settingsConfig.temperature) {
-                provider.temperature = settingsConfig.temperature;
+            if (apiKey) {
+                provider.apiKey = apiKey;
             }
 
             // 其他元数据
