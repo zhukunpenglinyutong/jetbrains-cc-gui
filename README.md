@@ -25,22 +25,24 @@ Currently in experimental stage. The product is still under active development w
 ## Installation
 
 ```sh
-# 1. Download the idea-claude-code-gui-0.0.9-beta1.zip file
+# 1. Download the idea-claude-code-gui-0.0.9-beta2.zip file
 
-# 2. In IDEA: Settings → Plugins → Install Plugin from Disk → Select the downloaded idea-claude-code-gui-0.0.9-beta1.zip
+# 2. In IDEA: Settings → Plugins → Install Plugin from Disk → Select the downloaded idea-claude-code-gui-0.0.9-beta2.zip
 ```
 
-Download: [idea-claude-code-gui-0.0.9-beta1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta1.zip)
+Download: [idea-claude-code-gui-0.0.9-beta2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta2.zip)
 
 ---
 
 ## Changelog
 
-##### **December 8 (v0.0.9-beta1)**
+##### **December 8 (v0.0.9-beta2)**
 
-- [x] P0 (feat) Import provider configurations from cc-switch
-- [x] P0 (fix) Resolve issue where .claude/setting.json was unexpectedly overwritten with official default config in certain scenarios
-- [x] P1 (feat) Major refinement and refactoring of Provider Settings page UI/UX
+- [x] P0: Implement right-click selected files to send to plugin (with keyboard shortcut support)
+- [x] P0 (feat): Implement importing vendor configuration from cc-switch
+- [x] P0 (fix): Fix issue where .claude/setting.json was occasionally overwritten with official default configuration under certain conditions
+- [x] P1 (feat): Initial detailed refinement, refactor Vendor page UI interaction
+- [x] P1: Fix MCP list not displaying issue
 
 ---
 
