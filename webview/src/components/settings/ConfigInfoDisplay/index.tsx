@@ -18,6 +18,7 @@ export interface ProviderOption {
   id: string;
   name: string;
   isActive?: boolean;
+  source?: string;
 }
 
 interface ConfigInfoDisplayProps {
@@ -150,6 +151,9 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
                   >
                     <span className="codicon codicon-server" />
                     <span>{provider.name}</span>
+                    {provider.source === 'cc-switch' && (
+                      <span className={styles.ccSwitchTag}>cc-switch</span>
+                    )}
                   </button>
                 ))}
               </div>

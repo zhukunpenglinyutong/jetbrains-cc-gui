@@ -32,8 +32,8 @@ import {
 } from './services/claude/message-service.js';
 import { getSessionMessages as claudeGetSessionMessages } from './services/claude/session-service.js';
 
-// Codex 服务
-import { sendMessage as codexSendMessage } from './services/codex/message-service.js';
+// Codex 服务 (暂时禁用 - SDK 已卸载)
+// import { sendMessage as codexSendMessage } from './services/codex/message-service.js';
 
 // 命令行参数解析
 const provider = process.argv[2];
@@ -101,23 +101,10 @@ async function handleClaudeCommand(command, args, stdinData) {
 }
 
 /**
- * Codex 命令处理
+ * Codex 命令处理 (暂时禁用 - SDK 已卸载)
  */
 async function handleCodexCommand(command, args, stdinData) {
-  switch (command) {
-    case 'send': {
-      if (stdinData && stdinData.message !== undefined) {
-        const { message, threadId, cwd, model, baseUrl, apiKey } = stdinData;
-        await codexSendMessage(message, threadId || '', cwd || '', model || '', baseUrl || '', apiKey || '');
-      } else {
-        await codexSendMessage(args[0], args[1], args[2], args[3]);
-      }
-      break;
-    }
-
-    default:
-      throw new Error(`Unknown Codex command: ${command}`);
-  }
+  throw new Error('Codex support is temporarily disabled. SDK not installed.');
 }
 
 // 执行命令

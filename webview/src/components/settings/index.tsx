@@ -253,7 +253,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
   const handleSaveProviderFromDialog = (data: {
     providerName: string;
-    websiteUrl: string;
+    remark: string;
     apiKey: string;
     apiUrl: string;
     jsonConfig: string;
@@ -274,7 +274,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
     const updates = {
       name: data.providerName,
-      websiteUrl: data.websiteUrl,
+      remark: data.remark,
+      websiteUrl: null, // 清除可能存在的旧字段，避免显示混淆
       settingsConfig: parsedConfig,
     };
 
@@ -291,12 +292,29 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     } else {
       // 更新现有供应商
       if (!providerDialog.provider) return;
+      
+      const providerId = providerDialog.provider.id;
+      // 检查当前编辑的供应商是否是激活状态
+      // 优先从 providers 列表中查找最新状态，如果找不到则使用 dialog 中的状态
+      const currentProvider = providers.find(p => p.id === providerId) || providerDialog.provider;
+      const isActive = currentProvider.isActive;
+
       const updateData = {
-        id: providerDialog.provider.id,
+        id: providerId,
         updates,
       };
       sendToJava(`update_provider:${JSON.stringify(updateData)}`);
       addToast('供应商更新成功', 'success');
+
+      // 如果是当前正在使用的供应商，更新后立即重新应用配置
+      if (isActive) {
+        console.log('[SettingsView] Re-applying active provider config:', providerId);
+        // 使用 setTimeout 稍微延迟一下，确保 update_provider 先处理完成
+        // 虽然在单线程模型中通常不需要，但为了保险起见
+        setTimeout(() => {
+          sendToJava(`switch_provider:${JSON.stringify({ id: providerId })}`);
+        }, 100);
+      }
     }
 
     setProviderDialog({ isOpen: false, provider: null });
@@ -330,18 +348,6 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
   const cancelDeleteProvider = () => {
     setDeleteConfirm({ isOpen: false, provider: null });
-  };
-
-  const copyToClipboard = async (text: string): Promise<boolean> => {
-    try {
-      await navigator.clipboard.writeText(text);
-      addToast('已复制到剪切板', 'success');
-      return true;
-    } catch (err) {
-      console.error('Failed to copy: ', err);
-      addToast('复制失败', 'error');
-      return false;
-    }
   };
 
   return (
@@ -436,7 +442,6 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
         onSave={handleSaveProviderFromDialog}
         onDelete={handleDeleteProvider}
         canDelete={true}
-        copyToClipboard={copyToClipboard}
         addToast={addToast}
       />
 

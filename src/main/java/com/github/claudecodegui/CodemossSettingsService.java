@@ -408,6 +408,177 @@ public class CodemossSettingsService {
     }
 
     /**
+     * 保存供应商（如果存在则更新，不存在则添加）
+     */
+    public void saveClaudeProvider(JsonObject provider) throws IOException {
+        if (!provider.has("id")) {
+            throw new IllegalArgumentException("Provider must have an id");
+        }
+
+        JsonObject config = readConfig();
+
+        // 确保 claude 配置存在
+        if (!config.has("claude")) {
+            JsonObject claude = new JsonObject();
+            claude.add("providers", new JsonObject());
+            claude.addProperty("current", "");
+            config.add("claude", claude);
+        }
+
+        JsonObject claude = config.getAsJsonObject("claude");
+        JsonObject providers = claude.getAsJsonObject("providers");
+
+        String id = provider.get("id").getAsString();
+
+        // 如果已存在，保留原有的 createdAt
+        if (providers.has(id)) {
+            JsonObject existing = providers.getAsJsonObject(id);
+            if (existing.has("createdAt") && !provider.has("createdAt")) {
+                provider.addProperty("createdAt", existing.get("createdAt").getAsLong());
+            }
+        } else {
+            if (!provider.has("createdAt")) {
+                provider.addProperty("createdAt", System.currentTimeMillis());
+            }
+        }
+
+        // 如果 provider 中没有 source 字段，但数据库中有，说明是更新（或者是转换）
+        // 如果这是一个"转换"操作，provider 中显式删除了 source，那么这里添加时也不会有 source
+        // 关键：provider 参数就是最终要保存的状态。
+        
+        // 覆盖保存
+        providers.add(id, provider);
+        writeConfig(config);
+    }
+
+    /**
+     * 解析 cc-switch.db 中的供应商配置
+     * 使用 Node.js 脚本读取数据库（跨平台兼容，避免 JDBC 类加载器问题）
+     * @param dbPath db文件路径
+     * @return 解析出的供应商列表
+     */
+    public List<JsonObject> parseProvidersFromCcSwitchDb(String dbPath) throws IOException {
+        List<JsonObject> result = new ArrayList<>();
+
+        System.out.println("[Backend] 正在通过 Node.js 读取 cc-switch 数据库: " + dbPath);
+
+        // 获取 ai-bridge 目录路径（自动处理解压）
+        String aiBridgePath = getAiBridgePath();
+        String scriptPath = new File(aiBridgePath, "read-cc-switch-db.js").getAbsolutePath();
+
+        System.out.println("[Backend] 脚本路径: " + scriptPath);
+
+        // 检查脚本是否存在
+        if (!new File(scriptPath).exists()) {
+            throw new IOException("读取脚本不存在: " + scriptPath);
+        }
+
+        try {
+            // 构建 Node.js 命令
+            ProcessBuilder pb = new ProcessBuilder("node", scriptPath, dbPath);
+            pb.directory(new File(aiBridgePath));
+            pb.redirectErrorStream(true); // 合并错误输出到标准输出
+
+            System.out.println("[Backend] 执行命令: node " + scriptPath + " " + dbPath);
+
+            // 启动进程
+            Process process = pb.start();
+
+            // 读取输出
+            StringBuilder output = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line);
+                }
+            }
+
+            // 等待进程完成
+            int exitCode = process.waitFor();
+
+            String jsonOutput = output.toString();
+            System.out.println("[Backend] Node.js 输出: " + jsonOutput);
+
+            if (exitCode != 0) {
+                throw new IOException("Node.js 脚本执行失败 (退出码: " + exitCode + "): " + jsonOutput);
+            }
+
+            // 解析 JSON 输出
+            JsonObject response = gson.fromJson(jsonOutput, JsonObject.class);
+
+            if (response == null || !response.has("success")) {
+                throw new IOException("无效的 Node.js 脚本响应: " + jsonOutput);
+            }
+
+            if (!response.get("success").getAsBoolean()) {
+                String errorMsg = response.has("error") ? response.get("error").getAsString() : "未知错误";
+                throw new IOException("Node.js 脚本执行失败: " + errorMsg);
+            }
+
+            // 提取供应商列表
+            if (response.has("providers")) {
+                JsonArray providersArray = response.getAsJsonArray("providers");
+                for (JsonElement element : providersArray) {
+                    if (element.isJsonObject()) {
+                        result.add(element.getAsJsonObject());
+                    }
+                }
+            }
+
+            int count = response.has("count") ? response.get("count").getAsInt() : result.size();
+            System.out.println("[Backend] 成功从数据库读取 " + count + " 个 Claude 供应商配置");
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Node.js 脚本执行被中断", e);
+        } catch (Exception e) {
+            String errorMsg = "通过 Node.js 读取数据库失败: " + e.getMessage();
+            System.err.println("[Backend] " + errorMsg);
+            e.printStackTrace();
+            throw new IOException(errorMsg, e);
+        }
+
+        return result;
+    }
+
+    /**
+     * 获取 ai-bridge 目录路径（使用 BridgeDirectoryResolver 自动处理解压）
+     */
+    private String getAiBridgePath() throws IOException {
+        com.github.claudecodegui.bridge.BridgeDirectoryResolver resolver =
+                new com.github.claudecodegui.bridge.BridgeDirectoryResolver();
+
+        File aiBridgeDir = resolver.findSdkDir();
+
+        if (aiBridgeDir == null || !aiBridgeDir.exists()) {
+            throw new IOException("无法找到 ai-bridge 目录，请检查插件安装");
+        }
+
+        System.out.println("[Backend] ai-bridge 目录: " + aiBridgeDir.getAbsolutePath());
+        return aiBridgeDir.getAbsolutePath();
+    }
+
+    /**
+     * 批量保存供应商配置
+     * @param providers 供应商列表
+     * @return 成功保存的数量
+     */
+    public int saveProviders(List<JsonObject> providers) throws IOException {
+        int count = 0;
+        for (JsonObject provider : providers) {
+            try {
+                saveClaudeProvider(provider);
+                count++;
+            } catch (Exception e) {
+                System.err.println("Failed to save provider " + provider.get("id") + ": " + e.getMessage());
+            }
+        }
+        return count;
+    }
+
+
+    /**
      * 更新供应商
      */
     public void updateClaudeProvider(String id, JsonObject updates) throws IOException {
@@ -432,7 +603,13 @@ public class CodemossSettingsService {
             if (key.equals("id")) {
                 continue;
             }
-            provider.add(key, updates.get(key));
+            
+            // 如果值为 null (JsonNull)，则删除该字段
+            if (updates.get(key).isJsonNull()) {
+                provider.remove(key);
+            } else {
+                provider.add(key, updates.get(key));
+            }
         }
 
         writeConfig(config);

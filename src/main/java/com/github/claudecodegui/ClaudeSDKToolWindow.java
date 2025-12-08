@@ -18,15 +18,22 @@ import com.intellij.ide.BrowserUtil;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
+import com.intellij.openapi.ui.Messages;
 import com.github.claudecodegui.permission.PermissionDialog;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.model.DeleteResult;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -517,10 +524,137 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         handleToggleSkill(content);
                         break;
 
+                    case "preview_cc_switch_import":
+                        System.out.println("[Backend] 处理: preview_cc_switch_import");
+                        handlePreviewCcSwitchImport();
+                        break;
+
+                    case "save_imported_providers":
+                        System.out.println("[Backend] 处理: save_imported_providers");
+                        handleSaveImportedProviders(content);
+                        break;
+
                 default:
                     System.err.println("[Backend] 警告: 未知的消息类型: " + type);
             }
             // System.out.println("[Backend] ========== 消息处理完成 ==========");
+        }
+
+        private void handlePreviewCcSwitchImport() {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                // 1. 自动查找默认路径（使用跨平台路径分隔符）
+                String userHome = System.getProperty("user.home");
+                String osName = System.getProperty("os.name").toLowerCase();
+
+                // 统一使用 File.separator 或直接用正斜杠（Java 在 Windows 上也支持）
+                File ccSwitchDir = new File(userHome, ".cc-switch");
+                File dbFile = new File(ccSwitchDir, "cc-switch.db");
+
+                System.out.println("[Backend] 操作系统: " + osName);
+                System.out.println("[Backend] 用户目录: " + userHome);
+                System.out.println("[Backend] cc-switch 目录: " + ccSwitchDir.getAbsolutePath());
+                System.out.println("[Backend] 数据库文件路径: " + dbFile.getAbsolutePath());
+                System.out.println("[Backend] 数据库文件是否存在: " + dbFile.exists());
+
+                if (!dbFile.exists()) {
+                    String errorMsg = "未找到 cc-switch 数据库文件\n" +
+                                     "路径: " + dbFile.getAbsolutePath() + "\n" +
+                                     "请确保:\n" +
+                                     "1. 已安装 cc-switch 3.8.2 及以上版本\n" +
+                                     "2. 至少配置过一个 Claude 供应商";
+                    System.err.println("[Backend] " + errorMsg);
+                    sendErrorToFrontend("文件未找到", errorMsg);
+                    return;
+                }
+
+                // 2. 异步读取并解析
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        System.out.println("[Backend] 开始读取数据库文件...");
+                        Gson gson = new Gson();
+                        List<JsonObject> providers = settingsService.parseProvidersFromCcSwitchDb(dbFile.getPath());
+
+                        if (providers.isEmpty()) {
+                            System.out.println("[Backend] 数据库中没有找到 Claude 供应商配置");
+                            sendInfoToFrontend("无数据", "未在数据库中找到有效的 Claude 供应商配置。");
+                            return;
+                        }
+
+                        // 3. 发送给前端预览
+                        JsonArray providersArray = new JsonArray();
+                        for (JsonObject p : providers) {
+                            providersArray.add(p);
+                        }
+
+                        JsonObject response = new JsonObject();
+                        response.add("providers", providersArray);
+
+                        String jsonStr = gson.toJson(response);
+                        System.out.println("[Backend] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
+                        callJavaScript("import_preview_result", jsonStr);
+
+                    } catch (Exception e) {
+                        String errorDetails = "读取数据库失败: " + e.getMessage();
+                        System.err.println("[Backend] " + errorDetails);
+                        e.printStackTrace();
+                        sendErrorToFrontend("读取数据库失败", errorDetails);
+                    }
+                });
+            });
+        }
+
+        private void handleSaveImportedProviders(String content) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    Gson gson = new Gson();
+                    JsonObject request = gson.fromJson(content, JsonObject.class);
+                    JsonArray providersArray = request.getAsJsonArray("providers");
+                    
+                    if (providersArray == null || providersArray.size() == 0) {
+                        return;
+                    }
+                    
+                    List<JsonObject> providers = new ArrayList<>();
+                    for (JsonElement e : providersArray) {
+                        if (e.isJsonObject()) {
+                            providers.add(e.getAsJsonObject());
+                        }
+                    }
+                    
+                    int count = settingsService.saveProviders(providers);
+                    
+                    SwingUtilities.invokeLater(() -> {
+                        handleGetProviders(); // 刷新界面
+                        sendInfoToFrontend("导入成功", "成功导入 " + count + " 个配置。");
+                    });
+                    
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    sendErrorToFrontend("保存失败", e.getMessage());
+                }
+            });
+        }
+        
+        private void sendInfoToFrontend(String title, String message) {
+            // 这里可以封装一个通用的前端通知方法，或者复用 Messages.showInfoMessage 但用户不希望系统弹窗
+            // 既然用户不希望系统弹窗，我们可以通过 callJavaScript 发送通知事件，让前端自己弹 toast
+            // 假设前端有一个 handleNotification 之类的方法，或者直接用 postMessage
+            // 这里为了简单，我们还是用 bridge 发送一个事件，让前端处理
+             Gson gson = new Gson();
+             JsonObject errorObj = new JsonObject();
+             errorObj.addProperty("type", "info");
+             errorObj.addProperty("title", title);
+             errorObj.addProperty("message", message);
+             callJavaScript("backend_notification", gson.toJson(errorObj));
+        }
+
+        private void sendErrorToFrontend(String title, String message) {
+             Gson gson = new Gson();
+             JsonObject errorObj = new JsonObject();
+             errorObj.addProperty("type", "error");
+             errorObj.addProperty("title", title);
+             errorObj.addProperty("message", message);
+             callJavaScript("backend_notification", gson.toJson(errorObj));
         }
 
         /**

@@ -791,7 +791,8 @@ const App = () => {
         .version-tag {
           position: absolute;
           top: -2px;
-          right: -54px;
+          left: 100%;
+          margin-left: 10px;
           background: rgba(139, 92, 246, 0.1);
           border: 1px solid rgba(139, 92, 246, 0.5);
           color: #ddd6fe;
@@ -884,7 +885,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.0.9
+                  v0.0.9-beta1
                 </span>
               </div>
               <div>给 {currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code'} 发送消息</div>

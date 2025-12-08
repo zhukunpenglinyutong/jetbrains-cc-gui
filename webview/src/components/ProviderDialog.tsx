@@ -7,25 +7,15 @@ interface ProviderDialogProps {
   onClose: () => void;
   onSave: (data: {
     providerName: string;
-    websiteUrl: string;
+    remark: string;
     apiKey: string;
     apiUrl: string;
     jsonConfig: string;
   }) => void;
   onDelete?: (provider: ProviderConfig) => void;
   canDelete?: boolean;
-  copyToClipboard: (text: string) => Promise<boolean>;
   addToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
-
-const isValidUrl = (url: string): boolean => {
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 export default function ProviderDialog({
   isOpen,
@@ -34,13 +24,12 @@ export default function ProviderDialog({
   onSave,
   onDelete: _onDelete,
   canDelete: _canDelete = true,
-  copyToClipboard,
-  addToast,
+  addToast: _addToast,
 }: ProviderDialogProps) {
   const isAdding = !provider;
   
   const [providerName, setProviderName] = useState('');
-  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [remark, setRemark] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -53,7 +42,7 @@ export default function ProviderDialog({
       if (provider) {
         // 编辑模式
         setProviderName(provider.name || '');
-        setWebsiteUrl(provider.websiteUrl || '');
+        setRemark(provider.remark || provider.websiteUrl || '');
         setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');
         // 编辑模式下不填充默认值，避免覆盖用户实际使用的第三方代理 URL
         setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '');
@@ -68,7 +57,7 @@ export default function ProviderDialog({
       } else {
         // 添加模式
         setProviderName('');
-        setWebsiteUrl('');
+        setRemark('');
         setApiKey('');
         setApiUrl('');
         const config = {
@@ -152,7 +141,7 @@ export default function ProviderDialog({
   const handleSave = () => {
     onSave({
       providerName,
-      websiteUrl,
+      remark,
       apiKey,
       apiUrl,
       jsonConfig,
@@ -194,34 +183,15 @@ export default function ProviderDialog({
           </div>
 
           <div className="form-group">
-            <label htmlFor="websiteUrl">官网链接</label>
-            <div className="input-with-link">
-              <input
-                id="websiteUrl"
-                type="text"
-                className="form-input"
-                placeholder="https://"
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-              />
-              {websiteUrl && isValidUrl(websiteUrl) && (
-                <button
-                  type="button"
-                  className="link-btn"
-                  title="复制链接"
-                  onClick={async () => {
-                    const success = await copyToClipboard(websiteUrl);
-                    if (success) {
-                      addToast('链接已复制，请到浏览器打开', 'success');
-                    } else {
-                      addToast('复制失败，请手动复制', 'error');
-                    }
-                  }}
-                >
-                  <span className="codicon codicon-copy" />
-                </button>
-              )}
-            </div>
+            <label htmlFor="remark">备注</label>
+            <input
+              id="remark"
+              type="text"
+              className="form-input"
+              placeholder="可选"
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+            />
           </div>
 
           <div className="form-group">

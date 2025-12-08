@@ -10,7 +10,9 @@ export interface ProviderConfig {
   id: string;
   /** 供应商名称 */
   name: string;
-  /** 官网链接 */
+  /** 备注 */
+  remark?: string;
+  /** 官网链接 (已弃用，保留兼容) */
   websiteUrl?: string;
   /** 供应商分类 */
   category?: ProviderCategory;
@@ -18,6 +20,8 @@ export interface ProviderConfig {
   createdAt?: number;
   /** 是否为当前使用的供应商 */
   isActive?: boolean;
+  /** 来源 */
+  source?: 'cc-switch' | string;
   /** 配置信息 */
   settingsConfig?: {
     env?: {

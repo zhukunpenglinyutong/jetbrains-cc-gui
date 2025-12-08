@@ -36,7 +36,7 @@ const ProviderManageSection = ({
         <ConfigInfoDisplay
           config={claudeConfig}
           loading={claudeConfigLoading}
-          providers={providers.map(p => ({ id: p.id, name: p.name, isActive: p.isActive }))}
+          providers={providers.map(p => ({ id: p.id, name: p.name, isActive: p.isActive, source: p.source }))}
           onSwitchProvider={onSwitchProvider}
           addToast={addToast}
         />
