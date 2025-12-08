@@ -134,6 +134,14 @@ export function McpSettingsSection() {
     };
 
     sendToJava('update_mcp_server', updatedServer);
+
+    // 显示Toast提示
+    addToast(enabled ? `已启用 ${server.name || server.id}` : `已禁用 ${server.name || server.id}`, 'success');
+
+    // 刷新服务器列表以显示最新状态
+    setTimeout(() => {
+      loadServers();
+    }, 100);
   };
 
   const handleEdit = (server: McpServer) => {
@@ -149,6 +157,12 @@ export function McpSettingsSection() {
   const confirmDelete = () => {
     if (deletingServer) {
       sendToJava('delete_mcp_server', { id: deletingServer.id });
+      addToast(`已删除 ${deletingServer.name || deletingServer.id}`, 'success');
+
+      // 刷新服务器列表
+      setTimeout(() => {
+        loadServers();
+      }, 100);
     }
     setShowConfirmDialog(false);
     setDeletingServer(null);
@@ -178,14 +192,23 @@ export function McpSettingsSection() {
         // ID 改变了，先删除旧的，再添加新的
         sendToJava('delete_mcp_server', { id: editingServer.id });
         sendToJava('add_mcp_server', server);
+        addToast(`已更新 ${server.name || server.id}`, 'success');
       } else {
         // ID 没变，直接更新
         sendToJava('update_mcp_server', server);
+        addToast(`已保存 ${server.name || server.id}`, 'success');
       }
     } else {
       // 添加服务器
       sendToJava('add_mcp_server', server);
+      addToast(`已添加 ${server.name || server.id}`, 'success');
     }
+
+    // 刷新服务器列表
+    setTimeout(() => {
+      loadServers();
+    }, 100);
+
     setShowServerDialog(false);
     setEditingServer(null);
   };
@@ -208,6 +231,13 @@ export function McpSettingsSection() {
       enabled: true,
     };
     sendToJava('add_mcp_server', server);
+    addToast(`已添加 ${preset.name}`, 'success');
+
+    // 刷新服务器列表
+    setTimeout(() => {
+      loadServers();
+    }, 100);
+
     setShowPresetDialog(false);
   };
 
@@ -283,17 +313,15 @@ export function McpSettingsSection() {
                   <span className="server-name">{server.name || server.id}</span>
                 </div>
                 <div className="header-right-section" onClick={(e) => e.stopPropagation()}>
-                  {/* 只有多个服务器时才显示开关 */}
-                  {servers.length > 1 && (
-                    <label className="toggle-switch">
-                      <input
-                        type="checkbox"
-                        checked={isServerEnabled(server)}
-                        onChange={(e) => handleToggleServer(server, e.target.checked)}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  )}
+                  {/* TODO: 启用/禁用开关 - 暂时隐藏，后续再加回 */}
+                  {/* <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={isServerEnabled(server)}
+                      onChange={(e) => handleToggleServer(server, e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label> */}
                 </div>
               </div>
 
