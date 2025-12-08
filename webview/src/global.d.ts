@@ -37,6 +37,8 @@ declare global {
     skillImportResult?: (jsonStr: string) => void;
     skillDeleteResult?: (jsonStr: string) => void;
     skillToggleResult?: (jsonStr: string) => void;
+    // 选中代码发送到终端相关
+    addSelectionInfo?: (selectionInfo: string) => void;
   }
 }
 

@@ -60,9 +60,19 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
     }
 
     /**
+     * 静态方法，用于从外部添加选中的代码信息
+     */
+    public static void addSelectionFromExternal(String selectionInfo) {
+        ClaudeChatWindow.addSelectionFromExternalInternal(selectionInfo);
+    }
+
+    /**
      * 聊天窗口内部类
      */
     private static class ClaudeChatWindow {
+        // 静态引用，用于从外部访问
+        private static ClaudeChatWindow instance;
+
         private final JPanel mainPanel;
         private final ClaudeSDKBridge claudeSDKBridge;
         private final CodexSDKBridge codexSDKBridge;
@@ -87,6 +97,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             this.session = new ClaudeSession(claudeSDKBridge, codexSDKBridge); // 创建新会话
             this.toolInterceptor = new ToolInterceptor(project); // 创建工具拦截器
             this.settingsService = new CodemossSettingsService(); // 创建配置服务
+
+            // 设置静态引用，用于从外部访问
+            instance = this;
+
             try {
                 this.settingsService.applyActiveProviderToClaudeSettings();
             } catch (Exception e) {
@@ -2703,5 +2717,26 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 	    	public JPanel getContent() {
 	    	    return mainPanel;
 	    	}
+
+        /**
+         * 接收选中的代码信息并发送到聊天窗口
+         */
+        private void addSelectionInfo(String selectionInfo) {
+            if (selectionInfo == null || selectionInfo.isEmpty()) {
+                return;
+            }
+
+            // 调用JavaScript函数将选中信息添加到聊天
+            callJavaScript("addSelectionInfo", escapeJs(selectionInfo));
+        }
+
+        /**
+         * 静态方法，用于从外部添加选中的代码信息（内部调用）
+         */
+        static void addSelectionFromExternalInternal(String selectionInfo) {
+            if (instance != null) {
+                instance.addSelectionInfo(selectionInfo);
+            }
+        }
     }
 }

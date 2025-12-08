@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.github.idea-claude-code-gui'
-version '0.0.9-beta1'
+version '0.0.9-beta2'
 
 sourceCompatibility = 17
 targetCompatibility = 17

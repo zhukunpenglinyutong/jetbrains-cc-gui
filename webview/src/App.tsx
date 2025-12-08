@@ -231,6 +231,18 @@ const App = () => {
         console.error('[PERM_DEBUG][FRONTEND] ERROR: Failed to parse permission request:', error);
       }
     };
+
+    // 选中代码发送到终端回调
+    window.addSelectionInfo = (selectionInfo) => {
+      console.log('[Frontend] addSelectionInfo called:', selectionInfo);
+      if (selectionInfo) {
+        // 将选中的代码引用添加到输入框
+        setInputValue((prev) => {
+          const separator = prev.trim() ? ' ' : '';
+          return prev + separator + selectionInfo;
+        });
+      }
+    };
   }, [currentProvider]);
 
   useEffect(() => {
@@ -885,7 +897,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.0.9-beta1
+                  v0.0.9-beta2
                 </span>
               </div>
               <div>给 {currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code'} 发送消息</div>

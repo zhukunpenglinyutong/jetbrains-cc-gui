@@ -122,27 +122,28 @@ export function McpSettingsSection() {
     loadServers();
   };
 
-  const handleToggleServer = (server: McpServer, enabled: boolean) => {
-    const updatedServer: McpServer = {
-      ...server,
-      enabled,
-      apps: {
-        claude: enabled,
-        codex: server.apps?.codex ?? false,
-        gemini: server.apps?.gemini ?? false,
-      }
-    };
-
-    sendToJava('update_mcp_server', updatedServer);
-
-    // 显示Toast提示
-    addToast(enabled ? `已启用 ${server.name || server.id}` : `已禁用 ${server.name || server.id}`, 'success');
-
-    // 刷新服务器列表以显示最新状态
-    setTimeout(() => {
-      loadServers();
-    }, 100);
-  };
+  // TODO: 启用/禁用开关功能 - 暂时注释掉，后续再加回
+  // const handleToggleServer = (server: McpServer, enabled: boolean) => {
+  //   const updatedServer: McpServer = {
+  //     ...server,
+  //     enabled,
+  //     apps: {
+  //       claude: enabled,
+  //       codex: server.apps?.codex ?? false,
+  //       gemini: server.apps?.gemini ?? false,
+  //     }
+  //   };
+  //
+  //   sendToJava('update_mcp_server', updatedServer);
+  //
+  //   // 显示Toast提示
+  //   addToast(enabled ? `已启用 ${server.name || server.id}` : `已禁用 ${server.name || server.id}`, 'success');
+  //
+  //   // 刷新服务器列表以显示最新状态
+  //   setTimeout(() => {
+  //     loadServers();
+  //   }, 100);
+  // };
 
   const handleEdit = (server: McpServer) => {
     setEditingServer(server);

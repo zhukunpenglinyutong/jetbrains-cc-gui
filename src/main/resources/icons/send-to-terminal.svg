@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Terminal window outline -->
+  <rect x="1" y="2" width="14" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
+
+  <!-- Terminal prompt symbol (>) -->
+  <path d="M 3 5 L 6 7.5 L 3 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Arrow indicating send action -->
+  <path d="M 7 8 L 11 8 M 9 6 L 11 8 L 9 10" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
