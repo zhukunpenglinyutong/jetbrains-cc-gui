@@ -1,0 +1,80 @@
+/* 加载动画 */
+.loading {
+    display: none;
+    padding: 12px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 13px;
+}
+
+.loading.show {
+    display: block;
+}
+
+.loading::after {
+    content: '...';
+    animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60%, 100% { content: '...'; }
+}
+
+/* Waiting Indicator 样式 */
+.waiting-indicator {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    color: var(--vscode-foreground, #d4d4d4);
+    padding: 14px 24px;
+}
+
+.waiting-spinner {
+    display: inline-block;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.waiting-spinner::before,
+.waiting-spinner::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: #b0b0b0;
+    transform: translate(-50%, -50%);
+    animation: waiting-spin 1s linear infinite;
+}
+
+.waiting-spinner::after {
+    width: 60%;
+    height: 60%;
+    border-top-color: #707070;
+    animation-duration: 0.8s;
+    animation-direction: reverse;
+}
+
+@keyframes waiting-spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.waiting-text {
+    font-size: 14px;
+    color: var(--vscode-descriptionForeground, #858585);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: 1px;
+}
+
+.waiting-dots {
+    display: inline-block;
+    min-width: 2em;
+    text-align: left;
+}

@@ -1,0 +1,1024 @@
+.mcp-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* MCP 头部 */
+.mcp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mcp-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mcp-header .header-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.mcp-header .help-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    color: var(--text-white);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.mcp-header .help-btn:hover {
+    opacity: 0.8;
+}
+
+.mcp-header .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mcp-header .refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.mcp-header .refresh-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+}
+
+.mcp-header .refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.mcp-header .refresh-btn .spinning {
+    animation: spin 1s linear infinite;
+}
+
+/* 下拉菜单 */
+.add-dropdown {
+    position: relative;
+}
+
+.add-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent-primary);
+    color: var(--text-white);
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.add-btn:hover {
+    background: var(--accent-primary-hover);
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 160px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    box-shadow: var(--shadow-md);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.dropdown-item:hover {
+    background: var(--bg-hover);
+}
+
+.dropdown-item .codicon {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+/* 服务器列表 */
+.server-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 服务器卡片 */
+.server-card {
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+    transition: all 0.15s ease;
+}
+
+.server-card:hover {
+    border-color: var(--accent-primary);
+}
+
+.server-card.disabled {
+    opacity: 0.6;
+}
+
+.server-card.disabled .card-header {
+    background: transparent;
+}
+
+/* 卡片头部 */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.card-header:hover {
+    background: var(--bg-hover);
+}
+
+.header-left-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.expand-icon {
+    font-size: 14px;
+    color: var(--text-tertiary);
+    transition: transform 0.15s ease;
+}
+
+.server-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.server-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.status-indicator.connected {
+    color: var(--color-success);
+}
+
+.status-indicator.checking {
+    color: var(--text-tertiary);
+}
+
+.status-indicator.error {
+    color: var(--color-error);
+}
+
+.status-indicator .codicon {
+    font-size: 14px;
+}
+
+.header-right-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Toggle 开关 */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 11px;
+    transition: 0.2s;
+}
+
+.toggle-slider::before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--text-tertiary);
+    border-radius: 50%;
+    transition: 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--color-success);
+    border-color: var(--color-success);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(18px);
+    background-color: #ffffff;
+}
+
+/* 卡片内容 */
+.card-content {
+    padding: 0 14px 14px 14px;
+    border-top: 1px solid var(--border-primary);
+    animation: slideDown 0.15s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 信息区 */
+.info-section {
+    padding: 12px 0;
+}
+
+.info-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.info-row:last-child {
+    margin-bottom: 0;
+}
+
+.info-label {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    min-width: 50px;
+}
+
+.info-value {
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.info-value.command {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--color-code-bg);
+}
+
+/* 标签区 */
+.tags-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 12px;
+}
+
+.tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-primary);
+    color: var(--text-white);
+}
+
+/* 操作区 */
+.actions-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-primary);
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.action-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.action-btn .codicon {
+    font-size: 14px;
+}
+
+.action-btn.check-btn {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: transparent;
+}
+
+.action-btn.check-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+}
+
+.action-btn.edit-btn:hover {
+    background: var(--bg-tertiary);
+}
+
+.action-btn.delete-btn:hover {
+    background: var(--color-danger);
+    color: var(--text-white);
+    border-color: transparent;
+}
+
+/* 空状态 & 加载状态 */
+.empty-state,
+.loading-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-tertiary);
+}
+
+.empty-state .codicon,
+.loading-state .codicon {
+    font-size: 48px;
+    opacity: 0.5;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.empty-state p,
+.loading-state p {
+    margin: 0 0 8px 0;
+}
+
+.empty-state .hint {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+/* 动画 */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.codicon-modifier-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* 响应式适配 */
+@media (max-width: 480px) {
+    .mcp-header {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .mcp-header .header-right {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .card-header {
+        padding: 10px 12px;
+    }
+
+    .server-icon {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+    }
+
+    .server-name {
+        font-size: 13px;
+    }
+
+    .actions-section {
+        flex-direction: column;
+    }
+
+    .action-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ===== MCP 弹窗样式 ===== */
+
+/* 弹窗遮罩层 */
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* 弹窗主体 */
+.dialog {
+    background: var(--vscode-editor-background, var(--bg-primary));
+    border: 1px solid var(--vscode-panel-border, var(--border-primary));
+    border-radius: 8px;
+    width: 90%;
+    max-width: 700px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* 弹窗头部 */
+.dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--vscode-panel-border, var(--border-primary));
+}
+
+.dialog-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--vscode-foreground, var(--text-primary));
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mode-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--vscode-panel-border, var(--border-primary));
+    border-radius: 4px;
+    background: var(--vscode-input-background, var(--bg-secondary));
+    color: var(--vscode-foreground, var(--text-primary));
+    font-size: 12px;
+    cursor: default;
+}
+
+.mode-btn.active {
+    background: var(--vscode-button-secondaryBackground, #5a5d5e);
+    border-color: var(--vscode-button-secondaryBackground, #5a5d5e);
+}
+
+.close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--vscode-foreground, var(--text-primary));
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+/* 弹窗内容区 */
+.dialog-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.dialog-desc {
+    margin: 0 0 16px 0;
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground, var(--text-secondary));
+    line-height: 1.5;
+}
+
+/* JSON 编辑器 */
+.json-editor {
+    display: flex;
+    border: 1px solid var(--vscode-input-border, var(--border-secondary));
+    border-radius: 6px;
+    background: var(--vscode-input-background, var(--bg-secondary));
+    overflow: hidden;
+    min-height: 300px;
+    max-height: 400px;
+}
+
+.line-numbers {
+    padding: 12px 8px;
+    background: rgba(128, 128, 128, 0.1);
+    border-right: 1px solid var(--vscode-panel-border, var(--border-primary));
+    user-select: none;
+    overflow-y: hidden;
+}
+
+.line-num {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--vscode-editorLineNumber-foreground, var(--text-tertiary));
+    text-align: right;
+    min-width: 24px;
+    padding-right: 4px;
+}
+
+.json-textarea {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    background: transparent;
+    color: var(--vscode-input-foreground, var(--text-primary));
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    resize: none;
+    overflow-y: auto;
+}
+
+.json-textarea:focus {
+    outline: none;
+}
+
+.json-textarea::placeholder {
+    color: var(--vscode-input-placeholderForeground, var(--text-placeholder));
+}
+
+/* 错误信息 */
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: var(--vscode-inputValidation-errorBackground, rgba(229, 62, 62, 0.15));
+    color: var(--vscode-inputValidation-errorForeground, #f56565);
+    font-size: 12px;
+}
+
+/* 弹窗底部 */
+.dialog-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-top: 1px solid var(--vscode-panel-border, var(--border-primary));
+}
+
+.footer-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground, var(--text-secondary));
+}
+
+.footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background-color 0.2s;
+}
+
+.btn-primary {
+    background: var(--vscode-button-background, #0e639c);
+    color: var(--vscode-button-foreground, #ffffff);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: transparent;
+    color: var(--vscode-foreground, var(--text-primary));
+    border: 1px solid var(--vscode-button-border, var(--border-primary));
+}
+
+.btn-secondary:hover {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+/* 供应商弹窗样式 */
+.provider-dialog {
+    max-width: 560px;
+    max-height: 85vh;
+}
+
+.provider-dialog .dialog-body {
+    overflow-y: auto;
+}
+
+.provider-dialog .dialog-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.provider-dialog .footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* 预设列表弹窗样式 */
+.mcp-preset-dialog .dialog {
+    max-width: 600px;
+    max-height: 80vh;
+}
+
+.preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.preset-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--vscode-panel-border, var(--border-primary));
+    border-radius: 8px;
+    background: var(--vscode-sideBar-background, var(--bg-secondary));
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.preset-item:hover {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1));
+    border-color: var(--vscode-focusBorder, #007acc);
+}
+
+.preset-item:hover .add-icon {
+    opacity: 1;
+}
+
+.preset-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.preset-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.preset-name {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--vscode-foreground, var(--text-primary));
+}
+
+.preset-desc {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground, var(--text-secondary));
+    line-height: 1.4;
+}
+
+.preset-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.type-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.type-badge.stdio {
+    background: #3b82f6;
+    color: #ffffff;
+}
+
+.type-badge.http {
+    background: #22c55e;
+    color: #ffffff;
+}
+
+.type-badge.sse {
+    background: #a855f7;
+    color: #ffffff;
+}
+
+.preset-tags {
+    display: flex;
+    gap: 4px;
+}
+
+.preset-tags .tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--vscode-badge-background, #4d4d4d);
+    color: var(--vscode-badge-foreground, #ffffff);
+}
+
+.add-icon {
+    font-size: 18px;
+    color: var(--vscode-descriptionForeground, var(--text-secondary));
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+}
+
+/* 确认对话框样式 */
+.mcp-confirm-dialog .dialog {
+    max-width: 400px;
+}
+
+.confirm-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+    padding: 12px 0;
+}
+
+.confirm-icon {
+    font-size: 48px;
+    color: var(--vscode-notificationsWarningIcon-foreground, #f59e0b);
+}
+
+.confirm-message {
+    margin: 0;
+    font-size: 14px;
+    color: var(--vscode-foreground, var(--text-primary));
+    line-height: 1.6;
+}
+
+.btn-danger {
+    background: var(--vscode-inputValidation-errorBackground, #d32f2f);
+    color: var(--vscode-button-foreground, #ffffff);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #b71c1c;
+}
+
+/* 帮助弹窗样式 */
+.mcp-help-dialog .dialog {
+    max-width: 600px;
+}
+
+.help-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.help-section h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-foreground, var(--text-primary));
+}
+
+.help-section p {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground, var(--text-secondary));
+    line-height: 1.6;
+}
+
+.help-section ul {
+    margin: 0;
+    padding-left: 20px;
+    list-style: disc;
+}
+
+.help-section li {
+    margin: 6px 0;
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground, var(--text-secondary));
+    line-height: 1.6;
+}
+
+.help-section li strong {
+    color: var(--vscode-foreground, var(--text-primary));
+}
+
+.inline-code {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 6px;
+    background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.1));
+    border-radius: 3px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-size: 11px;
+    color: var(--vscode-textPreformat-foreground, var(--text-primary));
+}
+
+.help-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--vscode-textLink-foreground, #4a90e2);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.help-link:hover {
+    color: var(--vscode-textLink-activeForeground, #6bb6ff);
+    text-decoration: underline;
+}
+
+/* 响应式适配 - 弹窗 */
+@media (max-width: 480px) {
+    .dialog {
+        width: 95%;
+        max-height: 95vh;
+    }
+
+    .dialog-header,
+    .dialog-body,
+    .dialog-footer {
+        padding: 12px 16px;
+    }
+
+    .dialog-footer {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .footer-hint {
+        order: 2;
+    }
+
+    .footer-actions {
+        order: 1;
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .preset-item {
+        padding: 10px 12px;
+    }
+
+    .preset-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    .preset-name {
+        font-size: 13px;
+    }
+
+    .preset-desc {
+        font-size: 11px;
+    }
+}

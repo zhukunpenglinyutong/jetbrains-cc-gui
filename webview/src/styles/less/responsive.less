@@ -1,0 +1,116 @@
+/* 响应式适配 - 480px 小屏幕 */
+/* 设置页面样式已迁移到组件级 less 文件 */
+@media (max-width: 480px) {
+    /* 表单适配 */
+    .form-group label {
+        font-size: 12px;
+    }
+
+    .form-input,
+    .form-select {
+        font-size: 12px;
+        padding: 7px 10px;
+    }
+
+    .form-hint {
+        font-size: 11px;
+    }
+
+    .form-actions {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        width: 100%;
+        justify-content: center;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    /* 使用统计响应式 - 480px */
+    .usage-section {
+        max-width: 100%;
+    }
+
+    .usage-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .scope-selector {
+        width: 100%;
+    }
+
+    .scope-btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .refresh-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .stat-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-value {
+        font-size: 20px;
+    }
+
+    .model-details {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .sessions-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .sort-controls {
+        justify-content: space-between;
+    }
+
+    .chart-label {
+        font-size: 9px;
+    }
+}
+
+/* 超小屏幕 360px */
+/* 设置页面样式已迁移到组件级 less 文件 */
+@media (max-width: 360px) {
+    /* 使用统计响应式 - 360px */
+    .stat-label {
+        font-size: 11px;
+    }
+
+    .stat-value {
+        font-size: 18px;
+    }
+
+    .legend-item {
+        font-size: 11px;
+    }
+
+    .model-name {
+        font-size: 12px;
+    }
+
+    .model-stats {
+        font-size: 11px;
+    }
+
+    .session-id,
+    .session-summary,
+    .session-meta {
+        font-size: 11px;
+    }
+
+    .session-cost {
+        font-size: 12px;
+    }
+}

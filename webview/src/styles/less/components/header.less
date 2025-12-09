@@ -1,0 +1,232 @@
+/* New Header Styles */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-primary);
+    height: 50px;
+    flex-shrink: 0;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0; /* Allow flex items to shrink below their minimum content size */
+    overflow: hidden;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0; /* Prevent buttons from shrinking */
+}
+
+/* Header tabs/titles */
+.header-left > * {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.new-chat-button {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+.new-chat-button:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-secondary);
+}
+
+/* New chat button tooltip */
+.new-chat-button::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1000;
+    box-shadow: var(--shadow-md);
+}
+
+.new-chat-button:hover::after {
+    opacity: 1;
+}
+
+.new-chat-button::before {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 5px solid var(--bg-elevated);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1001;
+}
+
+.new-chat-button:hover::before {
+    opacity: 1;
+}
+
+.back-button {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+}
+
+.back-button:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+/* Back button tooltip */
+.back-button::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1000;
+    box-shadow: var(--shadow-md);
+}
+
+.back-button:hover::after {
+    opacity: 1;
+}
+
+.back-button::before {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 5px solid var(--bg-elevated);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1001;
+}
+
+.back-button:hover::before {
+    opacity: 1;
+}
+
+.icon-button {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.icon-button:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.icon-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+.icon-button .codicon {
+    font-size: 18px;
+}
+
+/* Tooltip 样式 */
+.icon-button::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1000;
+    box-shadow: var(--shadow-md);
+}
+
+.icon-button:hover::after {
+    opacity: 1;
+}
+
+/* Tooltip 小箭头 */
+.icon-button::before {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 5px solid var(--bg-elevated);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1001;
+}
+
+.icon-button:hover::before {
+    opacity: 1;
+}

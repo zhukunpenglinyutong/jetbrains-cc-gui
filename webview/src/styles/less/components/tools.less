@@ -1,0 +1,170 @@
+/* 工具块标题样式 - 支持亮色/暗色主题 */
+.tool-title-icon {
+    color: var(--text-primary);
+    font-size: 16px;
+    margin-right: 6px;
+}
+
+.tool-title-text {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.tool-title-summary {
+    color: var(--text-tertiary);
+    margin-left: 12px;
+}
+
+/* 可点击的文件名样式 */
+.clickable-file {
+    cursor: pointer;
+    color: var(--color-link);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 2px;
+    transition: text-decoration-color 0.15s ease;
+}
+
+.clickable-file:hover {
+    text-decoration-color: var(--color-link);
+}
+
+/* Bash命令块样式 */
+.bash-tool-header {
+    border-bottom: none;
+    background: var(--bg-primary);
+}
+
+.bash-tool-header.expanded {
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.bash-tool-icon {
+    color: var(--text-primary);
+    font-size: 16px;
+    margin-right: 6px;
+}
+
+.bash-tool-title {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.bash-tool-description {
+    color: var(--text-tertiary);
+    font-style: normal;
+    margin-left: 12px;
+}
+
+.bash-tool-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+.bash-tool-status.pending {
+    background-color: var(--text-tertiary);
+}
+
+.bash-tool-status.completed {
+    background-color: var(--color-success);
+}
+
+.bash-tool-status.error {
+    background-color: var(--color-error);
+}
+
+.bash-tool-content {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+    position: relative;
+}
+
+.bash-tool-line {
+    position: absolute;
+    left: 21px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--border-primary);
+    z-index: 0;
+}
+
+.bash-command-block {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.bash-output-block {
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    display: flex;
+    gap: 6px;
+}
+
+.bash-output-block.normal {
+    color: var(--text-tertiary);
+}
+
+.bash-output-block.error {
+    color: var(--color-error);
+}
+
+/* ==================== 亮色模式适配 ==================== */
+[data-theme="light"] .tool-block {
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .tool-name {
+    color: #0078d4;
+}
+
+[data-theme="light"] .tool-icon {
+    color: #106ebe;
+}
+
+[data-theme="light"] .tool-summary {
+    color: #666666;
+}
+
+[data-theme="light"] .tool-file-link {
+    color: #107c10;
+}
+
+[data-theme="light"] .tool-params {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* 亮色模式下工具块摘要使用更深的颜色 */
+[data-theme="light"] .tool-title-summary {
+    color: #444444;
+}
+
+/* 亮色模式下可点击文件名样式 */
+[data-theme="light"] .clickable-file {
+    color: var(--color-link);
+}
+
+[data-theme="light"] .clickable-file:hover {
+    text-decoration-color: var(--color-link);
+}
+
+/* 亮色模式下 Bash 块的额外适配 */
+[data-theme="light"] .bash-command-block {
+    background: #f5f5f5;
+    border: 1px solid #d0d0d0;
+}

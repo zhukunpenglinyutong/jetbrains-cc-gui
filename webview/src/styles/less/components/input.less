@@ -1,0 +1,127 @@
+/* Input Area Styles */
+.input-area {
+    padding: 9px 8px 8px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--bg-tertiary);
+    flex-shrink: 0;
+}
+
+.input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    padding: 12px 12px 8px 12px;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.input-container:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary), var(--shadow-sm);
+}
+
+#messageInput {
+    width: 100%;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 20px;
+    resize: none;
+    font-family: inherit;
+    outline: none;
+    min-height: 24px;
+    max-height: 200px;
+}
+
+#messageInput::placeholder {
+    color: var(--text-placeholder);
+}
+
+/* Input Footer (Tools & Actions) */
+.input-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 4px;
+}
+
+.input-tools-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Placeholder for future tool buttons */
+.tool-button-placeholder {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6e6e6e;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tool-button-placeholder:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+/* Send/Stop Button Styles */
+.input-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.action-button {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    color: #ffffff;
+}
+
+.send-button {
+    background: var(--accent-primary);
+    cursor: pointer;
+}
+
+.send-button:hover {
+    background: var(--accent-primary-hover);
+}
+
+.send-button:active {
+    background: var(--accent-primary-active);
+}
+
+.send-button:disabled {
+    background: var(--border-secondary);
+    color: var(--text-placeholder);
+    cursor: not-allowed;
+}
+
+.stop-button {
+    background: rgba(211, 47, 47, 0.1);
+    border: 1px solid rgba(211, 47, 47, 0.3);
+    color: #d32f2f;
+    cursor: pointer;
+}
+
+.stop-button:hover {
+    background: rgba(211, 47, 47, 0.2);
+    border-color: #d32f2f;
+}

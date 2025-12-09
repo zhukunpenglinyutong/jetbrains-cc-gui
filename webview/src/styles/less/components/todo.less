@@ -1,0 +1,58 @@
+/* Todo List Styles */
+.todo-container {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 4px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.todo-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ccc;
+    margin-bottom: 8px;
+}
+
+.todo-header-icon {
+    color: #ccc;
+}
+
+.todo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #ccc;
+}
+
+.todo-item.completed {
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+.todo-status-icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+}
+
+/* Icons based on status */
+.status-pending .codicon { color: var(--text-muted); }
+.status-in-progress .codicon { color: #ccc; }
+.status-completed .codicon { color: #89d185; }

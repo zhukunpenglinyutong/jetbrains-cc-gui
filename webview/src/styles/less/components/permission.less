@@ -1,0 +1,516 @@
+/* Permission Dialog Styles */
+.permission-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.permission-dialog {
+    background: var(--bg-elevated);
+    border: 1px solid #454545;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+    min-width: 500px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow: hidden;
+    animation: slideUp 0.3s ease-out;
+}
+
+.permission-dialog-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #454545;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(180deg, #2d2d30 0%, #252526 100%);
+}
+
+.permission-dialog-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.permission-dialog-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+.permission-dialog-body {
+    padding: 24px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.permission-dialog-section {
+    margin-bottom: 20px;
+}
+
+.permission-dialog-section:last-child {
+    margin-bottom: 0;
+}
+
+.permission-dialog-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.permission-dialog-value {
+    font-size: 14px;
+    color: var(--text-secondary);
+    padding: 10px 12px;
+    background: #1e1e1e;
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.permission-dialog-value.tool-name {
+    font-weight: 600;
+    color: #4ec9b0;
+}
+
+.permission-dialog-params {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.permission-dialog-param {
+    padding: 10px 12px;
+    background: #1e1e1e;
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.permission-dialog-param .param-key {
+    color: #9cdcfe;
+    font-weight: 600;
+    margin-right: 8px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.permission-dialog-param .param-value {
+    color: #ce9178;
+    word-break: break-all;
+    white-space: pre-wrap;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.permission-dialog-remember {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #3e3e42;
+}
+
+.permission-dialog-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+    user-select: none;
+}
+
+.permission-dialog-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #007fd4;
+}
+
+.permission-dialog-checkbox:hover {
+    color: var(--text-secondary);
+}
+
+.permission-dialog-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #454545;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: var(--bg-secondary);
+}
+
+.permission-dialog-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.permission-dialog-button.deny-button {
+    background: #d13438;
+    color: #ffffff;
+    border: 1px solid #d13438;
+}
+
+.permission-dialog-button.deny-button:hover {
+    background: #e74c50;
+    border-color: #e74c50;
+}
+
+.permission-dialog-button.approve-button {
+    background: #3e3e42;
+    color: var(--text-primary);
+    border: 1px solid #555;
+}
+
+.permission-dialog-button.approve-button:hover {
+    background: #4a4a4f;
+    border-color: var(--text-muted);
+}
+
+.permission-dialog-button.approve-always-button {
+    background: #007fd4;
+    color: #ffffff;
+    min-width: 120px;
+}
+
+.permission-dialog-button.approve-always-button:hover {
+    background: #0098ff;
+    box-shadow: 0 0 12px rgba(0, 127, 212, 0.4);
+}
+
+.permission-dialog-button.approve-always-button:active {
+    background: #0060a0;
+    transform: scale(0.98);
+}
+
+/* Permission Dialog V2 Styles - New compact design */
+.permission-dialog-v2 {
+    background: #1e1e1e;
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    min-width: 400px;
+    max-width: 500px;
+    padding: 20px;
+    animation: slideUp 0.2s ease-out;
+}
+
+.permission-dialog-v2-title {
+    margin: 0 0 16px 0;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.permission-dialog-v2-details-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: background 0.15s;
+}
+
+.permission-dialog-v2-details-toggle:hover {
+    background: #363639;
+}
+
+.permission-dialog-v2-details-toggle .codicon {
+    font-size: 12px;
+}
+
+.permission-dialog-v2-details {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.permission-dialog-v2-param {
+    font-size: 12px;
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.permission-dialog-v2-param:last-child {
+    margin-bottom: 0;
+}
+
+.permission-dialog-v2-param .param-key {
+    color: #9cdcfe;
+    font-weight: 600;
+    margin-right: 6px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.permission-dialog-v2-param .param-value {
+    color: #ce9178;
+    word-break: break-all;
+    white-space: pre-wrap;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.permission-dialog-v2-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.permission-dialog-v2-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    padding: 12px 16px;
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+}
+
+.permission-dialog-v2-option:hover {
+    background: #363639;
+    border-color: var(--border-hover);
+}
+
+.permission-dialog-v2-option.selected {
+    background: #007fd4;
+    border-color: #007fd4;
+    color: #ffffff;
+}
+
+.permission-dialog-v2-option.selected:hover {
+    background: #0098ff;
+    border-color: #0098ff;
+}
+
+.permission-dialog-v2-option .option-key {
+    font-weight: 500;
+    min-width: 16px;
+}
+
+.permission-dialog-v2-option .option-text {
+    flex: 1;
+}
+
+.permission-dialog-v2-input-wrapper {
+    margin-top: 4px;
+}
+
+.permission-dialog-v2-input {
+    width: 100%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    padding: 12px 16px;
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+}
+
+.permission-dialog-v2-input::placeholder {
+    color: #6e6e6e;
+}
+
+.permission-dialog-v2-input:focus {
+    border-color: #007fd4;
+}
+
+/* Permission Dialog V3 Styles - 新设计 */
+.permission-dialog-v3 {
+    background: #1a1a1a;
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    min-width: 340px;
+    max-width: 420px;
+    padding: 16px;
+    animation: slideUp 0.2s ease-out;
+}
+
+.permission-dialog-v3-title {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.permission-dialog-v3-subtitle {
+    margin: 0 0 14px 0;
+    font-size: 12px;
+    color: #888888;
+}
+
+.permission-dialog-v3-command-box {
+    background: #0d0d0d;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+
+.permission-dialog-v3-command-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid #333333;
+}
+
+.permission-dialog-v3-command-header .command-path {
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    color: #e0e0e0;
+}
+
+.permission-dialog-v3-command-header .command-arrow {
+    color: #4ade80;
+    margin-right: 6px;
+}
+
+.permission-dialog-v3-command-header .command-toggle {
+    background: none;
+    border: none;
+    color: #888888;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.permission-dialog-v3-command-header .command-toggle:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.permission-dialog-v3-command-header .command-toggle .codicon {
+    font-size: 14px;
+}
+
+.permission-dialog-v3-command-content {
+    max-height: 54px; /* 约3行的高度 */
+    overflow-y: auto;
+    padding: 10px 12px;
+}
+
+.permission-dialog-v3-command-content pre {
+    margin: 0;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #c084fc;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* 自定义滚动条 */
+.permission-dialog-v3-command-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.permission-dialog-v3-command-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.permission-dialog-v3-command-content::-webkit-scrollbar-thumb {
+    background: #444444;
+    border-radius: 2px;
+}
+
+.permission-dialog-v3-command-content::-webkit-scrollbar-thumb:hover {
+    background: #555555;
+}
+
+.permission-dialog-v3-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.permission-dialog-v3-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+}
+
+.permission-dialog-v3-option:hover {
+    background: #333333;
+    border-color: #444444;
+}
+
+.permission-dialog-v3-option.selected {
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #000000;
+}
+
+.permission-dialog-v3-option.selected:hover {
+    background: #f0f0f0;
+    border-color: #f0f0f0;
+}
+
+.permission-dialog-v3-option .option-text {
+    font-weight: 500;
+}
+
+.permission-dialog-v3-option .option-key {
+    font-size: 11px;
+    font-weight: 400;
+    color: #888888;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.permission-dialog-v3-option.selected .option-key {
+    color: #666666;
+    background: rgba(0, 0, 0, 0.08);
+}

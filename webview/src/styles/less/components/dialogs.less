@@ -1,0 +1,109 @@
+/* Confirm Dialog Styles */
+.confirm-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.confirm-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    min-width: 400px;
+    max-width: 500px;
+    animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.confirm-dialog-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #3e3e42;
+}
+
+.confirm-dialog-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.confirm-dialog-body {
+    padding: 20px;
+}
+
+.confirm-dialog-message {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.confirm-dialog-footer {
+    padding: 12px 20px;
+    border-top: 1px solid #3e3e42;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.confirm-dialog-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.confirm-dialog-button.cancel-button {
+    background: transparent;
+    border: 1px solid var(--border-secondary);
+    color: var(--text-primary);
+}
+
+.confirm-dialog-button.cancel-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--border-hover);
+}
+
+.confirm-dialog-button.confirm-button {
+    background: #007fd4;
+    color: #ffffff;
+}
+
+.confirm-dialog-button.confirm-button:hover {
+    background: #026ec1;
+}
+
+.confirm-dialog-button.confirm-button:active {
+    background: #0060a0;
+}

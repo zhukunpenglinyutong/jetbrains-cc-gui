@@ -1,0 +1,124 @@
+/* Buttons Styles */
+.btn-primary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background: var(--accent-primary);
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background: var(--accent-primary-hover);
+}
+
+.btn-primary:active {
+    background: var(--accent-primary-active);
+}
+
+.btn-primary .codicon {
+    font-size: 14px;
+}
+
+.btn-secondary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--border-hover);
+}
+
+.btn-secondary:active {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-secondary .codicon {
+    font-size: 14px;
+}
+
+.btn-small {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.btn-small:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-tertiary);
+}
+
+.btn-small:active {
+    background: var(--bg-active);
+    transform: translateY(1px);
+}
+
+.btn-small.btn-primary {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #ffffff;
+}
+
+.btn-small.btn-primary:hover {
+    background: var(--accent-primary-hover);
+    box-shadow: 0 2px 8px rgba(0, 127, 212, 0.3);
+}
+
+.btn-small.btn-danger {
+    background: transparent;
+    border-color: rgba(211, 47, 47, 0.3);
+    color: var(--color-danger);
+}
+
+.btn-small.btn-danger:hover {
+    background: rgba(211, 47, 47, 0.1);
+    border-color: var(--color-danger);
+}
+
+.btn-small.btn-success {
+    background: rgba(76, 175, 80, 0.15);
+    border-color: rgba(76, 175, 80, 0.5);
+    color: #4caf50;
+}
+
+.btn-small.btn-success:hover {
+    background: rgba(76, 175, 80, 0.25);
+    border-color: #4caf50;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.btn-small:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn-small .codicon {
+    font-size: 14px;
+}

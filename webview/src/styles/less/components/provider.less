@@ -1,0 +1,129 @@
+/* Provider List Styles */
+.provider-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding-bottom: 32px;
+}
+
+.provider-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.provider-list-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.provider-list-header small {
+    color: var(--text-tertiary);
+    font-size: 12px;
+}
+
+.provider-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    padding: 20px;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.provider-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.provider-card.active {
+    border-color: var(--accent-primary);
+    background: linear-gradient(to right, rgba(0, 127, 212, 0.08), transparent);
+    border-left: 4px solid var(--accent-primary);
+    padding-left: 16px; /* Adjust for left border */
+}
+
+.provider-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.provider-info {
+    flex: 1;
+}
+
+.provider-name {
+    margin: 0 0 6px 0;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.active-badge {
+    display: inline-flex;
+    align-items: center;
+    background: var(--accent-primary);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.provider-url {
+    font-size: 12px;
+    color: var(--color-link);
+    text-decoration: none;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.provider-url:hover {
+    text-decoration: underline;
+    opacity: 1;
+}
+
+.provider-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.provider-details {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-primary);
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-secondary);
+}
+
+.detail-row {
+    display: flex;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.detail-label {
+    color: var(--text-tertiary);
+    min-width: 100px;
+    font-weight: 500;
+}
+
+.detail-value {
+    color: var(--text-primary);
+    word-break: break-all;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+}

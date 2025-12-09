@@ -1,0 +1,187 @@
+/* ==================== 配置信息展示组件 ==================== */
+.config-info-switch-wrapper {
+    position: relative;
+}
+
+.config-info-switch-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.config-info-switch-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.config-info-switch-btn .codicon {
+    font-size: 12px;
+}
+
+.config-info-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 180px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.config-info-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.config-info-dropdown-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.config-info-dropdown-item .codicon {
+    font-size: 14px;
+    color: var(--text-tertiary);
+}
+
+.config-info-loading,
+.config-info-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 24px;
+    justify-content: center;
+    color: var(--text-tertiary);
+    font-size: 13px;
+}
+
+.config-info-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.config-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.config-info-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.config-info-label .codicon {
+    font-size: 14px;
+}
+
+.config-info-value {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding-left: 20px;
+}
+
+.config-info-value-with-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 20px;
+}
+
+.config-info-code {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+    background: var(--color-code-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.config-info-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.config-info-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.config-info-toggle .codicon {
+    font-size: 14px;
+}
+
+.config-info-badge {
+    display: inline-block;
+    background: var(--accent-primary);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+/* 响应式设计 */
+@media (min-width: 768px) {
+    .config-info-item {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .config-info-label {
+        flex: 0 0 150px;
+    }
+
+    .config-info-value,
+    .config-info-value-with-action {
+        flex: 1;
+        padding-left: 0;
+    }
+}
+
+/* 亮色主题适配 */
+[data-theme="light"] .config-info-display {
+    background: #f8f8f8;
+    border-color: #d0d0d0;
+}
+
+[data-theme="light"] .config-info-code {
+    background: rgba(0, 0, 0, 0.05);
+}

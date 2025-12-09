@@ -1,0 +1,41 @@
+/* History Item Styles */
+.history-item {
+    padding: 16px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.history-item:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.history-item-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    align-items: center;
+}
+
+.history-item-title {
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    margin-right: 16px;
+}
+
+.history-item-time {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+.history-item-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}

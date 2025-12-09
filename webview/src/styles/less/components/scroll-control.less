@@ -1,0 +1,80 @@
+/* ===== 滚动控制按钮样式 ===== */
+.scroll-control-button {
+    position: fixed;
+    right: 24px;
+    bottom: 120px;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: #2d2d2d;
+    border: 1px solid #404040;
+    color: #e0e0e0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    animation: scrollControlFadeIn 0.2s ease-out forwards;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.scroll-control-button:hover {
+    background: #3d3d3d;
+    border-color: #505050;
+}
+
+.scroll-control-button:active {
+    background: #353535;
+}
+
+.scroll-control-button svg {
+    width: 20px;
+    height: 20px;
+    stroke: #b0b0b0;
+    transition: transform 0.15s ease;
+}
+
+/* 亮色模式适配 */
+[data-theme="light"] .scroll-control-button {
+    background: #f0f0f0;
+    border: 1px solid #d0d0d0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .scroll-control-button:hover {
+    background: #e0e0e0;
+    border-color: #c0c0c0;
+}
+
+[data-theme="light"] .scroll-control-button:active {
+    background: #d5d5d5;
+}
+
+[data-theme="light"] .scroll-control-button svg {
+    stroke: #505050;
+}
+
+/* 按钮淡入动画 */
+@keyframes scrollControlFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .scroll-control-button {
+        right: 16px;
+        width: 36px;
+        height: 36px;
+    }
+
+    .scroll-control-button svg {
+        width: 18px;
+        height: 18px;
+    }
+}

@@ -1,0 +1,284 @@
+/* Settings Page Styles */
+
+.config-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.form-group label .codicon {
+    font-size: 14px;
+    color: var(--text-tertiary);
+}
+
+.form-group .required {
+    color: #d32f2f;
+    margin-left: 2px;
+}
+
+.form-input,
+.form-select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.form-input:focus,
+.form-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.form-input::placeholder {
+    color: var(--text-placeholder);
+}
+
+.form-hint {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.form-hint a {
+    color: #4a90e2;
+    text-decoration: none;
+}
+
+.form-hint a:hover {
+    text-decoration: underline;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Config Info Display Styles - Modernized */
+.config-info-display {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.config-info-header {
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-secondary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.config-info-header .codicon {
+    font-size: 16px;
+    color: var(--accent-primary);
+}
+
+.config-info-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.config-info-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.config-info-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-secondary);
+    transition: background 0.2s;
+}
+
+.config-info-item:last-child {
+    border-bottom: none;
+}
+
+.config-info-item:hover {
+    background: var(--bg-hover);
+}
+
+.config-info-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.config-info-value {
+    color: var(--text-primary);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-info-value-with-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-info-code {
+    background: var(--bg-primary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+    color: var(--text-primary);
+    border: 1px solid var(--border-secondary);
+}
+
+.config-info-badge {
+    background: var(--accent-primary);
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.config-info-toggle {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.config-info-toggle:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+    border-color: var(--border-secondary);
+}
+
+.config-info-loading, .config-info-empty {
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    color: var(--text-tertiary);
+    background: var(--bg-secondary);
+}
+
+.config-info-loading .codicon, .config-info-empty .codicon {
+    font-size: 32px;
+    opacity: 0.5;
+}
+
+/* New Form Styles from Reference */
+.input-with-link,
+.input-with-visibility,
+.input-with-actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.link-btn,
+.visibility-toggle {
+    padding: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.link-btn:hover,
+.visibility-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Advanced Section */
+.advanced-section {
+    margin-top: 20px;
+    border-top: 1px solid #3e3e42;
+    padding-top: 16px;
+}
+
+.advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 0;
+    list-style: none;
+}
+
+.advanced-toggle:hover {
+    color: #4a90e2;
+}
+
+.advanced-section[open] .advanced-toggle .codicon {
+    transform: rotate(90deg);
+}
+
+.advanced-toggle .codicon {
+    transition: transform 0.2s;
+}
+
+/* JSON Config */
+.json-config-section {
+    margin-top: 12px;
+}
+
+.json-editor-wrapper {
+    position: relative;
+}
+
+.json-editor {
+    width: 100%;
+    min-height: 200px;
+    padding: 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+}

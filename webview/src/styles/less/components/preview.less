@@ -1,0 +1,80 @@
+
+.message-image-block img,
+.message .markdown-content img {
+    max-width: 480px;
+    max-height: 360px;
+    width: auto;
+    height: auto;
+    border-radius: 4px;
+    display: inline-block;
+    cursor: zoom-in;
+}
+
+/* 用户消息中的图片 - 确保不超出气泡宽度 */
+.message.user .message-image-block img,
+.message.user .markdown-content img {
+    max-width: 100%;
+}
+
+/* 用户上传图片的样式 */
+.message-image-block.user-image {
+    display: inline-block;
+    margin: 4px 4px 4px 0;
+    max-width: 100%;
+}
+
+.message-image-block.user-image img {
+    border: 1px solid #3e3e42;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.message-image-block.user-image:hover img {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 图片预览遮罩层 */
+.image-preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease-out;
+    cursor: pointer;
+}
+
+.image-preview-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    cursor: default;
+}
+
+.image-preview-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.image-preview-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
