@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.github.idea-claude-code-gui</id>
     <name>Claude Code GUI</name>
-    <vendor>Your Name</vendor>
+    <vendor>CodeMossAI</vendor>
     <description>IDEA版 Claude Code GUI 插件</description>
 
     <depends>com.intellij.modules.platform</depends>

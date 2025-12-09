@@ -175,8 +175,8 @@ public class SendSelectionToTerminalAction extends AnAction {
                         ApplicationManager.getApplication().invokeLater(() -> {
                             try {
                                 Thread.sleep(300); // 等待300ms确保界面加载完成
-                                ClaudeSDKToolWindow.addSelectionFromExternal(text);
-                                System.out.println("[SendSelectionToTerminalAction] 窗口已激活并发送内容");
+                                ClaudeSDKToolWindow.addSelectionFromExternal(project, text);
+                                System.out.println("[SendSelectionToTerminalAction] 窗口已激活并发送内容到项目: " + project.getName());
                             } catch (InterruptedException e) {
                                 Thread.currentThread().interrupt();
                             }
@@ -184,10 +184,10 @@ public class SendSelectionToTerminalAction extends AnAction {
                     }, true);
                 } else {
                     // 窗口已经打开，直接发送内容
-                    ClaudeSDKToolWindow.addSelectionFromExternal(text);
+                    ClaudeSDKToolWindow.addSelectionFromExternal(project, text);
                     // 确保窗口获得焦点
                     toolWindow.activate(null, true);
-                    System.out.println("[SendSelectionToTerminalAction] 聊天窗口已激活并发送内容");
+                    System.out.println("[SendSelectionToTerminalAction] 聊天窗口已激活并发送内容到项目: " + project.getName());
                 }
             } else {
                 showError(project, "找不到 Claude Code GUI 工具窗口");

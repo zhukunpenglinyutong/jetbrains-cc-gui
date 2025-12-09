@@ -188,7 +188,7 @@ export function fileToDropdownItem(file: FileItem): DropdownItemData {
   // 获取 SVG 字符串
   const iconSvg = file.type === 'directory'
     ? getFolderIcon(file.name, false)
-    : getFileIcon(file.extension);
+    : getFileIcon(file.extension, file.name);
 
   return {
     id: file.path,

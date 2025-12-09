@@ -47,6 +47,10 @@ import java.util.concurrent.TimeUnit;
  */
 public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
+    // 使用 Map 存储每个项目的窗口实例（替代静态单例）
+    // ConcurrentHashMap 是线程安全的，防止多窗口同时操作出问题
+    private static final java.util.Map<Project, ClaudeChatWindow> instances = new java.util.concurrent.ConcurrentHashMap<>();
+
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
@@ -57,21 +61,30 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             false
         );
         toolWindow.getContentManager().addContent(content);
+
+        // 监听工具窗口关闭事件，清理资源
+        content.setDisposer(() -> {
+            ClaudeChatWindow window = instances.get(project);
+            if (window != null) {
+                window.dispose();
+            }
+        });
     }
 
     /**
      * 静态方法，用于从外部添加选中的代码信息
+     * @param project 项目实例，用于定位正确的窗口
+     * @param selectionInfo 选中的代码信息
      */
-    public static void addSelectionFromExternal(String selectionInfo) {
-        ClaudeChatWindow.addSelectionFromExternalInternal(selectionInfo);
+    public static void addSelectionFromExternal(Project project, String selectionInfo) {
+        ClaudeChatWindow.addSelectionFromExternalInternal(project, selectionInfo);
     }
 
     /**
      * 聊天窗口内部类
      */
     private static class ClaudeChatWindow {
-        // 静态引用，用于从外部访问
-        private static ClaudeChatWindow instance;
+        // 移除静态单例，改为通过 Map 管理
 
         private final JPanel mainPanel;
         private final ClaudeSDKBridge claudeSDKBridge;
@@ -84,6 +97,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
         private String currentModel = "claude-sonnet-4-5";
         private String currentProvider = "claude"; // 当前提供商
+
+        // 窗口状态标志：防止已关闭的窗口继续被使用
+        private volatile boolean disposed = false;
+
+        // 初始化完成标志：防止未完全初始化的对象被访问
+        private volatile boolean initialized = false;
+
         private static final java.util.Map<String, Integer> MODEL_CONTEXT_LIMITS = new java.util.HashMap<>();
         static {
             MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
@@ -97,9 +117,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             this.session = new ClaudeSession(claudeSDKBridge, codexSDKBridge); // 创建新会话
             this.toolInterceptor = new ToolInterceptor(project); // 创建工具拦截器
             this.settingsService = new CodemossSettingsService(); // 创建配置服务
-
-            // 设置静态引用，用于从外部访问
-            instance = this;
 
             try {
                 this.settingsService.applyActiveProviderToClaudeSettings();
@@ -149,6 +166,23 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
             createUIComponents();
             registerSessionLoadListener(); // 注册会话加载监听器
+
+            // ⚠️ 重要：在构造函数的最后才注册实例，确保对象完全初始化
+            // 这样可以防止其他线程访问到未初始化完成的对象
+            synchronized (instances) {
+                // 检查是否已经存在旧实例（同一项目重新打开窗口的情况）
+                ClaudeChatWindow oldInstance = instances.get(project);
+                if (oldInstance != null && oldInstance != this) {
+                    System.out.println("[ClaudeChatWindow] 警告: 项目 " + project.getName() +
+                        " 已存在窗口实例，将替换旧实例");
+                    oldInstance.dispose(); // 清理旧实例
+                }
+                instances.put(project, this);
+            }
+
+            // 标记为已初始化
+            this.initialized = true;
+            System.out.println("[ClaudeChatWindow] 窗口实例已完全初始化并注册到 Map，项目: " + project.getName());
         }
 
         private void createUIComponents() {
@@ -1109,23 +1143,37 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         }
 
         /**
-         * 调用 JavaScript 函数
+         * 调用 JavaScript 函数（带状态检查）
          */
         private void callJavaScript(String functionName, String... args) {
-            if (browser == null) return;
-
-            StringBuilder js = new StringBuilder();
-            js.append("if (typeof ").append(functionName).append(" === 'function') { ");
-            js.append(functionName).append("(");
-
-            for (int i = 0; i < args.length; i++) {
-                if (i > 0) js.append(", ");
-                js.append("'").append(args[i]).append("'");
+            // 检查窗口是否已关闭
+            if (disposed) {
+                System.err.println("[ClaudeSDKToolWindow] 窗口已关闭，无法调用 JS 函数: " + functionName);
+                return;
             }
 
-            js.append("); }");
+            // 检查 browser 是否为空
+            if (browser == null) {
+                System.err.println("[ClaudeSDKToolWindow] browser 为 null，无法调用 JS 函数: " + functionName);
+                return;
+            }
 
-            browser.getCefBrowser().executeJavaScript(js.toString(), browser.getCefBrowser().getURL(), 0);
+            try {
+                StringBuilder js = new StringBuilder();
+                js.append("if (typeof ").append(functionName).append(" === 'function') { ");
+                js.append(functionName).append("(");
+
+                for (int i = 0; i < args.length; i++) {
+                    if (i > 0) js.append(", ");
+                    js.append("'").append(args[i]).append("'");
+                }
+
+                js.append("); }");
+
+                browser.getCefBrowser().executeJavaScript(js.toString(), browser.getCefBrowser().getURL(), 0);
+            } catch (Exception e) {
+                System.err.println("[ClaudeSDKToolWindow] 调用 JS 函数失败: " + functionName + ", 错误: " + e.getMessage());
+            }
         }
 
         /**
@@ -2778,11 +2826,99 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
         /**
          * 静态方法，用于从外部添加选中的代码信息（内部调用）
+         * @param project 项目实例
+         * @param selectionInfo 选中的代码信息
          */
-        static void addSelectionFromExternalInternal(String selectionInfo) {
-            if (instance != null) {
-                instance.addSelectionInfo(selectionInfo);
+        static void addSelectionFromExternalInternal(Project project, String selectionInfo) {
+            if (project == null) {
+                System.err.println("[ClaudeSDKToolWindow] 错误: project 参数为 null");
+                return;
             }
+
+            ClaudeChatWindow window = instances.get(project);
+            if (window == null) {
+                System.err.println("[ClaudeSDKToolWindow] 错误: 找不到项目 " + project.getName() + " 的窗口实例");
+                System.err.println("[ClaudeSDKToolWindow] 提示: 请确保先打开 Claude Code GUI 工具窗口");
+                return;
+            }
+
+            // 检查窗口是否已关闭
+            if (window.disposed) {
+                System.err.println("[ClaudeSDKToolWindow] 错误: 项目 " + project.getName() + " 的窗口已关闭");
+                instances.remove(project); // 清理已关闭的窗口引用
+                return;
+            }
+
+            // 检查窗口是否完全初始化
+            if (!window.initialized) {
+                System.err.println("[ClaudeSDKToolWindow] 警告: 项目 " + project.getName() + " 的窗口还未完全初始化，稍后重试");
+                // 延迟重试（最多等待3秒）
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    try {
+                        Thread.sleep(500);
+                        if (window.initialized && !window.disposed) {
+                            window.addSelectionInfo(selectionInfo);
+                        } else {
+                            System.err.println("[ClaudeSDKToolWindow] 错误: 窗口初始化超时或已关闭");
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+                return;
+            }
+
+            // 正常添加选中信息
+            window.addSelectionInfo(selectionInfo);
+        }
+
+        /**
+         * 清理资源（在窗口关闭时调用）
+         */
+        public void dispose() {
+            // 防止重复调用
+            if (disposed) {
+                System.out.println("[ClaudeSDKToolWindow] 窗口已经被清理过了，项目: " + project.getName());
+                return;
+            }
+
+            System.out.println("[ClaudeSDKToolWindow] 开始清理窗口资源，项目: " + project.getName());
+
+            // 立即标记为已关闭，防止并发访问
+            disposed = true;
+
+            // 从 Map 中移除实例（使用同步块确保线程安全）
+            synchronized (instances) {
+                ClaudeChatWindow current = instances.get(project);
+                // 只有当前实例才移除（防止移除了新创建的实例）
+                if (current == this) {
+                    instances.remove(project);
+                    System.out.println("[ClaudeSDKToolWindow] 已从 Map 中移除项目: " + project.getName());
+                } else {
+                    System.out.println("[ClaudeSDKToolWindow] Map 中的实例已被替换，跳过移除");
+                }
+            }
+
+            // 清理资源
+            try {
+                if (session != null) {
+                    // 中断正在进行的会话
+                    session.interrupt();
+                }
+            } catch (Exception e) {
+                System.err.println("[ClaudeSDKToolWindow] 清理会话失败: " + e.getMessage());
+            }
+
+            try {
+                if (browser != null) {
+                    browser.dispose();
+                    browser = null;
+                }
+            } catch (Exception e) {
+                System.err.println("[ClaudeSDKToolWindow] 清理浏览器失败: " + e.getMessage());
+            }
+
+            System.out.println("[ClaudeSDKToolWindow] 窗口资源已完全清理，项目: " + project.getName());
         }
     }
 }
