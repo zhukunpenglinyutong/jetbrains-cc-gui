@@ -63,7 +63,8 @@ export const ChatInputBox = ({
       if (!editableRef.current || !query) return;
 
       const text = getTextContent();
-      const replacement = `@${file.path} `;
+      // 文件夹不加空格（方便继续输入路径），文件加空格
+      const replacement = file.type === 'directory' ? `@${file.path}` : `@${file.path} `;
       const newText = fileCompletion.replaceText(text, replacement, query);
 
       // 更新输入框内容

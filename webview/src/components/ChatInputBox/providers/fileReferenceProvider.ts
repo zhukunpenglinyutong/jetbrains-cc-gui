@@ -1,4 +1,5 @@
 import type { FileItem, DropdownItemData } from '../types';
+import { getFileIcon, getFolderIcon } from '../../../utils/fileIcons';
 
 // 请求队列管理
 let pendingResolve: ((files: FileItem[]) => void) | null = null;
@@ -88,6 +89,34 @@ function filterFiles(files: FileItem[], query: string): FileItem[] {
 }
 
 /**
+ * 从查询字符串中提取当前路径和搜索关键词
+ * 例如：
+ *   "" → { currentPath: "", searchQuery: "" }
+ *   "src/" → { currentPath: "src/", searchQuery: "" }
+ *   "src/com" → { currentPath: "src/", searchQuery: "com" }
+ *   "but" → { currentPath: "", searchQuery: "but" }
+ */
+function parseQuery(query: string): { currentPath: string; searchQuery: string } {
+  if (!query) {
+    return { currentPath: '', searchQuery: '' };
+  }
+
+  // 检查是否包含 / 符号
+  const lastSlashIndex = query.lastIndexOf('/');
+
+  if (lastSlashIndex === -1) {
+    // 没有斜杠，说明是在根目录搜索
+    return { currentPath: '', searchQuery: query };
+  }
+
+  // 有斜杠，分离路径和搜索词
+  const currentPath = query.substring(0, lastSlashIndex + 1);
+  const searchQuery = query.substring(lastSlashIndex + 1);
+
+  return { currentPath, searchQuery };
+}
+
+/**
  * 文件引用数据提供者
  */
 export async function fileReferenceProvider(
@@ -109,6 +138,9 @@ export async function fileReferenceProvider(
       return;
     }
 
+    // 解析查询：分离路径和搜索关键词
+    const { currentPath, searchQuery } = parseQuery(query);
+
     // 保存回调
     pendingResolve = resolve;
     pendingReject = reject;
@@ -124,15 +156,18 @@ export async function fileReferenceProvider(
     // 检查 sendToJava 是否可用
     if (!window.sendToJava) {
       // 使用默认文件列表进行本地过滤
-      const filtered = filterFiles(DEFAULT_FILES, query);
+      const filtered = filterFiles(DEFAULT_FILES, searchQuery);
       pendingResolve = null;
       pendingReject = null;
       resolve(filtered);
       return;
     }
 
-    // 发送请求
-    sendToJava('list_files', { query });
+    // 发送请求，包含当前路径和搜索关键词
+    sendToJava('list_files', {
+      query: searchQuery,        // 搜索关键词
+      currentPath: currentPath,  // 当前路径
+    });
 
     // 超时处理（3秒），超时后使用默认文件列表
     setTimeout(() => {
@@ -140,7 +175,7 @@ export async function fileReferenceProvider(
         pendingResolve = null;
         pendingReject = null;
         // 超时时返回过滤后的默认文件列表
-        resolve(filterFiles(DEFAULT_FILES, query));
+        resolve(filterFiles(DEFAULT_FILES, searchQuery));
       }
     }, 3000);
   });
@@ -150,74 +185,19 @@ export async function fileReferenceProvider(
  * 将 FileItem 转换为 DropdownItemData
  */
 export function fileToDropdownItem(file: FileItem): DropdownItemData {
-  const icon = file.type === 'directory'
-    ? 'codicon-folder'
+  // 获取 SVG 字符串
+  const iconSvg = file.type === 'directory'
+    ? getFolderIcon(file.name, false)
     : getFileIcon(file.extension);
 
   return {
     id: file.path,
     label: file.name,
     description: file.path,
-    icon,
+    icon: iconSvg, // 直接使用 SVG 字符串
     type: file.type === 'directory' ? 'directory' : 'file',
     data: { file },
   };
-}
-
-/**
- * 根据扩展名获取文件图标
- */
-function getFileIcon(extension?: string): string {
-  if (!extension) return 'codicon-file';
-
-  const iconMap: Record<string, string> = {
-    // 编程语言
-    ts: 'codicon-file-code',
-    tsx: 'codicon-file-code',
-    js: 'codicon-file-code',
-    jsx: 'codicon-file-code',
-    py: 'codicon-file-code',
-    java: 'codicon-file-code',
-    c: 'codicon-file-code',
-    cpp: 'codicon-file-code',
-    h: 'codicon-file-code',
-    hpp: 'codicon-file-code',
-    go: 'codicon-file-code',
-    rs: 'codicon-file-code',
-    rb: 'codicon-file-code',
-    php: 'codicon-file-code',
-    swift: 'codicon-file-code',
-    kt: 'codicon-file-code',
-    scala: 'codicon-file-code',
-    // 标记语言
-    html: 'codicon-file-code',
-    css: 'codicon-file-code',
-    scss: 'codicon-file-code',
-    less: 'codicon-file-code',
-    xml: 'codicon-file-code',
-    svg: 'codicon-file-media',
-    // 配置文件
-    json: 'codicon-json',
-    yaml: 'codicon-file-code',
-    yml: 'codicon-file-code',
-    toml: 'codicon-file-code',
-    ini: 'codicon-settings-gear',
-    // 文档
-    md: 'codicon-markdown',
-    txt: 'codicon-file-text',
-    pdf: 'codicon-file-pdf',
-    doc: 'codicon-file-text',
-    docx: 'codicon-file-text',
-    // 图片
-    png: 'codicon-file-media',
-    jpg: 'codicon-file-media',
-    jpeg: 'codicon-file-media',
-    gif: 'codicon-file-media',
-    webp: 'codicon-file-media',
-    ico: 'codicon-file-media',
-  };
-
-  return iconMap[extension.toLowerCase()] || 'codicon-file';
 }
 
 export default fileReferenceProvider;

@@ -56,6 +56,13 @@ export function useCompletionDropdown<T>({
   const debounceTimerRef = useRef<number | null>(null);
   // AbortController 用于取消请求
   const abortControllerRef = useRef<AbortController | null>(null);
+  // 保存最新的 state，用于键盘事件处理（避免闭包问题）
+  const stateRef = useRef<CompletionDropdownState>(state);
+
+  // 同步更新 stateRef
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   /**
    * 打开下拉
@@ -167,34 +174,37 @@ export function useCompletionDropdown<T>({
    * 选择当前项
    */
   const selectActive = useCallback(() => {
-    const { activeIndex, rawItems, triggerQuery } = state;
+    const { activeIndex, rawItems, triggerQuery } = stateRef.current;
     if (activeIndex >= 0 && activeIndex < rawItems.length) {
       const item = rawItems[activeIndex] as T;
       onSelect(item, triggerQuery);
       close();
     }
-  }, [state, onSelect, close]);
+  }, [onSelect, close]);
 
   /**
    * 选择指定索引
    */
   const selectIndex = useCallback((index: number) => {
-    const { rawItems, triggerQuery } = state;
+    const { rawItems, triggerQuery } = stateRef.current;
     if (index >= 0 && index < rawItems.length) {
       const item = rawItems[index] as T;
       onSelect(item, triggerQuery);
       close();
     }
-  }, [state, onSelect, close]);
+  }, [onSelect, close]);
 
   /**
    * 处理键盘事件
    * 返回 true 表示事件已处理
    */
   const handleKeyDown = useCallback((e: KeyboardEvent): boolean => {
-    if (!state.isOpen) return false;
+    // 使用 ref 获取最新的 state，避免闭包问题
+    const currentState = stateRef.current;
 
-    const { items } = state;
+    if (!currentState.isOpen) return false;
+
+    const { items } = currentState;
     // 过滤可选择的项（排除分隔线和标题）
     const selectableCount = items.filter(
       i => i.type !== 'separator' && i.type !== 'section-header'
@@ -233,7 +243,7 @@ export function useCompletionDropdown<T>({
       default:
         return false;
     }
-  }, [state, selectActive, close]);
+  }, [selectActive, close]); // 只依赖不经常变化的函数
 
   /**
    * 处理鼠标进入

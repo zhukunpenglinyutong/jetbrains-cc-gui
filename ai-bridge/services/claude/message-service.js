@@ -192,6 +192,10 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 	      permissionMode: effectivePermissionMode,
 	      model: sdkModelName,
 	      maxTurns: 100,
+	      // 开启 Extended Thinking（扩展思考）功能
+	      // 设置思考过程的最大 token 数，这样 Claude 会在回复前先进行深度思考
+	      // 思考内容会通过 [THINKING] 标签输出给前端展示
+	      maxThinkingTokens: 10000,
 	      additionalDirectories: Array.from(
 	        new Set(
 	          [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
@@ -581,6 +585,10 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       permissionMode: normalizedPermissionMode,
       model: sdkModelName,
       maxTurns: 100,
+      // 开启 Extended Thinking（扩展思考）功能
+      // 设置思考过程的最大 token 数，这样 Claude 会在回复前先进行深度思考
+      // 思考内容会通过 [THINKING] 标签输出给前端展示
+      maxThinkingTokens: 10000,
       additionalDirectories: Array.from(
         new Set(
           [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)

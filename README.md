@@ -10,6 +10,8 @@
 
 ![][github-contributors-shield] ![][github-forks-shield] ![][github-stars-shield] ![][github-issues-shield]
 
+
+
 </div>
 
 An IntelliJ IDEA plugin that provides a visual interface for Claude Code operations within the IDE.
@@ -25,18 +27,18 @@ Currently in experimental stage. The product is still under active development w
 ## Installation
 
 ```sh
-# 1. Download the idea-claude-code-gui-0.0.9-beta2.zip file
+# 1. Download the idea-claude-code-gui-0.0.9-beta3.zip file
 
-# 2. In IDEA: Settings → Plugins → Install Plugin from Disk → Select the downloaded idea-claude-code-gui-0.0.9-beta2.zip
+# 2. In IDEA: Settings → Plugins → Install Plugin from Disk → Select the downloaded idea-claude-code-gui-0.0.9-beta3.zip
 ```
 
-Download: [idea-claude-code-gui-0.0.9-beta2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta2.zip)
+Download: [idea-claude-code-gui-0.0.9-beta3.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta3.zip)
 
 ---
 
 ## Changelog
 
-##### **December 8 (v0.0.9-beta2)**
+##### **December 8 (v0.0.9-beta3)**
 
 - [x] P0: Implement right-click selected files to send to plugin (with keyboard shortcut support)
 - [x] P0 (feat): Implement importing vendor configuration from cc-switch

@@ -22,18 +22,18 @@
 
 插件使用方式
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.9-beta2.zip 文件
+# 1.下载 idea-claude-code-gui-0.0.9-beta3.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.9-beta2.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.9-beta3.zip 即可
 ```
 
-插件下载：[idea-claude-code-gui-0.0.9-beta2.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta2.zip)
+插件下载：[idea-claude-code-gui-0.0.9-beta3.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta3.zip)
 
 ---
 
 ### 目前进度
 
-##### **12月8日（v0.0.9-beta2）**
+##### **12月8日（v0.0.9-beta3）**
 
 - [x] P0：实现右键选中文件发送到插件功能（支持快捷键）
 - [x] P0（feat）实现从cc-switch导入供应商配置的功能

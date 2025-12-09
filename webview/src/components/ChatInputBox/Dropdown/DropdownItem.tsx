@@ -10,12 +10,36 @@ export const DropdownItem = ({
   onMouseEnter,
 }: DropdownItemProps) => {
   /**
-   * 获取图标类名
+   * 渲染图标
    */
-  const getIconClass = (): string => {
-    if (item.icon) return item.icon;
+  const renderIcon = () => {
+    // 如果 icon 包含 SVG 标签，说明是内联 SVG
+    if (item.icon?.startsWith('<svg')) {
+      return (
+        <span
+          className="dropdown-item-icon"
+          dangerouslySetInnerHTML={{ __html: item.icon }}
+          style={{
+            width: 16,
+            height: 16,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        />
+      );
+    }
 
-    switch (item.type) {
+    // 否则使用 codicon 类名
+    const iconClass = item.icon || getDefaultIconClass(item.type);
+    return <span className={`dropdown-item-icon codicon ${iconClass}`} />;
+  };
+
+  /**
+   * 获取默认图标类名（用于 codicon）
+   */
+  const getDefaultIconClass = (type?: string): string => {
+    switch (type) {
       case 'file':
         return 'codicon-file';
       case 'directory':
@@ -51,7 +75,7 @@ export const DropdownItem = ({
       onMouseEnter={isDisabled ? undefined : onMouseEnter}
       style={isDisabled ? { cursor: 'default' } : undefined}
     >
-      <span className={`dropdown-item-icon codicon ${getIconClass()}`} />
+      {renderIcon()}
       <div className="dropdown-item-content">
         <div className="dropdown-item-label">{item.label}</div>
         {item.description && (

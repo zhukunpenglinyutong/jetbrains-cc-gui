@@ -101,7 +101,8 @@ export const CompletionDropdown = ({
 
     const activeItem = listRef.current.querySelector('.dropdown-item.active');
     if (activeItem) {
-      activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      // 使用 'auto' 瞬间滚动，避免平滑动画导致的延迟
+      activeItem.scrollIntoView({ block: 'nearest', behavior: 'auto' });
     }
   }, [selectedIndex]);
 

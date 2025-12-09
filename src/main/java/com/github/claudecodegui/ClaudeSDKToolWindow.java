@@ -2023,6 +2023,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             CompletableFuture.runAsync(() -> {
                 try {
                     String query = "";
+                    String currentPath = "";  // 新增：当前路径
+
                     if (content != null && !content.isEmpty()) {
                         try {
                             Gson gson = new Gson();
@@ -2030,8 +2032,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                             if (json.has("query")) {
                                 query = json.get("query").getAsString();
                             }
+                            if (json.has("currentPath")) {
+                                currentPath = json.get("currentPath").getAsString();
+                            }
                         } catch (Exception e) {
-                            // content 可能是纯字符串
+                            // content 可能是纯字符串（向后兼容）
                             query = content;
                         }
                     }
@@ -2042,40 +2047,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                         : (project.getBasePath() != null ? project.getBasePath() : System.getProperty("user.home"));
 
                     java.util.List<JsonObject> files = new java.util.ArrayList<>();
-                    File baseDir = new File(basePath);
 
-                    // 递归收集文件（限制深度和数量）
-                    collectFiles(baseDir, basePath, files, query.toLowerCase(), 0, 3, 200);
-
-                    // 如果没有结果且查询为空，提供顶层后备列表，避免前端空白
-                    if (files.isEmpty() && (query == null || query.isEmpty())) {
-                        File[] children = baseDir.listFiles();
-                        if (children != null) {
-                            int added = 0;
-                            for (File child : children) {
-                                if (added >= 20) break;
-                                String name = child.getName();
-                                // 跳过大型忽略目录，保留普通隐藏文件
-                                if (name.equals(".git") || name.equals(".svn") || name.equals(".hg") ||
-                                    name.equals("node_modules") || name.equals("dist") || name.equals("out")) {
-                                    continue;
-                                }
-                                JsonObject fileObj = new JsonObject();
-                                fileObj.addProperty("name", name);
-                                String rel = child.getAbsolutePath().substring(basePath.length());
-                                if (rel.startsWith(File.separator)) rel = rel.substring(1);
-                                rel = rel.replace("\\", "/");
-                                fileObj.addProperty("path", rel);
-                                fileObj.addProperty("type", child.isDirectory() ? "directory" : "file");
-                                if (child.isFile()) {
-                                    int dotIndex = name.lastIndexOf('.');
-                                    if (dotIndex > 0) {
-                                        fileObj.addProperty("extension", name.substring(dotIndex + 1));
-                                    }
-                                }
-                                files.add(fileObj);
-                                added++;
-                            }
+                    // 如果有搜索关键词，进行全局搜索
+                    if (query != null && !query.isEmpty()) {
+                        File baseDir = new File(basePath);
+                        // 递归收集文件（限制深度和数量）
+                        // 增加搜索深度到 10 层，以支持深层目录结构（如 src/main/java/com/example/...）
+                        collectFiles(baseDir, basePath, files, query.toLowerCase(), 0, 10, 200);
+                    } else {
+                        // 没有搜索关键词，只显示当前路径下的直接子文件/文件夹
+                        File targetDir = new File(basePath, currentPath);
+                        if (targetDir.exists() && targetDir.isDirectory()) {
+                            listDirectChildren(targetDir, basePath, files, 100);
                         }
                     }
 
@@ -2129,6 +2112,61 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         }
 
         /**
+         * 列出目录的直接子文件/文件夹（不递归）
+         */
+        private void listDirectChildren(File dir, String basePath, java.util.List<JsonObject> files, int maxFiles) {
+            if (!dir.isDirectory()) return;
+
+            File[] children = dir.listFiles();
+            if (children == null) return;
+
+            int added = 0;
+            for (File child : children) {
+                if (added >= maxFiles) break;
+
+                String name = child.getName();
+
+                // 跳过常见的忽略目录和系统文件
+                if (name.equals(".git") ||
+                    name.equals(".svn") ||
+                    name.equals(".hg") ||
+                    name.equals("node_modules") ||
+                    name.equals("target") ||
+                    name.equals("build") ||
+                    name.equals("dist") ||
+                    name.equals("out") ||
+                    name.equals("__pycache__") ||
+                    name.equals(".DS_Store") ||
+                    name.equals(".idea")) {
+                    continue;
+                }
+
+                // 计算相对路径
+                String relativePath = child.getAbsolutePath().substring(basePath.length());
+                if (relativePath.startsWith(File.separator)) {
+                    relativePath = relativePath.substring(1);
+                }
+                // 统一使用正斜杠
+                relativePath = relativePath.replace("\\", "/");
+
+                JsonObject fileObj = new JsonObject();
+                fileObj.addProperty("name", name);
+                fileObj.addProperty("path", relativePath);
+                fileObj.addProperty("type", child.isDirectory() ? "directory" : "file");
+
+                if (child.isFile()) {
+                    int dotIndex = name.lastIndexOf('.');
+                    if (dotIndex > 0) {
+                        fileObj.addProperty("extension", name.substring(dotIndex + 1));
+                    }
+                }
+
+                files.add(fileObj);
+                added++;
+            }
+        }
+
+        /**
          * 递归收集文件
          */
         private void collectFiles(File dir, String basePath, java.util.List<JsonObject> files,
@@ -2164,14 +2202,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 relativePath = relativePath.replace("\\", "/");
 
                 // 检查是否匹配查询
-                if (!query.isEmpty() &&
-                    !name.toLowerCase().contains(query) &&
-                    !relativePath.toLowerCase().contains(query)) {
-                    // 如果是目录，仍然递归搜索
-                    if (child.isDirectory()) {
-                        collectFiles(child, basePath, files, query, depth + 1, maxDepth, maxFiles);
+                if (!query.isEmpty()) {
+                    boolean matchesName = name.toLowerCase().contains(query);
+                    boolean matchesPath = relativePath.toLowerCase().contains(query);
+                    // 新增:支持扩展名搜索(如 .java, .ts 等)
+                    boolean matchesExtension = false;
+                    if (query.startsWith(".")) {
+                        matchesExtension = name.toLowerCase().endsWith(query);
                     }
-                    continue;
+
+                    if (!matchesName && !matchesPath && !matchesExtension) {
+                        // 如果是目录，仍然递归搜索
+                        if (child.isDirectory()) {
+                            collectFiles(child, basePath, files, query, depth + 1, maxDepth, maxFiles);
+                        }
+                        continue;
+                    }
                 }
 
                 JsonObject fileObj = new JsonObject();

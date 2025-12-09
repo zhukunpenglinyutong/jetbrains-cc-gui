@@ -294,6 +294,19 @@ const App = () => {
     }
   }, [messages]);
 
+  // 切换回聊天视图时，自动滚动到底部
+  useEffect(() => {
+    if (currentView === 'chat' && messagesContainerRef.current) {
+      // 使用 setTimeout 确保视图完全渲染后再滚动
+      const timer = setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [currentView]);
+
   /**
    * 处理消息发送（来自 ChatInputBox）
    */
@@ -797,6 +810,14 @@ const App = () => {
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;
   }, [messages]);
 
+  const hasThinkingBlockInLastMessage = useMemo(() => {
+    if (messages.length === 0) return false;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.type !== 'assistant') return false;
+    const blocks = getContentBlocks(lastMessage);
+    return blocks.some((b) => b.type === 'thinking');
+  }, [messages]);
+
   return (
     <>
       <style>{`
@@ -897,7 +918,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.0.9-beta2
+                  v0.0.9-beta3
                 </span>
               </div>
               <div>给 {currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code'} 发送消息</div>
@@ -965,7 +986,11 @@ const App = () => {
                               className="thinking-header"
                               onClick={() => toggleThinking(messageIndex, blockIndex)}
                             >
-                              <span className="thinking-title">思考过程</span>
+                              <span className="thinking-title">
+                                {isThinking && messageIndex === messages.length - 1
+                                  ? '思考中...'
+                                  : '思考过程'}
+                              </span>
                               <span className="thinking-icon">
                                 {isThinkingExpanded(messageIndex, blockIndex) ? '▼' : '▶'}
                               </span>
@@ -1018,7 +1043,7 @@ const App = () => {
           })}
 
           {/* Thinking indicator */}
-          {isThinking && (
+          {isThinking && !hasThinkingBlockInLastMessage && (
             <div className="message assistant">
               <div className="thinking-status">
                 <span className="thinking-status-icon">🤔</span>
@@ -1028,7 +1053,7 @@ const App = () => {
           )}
 
           {/* Loading indicator */}
-          {loading && !isThinking && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
+          {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
         </div>
 
         {/* 滚动控制按钮 */}
