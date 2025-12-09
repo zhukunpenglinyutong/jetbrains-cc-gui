@@ -1,0 +1,381 @@
+package com.github.claudecodegui.handler;
+
+import com.github.claudecodegui.model.DeleteResult;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import javax.swing.*;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Provider（供应商）相关消息处理器
+ * 处理供应商的增删改查和切换
+ */
+public class ProviderHandler extends BaseMessageHandler {
+
+    private static final String[] SUPPORTED_TYPES = {
+        "get_providers",
+        "get_current_claude_config",
+        "add_provider",
+        "update_provider",
+        "delete_provider",
+        "switch_provider",
+        "get_active_provider",
+        "preview_cc_switch_import",
+        "save_imported_providers"
+    };
+
+    public ProviderHandler(HandlerContext context) {
+        super(context);
+    }
+
+    @Override
+    public String[] getSupportedTypes() {
+        return SUPPORTED_TYPES;
+    }
+
+    @Override
+    public boolean handle(String type, String content) {
+        switch (type) {
+            case "get_providers":
+                handleGetProviders();
+                return true;
+            case "get_current_claude_config":
+                handleGetCurrentClaudeConfig();
+                return true;
+            case "add_provider":
+                handleAddProvider(content);
+                return true;
+            case "update_provider":
+                handleUpdateProvider(content);
+                return true;
+            case "delete_provider":
+                handleDeleteProvider(content);
+                return true;
+            case "switch_provider":
+                handleSwitchProvider(content);
+                return true;
+            case "get_active_provider":
+                handleGetActiveProvider();
+                return true;
+            case "preview_cc_switch_import":
+                handlePreviewCcSwitchImport();
+                return true;
+            case "save_imported_providers":
+                handleSaveImportedProviders(content);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * 获取所有供应商
+     */
+    private void handleGetProviders() {
+        try {
+            List<JsonObject> providers = context.getSettingsService().getClaudeProviders();
+            Gson gson = new Gson();
+            String providersJson = gson.toJson(providers);
+
+            SwingUtilities.invokeLater(() -> {
+                callJavaScript("window.updateProviders", escapeJs(providersJson));
+            });
+        } catch (Exception e) {
+            System.err.println("[ProviderHandler] Failed to get providers: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 获取当前 Claude CLI 配置 (~/.claude/settings.json)
+     */
+    private void handleGetCurrentClaudeConfig() {
+        try {
+            JsonObject config = context.getSettingsService().getCurrentClaudeConfig();
+            Gson gson = new Gson();
+            String configJson = gson.toJson(config);
+
+            SwingUtilities.invokeLater(() -> {
+                callJavaScript("window.updateCurrentClaudeConfig", escapeJs(configJson));
+            });
+        } catch (Exception e) {
+            System.err.println("[ProviderHandler] Failed to get current claude config: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 添加供应商
+     */
+    private void handleAddProvider(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject provider = gson.fromJson(content, JsonObject.class);
+            context.getSettingsService().addClaudeProvider(provider);
+
+            SwingUtilities.invokeLater(() -> {
+                handleGetProviders(); // 刷新列表
+            });
+        } catch (Exception e) {
+            System.err.println("[ProviderHandler] Failed to add provider: " + e.getMessage());
+            SwingUtilities.invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("添加供应商失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 更新供应商
+     */
+    private void handleUpdateProvider(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject data = gson.fromJson(content, JsonObject.class);
+            String id = data.get("id").getAsString();
+            JsonObject updates = data.getAsJsonObject("updates");
+
+            context.getSettingsService().updateClaudeProvider(id, updates);
+
+            boolean syncedActiveProvider = false;
+            JsonObject activeProvider = context.getSettingsService().getActiveClaudeProvider();
+            if (activeProvider != null &&
+                activeProvider.has("id") &&
+                id.equals(activeProvider.get("id").getAsString())) {
+                context.getSettingsService().applyProviderToClaudeSettings(activeProvider);
+                syncedActiveProvider = true;
+            }
+
+            final boolean finalSynced = syncedActiveProvider;
+            SwingUtilities.invokeLater(() -> {
+                handleGetProviders(); // 刷新列表
+            });
+        } catch (Exception e) {
+            System.err.println("[ProviderHandler] Failed to update provider: " + e.getMessage());
+            SwingUtilities.invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("更新供应商失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 删除供应商
+     */
+    private void handleDeleteProvider(String content) {
+        System.out.println("[ProviderHandler] ========== handleDeleteProvider START ==========");
+        System.out.println("[ProviderHandler] Received content: " + content);
+
+        try {
+            Gson gson = new Gson();
+            JsonObject data = gson.fromJson(content, JsonObject.class);
+            System.out.println("[ProviderHandler] Parsed JSON data: " + data);
+
+            if (!data.has("id")) {
+                System.err.println("[ProviderHandler] ERROR: Missing 'id' field in request");
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("删除失败: 请求中缺少供应商 ID"));
+                });
+                return;
+            }
+
+            String id = data.get("id").getAsString();
+            System.out.println("[ProviderHandler] Deleting provider with ID: " + id);
+
+            DeleteResult result = context.getSettingsService().deleteClaudeProvider(id);
+            System.out.println("[ProviderHandler] Delete result - success: " + result.isSuccess());
+
+            if (result.isSuccess()) {
+                System.out.println("[ProviderHandler] Delete successful, refreshing provider list");
+                SwingUtilities.invokeLater(() -> {
+                    handleGetProviders(); // 刷新列表
+                });
+            } else {
+                String errorMsg = result.getUserFriendlyMessage();
+                System.err.println("[ProviderHandler] Delete provider failed: " + errorMsg);
+                System.err.println("[ProviderHandler] Error type: " + result.getErrorType());
+                System.err.println("[ProviderHandler] Error details: " + result.getErrorMessage());
+                SwingUtilities.invokeLater(() -> {
+                    System.out.println("[ProviderHandler] Calling window.showError with: " + errorMsg);
+                    callJavaScript("window.showError", escapeJs(errorMsg));
+                });
+            }
+        } catch (Exception e) {
+            System.err.println("[ProviderHandler] Exception in handleDeleteProvider: " + e.getMessage());
+            e.printStackTrace();
+            SwingUtilities.invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("删除供应商失败: " + e.getMessage()));
+            });
+        }
+
+        System.out.println("[ProviderHandler] ========== handleDeleteProvider END ==========");
+    }
+
+    /**
+     * 切换供应商
+     */
+    private void handleSwitchProvider(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject data = gson.fromJson(content, JsonObject.class);
+            String id = data.get("id").getAsString();
+
+            context.getSettingsService().switchClaudeProvider(id);
+            context.getSettingsService().applyActiveProviderToClaudeSettings();
+
+            SwingUtilities.invokeLater(() -> {
+                callJavaScript("window.showSwitchSuccess", escapeJs("供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
+                handleGetProviders(); // 刷新供应商列表
+                handleGetCurrentClaudeConfig(); // 刷新 Claude CLI 配置显示
+            });
+        } catch (Exception e) {
+            System.err.println("[ProviderHandler] Failed to switch provider: " + e.getMessage());
+            SwingUtilities.invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("切换供应商失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 获取当前激活的供应商
+     */
+    private void handleGetActiveProvider() {
+        try {
+            JsonObject provider = context.getSettingsService().getActiveClaudeProvider();
+            Gson gson = new Gson();
+            String providerJson = gson.toJson(provider);
+
+            SwingUtilities.invokeLater(() -> {
+                callJavaScript("window.updateActiveProvider", escapeJs(providerJson));
+            });
+        } catch (Exception e) {
+            System.err.println("[ProviderHandler] Failed to get active provider: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 预览 cc-switch 导入
+     */
+    private void handlePreviewCcSwitchImport() {
+        com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(() -> {
+            String userHome = System.getProperty("user.home");
+            String osName = System.getProperty("os.name").toLowerCase();
+
+            File ccSwitchDir = new File(userHome, ".cc-switch");
+            File dbFile = new File(ccSwitchDir, "cc-switch.db");
+
+            System.out.println("[ProviderHandler] 操作系统: " + osName);
+            System.out.println("[ProviderHandler] 用户目录: " + userHome);
+            System.out.println("[ProviderHandler] cc-switch 目录: " + ccSwitchDir.getAbsolutePath());
+            System.out.println("[ProviderHandler] 数据库文件路径: " + dbFile.getAbsolutePath());
+            System.out.println("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
+
+            if (!dbFile.exists()) {
+                String errorMsg = "未找到 cc-switch 数据库文件\n" +
+                                 "路径: " + dbFile.getAbsolutePath() + "\n" +
+                                 "请确保:\n" +
+                                 "1. 已安装 cc-switch 3.8.2 及以上版本\n" +
+                                 "2. 至少配置过一个 Claude 供应商";
+                System.err.println("[ProviderHandler] " + errorMsg);
+                sendErrorToFrontend("文件未找到", errorMsg);
+                return;
+            }
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    System.out.println("[ProviderHandler] 开始读取数据库文件...");
+                    Gson gson = new Gson();
+                    List<JsonObject> providers = context.getSettingsService().parseProvidersFromCcSwitchDb(dbFile.getPath());
+
+                    if (providers.isEmpty()) {
+                        System.out.println("[ProviderHandler] 数据库中没有找到 Claude 供应商配置");
+                        sendInfoToFrontend("无数据", "未在数据库中找到有效的 Claude 供应商配置。");
+                        return;
+                    }
+
+                    JsonArray providersArray = new JsonArray();
+                    for (JsonObject p : providers) {
+                        providersArray.add(p);
+                    }
+
+                    JsonObject response = new JsonObject();
+                    response.add("providers", providersArray);
+
+                    String jsonStr = gson.toJson(response);
+                    System.out.println("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
+                    callJavaScript("import_preview_result", jsonStr);
+
+                } catch (Exception e) {
+                    String errorDetails = "读取数据库失败: " + e.getMessage();
+                    System.err.println("[ProviderHandler] " + errorDetails);
+                    e.printStackTrace();
+                    sendErrorToFrontend("读取数据库失败", errorDetails);
+                }
+            });
+        });
+    }
+
+    /**
+     * 保存导入的供应商
+     */
+    private void handleSaveImportedProviders(String content) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                Gson gson = new Gson();
+                JsonObject request = gson.fromJson(content, JsonObject.class);
+                JsonArray providersArray = request.getAsJsonArray("providers");
+
+                if (providersArray == null || providersArray.size() == 0) {
+                    return;
+                }
+
+                List<JsonObject> providers = new ArrayList<>();
+                for (JsonElement e : providersArray) {
+                    if (e.isJsonObject()) {
+                        providers.add(e.getAsJsonObject());
+                    }
+                }
+
+                int count = context.getSettingsService().saveProviders(providers);
+
+                SwingUtilities.invokeLater(() -> {
+                    handleGetProviders(); // 刷新界面
+                    sendInfoToFrontend("导入成功", "成功导入 " + count + " 个配置。");
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                sendErrorToFrontend("保存失败", e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * 发送信息通知到前端
+     */
+    private void sendInfoToFrontend(String title, String message) {
+        Gson gson = new Gson();
+        JsonObject obj = new JsonObject();
+        obj.addProperty("type", "info");
+        obj.addProperty("title", title);
+        obj.addProperty("message", message);
+        callJavaScript("backend_notification", gson.toJson(obj));
+    }
+
+    /**
+     * 发送错误通知到前端
+     */
+    private void sendErrorToFrontend(String title, String message) {
+        Gson gson = new Gson();
+        JsonObject obj = new JsonObject();
+        obj.addProperty("type", "error");
+        obj.addProperty("title", title);
+        obj.addProperty("message", message);
+        callJavaScript("backend_notification", gson.toJson(obj));
+    }
+}

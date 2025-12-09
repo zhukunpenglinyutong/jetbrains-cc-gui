@@ -642,6 +642,14 @@ public class ClaudeSDKBridge {
                                 callback.onComplete(result);
                             } else {
                                 String errorMsg = "Process exited with code: " + exitCode;
+                                
+                                // 针对 exitCode 1 (通常是环境配置问题) 提供更友好的提示
+                                if (exitCode == 1 && (lastNodeError[0] == null || lastNodeError[0].isEmpty())) {
+                                    String friendlyMsg = "Node环境配置错误，请前往设置页面检查 Node 路径配置。";
+                                    // 将友好提示放在最前面
+                                    errorMsg = friendlyMsg + " (" + errorMsg + ")";
+                                }
+
                                 // 如果 Node.js 侧有明确的错误日志，将其附加到错误消息中，提升可读性
                                 if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
                                     errorMsg = errorMsg + " | Last node error: " + lastNodeError[0];

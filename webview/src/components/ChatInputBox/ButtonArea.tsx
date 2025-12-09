@@ -41,19 +41,40 @@ export const ButtonArea = ({
    */
   const handleAttachClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    fileInputRef.current?.click();
+    console.log('[ButtonArea] Attach button clicked, fileInputRef.current:', fileInputRef.current);
+
+    // 确保文件输入存在
+    if (!fileInputRef.current) {
+      console.error('[ButtonArea] File input ref is null');
+      return;
+    }
+
+    try {
+      fileInputRef.current.click();
+      console.log('[ButtonArea] File input clicked successfully');
+    } catch (error) {
+      console.error('[ButtonArea] Error clicking file input:', error);
+    }
   }, []);
 
   /**
    * 处理文件选择
    */
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('[ButtonArea] handleFileChange called');
     const files = e.target.files;
+    console.log('[ButtonArea] Selected files:', files?.length, files);
+
     if (files && files.length > 0) {
+      console.log('[ButtonArea] Calling onAddAttachment with files');
       onAddAttachment?.(files);
+    } else {
+      console.log('[ButtonArea] No files selected');
     }
+
     // 清空 input 以允许重复选择同一文件
     e.target.value = '';
+    console.log('[ButtonArea] File input value cleared');
   }, [onAddAttachment]);
 
   /**
