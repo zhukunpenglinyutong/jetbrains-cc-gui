@@ -258,7 +258,7 @@ export const ChatInputBox = ({
   ]);
 
   /**
-   * 处理 Mac 风格的光标移动和文本选择
+   * 处理 Mac 风格的光标移动、文本选择和删除操作
    */
   const handleMacCursorMovement = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!editableRef.current) return false;
@@ -268,6 +268,54 @@ export const ChatInputBox = ({
 
     const range = selection.getRangeAt(0);
     const isShift = e.shiftKey;
+
+    // Cmd + Backspace：删除从光标到行首的内容
+    if (e.key === 'Backspace' && e.metaKey) {
+      e.preventDefault();
+
+      const node = range.startContainer;
+      const offset = range.startOffset;
+
+      // 如果有选中内容，直接使用 execCommand 删除（支持撤销）
+      if (!range.collapsed) {
+        document.execCommand('delete', false);
+        handleInput();
+        return true;
+      }
+
+      // 没有选中内容，先选择从光标到行首的内容，再删除
+      // 找到当前行的开始位置
+      let lineStartOffset = 0;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || '';
+        // 从当前位置向前查找换行符
+        for (let i = offset - 1; i >= 0; i--) {
+          if (text[i] === '\n') {
+            lineStartOffset = i + 1;
+            break;
+          }
+        }
+      }
+
+      // 如果光标已经在行首，不做任何操作
+      if (lineStartOffset === offset) {
+        return true;
+      }
+
+      // 选择从行首到当前光标的内容
+      const newRange = document.createRange();
+      newRange.setStart(node, lineStartOffset);
+      newRange.setEnd(node, offset);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+
+      // 使用 execCommand 删除选中内容（支持撤销）
+      document.execCommand('delete', false);
+
+      // 触发 input 事件以更新状态
+      handleInput();
+      return true;
+    }
 
     // Cmd + 左箭头：移动到行首（或选择到行首）
     if (e.key === 'ArrowLeft' && e.metaKey) {
@@ -535,14 +583,15 @@ export const ChatInputBox = ({
 
       const shift = (ev as KeyboardEvent).shiftKey === true;
 
-      // Mac 风格的光标移动快捷键（已在 React 事件中处理，这里不需要处理）
-      const isMacCursorMovement =
+      // Mac 风格的光标移动快捷键和删除操作（已在 React 事件中处理，这里不需要处理）
+      const isMacCursorMovementOrDelete =
         (ev.key === 'ArrowLeft' && ev.metaKey) ||
         (ev.key === 'ArrowRight' && ev.metaKey) ||
         (ev.key === 'ArrowUp' && ev.metaKey) ||
-        (ev.key === 'ArrowDown' && ev.metaKey);
+        (ev.key === 'ArrowDown' && ev.metaKey) ||
+        (ev.key === 'Backspace' && ev.metaKey);
 
-      if (isMacCursorMovement) {
+      if (isMacCursorMovementOrDelete) {
         // Mac 快捷键已在 React 事件中处理
         return;
       }

@@ -13,7 +13,11 @@ function setupFileListCallback() {
     window.onFileListResult = (json: string) => {
       try {
         const data = JSON.parse(json);
-        const files: FileItem[] = data.files || data || [];
+        let files: FileItem[] = data.files || data || [];
+
+        // 过滤掉应该隐藏的文件
+        files = files.filter(file => !shouldHideFile(file.name));
+
         const result = files.length > 0 ? files : filterFiles(DEFAULT_FILES, lastQuery);
         pendingResolve?.(result);
       } catch (error) {
@@ -39,6 +43,21 @@ function sendToJava(event: string, payload: Record<string, unknown>) {
 }
 
 /**
+ * 检查文件是否应该被隐藏（不显示在列表中）
+ */
+function shouldHideFile(fileName: string): boolean {
+  // 隐藏的文件/文件夹列表
+  const hiddenItems = [
+    '.DS_Store',      // macOS 系统文件
+    '.git',           // Git 仓库文件夹
+    'node_modules',   // npm 依赖文件夹
+    '.idea',          // IntelliJ IDEA 配置文件夹
+  ];
+
+  return hiddenItems.includes(fileName);
+}
+
+/**
  * 默认文件列表（演示用，当 Java 端未实现时显示）
  */
 const DEFAULT_FILES: FileItem[] = [
@@ -53,13 +72,19 @@ const DEFAULT_FILES: FileItem[] = [
  * 过滤文件
  */
 function filterFiles(files: FileItem[], query: string): FileItem[] {
-  if (!query) return files;
+  // 首先过滤掉应该隐藏的文件
+  let filtered = files.filter(file => !shouldHideFile(file.name));
 
-  const lowerQuery = query.toLowerCase();
-  return files.filter(file =>
-    file.name.toLowerCase().includes(lowerQuery) ||
-    file.path.toLowerCase().includes(lowerQuery)
-  );
+  // 如果有搜索关键词，再根据关键词过滤
+  if (query) {
+    const lowerQuery = query.toLowerCase();
+    filtered = filtered.filter(file =>
+      file.name.toLowerCase().includes(lowerQuery) ||
+      file.path.toLowerCase().includes(lowerQuery)
+    );
+  }
+
+  return filtered;
 }
 
 /**

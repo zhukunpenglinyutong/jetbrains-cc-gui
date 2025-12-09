@@ -41,9 +41,8 @@ export const DropdownItem = ({
     );
   }
 
-  // 目录不可选择
-  const isDirectory = item.type === 'directory';
-  const isDisabled = isDirectory;
+  // 所有项都可以选择
+  const isDisabled = false;
 
   return (
     <div
