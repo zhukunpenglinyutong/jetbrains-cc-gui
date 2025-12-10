@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
@@ -59,6 +60,7 @@ const formatTime = (timestamp?: string) => {
 };
 
 const App = () => {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<ClaudeMessage[]>([]);
   const [_status, setStatus] = useState(DEFAULT_STATUS); // Internal state, displayed via toast
   const [loading, setLoading] = useState(false);
@@ -822,15 +824,15 @@ const App = () => {
 
   const sessionTitle = useMemo(() => {
     if (messages.length === 0) {
-      return '新会话';
+      return t('common.newSession');
     }
     const firstUserMessage = messages.find((message) => message.type === 'user');
     if (!firstUserMessage) {
-      return '新会话';
+      return t('common.newSession');
     }
     const text = getMessageText(firstUserMessage);
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;
-  }, [messages]);
+  }, [messages, t]);
 
   const hasThinkingBlockInLastMessage = useMemo(() => {
     if (messages.length === 0) return false;
@@ -874,8 +876,8 @@ const App = () => {
         <div className="header">
           <div className="header-left">
             {currentView === 'history' ? (
-              <button className="back-button" onClick={() => setCurrentView('chat')} data-tooltip="返回聊天">
-                <BackIcon /> 返回
+              <button className="back-button" onClick={() => setCurrentView('chat')} data-tooltip={t('common.back')}>
+                <BackIcon /> {t('common.back')}
               </button>
             ) : (
               <div
@@ -893,20 +895,20 @@ const App = () => {
           <div className="header-right">
             {currentView === 'chat' && (
               <>
-                <button className="icon-button" onClick={createNewSession} data-tooltip="新会话">
+                <button className="icon-button" onClick={createNewSession} data-tooltip={t('common.newSession')}>
                   <span className="codicon codicon-plus" />
                 </button>
                 <button
                   className="icon-button"
                   onClick={() => setCurrentView('history')}
-                  data-tooltip="历史记录"
+                  data-tooltip={t('common.history')}
                 >
                   <span className="codicon codicon-history" />
                 </button>
                 <button
                   className="icon-button"
                   onClick={() => setCurrentView('settings')}
-                  data-tooltip="设置"
+                  data-tooltip={t('common.settings')}
                 >
                   <span className="codicon codicon-settings-gear" />
                 </button>
@@ -940,10 +942,10 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.0.9-beta4
+                  v0.0.9-beta5
                 </span>
               </div>
-              <div>给 {currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code'} 发送消息</div>
+              <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
             </div>
           )}
 
@@ -1010,8 +1012,8 @@ const App = () => {
                             >
                               <span className="thinking-title">
                                 {isThinking && messageIndex === messages.length - 1
-                                  ? '思考中...'
-                                  : '思考过程'}
+                                  ? t('common.thinking')
+                                  : t('common.thinkingProcess')}
                               </span>
                               <span className="thinking-icon">
                                 {isThinkingExpanded(messageIndex, blockIndex) ? '▼' : '▶'}
@@ -1069,7 +1071,7 @@ const App = () => {
             <div className="message assistant">
               <div className="thinking-status">
                 <span className="thinking-status-icon">🤔</span>
-                <span className="thinking-status-text">思考中...</span>
+                <span className="thinking-status-text">{t('common.thinking')}</span>
               </div>
             </div>
           )}
@@ -1101,6 +1103,7 @@ const App = () => {
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
             value={inputValue}
+            placeholder={t('chat.inputPlaceholder')}
             onSubmit={handleSubmit}
             onStop={interruptSession}
             onInput={setInputValue}
@@ -1115,20 +1118,20 @@ const App = () => {
 
       <ConfirmDialog
         isOpen={showNewSessionConfirm}
-        title="创建新会话"
-        message="当前会话已有消息，确定要创建新会话吗？"
-        confirmText="确定"
-        cancelText="取消"
+        title={t('chat.createNewSession')}
+        message={t('chat.confirmNewSession')}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         onConfirm={handleConfirmNewSession}
         onCancel={handleCancelNewSession}
       />
 
       <ConfirmDialog
         isOpen={showInterruptConfirm}
-        title="创建新会话"
-        message="当前正在对话中，创建新会话将中断当前对话，是否继续？"
-        confirmText="确定"
-        cancelText="取消"
+        title={t('chat.createNewSession')}
+        message={t('chat.confirmInterrupt')}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         onConfirm={handleConfirmInterrupt}
         onCancel={handleCancelInterrupt}
       />

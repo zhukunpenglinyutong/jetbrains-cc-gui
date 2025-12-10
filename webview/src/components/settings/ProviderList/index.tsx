@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../../types/provider';
 import { sendToJava } from '../../../utils/bridge';
 import ImportConfirmDialog from './ImportConfirmDialog';
@@ -23,6 +24,7 @@ export default function ProviderList({
   addToast,
   emptyState,
 }: ProviderListProps) {
+  const { t } = useTranslation();
   const [importMenuOpen, setImportMenuOpen] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
@@ -134,7 +136,7 @@ export default function ProviderList({
       sendToJava('delete_provider', { id: oldId });
       
       setConvertingProvider(null);
-      addToast('转换成功，已生成新 ID 并断开关联', 'success');
+      addToast(t('settings.provider.convertSuccess'), 'success');
       
       if (editingCcSwitchProvider && editingCcSwitchProvider.id === convertingProvider.id) {
           setEditingCcSwitchProvider(null);
@@ -164,7 +166,7 @@ export default function ProviderList({
         <div className={styles.loadingOverlay}>
           <div className={styles.loadingContent}>
             <span className="codicon codicon-loading codicon-modifier-spin" />
-            <span>正在读取 cc-switch 配置...</span>
+            <span>{t('settings.provider.readingCcSwitch')}</span>
           </div>
         </div>
       )}
@@ -175,36 +177,36 @@ export default function ProviderList({
               <div className={styles.warningDialog}>
                   <div className={styles.warningTitle}>
                       <span className="codicon codicon-warning" />
-                      编辑 cc-switch 配置
+                      {t('settings.provider.editCcSwitchTitle')}
                   </div>
                   <div className={styles.warningContent}>
-                      您当前正在编辑 cc-switch 类型配置，编辑此配置不会更新 cc-switch，相反导入的时候有可能会覆盖您的配置，建议您将 cc-switch 配置转为本插件配置再进行编辑。
+                      {t('settings.provider.editCcSwitchWarning')}
                   </div>
                   <div className={styles.warningActions}>
-                      <button 
-                          className={styles.btnSecondary} 
+                      <button
+                          className={styles.btnSecondary}
                           onClick={() => setEditingCcSwitchProvider(null)}
                       >
-                          取消
+                          {t('common.cancel')}
                       </button>
-                      <button 
-                          className={styles.btnSecondary} 
+                      <button
+                          className={styles.btnSecondary}
                           onClick={() => {
                               const p = editingCcSwitchProvider;
                               setEditingCcSwitchProvider(null);
                               onEdit(p);
                           }}
                       >
-                          继续编辑
+                          {t('settings.provider.continueEdit')}
                       </button>
-                      <button 
-                          className={styles.btnWarning} 
+                      <button
+                          className={styles.btnWarning}
                           onClick={() => {
                               setConvertingProvider(editingCcSwitchProvider);
                               // setEditingCcSwitchProvider(null); // 保持 null 以便在转换后处理
                           }}
                       >
-                          转换并编辑
+                          {t('settings.provider.convertAndEdit')}
                       </button>
                   </div>
               </div>
@@ -217,15 +219,15 @@ export default function ProviderList({
               <div className={styles.warningDialog}>
                   <div className={styles.warningTitle}>
                       <span className="codicon codicon-arrow-swap" />
-                      转换为插件配置
+                      {t('settings.provider.convertToPlugin')}
                   </div>
                   <div className={styles.warningContent}>
-                      是否将 cc-switch 配置 "{convertingProvider.name}" 转换为本插件配置？<br/><br/>
-                      转换后将断开与 cc-switch 的 ID 连接关系，后续导入 cc-switch 数据时不会覆盖此配置。
+                      {t('settings.provider.convertConfirmMessage', { name: convertingProvider.name })}<br/><br/>
+                      {t('settings.provider.convertDetailMessage')}
                   </div>
                   <div className={styles.warningActions}>
-                      <button 
-                          className={styles.btnSecondary} 
+                      <button
+                          className={styles.btnSecondary}
                           onClick={() => {
                               setConvertingProvider(null);
                               // 如果是从编辑来的，取消转换意味着取消编辑
@@ -234,13 +236,13 @@ export default function ProviderList({
                               }
                           }}
                       >
-                          取消
+                          {t('common.cancel')}
                       </button>
-                      <button 
-                          className={styles.btnPrimary} 
+                      <button
+                          className={styles.btnPrimary}
                           onClick={handleConvert}
                       >
-                          确认转换
+                          {t('settings.provider.confirmConvert')}
                       </button>
                   </div>
               </div>
@@ -248,16 +250,16 @@ export default function ProviderList({
       )}
 
       <div className={styles.header}>
-        <h4 className={styles.title}>所有供应商</h4>
-        
+        <h4 className={styles.title}>{t('settings.provider.allProviders')}</h4>
+
         <div className={styles.actions}>
           <div className={styles.importMenuWrapper} ref={importMenuRef}>
-            <button 
-              className={styles.btnSecondary} 
+            <button
+              className={styles.btnSecondary}
               onClick={() => setImportMenuOpen(!importMenuOpen)}
             >
               <span className="codicon codicon-cloud-download" />
-              导入
+              {t('settings.provider.import')}
             </button>
             
             {importMenuOpen && (
@@ -271,38 +273,38 @@ export default function ProviderList({
                   }}
                 >
                   <span className="codicon codicon-arrow-swap" />
-                  从cc-switch导入/更新
+                  {t('settings.provider.importFromCcSwitchUpdate')}
                 </div>
-                <div 
+                <div
                   className={styles.importMenuItem}
                   onClick={() => {
                     setImportMenuOpen(false);
-                    addToast('功能暂未实现，敬请期待', 'info');
+                    addToast(t('settings.provider.featureComingSoon'), 'info');
                   }}
                 >
                   <span className="codicon codicon-arrow-swap" />
-                  从cc-switch CLI导入/更新
+                  {t('settings.provider.importFromCcSwitchCli')}
                 </div>
-                <div 
+                <div
                   className={styles.importMenuItem}
                   onClick={() => {
                     setImportMenuOpen(false);
-                    addToast('功能暂未实现，敬请期待', 'info');
+                    addToast(t('settings.provider.featureComingSoon'), 'info');
                   }}
                 >
                   <span className="codicon codicon-arrow-swap" />
-                  从Claude Code Router导入/更新
+                  {t('settings.provider.importFromClaudeRouter')}
                 </div>
               </div>
             )}
           </div>
 
-          <button 
-            className={styles.btnPrimary} 
+          <button
+            className={styles.btnPrimary}
             onClick={onAdd}
           >
             <span className="codicon codicon-add" />
-            添加
+            {t('common.add')}
           </button>
         </div>
       </div>
@@ -334,44 +336,44 @@ export default function ProviderList({
                 {provider.isActive ? (
                   <div className={styles.activeBadge}>
                     <span className="codicon codicon-check" />
-                    使用中
+                    {t('settings.provider.inUse')}
                   </div>
                 ) : (
-                  <button 
+                  <button
                     className={styles.useButton}
                     onClick={() => onSwitch(provider.id)}
                   >
                     <span className="codicon codicon-play" />
-                    启用
+                    {t('settings.provider.enable')}
                   </button>
                 )}
-                
+
                 <div className={styles.divider}></div>
-                
+
                 <div className={styles.actionButtons}>
                   {provider.source === 'cc-switch' && (
-                    <button 
+                    <button
                       className={styles.iconBtn}
                       onClick={(e) => {
                         e.stopPropagation();
                         setConvertingProvider(provider);
                       }}
-                      title="转换为插件配置"
+                      title={t('settings.provider.convertToPlugin')}
                     >
                       <span className="codicon codicon-arrow-swap" />
                     </button>
                   )}
-                  <button 
+                  <button
                     className={styles.iconBtn}
                     onClick={() => handleEditClick(provider)}
-                    title="编辑"
+                    title={t('common.edit')}
                   >
                     <span className="codicon codicon-edit" />
                   </button>
-                  <button 
+                  <button
                     className={styles.iconBtn}
                     onClick={() => onDelete(provider)}
-                    title="删除"
+                    title={t('common.delete')}
                   >
                     <span className="codicon codicon-trash" />
                   </button>

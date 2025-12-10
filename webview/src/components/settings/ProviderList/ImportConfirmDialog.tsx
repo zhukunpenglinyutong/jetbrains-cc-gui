@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import styles from './style.module.less';
 
 interface ImportConfirmDialogProps {
@@ -15,6 +16,7 @@ export default function ImportConfirmDialog({
   onConfirm,
   onCancel
 }: ImportConfirmDialogProps) {
+  const { t } = useTranslation();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(providers.map(p => p.id)));
   const [mounted, setMounted] = useState(false);
 
@@ -43,7 +45,7 @@ export default function ImportConfirmDialog({
 
   const getStatus = (provider: any) => {
     const exists = existingProviders.some(p => p.id === provider.id);
-    return exists ? '更新' : '新增';
+    return exists ? t('settings.provider.importDialog.statusUpdate') : t('settings.provider.importDialog.statusNew');
   };
 
   const handleConfirm = () => {
@@ -61,7 +63,7 @@ export default function ImportConfirmDialog({
     }}>
       <div className={styles.dialog}>
         <div className={styles.dialogHeader}>
-          <h3>导入 cc-switch 配置</h3>
+          <h3>{t('settings.provider.importDialog.title')}</h3>
           <button className={styles.closeBtn} onClick={onCancel}>
             <span className="codicon codicon-close" />
           </button>
@@ -69,22 +71,23 @@ export default function ImportConfirmDialog({
         
         <div className={styles.dialogContent}>
           <div className={styles.summary}>
-            共识别到 {providers.length} 个配置，
-            其中 <span className={styles.newBadge}>{providers.filter(p => !existingProviders.some(e => e.id === p.id)).length} 新增</span>，
-            <span className={styles.updateBadge}>{providers.filter(p => existingProviders.some(e => e.id === p.id)).length} 更新</span>
+            {t('settings.provider.importDialog.summary', { total: providers.length })}
+            <span className={styles.newBadge}>{t('settings.provider.importDialog.newCount', { count: providers.filter(p => !existingProviders.some(e => e.id === p.id)).length })}</span>
+            ，
+            <span className={styles.updateBadge}>{t('settings.provider.importDialog.updateCount', { count: providers.filter(p => existingProviders.some(e => e.id === p.id)).length })}</span>
           </div>
 
           <div className={styles.tableHeader}>
             <div className={styles.colCheckbox}>
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={selectedIds.size === providers.length && providers.length > 0}
                 onChange={toggleAll}
               />
             </div>
-            <div className={styles.colName}>名称</div>
-            <div className={styles.colId}>ID</div>
-            <div className={styles.colStatus}>状态</div>
+            <div className={styles.colName}>{t('settings.provider.importDialog.columnName')}</div>
+            <div className={styles.colId}>{t('settings.provider.importDialog.columnId')}</div>
+            <div className={styles.colStatus}>{t('settings.provider.importDialog.columnStatus')}</div>
           </div>
 
           <div className={styles.providerList}>
@@ -108,7 +111,7 @@ export default function ImportConfirmDialog({
                   <div className={styles.colName}>{provider.name || provider.id}</div>
                   <div className={styles.colId}>{provider.id}</div>
                   <div className={styles.colStatus}>
-                    <span className={status === '新增' ? styles.tagNew : styles.tagUpdate}>
+                    <span className={status === t('settings.provider.importDialog.statusNew') ? styles.tagNew : styles.tagUpdate}>
                       {status}
                     </span>
                   </div>
@@ -120,16 +123,16 @@ export default function ImportConfirmDialog({
 
         <div className={styles.dialogFooter}>
           <div className={styles.selectedCount}>
-            已选择 {selectedIds.size} 项
+            {t('settings.provider.importDialog.selectedCount', { count: selectedIds.size })}
           </div>
           <div className={styles.dialogActions}>
-            <button className={styles.btnCancel} onClick={onCancel}>取消</button>
-            <button 
-              className={styles.btnConfirm} 
+            <button className={styles.btnCancel} onClick={onCancel}>{t('common.cancel')}</button>
+            <button
+              className={styles.btnConfirm}
               onClick={handleConfirm}
               disabled={selectedIds.size === 0}
             >
-              确认导入
+              {t('settings.provider.importDialog.confirmImport')}
             </button>
           </div>
         </div>

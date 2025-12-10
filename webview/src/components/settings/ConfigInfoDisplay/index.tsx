@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from './style.module.less';
 
 /**
@@ -34,6 +35,7 @@ interface ConfigInfoDisplayProps {
  * 用于展示当前 ~/.claude/settings.json 的配置信息
  */
 const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchProvider, addToast }: ConfigInfoDisplayProps) => {
+  const { t } = useTranslation();
   const [showApiKey, setShowApiKey] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -49,12 +51,12 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
       <div className={styles.container}>
         <div className={styles.header}>
           <span className={styles.title}>
-            当前ClaudeCode配置
+            {t('settings.provider.currentConfig')}
           </span>
         </div>
         <div className={styles.loading}>
           <span className="codicon codicon-loading codicon-modifier-spin" />
-          <span>加载中...</span>
+          <span>{t('settings.provider.loading')}</span>
         </div>
       </div>
     );
@@ -65,12 +67,12 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
       <div className={styles.container}>
         <div className={styles.header}>
           <span className={styles.title}>
-            当前ClaudeCode配置
+            {t('settings.provider.currentConfig')}
           </span>
         </div>
         <div className={styles.empty}>
           <span className="codicon codicon-warning" />
-          <span>暂无配置信息</span>
+          <span>{t('settings.provider.noConfig')}</span>
         </div>
       </div>
     );
@@ -82,7 +84,7 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
   // API Key 预览（显示前后各几位，中间用省略号）
   const getApiKeyPreview = () => {
     if (!apiKey) {
-      return '未配置';
+      return t('settings.provider.notConfigured');
     }
     if (showApiKey) {
       return apiKey;
@@ -104,12 +106,12 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
       if (addToast) {
-        addToast(`${label}已复制到剪切板`, 'success');
+        addToast(t('toast.copySuccess', { label }), 'success');
       }
     }).catch(err => {
       console.error('Failed to copy: ', err);
       if (addToast) {
-        addToast('复制失败', 'error');
+        addToast(t('toast.copyFailed'), 'error');
       }
     });
   };
@@ -120,7 +122,7 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <span className={styles.title}>
-            当前ClaudeCode配置
+            {t('settings.provider.currentConfig')}
           </span>
           {activeProvider && (
             <span className={styles.badge}>
@@ -134,10 +136,10 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
               type="button"
               className={styles.switchBtn}
               onClick={() => setShowDropdown(!showDropdown)}
-              title="切换供应商"
+              title={t('config.switchProvider')}
             >
               <span className="codicon codicon-arrow-swap" />
-              <span>切换</span>
+              <span>{t('config.switch')}</span>
               <span className={`codicon codicon-chevron-${showDropdown ? 'up' : 'down'}`} />
             </button>
             {showDropdown && (
@@ -167,10 +169,10 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
         {/* API Key 预览 */}
         <div className={styles.field}>
           <span className={`codicon codicon-key ${styles.icon}`} />
-          <code 
+          <code
             className={`${styles.value} ${styles.clickable}`}
-            onClick={() => handleCopy(apiKey, 'API Key')}
-            title="点击复制"
+            onClick={() => handleCopy(apiKey, t('settings.provider.apiKey'))}
+            title={t('config.clickToCopy')}
           >
             {getApiKeyPreview()}
           </code>
@@ -179,7 +181,7 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
               type="button"
               className={styles.toggleBtn}
               onClick={() => setShowApiKey(!showApiKey)}
-              title={showApiKey ? '隐藏' : '显示'}
+              title={showApiKey ? t('settings.provider.hide') : t('settings.provider.show')}
             >
               <span className={`codicon ${showApiKey ? 'codicon-eye-closed' : 'codicon-eye'}`} style={{ fontSize: '14px' }} />
             </button>
@@ -189,12 +191,12 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
         {/* Base URL */}
         <div className={styles.field}>
           <span className={`codicon codicon-globe ${styles.icon}`} />
-          <code 
+          <code
             className={`${styles.value} ${styles.clickable}`}
-            onClick={() => handleCopy(baseUrl, '链接')}
-            title="点击复制"
+            onClick={() => handleCopy(baseUrl, t('config.link'))}
+            title={t('config.clickToCopy')}
           >
-            {baseUrl || '未配置'}
+            {baseUrl || t('settings.provider.notConfigured')}
           </code>
         </div>
       </div>

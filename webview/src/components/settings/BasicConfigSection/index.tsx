@@ -1,4 +1,5 @@
 import styles from './style.module.less';
+import { useTranslation } from 'react-i18next';
 
 const SunIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -37,16 +38,38 @@ const BasicConfigSection = ({
   onSaveNodePath,
   savingNodePath,
 }: BasicConfigSectionProps) => {
+  const { t, i18n } = useTranslation();
+
+  // 当前语言
+  const currentLanguage = i18n.language || 'zh';
+
+  // 语言选项
+  const languageOptions = [
+    { value: 'zh', label: 'settings.basic.language.simplifiedChinese' },
+    { value: 'zh-TW', label: 'settings.basic.language.traditionalChinese' },
+    { value: 'en', label: 'settings.basic.language.english' },
+    { value: 'hi', label: 'settings.basic.language.hindi' },
+    { value: 'es', label: 'settings.basic.language.spanish' },
+    { value: 'fr', label: 'settings.basic.language.french' },
+  ];
+
+  // 切换语言
+  const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const language = event.target.value;
+    i18n.changeLanguage(language);
+    localStorage.setItem('language', language);
+  };
+
   return (
     <div className={styles.configSection}>
-      <h3 className={styles.sectionTitle}>基础配置</h3>
-      <p className={styles.sectionDesc}>配置页面主题和 Node.js 运行环境</p>
+      <h3 className={styles.sectionTitle}>{t('settings.basic.title')}</h3>
+      <p className={styles.sectionDesc}>{t('settings.basic.description')}</p>
 
       {/* 主题切换 */}
       <div className={styles.themeSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-symbol-color" />
-          <span className={styles.fieldLabel}>界面主题</span>
+          <span className={styles.fieldLabel}>{t('settings.basic.theme.label')}</span>
         </div>
 
         <div className={styles.themeGrid}>
@@ -65,8 +88,8 @@ const BasicConfigSection = ({
               <SunIcon />
             </div>
 
-            <div className={styles.themeCardTitle}>亮色主题</div>
-            <div className={styles.themeCardDesc}>清爽明亮，适合白天使用</div>
+            <div className={styles.themeCardTitle}>{t('settings.basic.theme.light')}</div>
+            <div className={styles.themeCardDesc}>{t('settings.basic.theme.lightDesc')}</div>
           </div>
 
           {/* 暗色主题卡片 */}
@@ -84,23 +107,42 @@ const BasicConfigSection = ({
               <MoonIcon />
             </div>
 
-            <div className={styles.themeCardTitle}>暗色主题</div>
-            <div className={styles.themeCardDesc}>护眼舒适，适合夜间使用</div>
+            <div className={styles.themeCardTitle}>{t('settings.basic.theme.dark')}</div>
+            <div className={styles.themeCardDesc}>{t('settings.basic.theme.darkDesc')}</div>
           </div>
         </div>
+      </div>
+
+      {/* 语言切换 */}
+      <div className={styles.languageSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-globe" />
+          <span className={styles.fieldLabel}>{t('settings.basic.language.label')}</span>
+        </div>
+        <select
+          className={styles.languageSelect}
+          value={currentLanguage}
+          onChange={handleLanguageChange}
+        >
+          {languageOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {t(option.label)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Node.js 路径配置 */}
       <div className={styles.nodePathSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-terminal" />
-          <span className={styles.fieldLabel}>Node.js 路径</span>
+          <span className={styles.fieldLabel}>{t('settings.basic.nodePath.label')}</span>
         </div>
         <div className={styles.nodePathInputWrapper}>
           <input
             type="text"
             className={styles.nodePathInput}
-            placeholder="例如 C:\Program Files\nodejs\node.exe 或 /usr/local/bin/node"
+            placeholder={t('settings.basic.nodePath.placeholder')}
             value={nodePath}
             onChange={(e) => onNodePathChange(e.target.value)}
           />
@@ -114,14 +156,13 @@ const BasicConfigSection = ({
                 className="codicon codicon-loading codicon-modifier-spin"
               />
             )}
-            保存
+            {t('common.save')}
           </button>
         </div>
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>
-            在终端中运行 <code>node -p &quot;process.execPath&quot;</code> 获取实际的 Node.js 可执行文件路径。
-            为空时插件会自动尝试检测 Node.js。
+            {t('settings.basic.nodePath.hint')} <code>{t('settings.basic.nodePath.hintCommand')}</code> {t('settings.basic.nodePath.hintText')}
           </span>
         </small>
       </div>

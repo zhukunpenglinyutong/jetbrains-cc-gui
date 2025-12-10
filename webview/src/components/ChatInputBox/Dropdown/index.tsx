@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { DropdownProps, DropdownItemData } from '../types';
 import { DropdownItem } from './DropdownItem';
 
@@ -86,11 +87,12 @@ export const CompletionDropdown = ({
   selectedIndex = 0,
   items,
   loading = false,
-  emptyText = '无匹配项',
+  emptyText,
   onClose,
   onSelect,
   onMouseEnter,
 }: CompletionDropdownProps) => {
+  const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -138,9 +140,9 @@ export const CompletionDropdown = ({
     >
       <div ref={listRef}>
         {loading ? (
-          <div className="dropdown-loading">加载中...</div>
+          <div className="dropdown-loading">{t('chat.loadingDropdown')}</div>
         ) : items.length === 0 ? (
-          <div className="dropdown-empty">{emptyText}</div>
+          <div className="dropdown-empty">{emptyText || t('chat.loadingDropdown')}</div>
         ) : (
           items.map((item) => {
             // 计算在可选择项中的索引

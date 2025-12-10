@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Attachment, AttachmentListProps } from './types';
 import { isImageAttachment } from './types';
 
@@ -11,6 +12,7 @@ export const AttachmentList = ({
   onRemove,
   onPreview,
 }: AttachmentListProps) => {
+  const { t } = useTranslation();
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
 
   /**
@@ -92,7 +94,7 @@ export const AttachmentList = ({
             <button
               className="attachment-remove"
               onClick={(e) => handleRemove(e, attachment.id)}
-              title="移除附件"
+              title={t('chat.removeAttachment')}
             >
               ×
             </button>
@@ -117,7 +119,7 @@ export const AttachmentList = ({
           <button
             className="image-preview-close"
             onClick={closePreview}
-            title="关闭预览"
+            title={t('chat.closePreview')}
           >
             ×
           </button>

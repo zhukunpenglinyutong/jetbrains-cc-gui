@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
 import VirtualList from './VirtualList';
 
@@ -8,17 +9,17 @@ interface HistoryViewProps {
   onDeleteSession: (sessionId: string) => void; // 添加删除回调
 }
 
-const formatTimeAgo = (timestamp?: string) => {
+const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string) => {
   if (!timestamp) {
     return '';
   }
   const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
   const units: [number, string][] = [
-    [31536000, '年前'],
-    [2592000, '个月前'],
-    [86400, '天前'],
-    [3600, '小时前'],
-    [60, '分钟前'],
+    [31536000, t('history.timeAgo.yearsAgo')],
+    [2592000, t('history.timeAgo.monthsAgo')],
+    [86400, t('history.timeAgo.daysAgo')],
+    [3600, t('history.timeAgo.hoursAgo')],
+    [60, t('history.timeAgo.minutesAgo')],
   ];
 
   for (const [unitSeconds, label] of units) {
@@ -27,10 +28,11 @@ const formatTimeAgo = (timestamp?: string) => {
       return `${interval} ${label}`;
     }
   }
-  return `${Math.max(seconds, 1)} 秒前`;
+  return `${Math.max(seconds, 1)} ${t('history.timeAgo.secondsAgo')}`;
 };
 
 const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryViewProps) => {
+  const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // 记录待删除的会话ID
 
@@ -48,15 +50,15 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryVie
     }
     const sessionCount = sessions.length;
     const messageCount = historyData.total ?? 0;
-    return `共 ${sessionCount} 个会话 · ${messageCount} 条消息`;
-  }, [historyData, sessions.length]);
+    return t('history.totalSessions', { count: sessionCount, total: messageCount });
+  }, [historyData, sessions.length, t]);
 
   if (!historyData) {
     return (
       <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: '#858585' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📜</div>
-          <div>加载历史记录中...</div>
+          <div>{t('history.loading')}</div>
         </div>
       </div>
     );
@@ -67,7 +69,7 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryVie
       <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: '#858585' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
-          <div>{historyData.error ?? '加载失败'}</div>
+          <div>{historyData.error ?? t('history.loadFailed')}</div>
         </div>
       </div>
     );
@@ -78,8 +80,8 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryVie
       <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: '#858585' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
-          <div>暂无历史会话</div>
-          <div style={{ fontSize: '12px', marginTop: '8px' }}>当前项目下没有找到 Claude 会话记录</div>
+          <div>{t('history.noSessions')}</div>
+          <div style={{ fontSize: '12px', marginTop: '8px' }}>{t('history.noSessionsDesc')}</div>
         </div>
       </div>
     );
@@ -109,20 +111,20 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryVie
       <div className="history-item-header">
         <div className="history-item-title">{session.title}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="history-item-time">{formatTimeAgo(session.lastTimestamp)}</div>
+          <div className="history-item-time">{formatTimeAgo(session.lastTimestamp, t)}</div>
           {/* 删除按钮 */}
           <button
             className="history-delete-btn"
             onClick={(e) => handleDeleteClick(e, session.sessionId)}
-            title="删除此会话"
-            aria-label="删除会话"
+            title={t('history.deleteSession')}
+            aria-label={t('history.deleteSession')}
           >
             <span className="codicon codicon-trash"></span>
           </button>
         </div>
       </div>
       <div className="history-item-meta">
-        <span>{session.messageCount} 条消息</span>
+        <span>{t('history.messageCount', { count: session.messageCount })}</span>
         <span style={{ fontFamily: 'monospace', color: '#666' }}>{session.sessionId.slice(0, 8)}</span>
       </div>
     </div>
@@ -150,14 +152,14 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryVie
       {deletingSessionId && (
         <div className="modal-overlay" onClick={cancelDelete}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>确认删除</h3>
-            <p>确定要删除这个会话吗?此操作无法撤销。</p>
+            <h3>{t('history.confirmDelete')}</h3>
+            <p>{t('history.deleteMessage')}</p>
             <div className="modal-actions">
               <button className="modal-btn modal-btn-cancel" onClick={cancelDelete}>
-                取消
+                {t('common.cancel')}
               </button>
               <button className="modal-btn modal-btn-danger" onClick={confirmDelete}>
-                删除
+                {t('common.delete')}
               </button>
             </div>
           </div>

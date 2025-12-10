@@ -6,9 +6,9 @@
     width: 40px;
     height: 40px;
     border-radius: 8px;
-    background: #2d2d2d;
-    border: 1px solid #404040;
-    color: #e0e0e0;
+    background: var(--color-scroll-control-bg);
+    border: 1px solid var(--color-scroll-control-border);
+    color: var(--color-scroll-control-text);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -20,39 +20,19 @@
 }
 
 .scroll-control-button:hover {
-    background: #3d3d3d;
-    border-color: #505050;
+    background: var(--color-scroll-control-hover-bg);
+    border-color: var(--color-scroll-control-hover-border);
 }
 
 .scroll-control-button:active {
-    background: #353535;
+    background: var(--color-scroll-control-active-bg);
 }
 
 .scroll-control-button svg {
     width: 20px;
     height: 20px;
-    stroke: #b0b0b0;
+    stroke: var(--color-scroll-control-icon);
     transition: transform 0.15s ease;
-}
-
-/* 亮色模式适配 */
-[data-theme="light"] .scroll-control-button {
-    background: #f0f0f0;
-    border: 1px solid #d0d0d0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="light"] .scroll-control-button:hover {
-    background: #e0e0e0;
-    border-color: #c0c0c0;
-}
-
-[data-theme="light"] .scroll-control-button:active {
-    background: #d5d5d5;
-}
-
-[data-theme="light"] .scroll-control-button svg {
-    stroke: #505050;
 }
 
 /* 按钮淡入动画 */

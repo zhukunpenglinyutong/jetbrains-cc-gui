@@ -6,6 +6,27 @@
     padding: 0;
     scroll-behavior: smooth;
     background: var(--bg-primary);
+
+    /* 滚动条样式 */
+    &::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background-color: var(--scrollbar-thumb);
+        border-radius: 5px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+        background-color: var(--scrollbar-thumb-hover);
+    }
 }
 
 /* Message Styles - Agent Style */
@@ -14,7 +35,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--color-message-divider);
     min-width: 0; /* 允许内容缩小 */
     max-width: 100%; /* 防止超出容器 */
 }
@@ -33,8 +54,8 @@
 }
 
 .message.user .message-content {
-    background-color: #005fb8;
-    color: #ffffff;
+    background-color: var(--color-message-user-bg);
+    color: var(--color-message-user-text);
     padding: 10px 14px;
     border-radius: 12px 12px 2px 12px;
     max-width: 85%;
@@ -72,20 +93,20 @@
 
 .message.error {
     background: rgba(90, 29, 29, 0.1);
-    border-left: 2px solid #d32f2f;
+    border-left: 2px solid var(--color-message-error-border);
 }
 
 /* AI Indicator Dot */
 .ai-indicator-dot {
     width: 6px;
     height: 6px;
-    background-color: #555;
+    background-color: var(--color-message-ai-indicator);
     border-radius: 50%;
     margin-top: 2px; /* Slight optical adjustment */
 }
 
 .message.assistant:hover .ai-indicator-dot {
-    background-color: #888;
+    background-color: var(--color-message-ai-indicator-hover);
 }
 
 .message-role-label {
@@ -102,15 +123,15 @@
 }
 
 .message.user .message-role-label {
-    color: #4a90e2;
+    color: var(--color-message-role-user);
 }
 
 .message.assistant .message-role-label {
-    color: #d97757;
+    color: var(--color-message-role-assistant);
 }
 
 .message.error .message-role-label {
-    color: #d32f2f;
+    color: var(--color-message-error-border);
 }
 
 /* Message Content */
@@ -144,7 +165,7 @@
 }
 
 .message.user .markdown-content {
-    color: #ffffff;
+    color: var(--color-message-user-text);
     word-wrap: break-word;
     word-break: break-word;
     overflow-wrap: break-word;
@@ -162,8 +183,8 @@
 }
 
 .markdown-content pre {
-    background-color: #1e1e1e;
-    border: 1px solid var(--border-primary);
+    background-color: var(--color-code-block-bg);
+    border: 1px solid var(--color-code-block-border);
     border-radius: 6px;
     padding: 12px;
     overflow-x: auto;
@@ -176,7 +197,7 @@
 
 .markdown-content code {
     font-family: 'JetBrains Mono', 'Consolas', monospace;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--color-code-inline-bg);
     padding: 2px 4px;
     border-radius: 3px;
     font-size: 12.5px;
@@ -192,14 +213,14 @@
 
 /* User message code blocks - ensure they fit within bubble */
 .message.user .markdown-content pre {
-    background-color: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--color-message-user-code-bg);
+    border: 1px solid var(--color-message-user-code-border);
     max-width: 100%;
     overflow-x: auto;
 }
 
 .message.user .markdown-content code {
-    background-color: rgba(0, 0, 0, 0.2);
+    background-color: var(--color-message-user-code-bg);
     word-break: break-all;
 }
 
@@ -223,7 +244,7 @@
 .markdown-content blockquote {
     margin: 10px 0;
     padding-left: 16px;
-    border-left: 4px solid #3e3e42;
+    border-left: 4px solid var(--color-message-blockquote);
     color: var(--text-tertiary);
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -318,8 +339,8 @@
 .thinking-content {
     margin-top: 8px;
     padding-left: 12px;
-    border-left: 2px solid #333;
-    color: #999;
+    border-left: 2px solid var(--color-thinking-border);
+    color: var(--color-thinking-text);
     font-family: 'JetBrains Mono', 'Consolas', monospace;
     font-size: 12.5px;
     white-space: pre-wrap;
@@ -363,8 +384,8 @@
 .tool-block {
     margin: 4px 0;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--color-tool-bg);
+    border: 1px solid var(--border-primary);
     overflow: hidden;
     max-width: 100%; /* 防止超出容器 */
     box-sizing: border-box;
@@ -380,7 +401,7 @@
 }
 
 .tool-icon {
-    color: #64b5f6;
+    color: var(--color-tool-icon);
     font-size: 14px;
     width: 16px;
     display: flex;
@@ -388,12 +409,12 @@
 }
 
 .tool-name {
-    color: #90caf9;
+    color: var(--color-tool-name);
     font-weight: 500;
 }
 
 .tool-summary {
-    color: #888;
+    color: var(--color-tool-summary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -403,7 +424,7 @@
 }
 
 .tool-file-link {
-    color: #a5d6a7;
+    color: var(--color-tool-file-link);
     text-decoration: none;
     cursor: pointer;
 }
@@ -414,11 +435,11 @@
 
 .tool-params {
     padding: 6px 12px;
-    background: rgba(0, 0, 0, 0.1);
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--color-tool-bg-secondary);
+    border-top: 1px solid var(--border-primary);
     font-family: 'JetBrains Mono', 'Consolas', monospace;
     font-size: 12px;
-    color: #aaa;
+    color: var(--color-tool-param-text);
     max-width: 100%;
     overflow-x: auto; /* 参数过长时内部滚动 */
     box-sizing: border-box;
@@ -434,13 +455,13 @@
 }
 
 .param-key {
-    color: #78909c;
+    color: var(--color-tool-param-key);
     min-width: 80px;
     flex-shrink: 0;
 }
 
 .param-value {
-    color: #cfd8dc;
+    color: var(--color-tool-param-value);
     white-space: pre-wrap;
     word-break: break-all;
 }

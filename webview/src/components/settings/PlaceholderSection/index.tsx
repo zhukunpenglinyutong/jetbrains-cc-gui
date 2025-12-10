@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { McpSettingsSection } from '../../mcp/McpSettingsSection';
 import styles from './style.module.less';
 
@@ -5,34 +6,36 @@ interface PlaceholderSectionProps {
   type: 'permissions' | 'mcp' | 'agents' | 'skills';
 }
 
-const sectionConfig = {
-  permissions: {
-    title: '权限配置',
-    desc: '管理 Claude Code 的文件访问和操作权限',
-    icon: 'codicon-shield',
-    message: '权限配置功能即将推出...',
-  },
-  mcp: {
-    title: 'MCP服务器',
-    desc: '配置和管理 Model Context Protocol 服务器',
-    icon: 'codicon-server',
-    message: null, // MCP有专门的组件
-  },
-  agents: {
-    title: 'Agents',
-    desc: '管理和配置AI代理',
-    icon: 'codicon-robot',
-    message: 'Agents配置功能即将推出...',
-  },
-  skills: {
-    title: 'Skills',
-    desc: '管理和配置技能模块',
-    icon: 'codicon-book',
-    message: 'Skills配置功能即将推出...',
-  },
-};
-
 const PlaceholderSection = ({ type }: PlaceholderSectionProps) => {
+  const { t } = useTranslation();
+
+  const sectionConfig = {
+    permissions: {
+      title: t('settings.permissions'),
+      desc: t('settings.permissionsDesc'),
+      icon: 'codicon-shield',
+      message: t('settings.permissionsComingSoon'),
+    },
+    mcp: {
+      title: t('settings.mcp'),
+      desc: t('settings.mcpDesc'),
+      icon: 'codicon-server',
+      message: null, // MCP有专门的组件
+    },
+    agents: {
+      title: t('settings.agents'),
+      desc: t('settings.agentsDesc'),
+      icon: 'codicon-robot',
+      message: t('settings.agentsComingSoon'),
+    },
+    skills: {
+      title: t('settings.skills'),
+      desc: t('settings.skillsDesc'),
+      icon: 'codicon-book',
+      message: t('settings.skillsComingSoon'),
+    },
+  };
+
   const config = sectionConfig[type];
 
   return (

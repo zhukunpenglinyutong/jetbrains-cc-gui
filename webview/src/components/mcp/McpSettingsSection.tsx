@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { McpServer, McpPreset } from '../../types/mcp';
 import { sendToJava } from '../../utils/bridge';
 import { McpServerDialog } from './McpServerDialog';
@@ -12,6 +13,7 @@ import { copyToClipboard } from '../../utils/helpers';
  * MCP 服务器设置组件
  */
 export function McpSettingsSection() {
+  const { t } = useTranslation();
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
@@ -158,7 +160,7 @@ export function McpSettingsSection() {
   const confirmDelete = () => {
     if (deletingServer) {
       sendToJava('delete_mcp_server', { id: deletingServer.id });
-      addToast(`已删除 ${deletingServer.name || deletingServer.id}`, 'success');
+      addToast(`${t('mcp.deleted')} ${deletingServer.name || deletingServer.id}`, 'success');
 
       // 刷新服务器列表
       setTimeout(() => {
@@ -182,8 +184,7 @@ export function McpSettingsSection() {
 
   const handleAddFromMarket = () => {
     setShowDropdown(false);
-    // 轻提示：MCP 市场功能暂未实现
-    alert('MCP 市场功能暂未实现，敬请期待');
+    alert(t('mcp.marketComingSoon'));
   };
 
   const handleSaveServer = (server: McpServer) => {
@@ -193,16 +194,16 @@ export function McpSettingsSection() {
         // ID 改变了，先删除旧的，再添加新的
         sendToJava('delete_mcp_server', { id: editingServer.id });
         sendToJava('add_mcp_server', server);
-        addToast(`已更新 ${server.name || server.id}`, 'success');
+        addToast(`${t('mcp.updated')} ${server.name || server.id}`, 'success');
       } else {
         // ID 没变，直接更新
         sendToJava('update_mcp_server', server);
-        addToast(`已保存 ${server.name || server.id}`, 'success');
+        addToast(`${t('mcp.saved')} ${server.name || server.id}`, 'success');
       }
     } else {
       // 添加服务器
       sendToJava('add_mcp_server', server);
-      addToast(`已添加 ${server.name || server.id}`, 'success');
+      addToast(`${t('mcp.added')} ${server.name || server.id}`, 'success');
     }
 
     // 刷新服务器列表
@@ -232,7 +233,7 @@ export function McpSettingsSection() {
       enabled: true,
     };
     sendToJava('add_mcp_server', server);
-    addToast(`已添加 ${preset.name}`, 'success');
+    addToast(`${t('mcp.added')} ${preset.name}`, 'success');
 
     // 刷新服务器列表
     setTimeout(() => {
@@ -245,9 +246,9 @@ export function McpSettingsSection() {
   const handleCopyUrl = async (url: string) => {
     const success = await copyToClipboard(url);
     if (success) {
-      addToast('链接已复制，请到浏览器打开', 'success');
+      addToast(t('mcp.linkCopied'), 'success');
     } else {
-      addToast('复制失败，请手动复制', 'error');
+      addToast(t('mcp.copyFailed'), 'error');
     }
   };
 
@@ -256,11 +257,11 @@ export function McpSettingsSection() {
       {/* 头部 */}
       <div className="mcp-header">
         <div className="header-left">
-          <span className="header-title">MCP 服务器</span>
+          <span className="header-title">{t('mcp.title')}</span>
           <button
             className="help-btn"
             onClick={() => setShowHelpDialog(true)}
-            title="什么是 MCP?"
+            title={t('mcp.whatIsMcp')}
           >
             <span className="codicon codicon-question"></span>
           </button>
@@ -270,25 +271,25 @@ export function McpSettingsSection() {
             className="refresh-btn"
             onClick={handleRefresh}
             disabled={loading}
-            title="刷新服务器状态"
+            title={t('mcp.refreshStatus')}
           >
             <span className={`codicon codicon-refresh ${loading ? 'spinning' : ''}`}></span>
           </button>
           <div className="add-dropdown" ref={dropdownRef}>
             <button className="add-btn" onClick={() => setShowDropdown(!showDropdown)}>
               <span className="codicon codicon-add"></span>
-              添加
+              {t('mcp.add')}
               <span className="codicon codicon-chevron-down"></span>
             </button>
             {showDropdown && (
               <div className="dropdown-menu">
                 <div className="dropdown-item" onClick={handleAddManual}>
                   <span className="codicon codicon-json"></span>
-                  手动配置
+                  {t('mcp.manualConfig')}
                 </div>
                 <div className="dropdown-item" onClick={handleAddFromMarket}>
                   <span className="codicon codicon-extensions"></span>
-                  从 MCP市场 添加
+                  {t('mcp.addFromMarket')}
                 </div>
               </div>
             )}
@@ -333,13 +334,13 @@ export function McpSettingsSection() {
                   <div className="info-section">
                     {server.description && (
                       <div className="info-row">
-                        <span className="info-label">描述:</span>
+                        <span className="info-label">{t('mcp.description')}:</span>
                         <span className="info-value">{server.description}</span>
                       </div>
                     )}
                     {server.server.command && (
                       <div className="info-row">
-                        <span className="info-label">命令:</span>
+                        <span className="info-label">{t('mcp.command')}:</span>
                         <code className="info-value command">
                           {server.server.command} {(server.server.args || []).join(' ')}
                         </code>
@@ -365,7 +366,7 @@ export function McpSettingsSection() {
                         title="复制主页链接"
                       >
                         <span className="codicon codicon-home"></span>
-                        主页
+                        {t('mcp.homepage')}
                       </button>
                     )}
                     {server.docs && (
@@ -375,7 +376,7 @@ export function McpSettingsSection() {
                         title="复制文档链接"
                       >
                         <span className="codicon codicon-book"></span>
-                        文档
+                        {t('mcp.docs')}
                       </button>
                     )}
                     <button
@@ -384,7 +385,7 @@ export function McpSettingsSection() {
                       title="编辑配置"
                     >
                       <span className="codicon codicon-edit"></span>
-                      编辑
+                      {t('mcp.edit')}
                     </button>
                     <button
                       className="action-btn delete-btn"
@@ -392,7 +393,7 @@ export function McpSettingsSection() {
                       title="删除服务器"
                     >
                       <span className="codicon codicon-trash"></span>
-                      删除
+                      {t('mcp.delete')}
                     </button>
                   </div>
                 </div>
@@ -404,8 +405,8 @@ export function McpSettingsSection() {
           {servers.length === 0 && !loading && (
             <div className="empty-state">
               <span className="codicon codicon-server"></span>
-              <p>暂无 MCP 服务器</p>
-              <p className="hint">点击"添加"按钮添加服务器</p>
+              <p>{t('mcp.noServers')}</p>
+              <p className="hint">{t('mcp.addServerHint')}</p>
             </div>
           )}
         </div>
@@ -415,7 +416,7 @@ export function McpSettingsSection() {
       {loading && servers.length === 0 && (
         <div className="loading-state">
           <span className="codicon codicon-loading codicon-modifier-spin"></span>
-          <p>加载中...</p>
+          <p>{t('mcp.loading')}</p>
         </div>
       )}
 
@@ -445,10 +446,10 @@ export function McpSettingsSection() {
 
       {showConfirmDialog && deletingServer && (
         <McpConfirmDialog
-          title="删除 MCP 服务器"
-          message={`确定要删除服务器 "${deletingServer.name || deletingServer.id}" 吗？\n\n此操作无法撤销。`}
-          confirmText="删除"
-          cancelText="取消"
+          title={t('mcp.deleteTitle')}
+          message={t('mcp.deleteMessage', { name: deletingServer.name || deletingServer.id })}
+          confirmText={t('mcp.deleteConfirm')}
+          cancelText={t('mcp.cancel')}
           onConfirm={confirmDelete}
           onCancel={cancelDelete}
         />

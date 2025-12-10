@@ -564,9 +564,9 @@ public class ClaudeSession {
                     Message message = parseServerMessage(msg);
                     if (message != null) {
                         messages.add(message);
-                        System.out.println("[ClaudeSession] Parsed message: type=" + message.type + ", content length=" + message.content.length());
+                        // System.out.println("[ClaudeSession] Parsed message: type=" + message.type + ", content length=" + message.content.length());
                     } else {
-                        System.out.println("[ClaudeSession] Failed to parse message: " + msg);
+                        // System.out.println("[ClaudeSession] Failed to parse message: " + msg);
                     }
                 }
 
@@ -742,9 +742,9 @@ public class ClaudeSession {
 
             // 如果没有提取到任何内容，记录调试信息
             if (!hasContent && contentArray.size() > 0) {
-                System.err.println("[ClaudeSession] Warning: Content array has " + contentArray.size() +
-                    " elements but no content was extracted. First element: " +
-                    (contentArray.size() > 0 ? contentArray.get(0).toString() : "N/A"));
+                // System.err.println("[ClaudeSession] Warning: Content array has " + contentArray.size() +
+                //     " elements but no content was extracted. First element: " +
+                //     (contentArray.size() > 0 ? contentArray.get(0).toString() : "N/A"));
             }
 
             return sb.toString();

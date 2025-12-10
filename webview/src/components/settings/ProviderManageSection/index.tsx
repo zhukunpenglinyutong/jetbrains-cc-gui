@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../../types/provider';
 import ConfigInfoDisplay, { type ClaudeConfig } from '../ConfigInfoDisplay';
 import ProviderList from '../ProviderList';
@@ -26,10 +27,12 @@ const ProviderManageSection = ({
   onSwitchProvider,
   addToast,
 }: ProviderManageSectionProps) => {
+  const { t } = useTranslation();
+
   return (
     <div className={styles.configSection}>
-      <h3 className={styles.sectionTitle}>供应商管理</h3>
-      <p className={styles.sectionDesc}>管理 Claude API 供应商配置，切换不同的 API 服务提供商</p>
+      <h3 className={styles.sectionTitle}>{t('settings.providers')}</h3>
+      <p className={styles.sectionDesc}>{t('settings.providersDesc')}</p>
 
       {/* 当前 Claude CLI 配置信息展示 */}
       <div className={styles.configInfoWrapper}>
@@ -45,7 +48,7 @@ const ProviderManageSection = ({
       {loading && (
         <div className={styles.tempNotice}>
           <span className="codicon codicon-loading codicon-modifier-spin" />
-          <p>加载中...</p>
+          <p>{t('settings.provider.loading')}</p>
         </div>
       )}
 
@@ -60,7 +63,7 @@ const ProviderManageSection = ({
           emptyState={
             <>
               <span className="codicon codicon-info" />
-              <p>暂无供应商配置</p>
+              <p>{t('settings.provider.emptyProvider')}</p>
             </>
           }
         />

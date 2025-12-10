@@ -14,18 +14,18 @@
     gap: 8px;
     font-size: 13px;
     font-weight: 600;
-    color: #ccc;
+    color: var(--color-todo-header);
     margin-bottom: 8px;
 }
 
 .todo-header-icon {
-    color: #ccc;
+    color: var(--color-todo-header);
 }
 
 .todo-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 0;
 }
 
 .todo-item {
@@ -34,7 +34,13 @@
     gap: 10px;
     font-size: 13px;
     line-height: 1.4;
-    color: #ccc;
+    color: var(--color-todo-text);
+    padding: 6px 0;
+    border-bottom: 1px solid var(--color-todo-divider);
+}
+
+.todo-item:last-child {
+    border-bottom: none;
 }
 
 .todo-item.completed {
@@ -53,6 +59,6 @@
 }
 
 /* Icons based on status */
-.status-pending .codicon { color: var(--text-muted); }
-.status-in-progress .codicon { color: #ccc; }
-.status-completed .codicon { color: #89d185; }
+.status-pending .codicon { color: var(--color-todo-status-pending); }
+.status-in-progress .codicon { color: var(--color-todo-status-progress); }
+.status-completed .codicon { color: var(--color-todo-status-completed); }

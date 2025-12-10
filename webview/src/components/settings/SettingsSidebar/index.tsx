@@ -1,22 +1,23 @@
 import styles from './style.module.less';
+import { useTranslation } from 'react-i18next';
 
 export type SettingsTab = 'basic' | 'providers' | 'usage' | 'permissions' | 'mcp' | 'agents' | 'skills' | 'community';
 
 interface SidebarItem {
   key: SettingsTab;
   icon: string;
-  label: string;
+  labelKey: string; // 改为翻译 key
 }
 
 const sidebarItems: SidebarItem[] = [
-  { key: 'basic', icon: 'codicon-settings-gear', label: '基础配置' },
-  { key: 'providers', icon: 'codicon-vm-connect', label: '供应商管理' },
-  { key: 'usage', icon: 'codicon-graph', label: '使用统计' },
-  { key: 'mcp', icon: 'codicon-server', label: 'MCP服务器' },
-  { key: 'permissions', icon: 'codicon-shield', label: '权限配置' },
-  { key: 'agents', icon: 'codicon-robot', label: 'Agents' },
-  { key: 'skills', icon: 'codicon-book', label: 'Skills' },
-  { key: 'community', icon: 'codicon-comment-discussion', label: '官方交流群' },
+  { key: 'basic', icon: 'codicon-settings-gear', labelKey: 'settings.basic.title' },
+  { key: 'providers', icon: 'codicon-vm-connect', labelKey: 'settings.providers' },
+  { key: 'usage', icon: 'codicon-graph', labelKey: 'settings.usage' },
+  { key: 'mcp', icon: 'codicon-server', labelKey: 'settings.mcp' },
+  { key: 'permissions', icon: 'codicon-shield', labelKey: 'settings.permissions' },
+  { key: 'agents', icon: 'codicon-robot', labelKey: 'settings.agents' },
+  { key: 'skills', icon: 'codicon-book', labelKey: 'settings.skills' },
+  { key: 'community', icon: 'codicon-comment-discussion', labelKey: 'settings.community' },
 ];
 
 interface SettingsSidebarProps {
@@ -32,20 +33,25 @@ const SettingsSidebar = ({
   isCollapsed,
   onToggleCollapse,
 }: SettingsSidebarProps) => {
+  const { t } = useTranslation();
+
   return (
     <div className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}>
       <div className={styles.sidebarItems}>
-        {sidebarItems.map((item) => (
-          <div
-            key={item.key}
-            className={`${styles.sidebarItem} ${currentTab === item.key ? styles.active : ''}`}
-            onClick={() => onTabChange(item.key)}
-            title={isCollapsed ? item.label : ''}
-          >
-            <span className={`codicon ${item.icon}`} />
-            <span className={styles.sidebarItemText}>{item.label}</span>
-          </div>
-        ))}
+        {sidebarItems.map((item) => {
+          const label = t(item.labelKey);
+          return (
+            <div
+              key={item.key}
+              className={`${styles.sidebarItem} ${currentTab === item.key ? styles.active : ''}`}
+              onClick={() => onTabChange(item.key)}
+              title={isCollapsed ? label : ''}
+            >
+              <span className={`codicon ${item.icon}`} />
+              <span className={styles.sidebarItemText}>{label}</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* 折叠按钮 */}

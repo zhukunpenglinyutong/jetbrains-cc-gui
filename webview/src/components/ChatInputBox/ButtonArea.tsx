@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 // TODO: 临时隐藏模式选择器,后续恢复
 // import type { ButtonAreaProps, PermissionMode } from './types';
 import type { ButtonAreaProps } from './types';
@@ -31,6 +32,7 @@ export const ButtonArea = ({
   onModelSelect,
   onProviderSelect,
 }: ButtonAreaProps) => {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 根据当前提供商选择模型列表
@@ -147,7 +149,7 @@ export const ButtonArea = ({
         <button
           className="attach-button"
           onClick={handleAttachClick}
-          title="添加附件"
+          title={t('chat.addAttachment')}
           disabled={disabled || isLoading}
         >
           <span className="codicon codicon-attach" />
@@ -168,7 +170,7 @@ export const ButtonArea = ({
           <button
             className="submit-button stop-button"
             onClick={handleStopClick}
-            title="停止生成"
+            title={t('chat.stopGeneration')}
           >
             <span className="codicon codicon-debug-stop" />
           </button>
@@ -177,7 +179,7 @@ export const ButtonArea = ({
             className="submit-button"
             onClick={handleSubmitClick}
             disabled={disabled || !hasInputContent}
-            title="发送消息 (Enter)"
+            title={t('chat.sendMessageEnter')}
           >
             <span className="codicon codicon-send" />
           </button>

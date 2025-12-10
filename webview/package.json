@@ -20,8 +20,10 @@
   },
   "dependencies": {
     "@lobehub/icons": "^2.43.1",
+    "i18next": "^25.7.2",
     "marked": "^17.0.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-i18next": "^16.4.1"
   }
 }

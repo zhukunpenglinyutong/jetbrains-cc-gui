@@ -45,7 +45,7 @@
 
 .confirm-dialog-header {
     padding: 16px 20px;
-    border-bottom: 1px solid #3e3e42;
+    border-bottom: 1px solid var(--color-dialog-border);
 }
 
 .confirm-dialog-title {
@@ -68,7 +68,7 @@
 
 .confirm-dialog-footer {
     padding: 12px 20px;
-    border-top: 1px solid #3e3e42;
+    border-top: 1px solid var(--color-dialog-border);
     display: flex;
     justify-content: flex-end;
     gap: 8px;
@@ -96,16 +96,16 @@
 }
 
 .confirm-dialog-button.confirm-button {
-    background: #007fd4;
-    color: #ffffff;
+    background: var(--color-dialog-button-primary);
+    color: var(--color-button-text);
 }
 
 .confirm-dialog-button.confirm-button:hover {
-    background: #026ec1;
+    background: var(--color-dialog-button-primary-hover);
 }
 
 .confirm-dialog-button.confirm-button:active {
-    background: #0060a0;
+    background: var(--color-dialog-button-primary-active);
 }
 
 /* Modal Dialog Styles (用于删除确认等) */
@@ -180,14 +180,14 @@
 }
 
 .modal-btn-danger {
-    background: #ff3b30;
-    color: #ffffff;
+    background: var(--color-dialog-button-danger);
+    color: var(--color-button-text);
 
     &:hover {
-        background: #e6352a;
+        background: var(--color-dialog-button-danger-hover);
     }
 
     &:active {
-        background: #cc2e24;
+        background: var(--color-dialog-button-danger-active);
     }
 }
