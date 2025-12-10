@@ -32,24 +32,48 @@ export function setupApiKey() {
   let apiKeySource = 'default';
   let baseUrlSource = 'default';
 
-  // 优先级：settings.json > 环境变量
-  if (settings?.env?.ANTHROPIC_API_KEY) {
-    apiKey = settings.env.ANTHROPIC_API_KEY;
-    apiKeySource = 'settings.json';
-  } else if (settings?.env?.ANTHROPIC_AUTH_TOKEN) {
-    apiKey = settings.env.ANTHROPIC_AUTH_TOKEN;
-    apiKeySource = 'settings.json';
-  } else if (process.env.ANTHROPIC_API_KEY) {
-    apiKey = process.env.ANTHROPIC_API_KEY;
-    apiKeySource = 'environment';
+  // 🔥 统一配置优先级：系统环境变量 > settings.json
+  // 这样所有配置都遵循相同的优先级规则，避免混淆
+  if (settings?.env) {
+    console.log('[DEBUG] Loading environment variables from settings.json...');
+    const loadedVars = [];
+
+    // 遍历所有环境变量并设置到 process.env
+    for (const [key, value] of Object.entries(settings.env)) {
+      // 只有当环境变量未被设置时才从配置文件读取（系统环境变量优先）
+      if (process.env[key] === undefined && value !== undefined && value !== null) {
+        process.env[key] = String(value);
+        loadedVars.push(key);
+      }
+    }
+
+    if (loadedVars.length > 0) {
+      console.log(`[DEBUG] Loaded ${loadedVars.length} environment variables:`, loadedVars.join(', '));
+    }
   }
 
-  if (settings?.env?.ANTHROPIC_BASE_URL) {
-    baseUrl = settings.env.ANTHROPIC_BASE_URL;
-    baseUrlSource = 'settings.json';
-  } else if (process.env.ANTHROPIC_BASE_URL) {
+  // 🔥 统一优先级：系统环境变量 > settings.json（与上面的通用逻辑一致）
+  // 先检查系统环境变量，再回退到 settings.json
+  if (process.env.ANTHROPIC_API_KEY) {
+    apiKey = process.env.ANTHROPIC_API_KEY;
+    apiKeySource = 'environment (ANTHROPIC_API_KEY)';
+  } else if (process.env.ANTHROPIC_AUTH_TOKEN) {
+    apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+    apiKeySource = 'environment (ANTHROPIC_AUTH_TOKEN)';
+  } else if (settings?.env?.ANTHROPIC_API_KEY) {
+    apiKey = settings.env.ANTHROPIC_API_KEY;
+    apiKeySource = 'settings.json (ANTHROPIC_API_KEY)';
+  } else if (settings?.env?.ANTHROPIC_AUTH_TOKEN) {
+    apiKey = settings.env.ANTHROPIC_AUTH_TOKEN;
+    apiKeySource = 'settings.json (ANTHROPIC_AUTH_TOKEN)';
+  }
+
+  if (process.env.ANTHROPIC_BASE_URL) {
     baseUrl = process.env.ANTHROPIC_BASE_URL;
     baseUrlSource = 'environment';
+  } else if (settings?.env?.ANTHROPIC_BASE_URL) {
+    baseUrl = settings.env.ANTHROPIC_BASE_URL;
+    baseUrlSource = 'settings.json';
   }
 
   if (!apiKey) {

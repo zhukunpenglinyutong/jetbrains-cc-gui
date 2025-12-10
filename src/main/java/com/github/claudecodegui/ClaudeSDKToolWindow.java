@@ -123,8 +123,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 PropertiesComponent props = PropertiesComponent.getInstance();
                 String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
                 if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
-                    claudeSDKBridge.setNodeExecutable(savedNodePath.trim());
-                    System.out.println("[ClaudeChatWindow] Using manually configured Node.js path: " + savedNodePath.trim());
+                    String path = savedNodePath.trim();
+                    // 同时设置 Claude 和 Codex 的 Node.js 路径
+                    claudeSDKBridge.setNodeExecutable(path);
+                    codexSDKBridge.setNodeExecutable(path);
+                    System.out.println("[ClaudeChatWindow] Using manually configured Node.js path: " + path);
                 }
             } catch (Exception e) {
                 System.err.println("[ClaudeChatWindow] Failed to load manual Node.js path: " + e.getMessage());
@@ -260,11 +263,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
                 if (manualPath == null || manualPath.isEmpty()) {
                     props.unsetValue(NODE_PATH_PROPERTY_KEY);
+                    // 同时清除 Claude 和 Codex 的手动配置
                     claudeSDKBridge.setNodeExecutable(null);
+                    codexSDKBridge.setNodeExecutable(null);
                     System.out.println("[ClaudeChatWindow] Cleared manual Node.js path");
                 } else {
                     props.setValue(NODE_PATH_PROPERTY_KEY, manualPath);
+                    // 同时设置 Claude 和 Codex 的 Node.js 路径
                     claudeSDKBridge.setNodeExecutable(manualPath);
+                    codexSDKBridge.setNodeExecutable(manualPath);
                     System.out.println("[ClaudeChatWindow] Saved manual Node.js path: " + manualPath);
                 }
 

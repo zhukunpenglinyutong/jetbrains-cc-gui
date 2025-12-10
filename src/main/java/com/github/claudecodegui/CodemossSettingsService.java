@@ -514,12 +514,38 @@ public class CodemossSettingsService {
         }
 
         try {
+            // 优先使用用户在设置页面配置的 Node.js 路径
+            String nodePath = null;
+            try {
+                com.intellij.ide.util.PropertiesComponent props = com.intellij.ide.util.PropertiesComponent.getInstance();
+                String savedNodePath = props.getValue("claude.code.node.path");
+                if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
+                    // 验证用户配置的路径是否有效
+                    File nodeFile = new File(savedNodePath.trim());
+                    if (nodeFile.exists() && nodeFile.canExecute()) {
+                        nodePath = savedNodePath.trim();
+                        System.out.println("[Backend] 使用用户配置的 Node.js 路径: " + nodePath);
+                    } else {
+                        System.out.println("[Backend] 用户配置的 Node.js 路径无效，将自动检测: " + savedNodePath);
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("[Backend] 读取用户配置的 Node.js 路径失败: " + e.getMessage());
+            }
+
+            // 如果用户没有配置或配置无效，使用 NodeDetector 自动检测
+            if (nodePath == null) {
+                com.github.claudecodegui.bridge.NodeDetector nodeDetector = new com.github.claudecodegui.bridge.NodeDetector();
+                nodePath = nodeDetector.findNodeExecutable();
+                System.out.println("[Backend] 自动检测到的 Node.js 路径: " + nodePath);
+            }
+
             // 构建 Node.js 命令
-            ProcessBuilder pb = new ProcessBuilder("node", scriptPath, dbPath);
+            ProcessBuilder pb = new ProcessBuilder(nodePath, scriptPath, dbPath);
             pb.directory(new File(aiBridgePath));
             pb.redirectErrorStream(true); // 合并错误输出到标准输出
 
-            System.out.println("[Backend] 执行命令: node " + scriptPath + " " + dbPath);
+            System.out.println("[Backend] 执行命令: " + nodePath + " " + scriptPath + " " + dbPath);
 
             // 启动进程
             Process process = pb.start();

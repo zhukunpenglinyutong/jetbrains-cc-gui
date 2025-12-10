@@ -199,13 +199,17 @@ public class SettingsHandler extends BaseMessageHandler {
             String effectivePath;
             if (path == null || path.isEmpty()) {
                 props.unsetValue(NODE_PATH_PROPERTY_KEY);
+                // 同时清除 Claude 和 Codex 的手动配置
                 context.getClaudeSDKBridge().setNodeExecutable(null);
+                context.getCodexSDKBridge().setNodeExecutable(null);
                 System.out.println("[SettingsHandler] Cleared manual Node.js path from settings");
                 String detected = context.getClaudeSDKBridge().getNodeExecutable();
                 effectivePath = detected != null ? detected : "";
             } else {
                 props.setValue(NODE_PATH_PROPERTY_KEY, path);
+                // 同时设置 Claude 和 Codex 的 Node.js 路径
                 context.getClaudeSDKBridge().setNodeExecutable(path);
+                context.getCodexSDKBridge().setNodeExecutable(path);
                 System.out.println("[SettingsHandler] Updated manual Node.js path from settings: " + path);
                 effectivePath = path;
             }

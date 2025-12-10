@@ -92,7 +92,7 @@ public class FileHandler extends BaseMessageHandler {
 
                 if (query != null && !query.isEmpty()) {
                     File baseDir = new File(basePath);
-                    collectFiles(baseDir, basePath, files, query.toLowerCase(), 0, 10, 200);
+                    collectFiles(baseDir, basePath, files, query.toLowerCase(), 0, 15, 200);
                 } else {
                     File targetDir = new File(basePath, currentPath);
                     if (targetDir.exists() && targetDir.isDirectory()) {

@@ -102,19 +102,25 @@ public class NodeDetector {
      * 通过系统命令 (where/which) 检测 Node.js
      */
     private NodeDetectionResult detectNodeViaSystemCommand(List<String> triedPaths) {
-        try {
-            ProcessBuilder pb;
-            String methodDesc;
-
-            if (PlatformUtils.isWindows()) {
-                // Windows: 使用 where 命令
-                pb = new ProcessBuilder("where", "node");
-                methodDesc = "Windows where 命令";
-            } else {
-                // macOS/Linux: 使用 bash -l -c 'which node' 获取完整 shell 环境
-                pb = new ProcessBuilder("/bin/bash", "-l", "-c", "which node");
-                methodDesc = "Unix which 命令";
+        if (PlatformUtils.isWindows()) {
+            return detectNodeViaWindowsWhere(triedPaths);
+        } else {
+            // macOS/Linux: 先尝试 zsh（macOS 默认），再尝试 bash
+            NodeDetectionResult result = detectNodeViaShell("/bin/zsh", "zsh", triedPaths);
+            if (result != null && result.isFound()) {
+                return result;
             }
+            return detectNodeViaShell("/bin/bash", "bash", triedPaths);
+        }
+    }
+
+    /**
+     * Windows: 使用 where 命令检测 Node.js
+     */
+    private NodeDetectionResult detectNodeViaWindowsWhere(List<String> triedPaths) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("where", "node");
+            String methodDesc = "Windows where 命令";
 
             System.out.println("  尝试方法: " + methodDesc);
             Process process = pb.start();
@@ -126,15 +132,12 @@ public class NodeDetector {
                     path = path.trim();
                     triedPaths.add(path);
 
-                    // 验证路径可用
                     String version = verifyNodePath(path);
                     if (version != null) {
                         System.out.println("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
                         return NodeDetectionResult.success(
                             path, version,
-                            PlatformUtils.isWindows() ?
-                                NodeDetectionResult.DetectionMethod.WHERE_COMMAND :
-                                NodeDetectionResult.DetectionMethod.WHICH_COMMAND,
+                            NodeDetectionResult.DetectionMethod.WHERE_COMMAND,
                             triedPaths
                         );
                     }
@@ -146,7 +149,61 @@ public class NodeDetector {
                 process.destroyForcibly();
             }
         } catch (Exception e) {
-            System.out.println("  系统命令查找失败: " + e.getMessage());
+            System.out.println("  Windows where 命令查找失败: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Unix/macOS: 通过指定 shell 检测 Node.js
+     * @param shellPath shell 可执行文件路径（如 /bin/zsh 或 /bin/bash）
+     * @param shellName shell 名称（用于日志）
+     * @param triedPaths 已尝试的路径列表
+     */
+    private NodeDetectionResult detectNodeViaShell(String shellPath, String shellName, List<String> triedPaths) {
+        // 检查 shell 是否存在
+        if (!new File(shellPath).exists()) {
+            System.out.println("  跳过 " + shellName + "（不存在）");
+            return null;
+        }
+
+        try {
+            // 使用 -l（登录 shell）和 -i（交互式）确保加载用户配置
+            // 这样可以获取 nvm、fnm 等版本管理器配置的路径
+            ProcessBuilder pb = new ProcessBuilder(shellPath, "-l", "-c", "which node");
+            String methodDesc = shellName + " which 命令";
+
+            System.out.println("  尝试方法: " + methodDesc);
+            Process process = pb.start();
+
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String path = reader.readLine();
+                if (path != null && !path.isEmpty()) {
+                    path = path.trim();
+                    // 排除 "node not found" 类似的错误信息
+                    if (path.startsWith("/") && !path.contains("not found")) {
+                        triedPaths.add(path);
+
+                        String version = verifyNodePath(path);
+                        if (version != null) {
+                            System.out.println("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
+                            return NodeDetectionResult.success(
+                                path, version,
+                                NodeDetectionResult.DetectionMethod.WHICH_COMMAND,
+                                triedPaths
+                            );
+                        }
+                    }
+                }
+            }
+
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+            }
+        } catch (Exception e) {
+            System.out.println("  " + shellName + " 命令查找失败: " + e.getMessage());
         }
         return null;
     }

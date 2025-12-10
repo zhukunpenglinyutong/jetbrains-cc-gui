@@ -112,6 +112,21 @@ public class CodexSDKBridge {
     }
 
     /**
+     * 手动设置 Node.js 可执行文件路径
+     * @param path Node.js 路径，传 null 则清除手动设置，恢复自动检测
+     */
+    public void setNodeExecutable(String path) {
+        nodeDetector.setNodeExecutable(path);
+    }
+
+    /**
+     * 获取当前使用的 Node.js 路径
+     */
+    public String getNodeExecutable() {
+        return nodeDetector.getNodeExecutable();
+    }
+
+    /**
      * 设置 codex 二进制文件的执行权限
      */
     private void setCodexExecutablePermission(File bridgeDir) {

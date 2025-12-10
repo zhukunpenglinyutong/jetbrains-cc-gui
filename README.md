@@ -27,12 +27,12 @@ Currently in experimental stage. The product is still under active development w
 ## Installation
 
 ```sh
-# 1. Download the idea-claude-code-gui-0.0.9-beta3.zip file
+# 1. Download the idea-claude-code-gui-0.0.9-beta4.zip file
 
-# 2. In IDEA: Settings → Plugins → Install Plugin from Disk → Select the downloaded idea-claude-code-gui-0.0.9-beta3.zip
+# 2. In IDEA: Settings → Plugins → Install Plugin from Disk → Select the downloaded idea-claude-code-gui-0.0.9-beta4.zip
 ```
 
-Download: [idea-claude-code-gui-0.0.9-beta3.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta3.zip)
+Download: [idea-claude-code-gui-0.0.9-beta4.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta4.zip)
 
 ---
 
