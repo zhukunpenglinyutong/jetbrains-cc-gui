@@ -550,6 +550,28 @@ const App = () => {
     setCurrentView('chat');
   };
 
+  // 删除会话历史
+  const deleteHistorySession = (sessionId: string) => {
+    // 发送删除请求到 Java 后端
+    sendBridgeMessage('delete_session', sessionId);
+
+    // 立即更新前端状态,从历史列表中移除该会话
+    if (historyData && historyData.sessions) {
+      const updatedSessions = historyData.sessions.filter(s => s.sessionId !== sessionId);
+      const deletedSession = historyData.sessions.find(s => s.sessionId === sessionId);
+      const updatedTotal = (historyData.total || 0) - (deletedSession?.messageCount || 0);
+
+      setHistoryData({
+        ...historyData,
+        sessions: updatedSessions,
+        total: updatedTotal
+      });
+
+      // 显示成功提示
+      addToast('会话已删除', 'success');
+    }
+  };
+
   // 文案本地化映射
   const localizeMessage = (text: string): string => {
     const messageMap: Record<string, string> = {
@@ -1060,7 +1082,11 @@ const App = () => {
         <ScrollControl containerRef={messagesContainerRef} inputAreaRef={inputAreaRef} />
       </>
       ) : (
-        <HistoryView historyData={historyData} onLoadSession={loadHistorySession} />
+        <HistoryView
+          historyData={historyData}
+          onLoadSession={loadHistorySession}
+          onDeleteSession={deleteHistorySession}
+        />
       )}
 
       {currentView === 'chat' && (

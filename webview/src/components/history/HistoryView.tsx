@@ -5,6 +5,7 @@ import VirtualList from './VirtualList';
 interface HistoryViewProps {
   historyData: HistoryData | null;
   onLoadSession: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void; // 添加删除回调
 }
 
 const formatTimeAgo = (timestamp?: string) => {
@@ -29,8 +30,9 @@ const formatTimeAgo = (timestamp?: string) => {
   return `${Math.max(seconds, 1)} 秒前`;
 };
 
-const HistoryView = ({ historyData, onLoadSession }: HistoryViewProps) => {
+const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryViewProps) => {
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // 记录待删除的会话ID
 
   useEffect(() => {
     const handleResize = () => setViewportHeight(window.innerHeight || 600);
@@ -83,11 +85,41 @@ const HistoryView = ({ historyData, onLoadSession }: HistoryViewProps) => {
     );
   }
 
+  // 处理删除按钮点击(阻止事件冒泡,避免触发会话加载)
+  const handleDeleteClick = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation(); // 阻止点击事件冒泡到父元素
+    setDeletingSessionId(sessionId); // 显示确认对话框
+  };
+
+  // 确认删除
+  const confirmDelete = () => {
+    if (deletingSessionId) {
+      onDeleteSession(deletingSessionId);
+      setDeletingSessionId(null);
+    }
+  };
+
+  // 取消删除
+  const cancelDelete = () => {
+    setDeletingSessionId(null);
+  };
+
   const renderHistoryItem = (session: HistorySessionSummary) => (
     <div key={session.sessionId} className="history-item" onClick={() => onLoadSession(session.sessionId)}>
       <div className="history-item-header">
         <div className="history-item-title">{session.title}</div>
-        <div className="history-item-time">{formatTimeAgo(session.lastTimestamp)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="history-item-time">{formatTimeAgo(session.lastTimestamp)}</div>
+          {/* 删除按钮 */}
+          <button
+            className="history-delete-btn"
+            onClick={(e) => handleDeleteClick(e, session.sessionId)}
+            title="删除此会话"
+            aria-label="删除会话"
+          >
+            <span className="codicon codicon-trash"></span>
+          </button>
+        </div>
       </div>
       <div className="history-item-meta">
         <span>{session.messageCount} 条消息</span>
@@ -113,6 +145,24 @@ const HistoryView = ({ historyData, onLoadSession }: HistoryViewProps) => {
           className="messages-container"
         />
       </div>
+
+      {/* 删除确认对话框 */}
+      {deletingSessionId && (
+        <div className="modal-overlay" onClick={cancelDelete}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>确认删除</h3>
+            <p>确定要删除这个会话吗?此操作无法撤销。</p>
+            <div className="modal-actions">
+              <button className="modal-btn modal-btn-cancel" onClick={cancelDelete}>
+                取消
+              </button>
+              <button className="modal-btn modal-btn-danger" onClick={confirmDelete}>
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
