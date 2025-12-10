@@ -39,3 +39,38 @@
     font-size: 12px;
     color: var(--text-tertiary);
 }
+
+/* 删除按钮样式 */
+.history-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* 默认隐藏 */
+    line-height: 1;
+
+    .codicon {
+        font-size: 14px;
+    }
+}
+
+.history-item:hover .history-delete-btn {
+    opacity: 1; /* 鼠标悬停时显示 */
+}
+
+.history-delete-btn:hover {
+    background-color: rgba(255, 59, 48, 0.15);
+    color: #ff3b30; /* 红色表示删除操作 */
+}
+
+.history-delete-btn:active {
+    transform: scale(0.92);
+    background-color: rgba(255, 59, 48, 0.25);
+}

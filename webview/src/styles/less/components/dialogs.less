@@ -107,3 +107,87 @@
 .confirm-dialog-button.confirm-button:active {
     background: #0060a0;
 }
+
+/* Modal Dialog Styles (用于删除确认等) */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    min-width: 380px;
+    max-width: 500px;
+    padding: 24px;
+    animation: slideIn 0.2s ease-out;
+
+    h3 {
+        margin: 0 0 12px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    p {
+        margin: 0 0 20px 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text-primary);
+    }
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.modal-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:active {
+        transform: scale(0.98);
+    }
+}
+
+.modal-btn-cancel {
+    background: transparent;
+    border: 1px solid var(--border-secondary);
+    color: var(--text-primary);
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: var(--border-hover);
+    }
+}
+
+.modal-btn-danger {
+    background: #ff3b30;
+    color: #ffffff;
+
+    &:hover {
+        background: #e6352a;
+    }
+
+    &:active {
+        background: #cc2e24;
+    }
+}
