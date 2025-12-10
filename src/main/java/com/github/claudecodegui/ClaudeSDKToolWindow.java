@@ -445,32 +445,63 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         }
 
         private void createNewSession() {
-            System.out.println("Creating new session...");
+            System.out.println("[ClaudeSDKToolWindow] Creating new session...");
 
-            session = new ClaudeSession(claudeSDKBridge, codexSDKBridge);
-            handlerContext.setSession(session);
-            setupSessionCallbacks();
+            // 清空前端消息显示（修复新建会话时消息不清空的bug）
+            callJavaScript("clearMessages");
 
-            String workingDirectory = determineWorkingDirectory();
-            session.setSessionInfo(null, workingDirectory);
-            System.out.println("New session created with cwd: " + workingDirectory);
+            // 先中断旧会话，确保彻底断开旧的连接
+            // 使用异步方式等待中断完成，避免竞态条件
+            CompletableFuture<Void> interruptFuture = session != null
+                ? session.interrupt()
+                : CompletableFuture.completedFuture(null);
 
-            SwingUtilities.invokeLater(() -> {
-                callJavaScript("updateStatus", JsUtils.escapeJs("新会话已创建，可以开始提问"));
+            interruptFuture.thenRun(() -> {
+                System.out.println("[ClaudeSDKToolWindow] Old session interrupted, creating new session");
 
-                int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
-                JsonObject usageUpdate = new JsonObject();
-                usageUpdate.addProperty("percentage", 0);
-                usageUpdate.addProperty("totalTokens", 0);
-                usageUpdate.addProperty("limit", maxTokens);
-                usageUpdate.addProperty("usedTokens", 0);
-                usageUpdate.addProperty("maxTokens", maxTokens);
+                // 创建全新的 Session 对象
+                session = new ClaudeSession(claudeSDKBridge, codexSDKBridge);
 
-                String usageJson = new Gson().toJson(usageUpdate);
-                String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "'); }";
-                if (browser != null && !disposed) {
-                    browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
-                }
+                // 更新 HandlerContext 中的 Session 引用（重要：确保所有 Handler 使用新 Session）
+                handlerContext.setSession(session);
+
+                // 设置回调
+                setupSessionCallbacks();
+
+                // 设置工作目录（sessionId 为 null 表示新会话）
+                String workingDirectory = determineWorkingDirectory();
+                session.setSessionInfo(null, workingDirectory);
+
+                System.out.println("[ClaudeSDKToolWindow] New session created successfully");
+                System.out.println("[ClaudeSDKToolWindow]   - SessionId: null (new session)");
+                System.out.println("[ClaudeSDKToolWindow]   - Working directory: " + workingDirectory);
+
+                // 更新前端状态
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("updateStatus", JsUtils.escapeJs("新会话已创建，可以开始提问"));
+
+                    // 重置 Token 使用统计
+                    int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
+                    JsonObject usageUpdate = new JsonObject();
+                    usageUpdate.addProperty("percentage", 0);
+                    usageUpdate.addProperty("totalTokens", 0);
+                    usageUpdate.addProperty("limit", maxTokens);
+                    usageUpdate.addProperty("usedTokens", 0);
+                    usageUpdate.addProperty("maxTokens", maxTokens);
+
+                    String usageJson = new Gson().toJson(usageUpdate);
+                    String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "'); }";
+                    if (browser != null && !disposed) {
+                        browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
+                    }
+                });
+            }).exceptionally(ex -> {
+                System.err.println("[ClaudeSDKToolWindow] Failed to create new session: " + ex.getMessage());
+                ex.printStackTrace();
+                SwingUtilities.invokeLater(() -> {
+                    callJavaScript("updateStatus", JsUtils.escapeJs("创建新会话失败: " + ex.getMessage()));
+                });
+                return null;
             });
         }
 

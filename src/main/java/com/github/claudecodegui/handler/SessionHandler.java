@@ -22,15 +22,9 @@ public class SessionHandler extends BaseMessageHandler {
         "send_message",
         "send_message_with_attachments",
         "interrupt_session",
-        "restart_session",
-        "create_new_session"
+        "restart_session"
+        // 注意：create_new_session 不应该在这里处理，应该由 ClaudeSDKToolWindow.createNewSession() 处理
     };
-
-    private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new java.util.HashMap<>();
-    static {
-        MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
-        MODEL_CONTEXT_LIMITS.put("claude-opus-4-5-20251101", 200_000);
-    }
 
     public SessionHandler(HandlerContext context) {
         super(context);
@@ -59,10 +53,6 @@ public class SessionHandler extends BaseMessageHandler {
             case "restart_session":
                 System.out.println("[SessionHandler] 处理: restart_session");
                 handleRestartSession();
-                return true;
-            case "create_new_session":
-                System.out.println("[SessionHandler] 处理: create_new_session");
-                handleCreateNewSession();
                 return true;
             default:
                 return false;
@@ -170,32 +160,6 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 创建新会话
-     */
-    private void handleCreateNewSession() {
-        System.out.println("Creating new session...");
-
-        // 创建新会话需要通过回调通知主类
-        // 这里发送一个事件让主类处理
-        SwingUtilities.invokeLater(() -> {
-            callJavaScript("updateStatus", escapeJs("新会话已创建，可以开始提问"));
-
-            int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(context.getCurrentModel(), 200_000);
-            Gson gson = new Gson();
-            JsonObject usageUpdate = new JsonObject();
-            usageUpdate.addProperty("percentage", 0);
-            usageUpdate.addProperty("totalTokens", 0);
-            usageUpdate.addProperty("limit", maxTokens);
-            usageUpdate.addProperty("usedTokens", 0);
-            usageUpdate.addProperty("maxTokens", maxTokens);
-            String usageJson = gson.toJson(usageUpdate);
-
-            String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + escapeJs(usageJson) + "'); }";
-            context.executeJavaScriptOnEDT(js);
-        });
-    }
-
-    /**
      * 确定合适的工作目录
      */
     private String determineWorkingDirectory() {
@@ -204,12 +168,5 @@ public class SessionHandler extends BaseMessageHandler {
             return projectPath;
         }
         return System.getProperty("user.home");
-    }
-
-    /**
-     * 获取模型上下文限制
-     */
-    public static int getModelContextLimit(String model) {
-        return MODEL_CONTEXT_LIMITS.getOrDefault(model, 200_000);
     }
 }
