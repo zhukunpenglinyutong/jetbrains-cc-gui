@@ -63,8 +63,9 @@ def aiBridgePackDir = file("$buildDir/ai-bridge-pack")
 def aiBridgeArchive = new File(aiBridgePackDir, "ai-bridge.zip")
 
 // 自动构建 webview
+def webviewDir = file('webview')
 tasks.register('buildWebview', Exec) {
-    workingDir file('webview')
+    workingDir webviewDir
 
     // 根据操作系统选择命令
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
@@ -73,8 +74,8 @@ tasks.register('buildWebview', Exec) {
         commandLine 'npm', 'run', 'build'
     }
 
-    // 只在 webview 目录存在时执行
-    onlyIf { file('webview').exists() }
+    // 只在 webview 目录存在时执行（使用变量避免配置缓存问题）
+    onlyIf { webviewDir.exists() }
 
     // 输出构建信息
     doFirst {
@@ -94,15 +95,19 @@ tasks.register('packageAiBridge', Zip) {
     includeEmptyDirs = true
 }
 
+// 提取插件名称，避免在闭包中访问 extensions
+def intellijExt = project.extensions.getByType(IntelliJPluginExtension)
+def pluginName = intellijExt.pluginName.getOrElse(project.name)
+
 tasks.named("prepareSandbox") {
     dependsOn("buildWebview", "packageAiBridge")
+    def sandboxRootProvider = layout.buildDirectory.dir("idea-sandbox")
+
     doLast {
         if (!aiBridgeDir.exists()) {
             throw new GradleException("ai-bridge 目录不存在，请确保已拉取并安装依赖。")
         }
-        def sandboxRoot = layout.buildDirectory.dir("idea-sandbox").get().asFile
-        def intellijExt = project.extensions.getByType(IntelliJPluginExtension)
-        def pluginName = intellijExt.pluginName.getOrElse(project.name)
+        def sandboxRoot = sandboxRootProvider.get().asFile
         def pluginDir = new File(sandboxRoot, "plugins/${pluginName}")
 
         // 部署 ai-bridge

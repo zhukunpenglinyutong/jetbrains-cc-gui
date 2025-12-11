@@ -3,11 +3,11 @@ package com.github.claudecodegui.permission;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import com.google.gson.Gson;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
-import org.cef.handler.CefLoadHandler;
 import org.cef.handler.CefLoadHandlerAdapter;
 import org.jetbrains.annotations.Nullable;
 
@@ -56,7 +56,8 @@ public class PermissionDialog extends DialogWrapper {
 
         // 创建 JCEF 浏览器
         this.browser = new JBCefBrowser();
-        this.jsQuery = JBCefJSQuery.create(browser);
+        JBCefBrowserBase browserBase = this.browser;
+        this.jsQuery = JBCefJSQuery.create(browserBase);
 
         // 设置 JavaScript 回调
         jsQuery.addHandler((message) -> {

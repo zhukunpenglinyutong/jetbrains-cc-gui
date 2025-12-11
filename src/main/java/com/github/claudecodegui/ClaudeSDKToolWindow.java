@@ -7,6 +7,7 @@ import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.vfs.VirtualFileManager;
@@ -27,6 +28,8 @@ import com.google.gson.JsonObject;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.*;
+import java.awt.dnd.*;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -215,10 +218,41 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 browser = new JBCefBrowser();
                 handlerContext.setBrowser(browser);
 
-                JBCefJSQuery jsQuery = JBCefJSQuery.create((JBCefBrowser) browser);
+                // 启用开发者工具（右键菜单）
+                browser.getJBCefClient().setProperty("allowRunningInsecureContent", true);
+
+                JBCefBrowserBase browserBase = browser;
+                JBCefJSQuery jsQuery = JBCefJSQuery.create(browserBase);
                 jsQuery.addHandler((msg) -> {
                     handleJavaScriptMessage(msg);
                     return new JBCefJSQuery.Response("ok");
+                });
+
+                // 创建一个专门用于获取剪贴板文件路径的 JSQuery
+                JBCefJSQuery getClipboardPathQuery = JBCefJSQuery.create(browserBase);
+                getClipboardPathQuery.addHandler((msg) -> {
+                    try {
+                        System.out.println("[Java] Clipboard path request received");
+                        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                        Transferable contents = clipboard.getContents(null);
+
+                        if (contents != null && contents.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                            @SuppressWarnings("unchecked")
+                            List<File> files = (List<File>) contents.getTransferData(DataFlavor.javaFileListFlavor);
+
+                            if (!files.isEmpty()) {
+                                File file = files.get(0);
+                                String filePath = file.getAbsolutePath();
+                                System.out.println("[Java] Returning file path from clipboard: " + filePath);
+                                return new JBCefJSQuery.Response(filePath);
+                            }
+                        }
+                        System.out.println("[Java] No file in clipboard");
+                        return new JBCefJSQuery.Response("");
+                    } catch (Exception ex) {
+                        System.err.println("[Java] Error getting clipboard path: " + ex.getMessage());
+                        return new JBCefJSQuery.Response("");
+                    }
                 });
 
                 String htmlContent = htmlLoader.loadChatHtml();
@@ -228,11 +262,80 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                     public void onLoadEnd(CefBrowser browser, CefFrame frame, int httpStatusCode) {
                         String injection = "window.sendToJava = function(msg) { " + jsQuery.inject("msg") + " };";
                         browser.executeJavaScript(injection, browser.getURL(), 0);
+
+                        // 注入获取剪贴板路径的函数
+                        String clipboardPathInjection =
+                            "window.getClipboardFilePath = function() {" +
+                            "  return new Promise((resolve) => {" +
+                            "    " + getClipboardPathQuery.inject("''",
+                                "function(response) { resolve(response); }",
+                                "function(error_code, error_message) { console.error('Failed to get clipboard path:', error_message); resolve(''); }") +
+                            "  });" +
+                            "};";
+                        browser.executeJavaScript(clipboardPathInjection, browser.getURL(), 0);
+
+                        // 将控制台日志转发到 IDEA 控制台
+                        String consoleForward =
+                            "const originalLog = console.log;" +
+                            "const originalError = console.error;" +
+                            "const originalWarn = console.warn;" +
+                            "console.log = function(...args) {" +
+                            "  originalLog.apply(console, args);" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.log', args: args}));" +
+                            "};" +
+                            "console.error = function(...args) {" +
+                            "  originalError.apply(console, args);" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.error', args: args}));" +
+                            "};" +
+                            "console.warn = function(...args) {" +
+                            "  originalWarn.apply(console, args);" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.warn', args: args}));" +
+                            "};";
+                        browser.executeJavaScript(consoleForward, browser.getURL(), 0);
                     }
                 }, browser.getCefBrowser());
 
                 browser.loadHTML(htmlContent);
-                mainPanel.add(browser.getComponent(), BorderLayout.CENTER);
+
+                JComponent browserComponent = browser.getComponent();
+
+                // 添加拖拽支持 - 获取完整文件路径
+                new DropTarget(browserComponent, new DropTargetAdapter() {
+                    @Override
+                    public void drop(DropTargetDropEvent dtde) {
+                        try {
+                            dtde.acceptDrop(DnDConstants.ACTION_COPY);
+                            Transferable transferable = dtde.getTransferable();
+
+                            if (transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                                @SuppressWarnings("unchecked")
+                                List<File> files = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
+
+                                if (!files.isEmpty()) {
+                                    File file = files.get(0); // 只处理第一个文件
+                                    String filePath = file.getAbsolutePath();
+                                    System.out.println("[Java] Dropped file path: " + filePath);
+
+                                    // 通过 JavaScript 将路径传递到前端
+                                    String jsCode = String.format(
+                                        "if (window.handleFilePathFromJava) { window.handleFilePathFromJava('%s'); }",
+                                        filePath.replace("\\", "\\\\").replace("'", "\\'")
+                                    );
+                                    browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
+                                }
+                                dtde.dropComplete(true);
+                                return;
+                            }
+                        } catch (Exception ex) {
+                            System.err.println("[Java] Drop error: " + ex.getMessage());
+                            ex.printStackTrace();
+                        }
+                        dtde.dropComplete(false);
+                    }
+                });
+
+
+                mainPanel.add(browserComponent, BorderLayout.CENTER);
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -290,6 +393,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         }
 
         private void handleJavaScriptMessage(String message) {
+            // 处理控制台日志转发
+            if (message.startsWith("{\"type\":\"console.")) {
+                try {
+                    JsonObject json = new Gson().fromJson(message, JsonObject.class);
+                    String logType = json.get("type").getAsString();
+                    JsonArray args = json.getAsJsonArray("args");
+
+                    StringBuilder logMessage = new StringBuilder("[Webview] ");
+                    for (int i = 0; i < args.size(); i++) {
+                        if (i > 0) logMessage.append(" ");
+                        logMessage.append(args.get(i).toString());
+                    }
+
+                    if ("console.error".equals(logType)) {
+                        System.err.println(logMessage);
+                    } else if ("console.warn".equals(logType)) {
+                        System.out.println(logMessage);
+                    } else {
+                        System.out.println(logMessage);
+                    }
+                } catch (Exception e) {
+                    System.err.println("[Backend] 解析控制台日志失败: " + e.getMessage());
+                }
+                return;
+            }
+
             String[] parts = message.split(":", 2);
             if (parts.length < 1) {
                 System.err.println("[Backend] 错误: 消息格式无效");

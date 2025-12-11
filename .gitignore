@@ -57,3 +57,6 @@ src/main/resources/html/*
 .claude
 specs
 CLAUDE.md
+
+# 自定义沙箱目录（如果启用）
+.sandbox/
