@@ -18,7 +18,9 @@
     "success": "सफलता",
     "error": "त्रुटि",
     "warning": "चेतावनी",
-    "info": "जानकारी"
+    "info": "जानकारी",
+    "seconds": "से",
+    "minutes": "मि"
   },
   "chat": {
     "sendMessage": "{{provider}} को संदेश भेजें",
@@ -37,7 +39,14 @@
     "closePreview": "पूर्वावलोकन बंद करें",
     "loadingDropdown": "लोड हो रहा है...",
     "addAttachment": "अटैचमेंट जोड़ें",
-    "stopGeneration": "जनरेशन रोकें"
+    "stopGeneration": "जनरेशन रोकें",
+    "generatingResponse": "प्रतिक्रिया उत्पन्न हो रही है",
+    "elapsedTime": "बीता {{time}}",
+    "minutesAndSeconds": "{{minutes}} मि {{seconds}} से",
+    "imagePreview": "पूर्वावलोकन",
+    "context": "संदर्भ",
+    "usage": "उपयोग",
+    "usagePercentage": "उपयोग: {{percentage}}"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -138,7 +147,8 @@
         "statusUpdate": "अपडेट",
         "selectedCount": "{{count}} आइटम चुने गए",
         "confirmImport": "आयात की पुष्टि करें"
-      }
+      },
+      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone."
     },
     "comingSoon": "सुविधा जल्द आ रही है...",
     "permissionsComingSoon": "अनुमति कॉन्फ़िगरेशन सुविधा जल्द आ रही है...",
@@ -257,6 +267,66 @@
     "saved": "सहेजा गया",
     "added": "जोड़ा गया",
     "linkCopied": "लिंक कॉपी किया गया, कृपया ब्राउज़र में खोलें",
-    "copyFailed": "कॉपी विफल, कृपया मैन्युअल रूप से कॉपी करें"
+    "copyFailed": "कॉपी विफल, कृपया मैन्युअल रूप से कॉपी करें",
+    "presets": {
+      "fetch": "Web content fetching tool for scraping web pages",
+      "time": "Time and timezone utilities",
+      "memory": "Knowledge graph and memory storage tool",
+      "sequentialThinking": "Sequential thinking and reasoning tool",
+      "context7": "Document search and context retrieval tool"
+    }
+  },
+  "tools": {
+    "toolCall": "उपकरण कॉल",
+    "runCommand": "कमांड चलाएं",
+    "contextEngine": "संदर्भ इंजन",
+    "task": "कार्य",
+    "readFile": "फ़ाइल पढ़ें",
+    "editFile": "फ़ाइल संपादित करें",
+    "writeFile": "फ़ाइल लिखें",
+    "replaceString": "स्ट्रिंग बदलें",
+    "executeCommand": "कमांड निष्पादित करें",
+    "search": "खोजें",
+    "fileMatch": "फ़ाइल मिलान",
+    "webFetch": "वेब प्राप्त करें",
+    "webSearch": "वेब खोज",
+    "delete": "हटाएं",
+    "explore": "अन्वेषण करें",
+    "createDirectory": "निर्देशिका बनाएं",
+    "moveFile": "फ़ाइल स्थानांतरित करें",
+    "copyFile": "फ़ाइल कॉपी करें",
+    "listFiles": "फ़ाइलें सूचीबद्ध करें",
+    "findFile": "फ़ाइल खोजें",
+    "todoList": "कार्य सूची"
+  },
+  "skills": {
+    "title": "Skills",
+    "all": "All",
+    "global": "Global",
+    "local": "Local",
+    "filterEnabled": "Filter enabled Skills",
+    "enabled": "Enabled",
+    "filterDisabled": "Filter disabled Skills",
+    "disabled": "Disabled",
+    "searchPlaceholder": "Search Skills...",
+    "whatIsSkills": "What are Skills?",
+    "importSkill": "Import Skill",
+    "importGlobalSkill": "Import Global Skill",
+    "importLocalSkill": "Import Local Skill",
+    "description": "Description",
+    "noDescription": "No description",
+    "noSkills": "No Skills",
+    "importHint": "Click + button to import Skill file or folder",
+    "deleteTitle": "Delete Skill",
+    "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
+    "deleteMessageGlobal": "global",
+    "deleteMessageLocal": "local",
+    "importSuccess": "Successfully imported {{count}} Skills",
+    "importSuccessOne": "Successfully imported 1 Skill",
+    "importPartialSuccess": "Successfully imported {{count}}/{{total}} Skills, some failed",
+    "importFailed": "Failed to import Skill",
+    "deleteSuccess": "Successfully deleted Skill",
+    "toggleSuccess": "Updated Skill status",
+    "toggleFailed": "Failed to update Skill status"
   }
 }

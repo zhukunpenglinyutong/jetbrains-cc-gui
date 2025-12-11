@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { TokenIndicatorProps } from './types';
 
 /**
@@ -10,6 +11,7 @@ export const TokenIndicator = ({
   usedTokens,
   maxTokens,
 }: TokenIndicatorProps) => {
+  const { t } = useTranslation();
   // 圆的半径（留出 stroke 空间）
   const radius = (size - 3) / 2;
   const center = size / 2;
@@ -36,8 +38,8 @@ export const TokenIndicator = ({
   const usedText = formatTokens(usedTokens);
   const maxText = formatTokens(maxTokens);
   const tooltip = usedText && maxText
-    ? `${formattedPercentage} · ${usedText} / ${maxText} 上下文`
-    : `使用量: ${formattedPercentage}`;
+    ? `${formattedPercentage} · ${usedText} / ${maxText} ${t('chat.context')}`
+    : t('chat.usagePercentage', { percentage: formattedPercentage });
 
   return (
     <div className="token-indicator">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface WaitingIndicatorProps {
   size?: number;
@@ -7,6 +8,7 @@ interface WaitingIndicatorProps {
 }
 
 export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps) => {
+  const { t } = useTranslation();
   const [dotCount, setDotCount] = useState(1);
   const [elapsedSeconds, setElapsedSeconds] = useState(() => {
     // 如果提供了开始时间，计算已经过去的秒数
@@ -45,19 +47,19 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
   // 格式化时间显示：60秒以内显示"X秒"，超过60秒显示"X分Y秒"
   const formatElapsedTime = (seconds: number): string => {
     if (seconds < 60) {
-      return `${seconds} 秒`;
+      return `${seconds} ${t('common.seconds')}`;
     }
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${minutes} 分 ${remainingSeconds} 秒`;
+    return `${t('chat.minutesAndSeconds', { minutes, seconds: remainingSeconds })}`;
   };
 
   return (
     <div className="waiting-indicator">
       <span className="waiting-spinner" style={{ width: size, height: size }} />
       <span className="waiting-text">
-	        正在生成响应<span className="waiting-dots">{dots}</span>
-	        <span className="waiting-seconds">（已用 {formatElapsedTime(elapsedSeconds)}）</span>
+	        {t('chat.generatingResponse')}<span className="waiting-dots">{dots}</span>
+	        <span className="waiting-seconds">（{t('chat.elapsedTime', { time: formatElapsedTime(elapsedSeconds) })}）</span>
       </span>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ToolInput } from '../../types';
 import { openFile } from '../../utils/bridge';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
@@ -17,44 +18,44 @@ const CODICON_MAP: Record<string, string> = {
   augmentcontextengine: 'codicon-symbol-class', // Added based on Picture 2
 };
 
-const getToolDisplayName = (name?: string) => {
+const getToolDisplayName = (t: any, name?: string) => {
   if (!name) {
-    return '工具调用';
+    return t('tools.toolCall');
   }
 
-  // 中文映射表
-  const chineseNameMap: Record<string, string> = {
-    'augmentcontextengine': '上下文引擎',
-    'task': '任务',
-    'read': '读取文件',
-    'read_file': '读取文件',
-    'edit': '编辑文件',
-    'edit_file': '编辑文件',
-    'write': '写入文件',
-    'write_to_file': '写入文件',
-    'replace_string': '替换字符串',
-    'bash': '运行命令',
-    'run_terminal_cmd': '运行命令',
-    'execute_command': '执行命令',
-    'executecommand': '执行命令',
-    'grep': '搜索',
-    'glob': '文件匹配',
-    'webfetch': '网页获取',
-    'websearch': '网页搜索',
-    'delete': '删除',
-    'explore': '探索',
-    'createdirectory': '创建目录',
-    'movefile': '移动文件',
-    'copyfile': '复制文件',
-    'list': '列出文件',
-    'search': '搜索',
-    'find': '查找文件',
-    'todowrite': '任务列表',
+  // Translation key mapping
+  const toolKeyMap: Record<string, string> = {
+    'augmentcontextengine': 'tools.contextEngine',
+    'task': 'tools.task',
+    'read': 'tools.readFile',
+    'read_file': 'tools.readFile',
+    'edit': 'tools.editFile',
+    'edit_file': 'tools.editFile',
+    'write': 'tools.writeFile',
+    'write_to_file': 'tools.writeFile',
+    'replace_string': 'tools.replaceString',
+    'bash': 'tools.runCommand',
+    'run_terminal_cmd': 'tools.runCommand',
+    'execute_command': 'tools.executeCommand',
+    'executecommand': 'tools.executeCommand',
+    'grep': 'tools.search',
+    'glob': 'tools.fileMatch',
+    'webfetch': 'tools.webFetch',
+    'websearch': 'tools.webSearch',
+    'delete': 'tools.delete',
+    'explore': 'tools.explore',
+    'createdirectory': 'tools.createDirectory',
+    'movefile': 'tools.moveFile',
+    'copyfile': 'tools.copyFile',
+    'list': 'tools.listFiles',
+    'search': 'tools.search',
+    'find': 'tools.findFile',
+    'todowrite': 'tools.todoList',
   };
 
   const lowerName = name.toLowerCase();
-  if (chineseNameMap[lowerName]) {
-    return chineseNameMap[lowerName];
+  if (toolKeyMap[lowerName]) {
+    return t(toolKeyMap[lowerName]);
   }
 
   // If it's snake_case, replace underscores with spaces and capitalize
@@ -95,6 +96,7 @@ interface GenericToolBlockProps {
 }
 
 const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
+  const { t } = useTranslation();
   // Tools that should be collapsible (Grep, Glob, Write, and MCP tools)
   const lowerName = (name ?? '').toLowerCase();
   const isMcpTool = lowerName.startsWith('mcp__');
@@ -106,7 +108,7 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
   }
 
   const filePath = pickFilePath(input);
-  const displayName = getToolDisplayName(name);
+  const displayName = getToolDisplayName(t, name);
   const codicon = CODICON_MAP[(name ?? '').toLowerCase()] ?? 'codicon-tools';
 
   let summary: string | null = null;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Skill, SkillsConfig, SkillScope, SkillFilter, SkillEnabledFilter } from '../../types/skill';
 import { sendToJava } from '../../utils/bridge';
 import { SkillHelpDialog } from './SkillHelpDialog';
@@ -11,6 +12,7 @@ import { ToastContainer, type ToastMessage } from '../Toast';
  * 支持启用/停用 Skills（通过在使用中目录和管理目录之间移动文件）
  */
 export function SkillsSettingsSection() {
+  const { t } = useTranslation();
   // Skills 数据
   const [skills, setSkills] = useState<SkillsConfig>({ global: {}, local: {} });
   const [loading, setLoading] = useState(true);
@@ -127,16 +129,16 @@ export function SkillsSettingsSection() {
           const count = result.count || 0;
           const total = result.total || 0;
           if (result.errors && result.errors.length > 0) {
-            addToast(`成功导入 ${count}/${total} 个 Skills，部分失败`, 'warning');
+            addToast(t('skills.importPartialSuccess', { count, total }), 'warning');
           } else if (count === 1) {
-            addToast('已成功导入 1 个 Skill', 'success');
+            addToast(t('skills.importSuccessOne'), 'success');
           } else if (count > 1) {
-            addToast(`已成功导入 ${count} 个 Skills`, 'success');
+            addToast(t('skills.importSuccess', { count }), 'success');
           }
           // 重新加载
           loadSkills();
         } else {
-          addToast(result.error || '导入 Skill 失败', 'error');
+          addToast(result.error || t('skills.importFailed'), 'error');
         }
       } catch (error) {
         console.error('[SkillsSettings] Failed to parse import result:', error);
@@ -148,7 +150,7 @@ export function SkillsSettingsSection() {
       try {
         const result = JSON.parse(jsonStr);
         if (result.success) {
-          addToast('已成功删除 Skill', 'success');
+          addToast(t('skills.deleteSuccess'), 'success');
           loadSkills();
         } else {
           addToast(result.error || '删除 Skill 失败', 'error');
@@ -298,37 +300,37 @@ export function SkillsSettingsSection() {
             className={`tab-item ${currentFilter === 'all' ? 'active' : ''}`}
             onClick={() => setCurrentFilter('all')}
           >
-            全部 <span className="count-badge">{totalCount}</span>
+            {t('skills.all')} <span className="count-badge">{totalCount}</span>
           </div>
           <div
             className={`tab-item ${currentFilter === 'global' ? 'active' : ''}`}
             onClick={() => setCurrentFilter('global')}
           >
-            全局 <span className="count-badge">{globalCount}</span>
+            {t('skills.global')} <span className="count-badge">{globalCount}</span>
           </div>
           <div
             className={`tab-item ${currentFilter === 'local' ? 'active' : ''}`}
             onClick={() => setCurrentFilter('local')}
           >
-            本项目 <span className="count-badge">{localCount}</span>
+            {t('skills.local')} <span className="count-badge">{localCount}</span>
           </div>
           {/* 启用状态筛选 */}
           <div className="filter-separator"></div>
           <div
             className={`tab-item enabled-filter ${enabledFilter === 'enabled' ? 'active' : ''}`}
             onClick={() => setEnabledFilter(enabledFilter === 'enabled' ? 'all' : 'enabled')}
-            title="筛选启用的 Skills"
+            title={t('skills.filterEnabled')}
           >
             <span className="codicon codicon-check"></span>
-            启用 <span className="count-badge">{enabledCount}</span>
+            {t('skills.enabled')} <span className="count-badge">{enabledCount}</span>
           </div>
           <div
             className={`tab-item enabled-filter ${enabledFilter === 'disabled' ? 'active' : ''}`}
             onClick={() => setEnabledFilter(enabledFilter === 'disabled' ? 'all' : 'disabled')}
-            title="筛选停用的 Skills"
+            title={t('skills.filterDisabled')}
           >
             <span className="codicon codicon-circle-slash"></span>
-            停用 <span className="count-badge">{disabledCount}</span>
+            {t('skills.disabled')} <span className="count-badge">{disabledCount}</span>
           </div>
         </div>
 
@@ -340,7 +342,7 @@ export function SkillsSettingsSection() {
             <input
               type="text"
               className="search-input"
-              placeholder="搜索 Skills..."
+              placeholder={t('skills.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -350,7 +352,7 @@ export function SkillsSettingsSection() {
           <button
             className="icon-btn"
             onClick={() => setShowHelpDialog(true)}
-            title="什么是 Skills?"
+            title={t('skills.whatIsSkills')}
           >
             <span className="codicon codicon-question"></span>
           </button>
@@ -360,7 +362,7 @@ export function SkillsSettingsSection() {
             <button
               className="icon-btn primary"
               onClick={() => setShowDropdown(!showDropdown)}
-              title="导入 Skill"
+              title={t('skills.importSkill')}
             >
               <span className="codicon codicon-add"></span>
             </button>
@@ -446,20 +448,20 @@ export function SkillsSettingsSection() {
                 <div className="info-section">
                   {skill.description ? (
                     <div className="description-container">
-                      <div className="description-label">描述:</div>
+                      <div className="description-label">{t('skills.description')}:</div>
                       <div className="description-content">{skill.description}</div>
                     </div>
                   ) : (
-                    <div className="description-placeholder">暂无描述</div>
+                    <div className="description-placeholder">{t('skills.noDescription')}</div>
                   )}
                 </div>
 
                 <div className="actions-section">
                   <button className="action-btn edit-btn" onClick={() => handleOpen(skill)}>
-                    <span className="codicon codicon-edit"></span> 编辑
+                    <span className="codicon codicon-edit"></span> {t('common.edit')}
                   </button>
                   <button className="action-btn delete-btn" onClick={() => handleDelete(skill)}>
-                    <span className="codicon codicon-trash"></span> 删除
+                    <span className="codicon codicon-trash"></span> {t('common.delete')}
                   </button>
                 </div>
               </div>
@@ -472,7 +474,7 @@ export function SkillsSettingsSection() {
           <div className="empty-state">
             <span className="codicon codicon-extensions"></span>
             <p>未找到匹配的 Skills</p>
-            <p className="hint">点击 + 按钮导入 Skill 文件或文件夹</p>
+            <p className="hint">{t('skills.importHint')}</p>
           </div>
         )}
 
@@ -480,7 +482,7 @@ export function SkillsSettingsSection() {
         {loading && filteredSkills.length === 0 && (
           <div className="loading-state">
             <span className="codicon codicon-loading codicon-modifier-spin"></span>
-            <p>加载中...</p>
+            <p>{t('common.loading')}</p>
           </div>
         )}
       </div>
@@ -492,8 +494,8 @@ export function SkillsSettingsSection() {
 
       {showConfirmDialog && deletingSkill && (
         <SkillConfirmDialog
-          title="删除 Skill"
-          message={`确定要删除${deletingSkill.scope === 'global' ? '全局' : '本项目'} Skill "${deletingSkill.name}" 吗？\n\n此操作无法撤销。`}
+          title={t('skills.deleteTitle')}
+          message={t('skills.deleteMessage', { scope: deletingSkill.scope === 'global' ? t('skills.deleteMessageGlobal') : t('skills.deleteMessageLocal'), name: deletingSkill.name })}
           confirmText="删除"
           cancelText="取消"
           onConfirm={confirmDelete}

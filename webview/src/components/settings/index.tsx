@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../types/provider';
 import { type ClaudeConfig } from './ConfigInfoDisplay';
 import AlertDialog from '../AlertDialog';
@@ -35,6 +36,7 @@ const sendToJava = (message: string) => {
 const AUTO_COLLAPSE_THRESHOLD = 900;
 
 const SettingsView = ({ onClose }: SettingsViewProps) => {
+  const { t } = useTranslation();
   const [currentTab, setCurrentTab] = useState<SettingsTab>('basic');
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -427,7 +429,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
         title="确认删除"
-        message={`确定要删除供应商"${deleteConfirm.provider?.name || ''}"吗？\n\n此操作无法撤销。`}
+        message={t('settings.provider.deleteProviderMessage', { name: deleteConfirm.provider?.name || '' })}
         confirmText="删除"
         cancelText="取消"
         onConfirm={confirmDeleteProvider}

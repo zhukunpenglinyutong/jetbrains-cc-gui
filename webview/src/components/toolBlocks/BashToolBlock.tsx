@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 
 interface BashToolBlockProps {
@@ -8,6 +9,7 @@ interface BashToolBlockProps {
 }
 
 const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   if (!input) {
@@ -41,7 +43,7 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
       >
         <div className="task-title-section">
           <span className="codicon codicon-terminal bash-tool-icon" />
-          <span className="bash-tool-title">运行命令</span>
+          <span className="bash-tool-title">{t('tools.runCommand')}</span>
           <span className="bash-tool-description">{description}</span>
         </div>
 

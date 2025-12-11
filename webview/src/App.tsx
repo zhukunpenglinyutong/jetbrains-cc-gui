@@ -32,7 +32,7 @@ import type {
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
-const DEFAULT_STATUS = '就绪';
+const DEFAULT_STATUS = 'ready';
 
 const isTruthy = (value: unknown) => value === true || value === 'true';
 
@@ -982,7 +982,7 @@ const App = () => {
                               if (previewRoot && block.src) {
                                 previewRoot.innerHTML = `
                                   <div class="image-preview-overlay" onclick="this.remove()">
-                                    <img src="${block.src}" alt="预览" class="image-preview-content" onclick="event.stopPropagation()" />
+                                    <img src="${block.src}" alt={t('chat.imagePreview')} class="image-preview-content" onclick="event.stopPropagation()" />
                                     <div class="image-preview-close" onclick="this.parentElement.remove()">×</div>
                                   </div>
                                 `;

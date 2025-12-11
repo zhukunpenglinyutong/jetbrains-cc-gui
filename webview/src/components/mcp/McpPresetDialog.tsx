@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { McpPreset } from '../../types/mcp';
 
 interface McpPresetDialogProps {
@@ -9,12 +10,13 @@ interface McpPresetDialogProps {
  * MCP 预设服务器选择对话框
  */
 export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
+  const { t } = useTranslation();
   // MCP 预设服务器配置
   const MCP_PRESETS: McpPreset[] = [
     {
       id: 'fetch',
       name: 'mcp-server-fetch',
-      description: 'Web 内容获取工具，可以抓取网页内容',
+      description: t('mcp.presets.fetch'),
       tags: ['stdio', 'http', 'web'],
       server: {
         type: 'stdio',
@@ -27,7 +29,7 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
     {
       id: 'time',
       name: '@modelcontextprotocol/server-time',
-      description: '时间和时区工具',
+      description: t('mcp.presets.time'),
       tags: ['stdio', 'time', 'utility'],
       server: {
         type: 'stdio',
@@ -40,7 +42,7 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
     {
       id: 'memory',
       name: '@modelcontextprotocol/server-memory',
-      description: '知识图谱和记忆存储工具',
+      description: t('mcp.presets.memory'),
       tags: ['stdio', 'memory', 'graph'],
       server: {
         type: 'stdio',
@@ -53,7 +55,7 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
     {
       id: 'sequential-thinking',
       name: '@modelcontextprotocol/server-sequential-thinking',
-      description: '顺序思考和推理工具',
+      description: t('mcp.presets.sequentialThinking'),
       tags: ['stdio', 'thinking', 'reasoning'],
       server: {
         type: 'stdio',
@@ -66,7 +68,7 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
     {
       id: 'context7',
       name: '@upstash/context7-mcp',
-      description: '文档搜索和上下文检索工具',
+      description: t('mcp.presets.context7'),
       tags: ['stdio', 'docs', 'search'],
       server: {
         type: 'stdio',

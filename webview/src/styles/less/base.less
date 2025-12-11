@@ -18,3 +18,28 @@ body {
     flex-direction: column;
     border-left: 1px solid var(--border-primary);
 }
+
+/* Global Scrollbar Styles - Force Override */
+*::-webkit-scrollbar {
+    width: 10px !important;
+    height: 10px !important;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb) !important;
+    border-radius: 5px !important;
+    border: 2px solid transparent !important;
+    background-clip: content-box !important;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover) !important;
+}
+
+*::-webkit-scrollbar-corner {
+    background: transparent !important;
+}

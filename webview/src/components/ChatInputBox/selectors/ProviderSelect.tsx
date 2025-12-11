@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Claude, OpenAI, Gemini } from '@lobehub/icons';
 import { AVAILABLE_PROVIDERS } from '../types';
 
@@ -28,6 +29,7 @@ const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: nu
  * 支持 Claude、Codex、Gemini 等提供商切换
  */
 export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -65,7 +67,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
 
     if (!provider.enabled) {
       // 如果提供商不可用，显示提示
-      showToastMessage('切换功能暂未实现，敬请期待');
+      showToastMessage(t('settings.provider.featureComingSoon'));
       setIsOpen(false);
       return;
     }

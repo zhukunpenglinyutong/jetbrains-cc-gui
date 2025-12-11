@@ -18,7 +18,9 @@
     "success": "成功",
     "error": "错误",
     "warning": "警告",
-    "info": "信息"
+    "info": "信息",
+    "seconds": "秒",
+    "minutes": "分"
   },
   "chat": {
     "sendMessage": "给 {{provider}} 发送消息",
@@ -37,7 +39,14 @@
     "closePreview": "关闭预览",
     "loadingDropdown": "加载中...",
     "addAttachment": "添加附件",
-    "stopGeneration": "停止生成"
+    "stopGeneration": "停止生成",
+    "generatingResponse": "正在生成响应",
+    "elapsedTime": "已用 {{time}}",
+    "minutesAndSeconds": "{{minutes}} 分 {{seconds}} 秒",
+    "imagePreview": "预览",
+    "context": "上下文",
+    "usage": "使用量",
+    "usagePercentage": "使用量: {{percentage}}"
   },
   "settings": {
     "title": "设置",
@@ -138,7 +147,8 @@
         "statusUpdate": "更新",
         "selectedCount": "已选择 {{count}} 项",
         "confirmImport": "确认导入"
-      }
+      },
+      "deleteProviderMessage": "确定要删除供应商 \"{{name}}\" 吗？\n\n此操作无法撤销。"
     },
     "comingSoon": "功能即将推出...",
     "permissionsComingSoon": "权限配置功能即将推出...",
@@ -257,6 +267,66 @@
     "saved": "已保存",
     "added": "已添加",
     "linkCopied": "链接已复制，请到浏览器打开",
-    "copyFailed": "复制失败，请手动复制"
+    "copyFailed": "复制失败，请手动复制",
+    "presets": {
+      "fetch": "Web 内容获取工具，可以抓取网页内容",
+      "time": "时间和时区工具",
+      "memory": "知识图谱和记忆存储工具",
+      "sequentialThinking": "顺序思考和推理工具",
+      "context7": "文档搜索和上下文检索工具"
+    }
+  },
+  "tools": {
+    "toolCall": "工具调用",
+    "runCommand": "运行命令",
+    "contextEngine": "上下文引擎",
+    "task": "任务",
+    "readFile": "读取文件",
+    "editFile": "编辑文件",
+    "writeFile": "写入文件",
+    "replaceString": "替换字符串",
+    "executeCommand": "执行命令",
+    "search": "搜索",
+    "fileMatch": "文件匹配",
+    "webFetch": "网页获取",
+    "webSearch": "网页搜索",
+    "delete": "删除",
+    "explore": "探索",
+    "createDirectory": "创建目录",
+    "moveFile": "移动文件",
+    "copyFile": "复制文件",
+    "listFiles": "列出文件",
+    "findFile": "查找文件",
+    "todoList": "任务列表"
+  },
+  "skills": {
+    "title": "Skills",
+    "all": "全部",
+    "global": "全局",
+    "local": "本项目",
+    "filterEnabled": "筛选启用的 Skills",
+    "enabled": "启用",
+    "filterDisabled": "筛选停用的 Skills",
+    "disabled": "停用",
+    "searchPlaceholder": "搜索 Skills...",
+    "whatIsSkills": "什么是 Skills?",
+    "importSkill": "导入 Skill",
+    "importGlobalSkill": "导入全局 Skill",
+    "importLocalSkill": "导入本项目 Skill",
+    "description": "描述",
+    "noDescription": "暂无描述",
+    "noSkills": "暂无 Skills",
+    "importHint": "点击 + 按钮导入 Skill 文件或文件夹",
+    "deleteTitle": "删除 Skill",
+    "deleteMessage": "确定要删除{{scope}} Skill \"{{name}}\" 吗？\n\n此操作无法撤销。",
+    "deleteMessageGlobal": "全局",
+    "deleteMessageLocal": "本项目",
+    "importSuccess": "已成功导入 {{count}} 个 Skills",
+    "importSuccessOne": "已成功导入 1 个 Skill",
+    "importPartialSuccess": "成功导入 {{count}}/{{total}} 个 Skills，部分失败",
+    "importFailed": "导入 Skill 失败",
+    "deleteSuccess": "已成功删除 Skill",
+    "toggleSuccess": "已更新 Skill 状态",
+    "toggleFailed": "更新 Skill 状态失败"
   }
 }

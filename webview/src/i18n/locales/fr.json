@@ -18,7 +18,9 @@
     "success": "Succès",
     "error": "Erreur",
     "warning": "Avertissement",
-    "info": "Information"
+    "info": "Information",
+    "seconds": "s",
+    "minutes": "m"
   },
   "chat": {
     "sendMessage": "Envoyer un message à {{provider}}",
@@ -37,7 +39,14 @@
     "closePreview": "Fermer l'aperçu",
     "loadingDropdown": "Chargement...",
     "addAttachment": "Ajouter une pièce jointe",
-    "stopGeneration": "Arrêter la génération"
+    "stopGeneration": "Arrêter la génération",
+    "generatingResponse": "Génération de la réponse",
+    "elapsedTime": "Écoulé {{time}}",
+    "minutesAndSeconds": "{{minutes}}m {{seconds}}s",
+    "imagePreview": "Aperçu",
+    "context": "Contexte",
+    "usage": "Utilisation",
+    "usagePercentage": "Utilisation: {{percentage}}"
   },
   "settings": {
     "title": "Paramètres",
@@ -138,7 +147,8 @@
         "statusUpdate": "Mise à jour",
         "selectedCount": "{{count}} éléments sélectionnés",
         "confirmImport": "Confirmer l'importation"
-      }
+      },
+      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone."
     },
     "comingSoon": "Bientôt disponible...",
     "permissionsComingSoon": "Configuration des permissions bientôt disponible...",
@@ -257,6 +267,66 @@
     "saved": "Enregistré",
     "added": "Ajouté",
     "linkCopied": "Lien copié, veuillez ouvrir dans le navigateur",
-    "copyFailed": "Échec de la copie, veuillez copier manuellement"
+    "copyFailed": "Échec de la copie, veuillez copier manuellement",
+    "presets": {
+      "fetch": "Web content fetching tool for scraping web pages",
+      "time": "Time and timezone utilities",
+      "memory": "Knowledge graph and memory storage tool",
+      "sequentialThinking": "Sequential thinking and reasoning tool",
+      "context7": "Document search and context retrieval tool"
+    }
+  },
+  "tools": {
+    "toolCall": "Appel d'outil",
+    "runCommand": "Exécuter commande",
+    "contextEngine": "Moteur de contexte",
+    "task": "Tâche",
+    "readFile": "Lire fichier",
+    "editFile": "Modifier fichier",
+    "writeFile": "Écrire fichier",
+    "replaceString": "Remplacer chaîne",
+    "executeCommand": "Exécuter commande",
+    "search": "Rechercher",
+    "fileMatch": "Correspondance de fichiers",
+    "webFetch": "Récupérer web",
+    "webSearch": "Recherche web",
+    "delete": "Supprimer",
+    "explore": "Explorer",
+    "createDirectory": "Créer répertoire",
+    "moveFile": "Déplacer fichier",
+    "copyFile": "Copier fichier",
+    "listFiles": "Lister fichiers",
+    "findFile": "Trouver fichier",
+    "todoList": "Liste de tâches"
+  },
+  "skills": {
+    "title": "Skills",
+    "all": "Tous",
+    "global": "Global",
+    "local": "Local",
+    "filterEnabled": "Filter enabled Skills",
+    "enabled": "Enabled",
+    "filterDisabled": "Filter disabled Skills",
+    "disabled": "Disabled",
+    "searchPlaceholder": "Search Skills...",
+    "whatIsSkills": "What are Skills?",
+    "importSkill": "Import Skill",
+    "importGlobalSkill": "Import Global Skill",
+    "importLocalSkill": "Import Local Skill",
+    "description": "Description",
+    "noDescription": "No description",
+    "noSkills": "No Skills",
+    "importHint": "Click + button to import Skill file or folder",
+    "deleteTitle": "Delete Skill",
+    "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
+    "deleteMessageGlobal": "global",
+    "deleteMessageLocal": "local",
+    "importSuccess": "Successfully imported {{count}} Skills",
+    "importSuccessOne": "Successfully imported 1 Skill",
+    "importPartialSuccess": "Successfully imported {{count}}/{{total}} Skills, some failed",
+    "importFailed": "Failed to import Skill",
+    "deleteSuccess": "Successfully deleted Skill",
+    "toggleSuccess": "Updated Skill status",
+    "toggleFailed": "Failed to update Skill status"
   }
 }

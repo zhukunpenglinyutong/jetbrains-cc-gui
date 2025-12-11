@@ -171,25 +171,6 @@
 }
 
 /* 输入框滚动条样式 */
-.input-editable-wrapper::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.input-editable-wrapper::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.input-editable-wrapper::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb, #424242);
-  border-radius: 5px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-.input-editable-wrapper::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scrollbar-thumb-hover, #4f4f4f);
-}
 
 .input-editable {
   min-height: calc(1.5em * 3);
@@ -479,25 +460,6 @@
 }
 
 /* 滚动条样式 */
-.completion-dropdown::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.completion-dropdown::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.completion-dropdown::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb, #424242);
-  border-radius: 5px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-.completion-dropdown::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scrollbar-thumb-hover, #4f4f4f);
-}
 
 .dropdown-item {
   display: flex;

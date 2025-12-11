@@ -18,7 +18,9 @@
     "success": "成功",
     "error": "錯誤",
     "warning": "警告",
-    "info": "資訊"
+    "info": "資訊",
+    "seconds": "秒",
+    "minutes": "分"
   },
   "chat": {
     "sendMessage": "給 {{provider}} 發送訊息",
@@ -37,7 +39,14 @@
     "closePreview": "關閉預覽",
     "loadingDropdown": "載入中...",
     "addAttachment": "新增附件",
-    "stopGeneration": "停止生成"
+    "stopGeneration": "停止生成",
+    "generatingResponse": "正在生成響應",
+    "elapsedTime": "已用 {{time}}",
+    "minutesAndSeconds": "{{minutes}} 分 {{seconds}} 秒",
+    "imagePreview": "預覽",
+    "context": "上下文",
+    "usage": "使用量",
+    "usagePercentage": "使用量: {{percentage}}"
   },
   "settings": {
     "title": "設定",
@@ -138,7 +147,8 @@
         "statusUpdate": "更新",
         "selectedCount": "已選擇 {{count}} 項",
         "confirmImport": "確認匯入"
-      }
+      },
+      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone."
     },
     "comingSoon": "功能即將推出...",
     "permissionsComingSoon": "權限配置功能即將推出...",
@@ -257,6 +267,66 @@
     "saved": "已儲存",
     "added": "已新增",
     "linkCopied": "連結已複製，請到瀏覽器開啟",
-    "copyFailed": "複製失敗，請手動複製"
+    "copyFailed": "複製失敗，請手動複製",
+    "presets": {
+      "fetch": "Web content fetching tool for scraping web pages",
+      "time": "Time and timezone utilities",
+      "memory": "Knowledge graph and memory storage tool",
+      "sequentialThinking": "Sequential thinking and reasoning tool",
+      "context7": "Document search and context retrieval tool"
+    }
+  },
+  "tools": {
+    "toolCall": "工具調用",
+    "runCommand": "運行命令",
+    "contextEngine": "上下文引擎",
+    "task": "任務",
+    "readFile": "讀取文件",
+    "editFile": "編輯文件",
+    "writeFile": "寫入文件",
+    "replaceString": "替換字符串",
+    "executeCommand": "執行命令",
+    "search": "搜索",
+    "fileMatch": "文件匹配",
+    "webFetch": "網頁獲取",
+    "webSearch": "網頁搜索",
+    "delete": "刪除",
+    "explore": "探索",
+    "createDirectory": "創建目錄",
+    "moveFile": "移動文件",
+    "copyFile": "複製文件",
+    "listFiles": "列出文件",
+    "findFile": "查找文件",
+    "todoList": "任務列表"
+  },
+  "skills": {
+    "title": "Skills",
+    "all": "全部",
+    "global": "全局",
+    "local": "本項目",
+    "filterEnabled": "Filter enabled Skills",
+    "enabled": "Enabled",
+    "filterDisabled": "Filter disabled Skills",
+    "disabled": "Disabled",
+    "searchPlaceholder": "Search Skills...",
+    "whatIsSkills": "What are Skills?",
+    "importSkill": "Import Skill",
+    "importGlobalSkill": "Import Global Skill",
+    "importLocalSkill": "Import Local Skill",
+    "description": "描述",
+    "noDescription": "暫無描述",
+    "noSkills": "No Skills",
+    "importHint": "Click + button to import Skill file or folder",
+    "deleteTitle": "Delete Skill",
+    "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
+    "deleteMessageGlobal": "global",
+    "deleteMessageLocal": "local",
+    "importSuccess": "Successfully imported {{count}} Skills",
+    "importSuccessOne": "Successfully imported 1 Skill",
+    "importPartialSuccess": "Successfully imported {{count}}/{{total}} Skills, some failed",
+    "importFailed": "Failed to import Skill",
+    "deleteSuccess": "Successfully deleted Skill",
+    "toggleSuccess": "Updated Skill status",
+    "toggleFailed": "Failed to update Skill status"
   }
 }
