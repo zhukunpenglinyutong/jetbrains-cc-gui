@@ -446,7 +446,7 @@ public class ClaudeSDKBridge {
         List<ClaudeSession.Attachment> attachments,
         MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, callback);
+        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, null, callback);
     }
 
     /**
@@ -460,6 +460,7 @@ public class ClaudeSDKBridge {
         List<ClaudeSession.Attachment> attachments,
         String permissionMode,
         String model,
+        JsonObject openedFiles,
         MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -502,6 +503,11 @@ public class ClaudeSDKBridge {
                 stdinInput.addProperty("model", model != null ? model : "");
                 if (hasAttachments && attachmentsJson != null) {
                     stdinInput.add("attachments", gson.fromJson(attachmentsJson, JsonArray.class));
+                }
+                // 添加打开的文件信息（包含激活文件和其他文件）
+                if (openedFiles != null && openedFiles.size() > 0) {
+                    stdinInput.add("openedFiles", openedFiles);
+                    System.out.println("[ClaudeSDKBridge] Adding opened files info to context");
                 }
                 String stdinJson = gson.toJson(stdinInput);
 

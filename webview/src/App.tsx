@@ -87,6 +87,9 @@ const App = () => {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [inputValue, setInputValue] = useState('');
 
+  // Context state (active file and selection)
+  const [contextInfo, setContextInfo] = useState<{ file: string; startLine?: number; endLine?: number; raw: string } | null>(null);
+
   // 根据当前提供商选择显示的模型
   const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
 
@@ -238,12 +241,33 @@ const App = () => {
     window.addSelectionInfo = (selectionInfo) => {
       console.log('[Frontend] addSelectionInfo called:', selectionInfo);
       if (selectionInfo) {
-        // 将选中的代码引用添加到输入框
-        setInputValue((prev) => {
-          const separator = prev.trim() ? ' ' : '';
-          return prev + separator + selectionInfo;
-        });
+        // Try to parse the format @path#Lstart-end or just @path
+        // Regex: starts with @, captures path until # or end. Optional #L(start)[-(end)]
+        const match = selectionInfo.match(/^@([^#]+)(?:#L(\d+)(?:-(\d+))?)?$/);
+        if (match) {
+          const file = match[1];
+          const startLine = match[2] ? parseInt(match[2], 10) : undefined;
+          const endLine = match[3] ? parseInt(match[3], 10) : (startLine !== undefined ? startLine : undefined);
+          setContextInfo({
+            file,
+            startLine,
+            endLine,
+            raw: selectionInfo
+          });
+        } else {
+          // Fallback: 将选中的代码引用添加到输入框
+          setInputValue((prev) => {
+            const separator = prev.trim() ? ' ' : '';
+            return prev + separator + selectionInfo;
+          });
+        }
       }
+    };
+
+    // 清除选中代码信息回调
+    window.clearSelectionInfo = () => {
+      console.log('[Frontend] clearSelectionInfo called');
+      setContextInfo(null);
     };
   }, [currentProvider]);
 
@@ -313,8 +337,15 @@ const App = () => {
    * 处理消息发送（来自 ChatInputBox）
    */
   const handleSubmit = (content: string, attachments?: Attachment[]) => {
-    const text = content.trim();
+    let text = content.trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+
+    // Append context if exists
+    if (contextInfo) {
+      const separator = text ? ' ' : '';
+      text = text + separator + contextInfo.raw;
+    }
+
     if (!text && !hasAttachments) {
       return;
     }
@@ -386,6 +417,7 @@ const App = () => {
 
     // 清空输入框状态
     setInputValue('');
+    setContextInfo(null);
   };
 
   /**
@@ -942,7 +974,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.0.9-beta5
+                  v0.1.0
                 </span>
               </div>
               <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
@@ -1110,6 +1142,13 @@ const App = () => {
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
+            activeFile={contextInfo?.file}
+            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined 
+              ? (contextInfo.startLine === contextInfo.endLine 
+                  ? `L${contextInfo.startLine}` 
+                  : `L${contextInfo.startLine}-${contextInfo.endLine}`)
+              : undefined}
+            onClearContext={() => setContextInfo(null)}
           />
         </div>
       )}

@@ -130,7 +130,7 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
   }
 }
 
-	export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null) {
 	  let timeoutId;
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
@@ -177,6 +177,54 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
     const sdkModelName = mapModelIdToSdkName(model);
     console.log('[DEBUG] Model mapping:', model, '->', sdkModelName);
 
+	    // Build systemPrompt.append content (for adding opened files context)
+	    let systemPromptAppend = '';
+	    if (openedFiles && typeof openedFiles === 'object') {
+	      const { active, selection, others } = openedFiles;
+	      const hasActive = active && active.trim() !== '';
+	      const hasSelection = selection && selection.selectedText;
+	      const hasOthers = Array.isArray(others) && others.length > 0;
+
+	      if (hasActive || hasOthers) {
+	        console.log('[DEBUG] Building systemPrompt.append with active file:', active,
+	                    'selection:', hasSelection ? 'yes' : 'no',
+	                    'other files:', others?.length || 0);
+	        systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
+
+	        if (hasActive) {
+	          systemPromptAppend += '**Currently Active File** (primary focus):\n';
+	          systemPromptAppend += `- ${active}`;
+
+	          // If there's a code selection, highlight it
+	          if (hasSelection) {
+	            systemPromptAppend += ` (lines ${selection.startLine}-${selection.endLine} selected)\n\n`;
+	            systemPromptAppend += '**Selected Code** (this is what the user is specifically asking about):\n';
+	            systemPromptAppend += '```\n';
+	            systemPromptAppend += selection.selectedText;
+	            systemPromptAppend += '\n```\n\n';
+	            systemPromptAppend += 'This selected code is the PRIMARY FOCUS. The user\'s question is most likely about this specific code section.\n';
+	          } else {
+	            systemPromptAppend += '\n\n';
+	            systemPromptAppend += 'This is the file the user is currently viewing/editing. It should be the main focus when answering questions.\n';
+	          }
+	        }
+
+	        if (hasOthers) {
+	          if (hasActive) {
+	            systemPromptAppend += '\n**Other Open Files** (potentially relevant):\n';
+	          } else {
+	            systemPromptAppend += 'User has the following files open:\n';
+	          }
+	          others.forEach(file => {
+	            systemPromptAppend += `- ${file}\n`;
+	          });
+	          if (hasActive && !hasSelection) {
+	            systemPromptAppend += '\nThese files may be related to the question, but are not the primary focus.';
+	          }
+	        }
+	      }
+	    }
+
 	    // 准备选项
 	    // 注意：不再传递 pathToClaudeCodeExecutable，让 SDK 自动使用内置 cli.js
 	    // 这样可以避免 Windows 下系统 CLI 路径问题（ENOENT 错误）
@@ -206,9 +254,11 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 	      settingSources: ['user', 'project', 'local'],
 	      // 使用 Claude Code 预设系统提示，让 Claude 知道当前工作目录
 	      // 这是修复路径问题的关键：没有 systemPrompt 时 Claude 不知道 cwd
+	      // 如果有 openedFiles，通过 append 字段添加打开文件的上下文
 	      systemPrompt: {
 	        type: 'preset',
-	        preset: 'claude_code'
+	        preset: 'claude_code',
+	        ...(systemPromptAppend && { append: systemPromptAppend })
 	      }
 	    };
 	    console.log('[PERM_DEBUG] options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
@@ -514,6 +564,57 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     // 加载附件
     const attachments = await loadAttachments(stdinData);
 
+    // 提取打开的文件列表（从 stdinData）
+    const openedFiles = stdinData?.openedFiles || null;
+
+    // Build systemPrompt.append content (for adding opened files context)
+    let systemPromptAppend = '';
+    if (openedFiles && typeof openedFiles === 'object') {
+      const { active, selection, others } = openedFiles;
+      const hasActive = active && active.trim() !== '';
+      const hasSelection = selection && selection.selectedText;
+      const hasOthers = Array.isArray(others) && others.length > 0;
+
+      if (hasActive || hasOthers) {
+        console.log('[DEBUG] (withAttachments) Building systemPrompt.append with active file:', active,
+                    'selection:', hasSelection ? 'yes' : 'no',
+                    'other files:', others?.length || 0);
+        systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
+
+        if (hasActive) {
+          systemPromptAppend += '**Currently Active File** (primary focus):\n';
+          systemPromptAppend += `- ${active}`;
+
+          // If there's a code selection, highlight it
+          if (hasSelection) {
+            systemPromptAppend += ` (lines ${selection.startLine}-${selection.endLine} selected)\n\n`;
+            systemPromptAppend += '**Selected Code** (this is what the user is specifically asking about):\n';
+            systemPromptAppend += '```\n';
+            systemPromptAppend += selection.selectedText;
+            systemPromptAppend += '\n```\n\n';
+            systemPromptAppend += 'This selected code is the PRIMARY FOCUS. The user\'s question is most likely about this specific code section.\n';
+          } else {
+            systemPromptAppend += '\n\n';
+            systemPromptAppend += 'This is the file the user is currently viewing/editing. It should be the main focus when answering questions.\n';
+          }
+        }
+
+        if (hasOthers) {
+          if (hasActive) {
+            systemPromptAppend += '\n**Other Open Files** (potentially relevant):\n';
+          } else {
+            systemPromptAppend += 'User has the following files open:\n';
+          }
+          others.forEach(file => {
+            systemPromptAppend += `- ${file}\n`;
+          });
+          if (hasActive && !hasSelection) {
+            systemPromptAppend += '\nThese files may be related to the question, but are not the primary focus.';
+          }
+        }
+      }
+    }
+
     // 构建用户消息内容块
     const contentBlocks = buildContentBlocks(attachments, message);
 
@@ -606,9 +707,11 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       settingSources: ['user', 'project', 'local'],
       // 使用 Claude Code 预设系统提示，让 Claude 知道当前工作目录
       // 这是修复路径问题的关键：没有 systemPrompt 时 Claude 不知道 cwd
+      // 如果有 openedFiles，通过 append 字段添加打开文件的上下文
       systemPrompt: {
         type: 'preset',
-        preset: 'claude_code'
+        preset: 'claude_code',
+        ...(systemPromptAppend && { append: systemPromptAppend })
       }
     };
     console.log('[PERM_DEBUG] (withAttachments) options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');

@@ -11,6 +11,17 @@ import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.vfs.VirtualFileManager;
+import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileEditor.FileEditorManagerListener;
+import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
+import com.intellij.openapi.editor.event.SelectionListener;
+import com.intellij.openapi.editor.event.SelectionEvent;
+import com.intellij.openapi.editor.EditorFactory;
+import com.intellij.util.messages.MessageBusConnection;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.util.Alarm;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefLoadHandlerAdapter;
@@ -80,6 +91,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         private final CodemossSettingsService settingsService;
         private final HtmlLoader htmlLoader;
 
+        // Editor Event Listeners
+        private Alarm contextUpdateAlarm;
+        private MessageBusConnection connection;
+
         private JBCefBrowser browser;
         private ClaudeSession session;
         private String currentModel = "claude-sonnet-4-5";
@@ -106,6 +121,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             syncActiveProvider();
             setupPermissionService();
             initializeHandlers();
+            registerEditorListeners();
             setupSessionCallbacks();
             initializeSessionInfo();
 
@@ -118,7 +134,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
         }
 
         private void initializeSession() {
-            this.session = new ClaudeSession(claudeSDKBridge, codexSDKBridge);
+            this.session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
         }
 
         private void loadNodePathFromSettings() {
@@ -189,6 +205,84 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             messageDispatcher.registerHandler(historyHandler);
 
             System.out.println("[ClaudeChatWindow] Registered " + messageDispatcher.getHandlerCount() + " message handlers");
+        }
+
+        private void registerEditorListeners() {
+            contextUpdateAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD);
+            connection = project.getMessageBus().connect();
+
+            // Monitor file switching
+            connection.subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, new FileEditorManagerListener() {
+                @Override
+                public void selectionChanged(@NotNull FileEditorManagerEvent event) {
+                    scheduleContextUpdate();
+                }
+            });
+
+            // Monitor text selection
+            SelectionListener selectionListener = new SelectionListener() {
+                @Override
+                public void selectionChanged(@NotNull SelectionEvent e) {
+                    if (e.getEditor().getProject() == project) {
+                        scheduleContextUpdate();
+                    }
+                }
+            };
+            EditorFactory.getInstance().getEventMulticaster().addSelectionListener(selectionListener, connection);
+        }
+
+        private void scheduleContextUpdate() {
+            if (disposed || contextUpdateAlarm == null) return;
+            contextUpdateAlarm.cancelAllRequests();
+            contextUpdateAlarm.addRequest(this::updateContextInfo, 200);
+        }
+
+        private void updateContextInfo() {
+            if (disposed) return;
+
+            // Ensure we are on EDT (Alarm.ThreadToUse.SWING_THREAD guarantees this, but being safe)
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (disposed) return;
+                try {
+                    FileEditorManager editorManager = FileEditorManager.getInstance(project);
+                    Editor editor = editorManager.getSelectedTextEditor();
+
+                    String selectionInfo = null;
+
+                    if (editor != null) {
+                        VirtualFile file = FileDocumentManager.getInstance().getFile(editor.getDocument());
+                        if (file != null) {
+                            String path = file.getPath();
+                            selectionInfo = "@" + path;
+
+                            com.intellij.openapi.editor.SelectionModel selectionModel = editor.getSelectionModel();
+                            if (selectionModel.hasSelection()) {
+                                int startLine = editor.getDocument().getLineNumber(selectionModel.getSelectionStart()) + 1;
+                                int endLine = editor.getDocument().getLineNumber(selectionModel.getSelectionEnd()) + 1;
+
+                                if (endLine > startLine && editor.offsetToLogicalPosition(selectionModel.getSelectionEnd()).column == 0) {
+                                    endLine--;
+                                }
+                                selectionInfo += "#L" + startLine + "-" + endLine;
+                            }
+                        }
+                    } else {
+                         VirtualFile[] files = editorManager.getSelectedFiles();
+                         if (files.length > 0) {
+                             selectionInfo = "@" + files[0].getPath();
+                         }
+                    }
+
+                    if (selectionInfo != null) {
+                        addSelectionInfo(selectionInfo);
+                    } else {
+                        // 当没有打开文件时，清除前端显示
+                        clearSelectionInfo();
+                    }
+                } catch (Exception e) {
+                    System.err.println("[ClaudeChatWindow] Failed to update context info: " + e.getMessage());
+                }
+            });
         }
 
         private void initializeSessionInfo() {
@@ -463,7 +557,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
             callJavaScript("clearMessages");
 
-            session = new ClaudeSession(claudeSDKBridge, codexSDKBridge);
+            session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
             handlerContext.setSession(session);
             setupSessionCallbacks();
 
@@ -596,7 +690,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
                 System.out.println("[ClaudeSDKToolWindow] Old session interrupted, creating new session");
 
                 // 创建全新的 Session 对象
-                session = new ClaudeSession(claudeSDKBridge, codexSDKBridge);
+                session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 
                 // 更新 HandlerContext 中的 Session 引用（重要：确保所有 Handler 使用新 Session）
                 handlerContext.setSession(session);
@@ -663,6 +757,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
             }
         }
 
+        private void clearSelectionInfo() {
+            callJavaScript("clearSelectionInfo");
+        }
+
         static void addSelectionFromExternalInternal(Project project, String selectionInfo) {
             if (project == null) {
                 System.err.println("[ClaudeSDKToolWindow] 错误: project 参数为 null");
@@ -703,6 +801,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory {
 
         public void dispose() {
             if (disposed) return;
+
+            if (connection != null) {
+                connection.disconnect();
+            }
+            if (contextUpdateAlarm != null) {
+                contextUpdateAlarm.dispose();
+            }
 
             System.out.println("[ClaudeSDKToolWindow] 开始清理窗口资源，项目: " + project.getName());
 

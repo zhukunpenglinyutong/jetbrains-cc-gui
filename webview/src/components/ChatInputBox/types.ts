@@ -270,6 +270,14 @@ export interface ChatInputBoxProps {
   /** 受控模式：输入框内容 */
   value?: string;
 
+  /** 当前活动文件 */
+  activeFile?: string;
+  /** 选中行数信息 (例如: "L10-20") */
+  selectedLines?: string;
+
+  /** 清除上下文回调 */
+  onClearContext?: () => void;
+
   // 事件回调
   /** 提交消息 */
   onSubmit?: (content: string, attachments?: Attachment[]) => void;
@@ -305,19 +313,10 @@ export interface ButtonAreaProps {
   permissionMode?: PermissionMode;
   /** 当前提供商 */
   currentProvider?: string;
-  /** 使用量百分比 */
-  usagePercentage?: number;
-  /** 已用上下文token */
-  usageUsedTokens?: number;
-  /** 上下文最大token */
-  usageMaxTokens?: number;
-  /** 是否显示进度 */
-  showUsage?: boolean;
 
   // 事件回调
   onSubmit?: () => void;
   onStop?: () => void;
-  onAddAttachment?: (files: FileList) => void;
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;

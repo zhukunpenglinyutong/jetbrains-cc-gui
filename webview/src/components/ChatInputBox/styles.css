@@ -160,6 +160,93 @@
 }
 
 /* ============================================================
+   上下文展示条 (Top Control Bar)
+   ============================================================ */
+.context-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: transparent;
+  min-height: 32px;
+}
+
+/* 确保第一个子元素（通常是 ContextBar 或 AttachmentList）拥有圆角 */
+.chat-input-box > :first-child {
+  border-top-left-radius: 7px;
+  border-top-right-radius: 7px;
+}
+
+.context-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.context-token-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.context-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.context-tool-btn:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+.context-tool-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--input-border);
+  margin: 0 4px;
+}
+
+.context-item {
+  display: flex;
+  align-items: center;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  max-width: 200px;
+}
+
+.context-text {
+  margin: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-close {
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+.context-close:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+
+/* ============================================================
    输入区域
    ============================================================ */
 .input-editable-wrapper {

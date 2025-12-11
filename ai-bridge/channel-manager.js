@@ -66,8 +66,8 @@ async function handleClaudeCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
-        const { message, sessionId, cwd, permissionMode, model } = stdinData;
-        await claudeSendMessage(message, sessionId || '', cwd || '', permissionMode || '', model || '');
+        const { message, sessionId, cwd, permissionMode, model, openedFiles } = stdinData;
+        await claudeSendMessage(message, sessionId || '', cwd || '', permissionMode || '', model || '', openedFiles || null);
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
       }
@@ -76,14 +76,14 @@ async function handleClaudeCommand(command, args, stdinData) {
 
     case 'sendWithAttachments': {
       if (stdinData && stdinData.message !== undefined) {
-        const { message, sessionId, cwd, permissionMode, model, attachments } = stdinData;
+        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles } = stdinData;
         await claudeSendMessageWithAttachments(
           message,
           sessionId || '',
           cwd || '',
           permissionMode || '',
           model || '',
-          attachments ? { attachments } : null
+          attachments ? { attachments, openedFiles } : { openedFiles }
         );
       } else {
         await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);

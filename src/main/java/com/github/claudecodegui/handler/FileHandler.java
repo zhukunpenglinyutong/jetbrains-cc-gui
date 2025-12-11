@@ -4,10 +4,12 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ide.BrowserUtil;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import javax.swing.*;
 import java.io.File;
@@ -168,7 +170,8 @@ public class FileHandler extends BaseMessageHandler {
     private void handleOpenFile(String filePath) {
         System.out.println("请求打开文件: " + filePath);
 
-        ApplicationManager.getApplication().invokeLater(() -> {
+        // 先在普通线程中处理文件路径解析（不涉及 VFS 操作）
+        CompletableFuture.runAsync(() -> {
             try {
                 File file = new File(filePath);
 
@@ -183,24 +186,37 @@ public class FileHandler extends BaseMessageHandler {
 
                 if (!file.exists()) {
                     System.err.println("文件不存在: " + filePath);
-                    callJavaScript("addErrorMessage", escapeJs("无法打开文件: 文件不存在 (" + filePath + ")"));
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("addErrorMessage", escapeJs("无法打开文件: 文件不存在 (" + filePath + ")"));
+                    }, ModalityState.NON_MODAL);
                     return;
                 }
 
-                VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByIoFile(file);
-                if (virtualFile == null) {
-                    System.err.println("无法获取 VirtualFile: " + filePath);
-                    return;
-                }
+                final File finalFile = file;
 
-                FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
-                System.out.println("成功打开文件: " + filePath);
+                // 使用 ReadAction.nonBlocking() 在后台线程中查找文件
+                ReadAction
+                    .nonBlocking(() -> {
+                        // 在后台线程中查找文件（这是慢操作）
+                        return LocalFileSystem.getInstance().findFileByIoFile(finalFile);
+                    })
+                    .finishOnUiThread(ModalityState.NON_MODAL, virtualFile -> {
+                        // 在 UI 线程中打开文件
+                        if (virtualFile == null) {
+                            System.err.println("无法获取 VirtualFile: " + filePath);
+                            return;
+                        }
+
+                        FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
+                        System.out.println("成功打开文件: " + filePath);
+                    })
+                    .submit(AppExecutorUtil.getAppExecutorService());
 
             } catch (Exception e) {
                 System.err.println("打开文件失败: " + e.getMessage());
                 e.printStackTrace();
             }
-        }, ModalityState.NON_MODAL);
+        });
     }
 
     /**

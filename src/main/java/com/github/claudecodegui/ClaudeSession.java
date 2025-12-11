@@ -6,6 +6,10 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.util.EditorFileUtils;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,6 +42,10 @@ public class ClaudeSession {
     private String summary = null;
     private long lastModifiedTime = System.currentTimeMillis();
     private String cwd = null;
+
+    // IDEA 项目引用（用于获取打开的文件）
+    private final Project project;
+
     // SDK 桥接
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
@@ -92,7 +100,8 @@ public class ClaudeSession {
 
     private SessionCallback callback;
 
-    public ClaudeSession(ClaudeSDKBridge claudeSDKBridge, CodexSDKBridge codexSDKBridge) {
+    public ClaudeSession(Project project, ClaudeSDKBridge claudeSDKBridge, CodexSDKBridge codexSDKBridge) {
+        this.project = project;
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
 
@@ -316,6 +325,61 @@ public class ClaudeSession {
         updateState();
 
         return launchClaude().thenCompose(chId -> {
+            // 使用 ReadAction.nonBlocking() 在后台线程中安全地获取文件信息
+            CompletableFuture<JsonObject> fileInfoFuture = new CompletableFuture<>();
+
+            ReadAction
+                .nonBlocking(() -> {
+                    try {
+                        // 在后台线程中获取当前打开的文件信息（这是读操作，不会修改数据）
+                        String activeFile = EditorFileUtils.getCurrentActiveFile(project);
+                        List<String> allOpenedFiles = EditorFileUtils.getOpenedFiles(project);
+                        Map<String, Object> selectionInfo = EditorFileUtils.getSelectedCodeInfo(project);
+
+                        // 构建 openedFiles 对象，区分激活文件和其他文件
+                        JsonObject openedFilesJson = new JsonObject();
+                        if (activeFile != null) {
+                            openedFilesJson.addProperty("active", activeFile);
+                            System.out.println("[ClaudeSession] Current active file: " + activeFile);
+
+                            // 如果有选中的代码，添加选中信息
+                            if (selectionInfo != null) {
+                                JsonObject selectionJson = new JsonObject();
+                                selectionJson.addProperty("startLine", (Integer) selectionInfo.get("startLine"));
+                                selectionJson.addProperty("endLine", (Integer) selectionInfo.get("endLine"));
+                                selectionJson.addProperty("selectedText", (String) selectionInfo.get("selectedText"));
+                                openedFilesJson.add("selection", selectionJson);
+                                System.out.println("[ClaudeSession] Code selection detected: lines " +
+                                    selectionInfo.get("startLine") + "-" + selectionInfo.get("endLine"));
+                            }
+                        }
+
+                        // 其他打开的文件（排除激活文件）
+                        JsonArray othersArray = new JsonArray();
+                        for (String file : allOpenedFiles) {
+                            if (!file.equals(activeFile)) {
+                                othersArray.add(file);
+                            }
+                        }
+                        if (othersArray.size() > 0) {
+                            openedFilesJson.add("others", othersArray);
+                            System.out.println("[ClaudeSession] Other opened files count: " + othersArray.size());
+                        }
+
+                        return openedFilesJson;
+                    } catch (Exception e) {
+                        System.err.println("[ClaudeSession] Failed to get file info: " + e.getMessage());
+                        // 返回空对象，不影响主流程
+                        return new JsonObject();
+                    }
+                })
+                .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), openedFilesJson -> {
+                    // 文件信息获取完成，继续执行
+                    fileInfoFuture.complete(openedFilesJson);
+                })
+                .submit(AppExecutorUtil.getAppExecutorService());
+
+            return fileInfoFuture.thenCompose(openedFilesJson -> {
             // 根据 provider 选择 SDK
             CompletableFuture<Void> sendFuture;
             if ("codex".equals(provider)) {
@@ -381,6 +445,7 @@ public class ClaudeSession {
                     attachments,
                     permissionMode, // 传递权限模式
                     model,      // 传递模型
+                    openedFilesJson, // 传递打开的文件信息（包含激活文件和其他文件）
                     new ClaudeSDKBridge.MessageCallback() {
                 private final StringBuilder assistantContent = new StringBuilder();
                 private Message currentAssistantMessage = null;
@@ -492,6 +557,7 @@ public class ClaudeSession {
             }
 
             return sendFuture;
+            });
         }).exceptionally(ex -> {
             this.error = ex.getMessage();
             this.busy = false;

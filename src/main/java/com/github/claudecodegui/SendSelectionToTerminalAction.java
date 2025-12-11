@@ -4,6 +4,7 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.fileEditor.FileEditorManager;
@@ -11,6 +12,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -33,16 +35,22 @@ public class SendSelectionToTerminalAction extends AnAction {
         }
 
         try {
-            // 获取当前编辑器中的选中代码和文件信息
-            String selectionInfo = getSelectionInfo(e);
-            if (selectionInfo == null) {
-                return; // 错误信息已在方法内显示
-            }
+            // 使用 ReadAction.nonBlocking() 在后台线程中安全地获取文件信息
+            ReadAction
+                .nonBlocking(() -> {
+                    // 在后台线程中获取选中代码和文件信息
+                    return getSelectionInfo(e);
+                })
+                .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), selectionInfo -> {
+                    if (selectionInfo == null) {
+                        return; // 错误信息已在方法内显示
+                    }
 
-            // 发送到插件的聊天窗口
-            sendToChatWindow(project, selectionInfo);
-
-            System.out.println("[SendSelectionToTerminalAction] 已添加到待发送: " + selectionInfo);
+                    // 发送到插件的聊天窗口（在 UI 线程执行）
+                    sendToChatWindow(project, selectionInfo);
+                    System.out.println("[SendSelectionToTerminalAction] 已添加到待发送: " + selectionInfo);
+                })
+                .submit(AppExecutorUtil.getAppExecutorService());
 
         } catch (Exception ex) {
             showError(project, "发送失败: " + ex.getMessage());

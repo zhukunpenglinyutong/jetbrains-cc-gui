@@ -4,9 +4,11 @@ import com.github.claudecodegui.SkillService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import javax.swing.*;
 import java.io.File;
@@ -218,14 +220,23 @@ public class SkillHandler extends BaseMessageHandler {
             }
 
             final String fileToOpen = targetPath;
-            ApplicationManager.getApplication().invokeLater(() -> {
-                VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByPath(fileToOpen);
-                if (virtualFile != null) {
-                    FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
-                } else {
-                    System.err.println("[SkillHandler] Cannot find file: " + fileToOpen);
-                }
-            });
+
+            // 使用 ReadAction.nonBlocking() 在后台线程中查找文件
+            ReadAction
+                .nonBlocking(() -> {
+                    // 在后台线程中查找文件（这是慢操作）
+                    return LocalFileSystem.getInstance().findFileByPath(fileToOpen);
+                })
+                .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), virtualFile -> {
+                    // 在 UI 线程中打开文件
+                    if (virtualFile != null) {
+                        FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
+                    } else {
+                        System.err.println("[SkillHandler] Cannot find file: " + fileToOpen);
+                    }
+                })
+                .submit(AppExecutorUtil.getAppExecutorService());
+
         } catch (Exception e) {
             System.err.println("[SkillHandler] Failed to open skill: " + e.getMessage());
             e.printStackTrace();

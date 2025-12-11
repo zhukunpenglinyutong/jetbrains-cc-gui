@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Attachment, ChatInputBoxProps, PermissionMode, FileItem, CommandItem } from './types';
 import { ButtonArea } from './ButtonArea';
 import { AttachmentList } from './AttachmentList';
+import { ContextBar } from './ContextBar';
 import { CompletionDropdown } from './Dropdown';
 import { useTriggerDetection, useCompletionDropdown } from './hooks';
 import {
@@ -37,6 +38,9 @@ export const ChatInputBox = ({
   onModeSelect,
   onModelSelect,
   onProviderSelect,
+  activeFile,
+  selectedLines,
+  onClearContext,
 }: ChatInputBoxProps) => {
   // 内部附件状态（如果外部未提供）
   const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
@@ -1075,6 +1079,18 @@ export const ChatInputBox = ({
         />
       )}
 
+      {/* 上下文展示条 (Top Control Bar) */}
+      <ContextBar
+        activeFile={activeFile}
+        selectedLines={selectedLines}
+        percentage={usagePercentage}
+        usedTokens={usageUsedTokens}
+        maxTokens={usageMaxTokens}
+        showUsage={showUsage}
+        onClearFile={onClearContext}
+        onAddAttachment={handleAddAttachment}
+      />
+
       {/* 输入区域 */}
       <div className="input-editable-wrapper">
         <div
@@ -1121,13 +1137,8 @@ export const ChatInputBox = ({
         selectedModel={selectedModel}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
-        usagePercentage={usagePercentage}
-        usageUsedTokens={usageUsedTokens}
-        usageMaxTokens={usageMaxTokens}
-        showUsage={showUsage}
         onSubmit={handleSubmit}
         onStop={onStop}
-        onAddAttachment={handleAddAttachment}
         onModeSelect={handleModeSelect}
         onModelSelect={handleModelSelect}
         onProviderSelect={onProviderSelect}
