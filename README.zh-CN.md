@@ -12,34 +12,42 @@
 
 这是一个IDEA插件项目，目的是为了在IDEA中可以可视化的操作Claude Code
 
-目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.0.9-feat1（2025年12月6日更新）
+目前在实验阶段，成品尚未完成，代码会按天更新进度，预计发布10个版本，才能达到稳定使用程度，目前版本为v0.1.0（2025年12月11日更新）
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
-<img width="350" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/1.png" />
+<img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/1.png" />
 
+<img width="850" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/2.png" />
 ---
 
+
+插件下载地址：[idea-claude-code-gui-0.1.0.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/idea-claude-code-gui-0.1.0.zip)
+
 插件使用方式
+
 ```sh
-# 1.下载 idea-claude-code-gui-0.0.9-beta4.zip 文件
+# 1.下载 idea-claude-code-gui-0.1.0.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.0.9-beta4.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.1.0.zip 即可
 ```
-
-插件下载：[idea-claude-code-gui-0.0.9-beta4.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.9/idea-claude-code-gui-0.0.9-beta4.zip)
 
 ---
 
 ### 目前进度
 
-##### **12月8日（v0.0.9-beta3）**
+##### **12月11日（v0.1.0）**
 
-- [x] P0：实现右键选中文件发送到插件功能（支持快捷键）
-- [x] P0（feat）实现从cc-switch导入供应商配置的功能
-- [x] P0（fix）解决在某些特定情况下，异常覆盖.claude/setting.json为官方默认配置的问题
-- [x] P1（feat）首次非常细化，重构 供应商页面 UI交互
-- [x] P1：修复MCP列表展示不出来的问题
+- [x] P0（feat）实现当前打开的文件路径（将当前打开的文件信息默认发送给AI）
+- [x] P0（feat）实现国际化功能
+- [x] P0（feat）重构供应商管理列表，支持导入cc-switch配置
+- [x] P0（bug）解决一个困扰很久的，配置信息报错阻塞问题
+- [x] P1（feat）实现文件支持拖拽入输入框的功能（#gadfly3173 PR）
+- [x] P1（feat）增加删除历史会话功能（由群友 PR）
+- [x] P1（feat）增加Skills功能（由群友 PR）
+- [x] P1（feat）增加右键选中代码，发送到插件的功能（#lxm1007 PR）
+- [x] P1（fix）完善和重构 @文件功能，使@文件功能变得好用
+- [x] P2（fix）解决输入框部分快捷操作失效的问题
 
 ---
 
@@ -84,6 +92,44 @@ npm install
 ## License
 
 AGPL-3.0
+
+---
+
+## Contributing
+
+感谢所有帮助 IDEA-Claude-Code-GUI 变得更好的贡献者！
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/claude">
+        <img src="https://avatars.githubusercontent.com/u/81847?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/openai/codex">
+        <img src="https://avatars.githubusercontent.com/u/14957082?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/zhukunpenglinyutong">
+        <img src="https://avatars.githubusercontent.com/u/31264015?size=100" width="100" height="100" alt="mcowger" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/M1sury">
+        <img src="https://avatars.githubusercontent.com/u/64764195?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/gadfly3173">
+        <img src="https://avatars.githubusercontent.com/u/28685179?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+      </a>
+    </td>
+  </tr>
+</table>
+
+---
 
 ## Star History
 

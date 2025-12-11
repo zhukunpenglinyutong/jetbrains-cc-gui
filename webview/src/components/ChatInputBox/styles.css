@@ -29,6 +29,7 @@
   --attachment-border: #404040;
   --error-color: #f44336;
   --success-color: #4caf50;
+  --context-bar-bg: #2f2f2f;
 }
 
 /* ============================================================
@@ -56,6 +57,7 @@
   --attachment-border: #e0e0e0;
   --error-color: #e81123;
   --success-color: #107c10;
+  --context-bar-bg: #f0f0f0;
 }
 
 /* ============================================================
@@ -168,7 +170,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: transparent;
+  background: var(--context-bar-bg);
   min-height: 32px;
 }
 
