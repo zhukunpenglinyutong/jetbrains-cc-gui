@@ -4,15 +4,15 @@
     <vendor>CodeMossAI</vendor>
 
     <description><![CDATA[
-        Claude Code GUI for IntelliJ IDEA - An AI-powered coding assistant that brings Claude Code Cli capabilities directly into your IDE.
+        <p><strong>Claude Code GUI</strong> - A powerful AI assistant and productivity tool that brings Claude Code capabilities with an intuitive graphical interface directly into IntelliJ IDEA.</p>
 
         <h2>Features:</h2>
         <ul>
-            <li>Integrated Claude Code Cli with intuitive GUI interface</li>
-            <li>AI-powered code generation and explanation</li>
-            <li>Smart context-aware code suggestions</li>
-            <li>Send selected code directly to Claude for analysis</li>
-            <li>Seamless integration with IntelliJ IDEA</li>
+            <li><strong>AI-Powered Code Generation</strong>: Leverage Claude AI for intelligent code generation and refactoring</li>
+            <li><strong>Smart Assistant</strong>: Context-aware AI coding assistant that understands your project</li>
+            <li><strong>Integrated Claude Code CLI</strong>: Full Claude Code functionality with an easy-to-use GUI interface</li>
+            <li><strong>Direct Code Analysis</strong>: Send selected code to Claude for instant AI-powered analysis and suggestions</li>
+            <li><strong>Productivity Boost</strong>: Seamless integration that enhances your coding workflow</li>
         </ul>
 
         <br/>
@@ -21,22 +21,12 @@
         <h2>How to Use:</h2>
         <ul>
             <li>Open the Claude Code GUI tool window from the right sidebar</li>
-            <li>Get instant AI-powered code assistance and suggestions</li>
+            <li>Select code and use <kbd>Ctrl+Alt+K</kbd> (Win/Linux) or <kbd>Cmd+Alt+K</kbd> (Mac) to send to Claude</li>
+            <li>Get instant AI-powered code assistance, generation, and intelligent suggestions</li>
         </ul>
-    ]]></description>
 
-    <!-- Search keywords for JetBrains Marketplace -->
-    <tags>
-        <tag>claude</tag>
-        <tag>ai</tag>
-        <tag>assistant</tag>
-        <tag>code-generation</tag>
-        <tag>productivity</tag>
-        <tag>ai-coding</tag>
-        <tag>claude-code</tag>
-        <tag>claude-code-gui</tag>
-        <tag>claude code gui</tag>
-    </tags>
+        <p><em>Keywords: Claude, AI Assistant, Code Generation, AI Coding, Productivity, Claude Code, Intelligent Code Assistant</em></p>
+    ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
 
