@@ -95,6 +95,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * 处理设置模型请求
+     * 设置完成后向前端发送确认回调，确保前后端状态同步
      */
     private void handleSetModel(String content) {
         try {
@@ -117,6 +118,14 @@ public class SettingsHandler extends BaseMessageHandler {
             if (context.getSession() != null) {
                 context.getSession().setModel(model);
             }
+
+            // 向前端发送确认回调，确保前后端状态同步
+            final String confirmedModel = model;
+            final String confirmedProvider = context.getCurrentProvider();
+            SwingUtilities.invokeLater(() -> {
+                // 发送模型确认
+                callJavaScript("window.onModelConfirmed", escapeJs(confirmedModel), escapeJs(confirmedProvider));
+            });
         } catch (Exception e) {
             System.err.println("[SettingsHandler] Failed to set model: " + e.getMessage());
             e.printStackTrace();
