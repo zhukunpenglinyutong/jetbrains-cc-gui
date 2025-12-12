@@ -30,6 +30,7 @@ export const ChatInputBox = ({
   placeholder = '@引用文件，shift + enter 换行',
   disabled = false,
   value,
+  remoteModels,
   onSubmit,
   onStop,
   onInput,
@@ -1137,6 +1138,7 @@ export const ChatInputBox = ({
         selectedModel={selectedModel}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
+        remoteModels={remoteModels}
         onSubmit={handleSubmit}
         onStop={onStop}
         onModeSelect={handleModeSelect}

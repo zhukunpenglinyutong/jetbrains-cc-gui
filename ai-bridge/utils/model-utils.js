@@ -15,17 +15,25 @@ export function mapModelIdToSdkName(modelId) {
 
   const lowerModel = modelId.toLowerCase();
 
-  // 映射规则：
-  // - 包含 'opus' -> 'opus'
-  // - 包含 'haiku' -> 'haiku'
-  // - 其他情况（包含 'sonnet' 或未知）-> 'sonnet'
-  if (lowerModel.includes('opus')) {
-    return 'opus';
-  } else if (lowerModel.includes('haiku')) {
-    return 'haiku';
-  } else {
-    return 'sonnet';
+  // 只对 Claude 官方模型进行简短名称映射
+  // 对于其他模型（如第三方代理的模型），直接返回原始 ID
+  if (lowerModel.includes('claude') || lowerModel.includes('sonnet') || lowerModel.includes('opus') || lowerModel.includes('haiku')) {
+    // Claude 模型映射规则：
+    // - 包含 'opus' -> 'opus'
+    // - 包含 'haiku' -> 'haiku'
+    // - 其他 Claude 模型 -> 'sonnet'
+    if (lowerModel.includes('opus')) {
+      return 'opus';
+    } else if (lowerModel.includes('haiku')) {
+      return 'haiku';
+    } else {
+      return 'sonnet';
+    }
   }
+
+  // 非 Claude 模型，直接返回原始模型 ID
+  // 这样可以支持第三方代理服务的自定义模型
+  return modelId;
 }
 
 // 注意：getClaudeCliPath() 函数已被移除

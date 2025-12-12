@@ -145,14 +145,14 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       console.log('[DEBUG] Will use system Claude CLI (not Anthropic SDK fallback)');
     }
 
-    console.log('[DEBUG] sendMessage called with params:', {
+    console.log('[DEBUG] sendMessage called with params:', JSON.stringify({
       resumeSessionId,
       cwd,
       permissionMode,
       model,
       IDEA_PROJECT_PATH: process.env.IDEA_PROJECT_PATH,
       PROJECT_PATH: process.env.PROJECT_PATH
-    });
+    }));
 
     console.log('[DEBUG] API Key source:', apiKeySource);
     console.log('[DEBUG] Base URL:', baseUrl || 'https://api.anthropic.com');

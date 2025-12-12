@@ -6,8 +6,8 @@ import SettingsView from './components/settings';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import { ChatInputBox } from './components/ChatInputBox';
-import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
+import { CLAUDE_MODELS, CODEX_MODELS, convertRemoteModelToModelInfo } from './components/ChatInputBox/types';
+import type { Attachment, PermissionMode, ModelInfo, RemoteModelsResult } from './components/ChatInputBox/types';
 import {
   BashToolBlock,
   EditToolBlock,
@@ -37,6 +37,16 @@ const DEFAULT_STATUS = 'ready';
 
 const isTruthy = (value: unknown) => value === true || value === 'true';
 
+// 重试配置
+const BRIDGE_RETRY_CONFIG = {
+  maxRetries: 30,
+  retryDelayMs: 100,
+  maxWaitMs: 3000,
+} as const;
+
+/**
+ * 发送消息到 Java 后端，如果 bridge 未准备好会自动重试
+ */
 const sendBridgeMessage = (event: string, payload = '') => {
   if (window.sendToJava) {
     const message = `${event}:${payload}`;
@@ -48,6 +58,42 @@ const sendBridgeMessage = (event: string, payload = '') => {
   } else {
     console.warn('[Frontend] sendToJava is not ready yet');
   }
+};
+
+/**
+ * 带重试机制的 bridge 消息发送
+ * @param event 事件名称
+ * @param payload 消息负载
+ * @param maxRetries 最大重试次数，默认使用全局配置
+ * @returns Promise，当消息发送成功或超出重试次数时 resolve
+ */
+const sendBridgeMessageWithRetry = async (
+  event: string,
+  payload: string = '',
+  maxRetries: number = BRIDGE_RETRY_CONFIG.maxRetries,
+): Promise<boolean> => {
+  let retryCount = 0;
+
+  return new Promise((resolve) => {
+    const attemptSend = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage(event, payload);
+        resolve(true);
+      } else {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          setTimeout(attemptSend, BRIDGE_RETRY_CONFIG.retryDelayMs);
+        } else {
+          console.warn(
+            `[Frontend] Failed to send '${event}' to backend: bridge not available after ${maxRetries} retries`,
+          );
+          resolve(false);
+        }
+      }
+    };
+
+    attemptSend();
+  });
 };
 
 const formatTime = (timestamp?: string) => {
@@ -88,6 +134,10 @@ const App = () => {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [inputValue, setInputValue] = useState('');
   const [, setProviderConfigVersion] = useState(0);
+  // 远程模型列表状态
+  const [remoteModels, setRemoteModels] = useState<ModelInfo[] | undefined>(undefined);
+  // 插件版本状态
+  const [pluginVersion, setPluginVersion] = useState<string>('0.1.0');
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -171,29 +221,18 @@ const App = () => {
       }
 
       // 初始化时同步模型状态到后端，确保前后端一致
-      let syncRetryCount = 0;
-      const MAX_SYNC_RETRIES = 30; // 最多重试30次（3秒）
+      const syncInitialModelState = async () => {
+        const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
 
-      const syncToBackend = () => {
-        if (window.sendToJava) {
-          // 先同步 provider
-          sendBridgeMessage('set_provider', restoredProvider);
-          // 再同步对应的模型
-          const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
-          sendBridgeMessage('set_model', modelToSync);
-          console.log('[Frontend] Synced model state to backend:', { provider: restoredProvider, model: modelToSync });
-        } else {
-          // 如果 sendToJava 还没准备好，稍后重试
-          syncRetryCount++;
-          if (syncRetryCount < MAX_SYNC_RETRIES) {
-            setTimeout(syncToBackend, 100);
-          } else {
-            console.warn('[Frontend] Failed to sync model state to backend: bridge not available after', MAX_SYNC_RETRIES, 'retries');
-          }
-        }
+        // 先同步 provider，再同步模型
+        await sendBridgeMessageWithRetry('set_provider', restoredProvider);
+        await sendBridgeMessageWithRetry('set_model', modelToSync);
+
+        console.log('[Frontend] Synced model state to backend:', { provider: restoredProvider, model: modelToSync });
       };
-      // 延迟同步，等待 bridge 准备好
-      setTimeout(syncToBackend, 200);
+
+      // 延迟 200ms 同步，等待 bridge 准备好
+      setTimeout(syncInitialModelState, 200);
     } catch (error) {
       console.error('Failed to load model selection state:', error);
     }
@@ -308,12 +347,69 @@ const App = () => {
         const provider: ProviderConfig = JSON.parse(jsonStr);
         syncActiveProviderModelMapping(provider);
         setProviderConfigVersion(prev => prev + 1);
+        // 当供应商变化时，重新获取远程模型列表
+        sendBridgeMessage('fetch_remote_models');
       } catch (error) {
         console.error('[Frontend] Failed to parse active provider in App:', error);
       }
     };
 
-    sendBridgeMessage('get_active_provider');
+    // 远程模型加载回调
+    window.onRemoteModelsLoaded = (json: string) => {
+      console.log('[Frontend] onRemoteModelsLoaded called');
+      try {
+        const result: RemoteModelsResult = JSON.parse(json);
+        console.log('[Frontend] Remote models result:', result);
+        if (result.success && result.models && result.models.length > 0) {
+          // 将远程模型数据转换为 ModelInfo 格式
+          const models = result.models.map(convertRemoteModelToModelInfo);
+          console.log('[Frontend] ✓ Successfully loaded', models.length, 'remote models:', models);
+          setRemoteModels(models);
+          // 如果当前选中的模型不在新列表中，选择第一个模型
+          const currentModel = selectedClaudeModel;
+          if (!models.find(m => m.id === currentModel)) {
+            console.log('[Frontend] Current model not in remote list, switching to first model:', models[0].id);
+            // 使用 sendBridgeMessage 而不是直接设置状态，让后端确认
+            sendBridgeMessage('set_model', models[0].id);
+          }
+        } else {
+          const errorMsg = result.error || 'No models returned from API';
+          console.warn('[Frontend] Remote models unavailable:', errorMsg);
+          setRemoteModels(undefined);
+        }
+      } catch (error) {
+        console.error('[Frontend] Failed to parse remote models response:', error);
+        console.error('[Frontend] Response was:', json);
+        setRemoteModels(undefined);
+      }
+    };
+
+    // 插件版本接收回调
+    window.onPluginVersionReceived = (json: string) => {
+      console.log('[Frontend] onPluginVersionReceived called');
+      try {
+        const result = JSON.parse(json);
+        console.log('[Frontend] Plugin version result:', result);
+        if (result.version) {
+          console.log('[Frontend] ✓ Plugin version loaded:', result.version);
+          setPluginVersion(result.version);
+        }
+      } catch (error) {
+        console.error('[Frontend] Failed to parse plugin version response:', error);
+      }
+    };
+
+    // 延迟发送初始化消息，确保 sendToJava bridge 已准备好
+    const sendInitMessages = async () => {
+      await Promise.all([
+        sendBridgeMessageWithRetry('get_active_provider'),
+        sendBridgeMessageWithRetry('fetch_remote_models'),
+        sendBridgeMessageWithRetry('get_plugin_version'),
+      ]);
+      console.log('[Frontend] ✓ Init messages sent');
+    };
+    // 延迟200ms后发送，给 bridge 足够的准备时间
+    setTimeout(sendInitMessages, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -371,20 +467,12 @@ const App = () => {
       return;
     }
 
-    let historyRetryCount = 0;
-    const MAX_HISTORY_RETRIES = 30; // 最多重试30次（3秒）
     let currentTimer: number | null = null;
 
-    const requestHistoryData = () => {
-      if (window.sendToJava) {
-        sendBridgeMessage('load_history_data');
-      } else {
-        historyRetryCount++;
-        if (historyRetryCount < MAX_HISTORY_RETRIES) {
-          currentTimer = setTimeout(requestHistoryData, 100);
-        } else {
-          console.warn('[Frontend] Failed to load history data: bridge not available after', MAX_HISTORY_RETRIES, 'retries');
-        }
+    const requestHistoryData = async () => {
+      const success = await sendBridgeMessageWithRetry('load_history_data');
+      if (!success) {
+        console.warn('[Frontend] Failed to load history data after max retries');
       }
     };
 
@@ -552,13 +640,12 @@ const App = () => {
 
   /**
    * 处理模型选择
+   * 注意: 不直接更新本地状态，而是等待后端通过 onModelConfirmed 回调确认
    */
   const handleModelSelect = (modelId: string) => {
-    if (currentProvider === 'claude') {
-      setSelectedClaudeModel(modelId);
-    } else if (currentProvider === 'codex') {
-      setSelectedCodexModel(modelId);
-    }
+    console.log('[Frontend] Model selection requested:', modelId);
+    // 发送模型设置请求，但不立即更新本地状态
+    // 状态会在 onModelConfirmed 回调中更新，确保前后端状态一致
     sendBridgeMessage('set_model', modelId);
   };
 
@@ -1096,7 +1183,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.1.0-beta2
+                  v{pluginVersion}
                 </span>
               </div>
               <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
@@ -1257,6 +1344,7 @@ const App = () => {
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
             value={inputValue}
+            remoteModels={remoteModels}
             placeholder={t('chat.inputPlaceholder')}
             onSubmit={handleSubmit}
             onStop={interruptSession}
@@ -1265,9 +1353,9 @@ const App = () => {
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
             activeFile={contextInfo?.file}
-            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined 
-              ? (contextInfo.startLine === contextInfo.endLine 
-                  ? `L${contextInfo.startLine}` 
+            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
+              ? (contextInfo.startLine === contextInfo.endLine
+                  ? `L${contextInfo.startLine}`
                   : `L${contextInfo.startLine}-${contextInfo.endLine}`)
               : undefined}
             onClearContext={() => setContextInfo(null)}

@@ -116,16 +116,18 @@ public class PermissionDialog extends DialogWrapper {
     }
 
     private void initializeRequestData() {
-        Map<String, Object> requestData = new HashMap<>();
-        requestData.put("channelId", request.getChannelId());
-        requestData.put("toolName", translateToolName(request.getToolName()));
-        requestData.put("inputs", request.getInputs());
-        requestData.put("suggestions", request.getSuggestions());
+        SwingUtilities.invokeLater(() -> {
+            Map<String, Object> requestData = new HashMap<>();
+            requestData.put("channelId", request.getChannelId());
+            requestData.put("toolName", translateToolName(request.getToolName()));
+            requestData.put("inputs", request.getInputs());
+            requestData.put("suggestions", request.getSuggestions());
 
-        String json = gson.toJson(requestData);
-        String script = String.format("if (window.initPermissionRequest) { window.initPermissionRequest(%s); }", json);
+            String json = gson.toJson(requestData);
+            String script = String.format("if (window.initPermissionRequest) { window.initPermissionRequest(%s); }", json);
 
-        browser.getCefBrowser().executeJavaScript(script, browser.getCefBrowser().getURL(), 0);
+            browser.getCefBrowser().executeJavaScript(script, browser.getCefBrowser().getURL(), 0);
+        });
     }
 
     /**
