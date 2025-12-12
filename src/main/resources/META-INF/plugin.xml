@@ -2,7 +2,41 @@
     <id>com.github.idea-claude-code-gui</id>
     <name>Claude Code GUI</name>
     <vendor>CodeMossAI</vendor>
-    <description>IDEA版 Claude Code GUI 插件</description>
+
+    <description><![CDATA[
+        Claude Code GUI for IntelliJ IDEA - An AI-powered coding assistant that brings Claude Code Cli capabilities directly into your IDE.
+
+        <h2>Features:</h2>
+        <ul>
+            <li>Integrated Claude Code Cli with intuitive GUI interface</li>
+            <li>AI-powered code generation and explanation</li>
+            <li>Smart context-aware code suggestions</li>
+            <li>Send selected code directly to Claude for analysis</li>
+            <li>Seamless integration with IntelliJ IDEA</li>
+        </ul>
+
+        <br/>
+        <img src="META-INF/demo.png" alt="Claude Code GUI Demo" width="700"/>
+
+        <h2>How to Use:</h2>
+        <ul>
+            <li>Open the Claude Code GUI tool window from the right sidebar</li>
+            <li>Get instant AI-powered code assistance and suggestions</li>
+        </ul>
+    ]]></description>
+
+    <!-- Search keywords for JetBrains Marketplace -->
+    <tags>
+        <tag>claude</tag>
+        <tag>ai</tag>
+        <tag>assistant</tag>
+        <tag>code-generation</tag>
+        <tag>productivity</tag>
+        <tag>ai-coding</tag>
+        <tag>claude-code</tag>
+        <tag>claude-code-gui</tag>
+        <tag>claude code gui</tag>
+    </tags>
 
     <depends>com.intellij.modules.platform</depends>
 
