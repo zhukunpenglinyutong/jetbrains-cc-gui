@@ -164,4 +164,10 @@ interface Window {
    * Called when remote models are fetched from /v1/models API
    */
   onRemoteModelsLoaded?: (json: string) => void;
+
+  /**
+   * Plugin version received callback
+   * Called when plugin version is retrieved from backend
+   */
+  onPluginVersionReceived?: (json: string) => void;
 }

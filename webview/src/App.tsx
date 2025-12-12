@@ -90,6 +90,8 @@ const App = () => {
   const [, setProviderConfigVersion] = useState(0);
   // 远程模型列表状态
   const [remoteModels, setRemoteModels] = useState<ModelInfo[] | undefined>(undefined);
+  // 插件版本状态
+  const [pluginVersion, setPluginVersion] = useState<string>('0.1.0');
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -337,9 +339,26 @@ const App = () => {
       }
     };
 
+    // 插件版本接收回调
+    window.onPluginVersionReceived = (json: string) => {
+      console.log('[Frontend] onPluginVersionReceived called');
+      try {
+        const result = JSON.parse(json);
+        console.log('[Frontend] Plugin version result:', result);
+        if (result.version) {
+          console.log('[Frontend] ✓ Plugin version loaded:', result.version);
+          setPluginVersion(result.version);
+        }
+      } catch (error) {
+        console.error('[Frontend] Failed to parse plugin version response:', error);
+      }
+    };
+
     sendBridgeMessage('get_active_provider');
     // 初始化时获取远程模型列表
     sendBridgeMessage('fetch_remote_models');
+    // 初始化时获取插件版本
+    sendBridgeMessage('get_plugin_version');
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -1088,7 +1107,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.1.0-beta1
+                  v{pluginVersion}
                 </span>
               </div>
               <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
