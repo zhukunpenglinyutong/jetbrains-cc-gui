@@ -87,6 +87,12 @@ const App = () => {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [inputValue, setInputValue] = useState('');
 
+  // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
+  const currentProviderRef = useRef(currentProvider);
+  useEffect(() => {
+    currentProviderRef.current = currentProvider;
+  }, [currentProvider]);
+
   // Context state (active file and selection)
   const [contextInfo, setContextInfo] = useState<{ file: string; startLine?: number; endLine?: number; raw: string } | null>(null);
 
@@ -103,28 +109,52 @@ const App = () => {
     document.documentElement.setAttribute('data-theme', theme);
   }, []);
 
-  // 从 LocalStorage 加载模型选择状态
+  // 从 LocalStorage 加载模型选择状态，并同步到后端
   useEffect(() => {
     try {
       const saved = localStorage.getItem('model-selection-state');
+      let restoredProvider = 'claude';
+      let restoredClaudeModel = CLAUDE_MODELS[0].id;
+      let restoredCodexModel = CODEX_MODELS[0].id;
+
       if (saved) {
         const state = JSON.parse(saved);
 
         // 验证并恢复提供商
         if (['claude', 'codex'].includes(state.provider)) {
+          restoredProvider = state.provider;
           setCurrentProvider(state.provider);
         }
 
         // 验证并恢复 Claude 模型
         if (CLAUDE_MODELS.find(m => m.id === state.claudeModel)) {
+          restoredClaudeModel = state.claudeModel;
           setSelectedClaudeModel(state.claudeModel);
         }
 
         // 验证并恢复 Codex 模型
         if (CODEX_MODELS.find(m => m.id === state.codexModel)) {
+          restoredCodexModel = state.codexModel;
           setSelectedCodexModel(state.codexModel);
         }
       }
+
+      // 初始化时同步模型状态到后端，确保前后端一致
+      const syncToBackend = () => {
+        if (window.sendToJava) {
+          // 先同步 provider
+          sendBridgeMessage('set_provider', restoredProvider);
+          // 再同步对应的模型
+          const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
+          sendBridgeMessage('set_model', modelToSync);
+          console.log('[Frontend] Synced model state to backend:', { provider: restoredProvider, model: modelToSync });
+        } else {
+          // 如果 sendToJava 还没准备好，稍后重试
+          setTimeout(syncToBackend, 100);
+        }
+      };
+      // 延迟同步，等待 bridge 准备好
+      setTimeout(syncToBackend, 200);
     } catch (error) {
       console.error('Failed to load model selection state:', error);
     }
@@ -211,11 +241,25 @@ const App = () => {
       }
     };
 
+    // 后端主动通知模型变化时调用（使用 ref 避免闭包问题）
     window.onModelChanged = (modelId) => {
-      // 根据当前提供商更新对应的模型状态
-      if (currentProvider === 'claude') {
+      // 使用 ref 获取最新的 provider 值，避免闭包捕获旧值
+      const provider = currentProviderRef.current;
+      console.log('[Frontend] onModelChanged:', { modelId, provider });
+      if (provider === 'claude') {
         setSelectedClaudeModel(modelId);
-      } else if (currentProvider === 'codex') {
+      } else if (provider === 'codex') {
+        setSelectedCodexModel(modelId);
+      }
+    };
+
+    // 后端确认模型设置成功后调用（关键：确保前后端状态同步）
+    window.onModelConfirmed = (modelId, provider) => {
+      console.log('[Frontend] onModelConfirmed:', { modelId, provider });
+      // 根据后端返回的 provider 更新对应的模型状态
+      if (provider === 'claude') {
+        setSelectedClaudeModel(modelId);
+      } else if (provider === 'codex') {
         setSelectedCodexModel(modelId);
       }
     };
@@ -269,7 +313,7 @@ const App = () => {
       console.log('[Frontend] clearSelectionInfo called');
       setContextInfo(null);
     };
-  }, [currentProvider]);
+  }, []); // 移除 currentProvider 依赖，因为现在使用 ref 获取最新值
 
   useEffect(() => {
     if (currentView !== 'history') {

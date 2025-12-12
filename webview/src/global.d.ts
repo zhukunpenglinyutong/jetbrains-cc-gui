@@ -68,6 +68,13 @@ interface Window {
   onModelChanged?: (modelId: string) => void;
 
   /**
+   * Model confirmed callback - 后端确认模型设置成功后调用
+   * @param modelId 确认的模型 ID
+   * @param provider 当前的提供商
+   */
+  onModelConfirmed?: (modelId: string, provider: string) => void;
+
+  /**
    * Show permission dialog
    */
   showPermissionDialog?: (json: string) => void;
