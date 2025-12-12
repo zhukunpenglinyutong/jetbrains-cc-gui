@@ -29,6 +29,7 @@ import type {
   TodoItem,
   ToolResultBlock,
 } from './types';
+import type { ProviderConfig } from './types/provider';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -86,6 +87,7 @@ const App = () => {
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [inputValue, setInputValue] = useState('');
+  const [, setProviderConfigVersion] = useState(0);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -101,6 +103,33 @@ const App = () => {
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
+
+  const syncActiveProviderModelMapping = (provider?: ProviderConfig | null) => {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    if (!provider || !provider.settingsConfig || !provider.settingsConfig.env) {
+      try {
+        window.localStorage.removeItem('claude-model-mapping');
+      } catch {
+      }
+      return;
+    }
+    const env = provider.settingsConfig.env as Record<string, any>;
+    const mapping = {
+      main: env.ANTHROPIC_MODEL ?? '',
+      haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? '',
+      sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? '',
+      opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? '',
+    };
+    const hasValue = Object.values(mapping).some(v => v && String(v).trim().length > 0);
+    try {
+      if (hasValue) {
+        window.localStorage.setItem('claude-model-mapping', JSON.stringify(mapping));
+      } else {
+        window.localStorage.removeItem('claude-model-mapping');
+      }
+    } catch {
+    }
+  };
 
   // 初始化主题
   useEffect(() => {
@@ -242,7 +271,7 @@ const App = () => {
     };
 
     // 后端主动通知模型变化时调用（使用 ref 避免闭包问题）
-    window.onModelChanged = (modelId) => {
+      window.onModelChanged = (modelId) => {
       // 使用 ref 获取最新的 provider 值，避免闭包捕获旧值
       const provider = currentProviderRef.current;
       console.log('[Frontend] onModelChanged:', { modelId, provider });
@@ -254,7 +283,7 @@ const App = () => {
     };
 
     // 后端确认模型设置成功后调用（关键：确保前后端状态同步）
-    window.onModelConfirmed = (modelId, provider) => {
+      window.onModelConfirmed = (modelId, provider) => {
       console.log('[Frontend] onModelConfirmed:', { modelId, provider });
       // 根据后端返回的 provider 更新对应的模型状态
       if (provider === 'claude') {
@@ -263,6 +292,18 @@ const App = () => {
         setSelectedCodexModel(modelId);
       }
     };
+
+    window.updateActiveProvider = (jsonStr: string) => {
+      try {
+        const provider: ProviderConfig = JSON.parse(jsonStr);
+        syncActiveProviderModelMapping(provider);
+        setProviderConfigVersion(prev => prev + 1);
+      } catch (error) {
+        console.error('[Frontend] Failed to parse active provider in App:', error);
+      }
+    };
+
+    sendBridgeMessage('get_active_provider');
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -350,6 +391,7 @@ const App = () => {
     return () => {
       clearTimeout(initTimer);
       clearInterval(intervalId);
+      window.updateActiveProvider = undefined;
     };
   }, []);
 
@@ -381,14 +423,8 @@ const App = () => {
    * 处理消息发送（来自 ChatInputBox）
    */
   const handleSubmit = (content: string, attachments?: Attachment[]) => {
-    let text = content.trim();
+    const text = content.trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-
-    // Append context if exists
-    if (contextInfo) {
-      const separator = text ? ' ' : '';
-      text = text + separator + contextInfo.raw;
-    }
 
     if (!text && !hasAttachments) {
       return;
@@ -461,7 +497,6 @@ const App = () => {
 
     // 清空输入框状态
     setInputValue('');
-    setContextInfo(null);
   };
 
   /**
@@ -1018,7 +1053,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.1.0
+                  v0.1.0-beta1
                 </span>
               </div>
               <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>

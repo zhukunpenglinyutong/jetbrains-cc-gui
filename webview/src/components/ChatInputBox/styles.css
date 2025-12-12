@@ -229,11 +229,64 @@
   max-width: 200px;
 }
 
+/* Tooltip styles */
+.context-item.has-tooltip {
+  position: relative;
+}
+
+.context-item.has-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 300px;
+  width: max-content;
+  
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+.context-item.has-tooltip:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  border: 6px solid transparent;
+  border-top-color: var(--dropdown-border);
+  z-index: 1000;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+@keyframes tooltip-fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .context-text {
   margin: 0 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 
 .context-close {
@@ -442,8 +495,8 @@
 .token-tooltip {
   position: absolute;
   bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(-6px);
+  left: 0;
+  transform: translateY(-6px);
   background: var(--dropdown-bg);
   color: var(--text-primary);
   border: 1px solid var(--dropdown-border);

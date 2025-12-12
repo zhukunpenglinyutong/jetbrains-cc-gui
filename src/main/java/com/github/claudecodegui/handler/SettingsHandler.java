@@ -30,6 +30,7 @@ public class SettingsHandler extends BaseMessageHandler {
     static {
         MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-5-20251101", 200_000);
+        MODEL_CONTEXT_LIMITS.put("claude-haiku-4-5", 200_000);
     }
 
     public SettingsHandler(HandlerContext context) {

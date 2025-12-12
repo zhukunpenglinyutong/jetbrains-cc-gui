@@ -88,6 +88,33 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   // Toast 状态管理
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  const syncActiveProviderModelMapping = (provider?: ProviderConfig | null) => {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    if (!provider || !provider.settingsConfig || !provider.settingsConfig.env) {
+      try {
+        window.localStorage.removeItem('claude-model-mapping');
+      } catch {
+      }
+      return;
+    }
+    const env = provider.settingsConfig.env as Record<string, any>;
+    const mapping = {
+      main: env.ANTHROPIC_MODEL ?? '',
+      haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? '',
+      sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? '',
+      opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? '',
+    };
+    const hasValue = Object.values(mapping).some(v => v && String(v).trim().length > 0);
+    try {
+      if (hasValue) {
+        window.localStorage.setItem('claude-model-mapping', JSON.stringify(mapping));
+      } else {
+        window.localStorage.removeItem('claude-model-mapping');
+      }
+    } catch {
+    }
+  };
+
   // Toast 辅助函数
   const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
     const id = `toast-${Date.now()}-${Math.random()}`;
@@ -120,6 +147,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       try {
         const providersList: ProviderConfig[] = JSON.parse(jsonStr);
         setProviders(providersList);
+        const active = providersList.find(p => p.isActive);
+        if (active) {
+          syncActiveProviderModelMapping(active);
+        }
         setLoading(false);
       } catch (error) {
         console.error('[SettingsView] Failed to parse providers:', error);
@@ -135,6 +166,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
           setProviders((prev) =>
               prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
           );
+          syncActiveProviderModelMapping(activeProvider);
         }
       } catch (error) {
         console.error('[SettingsView] Failed to parse active provider:', error);
@@ -311,6 +343,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       // 如果是当前正在使用的供应商，更新后立即重新应用配置
       if (isActive) {
         console.log('[SettingsView] Re-applying active provider config:', providerId);
+        syncActiveProviderModelMapping({
+          ...currentProvider,
+          settingsConfig: parsedConfig,
+        });
         // 使用 setTimeout 稍微延迟一下，确保 update_provider 先处理完成
         // 虽然在单线程模型中通常不需要，但为了保险起见
         setTimeout(() => {
@@ -325,6 +361,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
   const handleSwitchProvider = (id: string) => {
     const data = { id };
+    const target = providers.find(p => p.id === id);
+    if (target) {
+      syncActiveProviderModelMapping(target);
+    }
     sendToJava(`switch_provider:${JSON.stringify(data)}`);
     setLoading(true);
   };

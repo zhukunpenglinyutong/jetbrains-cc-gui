@@ -188,7 +188,7 @@ public class FileHandler extends BaseMessageHandler {
                     System.err.println("文件不存在: " + filePath);
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("addErrorMessage", escapeJs("无法打开文件: 文件不存在 (" + filePath + ")"));
-                    }, ModalityState.NON_MODAL);
+                    }, ModalityState.nonModal());
                     return;
                 }
 
@@ -200,7 +200,7 @@ public class FileHandler extends BaseMessageHandler {
                         // 在后台线程中查找文件（这是慢操作）
                         return LocalFileSystem.getInstance().findFileByIoFile(finalFile);
                     })
-                    .finishOnUiThread(ModalityState.NON_MODAL, virtualFile -> {
+                    .finishOnUiThread(ModalityState.nonModal(), virtualFile -> {
                         // 在 UI 线程中打开文件
                         if (virtualFile == null) {
                             System.err.println("无法获取 VirtualFile: " + filePath);

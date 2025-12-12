@@ -163,9 +163,10 @@ public class BridgeDirectoryResolver {
                 addCandidate(possibleDirs, Paths.get(pluginsRoot, PLUGIN_ID, SDK_DIR_NAME).toFile());
             }
 
-            String sandboxRoot = PathManager.getPluginTempPath();
-            if (sandboxRoot != null && !sandboxRoot.isEmpty()) {
-                Path sandboxPath = Paths.get(sandboxRoot);
+            // 使用系统路径下的 plugins 目录代替已废弃的 getPluginTempPath()
+            String systemPath = PathManager.getSystemPath();
+            if (systemPath != null && !systemPath.isEmpty()) {
+                Path sandboxPath = Paths.get(systemPath, "plugins");
                 addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_DIR_NAME).resolve(SDK_DIR_NAME).toFile());
                 addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_ID).resolve(SDK_DIR_NAME).toFile());
             }

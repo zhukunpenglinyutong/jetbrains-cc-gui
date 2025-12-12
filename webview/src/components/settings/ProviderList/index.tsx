@@ -55,16 +55,30 @@ export default function ProviderList({
         window.dispatchEvent(event);
     };
 
-    (window as any).backend_notification = (dataOrStr: any) => {
-        console.log('[Frontend] Received backend_notification:', dataOrStr);
-        let data = dataOrStr;
-        if (typeof data === 'string') {
-            try {
-                data = JSON.parse(data);
-            } catch (e) {
-                console.error('Failed to parse backend_notification data:', e);
+    (window as any).backend_notification = (...args: any[]) => {
+        console.log('[Frontend] Received backend_notification args:', args);
+        let data: any = {};
+        
+        // 支持多参数调用 (type, title, message) 以避免 JSON 解析问题
+        if (args.length >= 3 && typeof args[0] === 'string' && typeof args[2] === 'string') {
+            data = {
+                type: args[0],
+                title: args[1],
+                message: args[2]
+            };
+        } else if (args.length > 0) {
+            // 兼容旧的单参数 JSON 方式
+            let dataOrStr = args[0];
+            data = dataOrStr;
+            if (typeof data === 'string') {
+                try {
+                    data = JSON.parse(data);
+                } catch (e) {
+                    console.error('Failed to parse backend_notification data:', e);
+                }
             }
         }
+        
         const event = new CustomEvent('backend_notification', { detail: data });
         window.dispatchEvent(event);
     };

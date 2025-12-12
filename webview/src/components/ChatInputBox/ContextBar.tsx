@@ -53,6 +53,10 @@ export const ContextBar: React.FC<ContextBarProps> = ({
     selectedLines ? `${getFileName(activeFile)}#${selectedLines}` : getFileName(activeFile)
   ) : '';
 
+  const fullDisplayText = activeFile ? (
+    selectedLines ? `${activeFile}#${selectedLines}` : activeFile
+  ) : '';
+
   return (
     <div className="context-bar">
       {/* Tool Icons Group */}
@@ -93,7 +97,7 @@ export const ContextBar: React.FC<ContextBarProps> = ({
 
       {/* Active Context Chip */}
       {displayText && (
-        <div className="context-item">
+        <div className="context-item has-tooltip" data-tooltip={fullDisplayText}>
           {activeFile && (
             <span 
               className="context-file-icon" 
@@ -107,7 +111,9 @@ export const ContextBar: React.FC<ContextBarProps> = ({
               dangerouslySetInnerHTML={{ __html: getFileIconSvg(activeFile) }}
             />
           )}
-          <span className="context-text">{displayText}</span>
+          <span className="context-text">
+            <span dir="ltr">{displayText}</span>
+          </span>
           <span 
             className="codicon codicon-close context-close" 
             onClick={onClearFile}

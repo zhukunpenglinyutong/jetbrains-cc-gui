@@ -35,6 +35,7 @@
     "inputPlaceholder": "@referenciar archivos, shift + enter para nueva línea",
     "sendMessageEnter": "Enviar mensaje (Enter)",
     "currentMode": "Modo actual: {{mode}}",
+    "currentModel": "Modelo actual: {{model}}",
     "removeAttachment": "Eliminar adjunto",
     "closePreview": "Cerrar vista previa",
     "loadingDropdown": "Cargando...",
@@ -148,7 +149,41 @@
         "selectedCount": "{{count}} elementos seleccionados",
         "confirmImport": "Confirmar importación"
       },
-      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone."
+      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone.",
+      "dialog": {
+        "addTitle": "Añadir proveedor",
+        "editTitle": "Editar proveedor: {{name}}",
+        "addDescription": "Configurar nueva información del proveedor",
+        "editDescription": "Los cambios se aplicarán inmediatamente al proveedor actual.",
+        "providerName": "Nombre del proveedor",
+        "providerNamePlaceholder": "ej., Claude Oficial",
+        "remark": "Nota",
+        "remarkPlaceholder": "Opcional",
+        "apiKey": "API Key",
+        "apiKeyPlaceholder": "sk-ant-...",
+        "apiKeyHint": "Por favor ingrese su API Key",
+        "apiUrl": "Dirección de solicitud (API Endpoint)",
+        "apiUrlPlaceholder": "https://api.anthropic.com",
+        "apiUrlHint": "Ingrese la dirección del endpoint del servicio compatible con Claude API",
+        "modelMapping": "Mapeo de modelos (se inyectará en el env del JSON)",
+        "mainModel": "Modelo principal",
+        "mainModelPlaceholder": "ej., claude-sonnet-4-5",
+        "haikuModel": "Modelo Haiku predeterminado",
+        "haikuModelPlaceholder": "ej., claude-haiku-4-5",
+        "sonnetModel": "Modelo Sonnet predeterminado",
+        "sonnetModelPlaceholder": "ej., claude-sonnet-4-5",
+        "opusModel": "Modelo Opus predeterminado",
+        "opusModelPlaceholder": "ej., claude-opus-4-5-20251101",
+        "modelMappingHint": "Opcional: Especifique los modelos Claude predeterminados a usar. Deje vacío para valores predeterminados del sistema.",
+        "jsonConfig": "Configuración JSON",
+        "jsonConfigDescription": "Aquí puede configurar el contenido completo de settings.json, admitiendo todos los campos (por ejemplo, model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.)",
+        "jsonError": "Formato JSON inválido",
+        "required": "*",
+        "showApiKey": "Mostrar",
+        "hideApiKey": "Ocultar",
+        "confirmAdd": "Confirmar añadir",
+        "saveChanges": "Guardar cambios"
+      }
     },
     "comingSoon": "Próximamente...",
     "permissionsComingSoon": "Configuración de permisos próximamente...",
@@ -328,5 +363,21 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status"
+  },
+  "models": {
+    "claude": {
+      "sonnet45": {
+        "label": "Sonnet 4.5",
+        "description": "Sonnet 4.5 · Modelo recomendado por defecto"
+      },
+      "opus45": {
+        "label": "Opus 4.5",
+        "description": "Opus 4.5 · Más capaz para trabajos complejos"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku 4.5 · El más rápido para respuestas rápidas"
+      }
+    }
   }
 }

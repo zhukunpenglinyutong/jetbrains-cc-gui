@@ -35,6 +35,7 @@
     "inputPlaceholder": "@फाइल संदर्भ, shift + enter नई लाइन",
     "sendMessageEnter": "संदेश भेजें (Enter)",
     "currentMode": "वर्तमान मोड: {{mode}}",
+    "currentModel": "वर्तमान मॉडल: {{model}}",
     "removeAttachment": "अटैचमेंट हटाएं",
     "closePreview": "पूर्वावलोकन बंद करें",
     "loadingDropdown": "लोड हो रहा है...",
@@ -148,7 +149,41 @@
         "selectedCount": "{{count}} आइटम चुने गए",
         "confirmImport": "आयात की पुष्टि करें"
       },
-      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone."
+      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone.",
+      "dialog": {
+        "addTitle": "प्रदाता जोड़ें",
+        "editTitle": "प्रदाता संपादित करें: {{name}}",
+        "addDescription": "नए प्रदाता की जानकारी कॉन्फ़िगर करें",
+        "editDescription": "परिवर्तन तुरंत वर्तमान प्रदाता पर लागू होंगे।",
+        "providerName": "प्रदाता का नाम",
+        "providerNamePlaceholder": "उदाहरण: Claude आधिकारिक",
+        "remark": "टिप्पणी",
+        "remarkPlaceholder": "वैकल्पिक",
+        "apiKey": "API Key",
+        "apiKeyPlaceholder": "sk-ant-...",
+        "apiKeyHint": "कृपया अपनी API Key दर्ज करें",
+        "apiUrl": "अनुरोध पता (API Endpoint)",
+        "apiUrlPlaceholder": "https://api.anthropic.com",
+        "apiUrlHint": "Claude API संगत सेवा endpoint पता भरें",
+        "modelMapping": "मॉडल मैपिंग (JSON के env में इंजेक्ट किया जाएगा)",
+        "mainModel": "मुख्य मॉडल",
+        "mainModelPlaceholder": "उदाहरण: claude-sonnet-4-5",
+        "haikuModel": "Haiku डिफ़ॉल्ट मॉडल",
+        "haikuModelPlaceholder": "उदाहरण: claude-haiku-4-5",
+        "sonnetModel": "Sonnet डिफ़ॉल्ट मॉडल",
+        "sonnetModelPlaceholder": "उदाहरण: claude-sonnet-4-5",
+        "opusModel": "Opus डिफ़ॉल्ट मॉडल",
+        "opusModelPlaceholder": "उदाहरण: claude-opus-4-5-20251101",
+        "modelMappingHint": "वैकल्पिक: उपयोग करने के लिए डिफ़ॉल्ट Claude मॉडल निर्दिष्ट करें। सिस्टम डिफ़ॉल्ट के लिए खाली छोड़ें।",
+        "jsonConfig": "JSON कॉन्फ़िगरेशन",
+        "jsonConfigDescription": "यहाँ पूर्ण settings.json सामग्री कॉन्फ़िगर करें, सभी फ़ील्ड का समर्थन करता है (जैसे model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, आदि)",
+        "jsonError": "अमान्य JSON प्रारूप",
+        "required": "*",
+        "showApiKey": "दिखाएं",
+        "hideApiKey": "छुपाएं",
+        "confirmAdd": "जोड़ने की पुष्टि करें",
+        "saveChanges": "परिवर्तन सहेजें"
+      }
     },
     "comingSoon": "सुविधा जल्द आ रही है...",
     "permissionsComingSoon": "अनुमति कॉन्फ़िगरेशन सुविधा जल्द आ रही है...",
@@ -328,5 +363,21 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status"
+  },
+  "models": {
+    "claude": {
+      "sonnet45": {
+        "label": "Sonnet 4.5",
+        "description": "Sonnet 4.5 · डिफ़ॉल्ट अनुशंसित मॉडल"
+      },
+      "opus45": {
+        "label": "Opus 4.5",
+        "description": "Opus 4.5 · जटिल कार्यों के लिए सबसे सक्षम"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku 4.5 · सबसे तेज़, त्वरित उत्तरों के लिए उपयुक्त"
+      }
+    }
   }
 }

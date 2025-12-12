@@ -35,6 +35,7 @@
     "inputPlaceholder": "@reference files, shift + enter for new line",
     "sendMessageEnter": "Send message (Enter)",
     "currentMode": "Current mode: {{mode}}",
+    "currentModel": "Current model: {{model}}",
     "removeAttachment": "Remove attachment",
     "closePreview": "Close preview",
     "loadingDropdown": "Loading...",
@@ -148,7 +149,41 @@
         "selectedCount": "Selected {{count}} items",
         "confirmImport": "Confirm Import"
       },
-      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone."
+      "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"?\n\nThis action cannot be undone.",
+      "dialog": {
+        "addTitle": "Add Provider",
+        "editTitle": "Edit Provider: {{name}}",
+        "addDescription": "Configure new provider information",
+        "editDescription": "Changes will be applied immediately to the current provider.",
+        "providerName": "Provider Name",
+        "providerNamePlaceholder": "e.g., Claude Official",
+        "remark": "Remark",
+        "remarkPlaceholder": "Optional",
+        "apiKey": "API Key",
+        "apiKeyPlaceholder": "sk-ant-...",
+        "apiKeyHint": "Please enter your API Key",
+        "apiUrl": "API Endpoint",
+        "apiUrlPlaceholder": "https://api.anthropic.com",
+        "apiUrlHint": "Enter Claude API compatible service endpoint address",
+        "modelMapping": "Model Mapping (will be injected into JSON env)",
+        "mainModel": "Main Model",
+        "mainModelPlaceholder": "e.g., claude-sonnet-4-5",
+        "haikuModel": "Haiku Default Model",
+        "haikuModelPlaceholder": "e.g., claude-haiku-4-5",
+        "sonnetModel": "Sonnet Default Model",
+        "sonnetModelPlaceholder": "e.g., claude-sonnet-4-5",
+        "opusModel": "Opus Default Model",
+        "opusModelPlaceholder": "e.g., claude-opus-4-5-20251101",
+        "modelMappingHint": "Optional: Specify default Claude models to use. Leave empty for system defaults.",
+        "jsonConfig": "JSON Configuration",
+        "jsonConfigDescription": "Configure complete settings.json content here, supporting all fields (e.g., model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.)",
+        "jsonError": "Invalid JSON format",
+        "required": "*",
+        "showApiKey": "Show",
+        "hideApiKey": "Hide",
+        "confirmAdd": "Confirm Add",
+        "saveChanges": "Save Changes"
+      }
     },
     "comingSoon": "Coming soon...",
     "permissionsComingSoon": "Permissions configuration coming soon...",
@@ -328,5 +363,21 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status"
+  },
+  "models": {
+    "claude": {
+      "sonnet45": {
+        "label": "Sonnet 4.5",
+        "description": "Sonnet 4.5 · Use the default model"
+      },
+      "opus45": {
+        "label": "Opus 4.5",
+        "description": "Opus 4.5 · Most capable for complex work"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku 4.5 · Fastest for quick answers"
+      }
+    }
   }
 }

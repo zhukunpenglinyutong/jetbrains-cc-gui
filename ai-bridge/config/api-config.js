@@ -77,11 +77,12 @@ export function setupApiKey() {
   }
 
   if (!apiKey) {
-    console.error('[ERROR] API Key not configured. Please set ANTHROPIC_API_KEY in environment or ~/.claude/settings.json');
+    console.error('[ERROR] API Key not configured. Please set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in environment or ~/.claude/settings.json');
     throw new Error('API Key not configured');
   }
 
   process.env.ANTHROPIC_API_KEY = apiKey;
+  process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
   if (baseUrl) {
     process.env.ANTHROPIC_BASE_URL = baseUrl;
   }

@@ -359,23 +359,15 @@ public class ProviderHandler extends BaseMessageHandler {
      * 发送信息通知到前端
      */
     private void sendInfoToFrontend(String title, String message) {
-        Gson gson = new Gson();
-        JsonObject obj = new JsonObject();
-        obj.addProperty("type", "info");
-        obj.addProperty("title", title);
-        obj.addProperty("message", message);
-        callJavaScript("backend_notification", gson.toJson(obj));
+        // 使用多参数传递，避免 JSON 嵌套解析问题
+        callJavaScript("backend_notification", "info", escapeJs(title), escapeJs(message));
     }
 
     /**
      * 发送错误通知到前端
      */
     private void sendErrorToFrontend(String title, String message) {
-        Gson gson = new Gson();
-        JsonObject obj = new JsonObject();
-        obj.addProperty("type", "error");
-        obj.addProperty("title", title);
-        obj.addProperty("message", message);
-        callJavaScript("backend_notification", gson.toJson(obj));
+        // 使用多参数传递，避免 JSON 嵌套解析问题
+        callJavaScript("backend_notification", "error", escapeJs(title), escapeJs(message));
     }
 }

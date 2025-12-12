@@ -35,6 +35,7 @@
     "inputPlaceholder": "@引用文件，shift + enter 换行",
     "sendMessageEnter": "发送消息 (Enter)",
     "currentMode": "当前模式: {{mode}}",
+    "currentModel": "当前模型: {{model}}",
     "removeAttachment": "移除附件",
     "closePreview": "关闭预览",
     "loadingDropdown": "加载中...",
@@ -148,7 +149,41 @@
         "selectedCount": "已选择 {{count}} 项",
         "confirmImport": "确认导入"
       },
-      "deleteProviderMessage": "确定要删除供应商 \"{{name}}\" 吗？\n\n此操作无法撤销。"
+      "deleteProviderMessage": "确定要删除供应商 \"{{name}}\" 吗？\n\n此操作无法撤销。",
+      "dialog": {
+        "addTitle": "添加供应商",
+        "editTitle": "编辑供应商: {{name}}",
+        "addDescription": "配置新的供应商信息",
+        "editDescription": "更新配置后将立即应用到当前供应商。",
+        "providerName": "供应商名称",
+        "providerNamePlaceholder": "例如：Claude官方",
+        "remark": "备注",
+        "remarkPlaceholder": "可选",
+        "apiKey": "API Key",
+        "apiKeyPlaceholder": "sk-ant-...",
+        "apiKeyHint": "请输入您的API Key",
+        "apiUrl": "请求地址 (API Endpoint)",
+        "apiUrlPlaceholder": "https://api.anthropic.com",
+        "apiUrlHint": "填写兼容 Claude API 的服务端口地址",
+        "modelMapping": "模型映射（会注入到 JSON 的 env 里）",
+        "mainModel": "主模型",
+        "mainModelPlaceholder": "例如：claude-sonnet-4-5",
+        "haikuModel": "Haiku 默认模型",
+        "haikuModelPlaceholder": "例如：claude-haiku-4-5",
+        "sonnetModel": "Sonnet 默认模型",
+        "sonnetModelPlaceholder": "例如：claude-sonnet-4-5",
+        "opusModel": "Opus 默认模型",
+        "opusModelPlaceholder": "例如：claude-opus-4-5-20251101",
+        "modelMappingHint": "可选：指定默认使用的 Claude 模型，留空则使用系统默认。",
+        "jsonConfig": "配置 JSON",
+        "jsonConfigDescription": "此处可配置完整的 settings.json 内容，支持所有字段（如 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等）",
+        "jsonError": "JSON 格式无效",
+        "required": "*",
+        "showApiKey": "显示",
+        "hideApiKey": "隐藏",
+        "confirmAdd": "确认添加",
+        "saveChanges": "保存更改"
+      }
     },
     "comingSoon": "功能即将推出...",
     "permissionsComingSoon": "权限配置功能即将推出...",
@@ -328,5 +363,21 @@
     "deleteSuccess": "已成功删除 Skill",
     "toggleSuccess": "已更新 Skill 状态",
     "toggleFailed": "更新 Skill 状态失败"
+  },
+  "models": {
+    "claude": {
+      "sonnet45": {
+        "label": "Sonnet 4.5",
+        "description": "Sonnet 4.5 · 默认推荐模型"
+      },
+      "opus45": {
+        "label": "Opus 4.5",
+        "description": "Opus 4.5 · 复杂任务最强性能"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku 4.5 · 速度最快，适合快速答复"
+      }
+    }
   }
 }

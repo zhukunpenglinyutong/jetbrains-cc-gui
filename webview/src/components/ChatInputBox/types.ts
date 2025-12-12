@@ -172,8 +172,21 @@ export interface ModelInfo {
  * Claude 模型列表
  */
 export const CLAUDE_MODELS: ModelInfo[] = [
-  { id: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
-  { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5' },
+  {
+    id: 'claude-sonnet-4-5',
+    label: 'Sonnet 4.5',
+    description: 'Sonnet 4.5 · Use the default model',
+  },
+  {
+    id: 'claude-opus-4-5-20251101',
+    label: 'Opus 4.5',
+    description: 'Opus 4.5 · Most capable for complex work',
+  },
+  {
+    id: 'claude-haiku-4-5',
+    label: 'Haiku 4.5',
+    description: 'Haiku 4.5 · Fastest for quick answers',
+  },
 ];
 
 /**

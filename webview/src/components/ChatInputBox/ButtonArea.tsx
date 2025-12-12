@@ -31,7 +31,40 @@ export const ButtonArea = ({
   // const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 根据当前提供商选择模型列表
-  const availableModels = currentProvider === 'codex' ? CODEX_MODELS : CLAUDE_MODELS;
+  const availableModels = (() => {
+    if (currentProvider === 'codex') {
+      return CODEX_MODELS;
+    }
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return CLAUDE_MODELS;
+    }
+    try {
+      const stored = window.localStorage.getItem('claude-model-mapping');
+      if (!stored) {
+        return CLAUDE_MODELS;
+      }
+      const mapping = JSON.parse(stored) as {
+        main?: string;
+        haiku?: string;
+        sonnet?: string;
+        opus?: string;
+      };
+      return CLAUDE_MODELS.map((m) => {
+        if (m.id === 'claude-sonnet-4-5' && mapping.sonnet && String(mapping.sonnet).trim().length > 0) {
+          return { ...m, label: String(mapping.sonnet) };
+        }
+        if (m.id === 'claude-opus-4-5-20251101' && mapping.opus && String(mapping.opus).trim().length > 0) {
+          return { ...m, label: String(mapping.opus) };
+        }
+        if (m.id === 'claude-haiku-4-5' && mapping.haiku && String(mapping.haiku).trim().length > 0) {
+          return { ...m, label: String(mapping.haiku) };
+        }
+        return m;
+      });
+    } catch {
+      return CLAUDE_MODELS;
+    }
+  })();
 
   /**
    * 处理提交按钮点击

@@ -16,20 +16,18 @@
 
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
-<img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/1.png" />
-
 <img width="850" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/2.png" />
 ---
 
 
-插件下载地址：[idea-claude-code-gui-0.1.0.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/idea-claude-code-gui-0.1.0.zip)
+插件下载地址：[idea-claude-code-gui-0.1.0-beta1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/idea-claude-code-gui-0.1.0-beta1.zip)
 
 插件使用方式
 
 ```sh
-# 1.下载 idea-claude-code-gui-0.1.0.zip 文件
+# 1.下载 idea-claude-code-gui-0.1.0-beta1.zip 文件
 
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.1.0.zip 即可
+# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.1.0-beta1.zip 即可
 ```
 
 ---
@@ -124,6 +122,11 @@ AGPL-3.0
     <td align="center">
       <a href="https://github.com/gadfly3173">
         <img src="https://avatars.githubusercontent.com/u/28685179?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/song782360037">
+        <img src="https://avatars.githubusercontent.com/u/66980578?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>

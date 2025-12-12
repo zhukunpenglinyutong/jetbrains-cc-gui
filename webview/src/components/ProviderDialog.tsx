@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../types/provider';
 
 interface ProviderDialogProps {
@@ -26,15 +27,42 @@ export default function ProviderDialog({
   canDelete: _canDelete = true,
   addToast: _addToast,
 }: ProviderDialogProps) {
+  const { t } = useTranslation();
   const isAdding = !provider;
   
   const [providerName, setProviderName] = useState('');
   const [remark, setRemark] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState('');
+  const [mainModel, setMainModel] = useState('');
+  const [haikuModel, setHaikuModel] = useState('');
+  const [sonnetModel, setSonnetModel] = useState('');
+  const [opusModel, setOpusModel] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
   const [jsonError, setJsonError] = useState('');
+
+  const updateEnvField = (key: string, value: string) => {
+    try {
+      const config = jsonConfig ? JSON.parse(jsonConfig) : {};
+      if (!config.env) config.env = {};
+      const env = config.env as Record<string, any>;
+      const trimmed = typeof value === 'string' ? value.trim() : value;
+      if (!trimmed) {
+        if (Object.prototype.hasOwnProperty.call(env, key)) {
+          delete env[key];
+        }
+        if (Object.keys(env).length === 0) {
+          delete config.env;
+        }
+      } else {
+        env[key] = value;
+      }
+      setJsonConfig(JSON.stringify(config, null, 2));
+      setJsonError('');
+    } catch {
+    }
+  };
 
   // 初始化表单
   useEffect(() => {
@@ -46,11 +74,20 @@ export default function ProviderDialog({
         setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');
         // 编辑模式下不填充默认值，避免覆盖用户实际使用的第三方代理 URL
         setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '');
+        const env = provider.settingsConfig?.env || {};
+        setMainModel(env.ANTHROPIC_MODEL || '');
+        setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
+        setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
+        setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
 
         const config = provider.settingsConfig || {
           env: {
             ANTHROPIC_AUTH_TOKEN: '',
             ANTHROPIC_BASE_URL: '',
+            ANTHROPIC_MODEL: '',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: '',
+            ANTHROPIC_DEFAULT_OPUS_MODEL: '',
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
           }
         };
         setJsonConfig(JSON.stringify(config, null, 2));
@@ -60,10 +97,18 @@ export default function ProviderDialog({
         setRemark('');
         setApiKey('');
         setApiUrl('');
+        setMainModel('');
+        setHaikuModel('');
+        setSonnetModel('');
+        setOpusModel('');
         const config = {
           env: {
             ANTHROPIC_AUTH_TOKEN: '',
             ANTHROPIC_BASE_URL: '',
+            ANTHROPIC_MODEL: '',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: '',
+            ANTHROPIC_DEFAULT_OPUS_MODEL: '',
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
           }
         };
         setJsonConfig(JSON.stringify(config, null, 2));
@@ -89,31 +134,37 @@ export default function ProviderDialog({
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newApiKey = e.target.value;
     setApiKey(newApiKey);
-    
-    try {
-      const config = JSON.parse(jsonConfig);
-      if (!config.env) config.env = {};
-      config.env.ANTHROPIC_AUTH_TOKEN = newApiKey;
-      setJsonConfig(JSON.stringify(config, null, 2));
-      setJsonError('');
-    } catch {
-      // JSON 解析失败，忽略
-    }
+    updateEnvField('ANTHROPIC_AUTH_TOKEN', newApiKey);
   };
 
   const handleApiUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newApiUrl = e.target.value;
     setApiUrl(newApiUrl);
-    
-    try {
-      const config = JSON.parse(jsonConfig);
-      if (!config.env) config.env = {};
-      config.env.ANTHROPIC_BASE_URL = newApiUrl;
-      setJsonConfig(JSON.stringify(config, null, 2));
-      setJsonError('');
-    } catch {
-      // JSON 解析失败，忽略
-    }
+    updateEnvField('ANTHROPIC_BASE_URL', newApiUrl);
+  };
+
+  const handleMainModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setMainModel(value);
+    updateEnvField('ANTHROPIC_MODEL', value);
+  };
+
+  const handleHaikuModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setHaikuModel(value);
+    updateEnvField('ANTHROPIC_DEFAULT_HAIKU_MODEL', value);
+  };
+
+  const handleSonnetModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSonnetModel(value);
+    updateEnvField('ANTHROPIC_DEFAULT_SONNET_MODEL', value);
+  };
+
+  const handleOpusModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setOpusModel(value);
+    updateEnvField('ANTHROPIC_DEFAULT_OPUS_MODEL', value);
   };
 
   const handleJsonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -122,19 +173,48 @@ export default function ProviderDialog({
     
     try {
       const config = JSON.parse(newJson);
-      if (config.env) {
-        if (config.env.ANTHROPIC_AUTH_TOKEN !== undefined) {
-          setApiKey(config.env.ANTHROPIC_AUTH_TOKEN);
-        } else if (config.env.ANTHROPIC_API_KEY !== undefined) {
-          setApiKey(config.env.ANTHROPIC_API_KEY);
-        }
-        if (config.env.ANTHROPIC_BASE_URL !== undefined) {
-          setApiUrl(config.env.ANTHROPIC_BASE_URL);
-        }
+      const env = config.env || {};
+
+      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_AUTH_TOKEN')) {
+        setApiKey(env.ANTHROPIC_AUTH_TOKEN || '');
+      } else if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_API_KEY')) {
+        setApiKey(env.ANTHROPIC_API_KEY || '');
+      } else {
+        setApiKey('');
+      }
+
+      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_BASE_URL')) {
+        setApiUrl(env.ANTHROPIC_BASE_URL || '');
+      } else {
+        setApiUrl('');
+      }
+
+      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_MODEL')) {
+        setMainModel(env.ANTHROPIC_MODEL || '');
+      } else {
+        setMainModel('');
+      }
+
+      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_DEFAULT_HAIKU_MODEL')) {
+        setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
+      } else {
+        setHaikuModel('');
+      }
+
+      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_DEFAULT_SONNET_MODEL')) {
+        setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
+      } else {
+        setSonnetModel('');
+      }
+
+      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_DEFAULT_OPUS_MODEL')) {
+        setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
+      } else {
+        setOpusModel('');
       }
       setJsonError('');
     } catch (err) {
-      setJsonError('JSON 格式无效');
+      setJsonError(t('settings.provider.dialog.jsonError'));
     }
   };
 
@@ -156,7 +236,7 @@ export default function ProviderDialog({
     <div className="dialog-overlay">
       <div className="dialog provider-dialog">
         <div className="dialog-header">
-          <h3>{isAdding ? '添加供应商' : `编辑供应商: ${provider?.name}`}</h3>
+          <h3>{isAdding ? t('settings.provider.dialog.addTitle') : t('settings.provider.dialog.editTitle', { name: provider?.name })}</h3>
           <button className="close-btn" onClick={onClose}>
             <span className="codicon codicon-close"></span>
           </button>
@@ -164,31 +244,31 @@ export default function ProviderDialog({
 
         <div className="dialog-body">
           <p className="dialog-desc">
-            {isAdding ? '配置新的供应商信息' : '更新配置后将立即应用到当前供应商。'}
+            {isAdding ? t('settings.provider.dialog.addDescription') : t('settings.provider.dialog.editDescription')}
           </p>
 
           <div className="form-group">
             <label htmlFor="providerName">
-              供应商名称
-              <span className="required">*</span>
+              {t('settings.provider.dialog.providerName')}
+              <span className="required">{t('settings.provider.dialog.required')}</span>
             </label>
             <input
               id="providerName"
               type="text"
               className="form-input"
-              placeholder="例如：Claude官方"
+              placeholder={t('settings.provider.dialog.providerNamePlaceholder')}
               value={providerName}
               onChange={(e) => setProviderName(e.target.value)}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="remark">备注</label>
+            <label htmlFor="remark">{t('settings.provider.dialog.remark')}</label>
             <input
               id="remark"
               type="text"
               className="form-input"
-              placeholder="可选"
+              placeholder={t('settings.provider.dialog.remarkPlaceholder')}
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
             />
@@ -196,15 +276,15 @@ export default function ProviderDialog({
 
           <div className="form-group">
             <label htmlFor="apiKey">
-              API Key
-              <span className="required">*</span>
+              {t('settings.provider.dialog.apiKey')}
+              <span className="required">{t('settings.provider.dialog.required')}</span>
             </label>
             <div className="input-with-visibility">
               <input
                 id="apiKey"
                 type={showApiKey ? 'text' : 'password'}
                 className="form-input"
-                placeholder="sk-ant-..."
+                placeholder={t('settings.provider.dialog.apiKeyPlaceholder')}
                 value={apiKey}
                 onChange={handleApiKeyChange}
               />
@@ -212,31 +292,82 @@ export default function ProviderDialog({
                 type="button"
                 className="visibility-toggle"
                 onClick={() => setShowApiKey(!showApiKey)}
-                title={showApiKey ? '隐藏' : '显示'}
+                title={showApiKey ? t('settings.provider.dialog.hideApiKey') : t('settings.provider.dialog.showApiKey')}
               >
                 <span className={`codicon ${showApiKey ? 'codicon-eye-closed' : 'codicon-eye'}`} />
               </button>
             </div>
-            <small className="form-hint">请输入您的API Key</small>
+            <small className="form-hint">{t('settings.provider.dialog.apiKeyHint')}</small>
           </div>
 
           <div className="form-group">
             <label htmlFor="apiUrl">
-              请求地址 (API Endpoint)
-              <span className="required">*</span>
+              {t('settings.provider.dialog.apiUrl')}
+              <span className="required">{t('settings.provider.dialog.required')}</span>
             </label>
             <input
               id="apiUrl"
               type="text"
               className="form-input"
-              placeholder="https://api.anthropic.com"
+              placeholder={t('settings.provider.dialog.apiUrlPlaceholder')}
               value={apiUrl}
               onChange={handleApiUrlChange}
             />
             <small className="form-hint">
               <span className="codicon codicon-info" style={{ fontSize: '12px', marginRight: '4px' }} />
-              填写兼容 Claude API 的服务端口地址
+              {t('settings.provider.dialog.apiUrlHint')}
             </small>
+          </div>
+
+          <div className="form-group">
+            <label>{t('settings.provider.dialog.modelMapping')}</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label htmlFor="mainModel">{t('settings.provider.dialog.mainModel')}</label>
+                <input
+                  id="mainModel"
+                  type="text"
+                  className="form-input"
+                  placeholder={t('settings.provider.dialog.mainModelPlaceholder')}
+                  value={mainModel}
+                  onChange={handleMainModelChange}
+                />
+              </div>
+              <div>
+                <label htmlFor="haikuModel">{t('settings.provider.dialog.haikuModel')}</label>
+                <input
+                  id="haikuModel"
+                  type="text"
+                  className="form-input"
+                  placeholder={t('settings.provider.dialog.haikuModelPlaceholder')}
+                  value={haikuModel}
+                  onChange={handleHaikuModelChange}
+                />
+              </div>
+              <div>
+                <label htmlFor="sonnetModel">{t('settings.provider.dialog.sonnetModel')}</label>
+                <input
+                  id="sonnetModel"
+                  type="text"
+                  className="form-input"
+                  placeholder={t('settings.provider.dialog.sonnetModelPlaceholder')}
+                  value={sonnetModel}
+                  onChange={handleSonnetModelChange}
+                />
+              </div>
+              <div>
+                <label htmlFor="opusModel">{t('settings.provider.dialog.opusModel')}</label>
+                <input
+                  id="opusModel"
+                  type="text"
+                  className="form-input"
+                  placeholder={t('settings.provider.dialog.opusModelPlaceholder')}
+                  value={opusModel}
+                  onChange={handleOpusModelChange}
+                />
+              </div>
+            </div>
+            <small className="form-hint">{t('settings.provider.dialog.modelMappingHint')}</small>
           </div>
 
           {/* 高级选项 - 暂时隐藏，后续会使用 */}
@@ -253,11 +384,11 @@ export default function ProviderDialog({
           <details className="advanced-section" open>
             <summary className="advanced-toggle">
               <span className="codicon codicon-chevron-right" />
-              配置 JSON
+              {t('settings.provider.dialog.jsonConfig')}
             </summary>
             <div className="json-config-section">
               <p className="section-desc" style={{ marginBottom: '12px', fontSize: '12px', color: '#999' }}>
-                此处可配置完整的 settings.json 内容，支持所有字段（如 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等）
+                {t('settings.provider.dialog.jsonConfigDescription')}
               </p>
               <div className="json-editor-wrapper">
                 <textarea
@@ -268,7 +399,11 @@ export default function ProviderDialog({
   "env": {
     "ANTHROPIC_API_KEY": "",
     "ANTHROPIC_AUTH_TOKEN": "",
-    "ANTHROPIC_BASE_URL": ""
+    "ANTHROPIC_BASE_URL": "",
+    "ANTHROPIC_MODEL": "",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": ""
   },
   "model": "opus",
   "alwaysThinkingEnabled": false,
@@ -291,11 +426,11 @@ export default function ProviderDialog({
           <div className="footer-actions" style={{ marginLeft: 'auto' }}>
             <button className="btn btn-secondary" onClick={onClose}>
               <span className="codicon codicon-close" />
-              取消
+              {t('common.cancel')}
             </button>
             <button className="btn btn-primary" onClick={handleSave}>
               <span className="codicon codicon-save" />
-              {isAdding ? '确认添加' : '保存更改'}
+              {isAdding ? t('settings.provider.dialog.confirmAdd') : t('settings.provider.dialog.saveChanges')}
             </button>
           </div>
         </div>
@@ -303,4 +438,3 @@ export default function ProviderDialog({
     </div>
   );
 }
-

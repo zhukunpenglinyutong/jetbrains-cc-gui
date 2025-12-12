@@ -1120,7 +1120,7 @@ public class CodemossSettingsService {
                 } else {
                     String url = serverSpec.get("url").getAsString();
                      try {
-                        new java.net.URL(url);
+                        new java.net.URI(url).toURL();
                     } catch (Exception e) {
                         errors.add("URL 格式无效");
                     }

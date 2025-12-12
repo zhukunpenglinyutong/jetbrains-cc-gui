@@ -25,6 +25,19 @@
         </ul>
     ]]></description>
 
+    <!-- Search keywords for JetBrains Marketplace -->
+    <tags>
+        <tag>claude</tag>
+        <tag>ai</tag>
+        <tag>assistant</tag>
+        <tag>code-generation</tag>
+        <tag>productivity</tag>
+        <tag>ai-coding</tag>
+        <tag>claude-code</tag>
+        <tag>claude-code-gui</tag>
+        <tag>claude code gui</tag>
+    </tags>
+
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
