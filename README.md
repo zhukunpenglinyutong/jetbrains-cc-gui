@@ -36,18 +36,16 @@ Plugin Installation Instructions
 
 ### Current Progress
 
-##### **December 11 (v0.1.0)**
+##### **December 12 (v0.1.0-beta1)**
 
-- [x] P0 (feat) Implement current open file path (send currently open file information to AI by default)
-- [x] P0 (feat) Implement internationalization functionality
-- [x] P0 (feat) Refactor provider management list, support importing cc-switch configuration
-- [x] P0 (bug) Resolve a long-standing configuration error blocking issue
-- [x] P1 (feat) Implement file drag-and-drop into input box functionality (#gadfly3173 PR)
-- [x] P1 (feat) Add delete history session feature (contributed by community member PR)
-- [x] P1 (feat) Add Skills functionality (contributed by community member PR)
-- [x] P1 (feat) Add right-click selected code to send to plugin functionality (#lxm1007 PR)
-- [x] P1 (fix) Improve and refactor @file functionality, making @file feature more user-friendly
-- [x] P2 (fix) Resolve input box shortcut operation failure issues
+- [x] P0 (feat) Added model mapping functionality (now you can easily configure various models, such as GLM, Deepseek, etc.)
+- [x] P0 (fix) Resolved configuration injection issue when ANTHROPIC_AUTH_TOKEN is set
+- [x] P1 (feat) Fixed issue with sending @ file paths
+- [x] P1 (fix) Fixed missing prompt when provider management import encounters errors
+- [x] P2 (feat) Added hover to view full path functionality
+- [x] P3 (fix) Fixed issue where files too long are not fully displayed
+- [x] P3 (fix) Updated some deprecated Java APIs
+- [x] P3 (ui) Modified some UI details
 
 ---
 
