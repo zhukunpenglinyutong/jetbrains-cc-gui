@@ -2,9 +2,9 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
-import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.project.Project;
 
 import javax.swing.*;
 import java.util.Map;
@@ -132,17 +132,40 @@ public class PermissionHandler extends BaseMessageHandler {
             String requestJson = gson.toJson(requestData);
             String escapedJson = escapeJs(requestJson);
 
-            SwingUtilities.invokeLater(() -> {
-                String jsCode = "if (window.showPermissionDialog) { " +
-                    "  window.showPermissionDialog('" + escapedJson + "'); " +
-                    "}";
+            // 获取权限请求所属的项目
+            Project targetProject = request.getProject();
+            if (targetProject == null) {
+                System.err.println("[PermissionHandler] 警告: PermissionRequest 没有关联的 Project，使用当前 context 的窗口");
+                targetProject = this.context.getProject();
+            }
 
-                context.executeJavaScriptOnEDT(jsCode);
-            });
+            // 获取目标项目的窗口实例
+            com.github.claudecodegui.ClaudeSDKToolWindow.ClaudeChatWindow targetWindow =
+                com.github.claudecodegui.ClaudeSDKToolWindow.getChatWindow(targetProject);
+
+            if (targetWindow == null) {
+                System.err.println("[PermissionHandler] 错误: 找不到项目 " + targetProject.getName() + " 的窗口实例");
+                // 如果找不到目标窗口，拒绝权限请求
+                this.context.getSession().handlePermissionDecision(
+                    request.getChannelId(),
+                    false,
+                    false,
+                    "Failed to show permission dialog: window not found"
+                );
+                notifyPermissionDenied();
+                return;
+            }
+
+            // 在目标窗口中执行 JavaScript 显示弹窗
+            String jsCode = "if (window.showPermissionDialog) { " +
+                "  window.showPermissionDialog('" + escapedJson + "'); " +
+                "}";
+
+            targetWindow.executeJavaScriptCode(jsCode);
 
         } catch (Exception e) {
             System.err.println("[PermissionHandler] 显示权限弹窗失败: " + e.getMessage());
-            context.getSession().handlePermissionDecision(
+            this.context.getSession().handlePermissionDecision(
                 request.getChannelId(),
                 false,
                 false,

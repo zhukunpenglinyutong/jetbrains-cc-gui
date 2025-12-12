@@ -1,6 +1,7 @@
 package com.github.claudecodegui.permission;
 
 import com.google.gson.JsonObject;
+import com.intellij.openapi.project.Project;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -24,12 +25,19 @@ public class PermissionManager {
     private Consumer<PermissionRequest> onPermissionRequestedCallback;
 
     /**
-     * 创建新的权限请求
+     * 创建新的权限请求.
+     *
+     * @param channelId 通道ID
+     * @param toolName 工具名称
+     * @param inputs 输入参数
+     * @param suggestions 建议
+     * @param project 所属项目
+     * @return 权限请求对象
      */
-    public PermissionRequest createRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions) {
+    public PermissionRequest createRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions, Project project) {
         // 首先检查工具级别的权限记忆（总是允许）
         if (toolOnlyPermissionMemory.containsKey(toolName)) {
-            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions);
+            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
             if (toolOnlyPermissionMemory.get(toolName)) {
                 request.accept();
             } else {
@@ -42,7 +50,7 @@ public class PermissionManager {
         String memoryKey = toolName + ":" + generateInputHash(inputs);
         if (toolPermissionMemory.containsKey(memoryKey)) {
             // 自动处理基于记忆的决策
-            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions);
+            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
             if (toolPermissionMemory.get(memoryKey)) {
                 request.accept();
             } else {
@@ -53,17 +61,17 @@ public class PermissionManager {
 
         // 检查全局权限模式
         if (mode == PermissionMode.ALLOW_ALL) {
-            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions);
+            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
             request.accept();
             return request;
         } else if (mode == PermissionMode.DENY_ALL) {
-            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions);
+            PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
             request.reject("Denied by global permission mode", true);
             return request;
         }
 
         // 创建新的权限请求
-        PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions);
+        PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
         pendingRequests.put(channelId, request);
 
         // 触发权限请求回调
@@ -72,6 +80,16 @@ public class PermissionManager {
         }
 
         return request;
+    }
+
+    /**
+     * 创建新的权限请求（兼容旧版本）.
+     *
+     * @deprecated 使用包含 project 参数的方法
+     */
+    @Deprecated
+    public PermissionRequest createRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions) {
+        return createRequest(channelId, toolName, inputs, suggestions, null);
     }
 
     /**

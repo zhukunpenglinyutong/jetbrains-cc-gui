@@ -56,6 +56,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     private static final Map<Project, ClaudeChatWindow> instances = new ConcurrentHashMap<>();
 
+    /**
+     * 获取指定项目的聊天窗口实例.
+     *
+     * @param project 项目
+     * @return 聊天窗口实例，如果不存在返回 null
+     */
+    public static ClaudeChatWindow getChatWindow(Project project) {
+        return instances.get(project);
+    }
+
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
@@ -78,7 +88,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     /**
      * 聊天窗口内部类
      */
-    private static class ClaudeChatWindow {
+    public static class ClaudeChatWindow {
         private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
         private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new java.util.HashMap<>();
         static {
@@ -738,7 +748,23 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void interruptDueToPermissionDenial() {
-            session.interrupt().thenRun(() -> SwingUtilities.invokeLater(() -> {}));
+            this.session.interrupt().thenRun(() -> SwingUtilities.invokeLater(() -> {}));
+        }
+
+        /**
+         * 执行 JavaScript 代码（对外公开，用于权限弹窗等功能）.
+         *
+         * @param jsCode 要执行的 JavaScript 代码
+         */
+        public void executeJavaScriptCode(String jsCode) {
+            if (this.disposed || this.browser == null) {
+                return;
+            }
+            SwingUtilities.invokeLater(() -> {
+                if (!this.disposed && this.browser != null) {
+                    this.browser.getCefBrowser().executeJavaScript(jsCode, this.browser.getCefBrowser().getURL(), 0);
+                }
+            });
         }
 
         private void callJavaScript(String functionName, String... args) {
