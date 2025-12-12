@@ -6,8 +6,8 @@ import SettingsView from './components/settings';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import { ChatInputBox } from './components/ChatInputBox';
-import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
+import { CLAUDE_MODELS, CODEX_MODELS, convertRemoteModelToModelInfo } from './components/ChatInputBox/types';
+import type { Attachment, PermissionMode, ModelInfo, RemoteModelsResult } from './components/ChatInputBox/types';
 import {
   BashToolBlock,
   EditToolBlock,
@@ -88,6 +88,8 @@ const App = () => {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [inputValue, setInputValue] = useState('');
   const [, setProviderConfigVersion] = useState(0);
+  // 远程模型列表状态
+  const [remoteModels, setRemoteModels] = useState<ModelInfo[] | undefined>(undefined);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -298,12 +300,46 @@ const App = () => {
         const provider: ProviderConfig = JSON.parse(jsonStr);
         syncActiveProviderModelMapping(provider);
         setProviderConfigVersion(prev => prev + 1);
+        // 当供应商变化时，重新获取远程模型列表
+        sendBridgeMessage('fetch_remote_models');
       } catch (error) {
         console.error('[Frontend] Failed to parse active provider in App:', error);
       }
     };
 
+    // 远程模型加载回调
+    window.onRemoteModelsLoaded = (json: string) => {
+      console.log('[Frontend] onRemoteModelsLoaded called');
+      try {
+        const result: RemoteModelsResult = JSON.parse(json);
+        console.log('[Frontend] Remote models result:', result);
+        if (result.success && result.models && result.models.length > 0) {
+          // 将远程模型数据转换为 ModelInfo 格式
+          const models = result.models.map(convertRemoteModelToModelInfo);
+          console.log('[Frontend] ✓ Successfully loaded', models.length, 'remote models:', models);
+          setRemoteModels(models);
+          // 如果当前选中的模型不在新列表中，选择第一个模型
+          const currentModel = selectedClaudeModel;
+          if (!models.find(m => m.id === currentModel)) {
+            console.log('[Frontend] Current model not in remote list, switching to first model:', models[0].id);
+            // 使用 sendBridgeMessage 而不是直接设置状态，让后端确认
+            sendBridgeMessage('set_model', models[0].id);
+          }
+        } else {
+          const errorMsg = result.error || 'No models returned from API';
+          console.warn('[Frontend] Remote models unavailable:', errorMsg);
+          setRemoteModels(undefined);
+        }
+      } catch (error) {
+        console.error('[Frontend] Failed to parse remote models response:', error);
+        console.error('[Frontend] Response was:', json);
+        setRemoteModels(undefined);
+      }
+    };
+
     sendBridgeMessage('get_active_provider');
+    // 初始化时获取远程模型列表
+    sendBridgeMessage('fetch_remote_models');
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -509,13 +545,12 @@ const App = () => {
 
   /**
    * 处理模型选择
+   * 注意: 不直接更新本地状态，而是等待后端通过 onModelConfirmed 回调确认
    */
   const handleModelSelect = (modelId: string) => {
-    if (currentProvider === 'claude') {
-      setSelectedClaudeModel(modelId);
-    } else if (currentProvider === 'codex') {
-      setSelectedCodexModel(modelId);
-    }
+    console.log('[Frontend] Model selection requested:', modelId);
+    // 发送模型设置请求，但不立即更新本地状态
+    // 状态会在 onModelConfirmed 回调中更新，确保前后端状态一致
     sendBridgeMessage('set_model', modelId);
   };
 
@@ -1214,6 +1249,7 @@ const App = () => {
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
             value={inputValue}
+            remoteModels={remoteModels}
             placeholder={t('chat.inputPlaceholder')}
             onSubmit={handleSubmit}
             onStop={interruptSession}
@@ -1222,9 +1258,9 @@ const App = () => {
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
             activeFile={contextInfo?.file}
-            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined 
-              ? (contextInfo.startLine === contextInfo.endLine 
-                  ? `L${contextInfo.startLine}` 
+            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
+              ? (contextInfo.startLine === contextInfo.endLine
+                  ? `L${contextInfo.startLine}`
                   : `L${contextInfo.startLine}-${contextInfo.endLine}`)
               : undefined}
             onClearContext={() => setContextInfo(null)}
