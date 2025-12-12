@@ -1,6 +1,7 @@
 package com.github.claudecodegui;
 
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
@@ -49,8 +50,9 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Claude SDK 聊天工具窗口
+ * 实现 DumbAware 接口允许在索引构建期间使用此工具窗口
  */
-public class ClaudeSDKToolWindow implements ToolWindowFactory {
+public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     private static final Map<Project, ClaudeChatWindow> instances = new ConcurrentHashMap<>();
 

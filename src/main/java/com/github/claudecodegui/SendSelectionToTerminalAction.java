@@ -8,6 +8,7 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
@@ -21,8 +22,9 @@ import java.io.File;
 /**
  * 将选中的代码发送到插件聊天窗口的Action
  * 支持跨平台快捷键：Mac(Cmd+Option+K) 和 Windows/Linux(Ctrl+Alt+K)
+ * 实现 DumbAware 接口允许在索引构建期间使用此功能
  */
-public class SendSelectionToTerminalAction extends AnAction {
+public class SendSelectionToTerminalAction extends AnAction implements DumbAware {
 
     /**
      * 执行Action的主要逻辑
