@@ -117,11 +117,12 @@ public class ToolInterceptor {
                 UUID.randomUUID().toString(),
                 toolName,
                 inputs,
-                null
+                null,
+                this.project
             );
 
             // 显示权限对话框
-            PermissionDialog dialog = new PermissionDialog(project, request);
+            PermissionDialog dialog = new PermissionDialog(this.project, request);
             dialog.setDecisionCallback(decision -> {
                 future.complete(decision.allow);
             });

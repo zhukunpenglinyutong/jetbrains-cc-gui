@@ -1,6 +1,7 @@
 package com.github.claudecodegui.permission;
 
 import com.google.gson.JsonObject;
+import com.intellij.openapi.project.Project;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -13,14 +14,26 @@ public class PermissionRequest {
     private final Map<String, Object> inputs;
     private final JsonObject suggestions;
     private final CompletableFuture<PermissionResult> resultFuture;
+    private final Project project;
     private boolean resolved = false;
 
-    public PermissionRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions) {
+    public PermissionRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions, Project project) {
         this.channelId = channelId;
         this.toolName = toolName;
         this.inputs = inputs;
         this.suggestions = suggestions;
+        this.project = project;
         this.resultFuture = new CompletableFuture<>();
+    }
+
+    /**
+     * 兼容旧版本的构造函数（不包含 project）.
+     *
+     * @deprecated 使用包含 project 参数的构造函数
+     */
+    @Deprecated
+    public PermissionRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions) {
+        this(channelId, toolName, inputs, suggestions, null);
     }
 
     /**
@@ -89,6 +102,10 @@ public class PermissionRequest {
 
     public JsonObject getSuggestions() {
         return suggestions;
+    }
+
+    public Project getProject() {
+        return this.project;
     }
 
     public boolean isResolved() {
