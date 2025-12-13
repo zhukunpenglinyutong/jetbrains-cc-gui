@@ -103,6 +103,8 @@ const App = () => {
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
+  // 追踪用户是否在底部（用于判断是否需要自动滚动）
+  const isUserAtBottomRef = useRef(true);
 
   const syncActiveProviderModelMapping = (provider?: ProviderConfig | null) => {
     if (typeof window === 'undefined' || !window.localStorage) return;
@@ -417,8 +419,27 @@ const App = () => {
     };
   }, []);
 
+  // 监听滚动事件，检测用户是否在底部
+  // 原理：如果用户向上滚动查看历史，就标记为"不在底部"，不再自动滚动
+  // 依赖 currentView 是因为视图切换时容器会重新挂载，需要重新绑定监听器
   useEffect(() => {
-    if (messagesContainerRef.current) {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      // 计算距离底部的距离（容差 50 像素）
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      // 如果距离底部小于 50 像素，认为用户在底部
+      isUserAtBottomRef.current = distanceFromBottom < 50;
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [currentView]);
+
+  useEffect(() => {
+    // 只有当用户在底部时，才自动滚动到底部
+    if (messagesContainerRef.current && isUserAtBottomRef.current) {
       // 使用 requestAnimationFrame 确保 DOM 已完全渲染
       requestAnimationFrame(() => {
         if (messagesContainerRef.current) {
