@@ -30,13 +30,7 @@ public class JsUtils {
      */
     public static String buildJsCall(String functionName, String... args) {
         StringBuilder js = new StringBuilder();
-        // 使用 try-catch 包裹，而不是 typeof 检查
-        // 这样即使函数未定义也不会导致错误，只会静默失败
-        js.append("(function() { ");
-        js.append("try { ");
-
-        // 检查函数是否存在和可调用
-        js.append("if (").append(functionName).append(" && typeof ").append(functionName).append(" === 'function') { ");
+        js.append("if (typeof ").append(functionName).append(" === 'function') { ");
         js.append(functionName).append("(");
 
         for (int i = 0; i < args.length; i++) {
@@ -44,12 +38,7 @@ public class JsUtils {
             js.append("'").append(args[i]).append("'");
         }
 
-        js.append("); ");
-        js.append("} ");
-        js.append("} catch (e) { ");
-        js.append("console.error('[JS Call Error] Failed to call ").append(functionName).append(":', e); ");
-        js.append("} ");
-        js.append("})();");
+        js.append("); }");
         return js.toString();
     }
 
@@ -61,10 +50,7 @@ public class JsUtils {
      */
     public static String buildSafeJsCall(String objectPath, String... args) {
         StringBuilder js = new StringBuilder();
-        // 使用 try-catch 包裹，提高可靠性
-        js.append("(function() { ");
-        js.append("try { ");
-        js.append("if (").append(objectPath).append(" && typeof ").append(objectPath).append(" === 'function') { ");
+        js.append("if (").append(objectPath).append(") { ");
         js.append(objectPath).append("(");
 
         for (int i = 0; i < args.length; i++) {
@@ -72,12 +58,7 @@ public class JsUtils {
             js.append("'").append(args[i]).append("'");
         }
 
-        js.append("); ");
-        js.append("} ");
-        js.append("} catch (e) { ");
-        js.append("console.error('[JS Call Error] Failed to call ").append(objectPath).append(":', e); ");
-        js.append("} ");
-        js.append("})();");
+        js.append("); }");
         return js.toString();
     }
 }
