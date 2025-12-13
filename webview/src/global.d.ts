@@ -158,4 +158,14 @@ interface Window {
    * Update usage statistics
    */
   updateUsageStatistics?: (json: string) => void;
+
+  /**
+   * Update slash commands list (from SDK)
+   */
+  updateSlashCommands?: (json: string) => void;
+
+  /**
+   * Pending slash commands payload before provider initialization
+   */
+  __pendingSlashCommands?: string;
 }

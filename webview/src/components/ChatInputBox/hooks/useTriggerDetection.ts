@@ -69,23 +69,32 @@ function detectAtTrigger(text: string, cursorPosition: number): TriggerQuery | n
  * 检测 / 斜杠命令触发（仅行首）
  */
 function detectSlashTrigger(text: string, cursorPosition: number): TriggerQuery | null {
+  // console.log('[detectSlashTrigger] Input:', { text, cursorPosition, textLength: text.length });
+
   // 从光标位置向前查找 /
   let start = cursorPosition - 1;
   while (start >= 0) {
     const char = text[start];
-    // 遇到空格或换行，检查是否为行首
-    if (char === '\n' || (start === 0 && char === '/')) {
-      break;
-    }
+    // console.log('[detectSlashTrigger] Checking char:', { start, char, charCode: char?.charCodeAt(0) });
+
+    // 遇到空格或换行，停止搜索
     if (char === ' ' || char === '\t') {
+      // console.log('[detectSlashTrigger] Found space/tab, returning null');
       return null;
     }
+    if (char === '\n') {
+      // console.log('[detectSlashTrigger] Found newline, returning null');
+      return null;
+    }
+
     // 找到 /
     if (char === '/') {
       // 检查 / 前是否为行首
       const isLineStart = start === 0 || text[start - 1] === '\n';
+      // console.log('[detectSlashTrigger] Found /, isLineStart:', isLineStart);
       if (isLineStart) {
         const query = text.slice(start + 1, cursorPosition);
+        // console.log('[detectSlashTrigger] Returning trigger:', { trigger: '/', query, start, end: cursorPosition });
         return {
           trigger: '/',
           query,
@@ -93,10 +102,12 @@ function detectSlashTrigger(text: string, cursorPosition: number): TriggerQuery 
           end: cursorPosition,
         };
       }
+      // console.log('[detectSlashTrigger] / not at line start, returning null');
       return null;
     }
     start--;
   }
+  // console.log('[detectSlashTrigger] Loop ended, returning null');
   return null;
 }
 

@@ -329,6 +329,11 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       if (msg.type === 'system' && msg.session_id) {
         currentSessionId = msg.session_id;
         console.log('[SESSION_ID]', msg.session_id);
+
+        // 输出 slash_commands（如果存在）
+        if (msg.subtype === 'init' && Array.isArray(msg.slash_commands)) {
+          // console.log('[SLASH_COMMANDS]', JSON.stringify(msg.slash_commands));
+        }
       }
     }
     } catch (loopError) {
@@ -786,7 +791,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	      success: true,
 	      sessionId: currentSessionId
 	    }));
-	
+
 	  } catch (error) {
 	    const payload = buildConfigErrorPayload(error);
 	    console.error('[SEND_ERROR]', JSON.stringify(payload));
@@ -795,3 +800,84 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    if (timeoutId) clearTimeout(timeoutId);
 	  }
 	}
+
+/**
+ * 获取斜杠命令列表
+ * 通过 SDK 的 supportedCommands() 方法获取完整的命令列表
+ * 这个方法不需要发送消息，可以在插件启动时调用
+ */
+export async function getSlashCommands(cwd = null) {
+  try {
+    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
+
+    // 设置 API Key
+    setupApiKey();
+
+    // 确保 HOME 环境变量设置正确
+    if (!process.env.HOME) {
+      const os = await import('os');
+      process.env.HOME = os.homedir();
+    }
+
+    // 智能确定工作目录
+    const workingDirectory = selectWorkingDirectory(cwd);
+    try {
+      process.chdir(workingDirectory);
+    } catch (chdirError) {
+      console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
+    }
+
+    // 创建一个空的输入流
+    const inputStream = new AsyncStream();
+
+    // 调用 query 函数，使用空输入流
+    // 这样不会发送任何消息，只是初始化 SDK 以获取配置
+    const result = query({
+      prompt: inputStream,
+      options: {
+        cwd: workingDirectory,
+        permissionMode: 'default',
+        maxTurns: 0,  // 不需要进行任何轮次
+        canUseTool: async () => ({
+          behavior: 'deny',
+          message: 'Config loading only'
+        }),
+        // 明确启用默认工具集
+        tools: { type: 'preset', preset: 'claude_code' },
+        settingSources: ['user', 'project', 'local'],
+        // 捕获 SDK stderr 调试日志，帮助定位 CLI 初始化问题
+        stderr: (data) => {
+          if (data && data.trim()) {
+            console.log(`[SDK-STDERR] ${data.trim()}`);
+          }
+        }
+      }
+    });
+
+    // 立即关闭输入流，告诉 SDK 我们没有消息要发送
+    inputStream.done();
+
+    // 获取支持的命令列表
+    // SDK 返回的格式是 SlashCommand[]，包含 name 和 description
+    const slashCommands = await result.supportedCommands?.() || [];
+
+    // 清理资源
+    await result.return?.();
+
+    // 输出命令列表（包含 name 和 description）
+    console.log('[SLASH_COMMANDS]', JSON.stringify(slashCommands));
+
+    console.log(JSON.stringify({
+      success: true,
+      commands: slashCommands
+    }));
+
+  } catch (error) {
+    console.error('[GET_SLASH_COMMANDS_ERROR]', error.message);
+    console.log(JSON.stringify({
+      success: false,
+      error: error.message,
+      commands: []
+    }));
+  }
+}

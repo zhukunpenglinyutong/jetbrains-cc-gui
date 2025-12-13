@@ -122,6 +122,7 @@ public class FileHandler extends BaseMessageHandler {
 
     /**
      * 处理获取命令列表请求
+     * 调用 ClaudeSDKBridge 获取真实的 SDK 斜杠命令列表
      */
     private void handleGetCommands(String content) {
         CompletableFuture.runAsync(() -> {
@@ -139,24 +140,98 @@ public class FileHandler extends BaseMessageHandler {
                     }
                 }
 
-                List<JsonObject> commands = new ArrayList<>();
-                addCommand(commands, "/help", "显示帮助信息", query);
-                addCommand(commands, "/clear", "清空对话历史", query);
-                addCommand(commands, "/new", "创建新会话", query);
-                addCommand(commands, "/history", "查看历史记录", query);
-                addCommand(commands, "/model", "切换模型", query);
-                addCommand(commands, "/settings", "打开设置", query);
-                addCommand(commands, "/compact", "压缩对话上下文", query);
+                // 获取工作目录
+                String cwd = context.getSession() != null &&
+                             context.getSession().getCwd() != null &&
+                             !context.getSession().getCwd().isEmpty()
+                    ? context.getSession().getCwd()
+                    : (context.getProject().getBasePath() != null ?
+                       context.getProject().getBasePath() : System.getProperty("user.home"));
 
-                Gson gson = new Gson();
-                JsonObject result = new JsonObject();
-                result.add("commands", gson.toJsonTree(commands));
-                String resultJson = gson.toJson(result);
+                System.out.println("[FileHandler] Getting slash commands from SDK, cwd=" + cwd);
 
-                SwingUtilities.invokeLater(() -> {
-                    String js = "if (window.onCommandListResult) { window.onCommandListResult('" + escapeJs(resultJson) + "'); }";
-                    context.executeJavaScriptOnEDT(js);
-                });
+                // 调用 ClaudeSDKBridge 获取真实的斜杠命令
+                final String finalQuery = query;
+                context.getClaudeSDKBridge().getSlashCommands(cwd)
+                    .thenAccept(sdkCommands -> {
+                        try {
+                            Gson gson = new Gson();
+                            List<JsonObject> commands = new ArrayList<>();
+
+                            // 转换 SDK 返回的命令格式
+                            for (JsonObject cmd : sdkCommands) {
+                                String name = cmd.has("name") ? cmd.get("name").getAsString() : "";
+                                String description = cmd.has("description") ? cmd.get("description").getAsString() : "";
+
+                                // 确保命令以 / 开头
+                                String label = name.startsWith("/") ? name : "/" + name;
+
+                                // 应用过滤
+                                if (finalQuery.isEmpty() ||
+                                    label.toLowerCase().contains(finalQuery.toLowerCase()) ||
+                                    description.toLowerCase().contains(finalQuery.toLowerCase())) {
+                                    JsonObject cmdObj = new JsonObject();
+                                    cmdObj.addProperty("label", label);
+                                    cmdObj.addProperty("description", description);
+                                    commands.add(cmdObj);
+                                }
+                            }
+
+                            System.out.println("[FileHandler] Got " + commands.size() + " commands from SDK (filtered from " + sdkCommands.size() + ")");
+
+                            // 如果 SDK 没有返回命令，使用本地默认命令作为回退
+                            if (commands.isEmpty() && sdkCommands.isEmpty()) {
+                                System.out.println("[FileHandler] SDK returned no commands, using local fallback");
+                                addCommand(commands, "/help", "显示帮助信息", finalQuery);
+                                addCommand(commands, "/clear", "清空对话历史", finalQuery);
+                                addCommand(commands, "/new", "创建新会话", finalQuery);
+                                addCommand(commands, "/history", "查看历史记录", finalQuery);
+                                addCommand(commands, "/model", "切换模型", finalQuery);
+                                addCommand(commands, "/settings", "打开设置", finalQuery);
+                                addCommand(commands, "/compact", "压缩对话上下文", finalQuery);
+                            }
+
+                            JsonObject result = new JsonObject();
+                            result.add("commands", gson.toJsonTree(commands));
+                            String resultJson = gson.toJson(result);
+
+                            SwingUtilities.invokeLater(() -> {
+                                String js = "if (window.onCommandListResult) { window.onCommandListResult('" + escapeJs(resultJson) + "'); }";
+                                context.executeJavaScriptOnEDT(js);
+                            });
+                        } catch (Exception e) {
+                            System.err.println("[FileHandler] Failed to process SDK commands: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    })
+                    .exceptionally(ex -> {
+                        System.err.println("[FileHandler] Failed to get commands from SDK: " + ex.getMessage());
+                        // 出错时使用本地默认命令
+                        try {
+                            Gson gson = new Gson();
+                            List<JsonObject> commands = new ArrayList<>();
+                            addCommand(commands, "/help", "显示帮助信息", finalQuery);
+                            addCommand(commands, "/clear", "清空对话历史", finalQuery);
+                            addCommand(commands, "/new", "创建新会话", finalQuery);
+                            addCommand(commands, "/history", "查看历史记录", finalQuery);
+                            addCommand(commands, "/model", "切换模型", finalQuery);
+                            addCommand(commands, "/settings", "打开设置", finalQuery);
+                            addCommand(commands, "/compact", "压缩对话上下文", finalQuery);
+
+                            JsonObject result = new JsonObject();
+                            result.add("commands", gson.toJsonTree(commands));
+                            String resultJson = gson.toJson(result);
+
+                            SwingUtilities.invokeLater(() -> {
+                                String js = "if (window.onCommandListResult) { window.onCommandListResult('" + escapeJs(resultJson) + "'); }";
+                                context.executeJavaScriptOnEDT(js);
+                            });
+                        } catch (Exception e) {
+                            System.err.println("[FileHandler] Failed to send fallback commands: " + e.getMessage());
+                        }
+                        return null;
+                    });
+
             } catch (Exception e) {
                 System.err.println("[FileHandler] Failed to get commands: " + e.getMessage());
                 e.printStackTrace();

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { ToolInput } from '../../types';
 import { openFile } from '../../utils/bridge';
 import { getFileName } from '../../utils/helpers';
+import { getFileIcon } from '../../utils/fileIcons';
+import { icon_folder } from '../../utils/icons';
 
 interface ReadToolBlockProps {
   input?: ToolInput;
@@ -39,6 +41,13 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
     }
   };
 
+  const getFileIconSvg = (path?: string) => {
+    if (!path) return '';
+    const name = getFileName(path);
+    const extension = name.indexOf('.') !== -1 ? name.split('.').pop() : '';
+    return getFileIcon(extension, name);
+  };
+
   // Get all input parameters for the expanded view
   const params = Object.entries(input).filter(([key]) => key !== 'file_path' && key !== 'target_file' && key !== 'path');
 
@@ -61,7 +70,19 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
             className={`tool-title-summary ${!isDirectory ? 'clickable-file' : ''}`}
             onClick={!isDirectory ? handleFileClick : undefined}
             title={!isDirectory ? `点击打开 ${filePath}` : undefined}
+            style={{ display: 'flex', alignItems: 'center' }}
           >
+            {isDirectory ? (
+               <span 
+                  style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
+                  dangerouslySetInnerHTML={{ __html: icon_folder }} 
+               />
+            ) : (
+               <span 
+                  style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
+                  dangerouslySetInnerHTML={{ __html: getFileIconSvg(filePath) }} 
+               />
+            )}
             {fileName || filePath}
           </span>
 

@@ -4,6 +4,19 @@
  */
 
 /* ============================================================
+   Global Dropdown Variables (Shared with Portals)
+   ============================================================ */
+:root, [data-theme="dark"] {
+  --dropdown-bg: #252526;
+  --dropdown-border: #454545;
+}
+
+[data-theme="light"] {
+  --dropdown-bg: #ffffff;
+  --dropdown-border: #d0d0d0;
+}
+
+/* ============================================================
    CSS 变量 - 暗色主题（默认）
    ============================================================ */
 :root .chat-input-box,
@@ -676,6 +689,18 @@
   flex: 1;
   direction: rtl;
   text-overflow: ellipsis;
+}
+
+/* Portal tooltip animation */
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .dropdown-empty {

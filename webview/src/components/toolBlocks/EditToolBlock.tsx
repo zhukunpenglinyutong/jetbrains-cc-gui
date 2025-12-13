@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import type { ToolInput } from '../../types';
 import { openFile } from '../../utils/bridge';
 import { getFileName } from '../../utils/helpers';
+import { getFileIcon } from '../../utils/fileIcons';
 import GenericToolBlock from './GenericToolBlock';
 
 interface EditToolBlockProps {
@@ -114,6 +115,13 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
     }
   };
 
+  const getFileIconSvg = (path?: string) => {
+    if (!path) return '';
+    const name = getFileName(path);
+    const extension = name.indexOf('.') !== -1 ? name.split('.').pop() : '';
+    return getFileIcon(extension, name);
+  };
+
   return (
     <div className="task-container">
       <div className="task-header" onClick={() => setExpanded((prev) => !prev)}>
@@ -127,7 +135,12 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
             className="tool-title-summary clickable-file"
             onClick={handleFileClick}
             title={`点击打开 ${filePath}`}
+            style={{ display: 'flex', alignItems: 'center' }}
           >
+            <span 
+              style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
+              dangerouslySetInnerHTML={{ __html: getFileIconSvg(filePath) }} 
+            />
             {getFileName(filePath) || filePath}
           </span>
           

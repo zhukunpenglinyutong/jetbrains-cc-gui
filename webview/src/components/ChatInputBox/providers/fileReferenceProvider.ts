@@ -7,6 +7,17 @@ let pendingReject: ((error: Error) => void) | null = null;
 let lastQuery: string = '';
 
 /**
+ * 重置文件引用提供者状态
+ * 在组件初始化时调用，确保状态是干净的
+ */
+export function resetFileReferenceState() {
+  console.log('[fileReferenceProvider] Resetting file reference state');
+  pendingResolve = null;
+  pendingReject = null;
+  lastQuery = '';
+}
+
+/**
  * 注册 Java 回调
  */
 function setupFileListCallback() {

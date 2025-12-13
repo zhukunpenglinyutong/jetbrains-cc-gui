@@ -1,6 +1,7 @@
 /* Messages Container */
 .messages-container {
     flex: 1;
+    min-height: 0; /* Fix flex child scroll issue */
     overflow-y: auto;
     overflow-x: hidden; /* 防止横向滚动 */
     padding: 0;

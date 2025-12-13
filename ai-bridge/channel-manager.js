@@ -28,7 +28,8 @@ import { readStdinData } from './utils/stdin-utils.js';
 // Claude 服务
 import {
   sendMessage as claudeSendMessage,
-  sendMessageWithAttachments as claudeSendMessageWithAttachments
+  sendMessageWithAttachments as claudeSendMessageWithAttachments,
+  getSlashCommands as claudeGetSlashCommands
 } from './services/claude/message-service.js';
 import { getSessionMessages as claudeGetSessionMessages } from './services/claude/session-service.js';
 
@@ -94,6 +95,13 @@ async function handleClaudeCommand(command, args, stdinData) {
     case 'getSession':
       await claudeGetSessionMessages(args[0], args[1]);
       break;
+
+    case 'getSlashCommands': {
+      // 获取斜杠命令列表
+      const cwd = stdinData?.cwd || args[0] || null;
+      await claudeGetSlashCommands(cwd);
+      break;
+    }
 
     default:
       throw new Error(`Unknown Claude command: ${command}`);

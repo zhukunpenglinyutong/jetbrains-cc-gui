@@ -34,6 +34,7 @@ import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.cache.SlashCommandCache;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -113,6 +114,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private volatile boolean disposed = false;
         private volatile boolean initialized = false;
+        private volatile boolean slashCommandsFetched = false;  // 标记是否已通过 API 获取了完整命令列表
+        private volatile int fetchedSlashCommandsCount = 0;
+
+        // 斜杠命令智能缓存
+        private SlashCommandCache slashCommandCache;
 
         // Handler 相关
         private HandlerContext handlerContext;
@@ -136,6 +142,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             registerEditorListeners();
             setupSessionCallbacks();
             initializeSessionInfo();
+            overrideBridgePathIfAvailable();
 
             createUIComponents();
             registerSessionLoadListener();
@@ -143,6 +150,31 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             this.initialized = true;
             System.out.println("[ClaudeChatWindow] 窗口实例已完全初始化，项目: " + project.getName());
+
+            // 在构造函数结束后立即获取斜杠命令（不依赖 onLoadEnd 回调）
+            // 使用异步调用避免阻塞 UI 线程
+            fetchSlashCommandsOnStartup();
+        }
+
+        /**
+         * 如果项目根目录下存在 ai-bridge 目录，则优先使用该目录
+         * 避免使用插件内嵌的旧版 bridge，确保与仓库中的 SDK 版本一致
+         */
+        private void overrideBridgePathIfAvailable() {
+            try {
+                String basePath = project.getBasePath();
+                if (basePath == null) return;
+                java.io.File bridgeDir = new java.io.File(basePath, "ai-bridge");
+                java.io.File channelManager = new java.io.File(bridgeDir, "channel-manager.js");
+                if (bridgeDir.exists() && bridgeDir.isDirectory() && channelManager.exists()) {
+                    claudeSDKBridge.setSdkTestDir(bridgeDir.getAbsolutePath());
+                    System.out.println("[ClaudeChatWindow] Overriding ai-bridge path to project directory: " + bridgeDir.getAbsolutePath());
+                } else {
+                    System.out.println("[ClaudeChatWindow] Project ai-bridge not found, using default resolver");
+                }
+            } catch (Exception e) {
+                System.err.println("[ClaudeChatWindow] Failed to override bridge path: " + e.getMessage());
+            }
         }
 
         private void initializeSession() {
@@ -365,9 +397,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 browser.getJBCefClient().addLoadHandler(new CefLoadHandlerAdapter() {
                     @Override
-                    public void onLoadEnd(CefBrowser browser, CefFrame frame, int httpStatusCode) {
+                    public void onLoadEnd(CefBrowser cefBrowser, CefFrame frame, int httpStatusCode) {
+                        System.out.println("[ClaudeChatWindow] onLoadEnd called, isMain=" + frame.isMain() + ", url=" + cefBrowser.getURL());
+
+                        // 只在主框架加载完成时执行
+                        if (!frame.isMain()) {
+                            return;
+                        }
+
                         String injection = "window.sendToJava = function(msg) { " + jsQuery.inject("msg") + " };";
-                        browser.executeJavaScript(injection, browser.getURL(), 0);
+                        cefBrowser.executeJavaScript(injection, cefBrowser.getURL(), 0);
 
                         // 注入获取剪贴板路径的函数
                         String clipboardPathInjection =
@@ -378,7 +417,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                                 "function(error_code, error_message) { console.error('Failed to get clipboard path:', error_message); resolve(''); }") +
                             "  });" +
                             "};";
-                        browser.executeJavaScript(clipboardPathInjection, browser.getURL(), 0);
+                        cefBrowser.executeJavaScript(clipboardPathInjection, cefBrowser.getURL(), 0);
 
                         // 将控制台日志转发到 IDEA 控制台
                         String consoleForward =
@@ -397,7 +436,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             "  originalWarn.apply(console, args);" +
                             "  window.sendToJava(JSON.stringify({type: 'console.warn', args: args}));" +
                             "};";
-                        browser.executeJavaScript(consoleForward, browser.getURL(), 0);
+                        cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
+
+                        // 在浏览器加载完成后获取斜杠命令
+                        System.out.println("[ClaudeChatWindow] About to call fetchSlashCommandsOnStartup");
+                        fetchSlashCommandsOnStartup();
                     }
                 }, browser.getCefBrowser());
 
@@ -544,6 +587,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 createNewSession();
                 return;
             }
+            // 特殊处理：刷新斜杠命令列表
+            if ("refresh_slash_commands".equals(type)) {
+                System.out.println("[Backend] Received refresh_slash_commands request");
+                fetchSlashCommandsOnStartup();
+                return;
+            }
 
             System.err.println("[Backend] 警告: 未知的消息类型: " + type);
         }
@@ -626,7 +675,68 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         System.out.println("[ClaudeChatWindow] Thinking status changed: " + isThinking);
                     });
                 }
+
+                @Override
+                public void onSlashCommandsReceived(List<String> slashCommands) {
+                    // 不再发送旧格式（字符串数组）的命令到前端
+                    // 原因：
+                    // 1. 初始化时已经从 getSlashCommands() 获取了完整的命令列表（包含 description）
+                    // 2. 这里接收到的是旧格式（只有命令名，没有描述）
+                    // 3. 如果发送到前端会覆盖完整的命令列表，导致 description 丢失
+                    int incomingCount = slashCommands != null ? slashCommands.size() : 0;
+                    System.out.println("[ClaudeChatWindow] onSlashCommandsReceived called (old format, ignored). incoming=" + incomingCount);
+
+                    // 记录收到命令，但不发送到前端
+                    if (slashCommands != null && !slashCommands.isEmpty() && !slashCommandsFetched) {
+                        System.out.println("[ClaudeChatWindow] Received " + incomingCount + " slash commands (old format), but keeping existing commands with descriptions");
+                    }
+                }
             });
+        }
+
+        /**
+         * 在启动时初始化斜杠命令智能缓存
+         * 使用智能缓存系统：内存缓存 + 文件监听 + 定期检查
+         */
+        private void fetchSlashCommandsOnStartup() {
+            String cwd = session.getCwd();
+            if (cwd == null) {
+                cwd = project.getBasePath();
+            }
+
+            System.out.println("[ClaudeChatWindow] Initializing slash command cache, cwd=" + cwd);
+
+            // 如果缓存已存在，先清理
+            if (slashCommandCache != null) {
+                System.out.println("[ClaudeChatWindow] Disposing existing slash command cache");
+                slashCommandCache.dispose();
+            }
+
+            // 创建并初始化缓存
+            slashCommandCache = new SlashCommandCache(project, claudeSDKBridge, cwd);
+
+            // 添加更新监听器：缓存更新时自动通知前端
+            slashCommandCache.addUpdateListener(commands -> {
+                fetchedSlashCommandsCount = commands.size();
+                slashCommandsFetched = true;
+                System.out.println("[ClaudeChatWindow] Slash command cache listener triggered, count=" + commands.size());
+                SwingUtilities.invokeLater(() -> {
+                    try {
+                        Gson gson = new Gson();
+                        String commandsJson = gson.toJson(commands);
+                        System.out.println("[ClaudeChatWindow] Calling updateSlashCommands with JSON length=" + commandsJson.length());
+                        callJavaScript("updateSlashCommands", JsUtils.escapeJs(commandsJson));
+                        System.out.println("[ClaudeChatWindow] Slash commands updated: " + commands.size() + " commands");
+                    } catch (Exception e) {
+                        System.err.println("[ClaudeChatWindow] Failed to send slash commands to frontend: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                });
+            });
+
+            // 初始化缓存（开始加载 + 启动文件监听 + 定期检查）
+            System.out.println("[ClaudeChatWindow] Starting slash command cache initialization");
+            slashCommandCache.init();
         }
 
         private String convertMessagesToJson(List<ClaudeSession.Message> messages) {
@@ -835,6 +945,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
             if (contextUpdateAlarm != null) {
                 contextUpdateAlarm.dispose();
+            }
+
+            // 清理斜杠命令缓存
+            if (slashCommandCache != null) {
+                slashCommandCache.dispose();
+                slashCommandCache = null;
             }
 
             System.out.println("[ClaudeSDKToolWindow] 开始清理窗口资源，项目: " + project.getName());

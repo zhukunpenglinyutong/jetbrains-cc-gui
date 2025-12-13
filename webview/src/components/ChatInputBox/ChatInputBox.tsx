@@ -27,7 +27,7 @@ export const ChatInputBox = ({
   usageMaxTokens,
   showUsage = true,
   attachments: externalAttachments,
-  placeholder = '@引用文件，shift + enter 换行',
+  placeholder = '@引用文件，/唤起指令，shift + enter 换行',
   disabled = false,
   value,
   onSubmit,
@@ -137,22 +137,18 @@ export const ChatInputBox = ({
 
   /**
    * 调整输入框高度
+   * 改动说明：不再手动计算和限制高度，而是让 contenteditable 元素自然撑开（height: auto），
+   * 并由外层容器 (.input-editable-wrapper) 通过 max-height 和 overflow-y 来控制滚动。
+   * 这样可以避免"外层容器滚动 + 内层元素滚动"导致的双滚动条问题。
    */
   const adjustHeight = useCallback(() => {
     const el = editableRef.current;
     if (!el) return;
 
-    // 重置高度以获取正确的 scrollHeight
+    // 确保高度为自动，由内容撑开
     el.style.height = 'auto';
-    const computed = window.getComputedStyle(el);
-    const lineHeightStr = computed.lineHeight;
-    const lineHeight = parseFloat(lineHeightStr);
-    const minHeight = isNaN(lineHeight) ? 60 : lineHeight * 3;
-
-    const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, 240));
-    el.style.height = `${newHeight}px`;
-
-    el.style.overflowY = el.scrollHeight > 240 ? 'auto' : 'hidden';
+    // 隐藏内层滚动条，完全依赖外层容器滚动
+    el.style.overflowY = 'hidden';
   }, []);
 
   /**
@@ -226,14 +222,11 @@ export const ChatInputBox = ({
    */
   const handleSubmit = useCallback(() => {
     const content = getTextContent().trim();
-    console.log('[ChatInputBox] handleSubmit called, content:', content, 'attachments:', attachments.length);
 
     if (!content && attachments.length === 0) {
-      console.log('[ChatInputBox] No content or attachments, returning');
       return;
     }
     if (isLoading) {
-      console.log('[ChatInputBox] isLoading, returning');
       return;
     }
 
@@ -241,7 +234,6 @@ export const ChatInputBox = ({
     fileCompletion.close();
     commandCompletion.close();
 
-    console.log('[ChatInputBox] Calling onSubmit');
     onSubmit?.(content, attachments.length > 0 ? attachments : undefined);
 
     // 清空输入框
@@ -461,12 +453,6 @@ export const ChatInputBox = ({
       (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
       (e as unknown as { which?: number }).which === 13;
 
-    console.log('[ChatInputBox] handleKeyDown:', e.key,
-      'shiftKey:', e.shiftKey,
-      'isComposing:', isComposing,
-      'nativeIsComposing:', e.nativeEvent.isComposing,
-      'isIMEComposing:', isIMEComposing);
-
     // 优先处理 Mac 风格的光标移动和文本选择
     if (handleMacCursorMovement(e)) {
       return;
@@ -517,7 +503,6 @@ export const ChatInputBox = ({
 
     // Enter 发送（非 Shift 组合，非 IME 组合）
     if (isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing) {
-      console.log('[ChatInputBox] Enter pressed, calling handleSubmit');
       e.preventDefault();
       submittedOnEnterRef.current = true;
       handleSubmit();
@@ -719,28 +704,11 @@ export const ChatInputBox = ({
    * 处理粘贴事件 - 检测图片和纯文本
    */
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    console.log('[ChatInputBox] ========== handlePaste START ==========');
     const items = e.clipboardData?.items;
-    console.log('[ChatInputBox] clipboardData items count:', items?.length);
 
     if (!items) {
-      console.log('[ChatInputBox] No clipboard items, allowing default paste');
       return;
     }
-
-    // 打印所有 clipboard items 的详细信息
-    console.log('[ChatInputBox] All clipboard items:');
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      console.log(`  [${i}] type: "${item.type}", kind: "${item.kind}"`);
-    }
-
-    // 尝试从多种格式获取文本内容
-    const plainText = e.clipboardData.getData('text/plain');
-    const uriList = e.clipboardData.getData('text/uri-list');
-
-    console.log('[ChatInputBox] Plain text available:', plainText ? `yes (${plainText.length} chars)` : 'no');
-    console.log('[ChatInputBox] URI list available:', uriList ? `yes (${uriList.length} chars)` : 'no');
 
     // 检查是否有真正的图片（type 为 image/*）
     let hasImage = false;
@@ -749,18 +717,15 @@ export const ChatInputBox = ({
 
       // 只处理真正的图片类型（type 以 image/ 开头）
       if (item.type.startsWith('image/')) {
-        console.log('[ChatInputBox] Found image item at index', i, ', type:', item.type);
         hasImage = true;
         e.preventDefault();
 
         const blob = item.getAsFile();
-        console.log('[ChatInputBox] Got blob:', blob ? 'yes' : 'no', blob ? `size: ${blob.size}` : '');
 
         if (blob) {
           // 读取图片为 Base64
           const reader = new FileReader();
           reader.onload = () => {
-            console.log('[ChatInputBox] Image loaded, result length:', (reader.result as string)?.length);
             const base64 = (reader.result as string).split(',')[1];
             const mediaType = blob.type || item.type || 'image/png';
             const ext = (() => {
@@ -777,27 +742,18 @@ export const ChatInputBox = ({
               mediaType,
               data: base64,
             };
-            console.log('[ChatInputBox] Created attachment:', attachment.fileName);
 
-            setInternalAttachments(prev => {
-              console.log('[ChatInputBox] Adding image attachment, prev count:', prev.length);
-              return [...prev, attachment];
-            });
-          };
-          reader.onerror = (error) => {
-            console.error('[ChatInputBox] FileReader error:', error);
+            setInternalAttachments(prev => [...prev, attachment]);
           };
           reader.readAsDataURL(blob);
         }
 
-        console.log('[ChatInputBox] ========== handlePaste END (image) ==========');
         return;
       }
     }
 
     // 如果没有图片，尝试获取文本或文件路径
     if (!hasImage) {
-      console.log('[ChatInputBox] No image found, trying to get text or file path');
       e.preventDefault();
 
       // 尝试多种方式获取文本
@@ -807,55 +763,39 @@ export const ChatInputBox = ({
 
       // 如果还是没有文本，尝试从 file 类型的 item 中获取文件名/路径
       if (!text) {
-        console.log('[ChatInputBox] No text data, trying to get from file items');
-
         // 检查是否有文件类型的 item
         let hasFileItem = false;
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
           if (item.kind === 'file') {
             hasFileItem = true;
-            const file = item.getAsFile();
-            if (file) {
-              console.log('[ChatInputBox] Got file from clipboard:', file.name, file.type, file.size);
-            }
             break;
           }
         }
 
         // 如果有文件类型的 item，尝试通过 Java 端获取完整路径
         if (hasFileItem && (window as any).getClipboardFilePath) {
-          console.log('[ChatInputBox] Requesting full path from Java...');
           (window as any).getClipboardFilePath().then((fullPath: string) => {
-            console.log('[ChatInputBox] Received full path from Java:', fullPath);
             if (fullPath && fullPath.trim()) {
               // 插入完整路径
               document.execCommand('insertText', false, fullPath);
               handleInput();
             }
-          }).catch((error: any) => {
-            console.error('[ChatInputBox] Error getting clipboard path:', error);
+          }).catch(() => {
+            // 忽略错误
           });
-          console.log('[ChatInputBox] ========== handlePaste END (async path request) ==========');
           return;
         }
       }
 
-      console.log('[ChatInputBox] Final text to insert, length:', text ? text.length : 0);
-
       if (text && text.trim()) {
         // 使用 document.execCommand 插入纯文本（保持光标位置）
-        const success = document.execCommand('insertText', false, text);
-        console.log('[ChatInputBox] execCommand insertText result:', success);
+        document.execCommand('insertText', false, text);
 
         // 触发 input 事件以更新状态
         handleInput();
-      } else {
-        console.log('[ChatInputBox] No text to insert');
       }
     }
-
-    console.log('[ChatInputBox] ========== handlePaste END ==========');
   }, [generateId, handleInput]);
 
   /**
@@ -875,22 +815,17 @@ export const ChatInputBox = ({
     e.preventDefault();
     e.stopPropagation();
 
-    console.log('[ChatInputBox] handleDrop called');
-
     // 先获取文本内容（文件路径）
     const text = e.dataTransfer?.getData('text/plain');
-    console.log('[ChatInputBox] Drop text:', text);
 
     // 再检查文件对象
     const files = e.dataTransfer?.files;
-    console.log('[ChatInputBox] Drop files count:', files?.length);
 
     // 检查是否有实际的图片文件对象
     let hasImageFile = false;
     if (files && files.length > 0) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        console.log('[ChatInputBox] Drop file', i, '- type:', file.type, ', name:', file.name, ', size:', file.size);
 
         // 只处理图片文件
         if (file.type.startsWith('image/')) {
@@ -911,12 +846,8 @@ export const ChatInputBox = ({
               mediaType: file.type || 'image/png',
               data: base64,
             };
-            console.log('[ChatInputBox] Created attachment from drop:', attachment.fileName);
 
             setInternalAttachments(prev => [...prev, attachment]);
-          };
-          reader.onerror = (error) => {
-            console.error('[ChatInputBox] FileReader error:', error);
           };
           reader.readAsDataURL(file);
         }
@@ -925,13 +856,11 @@ export const ChatInputBox = ({
 
     // 如果有图片文件，不处理文本
     if (hasImageFile) {
-      console.log('[ChatInputBox] Has image file, skipping text insertion');
       return;
     }
 
     // 没有图片文件，处理文本（文件路径或其他文本）
     if (text && text.trim()) {
-      console.log('[ChatInputBox] Inserting text (file path or plain text):', text);
 
       // 获取当前光标位置
       const selection = window.getSelection();
@@ -940,10 +869,8 @@ export const ChatInputBox = ({
         if (editableRef.current.contains(selection.anchorNode)) {
           // 使用 document.execCommand 插入纯文本（保持光标位置）
           document.execCommand('insertText', false, text);
-          console.log('[ChatInputBox] Text inserted successfully');
         } else {
           // 光标不在输入框内，直接追加到末尾
-          console.log('[ChatInputBox] Cursor not in editable, appending to end');
           const currentText = getTextContent();
           editableRef.current.innerText = currentText + text;
 
@@ -956,7 +883,6 @@ export const ChatInputBox = ({
         }
       } else {
         // 没有选区，直接追加
-        console.log('[ChatInputBox] No selection, appending to end');
         const currentText = getTextContent();
         if (editableRef.current) {
           editableRef.current.innerText = currentText + text;
@@ -965,8 +891,6 @@ export const ChatInputBox = ({
 
       // 触发 input 事件以更新状态
       handleInput();
-    } else {
-      console.log('[ChatInputBox] No text to insert');
     }
   }, [generateId, handleInput, getTextContent]);
 
@@ -1029,12 +953,8 @@ export const ChatInputBox = ({
 
   // 初始化时聚焦和注册全局函数
   useEffect(() => {
-    console.log('[ChatInputBox] Component mounted');
-
     // 注册全局函数以接收 Java 传递的文件路径
     (window as any).handleFilePathFromJava = (filePath: string) => {
-      console.log('[ChatInputBox] Received file path from Java:', filePath);
-
       if (!editableRef.current) return;
 
       // 插入文件路径到输入框
@@ -1042,12 +962,10 @@ export const ChatInputBox = ({
       if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
         // 光标在输入框内，在光标位置插入
         document.execCommand('insertText', false, filePath);
-        console.log('[ChatInputBox] File path inserted at cursor position');
       } else {
         // 光标不在输入框内，追加到末尾
         const currentText = getTextContent();
         editableRef.current.innerText = currentText + filePath;
-        console.log('[ChatInputBox] File path appended to end');
 
         // 将光标移到末尾
         const range = document.createRange();
@@ -1161,6 +1079,7 @@ export const ChatInputBox = ({
       <CompletionDropdown
         isVisible={commandCompletion.isOpen}
         position={commandCompletion.position}
+        width={450}
         items={commandCompletion.items}
         selectedIndex={commandCompletion.activeIndex}
         loading={commandCompletion.loading}

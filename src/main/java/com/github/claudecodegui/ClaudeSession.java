@@ -62,6 +62,9 @@ public class ClaudeSession {
     // AI 提供商（claude 或 codex）
     private String provider = "claude";
 
+    // 斜杠命令列表（从 SDK 获取）
+    private List<String> slashCommands = new ArrayList<>();
+
     /**
      * 消息类
      */
@@ -96,6 +99,7 @@ public class ClaudeSession {
         void onSessionIdReceived(String sessionId);
         void onPermissionRequested(PermissionRequest request);
         void onThinkingStatusChanged(boolean isThinking);
+        void onSlashCommandsReceived(List<String> slashCommands);
     }
 
     private SessionCallback callback;
@@ -226,7 +230,20 @@ public class ClaudeSession {
                 updateState();
                 throw new RuntimeException("Failed to launch: " + e.getMessage(), e);
             }
-        });
+        }).orTimeout(com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT,
+                     com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_UNIT)
+          .exceptionally(ex -> {
+              if (ex instanceof java.util.concurrent.TimeoutException) {
+                  String timeoutMsg = "启动 Channel 超时（" +
+                      com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT + "秒），请重试";
+                  System.err.println("[ClaudeSession] " + timeoutMsg);
+                  this.error = timeoutMsg;
+                  this.channelId = null;
+                  updateState();
+                  throw new RuntimeException(timeoutMsg);
+              }
+              throw new RuntimeException(ex.getCause());
+          });
     }
 
     /**
@@ -529,9 +546,42 @@ public class ClaudeSession {
                         loading = false;
                         updateState();
                         System.out.println("[ClaudeSession] Message end received, loading set to false");
+                    } else if ("slash_commands".equals(type)) {
+                        // 处理斜杠命令列表
+                        try {
+                            JsonArray commandsArray = gson.fromJson(content, JsonArray.class);
+                            slashCommands.clear();
+                            for (int i = 0; i < commandsArray.size(); i++) {
+                                slashCommands.add(commandsArray.get(i).getAsString());
+                            }
+                            System.out.println("[ClaudeSession] Received " + slashCommands.size() + " slash commands");
+                            if (callback != null) {
+                                callback.onSlashCommandsReceived(slashCommands);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("[ClaudeSession] Failed to parse slash commands: " + e.getMessage());
+                        }
                     } else if ("system".equals(type)) {
                         // 处理系统消息
                         System.out.println("System message: " + content);
+
+                        // 解析 system 消息中的 slash_commands 字段
+                        try {
+                            JsonObject systemObj = gson.fromJson(content, JsonObject.class);
+                            if (systemObj.has("slash_commands") && systemObj.get("slash_commands").isJsonArray()) {
+                                JsonArray commandsArray = systemObj.getAsJsonArray("slash_commands");
+                                slashCommands.clear();
+                                for (int i = 0; i < commandsArray.size(); i++) {
+                                    slashCommands.add(commandsArray.get(i).getAsString());
+                                }
+                                System.out.println("[ClaudeSession] Extracted " + slashCommands.size() + " slash commands from system message");
+                                if (callback != null) {
+                                    callback.onSlashCommandsReceived(slashCommands);
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("[ClaudeSession] Failed to extract slash commands from system message: " + e.getMessage());
+                        }
                     }
                 }
 
@@ -913,6 +963,13 @@ public class ClaudeSession {
      */
     public String getProvider() {
         return provider;
+    }
+
+    /**
+     * 获取斜杠命令列表
+     */
+    public List<String> getSlashCommands() {
+        return new ArrayList<>(slashCommands);
     }
 
     /**

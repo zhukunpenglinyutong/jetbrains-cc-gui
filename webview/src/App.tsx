@@ -8,6 +8,7 @@ import PermissionDialog, { type PermissionRequest } from './components/Permissio
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
 import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
+import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from './components/ChatInputBox/providers';
 import {
   BashToolBlock,
   EditToolBlock,
@@ -255,6 +256,11 @@ const App = () => {
     window.clearMessages = () => setMessages([]);
     window.addErrorMessage = (message) =>
       setMessages((prev) => [...prev, { type: 'error', content: message }]);
+
+    // 注册斜杠命令回调（接收 SDK 返回的命令列表）
+    resetSlashCommandsState(); // 重置状态，确保首次加载时能正确触发刷新
+    resetFileReferenceState(); // 重置文件引用状态，防止 Promise 泄漏
+    setupSlashCommandsCallback();
 
     // ChatInputBox 相关回调
     window.onUsageUpdate = (json) => {
@@ -988,14 +994,6 @@ const App = () => {
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;
   }, [messages, t]);
 
-  const hasThinkingBlockInLastMessage = useMemo(() => {
-    if (messages.length === 0) return false;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.type !== 'assistant') return false;
-    const blocks = getContentBlocks(lastMessage);
-    return blocks.some((b) => b.type === 'thinking');
-  }, [messages]);
-
   return (
     <>
       <style>{`
@@ -1221,14 +1219,14 @@ const App = () => {
           })}
 
           {/* Thinking indicator */}
-          {isThinking && !hasThinkingBlockInLastMessage && (
+          {/* {isThinking && !hasThinkingBlockInLastMessage && (
             <div className="message assistant">
               <div className="thinking-status">
                 <span className="thinking-status-icon">🤔</span>
                 <span className="thinking-status-text">{t('common.thinking')}</span>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Loading indicator */}
           {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
