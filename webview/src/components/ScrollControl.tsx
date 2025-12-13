@@ -18,7 +18,7 @@ export const ScrollControl = ({ containerRef, inputAreaRef }: ScrollControlProps
   const [visible, setVisible] = useState(false);
   const [direction, setDirection] = useState<'up' | 'down'>('down');
   const [bottomOffset, setBottomOffset] = useState(120);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<number | null>(null);
 
   const THRESHOLD = 100; // 距离底部的阈值（像素）
   const HIDE_DELAY = 1500; // 停止滚动后隐藏的延迟时间（毫秒）

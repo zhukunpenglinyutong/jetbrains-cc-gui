@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.github.idea-claude-code-gui'
-version '0.1.0-beta1'
+version '0.1.0-beta2'
 
 sourceCompatibility = 17
 targetCompatibility = 17
@@ -29,6 +29,9 @@ intellij {
 
     // 插件依赖（如果需要）
     plugins = []
+
+    // 禁用字节码插桩，避免生成 instrumented JAR
+    instrumentCode = false
 }
 
 tasks.withType(JavaCompile) {
@@ -54,6 +57,16 @@ runIde {
 }
 
 buildSearchableOptions {
+    enabled = false
+}
+
+// 禁用 instrumented JAR 生成（这是导致 "invalid plugin descriptor" 错误的根源）
+// instrumented JAR 是用于代码覆盖率测试的，不应该被打包到最终的插件分发包中
+tasks.named("instrumentCode") {
+    enabled = false
+}
+
+tasks.named("instrumentTestCode") {
     enabled = false
 }
 

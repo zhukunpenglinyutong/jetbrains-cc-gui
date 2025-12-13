@@ -169,6 +169,9 @@ const App = () => {
       }
 
       // 初始化时同步模型状态到后端，确保前后端一致
+      let syncRetryCount = 0;
+      const MAX_SYNC_RETRIES = 30; // 最多重试30次（3秒）
+
       const syncToBackend = () => {
         if (window.sendToJava) {
           // 先同步 provider
@@ -179,7 +182,12 @@ const App = () => {
           console.log('[Frontend] Synced model state to backend:', { provider: restoredProvider, model: modelToSync });
         } else {
           // 如果 sendToJava 还没准备好，稍后重试
-          setTimeout(syncToBackend, 100);
+          syncRetryCount++;
+          if (syncRetryCount < MAX_SYNC_RETRIES) {
+            setTimeout(syncToBackend, 100);
+          } else {
+            console.warn('[Frontend] Failed to sync model state to backend: bridge not available after', MAX_SYNC_RETRIES, 'retries');
+          }
         }
       };
       // 延迟同步，等待 bridge 准备好
@@ -361,16 +369,30 @@ const App = () => {
       return;
     }
 
+    let historyRetryCount = 0;
+    const MAX_HISTORY_RETRIES = 30; // 最多重试30次（3秒）
+    let currentTimer: number | null = null;
+
     const requestHistoryData = () => {
       if (window.sendToJava) {
         sendBridgeMessage('load_history_data');
       } else {
-        setTimeout(requestHistoryData, 100);
+        historyRetryCount++;
+        if (historyRetryCount < MAX_HISTORY_RETRIES) {
+          currentTimer = setTimeout(requestHistoryData, 100);
+        } else {
+          console.warn('[Frontend] Failed to load history data: bridge not available after', MAX_HISTORY_RETRIES, 'retries');
+        }
       }
     };
 
-    const timer = setTimeout(requestHistoryData, 50);
-    return () => clearTimeout(timer);
+    currentTimer = setTimeout(requestHistoryData, 50);
+
+    return () => {
+      if (currentTimer) {
+        clearTimeout(currentTimer);
+      }
+    };
   }, [currentView]);
 
   // 定期获取使用统计
@@ -1053,7 +1075,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.1.0-beta1
+                  v0.1.0-beta2
                 </span>
               </div>
               <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
