@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 // TODO: 临时隐藏模式选择器,后续恢复
 // import type { ButtonAreaProps, PermissionMode } from './types';
@@ -20,6 +20,7 @@ export const ButtonArea = ({
   // TODO: 临时隐藏模式选择器,后续恢复
   // permissionMode = 'default',
   currentProvider = 'claude',
+  remoteModels,
   onSubmit,
   onStop,
   // TODO: 临时隐藏模式选择器,后续恢复
@@ -31,10 +32,17 @@ export const ButtonArea = ({
   // const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 根据当前提供商选择模型列表
-  const availableModels = (() => {
+  const availableModels = useMemo(() => {
     if (currentProvider === 'codex') {
       return CODEX_MODELS;
     }
+
+    // 如果有远程模型列表，优先使用
+    if (remoteModels && remoteModels.length > 0) {
+      return remoteModels;
+    }
+
+    // 否则使用默认模型列表，并应用本地映射
     if (typeof window === 'undefined' || !window.localStorage) {
       return CLAUDE_MODELS;
     }
@@ -64,7 +72,7 @@ export const ButtonArea = ({
     } catch {
       return CLAUDE_MODELS;
     }
-  })();
+  }, [currentProvider, remoteModels]);
 
   /**
    * 处理提交按钮点击

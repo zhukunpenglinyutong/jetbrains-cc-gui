@@ -166,28 +166,81 @@ export interface ModelInfo {
   id: string;
   label: string;
   description?: string;
+  /** 模型上下文限制 */
+  contextLimit?: number;
+  /** 创建时间 (ISO 8601) */
+  createdAt?: string;
 }
 
 /**
- * Claude 模型列表
+ * 远程模型 API 响应中的模型数据
+ */
+export interface RemoteModelData {
+  type: string;
+  id: string;
+  display_name: string;
+  created_at: string;
+}
+
+/**
+ * 远程模型加载结果
+ */
+export interface RemoteModelsResult {
+  success: boolean;
+  models?: RemoteModelData[];
+  error?: string;
+}
+
+/**
+ * Claude 默认模型列表（当无法获取远程模型时使用）
  */
 export const CLAUDE_MODELS: ModelInfo[] = [
   {
     id: 'claude-sonnet-4-5',
     label: 'Sonnet 4.5',
     description: 'Sonnet 4.5 · Use the default model',
+    contextLimit: 200000,
   },
   {
     id: 'claude-opus-4-5-20251101',
     label: 'Opus 4.5',
     description: 'Opus 4.5 · Most capable for complex work',
+    contextLimit: 200000,
   },
   {
     id: 'claude-haiku-4-5',
     label: 'Haiku 4.5',
     description: 'Haiku 4.5 · Fastest for quick answers',
+    contextLimit: 200000,
   },
 ];
+
+/**
+ * 将远程模型数据转换为 ModelInfo 格式
+ */
+export function convertRemoteModelToModelInfo(remoteModel: RemoteModelData): ModelInfo {
+  return {
+    id: remoteModel.id,
+    label: remoteModel.display_name || remoteModel.id,
+    description: remoteModel.display_name || remoteModel.id,
+    createdAt: remoteModel.created_at,
+    // 默认上下文限制，可以根据模型 ID 推断
+    contextLimit: inferContextLimit(remoteModel.id),
+  };
+}
+
+/**
+ * 根据模型 ID 推断上下文限制
+ */
+function inferContextLimit(modelId: string): number {
+  const id = modelId.toLowerCase();
+  // Claude 3.5 和 4 系列通常有 200K 上下文
+  if (id.includes('claude-3') || id.includes('claude-4') || id.includes('sonnet') || id.includes('opus') || id.includes('haiku')) {
+    return 200000;
+  }
+  // 默认 100K
+  return 100000;
+}
 
 /**
  * Codex 模型列表
@@ -282,6 +335,8 @@ export interface ChatInputBoxProps {
   disabled?: boolean;
   /** 受控模式：输入框内容 */
   value?: string;
+  /** 远程模型列表（从 /v1/models API 获取） */
+  remoteModels?: ModelInfo[];
 
   /** 当前活动文件 */
   activeFile?: string;
@@ -326,6 +381,8 @@ export interface ButtonAreaProps {
   permissionMode?: PermissionMode;
   /** 当前提供商 */
   currentProvider?: string;
+  /** 远程模型列表（从 /v1/models API 获取） */
+  remoteModels?: ModelInfo[];
 
   // 事件回调
   onSubmit?: () => void;

@@ -26,12 +26,16 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_usage_statistics"
     };
 
+    // 默认模型上下文限制（当无法从远程获取时使用）
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
     static {
         MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-5-20251101", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-haiku-4-5", 200_000);
     }
+
+    // 默认上下文限制（用于未知模型）
+    private static final int DEFAULT_CONTEXT_LIMIT = 200_000;
 
     public SettingsHandler(HandlerContext context) {
         super(context);
@@ -307,8 +311,28 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * 获取模型上下文限制
+     * 优先从预定义列表获取，如果不存在则根据模型名称推断
      */
     public static int getModelContextLimit(String model) {
-        return MODEL_CONTEXT_LIMITS.getOrDefault(model, 200_000);
+        if (model == null || model.isEmpty()) {
+            return DEFAULT_CONTEXT_LIMIT;
+        }
+
+        // 先检查预定义列表
+        if (MODEL_CONTEXT_LIMITS.containsKey(model)) {
+            return MODEL_CONTEXT_LIMITS.get(model);
+        }
+
+        // 根据模型名称推断上下文限制
+        String lowerModel = model.toLowerCase();
+
+        // Claude 3.5 和 4 系列通常有 200K 上下文
+        if (lowerModel.contains("claude-3") || lowerModel.contains("claude-4") ||
+            lowerModel.contains("sonnet") || lowerModel.contains("opus") || lowerModel.contains("haiku")) {
+            return 200_000;
+        }
+
+        // 默认返回 200K
+        return DEFAULT_CONTEXT_LIMIT;
     }
 }

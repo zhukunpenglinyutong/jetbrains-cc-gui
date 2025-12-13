@@ -39,6 +39,7 @@ tasks.withType(JavaCompile) {
 }
 
 patchPluginXml {
+    version = project.version
     sinceBuild = '233'
     untilBuild = '253.*'
 
@@ -133,6 +134,31 @@ tasks.named("prepareSandbox") {
             into(pluginDir)
         }
     }
+}
+
+// 清除沙箱中的 ai-bridge 资源（用于开发时强制更新）
+tasks.register('cleanSandboxBridge', Delete) {
+    def sandboxRootProvider = layout.buildDirectory.dir("idea-sandbox")
+    doFirst {
+        def sandboxRoot = sandboxRootProvider.get().asFile
+        def pluginDir = new File(sandboxRoot, "plugins/${pluginName}")
+        def extractedDir = new File(pluginDir, "ai-bridge")
+        def archiveTarget = new File(pluginDir, "ai-bridge.zip")
+
+        if (extractedDir.exists()) {
+            println "清除沙箱中的 ai-bridge 目录: ${extractedDir.absolutePath}"
+            delete extractedDir
+        }
+        if (archiveTarget.exists()) {
+            println "清除沙箱中的 ai-bridge.zip: ${archiveTarget.absolutePath}"
+            delete archiveTarget
+        }
+    }
+}
+
+// runIde 之前先清除沙箱中的 ai-bridge 资源，确保使用最新代码
+tasks.named("runIde") {
+    dependsOn("cleanSandboxBridge")
 }
 
 tasks.named("buildPlugin") {

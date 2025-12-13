@@ -23,12 +23,16 @@ export type {
   FileItem,
   CommandItem,
   CompletionType,
+  ModelInfo,
+  RemoteModelData,
+  RemoteModelsResult,
 } from './types';
 
-// 导出常量
+// 导出常量和函数
 export {
   AVAILABLE_MODES,
   AVAILABLE_MODELS,
   IMAGE_MEDIA_TYPES,
   isImageAttachment,
+  convertRemoteModelToModelInfo,
 } from './types';

@@ -49,7 +49,6 @@
             <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="CutCopyPasteGroup"/>
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt K"/>
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt K"/>
-            <keyboard-shortcut keymap="macOS" first-keystroke="meta alt K"/>
         </action>
     </actions>
 </idea-plugin>

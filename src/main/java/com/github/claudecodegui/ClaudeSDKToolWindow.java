@@ -205,6 +205,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new FileHandler(handlerContext));
             messageDispatcher.registerHandler(new SettingsHandler(handlerContext));
             messageDispatcher.registerHandler(new SessionHandler(handlerContext));
+            messageDispatcher.registerHandler(new ModelHandler(handlerContext));
+            messageDispatcher.registerHandler(new VersionHandler(handlerContext));
 
             // 权限处理器（需要特殊回调）
             this.permissionHandler = new PermissionHandler(handlerContext);
@@ -365,39 +367,41 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 browser.getJBCefClient().addLoadHandler(new CefLoadHandlerAdapter() {
                     @Override
-                    public void onLoadEnd(CefBrowser browser, CefFrame frame, int httpStatusCode) {
-                        String injection = "window.sendToJava = function(msg) { " + jsQuery.inject("msg") + " };";
-                        browser.executeJavaScript(injection, browser.getURL(), 0);
+                    public void onLoadEnd(CefBrowser cefBrowser, CefFrame frame, int httpStatusCode) {
+                        SwingUtilities.invokeLater(() -> {
+                            String injection = "window.sendToJava = function(msg) { " + jsQuery.inject("msg") + " };";
+                            cefBrowser.executeJavaScript(injection, cefBrowser.getURL(), 0);
 
-                        // 注入获取剪贴板路径的函数
-                        String clipboardPathInjection =
-                            "window.getClipboardFilePath = function() {" +
-                            "  return new Promise((resolve) => {" +
-                            "    " + getClipboardPathQuery.inject("''",
-                                "function(response) { resolve(response); }",
-                                "function(error_code, error_message) { console.error('Failed to get clipboard path:', error_message); resolve(''); }") +
-                            "  });" +
-                            "};";
-                        browser.executeJavaScript(clipboardPathInjection, browser.getURL(), 0);
+                            // 注入获取剪贴板路径的函数
+                            String clipboardPathInjection =
+                                "window.getClipboardFilePath = function() {" +
+                                "  return new Promise((resolve) => {" +
+                                "    " + getClipboardPathQuery.inject("''",
+                                    "function(response) { resolve(response); }",
+                                    "function(error_code, error_message) { console.error('Failed to get clipboard path:', error_message); resolve(''); }") +
+                                "  });" +
+                                "};";
+                            cefBrowser.executeJavaScript(clipboardPathInjection, cefBrowser.getURL(), 0);
 
-                        // 将控制台日志转发到 IDEA 控制台
-                        String consoleForward =
-                            "const originalLog = console.log;" +
-                            "const originalError = console.error;" +
-                            "const originalWarn = console.warn;" +
-                            "console.log = function(...args) {" +
-                            "  originalLog.apply(console, args);" +
-                            "  window.sendToJava(JSON.stringify({type: 'console.log', args: args}));" +
-                            "};" +
-                            "console.error = function(...args) {" +
-                            "  originalError.apply(console, args);" +
-                            "  window.sendToJava(JSON.stringify({type: 'console.error', args: args}));" +
-                            "};" +
-                            "console.warn = function(...args) {" +
-                            "  originalWarn.apply(console, args);" +
-                            "  window.sendToJava(JSON.stringify({type: 'console.warn', args: args}));" +
-                            "};";
-                        browser.executeJavaScript(consoleForward, browser.getURL(), 0);
+                            // 将控制台日志转发到 IDEA 控制台
+                            String consoleForward =
+                                "const originalLog = console.log;" +
+                                "const originalError = console.error;" +
+                                "const originalWarn = console.warn;" +
+                                "console.log = function(...args) {" +
+                                "  originalLog.apply(console, args);" +
+                                "  window.sendToJava(JSON.stringify({type: 'console.log', args: args}));" +
+                                "};" +
+                                "console.error = function(...args) {" +
+                                "  originalError.apply(console, args);" +
+                                "  window.sendToJava(JSON.stringify({type: 'console.error', args: args}));" +
+                                "};" +
+                                "console.warn = function(...args) {" +
+                                "  originalWarn.apply(console, args);" +
+                                "  window.sendToJava(JSON.stringify({type: 'console.warn', args: args}));" +
+                                "};";
+                            cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
+                        });
                     }
                 }, browser.getCefBrowser());
 
@@ -771,12 +775,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             if (disposed || browser == null) {
                 return;
             }
-            try {
-                String js = JsUtils.buildJsCall(functionName, args);
-                browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
-            } catch (Exception e) {
-                System.err.println("[ClaudeSDKToolWindow] 调用 JS 函数失败: " + functionName + ", 错误: " + e.getMessage());
-            }
+            SwingUtilities.invokeLater(() -> {
+                if (disposed || browser == null) {
+                    return;
+                }
+                try {
+                    String js = JsUtils.buildJsCall(functionName, args);
+                    browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
+                } catch (Exception e) {
+                    System.err.println("[ClaudeSDKToolWindow] 调用 JS 函数失败: " + functionName + ", 错误: " + e.getMessage());
+                }
+            });
         }
 
         private void addSelectionInfo(String selectionInfo) {
