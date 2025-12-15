@@ -218,13 +218,27 @@ public class CodemossSettingsService {
         // 提取 env 中的关键配置
         if (claudeSettings.has("env")) {
             JsonObject env = claudeSettings.getAsJsonObject("env");
-            String apiKey = env.has("ANTHROPIC_AUTH_TOKEN") ? env.get("ANTHROPIC_AUTH_TOKEN").getAsString() : "";
+
+            // 兼容两种认证方式：优先 ANTHROPIC_AUTH_TOKEN，回退到 ANTHROPIC_API_KEY
+            String apiKey = "";
+            String authType = "none";
+
+            if (env.has("ANTHROPIC_AUTH_TOKEN") && !env.get("ANTHROPIC_AUTH_TOKEN").getAsString().isEmpty()) {
+                apiKey = env.get("ANTHROPIC_AUTH_TOKEN").getAsString();
+                authType = "auth_token";  // Bearer 认证
+            } else if (env.has("ANTHROPIC_API_KEY") && !env.get("ANTHROPIC_API_KEY").getAsString().isEmpty()) {
+                apiKey = env.get("ANTHROPIC_API_KEY").getAsString();
+                authType = "api_key";  // x-api-key 认证
+            }
+
             String baseUrl = env.has("ANTHROPIC_BASE_URL") ? env.get("ANTHROPIC_BASE_URL").getAsString() : "";
 
             result.addProperty("apiKey", apiKey);
+            result.addProperty("authType", authType);  // 添加认证类型标识
             result.addProperty("baseUrl", baseUrl);
         } else {
             result.addProperty("apiKey", "");
+            result.addProperty("authType", "none");
             result.addProperty("baseUrl", "");
         }
 

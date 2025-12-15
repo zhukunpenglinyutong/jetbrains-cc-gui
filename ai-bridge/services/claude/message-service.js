@@ -136,8 +136,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
-    // 设置 API Key 并获取配置信息
-    const { baseUrl, apiKeySource, baseUrlSource } = setupApiKey();
+    // 设置 API Key 并获取配置信息（包含认证类型）
+    const { baseUrl, authType, apiKeySource, baseUrlSource } = setupApiKey();
 
     // 检测是否使用自定义 Base URL
     if (isCustomBaseUrl(baseUrl)) {
@@ -380,7 +380,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 /**
  * 使用 Anthropic SDK 发送消息（用于第三方 API 代理的回退方案）
  */
-export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl) {
+export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl, authType) {
   try {
     const workingDirectory = selectWorkingDirectory(cwd);
     try { process.chdir(workingDirectory); } catch {}
@@ -388,13 +388,36 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     const sessionId = (resumeSessionId && resumeSessionId !== '') ? resumeSessionId : randomUUID();
     const modelId = model || 'claude-sonnet-4-5';
 
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    // 根据认证类型使用正确的 SDK 参数
+    // authType = 'auth_token': 使用 authToken 参数（Bearer 认证）
+    // authType = 'api_key': 使用 apiKey 参数（x-api-key 认证）
+    let client;
+    if (authType === 'auth_token') {
+      console.log('[DEBUG] Using Bearer authentication (ANTHROPIC_AUTH_TOKEN)');
+      // 使用 authToken 参数（Bearer 认证）并清除 apiKey
+      client = new Anthropic({
+        authToken: apiKey,
+        apiKey: null,  // 明确设置为 null 避免使用 x-api-key header
+        baseURL: baseUrl || undefined
+      });
+      // 优先使用 Bearer（ANTHROPIC_AUTH_TOKEN），避免继续发送 x-api-key
+      delete process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
+    } else {
+      console.log('[DEBUG] Using API Key authentication (ANTHROPIC_API_KEY)');
+      // 使用 apiKey 参数（x-api-key 认证）
+      client = new Anthropic({
+        apiKey,
+        baseURL: baseUrl || undefined
+      });
+    }
 
     console.log('[MESSAGE_START]');
     console.log('[SESSION_ID]', sessionId);
     console.log('[DEBUG] Using Anthropic SDK fallback for custom Base URL (non-streaming)');
     console.log('[DEBUG] Model:', modelId);
     console.log('[DEBUG] Base URL:', baseUrl);
+    console.log('[DEBUG] Auth type:', authType || 'api_key (default)');
 
     const userContent = [{ type: 'text', text: message }];
 
@@ -555,7 +578,8 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
-    const { baseUrl } = setupApiKey();
+    // 设置 API Key 并获取配置信息（包含认证类型）
+    const { baseUrl, authType } = setupApiKey();
 
     console.log('[MESSAGE_START]');
 

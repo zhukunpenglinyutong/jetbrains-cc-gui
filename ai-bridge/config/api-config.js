@@ -22,13 +22,14 @@ export function loadClaudeSettings() {
 
 /**
  * 配置 API Key
- * @returns {Object} 包含 apiKey, baseUrl 及其来源
+ * @returns {Object} 包含 apiKey, baseUrl, authType 及其来源
  */
 export function setupApiKey() {
   const settings = loadClaudeSettings();
 
   let apiKey;
   let baseUrl;
+  let authType = 'api_key';  // 默认使用 api_key（x-api-key header）
   let apiKeySource = 'default';
   let baseUrlSource = 'default';
 
@@ -53,19 +54,24 @@ export function setupApiKey() {
   }
 
   // 🔥 统一优先级：系统环境变量 > settings.json（与上面的通用逻辑一致）
-  // 先检查系统环境变量，再回退到 settings.json
-  if (process.env.ANTHROPIC_API_KEY) {
-    apiKey = process.env.ANTHROPIC_API_KEY;
-    apiKeySource = 'environment (ANTHROPIC_API_KEY)';
-  } else if (process.env.ANTHROPIC_AUTH_TOKEN) {
+  // 优先使用 ANTHROPIC_AUTH_TOKEN（Bearer 认证），回退到 ANTHROPIC_API_KEY（x-api-key 认证）
+  // 这样可以兼容 Claude Code CLI 的两种认证方式
+  if (process.env.ANTHROPIC_AUTH_TOKEN) {
     apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+    authType = 'auth_token';  // Bearer 认证
     apiKeySource = 'environment (ANTHROPIC_AUTH_TOKEN)';
-  } else if (settings?.env?.ANTHROPIC_API_KEY) {
-    apiKey = settings.env.ANTHROPIC_API_KEY;
-    apiKeySource = 'settings.json (ANTHROPIC_API_KEY)';
+  } else if (process.env.ANTHROPIC_API_KEY) {
+    apiKey = process.env.ANTHROPIC_API_KEY;
+    authType = 'api_key';  // x-api-key 认证
+    apiKeySource = 'environment (ANTHROPIC_API_KEY)';
   } else if (settings?.env?.ANTHROPIC_AUTH_TOKEN) {
     apiKey = settings.env.ANTHROPIC_AUTH_TOKEN;
+    authType = 'auth_token';  // Bearer 认证
     apiKeySource = 'settings.json (ANTHROPIC_AUTH_TOKEN)';
+  } else if (settings?.env?.ANTHROPIC_API_KEY) {
+    apiKey = settings.env.ANTHROPIC_API_KEY;
+    authType = 'api_key';  // x-api-key 认证
+    apiKeySource = 'settings.json (ANTHROPIC_API_KEY)';
   }
 
   if (process.env.ANTHROPIC_BASE_URL) {
@@ -81,13 +87,24 @@ export function setupApiKey() {
     throw new Error('API Key not configured');
   }
 
-  process.env.ANTHROPIC_API_KEY = apiKey;
-  process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
+  // 根据认证类型设置对应的环境变量
+  if (authType === 'auth_token') {
+    process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
+    // 清除 ANTHROPIC_API_KEY 避免混淆
+    delete process.env.ANTHROPIC_API_KEY;
+  } else {
+    process.env.ANTHROPIC_API_KEY = apiKey;
+    // 清除 ANTHROPIC_AUTH_TOKEN 避免混淆
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+  }
+
   if (baseUrl) {
     process.env.ANTHROPIC_BASE_URL = baseUrl;
   }
 
-  return { apiKey, baseUrl, apiKeySource, baseUrlSource };
+  console.log('[DEBUG] Auth type:', authType);
+
+  return { apiKey, baseUrl, authType, apiKeySource, baseUrlSource };
 }
 
 /**

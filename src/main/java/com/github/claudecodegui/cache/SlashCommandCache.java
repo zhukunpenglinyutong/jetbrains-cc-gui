@@ -4,6 +4,9 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.*;
+import com.intellij.openapi.vfs.newvfs.BulkFileListener;
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
+import com.intellij.util.messages.MessageBusConnection;
 import com.github.claudecodegui.ClaudeSDKBridge;
 
 import javax.swing.*;
@@ -13,6 +16,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -37,9 +41,10 @@ public class SlashCommandCache {
     // 缓存策略配置
     private static final long CACHE_TTL = 10 * 60 * 1000; // 10分钟保底刷新
     private static final long MIN_REFRESH_INTERVAL = 1000; // 最小刷新间隔 1秒（防抖）
+    private static final long LOAD_TIMEOUT_SECONDS = 30; // SDK 调用超时时间 30秒
 
     // 监听器
-    private VirtualFileListener fileListener;
+    private MessageBusConnection messageBusConnection;
     private Timer periodicCheckTimer;
     private final List<Consumer<List<JsonObject>>> updateListeners;
 
@@ -109,73 +114,75 @@ public class SlashCommandCache {
             return;
         }
 
-        // 如果正在加载，跳过
+        // 如果正在加载,跳过
         if (isLoading) {
             System.out.println("[SlashCommandCache] Already loading, skipping");
             return;
         }
 
         isLoading = true;
+        long startTime = System.currentTimeMillis();
         System.out.println("[SlashCommandCache] Loading slash commands from SDK");
 
-        sdkBridge.getSlashCommands(cwd).thenAccept(commands -> {
-            if (commands != null && !commands.isEmpty()) {
-                cachedCommands = new ArrayList<>(commands);
-                lastLoadTime = System.currentTimeMillis();
-                System.out.println("[SlashCommandCache] Loaded " + commands.size() + " commands");
+        // 添加超时机制：30秒超时
+        sdkBridge.getSlashCommands(cwd)
+                .orTimeout(LOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .thenAccept(commands -> {
+                    long duration = System.currentTimeMillis() - startTime;
+                    if (commands != null && !commands.isEmpty()) {
+                        cachedCommands = new ArrayList<>(commands);
+                        lastLoadTime = System.currentTimeMillis();
+                        System.out.println("[SlashCommandCache] Loaded " + commands.size() + " commands in " + duration + "ms");
 
-                // 通知所有监听器
-                notifyListeners();
-            } else {
-                System.out.println("[SlashCommandCache] No commands received");
-            }
-            isLoading = false;
-        }).exceptionally(ex -> {
-            System.err.println("[SlashCommandCache] Failed to load commands: " + ex.getMessage());
-            isLoading = false;
-            return null;
-        });
+                        // 通知所有监听器
+                        notifyListeners();
+                    } else {
+                        System.out.println("[SlashCommandCache] No commands received (took " + duration + "ms)");
+                    }
+                    isLoading = false;
+                }).exceptionally(ex -> {
+                    long duration = System.currentTimeMillis() - startTime;
+                    isLoading = false;
+
+                    if (ex.getCause() instanceof java.util.concurrent.TimeoutException) {
+                        System.err.println("[SlashCommandCache] Load commands timeout after " + LOAD_TIMEOUT_SECONDS + " seconds");
+                    } else {
+                        System.err.println("[SlashCommandCache] Failed to load commands (took " + duration + "ms): " + ex.getMessage());
+                    }
+                    return null;
+                });
     }
 
     /**
      * 设置文件监听器
      */
     private void setupFileWatcher() {
-        fileListener = new VirtualFileListener() {
-            @Override
-            public void contentsChanged(VirtualFileEvent event) {
-                checkAndRefresh(event.getFile());
-            }
+        // 使用消息总线订阅文件变化事件（推荐的新方式）
+        messageBusConnection = ApplicationManager.getApplication().getMessageBus().connect();
 
+        messageBusConnection.subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
             @Override
-            public void fileCreated(VirtualFileEvent event) {
-                checkAndRefresh(event.getFile());
-            }
-
-            @Override
-            public void fileDeleted(VirtualFileEvent event) {
-                checkAndRefresh(event.getFile());
-            }
-
-            private void checkAndRefresh(VirtualFile file) {
-                if (isCommandFile(file)) {
-                    System.out.println("[SlashCommandCache] Command file changed: " + file.getPath());
-                    // 延迟刷新，避免频繁触发
-                    SwingUtilities.invokeLater(() -> {
-                        try {
-                            Thread.sleep(500); // 延迟 500ms
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                        loadCommands();
-                    });
+            public void after(List<? extends VFileEvent> events) {
+                for (VFileEvent event : events) {
+                    VirtualFile file = event.getFile();
+                    if (file != null && isCommandFile(file)) {
+                        System.out.println("[SlashCommandCache] Command file changed: " + file.getPath());
+                        // 延迟刷新，避免频繁触发
+                        SwingUtilities.invokeLater(() -> {
+                            try {
+                                Thread.sleep(500); // 延迟 500ms
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                            loadCommands();
+                        });
+                        break; // 只需要触发一次刷新
+                    }
                 }
             }
-        };
+        });
 
-        // 注册监听器
-        VirtualFileManager.getInstance().addVirtualFileListener(fileListener);
-        System.out.println("[SlashCommandCache] File watcher setup complete");
+        System.out.println("[SlashCommandCache] File watcher setup complete (using MessageBus)");
     }
 
     /**
@@ -227,9 +234,9 @@ public class SlashCommandCache {
     public void dispose() {
         System.out.println("[SlashCommandCache] Disposing cache system");
 
-        // 移除文件监听器
-        if (fileListener != null) {
-            VirtualFileManager.getInstance().removeVirtualFileListener(fileListener);
+        // 断开消息总线连接
+        if (messageBusConnection != null) {
+            messageBusConnection.disconnect();
         }
 
         // 取消定期检查

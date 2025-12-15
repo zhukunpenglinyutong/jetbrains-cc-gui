@@ -98,16 +98,6 @@ AGPL-3.0
 <table>
   <tr>
     <td align="center">
-      <a href="https://github.com/claude">
-        <img src="https://avatars.githubusercontent.com/u/81847?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/openai/codex">
-        <img src="https://avatars.githubusercontent.com/u/14957082?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
       <a href="https://github.com/zhukunpenglinyutong">
         <img src="https://avatars.githubusercontent.com/u/31264015?size=100" width="100" height="100" alt="mcowger" style="border-radius: 50%;" />
       </a>
@@ -125,6 +115,16 @@ AGPL-3.0
     <td align="center">
       <a href="https://github.com/song782360037">
         <img src="https://avatars.githubusercontent.com/u/66980578?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/hpstream">
+        <img src="https://avatars.githubusercontent.com/u/18394192?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/imblowsnow">
+        <img src="https://avatars.githubusercontent.com/u/74449531?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>
