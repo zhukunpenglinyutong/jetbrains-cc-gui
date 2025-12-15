@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      artifact-name: ${{ steps.extract.outputs.artifact-name }}
 
     steps:
       - name: Checkout
@@ -38,11 +40,20 @@ jobs:
       - name: Build Plugin
         run: ./gradlew buildPlugin
 
+      - name: Extract plugin artifact
+        id: extract
+        run: |
+          ZIP_FILE=$(ls build/distributions/*.zip | head -n 1)
+          ARTIFACT_NAME=$(basename "$ZIP_FILE" .zip)
+          mkdir -p extracted
+          unzip "$ZIP_FILE" -d extracted/
+          echo "artifact-name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: plugin-artifact
-          path: build/distributions/*.zip
+          name: ${{ steps.extract.outputs.artifact-name }}
+          path: extracted/**
 
   release:
     needs: build
@@ -56,11 +67,17 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: plugin-artifact
+          name: ${{ needs.build.outputs.artifact-name }}
           path: dist
+
+      - name: Repackage as zip
+        run: |
+          cd dist
+          zip -r ../${{ needs.build.outputs.artifact-name }}.zip .
+          cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: ${{ needs.build.outputs.artifact-name }}.zip
           generate_release_notes: true
