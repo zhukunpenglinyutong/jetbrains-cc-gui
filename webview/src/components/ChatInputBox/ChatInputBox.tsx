@@ -46,6 +46,9 @@ export const ChatInputBox = ({
   const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
   const attachments = externalAttachments ?? internalAttachments;
 
+  // 拖拽文件列表状态
+  const [droppedFiles, setDroppedFiles] = useState<string[]>([]);
+
   // 输入框引用和状态
   const editableRef = useRef<HTMLDivElement>(null);
   const submittedOnEnterRef = useRef(false);
@@ -221,7 +224,13 @@ export const ChatInputBox = ({
    * 处理提交
    */
   const handleSubmit = useCallback(() => {
-    const content = getTextContent().trim();
+    let content = getTextContent().trim();
+
+    // 将 droppedFiles 中的文件路径拼接到消息内容末尾
+    if (droppedFiles.length > 0) {
+      const fileReferences = droppedFiles.map(filePath => `@${filePath}`).join(' ');
+      content = content ? `${content} ${fileReferences}` : fileReferences;
+    }
 
     if (!content && attachments.length === 0) {
       return;
@@ -239,6 +248,9 @@ export const ChatInputBox = ({
     // 清空输入框
     clearInput();
 
+    // 清空拖拽的文件列表
+    setDroppedFiles([]);
+
     // 如果使用内部附件状态，也清空附件
     if (externalAttachments === undefined) {
       setInternalAttachments([]);
@@ -246,6 +258,7 @@ export const ChatInputBox = ({
   }, [
     getTextContent,
     attachments,
+    droppedFiles,
     isLoading,
     onSubmit,
     clearInput,
@@ -799,6 +812,31 @@ export const ChatInputBox = ({
   }, [generateId, handleInput]);
 
   /**
+   * 处理添加附件
+   */
+  const handleAddAttachment = useCallback((files: FileList) => {
+    if (externalAttachments !== undefined) {
+      onAddAttachment?.(files);
+    } else {
+      // 使用内部状态
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          const attachment: Attachment = {
+            id: generateId(),
+            fileName: file.name,
+            mediaType: file.type || 'application/octet-stream',
+            data: base64,
+          };
+          setInternalAttachments(prev => [...prev, attachment]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  }, [externalAttachments, onAddAttachment, generateId]);
+
+  /**
    * 处理拖拽进入事件
    */
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -809,59 +847,25 @@ export const ChatInputBox = ({
   }, []);
 
   /**
-   * 处理拖拽释放事件 - 检测图片和文件路径
+   * 处理拖拽释放事件 - 将文件添加到附件列表
    */
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // 先获取文本内容（文件路径）
-    const text = e.dataTransfer?.getData('text/plain');
-
-    // 再检查文件对象
+    // 检查文件对象
     const files = e.dataTransfer?.files;
 
-    // 检查是否有实际的图片文件对象
-    let hasImageFile = false;
+    // 如果有文件对象，将所有文件添加到附件列表
     if (files && files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-
-        // 只处理图片文件
-        if (file.type.startsWith('image/')) {
-          hasImageFile = true;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(',')[1];
-            const ext = (() => {
-              if (file.type && file.type.includes('/')) {
-                return file.type.split('/')[1];
-              }
-              const m = file.name.match(/\.([a-zA-Z0-9]+)$/);
-              return m ? m[1] : 'png';
-            })();
-            const attachment: Attachment = {
-              id: generateId(),
-              fileName: file.name || `dropped-image-${Date.now()}.${ext}`,
-              mediaType: file.type || 'image/png',
-              data: base64,
-            };
-
-            setInternalAttachments(prev => [...prev, attachment]);
-          };
-          reader.readAsDataURL(file);
-        }
-      }
-    }
-
-    // 如果有图片文件，不处理文本
-    if (hasImageFile) {
+      // 使用 handleAddAttachment 处理文件，这样可以统一处理外部和内部附件状态
+      handleAddAttachment(files);
       return;
     }
 
-    // 没有图片文件，处理文本（文件路径或其他文本）
+    // 如果没有文件对象，尝试获取文本内容并插入到输入框
+    const text = e.dataTransfer?.getData('text/plain');
     if (text && text.trim()) {
-
       // 获取当前光标位置
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editableRef.current) {
@@ -892,32 +896,7 @@ export const ChatInputBox = ({
       // 触发 input 事件以更新状态
       handleInput();
     }
-  }, [generateId, handleInput, getTextContent]);
-
-  /**
-   * 处理添加附件
-   */
-  const handleAddAttachment = useCallback((files: FileList) => {
-    if (externalAttachments !== undefined) {
-      onAddAttachment?.(files);
-    } else {
-      // 使用内部状态
-      Array.from(files).forEach(file => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = (reader.result as string).split(',')[1];
-          const attachment: Attachment = {
-            id: generateId(),
-            fileName: file.name,
-            mediaType: file.type || 'application/octet-stream',
-            data: base64,
-          };
-          setInternalAttachments(prev => [...prev, attachment]);
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-  }, [externalAttachments, onAddAttachment, generateId]);
+  }, [handleAddAttachment, handleInput, getTextContent]);
 
   /**
    * 处理移除附件
@@ -951,9 +930,25 @@ export const ChatInputBox = ({
     editableRef.current?.focus();
   }, []);
 
+  /**
+   * 删除拖拽的文件
+   */
+  const handleRemoveDroppedFile = useCallback((filePath: string) => {
+    setDroppedFiles(prev => prev.filter(f => f !== filePath));
+  }, []);
+
+  /**
+   * 在 IDEA 中打开拖拽的文件
+   */
+  const handleOpenDroppedFile = useCallback((filePath: string) => {
+    if ((window as any).sendToJava) {
+      (window as any).sendToJava(`open_file:${filePath}`);
+    }
+  }, []);
+
   // 初始化时聚焦和注册全局函数
   useEffect(() => {
-    // 注册全局函数以接收 Java 传递的文件路径
+    // 注册全局函数以接收 Java 传递的文件路径（用于文本插入，保留向后兼容）
     (window as any).handleFilePathFromJava = (filePath: string) => {
       if (!editableRef.current) return;
 
@@ -979,13 +974,25 @@ export const ChatInputBox = ({
       handleInput();
     };
 
+    // 注册新的全局函数以接收 Java 传递的文件路径并添加到拖拽文件列表
+    (window as any).handleFileDropFromJava = (filePath: string) => {
+      setDroppedFiles(prev => {
+        // 避免重复添加
+        if (prev.includes(filePath)) {
+          return prev;
+        }
+        return [...prev, filePath];
+      });
+    };
+
     focusInput();
 
     // 清理函数
     return () => {
       delete (window as any).handleFilePathFromJava;
+      delete (window as any).handleFileDropFromJava;
     };
-  }, [focusInput, handlePaste, handleDrop, handleDragOver, handleInput, getTextContent]);
+  }, [focusInput, handlePaste, handleDrop, handleDragOver, handleInput, getTextContent, generateId, externalAttachments]);
 
   return (
     <div className="chat-input-box" onClick={focusInput}>
@@ -1007,6 +1014,9 @@ export const ChatInputBox = ({
         showUsage={showUsage}
         onClearFile={onClearContext}
         onAddAttachment={handleAddAttachment}
+        droppedFiles={droppedFiles}
+        onRemoveDroppedFile={handleRemoveDroppedFile}
+        onOpenDroppedFile={handleOpenDroppedFile}
       />
 
       {/* 输入区域 */}

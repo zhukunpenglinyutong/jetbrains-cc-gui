@@ -11,6 +11,9 @@ interface ContextBarProps {
   showUsage?: boolean;
   onClearFile?: () => void;
   onAddAttachment?: (files: FileList) => void;
+  droppedFiles?: string[];  // 拖拽的文件路径列表
+  onRemoveDroppedFile?: (filePath: string) => void;  // 删除拖拽的文件
+  onOpenDroppedFile?: (filePath: string) => void;  // 在 IDEA 中打开文件
 }
 
 export const ContextBar: React.FC<ContextBarProps> = ({ 
@@ -21,7 +24,10 @@ export const ContextBar: React.FC<ContextBarProps> = ({
   maxTokens,
   showUsage = true,
   onClearFile,
-  onAddAttachment
+  onAddAttachment,
+  droppedFiles = [],
+  onRemoveDroppedFile,
+  onOpenDroppedFile
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,6 +43,15 @@ export const ContextBar: React.FC<ContextBarProps> = ({
     }
     e.target.value = '';
   }, [onAddAttachment]);
+
+  const handleFileClick = useCallback((filePath: string) => {
+    onOpenDroppedFile?.(filePath);
+  }, [onOpenDroppedFile]);
+
+  const handleRemoveFile = useCallback((e: React.MouseEvent, filePath: string) => {
+    e.stopPropagation();
+    onRemoveDroppedFile?.(filePath);
+  }, [onRemoveDroppedFile]);
 
   // Extract filename from path
   const getFileName = (path: string) => {
@@ -125,6 +140,37 @@ export const ContextBar: React.FC<ContextBarProps> = ({
           />
         </div>
       )}
+
+      {/* Dropped Files List */}
+      {droppedFiles.map((filePath) => (
+        <div
+          key={filePath}
+          className="context-item has-tooltip"
+          data-tooltip={filePath}
+          style={{ cursor: 'pointer' }}
+          onClick={() => handleFileClick(filePath)}
+        >
+          <span
+            className="context-file-icon"
+            style={{
+              marginRight: 4,
+              display: 'inline-flex',
+              alignItems: 'center',
+              width: 16,
+              height: 16
+            }}
+            dangerouslySetInnerHTML={{ __html: getFileIconSvg(filePath) }}
+          />
+          <span className="context-text">
+            <span dir="ltr">{getFileName(filePath)}</span>
+          </span>
+          <span
+            className="codicon codicon-close context-close"
+            onClick={(e) => handleRemoveFile(e, filePath)}
+            title="Remove file"
+          />
+        </div>
+      ))}
     </div>
   );
 };

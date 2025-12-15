@@ -179,7 +179,7 @@
    ============================================================ */
 .context-bar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
@@ -239,7 +239,9 @@
   padding: 1px 6px;
   font-size: 12px;
   color: var(--text-primary);
-  max-width: 200px;
+  max-width: calc(100% - 80px);
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 /* Tooltip styles */
@@ -300,6 +302,12 @@
   white-space: nowrap;
   direction: rtl;
   text-align: left;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.context-file-icon {
+  flex-shrink: 0;
 }
 
 .context-close {
@@ -307,6 +315,7 @@
   opacity: 0.7;
   font-size: 14px;
   margin-left: 4px;
+  flex-shrink: 0;
 }
 
 .context-close:hover {

@@ -448,7 +448,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 JComponent browserComponent = browser.getComponent();
 
-                // 添加拖拽支持 - 获取完整文件路径
+                // 添加拖拽支持 - 将文件路径传递到前端的 ContextBar
                 new DropTarget(browserComponent, new DropTargetAdapter() {
                     @Override
                     public void drop(DropTargetDropEvent dtde) {
@@ -465,10 +465,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                                     String filePath = file.getAbsolutePath();
                                     System.out.println("[Java] Dropped file path: " + filePath);
 
-                                    // 通过 JavaScript 将路径传递到前端
+                                    // 转义特殊字符，避免 JavaScript 注入
+                                    String escapedPath = filePath.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r");
+
+                                    // 通过 JavaScript 将文件路径传递到前端的 ContextBar
                                     String jsCode = String.format(
-                                        "if (window.handleFilePathFromJava) { window.handleFilePathFromJava('%s'); }",
-                                        filePath.replace("\\", "\\\\").replace("'", "\\'")
+                                        "if (window.handleFileDropFromJava) { window.handleFileDropFromJava('%s'); }",
+                                        escapedPath
                                     );
                                     browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
                                 }
