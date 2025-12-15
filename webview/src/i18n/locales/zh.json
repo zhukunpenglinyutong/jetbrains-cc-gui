@@ -284,6 +284,7 @@
     "marketComingSoon": "MCP 市场功能暂未实现，敬请期待",
     "description": "描述",
     "command": "命令",
+    "url": "URL",
     "homepage": "主页",
     "docs": "文档",
     "edit": "编辑",
