@@ -346,6 +346,12 @@ export function McpSettingsSection() {
                         </code>
                       </div>
                     )}
+                    {server.server.url && (
+                      <div className="info-row">
+                        <span className="info-label">{t('mcp.url')}:</span>
+                        <code className="info-value command">{server.server.url}</code>
+                      </div>
+                    )}
                   </div>
 
                   {/* 标签 */}

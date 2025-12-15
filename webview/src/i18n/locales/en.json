@@ -284,6 +284,7 @@
     "marketComingSoon": "MCP market feature not yet implemented, coming soon",
     "description": "Description",
     "command": "Command",
+    "url": "URL",
     "homepage": "Homepage",
     "docs": "Docs",
     "edit": "Edit",
