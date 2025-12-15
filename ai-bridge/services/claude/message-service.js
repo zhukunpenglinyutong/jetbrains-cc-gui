@@ -330,6 +330,13 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
         currentSessionId = msg.session_id;
         console.log('[SESSION_ID]', msg.session_id);
       }
+
+      // 检查是否收到错误结果消息（快速检测 API Key 错误）
+      if (msg.type === 'result' && msg.is_error) {
+        console.error('[DEBUG] Received error result message:', JSON.stringify(msg));
+        const errorText = msg.result || msg.message || 'API request failed';
+        throw new Error(errorText);
+      }
     }
     } catch (loopError) {
       // 捕获 for await 循环中的错误（包括 SDK 内部 spawn 子进程失败等）
@@ -766,6 +773,13 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    	      if (msg.type === 'system' && msg.session_id) {
 	    	        currentSessionId = msg.session_id;
 	    	        console.log('[SESSION_ID]', msg.session_id);
+	    	      }
+
+	    	      // 检查是否收到错误结果消息（快速检测 API Key 错误）
+	    	      if (msg.type === 'result' && msg.is_error) {
+	    	        console.error('[DEBUG] (withAttachments) Received error result message:', JSON.stringify(msg));
+	    	        const errorText = msg.result || msg.message || 'API request failed';
+	    	        throw new Error(errorText);
 	    	      }
 	    	    }
 	    	    } catch (loopError) {
