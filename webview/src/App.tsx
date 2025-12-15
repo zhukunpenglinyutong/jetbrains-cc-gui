@@ -22,6 +22,7 @@ import { Claude, OpenAI } from '@lobehub/icons';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
 import { ScrollControl } from './components/ScrollControl';
+import { APP_VERSION } from './version/version';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -1094,7 +1095,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.1.0-beta2
+                  v{APP_VERSION}
                 </span>
               </div>
               <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
