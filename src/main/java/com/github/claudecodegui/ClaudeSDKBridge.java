@@ -622,14 +622,20 @@ public class ClaudeSDKBridge {
                             }
                         }
 
-	                        // 设置60秒超时等待进程结束的逻辑存在严重问题，先恢复为无限等待进程结束
-	                        // boolean finished = process.waitFor(60, TimeUnit.SECONDS);
+	                        // 超时控制已禁用：正常的 API 错误会通过 Node.js 侧的 result 消息立即返回（3-4秒）
+	                        // Node.js 侧已添加 result 错误消息检查，能够快速检测并返回 API Key 等配置错误
+	                        // 这里改为无限等待进程结束，避免误杀正常但响应较慢的请求
+	                        // boolean finished = process.waitFor(45, TimeUnit.SECONDS);
 	                        // if (!finished) {
-	                        //     System.out.println("[ClaudeSDKBridge] Process timeout after 60 seconds, force killing...");
+	                        //     System.out.println("[ClaudeSDKBridge] Process timeout after 45 seconds, force killing...");
 	                        //     process.destroyForcibly();
 	                        //     result.success = false;
-	                        //     result.error = "响应超时（60s），已自动终止本次请求，请检查您的配置，或者在终端运行claude 测试是否可以正常使用";
-	                        //     callback.onError("响应超时（60s），已自动终止本次请求，请检查您的配置，或者在终端运行claude 测试是否可以正常使用");
+	                        //     result.error = "响应超时（45s），已自动终止本次请求。可能原因：\n" +
+	                        //                   "1. API Key 配置错误\n" +
+	                        //                   "2. 网络连接问题\n" +
+	                        //                   "3. Base URL 配置错误\n" +
+	                        //                   "请检查您的配置，或者在终端运行 claude 命令测试是否可以正常使用";
+	                        //     callback.onError(result.error);
 	                        //     return result;
 	                        // }
 	                        process.waitFor();
