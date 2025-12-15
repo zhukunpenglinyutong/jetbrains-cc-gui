@@ -7,7 +7,8 @@ import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
+import type { Attachment, PermissionMode, FileItem } from './components/ChatInputBox/types';
+
 import {
   BashToolBlock,
   EditToolBlock,
@@ -97,6 +98,10 @@ const App = () => {
 
   // Context state (active file and selection)
   const [contextInfo, setContextInfo] = useState<{ file: string; startLine?: number; endLine?: number; raw: string } | null>(null);
+
+  // 上下文文件
+  const [referencedFiles, setReferencedFiles] = useState<FileItem[]>([]);
+
 
   // 根据当前提供商选择显示的模型
   const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
@@ -540,6 +545,8 @@ const App = () => {
 
     // 清空输入框状态
     setInputValue('');
+    // 清空引用文件
+    handleClearReferencedFiles();
   };
 
   /**
@@ -996,6 +1003,31 @@ const App = () => {
     return blocks.some((b) => b.type === 'thinking');
   }, [messages]);
 
+  
+  const handleAddReferencedFile = (file: FileItem) => {
+    setReferencedFiles(prev => {
+      if (prev.some(item => item.path === file.path)) {
+        return prev;
+      }
+      return [...prev, file];
+    });
+  };
+
+  const handleRemoveReferencedFile = (file: FileItem) => {
+    setReferencedFiles(prev => prev.filter(item => item.path !== file.path));
+
+    setInputValue(prev => {
+      if (prev.includes("@" + file.path)) {
+        return prev.replaceAll("@" + file.path, "");
+      }
+      return prev;
+    });
+  };
+
+  const handleClearReferencedFiles = () => {
+    setReferencedFiles([]);
+  };
+
   return (
     <>
       <style>{`
@@ -1264,6 +1296,10 @@ const App = () => {
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
+            referencedFiles={referencedFiles}
+            onAddReferencedFile={handleAddReferencedFile}
+            onRemoveReferencedFile={handleRemoveReferencedFile}
+            onClearReferencedFile={handleClearReferencedFiles}
             activeFile={contextInfo?.file}
             selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined 
               ? (contextInfo.startLine === contextInfo.endLine 

@@ -39,6 +39,10 @@ export const ChatInputBox = ({
   onModelSelect,
   onProviderSelect,
   activeFile,
+  referencedFiles,
+  onAddReferencedFile,
+  onRemoveReferencedFile,
+  onClearReferencedFile,
   selectedLines,
   onClearContext,
 }: ChatInputBoxProps) => {
@@ -58,6 +62,19 @@ export const ChatInputBox = ({
   // 触发检测 Hook
   const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
 
+  // 引用文件相关处理
+  const addReferencedFile = useCallback((file: FileItem) => {
+    onAddReferencedFile?.(file);
+  }, []);
+
+  const removeReferencedFile = useCallback((file: FileItem) => {
+    onRemoveReferencedFile?.(file);
+  }, []);
+
+  const clearReferencedFiles = useCallback(() => {
+    onClearReferencedFile?.();
+  }, []);
+
   // 文件引用补全 Hook
   const fileCompletion = useCompletionDropdown<FileItem>({
     trigger: '@',
@@ -65,6 +82,7 @@ export const ChatInputBox = ({
     toDropdownItem: fileToDropdownItem,
     onSelect: (file, query) => {
       if (!editableRef.current || !query) return;
+      addReferencedFile(file);
 
       const text = getTextContent();
       // 文件夹不加空格（方便继续输入路径），文件加空格
@@ -251,6 +269,7 @@ export const ChatInputBox = ({
     if (externalAttachments === undefined) {
       setInternalAttachments([]);
     }
+    clearReferencedFiles();
   }, [
     getTextContent,
     attachments,
@@ -260,6 +279,7 @@ export const ChatInputBox = ({
     externalAttachments,
     fileCompletion,
     commandCompletion,
+    clearReferencedFiles,
   ]);
 
   /**
@@ -878,7 +898,7 @@ export const ChatInputBox = ({
     console.log('[ChatInputBox] handleDrop called');
 
     // 先获取文本内容（文件路径）
-    const text = e.dataTransfer?.getData('text/plain');
+    let text = e.dataTransfer?.getData('text/plain');
     console.log('[ChatInputBox] Drop text:', text);
 
     // 再检查文件对象
@@ -933,19 +953,45 @@ export const ChatInputBox = ({
     if (text && text.trim()) {
       console.log('[ChatInputBox] Inserting text (file path or plain text):', text);
 
+      let content = text;
+
+      // 判断文件路径是否是项目里面的路径，是的话加入引用文件，并且插入的时候修改为 @相对路径
+      if (window.getProjectPath && text){
+        const projectPath = window.getProjectPath().replaceAll("\\", "/");
+        const tempFilePath = text.replaceAll("\\", "/");
+        if (tempFilePath.startsWith(projectPath)){
+          let absPath = tempFilePath.replace(projectPath + "/", '');
+          content = `@${absPath} `;
+
+          const fileName = tempFilePath.split('/')?.pop() || "";
+
+          // 同时插入到引用文件
+          const fileItem = {
+            type: 'file',
+            path: absPath,
+            name: fileName,
+            extension: fileName.split('.')?.pop(),
+          } as FileItem;
+          addReferencedFile(fileItem);
+
+          console.log('[ChatInputBox] addReferencedFile ', fileItem);
+        }
+      }
+
+
       // 获取当前光标位置
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editableRef.current) {
         // 确保光标在输入框内
         if (editableRef.current.contains(selection.anchorNode)) {
           // 使用 document.execCommand 插入纯文本（保持光标位置）
-          document.execCommand('insertText', false, text);
+          document.execCommand('insertText', false, content);
           console.log('[ChatInputBox] Text inserted successfully');
         } else {
           // 光标不在输入框内，直接追加到末尾
           console.log('[ChatInputBox] Cursor not in editable, appending to end');
           const currentText = getTextContent();
-          editableRef.current.innerText = currentText + text;
+          editableRef.current.innerText = currentText + content;
 
           // 将光标移到末尾
           const range = document.createRange();
@@ -959,7 +1005,7 @@ export const ChatInputBox = ({
         console.log('[ChatInputBox] No selection, appending to end');
         const currentText = getTextContent();
         if (editableRef.current) {
-          editableRef.current.innerText = currentText + text;
+          editableRef.current.innerText = currentText + content;
         }
       }
 
@@ -1027,6 +1073,35 @@ export const ChatInputBox = ({
     editableRef.current?.focus();
   }, []);
 
+  /**
+   * 插入 @ 以触发文件引用
+   */
+  const handleInsertMention = useCallback(() => {
+    focusInput();
+    const el = editableRef.current;
+    if (!el) return;
+
+    const selection = window.getSelection();
+    const cursorInside = selection && selection.rangeCount > 0 && el.contains(selection.anchorNode);
+
+    if (cursorInside) {
+      document.execCommand('insertText', false, '@');
+    } else {
+      const currentText = getTextContent();
+      el.innerText = `${currentText}@`;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+
+    handleInput();
+  }, [focusInput, getTextContent, handleInput]);
+
+  /**
+   * 聚焦输入框
+   */
   // 初始化时聚焦和注册全局函数
   useEffect(() => {
     console.log('[ChatInputBox] Component mounted');
@@ -1037,16 +1112,41 @@ export const ChatInputBox = ({
 
       if (!editableRef.current) return;
 
+      let content = filePath;
+
+      // 判断文件路径是否是项目里面的路径，是的话加入引用文件，并且插入的时候修改为 @相对路径
+      if (window.getProjectPath){
+        const projectPath = window.getProjectPath().replaceAll("\\", "/");
+        const tempFilePath = filePath.replaceAll("\\", "/");
+          if (tempFilePath.startsWith(projectPath)){
+              let absPath = tempFilePath.replace(projectPath + "/", '');
+              content = `@${absPath} `;
+
+              const fileName = tempFilePath.split('/')?.pop() || "";
+
+              // 同时插入到引用文件
+              const fileItem = {
+                  type: 'file',
+                  path: absPath,
+                  name: fileName,
+                  extension: fileName.split('.')?.pop(),
+              } as FileItem;
+              addReferencedFile(fileItem);
+
+              console.log('[ChatInputBox] addReferencedFile ', fileItem);
+          }
+      }
+
       // 插入文件路径到输入框
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
         // 光标在输入框内，在光标位置插入
-        document.execCommand('insertText', false, filePath);
+        document.execCommand('insertText', false, content);
         console.log('[ChatInputBox] File path inserted at cursor position');
       } else {
         // 光标不在输入框内，追加到末尾
         const currentText = getTextContent();
-        editableRef.current.innerText = currentText + filePath;
+        editableRef.current.innerText = currentText + content;
         console.log('[ChatInputBox] File path appended to end');
 
         // 将光标移到末尾
@@ -1082,13 +1182,16 @@ export const ChatInputBox = ({
       {/* 上下文展示条 (Top Control Bar) */}
       <ContextBar
         activeFile={activeFile}
+        referencedFiles={referencedFiles}
         selectedLines={selectedLines}
         percentage={usagePercentage}
         usedTokens={usageUsedTokens}
         maxTokens={usageMaxTokens}
         showUsage={showUsage}
+        onRemoveReferencedFile={removeReferencedFile}
         onClearFile={onClearContext}
         onAddAttachment={handleAddAttachment}
+        onInsertMention={handleInsertMention}
       />
 
       {/* 输入区域 */}

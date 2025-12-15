@@ -380,6 +380,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             "};";
                         browser.executeJavaScript(clipboardPathInjection, browser.getURL(), 0);
 
+
+                        String projectPath = project.getBasePath();
+
+                        // 注入获取项目路径
+                        String projectPathInjection =
+                                "window.getProjectPath = function() {" +
+                                "  return '" + projectPath + "';" +
+                                "};";
+                        browser.executeJavaScript(projectPathInjection, browser.getURL(), 0);
+
                         // 将控制台日志转发到 IDEA 控制台
                         String consoleForward =
                             "const originalLog = console.log;" +

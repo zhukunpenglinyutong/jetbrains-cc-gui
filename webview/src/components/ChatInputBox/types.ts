@@ -288,6 +288,12 @@ export interface ChatInputBoxProps {
   /** 选中行数信息 (例如: "L10-20") */
   selectedLines?: string;
 
+  /** 上下文引用文件 */
+  referencedFiles?: FileItem[];
+  onAddReferencedFile?: (file: FileItem) => void;
+  onRemoveReferencedFile?: (file: FileItem) => void;
+  onClearReferencedFile?: () => void;
+
   /** 清除上下文回调 */
   onClearContext?: () => void;
 

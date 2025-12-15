@@ -13,6 +13,11 @@ interface Window {
   getClipboardFilePath?: () => Promise<string>;
 
   /**
+   * 获取项目路径
+   */
+  getProjectPath?: () => string;
+
+  /**
    * Handle file path dropped from Java
    */
   handleFilePathFromJava?: (filePath: string) => void;

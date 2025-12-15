@@ -186,6 +186,80 @@
   gap: 4px;
 }
 
+.context-ref-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--context-bar-bg);
+  border-top: 1px solid var(--input-border);
+}
+
+.context-ref-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.context-ref-list {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.context-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  max-width: 240px;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.context-ref-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.context-ref-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.context-ref-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+
+.context-ref-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  font-size: 12px;
+}
+
+.context-ref-remove:hover {
+  color: var(--error-color);
+}
+
 .context-token-indicator {
   display: flex;
   align-items: center;
