@@ -757,25 +757,47 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void pushUsageUpdateFromMessages(List<ClaudeSession.Message> messages) {
             try {
+                System.out.println("[Backend] pushUsageUpdateFromMessages called with " + messages.size() + " messages");
+
                 JsonObject lastUsage = null;
                 for (int i = messages.size() - 1; i >= 0; i--) {
                     ClaudeSession.Message msg = messages.get(i);
-                    if (msg.type != ClaudeSession.Message.Type.ASSISTANT || msg.raw == null) continue;
-                    if (!msg.raw.has("message")) continue;
-                    JsonObject message = msg.raw.getAsJsonObject("message");
-                    if (message.has("usage")) {
-                        lastUsage = message.getAsJsonObject("usage");
+
+                    if (msg.type != ClaudeSession.Message.Type.ASSISTANT || msg.raw == null) {
+                        continue;
+                    }
+
+                    // 检查不同的可能结构
+                    if (msg.raw.has("message")) {
+                        JsonObject message = msg.raw.getAsJsonObject("message");
+                        if (message.has("usage")) {
+                            lastUsage = message.getAsJsonObject("usage");
+                            break;
+                        }
+                    }
+
+                    // 检查usage是否在raw的根级别
+                    if (msg.raw.has("usage")) {
+                        lastUsage = msg.raw.getAsJsonObject("usage");
                         break;
                     }
+                }
+
+                if (lastUsage == null) {
+                    System.out.println("[Backend] WARNING: No usage info found in messages!");
                 }
 
                 int inputTokens = lastUsage != null && lastUsage.has("input_tokens") ? lastUsage.get("input_tokens").getAsInt() : 0;
                 int cacheWriteTokens = lastUsage != null && lastUsage.has("cache_creation_input_tokens") ? lastUsage.get("cache_creation_input_tokens").getAsInt() : 0;
                 int cacheReadTokens = lastUsage != null && lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
+                int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
 
-                int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens;
+                int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
                 int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
                 int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
+
+                System.out.println("[Backend] Pushing usage update: input=" + inputTokens + ", cacheWrite=" + cacheWriteTokens + ", cacheRead=" + cacheReadTokens + ", output=" + outputTokens + ", total=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
+
 
                 JsonObject usageUpdate = new JsonObject();
                 usageUpdate.addProperty("percentage", percentage);
@@ -786,13 +808,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 String usageJson = new Gson().toJson(usageUpdate);
                 SwingUtilities.invokeLater(() -> {
-                    String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "'); }";
                     if (browser != null && !disposed) {
+                        // 使用安全的调用方式，检查函数是否存在
+                        String js = "(function() {" +
+                                "  if (typeof window.onUsageUpdate === 'function') {" +
+                                "    window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "');" +
+                                "    console.log('[Backend->Frontend] Usage update sent successfully');" +
+                                "  } else {" +
+                                "    console.warn('[Backend->Frontend] window.onUsageUpdate not found');" +
+                                "  }" +
+                                "})();";
                         browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
                     }
                 });
             } catch (Exception e) {
                 System.err.println("[Backend] Failed to push usage update: " + e.getMessage());
+                e.printStackTrace();
             }
         }
 
@@ -842,8 +873,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     usageUpdate.addProperty("maxTokens", maxTokens);
 
                     String usageJson = new Gson().toJson(usageUpdate);
-                    String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "'); }";
+
                     if (browser != null && !disposed) {
+                        // 使用安全的调用方式
+                        String js = "(function() {" +
+                                "  if (typeof window.onUsageUpdate === 'function') {" +
+                                "    window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "');" +
+                                "    console.log('[Backend->Frontend] Usage reset for new session');" +
+                                "  } else {" +
+                                "    console.warn('[Backend->Frontend] window.onUsageUpdate not found');" +
+                                "  }" +
+                                "})();";
                         browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
                     }
                 });
@@ -879,14 +919,34 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void callJavaScript(String functionName, String... args) {
             if (disposed || browser == null) {
+                System.err.println("[ClaudeSDKToolWindow] 无法调用 JS 函数 " + functionName + ": disposed=" + disposed + ", browser=" + (browser == null ? "null" : "exists"));
                 return;
             }
-            try {
-                String js = JsUtils.buildJsCall(functionName, args);
-                browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
-            } catch (Exception e) {
-                System.err.println("[ClaudeSDKToolWindow] 调用 JS 函数失败: " + functionName + ", 错误: " + e.getMessage());
-            }
+
+            SwingUtilities.invokeLater(() -> {
+                if (disposed || browser == null) {
+                    return;
+                }
+                try {
+                    String js = JsUtils.buildJsCall(functionName, args);
+
+                    // 先检查函数是否存在，再调用
+                    String checkAndCall =
+                        "(function() {" +
+                        "  if (typeof window." + functionName + " === 'function') {" +
+                        "    " + js +
+                        "    console.log('[Backend->Frontend] Successfully called " + functionName + "');" +
+                        "  } else {" +
+                        "    console.warn('[Backend->Frontend] Function " + functionName + " not found on window');" +
+                        "  }" +
+                        "})();";
+
+                    browser.getCefBrowser().executeJavaScript(checkAndCall, browser.getCefBrowser().getURL(), 0);
+                } catch (Exception e) {
+                    System.err.println("[ClaudeSDKToolWindow] 调用 JS 函数失败: " + functionName + ", 错误: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            });
         }
 
         /**

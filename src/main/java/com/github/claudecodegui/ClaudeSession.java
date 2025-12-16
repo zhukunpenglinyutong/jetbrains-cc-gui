@@ -546,6 +546,44 @@ public class ClaudeSession {
                         loading = false;
                         updateState();
                         System.out.println("[ClaudeSession] Message end received, loading set to false");
+                    } else if ("result".equals(type) && content.startsWith("{")) {
+                        // 处理结果消息（包含最终的usage信息）
+                        try {
+                            JsonObject resultJson = gson.fromJson(content, JsonObject.class);
+                            System.out.println("[ClaudeSession] Result message received");
+
+                            // 如果当前消息的raw中usage为0，则用result中的usage进行更新
+                            if (currentAssistantMessage != null && currentAssistantMessage.raw != null) {
+                                JsonObject message = currentAssistantMessage.raw.has("message") && currentAssistantMessage.raw.get("message").isJsonObject()
+                                    ? currentAssistantMessage.raw.getAsJsonObject("message")
+                                    : null;
+
+                                // 检查当前消息的usage是否全为0
+                                boolean needsUsageUpdate = false;
+                                if (message != null && message.has("usage")) {
+                                    JsonObject usage = message.getAsJsonObject("usage");
+                                    int inputTokens = usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
+                                    int outputTokens = usage.has("output_tokens") ? usage.get("output_tokens").getAsInt() : 0;
+                                    if (inputTokens == 0 && outputTokens == 0) {
+                                        needsUsageUpdate = true;
+                                    }
+                                } else {
+                                    needsUsageUpdate = true;
+                                }
+
+                                if (needsUsageUpdate && resultJson.has("usage")) {
+                                    JsonObject resultUsage = resultJson.getAsJsonObject("usage");
+                                    if (message != null) {
+                                        message.add("usage", resultUsage);
+                                        currentAssistantMessage.raw = currentAssistantMessage.raw;
+                                        notifyMessageUpdate();
+                                        System.out.println("[ClaudeSession] Updated assistant message usage from result message");
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("[ClaudeSession] Failed to parse result message: " + e.getMessage());
+                        }
                     } else if ("slash_commands".equals(type)) {
                         // 处理斜杠命令列表
                         try {

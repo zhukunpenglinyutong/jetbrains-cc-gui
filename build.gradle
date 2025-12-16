@@ -1,132 +1,212 @@
-import org.jetbrains.intellij.IntelliJPluginExtension
-
 plugins {
     id 'java'
-    id 'org.jetbrains.intellij' version '1.17.4'
+    id 'org.jetbrains.intellij.platform' version '2.10.5'
 }
 
-group 'com.github.idea-claude-code-gui'
-version '0.1.0-beta3'
+group = 'com.github.idea-claude-code-gui'
+version = '0.1.0-beta3'
 
-sourceCompatibility = 17
-targetCompatibility = 17
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
 
 repositories {
     mavenCentral()
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
 
 dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
+
+    intellijPlatform {
+        intellijIdeaCommunity('2024.3.1')
+        instrumentationTools()
+    }
 }
 
-// 配置 IntelliJ Platform 插件
-intellij {
-    version = '2024.3'  // 使用 2024.3 稳定版本
-    type = 'IC'  // IC = IntelliJ IDEA Community Edition
-
-    // 下载源码和 JavaDoc
-    downloadSources = true
-
-    // 插件依赖（如果需要）
-    plugins = []
-
-    // 禁用字节码插桩，避免生成 instrumented JAR
-    instrumentCode = false
-}
-
-tasks.withType(JavaCompile) {
+tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+// Ensure plugin.xml is patched with the correct since/until build and change notes
 patchPluginXml {
+    // plugin compatibility range
     sinceBuild = '233'
-    untilBuild = '263.*'  // 兼容到 2026.3 版本，支持更新的 IDE 版本
+    untilBuild = '263.*'
 
-    changeNotes = """
-        <ul>
-            <li>初始版本发布</li>
-            <li>实现右侧工具栏窗口</li>
-            <li>最小支持IDEA 2023.3版本</li>
-            <li>兼容至 IDEA 2026.3 版本（build 263.*）</li>
-        </ul>
-    """
+    // Release notes shown in plugin repositories
+    // Dynamically load the latest changelog entry from CHANGELOG.md and convert to simple HTML.
+    def changelogFile = file('CHANGELOG.md')
+    def computedChangeNotes = ''
+    if (changelogFile.exists()) {
+        def lines = changelogFile.readLines('UTF-8')
+        // Find first section header (lines starting with '#####')
+        def start = -1
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines[i].trim().startsWith('#####')) {
+                start = i
+                break
+            }
+        }
+
+        if (start >= 0) {
+            def sb = new StringBuilder()
+            boolean inList = false
+            int i = start + 1
+            while (i < lines.size() && !lines[i].trim().startsWith('#####')) {
+                def line = lines[i]
+                def t = line.trim()
+
+                if (t.startsWith('- ')) {
+                    if (!inList) { sb.append('<ul>'); inList = true }
+                    def item = t.substring(2)
+                    // escape HTML special chars for safety
+                    item = item.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    sb.append('<li>' + item + '</li>')
+                } else if (t.startsWith('![') || t.startsWith('<img')) {
+                    if (inList) { sb.append('</ul>'); inList = false }
+                    // convert markdown image syntax to img tag if necessary
+                    if (t.startsWith('![')) {
+                        def pattern = Pattern.compile(/!\[(.*?)\]\((.*?)\)/)
+                        def matcher = pattern.matcher(t)
+                        if (matcher.find()) {
+                            def alt = matcher.group(1)
+                            def src = matcher.group(2)
+                            sb.append("<img alt=\"${alt}\" src=\"${src}\" width=\"500\" />")
+                        } else {
+                            sb.append(t)
+                        }
+                    } else {
+                        sb.append(t)
+                    }
+                } else if (t.length() == 0) {
+                    if (inList) { sb.append('</ul>'); inList = false }
+                    sb.append('<br/>')
+                } else {
+                    if (inList) { sb.append('</ul>'); inList = false }
+                    // paragraph
+                    def para = t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    sb.append('<p>' + para + '</p>')
+                }
+
+                i++
+            }
+            if (inList) { sb.append('</ul>') }
+            computedChangeNotes = sb.toString()
+        }
+    }
+
+    changeNotes = computedChangeNotes ?: '<p>No changelog found.</p>'
 }
 
-runIde {
-    // 启用 JCEF 支持
-    jvmArgs '-Djcef.sandbox.enable=false'
-}
-
-buildSearchableOptions {
+// Disable product-specific searchable options/instrument tasks if present
+// Use matching to cover task name variants like buildSearchableOptionsIC / buildSearchableOptionsIU etc.
+tasks.matching { it.name.startsWith('buildSearchableOptions') }.configureEach {
     enabled = false
 }
 
-// 禁用 instrumented JAR 生成（这是导致 "invalid plugin descriptor" 错误的根源）
-// instrumented JAR 是用于代码覆盖率测试的，不应该被打包到最终的插件分发包中
-tasks.named("instrumentCode") {
+tasks.named('buildSearchableOptions') {
     enabled = false
 }
 
-tasks.named("instrumentTestCode") {
+tasks.named('instrumentCode') {
     enabled = false
+}
+
+tasks.named('jarSearchableOptions') {
+    enabled = false
+}
+
+tasks.named('runIde') {
+    jvmArgumentProviders.add({
+        [
+            '-Djcef.sandbox.enable=false',
+            // 禁用插件自动卸载（避免检测到文件变更时自动卸载）
+            '-Didea.auto.reload.plugins=false',
+            // 禁用插件动态卸载
+            '-Didea.dynamic.plugins.allowed=false',
+            // 启用内部模式
+            '-Didea.is.internal=true',
+            // 禁用文件系统事件监控（可选）
+            // '-Didea.filewatcher.disabled=true',
+            // 增加插件加载超时
+            '-Didea.plugins.load.timeout=60000'
+        ]
+    } as CommandLineArgumentProvider)
+
+    // 设置系统属性
+    systemProperty 'idea.auto.reload.plugins', 'false'
+    systemProperty 'idea.dynamic.plugins.allowed', 'false'
+    systemProperty 'idea.is.internal', 'true'
+    systemProperty 'idea.plugin.in.sandbox.mode', 'true'
+
+    // 复制自定义配置到sandbox
+    doFirst {
+        def sandboxConfig = file('sandbox-idea.properties')
+        if (sandboxConfig.exists()) {
+            def sandboxDir = layout.buildDirectory.dir("idea-sandbox").get().asFile
+            def configDir = new File(sandboxDir, 'config')
+            configDir.mkdirs()
+
+            copy {
+                from sandboxConfig
+                into configDir
+                rename { 'idea.properties' }
+            }
+            println "已复制sandbox配置到: ${configDir}/idea.properties"
+        }
+    }
 }
 
 // 统一的 AI Bridge（合并 Claude 和 Codex）
 def aiBridgeDir = file("ai-bridge")
-def aiBridgePackDir = file("$buildDir/ai-bridge-pack")
-def aiBridgeArchive = new File(aiBridgePackDir, "ai-bridge.zip")
+def aiBridgePackDir = layout.buildDirectory.dir('ai-bridge-pack').get().asFile
+def aiBridgeArchive = new File(aiBridgePackDir, 'ai-bridge.zip')
 
 // 自动构建 webview
 def webviewDir = file('webview')
 tasks.register('buildWebview', Exec) {
     workingDir webviewDir
 
-    // 根据操作系统选择命令
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         commandLine 'cmd', '/c', 'npm', 'run', 'build'
     } else {
         commandLine 'npm', 'run', 'build'
     }
 
-    // 只在 webview 目录存在时执行（使用变量避免配置缓存问题）
     onlyIf { webviewDir.exists() }
-
-    // 输出构建信息
-    doFirst {
-        println "Building webview..."
-    }
-    doLast {
-        println "Webview build completed."
-    }
+    doFirst { println "Building webview..." }
+    doLast { println "Webview build completed." }
 }
 
 tasks.register('packageAiBridge', Zip) {
     onlyIf { aiBridgeDir.exists() }
-    archiveFileName = "ai-bridge.zip"
+    archiveFileName = 'ai-bridge.zip'
     destinationDirectory = aiBridgePackDir
     from(aiBridgeDir)
-    exclude("node_modules/.pnpm/**")
+    exclude('node_modules/.pnpm/**')
     includeEmptyDirs = true
 }
 
-// 提取插件名称，避免在闭包中访问 extensions
-def intellijExt = project.extensions.getByType(IntelliJPluginExtension)
-def pluginName = intellijExt.pluginName.getOrElse(project.name)
+// 提取插件名称
+def pluginName = project.name
 
-tasks.named("prepareSandbox") {
-    dependsOn("buildWebview", "packageAiBridge")
-    def sandboxRootProvider = layout.buildDirectory.dir("idea-sandbox")
+tasks.matching { it.name.startsWith('prepareSandbox') }.configureEach {
+    dependsOn('buildWebview', 'packageAiBridge')
+    def sandboxRootProvider = layout.buildDirectory.dir('idea-sandbox')
 
     doLast {
-        if (!aiBridgeDir.exists()) {
-            throw new GradleException("ai-bridge 目录不存在，请确保已拉取并安装依赖。")
+        if (!aiBridgeDir.exists() && !aiBridgeArchive.exists()) {
+            throw new GradleException('ai-bridge 目录不存在，请确保已拉取并安装依赖。')
         }
         def sandboxRoot = sandboxRootProvider.get().asFile
         def pluginDir = new File(sandboxRoot, "plugins/${pluginName}")
 
-        // 部署 ai-bridge
-        def extractedDir = new File(pluginDir, "ai-bridge")
-        def archiveTarget = new File(pluginDir, "ai-bridge.zip")
+        def extractedDir = new File(pluginDir, 'ai-bridge')
+        def archiveTarget = new File(pluginDir, 'ai-bridge.zip')
         project.delete(extractedDir)
         project.delete(archiveTarget)
         project.copy {
@@ -136,6 +216,53 @@ tasks.named("prepareSandbox") {
     }
 }
 
-tasks.named("buildPlugin") {
-    dependsOn("packageAiBridge")
+// 配置 prepareSandbox 之后的任务，确保 ai-bridge.zip 被包含
+tasks.matching { it.name == 'preparePluginForDistribution' || it.name == 'composedJar' }.configureEach {
+    dependsOn('packageAiBridge')
 }
+
+tasks.named('buildPlugin') {
+    dependsOn('packageAiBridge')
+
+    doLast {
+        // 解压插件 zip，添加 ai-bridge.zip，然后重新打包
+        def distributionFile = archiveFile.get().asFile
+        if (distributionFile.exists() && aiBridgeArchive.exists()) {
+            def tempDir = file("${layout.buildDirectory.get()}/tmp/plugin-repack")
+            delete(tempDir)
+
+            // 解压
+            copy {
+                from zipTree(distributionFile)
+                into tempDir
+            }
+
+            // 找到插件目录并添加 ai-bridge.zip
+            def pluginDir = new File(tempDir, pluginName)
+            if (pluginDir.exists()) {
+                copy {
+                    from aiBridgeArchive
+                    into pluginDir
+                }
+
+                // 删除 searchableOptions jar（如果存在）
+                fileTree(new File(pluginDir, 'lib')).matching {
+                    include '**/*searchableOptions*.jar'
+                }.each { jarFile ->
+                    delete(jarFile)
+                    println "已删除 searchableOptions jar: ${jarFile.name}"
+                }
+
+                // 重新打包
+                delete(distributionFile)
+                ant.zip(destfile: distributionFile) {
+                    fileset(dir: tempDir)
+                }
+                println "已将 ai-bridge.zip 添加到插件包并移除 searchableOptions jar"
+            }
+
+            delete(tempDir)
+        }
+    }
+}
+
