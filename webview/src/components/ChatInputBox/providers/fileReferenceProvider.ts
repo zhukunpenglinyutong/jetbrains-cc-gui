@@ -70,15 +70,9 @@ function shouldHideFile(fileName: string): boolean {
 }
 
 /**
- * 默认文件列表（演示用，当 Java 端未实现时显示）
+ * 默认文件列表（当 Java 端未实现时返回空列表）
  */
-const DEFAULT_FILES: FileItem[] = [
-  { name: 'src', path: 'src', type: 'directory' },
-  { name: 'package.json', path: 'package.json', type: 'file', extension: 'json' },
-  { name: 'README.md', path: 'README.md', type: 'file', extension: 'md' },
-  { name: 'tsconfig.json', path: 'tsconfig.json', type: 'file', extension: 'json' },
-  { name: '.gitignore', path: '.gitignore', type: 'file' },
-];
+const DEFAULT_FILES: FileItem[] = [];
 
 /**
  * 过滤文件
@@ -204,7 +198,7 @@ export function fileToDropdownItem(file: FileItem): DropdownItemData {
   return {
     id: file.path,
     label: file.name,
-    description: file.path,
+    description: file.absolutePath || file.path, // 优先显示完整路径
     icon: iconSvg, // 直接使用 SVG 字符串
     type: file.type === 'directory' ? 'directory' : 'file',
     data: { file },

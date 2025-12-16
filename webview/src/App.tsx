@@ -97,7 +97,7 @@ const App = () => {
     currentProviderRef.current = currentProvider;
   }, [currentProvider]);
 
-  // Context state (active file and selection)
+  // Context state (active file and selection) - 保留用于 ContextBar 显示
   const [contextInfo, setContextInfo] = useState<{ file: string; startLine?: number; endLine?: number; raw: string } | null>(null);
 
   // 根据当前提供商选择显示的模型
@@ -339,9 +339,9 @@ const App = () => {
       }
     };
 
-    // 选中代码发送到终端回调
+    // 【自动监听】更新 ContextBar（上面灰色条）- 由自动监听器调用
     window.addSelectionInfo = (selectionInfo) => {
-      console.log('[Frontend] addSelectionInfo called:', selectionInfo);
+      console.log('[Frontend] addSelectionInfo (auto) called:', selectionInfo);
       if (selectionInfo) {
         // Try to parse the format @path#Lstart-end or just @path
         // Regex: starts with @, captures path until # or end. Optional #L(start)[-(end)]
@@ -350,19 +350,25 @@ const App = () => {
           const file = match[1];
           const startLine = match[2] ? parseInt(match[2], 10) : undefined;
           const endLine = match[3] ? parseInt(match[3], 10) : (startLine !== undefined ? startLine : undefined);
+
+          // 只更新 ContextBar 显示（不添加代码片段标签）
           setContextInfo({
             file,
             startLine,
             endLine,
             raw: selectionInfo
           });
-        } else {
-          // Fallback: 将选中的代码引用添加到输入框
-          setInputValue((prev) => {
-            const separator = prev.trim() ? ' ' : '';
-            return prev + separator + selectionInfo;
-          });
+          console.log('[Frontend] Updated ContextBar (auto):', { file, startLine, endLine });
         }
+      }
+    };
+
+    // 【手动发送】添加代码片段标签到输入框 - 由右键"发送到 GUI"调用
+    window.addCodeSnippet = (selectionInfo) => {
+      console.log('[Frontend] addCodeSnippet (manual) called:', selectionInfo);
+      if (selectionInfo && window.insertCodeSnippetAtCursor) {
+        // 调用 ChatInputBox 注册的方法，在光标位置插入代码片段
+        window.insertCodeSnippetAtCursor(selectionInfo);
       }
     };
 
@@ -1264,9 +1270,9 @@ const App = () => {
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
             activeFile={contextInfo?.file}
-            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined 
-              ? (contextInfo.startLine === contextInfo.endLine 
-                  ? `L${contextInfo.startLine}` 
+            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
+              ? (contextInfo.startLine === contextInfo.endLine
+                  ? `L${contextInfo.startLine}`
                   : `L${contextInfo.startLine}-${contextInfo.endLine}`)
               : undefined}
             onClearContext={() => setContextInfo(null)}

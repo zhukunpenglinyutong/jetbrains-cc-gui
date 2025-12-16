@@ -11,6 +11,8 @@ import {
   slashCommandProvider,
   commandToDropdownItem,
 } from './providers';
+import { getFileIcon } from '../../utils/fileIcons';
+import { icon_folder } from '../../utils/icons';
 import './styles.css';
 
 /**
@@ -47,6 +49,7 @@ export const ChatInputBox = ({
   const attachments = externalAttachments ?? internalAttachments;
 
   // 输入框引用和状态
+  const containerRef = useRef<HTMLDivElement>(null);
   const editableRef = useRef<HTMLDivElement>(null);
   const submittedOnEnterRef = useRef(false);
   const completionSelectedRef = useRef(false);
@@ -55,6 +58,10 @@ export const ChatInputBox = ({
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
   const lastCompositionEndTimeRef = useRef<number>(0);
+
+  // 路径映射：存储文件名/相对路径 -> 完整绝对路径的映射
+  // 用于在 tooltip 中显示完整路径
+  const pathMappingRef = useRef<Map<string, string>>(new Map());
 
   // 触发检测 Hook
   const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
@@ -68,9 +75,27 @@ export const ChatInputBox = ({
       if (!editableRef.current || !query) return;
 
       const text = getTextContent();
+      // 优先使用绝对路径，如果没有则使用相对路径
+      const path = file.absolutePath || file.path;
       // 文件夹不加空格（方便继续输入路径），文件加空格
-      const replacement = file.type === 'directory' ? `@${file.path}` : `@${file.path} `;
+      const replacement = file.type === 'directory' ? `@${path}` : `@${path} `;
       const newText = fileCompletion.replaceText(text, replacement, query);
+
+      // 记录路径映射：文件名 -> 完整路径，用于 tooltip 显示
+      if (file.absolutePath) {
+        // 记录多个可能的 key：文件名、相对路径、绝对路径
+        pathMappingRef.current.set(file.name, file.absolutePath);
+        pathMappingRef.current.set(file.path, file.absolutePath);
+        pathMappingRef.current.set(file.absolutePath, file.absolutePath);
+        console.log('[PathMapping] 记录路径映射:', {
+          fileName: file.name,
+          relativePath: file.path,
+          absolutePath: file.absolutePath,
+          mapSize: pathMappingRef.current.size
+        });
+      } else {
+        console.warn('[PathMapping] 文件没有 absolutePath:', file);
+      }
 
       // 更新输入框内容
       editableRef.current.innerText = newText;
@@ -84,6 +109,12 @@ export const ChatInputBox = ({
       selection?.addRange(range);
 
       handleInput();
+
+      // 立即尝试渲染文件标签（不需要用户手动输入空格）
+      // 使用 setTimeout 确保 DOM 更新和光标位置已就绪
+      setTimeout(() => {
+        renderFileTags();
+      }, 0);
     },
   });
 
@@ -214,26 +245,62 @@ export const ChatInputBox = ({
       const fullMatch = match[0];
       const filePath = match[1];
       const matchIndex = match.index || 0;
-// 添加匹配前的文本
+      // 添加匹配前的文本
       if (matchIndex > lastIndex) {
         const textBefore = currentText.substring(lastIndex, matchIndex);
         newHTML += textBefore;
       }
 
-      // 获取文件名或目录名
-      const fileName = filePath.split(/[/\\]/).pop() || filePath;
+      // 分离路径和行号部分（例如：src/file.ts#L10-20 -> src/file.ts）
+      const hashIndex = filePath.indexOf('#');
+      const pureFilePath = hashIndex !== -1 ? filePath.substring(0, hashIndex) : filePath;
 
-      // 判断是文件还是目录
-      const isDirectory = !fileName.includes('.');
-      const icon = isDirectory ? '📁' : '📄';
+      // 获取纯文件名（不含行号，用于获取 ICON）
+      const pureFileName = pureFilePath.split(/[/\\]/).pop() || pureFilePath;
+
+      // 获取显示文件名（包含行号，用于显示）
+      const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
+
+      // 判断是文件还是目录（使用纯文件名）
+      const isDirectory = !pureFileName.includes('.');
+
+      let iconSvg = '';
+      if (isDirectory) {
+        iconSvg = icon_folder;
+      } else {
+        const extension = pureFileName.indexOf('.') !== -1 ? pureFileName.split('.').pop() : '';
+        iconSvg = getFileIcon(extension, pureFileName);
+      }
 
       // 转义文件路径以安全地放入 HTML 属性
       const escapedPath = escapeHtmlAttr(filePath);
 
+      // 尝试从路径映射中获取完整路径（用于 tooltip 显示）
+      // 优先级：pureFilePath -> pureFileName -> 原路径（去掉行号进行查找）
+      const fullPath =
+        pathMappingRef.current.get(pureFilePath) ||
+        pathMappingRef.current.get(pureFileName) ||
+        filePath;
+      const escapedFullPath = escapeHtmlAttr(fullPath);
+
+      // 调试日志：查看路径映射查找情况
+      console.log('[PathMapping] 查找路径映射:', {
+        filePath,
+        pureFilePath,
+        pureFileName,
+        displayFileName,
+        foundInMap: pathMappingRef.current.has(pureFilePath) || pathMappingRef.current.has(pureFileName),
+        fullPath,
+        mapSize: pathMappingRef.current.size,
+        allKeys: Array.from(pathMappingRef.current.keys())
+      });
+
       // 创建文件标签 HTML
-      newHTML += `<span class="file-tag" contenteditable="false" data-file-path="${escapedPath}">`;
-      newHTML += `<span class="file-tag-icon">${icon}</span>`;
-      newHTML += `<span class="file-tag-text">${fileName}</span>`;
+      // data-file-path: 存储原始路径（用于提取文本时还原）
+      // data-tooltip: 存储完整路径（用于悬停显示）
+      newHTML += `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`;
+      newHTML += `<span class="file-tag-icon">${iconSvg}</span>`;
+      newHTML += `<span class="file-tag-text">${displayFileName}</span>`;
       newHTML += `<span class="file-tag-close">×</span>`;
       newHTML += `</span>`;
 
@@ -293,6 +360,82 @@ export const ChatInputBox = ({
       justRenderedTagRef.current = false;
     }, 0);
   }, [fileCompletion, commandCompletion, escapeHtmlAttr, getTextContent]);
+
+  // Tooltip 状态
+  const [tooltip, setTooltip] = useState<{ 
+    visible: boolean; 
+    text: string; 
+    top: number; 
+    left: number;
+    tx?: string; // transform-x value
+    arrowLeft?: string; // arrow left position
+    width?: number; // width of the tooltip
+    isBar?: boolean; // whether to show as a bar
+  } | null>(null);
+
+  /**
+   * 处理鼠标悬停显示 Tooltip（小浮动弹窗样式，和上面 context-item 一致）
+   */
+  const handleMouseOver = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const fileTag = target.closest('.file-tag.has-tooltip');
+
+    if (fileTag) {
+      const text = fileTag.getAttribute('data-tooltip');
+      if (text) {
+        // 使用小浮动 tooltip（和 context-item 一样的效果）
+        const rect = fileTag.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const tagCenterX = rect.left + rect.width / 2; // 文件标签的中心X坐标
+
+        // 估算 tooltip 的宽度（根据文本长度）
+        const estimatedTooltipWidth = Math.min(text.length * 7 + 24, 400);
+        const tooltipHalfWidth = estimatedTooltipWidth / 2;
+
+        let tooltipLeft = tagCenterX; // tooltip 的基准点（默认居中）
+        let tx = '-50%'; // tooltip 的水平偏移（默认居中）
+        let arrowLeft = '50%'; // 箭头的位置（相对于 tooltip，默认在中间）
+
+        // 边界检测：防止 tooltip 左侧溢出
+        if (tagCenterX - tooltipHalfWidth < 10) {
+          // 靠左边界：tooltip 左对齐
+          tooltipLeft = 10; // tooltip 左边距离视口 10px
+          tx = '0'; // tooltip 不偏移
+          arrowLeft = `${tagCenterX - 10}px`; // 箭头指向文件标签中心
+        }
+        // 边界检测：防止 tooltip 右侧溢出
+        else if (tagCenterX + tooltipHalfWidth > viewportWidth - 10) {
+          // 靠右边界：tooltip 右对齐
+          tooltipLeft = viewportWidth - 10; // tooltip 右边距离视口 10px
+          tx = '-100%'; // tooltip 向左偏移整个宽度
+          arrowLeft = `${tagCenterX - (viewportWidth - 10) + estimatedTooltipWidth}px`; // 箭头指向文件标签中心
+        }
+        // 正常情况：tooltip 居中
+        else {
+          arrowLeft = '50%'; // 箭头在 tooltip 中间
+        }
+
+        setTooltip({
+          visible: true,
+          text,
+          top: rect.top,
+          left: tooltipLeft,
+          tx,
+          arrowLeft,
+          isBar: false
+        });
+      }
+    } else {
+      setTooltip(null);
+    }
+  }, []);
+
+  /**
+   * 处理鼠标离开隐藏 Tooltip
+   */
+  const handleMouseLeave = useCallback(() => {
+    setTooltip(null);
+  }, []);
 
   /**
    * 清空输入框
@@ -1235,11 +1378,68 @@ export const ChatInputBox = ({
         editableRef.current.removeEventListener('keydown', handleKeyDown);
       }
       delete (window as any).handleFilePathFromJava;
+      delete (window as any).insertCodeSnippetAtCursor;
     };
   }, [focusInput, handlePaste, handleDrop, handleDragOver, getTextContent, handleKeyDownForTagRendering, renderFileTags, fileCompletion, commandCompletion, adjustHeight, onInput]);
 
+  // 注册全局方法：在光标位置插入代码片段
+  useEffect(() => {
+    (window as any).insertCodeSnippetAtCursor = (selectionInfo: string) => {
+      if (!editableRef.current) return;
+
+      console.log('[ChatInputBox] Insert code snippet at cursor:', selectionInfo);
+
+      // 确保输入框有焦点
+      editableRef.current.focus();
+
+      // 在光标位置插入文本
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
+        // 光标在输入框内，在光标位置插入
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(selectionInfo + ' ');
+        range.insertNode(textNode);
+
+        // 将光标移到插入文本后
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        // 光标不在输入框内，追加到末尾
+        const textNode = document.createTextNode(selectionInfo + ' ');
+        editableRef.current.appendChild(textNode);
+
+        // 将光标移到末尾
+        const range = document.createRange();
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+
+      // 触发状态更新
+      const newText = getTextContent();
+      setHasContent(!!newText.trim());
+      adjustHeight();
+      onInput?.(newText);
+
+      // 立即渲染文件标签
+      setTimeout(() => {
+        renderFileTags();
+        // 渲染后重新聚焦
+        editableRef.current?.focus();
+      }, 50);
+    };
+
+    return () => {
+      delete (window as any).insertCodeSnippetAtCursor;
+    };
+  }, [getTextContent, renderFileTags, adjustHeight, onInput]);
+
   return (
-    <div className="chat-input-box" onClick={focusInput}>
+    <div className="chat-input-box" onClick={focusInput} ref={containerRef}>
       {/* 附件列表 */}
       {attachments.length > 0 && (
         <AttachmentList
@@ -1261,7 +1461,11 @@ export const ChatInputBox = ({
       />
 
       {/* 输入区域 */}
-      <div className="input-editable-wrapper">
+      <div
+        className="input-editable-wrapper"
+        onMouseOver={handleMouseOver}
+        onMouseLeave={handleMouseLeave}
+      >
         <div
           ref={editableRef}
           className="input-editable"
@@ -1339,6 +1543,24 @@ export const ChatInputBox = ({
         onSelect={(_, index) => commandCompletion.selectIndex(index)}
         onMouseEnter={commandCompletion.handleMouseEnter}
       />
+
+      {/* 悬浮提示 Tooltip (使用 Portal 或 Fixed 定位以突破 overflow 限制) */}
+      {tooltip && tooltip.visible && (
+        <div
+          className={`tooltip-popup ${tooltip.isBar ? 'tooltip-bar' : ''}`}
+          style={{
+            top: `${tooltip.top}px`, // 直接使用计算好的 top，不再在这里减
+            left: `${tooltip.left}px`,
+            width: tooltip.width ? `${tooltip.width}px` : undefined,
+            // @ts-ignore
+            '--tooltip-tx': tooltip.tx || '-50%',
+            // @ts-ignore
+            '--arrow-left': tooltip.arrowLeft || '50%',
+          }}
+        >
+          {tooltip.text}
+        </div>
+      )}
     </div>
   );
 };

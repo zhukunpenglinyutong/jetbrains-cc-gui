@@ -55,11 +55,25 @@ export const Dropdown = ({
     return null;
   }
 
+  // 计算 left 位置，确保不超出视口右侧
+  let left = position.left + offsetX;
+  const windowWidth = window.innerWidth;
+  const rightPadding = 10; // 距离右边缘的最小距离
+
+  if (left + width + rightPadding > windowWidth) {
+    left = windowWidth - width - rightPadding;
+  }
+  
+  // 确保不超出视口左侧
+  if (left < rightPadding) {
+    left = rightPadding;
+  }
+
   // 计算位置（优先在上方显示）
   const style: React.CSSProperties = {
     position: 'fixed',
     bottom: `calc(100vh - ${position.top}px + ${offsetY}px)`,
-    left: position.left + offsetX,
+    left,
     width,
     zIndex: 1001,
   };

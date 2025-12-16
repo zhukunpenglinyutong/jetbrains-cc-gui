@@ -428,6 +428,7 @@ public class FileHandler extends BaseMessageHandler {
         JsonObject fileObj = new JsonObject();
         fileObj.addProperty("name", name);
         fileObj.addProperty("path", relativePath);
+        fileObj.addProperty("absolutePath", file.getAbsolutePath().replace("\\", "/"));
         fileObj.addProperty("type", file.isDirectory() ? "directory" : "file");
 
         if (file.isFile()) {

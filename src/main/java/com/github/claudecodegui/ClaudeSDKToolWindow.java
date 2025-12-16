@@ -889,9 +889,23 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
         }
 
+        /**
+         * 【自动监听】更新 ContextBar - 由自动监听器调用
+         * 只更新上面灰色条的显示，不添加代码片段标签
+         */
         private void addSelectionInfo(String selectionInfo) {
             if (selectionInfo != null && !selectionInfo.isEmpty()) {
                 callJavaScript("addSelectionInfo", JsUtils.escapeJs(selectionInfo));
+            }
+        }
+
+        /**
+         * 【手动发送】添加代码片段到输入框 - 由右键"发送到 GUI"调用
+         * 添加代码片段标签到输入框内
+         */
+        private void addCodeSnippet(String selectionInfo) {
+            if (selectionInfo != null && !selectionInfo.isEmpty()) {
+                callJavaScript("addCodeSnippet", JsUtils.escapeJs(selectionInfo));
             }
         }
 
@@ -899,6 +913,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             callJavaScript("clearSelectionInfo");
         }
 
+        /**
+         * 从外部（右键菜单）添加代码片段
+         * 调用 addCodeSnippet 而不是 addSelectionInfo
+         */
         static void addSelectionFromExternalInternal(Project project, String selectionInfo) {
             if (project == null) {
                 System.err.println("[ClaudeSDKToolWindow] 错误: project 参数为 null");
@@ -921,7 +939,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     try {
                         Thread.sleep(500);
                         if (window.initialized && !window.disposed) {
-                            window.addSelectionInfo(selectionInfo);
+                            // 从外部调用，使用 addCodeSnippet 添加代码片段标签
+                            window.addCodeSnippet(selectionInfo);
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -930,7 +949,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
 
-            window.addSelectionInfo(selectionInfo);
+            // 从外部调用，使用 addCodeSnippet 添加代码片段标签
+            window.addCodeSnippet(selectionInfo);
         }
 
         public JPanel getContent() {

@@ -242,7 +242,7 @@
   max-width: 200px;
 }
 
-/* Tooltip styles */
+/* Tooltip styles - 适用于 ContextBar item (CSS实现) */
 .context-item.has-tooltip {
   position: relative;
 }
@@ -288,9 +288,69 @@
   animation: tooltip-fade-in 0.2s forwards;
 }
 
+/* Tooltip Popup (JS 实现，用于 InputBox 内突破 overflow 限制) */
+.tooltip-popup {
+  position: fixed;
+  /* 移除 transform 中的 translateY，改用 margin-top 来微调，避免动画冲突 */
+  transform: translateX(-50%);
+  
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 300px;
+  width: max-content;
+  
+  /* 确保 z-index 足够高 */
+  z-index: 99999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  
+  /* 使用 CSS 变量控制水平位移，默认为 -50% (居中) */
+  --tooltip-tx: -50%;
+  transform: translate(var(--tooltip-tx), -100%);
+}
+
+.tooltip-popup::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  /* 使用 CSS 变量控制箭头位置，默认为 50% (居中) */
+  left: var(--arrow-left, 50%);
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--dropdown-border);
+}
+
 @keyframes tooltip-fade-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translate(var(--tooltip-tx), -80%); }
+  to { opacity: 1; transform: translate(var(--tooltip-tx), -100%); }
+}
+
+.tooltip-bar {
+  max-width: none;
+  border-radius: 6px 6px 0 0;
+  border-bottom: none;
+  /* 稍微调整背景色以区分 */
+  background: var(--dropdown-bg);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  /* 覆盖 transform */
+  transform: translate(0, -100%);
+  animation: tooltip-bar-fade-in 0.2s forwards;
+}
+
+.tooltip-bar::before {
+  display: none;
+}
+
+@keyframes tooltip-bar-fade-in {
+  from { opacity: 0; transform: translate(0, -90%); }
+  to { opacity: 1; transform: translate(0, -100%); }
 }
 
 .context-text {
@@ -323,6 +383,102 @@
   min-height: 20px;
   max-height: 240px;
   overflow-y: auto;
+}
+
+/* 代码片段标签容器 */
+.code-snippets-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+/* 代码片段标签（复用 context-item 样式）*/
+.code-snippet-tag {
+  display: flex;
+  align-items: center;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  max-width: 300px;
+  cursor: default;
+  position: relative;
+}
+
+.code-snippet-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  width: 16px;
+  height: 16px;
+}
+
+.code-snippet-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  direction: ltr;
+  user-select: none;
+}
+
+.code-snippet-close {
+  margin-left: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.2s;
+}
+
+.code-snippet-close:hover {
+  opacity: 1;
+}
+
+/* Tooltip for code snippet tags */
+.code-snippet-tag.has-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 400px;
+  width: max-content;
+
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+.code-snippet-tag.has-tooltip:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  border: 6px solid transparent;
+  border-top-color: var(--dropdown-border);
+  z-index: 1000;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
 }
 
 /* 输入框滚动条样式 */
@@ -770,13 +926,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px 2px 4px;
+  padding: 1px 6px;
   margin: 0 2px;
-  background: var(--attachment-bg, #2d2d2d);
-  border: 1px solid var(--attachment-border, #404040);
-  border-radius: 3px;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
   font-size: 12px;
-  color: var(--text-primary, #cccccc);
+  color: var(--text-primary);
   cursor: default;
   user-select: none;
   vertical-align: middle;

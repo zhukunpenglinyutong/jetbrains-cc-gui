@@ -80,9 +80,19 @@ interface Window {
   showPermissionDialog?: (json: string) => void;
 
   /**
-   * Add selection info (file and line numbers)
+   * Add selection info (file and line numbers) - 自动监听，只更新 ContextBar
    */
   addSelectionInfo?: (selectionInfo: string) => void;
+
+  /**
+   * Add code snippet to input box - 手动发送，添加代码片段标签到输入框
+   */
+  addCodeSnippet?: (selectionInfo: string) => void;
+
+  /**
+   * Insert code snippet at cursor position - 由 ChatInputBox 注册
+   */
+  insertCodeSnippetAtCursor?: (selectionInfo: string) => void;
 
   /**
    * Clear selection info
