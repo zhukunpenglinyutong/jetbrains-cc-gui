@@ -49,7 +49,8 @@ export const ChatInputBox = ({
   // 输入框引用和状态
   const editableRef = useRef<HTMLDivElement>(null);
   const submittedOnEnterRef = useRef(false);
-  const completionSelectedRef = useRef(false); // 标记补全菜单刚选中项目，防止回车同时发送消息
+  const completionSelectedRef = useRef(false);
+  const justRenderedTagRef = useRef(false); // 标记是否刚刚渲染了文件标签 // 标记补全菜单刚选中项目，防止回车同时发送消息
   const [isComposing, setIsComposing] = useState(false);
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
@@ -119,10 +120,179 @@ export const ChatInputBox = ({
    * 这里统一去除末尾的换行符，确保获取的内容干净
    */
   const getTextContent = useCallback(() => {
-    const text = editableRef.current?.innerText || '';
+    if (!editableRef.current) return '';
+
+    // 从 DOM 中提取纯文本，包括文件标签的原始引用格式
+    let text = '';
+    const walk = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.textContent || '';
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as HTMLElement;
+        // 如果是文件标签，提取原始的 @文件路径 格式
+        if (element.classList.contains('file-tag')) {
+          const filePath = element.getAttribute('data-file-path') || '';
+          // 不要在这里添加空格，空格由后面的文本节点提供
+          text += `@${filePath}`;
+        } else {
+          // 递归处理子节点
+          node.childNodes.forEach(walk);
+        }
+      }
+    };
+
+    editableRef.current.childNodes.forEach(walk);
+
     // 去除末尾的换行符（\n, \r, \r\n）
     return text.replace(/[\r\n]+$/, '');
   }, []);
+
+  /**
+   * 转义 HTML 属性值
+   * 确保特殊字符（包括引号、<、>、&等）被正确处理
+   * 注意：反斜杠不需要转义，因为它在 HTML 属性中是合法字符
+   */
+  const escapeHtmlAttr = useCallback((str: string): string => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }, []);
+
+  /**
+   * 渲染文件标签
+   * 将输入框中的 @文件路径 格式文本转换为文件标签
+   */
+  const renderFileTags = useCallback(() => {
+    if (!editableRef.current) return;
+
+    // 正则：匹配 @文件路径 (以空格结束或字符串结束)
+    // 支持文件和目录：扩展名可选
+    // 支持 Windows 路径 (反斜杠) 和 Unix 路径 (正斜杠)
+    // 匹配除空格和@之外的所有字符（包括反斜杠、正斜杠、冒号等）
+    const fileRefRegex = /@([^\s@]+?)(\s|$)/g;
+
+    const currentText = getTextContent();
+    const matches = Array.from(currentText.matchAll(fileRefRegex));
+
+    if (matches.length === 0) {
+      // 没有文件引用，保持原样
+      return;
+    }
+
+    // 检查DOM中是否有纯文本的 @文件路径 需要转换
+    // 遍历所有文本节点，查找包含 @ 的文本
+    let hasUnrenderedReferences = false;
+    const walk = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || '';
+        if (text.includes('@')) {
+          hasUnrenderedReferences = true;
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as HTMLElement;
+        // 跳过已渲染的文件标签
+        if (!element.classList.contains('file-tag')) {
+          node.childNodes.forEach(walk);
+        }
+      }
+    };
+    editableRef.current.childNodes.forEach(walk);
+
+    // 如果没有未渲染的引用，不需要重新渲染
+    if (!hasUnrenderedReferences) {
+      return;
+    }
+
+    // 构建新的 HTML 内容
+    let newHTML = '';
+    let lastIndex = 0;
+
+    matches.forEach((match) => {
+      const fullMatch = match[0];
+      const filePath = match[1];
+      const matchIndex = match.index || 0;
+// 添加匹配前的文本
+      if (matchIndex > lastIndex) {
+        const textBefore = currentText.substring(lastIndex, matchIndex);
+        newHTML += textBefore;
+      }
+
+      // 获取文件名或目录名
+      const fileName = filePath.split(/[/\\]/).pop() || filePath;
+
+      // 判断是文件还是目录
+      const isDirectory = !fileName.includes('.');
+      const icon = isDirectory ? '📁' : '📄';
+
+      // 转义文件路径以安全地放入 HTML 属性
+      const escapedPath = escapeHtmlAttr(filePath);
+
+      // 创建文件标签 HTML
+      newHTML += `<span class="file-tag" contenteditable="false" data-file-path="${escapedPath}">`;
+      newHTML += `<span class="file-tag-icon">${icon}</span>`;
+      newHTML += `<span class="file-tag-text">${fileName}</span>`;
+      newHTML += `<span class="file-tag-close">×</span>`;
+      newHTML += `</span>`;
+
+      // 添加空格
+      newHTML += ' ';
+
+      lastIndex = matchIndex + fullMatch.length;
+    });
+
+    // 添加剩余文本
+    if (lastIndex < currentText.length) {
+      newHTML += currentText.substring(lastIndex);
+    }
+
+    // 在更新 innerHTML 之前设置标志，防止触发补全检测
+    justRenderedTagRef.current = true;
+    fileCompletion.close();
+    commandCompletion.close();
+
+    // 更新内容
+    editableRef.current.innerHTML = newHTML;
+
+    // 为文件标签的删除按钮添加事件监听
+    const tags = editableRef.current.querySelectorAll('.file-tag-close');
+    tags.forEach((closeBtn) => {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tag = (e.target as HTMLElement).closest('.file-tag');
+        if (tag) {
+          tag.remove();
+          // 不要在这里调用 handleInput，避免循环
+        }
+      });
+    });
+
+    // 恢复光标位置到末尾
+    const selection = window.getSelection();
+    if (selection && editableRef.current.childNodes.length > 0) {
+      try {
+        const range = document.createRange();
+        const lastChild = editableRef.current.lastChild;
+        if (lastChild) {
+          range.setStartAfter(lastChild);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      } catch (e) {
+        // 忽略光标恢复错误
+      }
+    }
+
+    // 渲染完成后，立即重置标志，允许后续的补全检测
+    // 使用 setTimeout 0 确保在当前事件循环后重置
+    setTimeout(() => {
+      justRenderedTagRef.current = false;
+    }, 0);
+  }, [fileCompletion, commandCompletion, escapeHtmlAttr, getTextContent]);
 
   /**
    * 清空输入框
@@ -156,6 +326,14 @@ export const ChatInputBox = ({
    */
   const detectAndTriggerCompletion = useCallback(() => {
     if (!editableRef.current) return;
+
+    // 如果刚刚渲染了文件标签，跳过这次补全检测
+    if (justRenderedTagRef.current) {
+      justRenderedTagRef.current = false;
+      fileCompletion.close();
+      commandCompletion.close();
+      return;
+    }
 
     const text = getTextContent();
     const cursorPos = getCursorPosition(editableRef.current);
@@ -216,6 +394,19 @@ export const ChatInputBox = ({
     // 通知父组件
     onInput?.(text);
   }, [getTextContent, adjustHeight, detectAndTriggerCompletion, onInput]);
+
+  /**
+   * 处理键盘按下事件（用于检测空格触发文件标签渲染）
+   */
+  const handleKeyDownForTagRendering = useCallback((e: KeyboardEvent) => {
+    // 如果按下空格键，检查是否需要渲染文件标签
+    if (e.key === ' ') {
+      // 延迟执行，等待空格输入完成
+      setTimeout(() => {
+        renderFileTags();
+      }, 50);
+    }
+  }, [renderFileTags]);
 
   /**
    * 处理提交
@@ -861,38 +1052,62 @@ export const ChatInputBox = ({
 
     // 没有图片文件，处理文本（文件路径或其他文本）
     if (text && text.trim()) {
+      // 自动添加 @ 前缀（如果还没有）
+      const textToInsert = text.startsWith('@') ? text : `@${text}`;
 
       // 获取当前光标位置
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editableRef.current) {
         // 确保光标在输入框内
         if (editableRef.current.contains(selection.anchorNode)) {
-          // 使用 document.execCommand 插入纯文本（保持光标位置）
-          document.execCommand('insertText', false, text);
+          // 使用现代 API 插入文本
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          const textNode = document.createTextNode(textToInsert);
+          range.insertNode(textNode);
+
+          // 将光标移到插入文本后
+          range.setStartAfter(textNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
         } else {
-          // 光标不在输入框内，直接追加到末尾
-          const currentText = getTextContent();
-          editableRef.current.innerText = currentText + text;
+          // 光标不在输入框内，追加到末尾
+          // 使用 appendChild 而不是 innerText，避免破坏已有的文件标签
+          const textNode = document.createTextNode(textToInsert);
+          editableRef.current.appendChild(textNode);
 
           // 将光标移到末尾
           const range = document.createRange();
-          range.selectNodeContents(editableRef.current);
-          range.collapse(false);
+          range.setStartAfter(textNode);
+          range.collapse(true);
           selection.removeAllRanges();
           selection.addRange(range);
         }
       } else {
-        // 没有选区，直接追加
-        const currentText = getTextContent();
+        // 没有选区，追加到末尾
         if (editableRef.current) {
-          editableRef.current.innerText = currentText + text;
+          const textNode = document.createTextNode(textToInsert);
+          editableRef.current.appendChild(textNode);
         }
       }
 
-      // 触发 input 事件以更新状态
-      handleInput();
+      // 关闭补全菜单
+      fileCompletion.close();
+      commandCompletion.close();
+
+      // 直接触发状态更新，不调用 handleInput（避免重新检测补全）
+      const newText = getTextContent();
+      setHasContent(!!newText.trim());
+      adjustHeight();
+      onInput?.(newText);
+
+      // 立即渲染文件标签（不需要等待空格）
+      setTimeout(() => {
+        renderFileTags();
+      }, 50);
     }
-  }, [generateId, handleInput, getTextContent]);
+  }, [generateId, getTextContent, renderFileTags, fileCompletion, commandCompletion, adjustHeight, onInput]);
 
   /**
    * 处理添加附件
@@ -957,35 +1172,71 @@ export const ChatInputBox = ({
     (window as any).handleFilePathFromJava = (filePath: string) => {
       if (!editableRef.current) return;
 
-      // 插入文件路径到输入框
+      // 插入文件路径到输入框（自动添加 @ 前缀）
+      const pathToInsert = filePath.startsWith('@') ? filePath : `@${filePath}`;
+
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
         // 光标在输入框内，在光标位置插入
-        document.execCommand('insertText', false, filePath);
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(pathToInsert);
+        range.insertNode(textNode);
+
+        // 将光标移到插入文本后
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
       } else {
         // 光标不在输入框内，追加到末尾
-        const currentText = getTextContent();
-        editableRef.current.innerText = currentText + filePath;
+        // 使用 appendChild 而不是 innerText，避免破坏已有的文件标签
+        const textNode = document.createTextNode(pathToInsert);
+        editableRef.current.appendChild(textNode);
 
         // 将光标移到末尾
         const range = document.createRange();
-        range.selectNodeContents(editableRef.current);
-        range.collapse(false);
+        range.setStartAfter(textNode);
+        range.collapse(true);
         selection?.removeAllRanges();
         selection?.addRange(range);
       }
 
-      // 触发 input 事件以更新状态
-      handleInput();
+      // 关闭补全菜单
+      fileCompletion.close();
+      commandCompletion.close();
+
+      // 直接触发状态更新，不调用 handleInput（避免重新检测补全）
+      const newText = getTextContent();
+      setHasContent(!!newText.trim());
+      adjustHeight();
+      onInput?.(newText);
+
+      // 立即渲染文件标签
+      setTimeout(() => {
+        renderFileTags();
+      }, 50);
     };
+
+    // 添加空格键监听以触发文件标签渲染
+    const handleKeyDown = (e: KeyboardEvent) => {
+      handleKeyDownForTagRendering(e);
+    };
+
+    if (editableRef.current) {
+      editableRef.current.addEventListener('keydown', handleKeyDown);
+    }
 
     focusInput();
 
     // 清理函数
     return () => {
+      if (editableRef.current) {
+        editableRef.current.removeEventListener('keydown', handleKeyDown);
+      }
       delete (window as any).handleFilePathFromJava;
     };
-  }, [focusInput, handlePaste, handleDrop, handleDragOver, handleInput, getTextContent]);
+  }, [focusInput, handlePaste, handleDrop, handleDragOver, getTextContent, handleKeyDownForTagRendering, renderFileTags, fileCompletion, commandCompletion, adjustHeight, onInput]);
 
   return (
     <div className="chat-input-box" onClick={focusInput}>
