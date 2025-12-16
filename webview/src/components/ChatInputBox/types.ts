@@ -22,6 +22,20 @@ export interface Attachment {
 }
 
 /**
+ * 代码片段（来自编辑器选中的代码）
+ */
+export interface CodeSnippet {
+  /** 唯一标识符 */
+  id: string;
+  /** 文件路径（相对路径） */
+  filePath: string;
+  /** 起始行号 */
+  startLine?: number;
+  /** 结束行号 */
+  endLine?: number;
+}
+
+/**
  * 图片媒体类型常量
  */
 export const IMAGE_MEDIA_TYPES = [
@@ -83,6 +97,8 @@ export interface FileItem {
   name: string;
   /** 相对路径 */
   path: string;
+  /** 绝对路径 (可选) */
+  absolutePath?: string;
   /** 类型 */
   type: 'file' | 'directory';
   /** 扩展名 */
@@ -290,6 +306,8 @@ export interface ChatInputBoxProps {
 
   /** 清除上下文回调 */
   onClearContext?: () => void;
+  /** 移除代码片段回调 */
+  onRemoveCodeSnippet?: (id: string) => void;
 
   // 事件回调
   /** 提交消息 */

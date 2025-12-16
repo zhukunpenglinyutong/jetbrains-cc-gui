@@ -97,7 +97,11 @@ export const ContextBar: React.FC<ContextBarProps> = ({
 
       {/* Active Context Chip */}
       {displayText && (
-        <div className="context-item has-tooltip" data-tooltip={fullDisplayText}>
+        <div 
+          className="context-item has-tooltip" 
+          data-tooltip={fullDisplayText}
+          style={{ cursor: 'default' }}
+        >
           {activeFile && (
             <span 
               className="context-file-icon" 

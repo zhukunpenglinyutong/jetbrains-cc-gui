@@ -93,6 +93,16 @@ public class EnvironmentConfigurator {
             env.put("PATH", newPathStr);
         }
 
+        // 4. 确保 HOME 环境变量设置正确
+        // SDK 需要 HOME 环境变量来找到 ~/.claude/commands/ 目录
+        String home = env.get("HOME");
+        if (home == null || home.isEmpty()) {
+            home = System.getProperty("user.home");
+            if (home != null && !home.isEmpty()) {
+                env.put("HOME", home);
+            }
+        }
+
         configurePermissionEnv(env);
     }
 

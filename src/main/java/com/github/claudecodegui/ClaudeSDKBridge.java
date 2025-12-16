@@ -177,7 +177,7 @@ public class ClaudeSDKBridge {
                 stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                 stdin.flush();
             } catch (Exception e) {
-                System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
+                // System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
             }
 
             try (BufferedReader reader = new BufferedReader(
@@ -302,7 +302,7 @@ public class ClaudeSDKBridge {
                         stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                         stdin.flush();
                     } catch (Exception e) {
-                        System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
+                        // System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
                     }
 
                     try (BufferedReader reader = new BufferedReader(
@@ -405,13 +405,13 @@ public class ClaudeSDKBridge {
             try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String version = reader.readLine();
-                System.out.println("Node.js 版本: " + version);
+                // System.out.println("Node.js 版本: " + version);
             }
 
             int exitCode = process.waitFor();
             return exitCode == 0;
         } catch (Exception e) {
-            System.err.println("环境检查失败: " + e.getMessage());
+            // System.err.println("环境检查失败: " + e.getMessage());
             return false;
         }
     }
@@ -431,7 +431,7 @@ public class ClaudeSDKBridge {
         }
         result.addProperty("channelId", channelId);
         result.addProperty("message", "Channel ready (auto-launch on first send)");
-        System.out.println("[Launch] Channel ready for: " + channelId + " (auto-launch on first send)");
+        // System.out.println("[Launch] Channel ready for: " + channelId + " (auto-launch on first send)");
         return result;
     }
 
@@ -464,6 +464,13 @@ public class ClaudeSDKBridge {
         MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
+            long sendStartTime = System.currentTimeMillis();
+            // System.out.println("[ClaudeSDKBridge] ====== 消息发送开始 ======");
+            // System.out.println("[ClaudeSDKBridge] 消息内容: " + (message != null ? message.substring(0, Math.min(50, message.length())) + "..." : "null"));
+            // System.out.println("[ClaudeSDKBridge] SessionId: " + sessionId);
+            // System.out.println("[ClaudeSDKBridge] CWD: " + cwd);
+            // System.out.println("[ClaudeSDKBridge] Model: " + model);
+
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
             final boolean[] hadSendError = {false};
@@ -494,6 +501,14 @@ public class ClaudeSDKBridge {
                 String node = nodeDetector.findNodeExecutable();
                 File workDir = directoryResolver.findSdkDir();
 
+                // 诊断：打印关键环境信息
+                // System.out.println("[ClaudeSDKBridge] 环境诊断:");
+                // System.out.println("[ClaudeSDKBridge]   Node.js 路径: " + node);
+                // System.out.println("[ClaudeSDKBridge]   SDK 目录: " + workDir.getAbsolutePath());
+                // System.out.println("[ClaudeSDKBridge]   HOME: " + System.getProperty("user.home"));
+                // String settingsPath = System.getProperty("user.home") + "/.claude/settings.json";
+                // System.out.println("[ClaudeSDKBridge]   settings.json: " + settingsPath + " (存在: " + new File(settingsPath).exists() + ")");
+
                 // 构建 stdin 输入 JSON，避免命令行参数中特殊字符导致解析错误
                 JsonObject stdinInput = new JsonObject();
                 stdinInput.addProperty("message", message);
@@ -507,7 +522,7 @@ public class ClaudeSDKBridge {
                 // 添加打开的文件信息（包含激活文件和其他文件）
                 if (openedFiles != null && openedFiles.size() > 0) {
                     stdinInput.add("openedFiles", openedFiles);
-                    System.out.println("[ClaudeSDKBridge] Adding opened files info to context");
+                    // System.out.println("[ClaudeSDKBridge] Adding opened files info to context");
                 }
                 String stdinJson = gson.toJson(stdinInput);
 
@@ -546,23 +561,37 @@ public class ClaudeSDKBridge {
 
                 Process process = null;
                 try {
+                    // System.out.println("[ClaudeSDKBridge] 正在启动 Node.js 进程...");
+                    // System.out.println("[ClaudeSDKBridge] 命令: " + String.join(" ", command));
                     process = pb.start();
+                    // System.out.println("[ClaudeSDKBridge] Node.js 进程已启动，PID: " + process.pid());
                     processManager.registerProcess(channelId, process);
 
                     // 通过 stdin 写入所有参数（包括消息和附件）
                     try (java.io.OutputStream stdin = process.getOutputStream()) {
                         stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                         stdin.flush();
+                        // System.out.println("[ClaudeSDKBridge] 已写入 stdin 数据，长度: " + stdinJson.length() + " 字节");
                     } catch (Exception e) {
-                        System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
+                        // System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
                     }
 
                     try {
+                        // System.out.println("[ClaudeSDKBridge] 开始读取 Node.js 输出...");
+                        long lastOutputTime = System.currentTimeMillis();
+                        int lineCount = 0;
                         try (BufferedReader reader = new BufferedReader(
                             new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 
                             String line;
                             while ((line = reader.readLine()) != null) {
+                                lineCount++;
+                                long now = System.currentTimeMillis();
+                                // 每 30 秒打印一次状态，或者收到第一行输出时
+                                // if (lineCount == 1 || now - lastOutputTime > 30000) {
+                                //     System.out.println("[ClaudeSDKBridge] 已读取 " + lineCount + " 行输出，耗时 " + (now - sendStartTime) / 1000 + " 秒");
+                                //     lastOutputTime = now;
+                                // }
                                 // 先捕获并输出 Node.js 侧的错误日志，便于在 IDE 日志中直接看到具体原因
                                 if (line.startsWith("[UNCAUGHT_ERROR]")
                                         || line.startsWith("[UNHANDLED_REJECTION]")
@@ -572,9 +601,9 @@ public class ClaudeSDKBridge {
                                 }
 
                                 // 打印权限/调试日志
-                                if (line.contains("[PERM_DEBUG]") || line.contains("[DEBUG]")) {
-                                    System.out.println("[Node.js] " + line);
-                                }
+                                // if (line.contains("[PERM_DEBUG]") || line.contains("[DEBUG]")) {
+                                //     System.out.println("[Node.js] " + line);
+                                // }
                                 if (line.startsWith("[MESSAGE]")) {
                                     String jsonStr = line.substring("[MESSAGE]".length()).trim();
                                     try {
@@ -614,6 +643,9 @@ public class ClaudeSDKBridge {
                                 } else if (line.startsWith("[SESSION_ID]")) {
                                     String capturedSessionId = line.substring("[SESSION_ID]".length()).trim();
                                     callback.onMessage("session_id", capturedSessionId);
+                                } else if (line.startsWith("[SLASH_COMMANDS]")) {
+                                    String slashCommandsJson = line.substring("[SLASH_COMMANDS]".length()).trim();
+                                    callback.onMessage("slash_commands", slashCommandsJson);
                                 } else if (line.startsWith("[MESSAGE_START]")) {
                                     callback.onMessage("message_start", "");
                                 } else if (line.startsWith("[MESSAGE_END]")) {
@@ -622,6 +654,8 @@ public class ClaudeSDKBridge {
                             }
                         }
 
+                        // System.out.println("[ClaudeSDKBridge] Node.js 输出读取完毕，共 " + lineCount + " 行");
+                        // System.out.println("[ClaudeSDKBridge] 等待进程结束...");
 	                        // 设置60秒超时等待进程结束的逻辑存在严重问题，先恢复为无限等待进程结束
 	                        // boolean finished = process.waitFor(60, TimeUnit.SECONDS);
 	                        // if (!finished) {
@@ -633,6 +667,10 @@ public class ClaudeSDKBridge {
 	                        //     return result;
 	                        // }
 	                        process.waitFor();
+
+                        long totalTime = System.currentTimeMillis() - sendStartTime;
+                        // System.out.println("[ClaudeSDKBridge] ====== 消息发送完成 ======");
+                        // System.out.println("[ClaudeSDKBridge] 总耗时: " + totalTime / 1000 + " 秒");
 
                         int exitCode = process.exitValue();
                         boolean wasInterrupted = processManager.wasInterrupted(channelId);
@@ -681,7 +719,13 @@ public class ClaudeSDKBridge {
                 callback.onError(e.getMessage());
                 return result;
             }
-        });
+        }).exceptionally(ex -> {
+              SDKResult errorResult = new SDKResult();
+              errorResult.success = false;
+              errorResult.error = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+              callback.onError(errorResult.error);
+              return errorResult;
+          });
     }
 
     /**
@@ -689,7 +733,7 @@ public class ClaudeSDKBridge {
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
         try {
-            System.out.println("[ClaudeSDKBridge] getSessionMessages: sessionId=" + sessionId + ", cwd=" + cwd);
+            // System.out.println("[ClaudeSDKBridge] getSessionMessages: sessionId=" + sessionId + ", cwd=" + cwd);
             String node = nodeDetector.findNodeExecutable();
 
             List<String> command = new ArrayList<>();
@@ -700,7 +744,7 @@ public class ClaudeSDKBridge {
             command.add(sessionId);
             command.add(cwd != null ? cwd : "");
 
-            System.out.println("[ClaudeSDKBridge] Command: " + String.join(" ", command));
+            // System.out.println("[ClaudeSDKBridge] Command: " + String.join(" ", command));
 
             ProcessBuilder pb = new ProcessBuilder(command);
             File workDir = directoryResolver.findSdkDir();
@@ -722,19 +766,19 @@ public class ClaudeSDKBridge {
             process.waitFor();
 
             String outputStr = output.toString().trim();
-            System.out.println("[ClaudeSDKBridge] Node.js output: " + outputStr);
+            // System.out.println("[ClaudeSDKBridge] Node.js output: " + outputStr);
 
             int jsonStart = outputStr.indexOf("{");
             if (jsonStart != -1) {
                 String jsonStr = outputStr.substring(jsonStart);
-                System.out.println("[ClaudeSDKBridge] Extracting JSON from position " + jsonStart);
+                // System.out.println("[ClaudeSDKBridge] Extracting JSON from position " + jsonStart);
                 JsonObject jsonResult = gson.fromJson(jsonStr, JsonObject.class);
 
                 if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
                     List<JsonObject> messages = new ArrayList<>();
                     if (jsonResult.has("messages")) {
                         JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
-                        System.out.println("[ClaudeSDKBridge] Found " + messagesArray.size() + " messages in response");
+                        // System.out.println("[ClaudeSDKBridge] Found " + messagesArray.size() + " messages in response");
                         for (var msg : messagesArray) {
                             messages.add(msg.getAsJsonObject());
                         }
@@ -744,19 +788,126 @@ public class ClaudeSDKBridge {
                     String errorMsg = (jsonResult.has("error") && !jsonResult.get("error").isJsonNull())
                         ? jsonResult.get("error").getAsString()
                         : "Unknown error";
-                    System.err.println("[ClaudeSDKBridge] Get session failed: " + errorMsg);
+                    // System.err.println("[ClaudeSDKBridge] Get session failed: " + errorMsg);
                     throw new RuntimeException("Get session failed: " + errorMsg);
                 }
             }
 
-            System.err.println("[ClaudeSDKBridge] No JSON found in output");
+            // System.err.println("[ClaudeSDKBridge] No JSON found in output");
             return new ArrayList<>();
 
         } catch (Exception e) {
-            System.err.println("[ClaudeSDKBridge] Exception: " + e.getMessage());
-            e.printStackTrace();
+            // System.err.println("[ClaudeSDKBridge] Exception: " + e.getMessage());
+            // e.printStackTrace();
             throw new RuntimeException("Failed to get session messages: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 获取斜杠命令列表
+     * 在插件启动时调用，获取完整的命令列表（包含 name 和 description）
+     */
+    public CompletableFuture<List<JsonObject>> getSlashCommands(String cwd) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String node = nodeDetector.findNodeExecutable();
+
+                // 构建 stdin 输入 JSON
+                JsonObject stdinInput = new JsonObject();
+                stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+                String stdinJson = gson.toJson(stdinInput);
+
+                List<String> command = new ArrayList<>();
+                command.add(node);
+                File bridgeDir = directoryResolver.findSdkDir();
+                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                command.add("claude");  // provider
+                command.add("getSlashCommands");
+
+                ProcessBuilder pb = new ProcessBuilder(command);
+                File workDir = bridgeDir;
+                pb.directory(workDir);
+                pb.redirectErrorStream(true);
+                envConfigurator.updateProcessEnvironment(pb, node);
+                pb.environment().put("CLAUDE_USE_STDIN", "true");
+
+                Process process = pb.start();
+
+                // 通过 stdin 写入参数
+                try (java.io.OutputStream stdin = process.getOutputStream()) {
+                    stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
+                    stdin.flush();
+                } catch (Exception e) {
+                    // System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
+                }
+
+                StringBuilder output = new StringBuilder();
+                String slashCommandsJson = null;
+                try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                        // 捕获 [SLASH_COMMANDS] 输出
+                        if (line.startsWith("[SLASH_COMMANDS]")) {
+                            slashCommandsJson = line.substring("[SLASH_COMMANDS]".length()).trim();
+                        }
+                    }
+                }
+
+                // 添加超时：等待最多 30 秒
+                boolean completed = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+                if (!completed) {
+                    // System.err.println("[ClaudeSDKBridge] getSlashCommands timeout after 30 seconds");
+                    process.destroyForcibly();
+                    throw new RuntimeException("getSlashCommands timeout after 30 seconds");
+                }
+
+                List<JsonObject> commands = new ArrayList<>();
+
+                // 优先使用 [SLASH_COMMANDS] 输出
+                if (slashCommandsJson != null && !slashCommandsJson.isEmpty()) {
+                    try {
+                        JsonArray commandsArray = gson.fromJson(slashCommandsJson, JsonArray.class);
+                        // System.out.println("[ClaudeSDKBridge] Loaded " + commandsArray.size() + " slash commands");
+                        for (var cmd : commandsArray) {
+                            commands.add(cmd.getAsJsonObject());
+                        }
+                        return commands;
+                    } catch (Exception e) {
+                        // System.err.println("[ClaudeSDKBridge] Failed to parse slash commands: " + e.getMessage());
+                    }
+                }
+
+                // 回退到解析最终 JSON 输出
+                String outputStr = output.toString().trim();
+                int jsonStart = outputStr.lastIndexOf("{");
+                if (jsonStart != -1) {
+                    String jsonStr = outputStr.substring(jsonStart);
+                    try {
+                        JsonObject jsonResult = gson.fromJson(jsonStr, JsonObject.class);
+                        if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
+                            if (jsonResult.has("commands")) {
+                                JsonArray commandsArray = jsonResult.getAsJsonArray("commands");
+                                // System.out.println("[ClaudeSDKBridge] Found " + commandsArray.size() + " slash commands from JSON");
+                                for (var cmd : commandsArray) {
+                                    commands.add(cmd.getAsJsonObject());
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // System.err.println("[ClaudeSDKBridge] Failed to parse JSON result: " + e.getMessage());
+                    }
+                }
+
+                return commands;
+
+            } catch (Exception e) {
+                // System.err.println("[ClaudeSDKBridge] getSlashCommands exception: " + e.getMessage());
+                // e.printStackTrace();
+                return new ArrayList<>();
+            }
+        });
     }
 
     // ============================================================================

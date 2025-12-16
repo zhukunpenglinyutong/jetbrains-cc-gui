@@ -136,8 +136,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
-    // 设置 API Key 并获取配置信息
-    const { baseUrl, apiKeySource, baseUrlSource } = setupApiKey();
+    // 设置 API Key 并获取配置信息（包含认证类型）
+    const { baseUrl, authType, apiKeySource, baseUrlSource } = setupApiKey();
 
     // 检测是否使用自定义 Base URL
     if (isCustomBaseUrl(baseUrl)) {
@@ -329,6 +329,18 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       if (msg.type === 'system' && msg.session_id) {
         currentSessionId = msg.session_id;
         console.log('[SESSION_ID]', msg.session_id);
+
+        // 输出 slash_commands（如果存在）
+        if (msg.subtype === 'init' && Array.isArray(msg.slash_commands)) {
+          // console.log('[SLASH_COMMANDS]', JSON.stringify(msg.slash_commands));
+        }
+      }
+
+      // 检查是否收到错误结果消息（快速检测 API Key 错误）
+      if (msg.type === 'result' && msg.is_error) {
+        console.error('[DEBUG] Received error result message:', JSON.stringify(msg));
+        const errorText = msg.result || msg.message || 'API request failed';
+        throw new Error(errorText);
       }
     }
     } catch (loopError) {
@@ -375,7 +387,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 /**
  * 使用 Anthropic SDK 发送消息（用于第三方 API 代理的回退方案）
  */
-export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl) {
+export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl, authType) {
   try {
     const workingDirectory = selectWorkingDirectory(cwd);
     try { process.chdir(workingDirectory); } catch {}
@@ -383,13 +395,36 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     const sessionId = (resumeSessionId && resumeSessionId !== '') ? resumeSessionId : randomUUID();
     const modelId = model || 'claude-sonnet-4-5';
 
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    // 根据认证类型使用正确的 SDK 参数
+    // authType = 'auth_token': 使用 authToken 参数（Bearer 认证）
+    // authType = 'api_key': 使用 apiKey 参数（x-api-key 认证）
+    let client;
+    if (authType === 'auth_token') {
+      console.log('[DEBUG] Using Bearer authentication (ANTHROPIC_AUTH_TOKEN)');
+      // 使用 authToken 参数（Bearer 认证）并清除 apiKey
+      client = new Anthropic({
+        authToken: apiKey,
+        apiKey: null,  // 明确设置为 null 避免使用 x-api-key header
+        baseURL: baseUrl || undefined
+      });
+      // 优先使用 Bearer（ANTHROPIC_AUTH_TOKEN），避免继续发送 x-api-key
+      delete process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
+    } else {
+      console.log('[DEBUG] Using API Key authentication (ANTHROPIC_API_KEY)');
+      // 使用 apiKey 参数（x-api-key 认证）
+      client = new Anthropic({
+        apiKey,
+        baseURL: baseUrl || undefined
+      });
+    }
 
     console.log('[MESSAGE_START]');
     console.log('[SESSION_ID]', sessionId);
     console.log('[DEBUG] Using Anthropic SDK fallback for custom Base URL (non-streaming)');
     console.log('[DEBUG] Model:', modelId);
     console.log('[DEBUG] Base URL:', baseUrl);
+    console.log('[DEBUG] Auth type:', authType || 'api_key (default)');
 
     const userContent = [{ type: 'text', text: message }];
 
@@ -550,7 +585,8 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
-    const { baseUrl } = setupApiKey();
+    // 设置 API Key 并获取配置信息（包含认证类型）
+    const { baseUrl, authType } = setupApiKey();
 
     console.log('[MESSAGE_START]');
 
@@ -767,6 +803,13 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    	        currentSessionId = msg.session_id;
 	    	        console.log('[SESSION_ID]', msg.session_id);
 	    	      }
+
+	    	      // 检查是否收到错误结果消息（快速检测 API Key 错误）
+	    	      if (msg.type === 'result' && msg.is_error) {
+	    	        console.error('[DEBUG] (withAttachments) Received error result message:', JSON.stringify(msg));
+	    	        const errorText = msg.result || msg.message || 'API request failed';
+	    	        throw new Error(errorText);
+	    	      }
 	    	    }
 	    	    } catch (loopError) {
 	    	      // 捕获 for await 循环中的错误
@@ -786,7 +829,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	      success: true,
 	      sessionId: currentSessionId
 	    }));
-	
+
 	  } catch (error) {
 	    const payload = buildConfigErrorPayload(error);
 	    console.error('[SEND_ERROR]', JSON.stringify(payload));
@@ -795,3 +838,84 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    if (timeoutId) clearTimeout(timeoutId);
 	  }
 	}
+
+/**
+ * 获取斜杠命令列表
+ * 通过 SDK 的 supportedCommands() 方法获取完整的命令列表
+ * 这个方法不需要发送消息，可以在插件启动时调用
+ */
+export async function getSlashCommands(cwd = null) {
+  try {
+    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
+
+    // 设置 API Key
+    setupApiKey();
+
+    // 确保 HOME 环境变量设置正确
+    if (!process.env.HOME) {
+      const os = await import('os');
+      process.env.HOME = os.homedir();
+    }
+
+    // 智能确定工作目录
+    const workingDirectory = selectWorkingDirectory(cwd);
+    try {
+      process.chdir(workingDirectory);
+    } catch (chdirError) {
+      console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
+    }
+
+    // 创建一个空的输入流
+    const inputStream = new AsyncStream();
+
+    // 调用 query 函数，使用空输入流
+    // 这样不会发送任何消息，只是初始化 SDK 以获取配置
+    const result = query({
+      prompt: inputStream,
+      options: {
+        cwd: workingDirectory,
+        permissionMode: 'default',
+        maxTurns: 0,  // 不需要进行任何轮次
+        canUseTool: async () => ({
+          behavior: 'deny',
+          message: 'Config loading only'
+        }),
+        // 明确启用默认工具集
+        tools: { type: 'preset', preset: 'claude_code' },
+        settingSources: ['user', 'project', 'local'],
+        // 捕获 SDK stderr 调试日志，帮助定位 CLI 初始化问题
+        stderr: (data) => {
+          if (data && data.trim()) {
+            console.log(`[SDK-STDERR] ${data.trim()}`);
+          }
+        }
+      }
+    });
+
+    // 立即关闭输入流，告诉 SDK 我们没有消息要发送
+    inputStream.done();
+
+    // 获取支持的命令列表
+    // SDK 返回的格式是 SlashCommand[]，包含 name 和 description
+    const slashCommands = await result.supportedCommands?.() || [];
+
+    // 清理资源
+    await result.return?.();
+
+    // 输出命令列表（包含 name 和 description）
+    console.log('[SLASH_COMMANDS]', JSON.stringify(slashCommands));
+
+    console.log(JSON.stringify({
+      success: true,
+      commands: slashCommands
+    }));
+
+  } catch (error) {
+    console.error('[GET_SLASH_COMMANDS_ERROR]', error.message);
+    console.log(JSON.stringify({
+      success: false,
+      error: error.message,
+      commands: []
+    }));
+  }
+}

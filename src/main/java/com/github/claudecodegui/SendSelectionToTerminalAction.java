@@ -142,28 +142,18 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
     }
 
     /**
-     * 获取文件相对于项目根目录的路径
+     * 获取文件的绝对路径（从电脑根目录开始）
      */
     private @Nullable String getRelativePath(@NotNull Project project, @NotNull VirtualFile file) {
-        String projectPath = project.getBasePath();
-        if (projectPath == null) {
-            return null;
-        }
-
-        File projectDir = new File(projectPath);
-        File fileDir = new File(file.getParent().getPath());
-
         try {
-            // 获取相对路径
-            String relativePath = projectDir.toPath().relativize(fileDir.toPath()).toString();
-            String fileName = file.getName();
-
-            // 如果是当前文件的直接子目录，格式为：dir/file
-            // 如果就是根目录下的文件，格式为：file
-            return relativePath.isEmpty() ? fileName : relativePath + "/" + fileName;
+            // 获取文件的绝对路径
+            String absolutePath = file.getPath();
+            System.out.println("[SendSelectionToTerminalAction] 文件绝对路径: " + absolutePath);
+            return absolutePath;
         } catch (Exception ex) {
-            // 如果无法获取相对路径，回退到使用文件名
-            return file.getName();
+            System.err.println("[SendSelectionToTerminalAction] 获取文件路径异常: " + ex.getMessage());
+            ex.printStackTrace();
+            return null;
         }
     }
 

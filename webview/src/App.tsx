@@ -8,6 +8,7 @@ import PermissionDialog, { type PermissionRequest } from './components/Permissio
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
 import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
+import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from './components/ChatInputBox/providers';
 import {
   BashToolBlock,
   EditToolBlock,
@@ -21,6 +22,7 @@ import { Claude, OpenAI } from '@lobehub/icons';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
 import { ScrollControl } from './components/ScrollControl';
+import { APP_VERSION } from './version/version';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -95,7 +97,7 @@ const App = () => {
     currentProviderRef.current = currentProvider;
   }, [currentProvider]);
 
-  // Context state (active file and selection)
+  // Context state (active file and selection) - 保留用于 ContextBar 显示
   const [contextInfo, setContextInfo] = useState<{ file: string; startLine?: number; endLine?: number; raw: string } | null>(null);
 
   // 根据当前提供商选择显示的模型
@@ -256,6 +258,11 @@ const App = () => {
     window.addErrorMessage = (message) =>
       setMessages((prev) => [...prev, { type: 'error', content: message }]);
 
+    // 注册斜杠命令回调（接收 SDK 返回的命令列表）
+    resetSlashCommandsState(); // 重置状态，确保首次加载时能正确触发刷新
+    resetFileReferenceState(); // 重置文件引用状态，防止 Promise 泄漏
+    setupSlashCommandsCallback();
+
     // ChatInputBox 相关回调
     window.onUsageUpdate = (json) => {
       try {
@@ -332,9 +339,9 @@ const App = () => {
       }
     };
 
-    // 选中代码发送到终端回调
+    // 【自动监听】更新 ContextBar（上面灰色条）- 由自动监听器调用
     window.addSelectionInfo = (selectionInfo) => {
-      console.log('[Frontend] addSelectionInfo called:', selectionInfo);
+      console.log('[Frontend] addSelectionInfo (auto) called:', selectionInfo);
       if (selectionInfo) {
         // Try to parse the format @path#Lstart-end or just @path
         // Regex: starts with @, captures path until # or end. Optional #L(start)[-(end)]
@@ -343,19 +350,25 @@ const App = () => {
           const file = match[1];
           const startLine = match[2] ? parseInt(match[2], 10) : undefined;
           const endLine = match[3] ? parseInt(match[3], 10) : (startLine !== undefined ? startLine : undefined);
+
+          // 只更新 ContextBar 显示（不添加代码片段标签）
           setContextInfo({
             file,
             startLine,
             endLine,
             raw: selectionInfo
           });
-        } else {
-          // Fallback: 将选中的代码引用添加到输入框
-          setInputValue((prev) => {
-            const separator = prev.trim() ? ' ' : '';
-            return prev + separator + selectionInfo;
-          });
+          console.log('[Frontend] Updated ContextBar (auto):', { file, startLine, endLine });
         }
+      }
+    };
+
+    // 【手动发送】添加代码片段标签到输入框 - 由右键"发送到 GUI"调用
+    window.addCodeSnippet = (selectionInfo) => {
+      console.log('[Frontend] addCodeSnippet (manual) called:', selectionInfo);
+      if (selectionInfo && window.insertCodeSnippetAtCursor) {
+        // 调用 ChatInputBox 注册的方法，在光标位置插入代码片段
+        window.insertCodeSnippetAtCursor(selectionInfo);
       }
     };
 
@@ -988,14 +1001,6 @@ const App = () => {
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;
   }, [messages, t]);
 
-  const hasThinkingBlockInLastMessage = useMemo(() => {
-    if (messages.length === 0) return false;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.type !== 'assistant') return false;
-    const blocks = getContentBlocks(lastMessage);
-    return blocks.some((b) => b.type === 'thinking');
-  }, [messages]);
-
   return (
     <>
       <style>{`
@@ -1096,7 +1101,7 @@ const App = () => {
                   <Claude.Color size={58} />
                 )}
                 <span className="version-tag">
-                  v0.1.0-beta2
+                  v{APP_VERSION}
                 </span>
               </div>
               <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
@@ -1221,14 +1226,14 @@ const App = () => {
           })}
 
           {/* Thinking indicator */}
-          {isThinking && !hasThinkingBlockInLastMessage && (
+          {/* {isThinking && !hasThinkingBlockInLastMessage && (
             <div className="message assistant">
               <div className="thinking-status">
                 <span className="thinking-status-icon">🤔</span>
                 <span className="thinking-status-text">{t('common.thinking')}</span>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Loading indicator */}
           {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
@@ -1265,9 +1270,9 @@ const App = () => {
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
             activeFile={contextInfo?.file}
-            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined 
-              ? (contextInfo.startLine === contextInfo.endLine 
-                  ? `L${contextInfo.startLine}` 
+            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
+              ? (contextInfo.startLine === contextInfo.endLine
+                  ? `L${contextInfo.startLine}`
                   : `L${contextInfo.startLine}-${contextInfo.endLine}`)
               : undefined}
             onClearContext={() => setContextInfo(null)}

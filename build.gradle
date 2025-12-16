@@ -2,11 +2,11 @@ import org.jetbrains.intellij.IntelliJPluginExtension
 
 plugins {
     id 'java'
-    id 'org.jetbrains.intellij' version '1.17.0'
+    id 'org.jetbrains.intellij' version '1.17.4'
 }
 
 group 'com.github.idea-claude-code-gui'
-version '0.1.0-beta2'
+version '0.1.0-beta3'
 
 sourceCompatibility = 17
 targetCompatibility = 17
@@ -21,7 +21,7 @@ dependencies {
 
 // 配置 IntelliJ Platform 插件
 intellij {
-    version = '2023.3.2'  // 目标 IDEA 版本
+    version = '2024.3'  // 使用 2024.3 稳定版本
     type = 'IC'  // IC = IntelliJ IDEA Community Edition
 
     // 下载源码和 JavaDoc
@@ -40,13 +40,14 @@ tasks.withType(JavaCompile) {
 
 patchPluginXml {
     sinceBuild = '233'
-    untilBuild = '253.*'
+    untilBuild = '263.*'  // 兼容到 2026.3 版本，支持更新的 IDE 版本
 
     changeNotes = """
         <ul>
             <li>初始版本发布</li>
             <li>实现右侧工具栏窗口</li>
             <li>最小支持IDEA 2023.3版本</li>
+            <li>兼容至 IDEA 2026.3 版本（build 263.*）</li>
         </ul>
     """
 }

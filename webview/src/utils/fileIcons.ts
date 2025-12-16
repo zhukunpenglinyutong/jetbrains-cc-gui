@@ -103,6 +103,12 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     if (nameMap[name]) {
       return nameMap[name];
     }
+
+    // 检查测试文件
+    if (name.endsWith('.test.ts') || name.endsWith('.test.tsx') || name.endsWith('.test.js') || name.endsWith('.test.jsx') ||
+        name.endsWith('.spec.ts') || name.endsWith('.spec.tsx') || name.endsWith('.spec.js') || name.endsWith('.spec.jsx')) {
+      return icons.icon_test_ts;
+    }
   }
 
   if (!extension) {

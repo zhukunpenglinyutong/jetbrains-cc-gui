@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { ToolInput } from '../../types';
 import { openFile } from '../../utils/bridge';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
+import { getFileIcon } from '../../utils/fileIcons';
+import { icon_folder } from '../../utils/icons';
 
 const CODICON_MAP: Record<string, string> = {
   read: 'codicon-eye',
@@ -130,12 +132,21 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
 
   // 判断是否为文件路径（非目录）
   const isFilePath = filePath && !filePath.endsWith('/') && filePath !== '.';
+  // 判断是否为目录
+  const isDirectoryPath = filePath && (filePath.endsWith('/') || filePath === '.');
 
   const handleFileClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isFilePath) {
       openFile(filePath);
     }
+  };
+
+  const getFileIconSvg = (path?: string) => {
+    if (!path) return '';
+    const name = getFileName(path);
+    const extension = name.indexOf('.') !== -1 ? name.split('.').pop() : '';
+    return getFileIcon(extension, name);
   };
 
   return (
@@ -159,7 +170,21 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
                 className={`task-summary-text tool-title-summary ${isFilePath ? 'clickable-file' : ''}`}
                 title={isFilePath ? `点击打开 ${filePath}` : summary}
                 onClick={isFilePath ? handleFileClick : undefined}
+                style={(isFilePath || isDirectoryPath) ? { display: 'flex', alignItems: 'center' } : undefined}
               >
+                {(isFilePath || isDirectoryPath) && (
+                   isDirectoryPath ? (
+                     <span 
+                        style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
+                        dangerouslySetInnerHTML={{ __html: icon_folder }} 
+                     />
+                   ) : (
+                     <span 
+                        style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
+                        dangerouslySetInnerHTML={{ __html: getFileIconSvg(filePath) }} 
+                     />
+                   )
+                )}
                 {summary}
               </span>
             )}

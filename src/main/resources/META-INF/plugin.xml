@@ -45,8 +45,8 @@
                 text="发送选中代码到GUI插件"
                 description="将当前选中的代码信息和路径发送到终端窗口"
                 icon="/icons/send-to-terminal.svg">
-            <!-- 添加到编辑器右键菜单（CutCopyPasteGroup后面） -->
-            <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="CutCopyPasteGroup"/>
+            <!-- 添加到编辑器右键菜单（显示在最上面） -->
+            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt K"/>
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt K"/>
             <keyboard-shortcut keymap="macOS" first-keystroke="meta alt K"/>

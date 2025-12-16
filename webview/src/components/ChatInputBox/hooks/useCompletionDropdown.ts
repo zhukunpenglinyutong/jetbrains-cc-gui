@@ -68,6 +68,7 @@ export function useCompletionDropdown<T>({
    * 打开下拉
    */
   const open = useCallback((position: DropdownPosition, triggerQuery: TriggerQuery) => {
+    console.log('[useCompletionDropdown] open:', { position, triggerQuery });
     setState(prev => ({
       ...prev,
       isOpen: true,
@@ -106,6 +107,8 @@ export function useCompletionDropdown<T>({
    * 搜索
    */
   const search = useCallback(async (query: string) => {
+    const startedAt = performance.now?.() ?? Date.now();
+    console.log('[useCompletionDropdown] search start:', { query });
     // 取消之前的请求
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -130,6 +133,9 @@ export function useCompletionDropdown<T>({
       if (controller.signal.aborted) return;
 
       const items = results.map(toDropdownItem);
+      const endedAt = performance.now?.() ?? Date.now();
+      const durationMs = (endedAt - startedAt).toFixed(1);
+      console.log('[useCompletionDropdown] search done:', { query, resultsCount: results.length, durationMs });
 
       setState(prev => ({
         ...prev,
@@ -166,6 +172,7 @@ export function useCompletionDropdown<T>({
    * 更新查询
    */
   const updateQuery = useCallback((triggerQuery: TriggerQuery) => {
+    console.log('[useCompletionDropdown] updateQuery:', triggerQuery);
     setState(prev => ({ ...prev, triggerQuery }));
     debouncedSearch(triggerQuery.query);
   }, [debouncedSearch]);

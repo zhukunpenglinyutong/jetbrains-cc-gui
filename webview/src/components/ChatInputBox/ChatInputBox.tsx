@@ -11,6 +11,8 @@ import {
   slashCommandProvider,
   commandToDropdownItem,
 } from './providers';
+import { getFileIcon } from '../../utils/fileIcons';
+import { icon_folder } from '../../utils/icons';
 import './styles.css';
 
 /**
@@ -27,7 +29,7 @@ export const ChatInputBox = ({
   usageMaxTokens,
   showUsage = true,
   attachments: externalAttachments,
-  placeholder = '@引用文件，shift + enter 换行',
+  placeholder = '@引用文件，/唤起指令，shift + enter 换行',
   disabled = false,
   value,
   onSubmit,
@@ -47,13 +49,19 @@ export const ChatInputBox = ({
   const attachments = externalAttachments ?? internalAttachments;
 
   // 输入框引用和状态
+  const containerRef = useRef<HTMLDivElement>(null);
   const editableRef = useRef<HTMLDivElement>(null);
   const submittedOnEnterRef = useRef(false);
-  const completionSelectedRef = useRef(false); // 标记补全菜单刚选中项目，防止回车同时发送消息
+  const completionSelectedRef = useRef(false);
+  const justRenderedTagRef = useRef(false); // 标记是否刚刚渲染了文件标签 // 标记补全菜单刚选中项目，防止回车同时发送消息
   const [isComposing, setIsComposing] = useState(false);
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
   const lastCompositionEndTimeRef = useRef<number>(0);
+
+  // 路径映射：存储文件名/相对路径 -> 完整绝对路径的映射
+  // 用于在 tooltip 中显示完整路径
+  const pathMappingRef = useRef<Map<string, string>>(new Map());
 
   // 触发检测 Hook
   const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
@@ -67,9 +75,27 @@ export const ChatInputBox = ({
       if (!editableRef.current || !query) return;
 
       const text = getTextContent();
+      // 优先使用绝对路径，如果没有则使用相对路径
+      const path = file.absolutePath || file.path;
       // 文件夹不加空格（方便继续输入路径），文件加空格
-      const replacement = file.type === 'directory' ? `@${file.path}` : `@${file.path} `;
+      const replacement = file.type === 'directory' ? `@${path}` : `@${path} `;
       const newText = fileCompletion.replaceText(text, replacement, query);
+
+      // 记录路径映射：文件名 -> 完整路径，用于 tooltip 显示
+      if (file.absolutePath) {
+        // 记录多个可能的 key：文件名、相对路径、绝对路径
+        pathMappingRef.current.set(file.name, file.absolutePath);
+        pathMappingRef.current.set(file.path, file.absolutePath);
+        pathMappingRef.current.set(file.absolutePath, file.absolutePath);
+        console.log('[PathMapping] 记录路径映射:', {
+          fileName: file.name,
+          relativePath: file.path,
+          absolutePath: file.absolutePath,
+          mapSize: pathMappingRef.current.size
+        });
+      } else {
+        console.warn('[PathMapping] 文件没有 absolutePath:', file);
+      }
 
       // 更新输入框内容
       editableRef.current.innerText = newText;
@@ -83,6 +109,12 @@ export const ChatInputBox = ({
       selection?.addRange(range);
 
       handleInput();
+
+      // 立即尝试渲染文件标签（不需要用户手动输入空格）
+      // 使用 setTimeout 确保 DOM 更新和光标位置已就绪
+      setTimeout(() => {
+        renderFileTags();
+      }, 0);
     },
   });
 
@@ -119,9 +151,290 @@ export const ChatInputBox = ({
    * 这里统一去除末尾的换行符，确保获取的内容干净
    */
   const getTextContent = useCallback(() => {
-    const text = editableRef.current?.innerText || '';
+    if (!editableRef.current) return '';
+
+    // 从 DOM 中提取纯文本，包括文件标签的原始引用格式
+    let text = '';
+    const walk = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.textContent || '';
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as HTMLElement;
+        // 如果是文件标签，提取原始的 @文件路径 格式
+        if (element.classList.contains('file-tag')) {
+          const filePath = element.getAttribute('data-file-path') || '';
+          // 不要在这里添加空格，空格由后面的文本节点提供
+          text += `@${filePath}`;
+        } else {
+          // 递归处理子节点
+          node.childNodes.forEach(walk);
+        }
+      }
+    };
+
+    editableRef.current.childNodes.forEach(walk);
+
     // 去除末尾的换行符（\n, \r, \r\n）
     return text.replace(/[\r\n]+$/, '');
+  }, []);
+
+  /**
+   * 转义 HTML 属性值
+   * 确保特殊字符（包括引号、<、>、&等）被正确处理
+   * 注意：反斜杠不需要转义，因为它在 HTML 属性中是合法字符
+   */
+  const escapeHtmlAttr = useCallback((str: string): string => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }, []);
+
+  /**
+   * 渲染文件标签
+   * 将输入框中的 @文件路径 格式文本转换为文件标签
+   */
+  const renderFileTags = useCallback(() => {
+    if (!editableRef.current) return;
+
+    // 正则：匹配 @文件路径 (以空格结束或字符串结束)
+    // 支持文件和目录：扩展名可选
+    // 支持 Windows 路径 (反斜杠) 和 Unix 路径 (正斜杠)
+    // 匹配除空格和@之外的所有字符（包括反斜杠、正斜杠、冒号等）
+    const fileRefRegex = /@([^\s@]+?)(\s|$)/g;
+
+    const currentText = getTextContent();
+    const matches = Array.from(currentText.matchAll(fileRefRegex));
+
+    if (matches.length === 0) {
+      // 没有文件引用，保持原样
+      return;
+    }
+
+    // 检查DOM中是否有纯文本的 @文件路径 需要转换
+    // 遍历所有文本节点，查找包含 @ 的文本
+    let hasUnrenderedReferences = false;
+    const walk = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || '';
+        if (text.includes('@')) {
+          hasUnrenderedReferences = true;
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as HTMLElement;
+        // 跳过已渲染的文件标签
+        if (!element.classList.contains('file-tag')) {
+          node.childNodes.forEach(walk);
+        }
+      }
+    };
+    editableRef.current.childNodes.forEach(walk);
+
+    // 如果没有未渲染的引用，不需要重新渲染
+    if (!hasUnrenderedReferences) {
+      return;
+    }
+
+    // 构建新的 HTML 内容
+    let newHTML = '';
+    let lastIndex = 0;
+
+    matches.forEach((match) => {
+      const fullMatch = match[0];
+      const filePath = match[1];
+      const matchIndex = match.index || 0;
+      // 添加匹配前的文本
+      if (matchIndex > lastIndex) {
+        const textBefore = currentText.substring(lastIndex, matchIndex);
+        newHTML += textBefore;
+      }
+
+      // 分离路径和行号部分（例如：src/file.ts#L10-20 -> src/file.ts）
+      const hashIndex = filePath.indexOf('#');
+      const pureFilePath = hashIndex !== -1 ? filePath.substring(0, hashIndex) : filePath;
+
+      // 获取纯文件名（不含行号，用于获取 ICON）
+      const pureFileName = pureFilePath.split(/[/\\]/).pop() || pureFilePath;
+
+      // 获取显示文件名（包含行号，用于显示）
+      const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
+
+      // 判断是文件还是目录（使用纯文件名）
+      const isDirectory = !pureFileName.includes('.');
+
+      let iconSvg = '';
+      if (isDirectory) {
+        iconSvg = icon_folder;
+      } else {
+        const extension = pureFileName.indexOf('.') !== -1 ? pureFileName.split('.').pop() : '';
+        iconSvg = getFileIcon(extension, pureFileName);
+      }
+
+      // 转义文件路径以安全地放入 HTML 属性
+      const escapedPath = escapeHtmlAttr(filePath);
+
+      // 尝试从路径映射中获取完整路径（用于 tooltip 显示）
+      // 优先级：pureFilePath -> pureFileName -> 原路径（去掉行号进行查找）
+      const fullPath =
+        pathMappingRef.current.get(pureFilePath) ||
+        pathMappingRef.current.get(pureFileName) ||
+        filePath;
+      const escapedFullPath = escapeHtmlAttr(fullPath);
+
+      // 调试日志：查看路径映射查找情况
+      console.log('[PathMapping] 查找路径映射:', {
+        filePath,
+        pureFilePath,
+        pureFileName,
+        displayFileName,
+        foundInMap: pathMappingRef.current.has(pureFilePath) || pathMappingRef.current.has(pureFileName),
+        fullPath,
+        mapSize: pathMappingRef.current.size,
+        allKeys: Array.from(pathMappingRef.current.keys())
+      });
+
+      // 创建文件标签 HTML
+      // data-file-path: 存储原始路径（用于提取文本时还原）
+      // data-tooltip: 存储完整路径（用于悬停显示）
+      newHTML += `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`;
+      newHTML += `<span class="file-tag-icon">${iconSvg}</span>`;
+      newHTML += `<span class="file-tag-text">${displayFileName}</span>`;
+      newHTML += `<span class="file-tag-close">×</span>`;
+      newHTML += `</span>`;
+
+      // 添加空格
+      newHTML += ' ';
+
+      lastIndex = matchIndex + fullMatch.length;
+    });
+
+    // 添加剩余文本
+    if (lastIndex < currentText.length) {
+      newHTML += currentText.substring(lastIndex);
+    }
+
+    // 在更新 innerHTML 之前设置标志，防止触发补全检测
+    justRenderedTagRef.current = true;
+    fileCompletion.close();
+    commandCompletion.close();
+
+    // 更新内容
+    editableRef.current.innerHTML = newHTML;
+
+    // 为文件标签的删除按钮添加事件监听
+    const tags = editableRef.current.querySelectorAll('.file-tag-close');
+    tags.forEach((closeBtn) => {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tag = (e.target as HTMLElement).closest('.file-tag');
+        if (tag) {
+          tag.remove();
+          // 不要在这里调用 handleInput，避免循环
+        }
+      });
+    });
+
+    // 恢复光标位置到末尾
+    const selection = window.getSelection();
+    if (selection && editableRef.current.childNodes.length > 0) {
+      try {
+        const range = document.createRange();
+        const lastChild = editableRef.current.lastChild;
+        if (lastChild) {
+          range.setStartAfter(lastChild);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      } catch (e) {
+        // 忽略光标恢复错误
+      }
+    }
+
+    // 渲染完成后，立即重置标志，允许后续的补全检测
+    // 使用 setTimeout 0 确保在当前事件循环后重置
+    setTimeout(() => {
+      justRenderedTagRef.current = false;
+    }, 0);
+  }, [fileCompletion, commandCompletion, escapeHtmlAttr, getTextContent]);
+
+  // Tooltip 状态
+  const [tooltip, setTooltip] = useState<{ 
+    visible: boolean; 
+    text: string; 
+    top: number; 
+    left: number;
+    tx?: string; // transform-x value
+    arrowLeft?: string; // arrow left position
+    width?: number; // width of the tooltip
+    isBar?: boolean; // whether to show as a bar
+  } | null>(null);
+
+  /**
+   * 处理鼠标悬停显示 Tooltip（小浮动弹窗样式，和上面 context-item 一致）
+   */
+  const handleMouseOver = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const fileTag = target.closest('.file-tag.has-tooltip');
+
+    if (fileTag) {
+      const text = fileTag.getAttribute('data-tooltip');
+      if (text) {
+        // 使用小浮动 tooltip（和 context-item 一样的效果）
+        const rect = fileTag.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const tagCenterX = rect.left + rect.width / 2; // 文件标签的中心X坐标
+
+        // 估算 tooltip 的宽度（根据文本长度）
+        const estimatedTooltipWidth = Math.min(text.length * 7 + 24, 400);
+        const tooltipHalfWidth = estimatedTooltipWidth / 2;
+
+        let tooltipLeft = tagCenterX; // tooltip 的基准点（默认居中）
+        let tx = '-50%'; // tooltip 的水平偏移（默认居中）
+        let arrowLeft = '50%'; // 箭头的位置（相对于 tooltip，默认在中间）
+
+        // 边界检测：防止 tooltip 左侧溢出
+        if (tagCenterX - tooltipHalfWidth < 10) {
+          // 靠左边界：tooltip 左对齐
+          tooltipLeft = 10; // tooltip 左边距离视口 10px
+          tx = '0'; // tooltip 不偏移
+          arrowLeft = `${tagCenterX - 10}px`; // 箭头指向文件标签中心
+        }
+        // 边界检测：防止 tooltip 右侧溢出
+        else if (tagCenterX + tooltipHalfWidth > viewportWidth - 10) {
+          // 靠右边界：tooltip 右对齐
+          tooltipLeft = viewportWidth - 10; // tooltip 右边距离视口 10px
+          tx = '-100%'; // tooltip 向左偏移整个宽度
+          arrowLeft = `${tagCenterX - (viewportWidth - 10) + estimatedTooltipWidth}px`; // 箭头指向文件标签中心
+        }
+        // 正常情况：tooltip 居中
+        else {
+          arrowLeft = '50%'; // 箭头在 tooltip 中间
+        }
+
+        setTooltip({
+          visible: true,
+          text,
+          top: rect.top,
+          left: tooltipLeft,
+          tx,
+          arrowLeft,
+          isBar: false
+        });
+      }
+    } else {
+      setTooltip(null);
+    }
+  }, []);
+
+  /**
+   * 处理鼠标离开隐藏 Tooltip
+   */
+  const handleMouseLeave = useCallback(() => {
+    setTooltip(null);
   }, []);
 
   /**
@@ -137,22 +450,18 @@ export const ChatInputBox = ({
 
   /**
    * 调整输入框高度
+   * 改动说明：不再手动计算和限制高度，而是让 contenteditable 元素自然撑开（height: auto），
+   * 并由外层容器 (.input-editable-wrapper) 通过 max-height 和 overflow-y 来控制滚动。
+   * 这样可以避免"外层容器滚动 + 内层元素滚动"导致的双滚动条问题。
    */
   const adjustHeight = useCallback(() => {
     const el = editableRef.current;
     if (!el) return;
 
-    // 重置高度以获取正确的 scrollHeight
+    // 确保高度为自动，由内容撑开
     el.style.height = 'auto';
-    const computed = window.getComputedStyle(el);
-    const lineHeightStr = computed.lineHeight;
-    const lineHeight = parseFloat(lineHeightStr);
-    const minHeight = isNaN(lineHeight) ? 60 : lineHeight * 3;
-
-    const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, 240));
-    el.style.height = `${newHeight}px`;
-
-    el.style.overflowY = el.scrollHeight > 240 ? 'auto' : 'hidden';
+    // 隐藏内层滚动条，完全依赖外层容器滚动
+    el.style.overflowY = 'hidden';
   }, []);
 
   /**
@@ -160,6 +469,14 @@ export const ChatInputBox = ({
    */
   const detectAndTriggerCompletion = useCallback(() => {
     if (!editableRef.current) return;
+
+    // 如果刚刚渲染了文件标签，跳过这次补全检测
+    if (justRenderedTagRef.current) {
+      justRenderedTagRef.current = false;
+      fileCompletion.close();
+      commandCompletion.close();
+      return;
+    }
 
     const text = getTextContent();
     const cursorPos = getCursorPosition(editableRef.current);
@@ -222,18 +539,28 @@ export const ChatInputBox = ({
   }, [getTextContent, adjustHeight, detectAndTriggerCompletion, onInput]);
 
   /**
+   * 处理键盘按下事件（用于检测空格触发文件标签渲染）
+   */
+  const handleKeyDownForTagRendering = useCallback((e: KeyboardEvent) => {
+    // 如果按下空格键，检查是否需要渲染文件标签
+    if (e.key === ' ') {
+      // 延迟执行，等待空格输入完成
+      setTimeout(() => {
+        renderFileTags();
+      }, 50);
+    }
+  }, [renderFileTags]);
+
+  /**
    * 处理提交
    */
   const handleSubmit = useCallback(() => {
     const content = getTextContent().trim();
-    console.log('[ChatInputBox] handleSubmit called, content:', content, 'attachments:', attachments.length);
 
     if (!content && attachments.length === 0) {
-      console.log('[ChatInputBox] No content or attachments, returning');
       return;
     }
     if (isLoading) {
-      console.log('[ChatInputBox] isLoading, returning');
       return;
     }
 
@@ -241,7 +568,6 @@ export const ChatInputBox = ({
     fileCompletion.close();
     commandCompletion.close();
 
-    console.log('[ChatInputBox] Calling onSubmit');
     onSubmit?.(content, attachments.length > 0 ? attachments : undefined);
 
     // 清空输入框
@@ -461,12 +787,6 @@ export const ChatInputBox = ({
       (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
       (e as unknown as { which?: number }).which === 13;
 
-    console.log('[ChatInputBox] handleKeyDown:', e.key,
-      'shiftKey:', e.shiftKey,
-      'isComposing:', isComposing,
-      'nativeIsComposing:', e.nativeEvent.isComposing,
-      'isIMEComposing:', isIMEComposing);
-
     // 优先处理 Mac 风格的光标移动和文本选择
     if (handleMacCursorMovement(e)) {
       return;
@@ -517,7 +837,6 @@ export const ChatInputBox = ({
 
     // Enter 发送（非 Shift 组合，非 IME 组合）
     if (isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing) {
-      console.log('[ChatInputBox] Enter pressed, calling handleSubmit');
       e.preventDefault();
       submittedOnEnterRef.current = true;
       handleSubmit();
@@ -719,28 +1038,11 @@ export const ChatInputBox = ({
    * 处理粘贴事件 - 检测图片和纯文本
    */
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    console.log('[ChatInputBox] ========== handlePaste START ==========');
     const items = e.clipboardData?.items;
-    console.log('[ChatInputBox] clipboardData items count:', items?.length);
 
     if (!items) {
-      console.log('[ChatInputBox] No clipboard items, allowing default paste');
       return;
     }
-
-    // 打印所有 clipboard items 的详细信息
-    console.log('[ChatInputBox] All clipboard items:');
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      console.log(`  [${i}] type: "${item.type}", kind: "${item.kind}"`);
-    }
-
-    // 尝试从多种格式获取文本内容
-    const plainText = e.clipboardData.getData('text/plain');
-    const uriList = e.clipboardData.getData('text/uri-list');
-
-    console.log('[ChatInputBox] Plain text available:', plainText ? `yes (${plainText.length} chars)` : 'no');
-    console.log('[ChatInputBox] URI list available:', uriList ? `yes (${uriList.length} chars)` : 'no');
 
     // 检查是否有真正的图片（type 为 image/*）
     let hasImage = false;
@@ -749,18 +1051,15 @@ export const ChatInputBox = ({
 
       // 只处理真正的图片类型（type 以 image/ 开头）
       if (item.type.startsWith('image/')) {
-        console.log('[ChatInputBox] Found image item at index', i, ', type:', item.type);
         hasImage = true;
         e.preventDefault();
 
         const blob = item.getAsFile();
-        console.log('[ChatInputBox] Got blob:', blob ? 'yes' : 'no', blob ? `size: ${blob.size}` : '');
 
         if (blob) {
           // 读取图片为 Base64
           const reader = new FileReader();
           reader.onload = () => {
-            console.log('[ChatInputBox] Image loaded, result length:', (reader.result as string)?.length);
             const base64 = (reader.result as string).split(',')[1];
             const mediaType = blob.type || item.type || 'image/png';
             const ext = (() => {
@@ -777,27 +1076,18 @@ export const ChatInputBox = ({
               mediaType,
               data: base64,
             };
-            console.log('[ChatInputBox] Created attachment:', attachment.fileName);
 
-            setInternalAttachments(prev => {
-              console.log('[ChatInputBox] Adding image attachment, prev count:', prev.length);
-              return [...prev, attachment];
-            });
-          };
-          reader.onerror = (error) => {
-            console.error('[ChatInputBox] FileReader error:', error);
+            setInternalAttachments(prev => [...prev, attachment]);
           };
           reader.readAsDataURL(blob);
         }
 
-        console.log('[ChatInputBox] ========== handlePaste END (image) ==========');
         return;
       }
     }
 
     // 如果没有图片，尝试获取文本或文件路径
     if (!hasImage) {
-      console.log('[ChatInputBox] No image found, trying to get text or file path');
       e.preventDefault();
 
       // 尝试多种方式获取文本
@@ -807,55 +1097,39 @@ export const ChatInputBox = ({
 
       // 如果还是没有文本，尝试从 file 类型的 item 中获取文件名/路径
       if (!text) {
-        console.log('[ChatInputBox] No text data, trying to get from file items');
-
         // 检查是否有文件类型的 item
         let hasFileItem = false;
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
           if (item.kind === 'file') {
             hasFileItem = true;
-            const file = item.getAsFile();
-            if (file) {
-              console.log('[ChatInputBox] Got file from clipboard:', file.name, file.type, file.size);
-            }
             break;
           }
         }
 
         // 如果有文件类型的 item，尝试通过 Java 端获取完整路径
         if (hasFileItem && (window as any).getClipboardFilePath) {
-          console.log('[ChatInputBox] Requesting full path from Java...');
           (window as any).getClipboardFilePath().then((fullPath: string) => {
-            console.log('[ChatInputBox] Received full path from Java:', fullPath);
             if (fullPath && fullPath.trim()) {
               // 插入完整路径
               document.execCommand('insertText', false, fullPath);
               handleInput();
             }
-          }).catch((error: any) => {
-            console.error('[ChatInputBox] Error getting clipboard path:', error);
+          }).catch(() => {
+            // 忽略错误
           });
-          console.log('[ChatInputBox] ========== handlePaste END (async path request) ==========');
           return;
         }
       }
 
-      console.log('[ChatInputBox] Final text to insert, length:', text ? text.length : 0);
-
       if (text && text.trim()) {
         // 使用 document.execCommand 插入纯文本（保持光标位置）
-        const success = document.execCommand('insertText', false, text);
-        console.log('[ChatInputBox] execCommand insertText result:', success);
+        document.execCommand('insertText', false, text);
 
         // 触发 input 事件以更新状态
         handleInput();
-      } else {
-        console.log('[ChatInputBox] No text to insert');
       }
     }
-
-    console.log('[ChatInputBox] ========== handlePaste END ==========');
   }, [generateId, handleInput]);
 
   /**
@@ -875,22 +1149,17 @@ export const ChatInputBox = ({
     e.preventDefault();
     e.stopPropagation();
 
-    console.log('[ChatInputBox] handleDrop called');
-
     // 先获取文本内容（文件路径）
     const text = e.dataTransfer?.getData('text/plain');
-    console.log('[ChatInputBox] Drop text:', text);
 
     // 再检查文件对象
     const files = e.dataTransfer?.files;
-    console.log('[ChatInputBox] Drop files count:', files?.length);
 
     // 检查是否有实际的图片文件对象
     let hasImageFile = false;
     if (files && files.length > 0) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        console.log('[ChatInputBox] Drop file', i, '- type:', file.type, ', name:', file.name, ', size:', file.size);
 
         // 只处理图片文件
         if (file.type.startsWith('image/')) {
@@ -911,12 +1180,8 @@ export const ChatInputBox = ({
               mediaType: file.type || 'image/png',
               data: base64,
             };
-            console.log('[ChatInputBox] Created attachment from drop:', attachment.fileName);
 
             setInternalAttachments(prev => [...prev, attachment]);
-          };
-          reader.onerror = (error) => {
-            console.error('[ChatInputBox] FileReader error:', error);
           };
           reader.readAsDataURL(file);
         }
@@ -925,50 +1190,67 @@ export const ChatInputBox = ({
 
     // 如果有图片文件，不处理文本
     if (hasImageFile) {
-      console.log('[ChatInputBox] Has image file, skipping text insertion');
       return;
     }
 
     // 没有图片文件，处理文本（文件路径或其他文本）
     if (text && text.trim()) {
-      console.log('[ChatInputBox] Inserting text (file path or plain text):', text);
+      // 自动添加 @ 前缀（如果还没有）
+      const textToInsert = text.startsWith('@') ? text : `@${text}`;
 
       // 获取当前光标位置
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editableRef.current) {
         // 确保光标在输入框内
         if (editableRef.current.contains(selection.anchorNode)) {
-          // 使用 document.execCommand 插入纯文本（保持光标位置）
-          document.execCommand('insertText', false, text);
-          console.log('[ChatInputBox] Text inserted successfully');
+          // 使用现代 API 插入文本
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          const textNode = document.createTextNode(textToInsert);
+          range.insertNode(textNode);
+
+          // 将光标移到插入文本后
+          range.setStartAfter(textNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
         } else {
-          // 光标不在输入框内，直接追加到末尾
-          console.log('[ChatInputBox] Cursor not in editable, appending to end');
-          const currentText = getTextContent();
-          editableRef.current.innerText = currentText + text;
+          // 光标不在输入框内，追加到末尾
+          // 使用 appendChild 而不是 innerText，避免破坏已有的文件标签
+          const textNode = document.createTextNode(textToInsert);
+          editableRef.current.appendChild(textNode);
 
           // 将光标移到末尾
           const range = document.createRange();
-          range.selectNodeContents(editableRef.current);
-          range.collapse(false);
+          range.setStartAfter(textNode);
+          range.collapse(true);
           selection.removeAllRanges();
           selection.addRange(range);
         }
       } else {
-        // 没有选区，直接追加
-        console.log('[ChatInputBox] No selection, appending to end');
-        const currentText = getTextContent();
+        // 没有选区，追加到末尾
         if (editableRef.current) {
-          editableRef.current.innerText = currentText + text;
+          const textNode = document.createTextNode(textToInsert);
+          editableRef.current.appendChild(textNode);
         }
       }
 
-      // 触发 input 事件以更新状态
-      handleInput();
-    } else {
-      console.log('[ChatInputBox] No text to insert');
+      // 关闭补全菜单
+      fileCompletion.close();
+      commandCompletion.close();
+
+      // 直接触发状态更新，不调用 handleInput（避免重新检测补全）
+      const newText = getTextContent();
+      setHasContent(!!newText.trim());
+      adjustHeight();
+      onInput?.(newText);
+
+      // 立即渲染文件标签（不需要等待空格）
+      setTimeout(() => {
+        renderFileTags();
+      }, 50);
     }
-  }, [generateId, handleInput, getTextContent]);
+  }, [generateId, getTextContent, renderFileTags, fileCompletion, commandCompletion, adjustHeight, onInput]);
 
   /**
    * 处理添加附件
@@ -1029,48 +1311,135 @@ export const ChatInputBox = ({
 
   // 初始化时聚焦和注册全局函数
   useEffect(() => {
-    console.log('[ChatInputBox] Component mounted');
-
     // 注册全局函数以接收 Java 传递的文件路径
     (window as any).handleFilePathFromJava = (filePath: string) => {
-      console.log('[ChatInputBox] Received file path from Java:', filePath);
-
       if (!editableRef.current) return;
 
-      // 插入文件路径到输入框
+      // 插入文件路径到输入框（自动添加 @ 前缀）
+      const pathToInsert = filePath.startsWith('@') ? filePath : `@${filePath}`;
+
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
         // 光标在输入框内，在光标位置插入
-        document.execCommand('insertText', false, filePath);
-        console.log('[ChatInputBox] File path inserted at cursor position');
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(pathToInsert);
+        range.insertNode(textNode);
+
+        // 将光标移到插入文本后
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
       } else {
         // 光标不在输入框内，追加到末尾
-        const currentText = getTextContent();
-        editableRef.current.innerText = currentText + filePath;
-        console.log('[ChatInputBox] File path appended to end');
+        // 使用 appendChild 而不是 innerText，避免破坏已有的文件标签
+        const textNode = document.createTextNode(pathToInsert);
+        editableRef.current.appendChild(textNode);
 
         // 将光标移到末尾
         const range = document.createRange();
-        range.selectNodeContents(editableRef.current);
-        range.collapse(false);
+        range.setStartAfter(textNode);
+        range.collapse(true);
         selection?.removeAllRanges();
         selection?.addRange(range);
       }
 
-      // 触发 input 事件以更新状态
-      handleInput();
+      // 关闭补全菜单
+      fileCompletion.close();
+      commandCompletion.close();
+
+      // 直接触发状态更新，不调用 handleInput（避免重新检测补全）
+      const newText = getTextContent();
+      setHasContent(!!newText.trim());
+      adjustHeight();
+      onInput?.(newText);
+
+      // 立即渲染文件标签
+      setTimeout(() => {
+        renderFileTags();
+      }, 50);
     };
+
+    // 添加空格键监听以触发文件标签渲染
+    const handleKeyDown = (e: KeyboardEvent) => {
+      handleKeyDownForTagRendering(e);
+    };
+
+    if (editableRef.current) {
+      editableRef.current.addEventListener('keydown', handleKeyDown);
+    }
 
     focusInput();
 
     // 清理函数
     return () => {
+      if (editableRef.current) {
+        editableRef.current.removeEventListener('keydown', handleKeyDown);
+      }
       delete (window as any).handleFilePathFromJava;
+      delete (window as any).insertCodeSnippetAtCursor;
     };
-  }, [focusInput, handlePaste, handleDrop, handleDragOver, handleInput, getTextContent]);
+  }, [focusInput, handlePaste, handleDrop, handleDragOver, getTextContent, handleKeyDownForTagRendering, renderFileTags, fileCompletion, commandCompletion, adjustHeight, onInput]);
+
+  // 注册全局方法：在光标位置插入代码片段
+  useEffect(() => {
+    (window as any).insertCodeSnippetAtCursor = (selectionInfo: string) => {
+      if (!editableRef.current) return;
+
+      console.log('[ChatInputBox] Insert code snippet at cursor:', selectionInfo);
+
+      // 确保输入框有焦点
+      editableRef.current.focus();
+
+      // 在光标位置插入文本
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
+        // 光标在输入框内，在光标位置插入
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(selectionInfo + ' ');
+        range.insertNode(textNode);
+
+        // 将光标移到插入文本后
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        // 光标不在输入框内，追加到末尾
+        const textNode = document.createTextNode(selectionInfo + ' ');
+        editableRef.current.appendChild(textNode);
+
+        // 将光标移到末尾
+        const range = document.createRange();
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+
+      // 触发状态更新
+      const newText = getTextContent();
+      setHasContent(!!newText.trim());
+      adjustHeight();
+      onInput?.(newText);
+
+      // 立即渲染文件标签
+      setTimeout(() => {
+        renderFileTags();
+        // 渲染后重新聚焦
+        editableRef.current?.focus();
+      }, 50);
+    };
+
+    return () => {
+      delete (window as any).insertCodeSnippetAtCursor;
+    };
+  }, [getTextContent, renderFileTags, adjustHeight, onInput]);
 
   return (
-    <div className="chat-input-box" onClick={focusInput}>
+    <div className="chat-input-box" onClick={focusInput} ref={containerRef}>
       {/* 附件列表 */}
       {attachments.length > 0 && (
         <AttachmentList
@@ -1092,7 +1461,11 @@ export const ChatInputBox = ({
       />
 
       {/* 输入区域 */}
-      <div className="input-editable-wrapper">
+      <div
+        className="input-editable-wrapper"
+        onMouseOver={handleMouseOver}
+        onMouseLeave={handleMouseLeave}
+      >
         <div
           ref={editableRef}
           className="input-editable"
@@ -1161,6 +1534,7 @@ export const ChatInputBox = ({
       <CompletionDropdown
         isVisible={commandCompletion.isOpen}
         position={commandCompletion.position}
+        width={450}
         items={commandCompletion.items}
         selectedIndex={commandCompletion.activeIndex}
         loading={commandCompletion.loading}
@@ -1169,6 +1543,24 @@ export const ChatInputBox = ({
         onSelect={(_, index) => commandCompletion.selectIndex(index)}
         onMouseEnter={commandCompletion.handleMouseEnter}
       />
+
+      {/* 悬浮提示 Tooltip (使用 Portal 或 Fixed 定位以突破 overflow 限制) */}
+      {tooltip && tooltip.visible && (
+        <div
+          className={`tooltip-popup ${tooltip.isBar ? 'tooltip-bar' : ''}`}
+          style={{
+            top: `${tooltip.top}px`, // 直接使用计算好的 top，不再在这里减
+            left: `${tooltip.left}px`,
+            width: tooltip.width ? `${tooltip.width}px` : undefined,
+            // @ts-ignore
+            '--tooltip-tx': tooltip.tx || '-50%',
+            // @ts-ignore
+            '--arrow-left': tooltip.arrowLeft || '50%',
+          }}
+        >
+          {tooltip.text}
+        </div>
+      )}
     </div>
   );
 };

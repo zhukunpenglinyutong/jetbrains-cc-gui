@@ -166,11 +166,7 @@ public class ClaudeHistoryReader {
     public List<SessionInfo> readProjectSessions(String projectPath) throws IOException {
         List<SessionInfo> sessions = new ArrayList<>();
 
-        System.out.println("[ClaudeHistoryReader] ========== readProjectSessions START ==========");
-        System.out.println("[ClaudeHistoryReader] Original projectPath: " + projectPath);
-
         if (projectPath == null || projectPath.isEmpty()) {
-            System.out.println("[ClaudeHistoryReader] projectPath is null or empty, returning empty list");
             return sessions;
         }
 
@@ -179,28 +175,7 @@ public class ClaudeHistoryReader {
         String sanitizedPath = PathUtils.sanitizePath(projectPath);
         Path projectDir = PROJECTS_DIR.resolve(sanitizedPath);
 
-        System.out.println("[ClaudeHistoryReader] Sanitized path: " + sanitizedPath);
-        System.out.println("[ClaudeHistoryReader] PROJECTS_DIR: " + PROJECTS_DIR);
-        System.out.println("[ClaudeHistoryReader] Looking for project dir: " + projectDir);
-        System.out.println("[ClaudeHistoryReader] Project dir exists: " + Files.exists(projectDir));
-
-        // 列出 PROJECTS_DIR 下的所有目录，帮助调试
-        if (Files.exists(PROJECTS_DIR)) {
-            try {
-                System.out.println("[ClaudeHistoryReader] Available project directories:");
-                Files.list(PROJECTS_DIR)
-                    .filter(Files::isDirectory)
-                    .limit(10)  // 只显示前10个
-                    .forEach(dir -> System.out.println("[ClaudeHistoryReader]   - " + dir.getFileName()));
-            } catch (IOException e) {
-                System.err.println("[ClaudeHistoryReader] Failed to list project directories: " + e.getMessage());
-            }
-        } else {
-            System.out.println("[ClaudeHistoryReader] PROJECTS_DIR does not exist: " + PROJECTS_DIR);
-        }
-
         if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
-            System.out.println("[ClaudeHistoryReader] Project directory not found, returning empty list");
             return sessions;
         }
 
@@ -243,7 +218,7 @@ public class ClaudeHistoryReader {
                     }
 
                 } catch (Exception e) {
-                    System.err.println("读取对话文件失败: " + path + " - " + e.getMessage());
+                    // 跳过读取失败的文件
                 }
             });
 
@@ -510,7 +485,7 @@ public class ClaudeHistoryReader {
                             history.add(entry);
                         }
                     } catch (Exception e) {
-                        System.err.println("解析行失败: " + e.getMessage());
+                        // 跳过解析失败的行
                     }
                 }
             }
@@ -637,14 +612,14 @@ public class ClaudeHistoryReader {
                                 convData.put("timestamp", Files.getLastModifiedTime(convFile).toMillis());
                                 conversations.add(convData);
                             } catch (Exception e) {
-                                System.err.println("读取对话文件失败: " + e.getMessage());
+                                // 跳过读取失败的文件
                             }
                         }
                     });
 
                 details.put("conversations", conversations);
             } catch (IOException e) {
-                System.err.println("读取项目详情失败: " + e.getMessage());
+                // 忽略读取失败
             }
         }
 
@@ -772,7 +747,7 @@ public class ClaudeHistoryReader {
                             try {
                                 allSessions.addAll(readSessionsFromDir(dir));
                             } catch (Exception e) {
-                                System.err.println("Error reading dir " + dir + ": " + e.getMessage());
+                                // 跳过读取失败的目录
                             }
                         });
                 }
@@ -804,7 +779,7 @@ public class ClaudeHistoryReader {
             return stats;
 
         } catch (Exception e) {
-            e.printStackTrace();
+            // 忽略错误，返回空统计
             return stats;
         }
     }
@@ -823,7 +798,7 @@ public class ClaudeHistoryReader {
                     }
                 });
         } catch (IOException e) {
-            e.printStackTrace();
+            // 忽略读取失败
         }
         return sessions;
     }
@@ -1058,32 +1033,4 @@ public class ClaudeHistoryReader {
         }
     }
 
-    /**
-     * 主方法用于测试
-     */
-    public static void main(String[] args) {
-        ClaudeHistoryReader reader = new ClaudeHistoryReader();
-
-        try {
-            // 测试读取历史
-            List<HistoryEntry> history = reader.readHistory();
-            System.out.println("历史记录条数: " + history.size());
-
-            // 测试获取项目
-            List<ProjectInfo> projects = reader.getProjects(history);
-            System.out.println("项目数: " + projects.size());
-
-            // 测试获取统计
-            Statistics stats = reader.getStatistics(history);
-            System.out.println("总消息数: " + stats.totalMessages);
-            System.out.println("总项目数: " + stats.totalProjects);
-
-            // 输出JSON
-            System.out.println("\nJSON输出:");
-            System.out.println(reader.getAllDataAsJson());
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 }
