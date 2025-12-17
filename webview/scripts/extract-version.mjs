@@ -16,14 +16,14 @@ const buildGradlePath = path.join(projectRoot, 'build.gradle');
 const buildGradleContent = fs.readFileSync(buildGradlePath, 'utf8');
 
 // 提取版本号
-// 查找类似 version '0.1.0-beta3' 这样的行
-let versionMatch = buildGradleContent.match(/^version\s+'(.+)'$/m);
+// 查找类似 version = '0.1.0-beta3' 这样的行
+let versionMatch = buildGradleContent.match(/^version\s*=\s*'(.+)'$/m);
 if (!versionMatch) {
   // 如果上面的正则失败，尝试另一种方式
   const lines = buildGradleContent.split('\n');
-  const versionLine = lines.find(line => line.trim().startsWith('version '));
+  const versionLine = lines.find(line => line.trim().startsWith('version ='));
   if (versionLine) {
-    const match = versionLine.match(/version\s+'(.+)'/);
+    const match = versionLine.match(/version\s*=\s*'(.+)'/);
     if (match) {
       versionMatch = match;
     }

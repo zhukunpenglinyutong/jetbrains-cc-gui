@@ -158,14 +158,14 @@ public class BridgeDirectoryResolver {
 
         try {
             String pluginsRoot = PathManager.getPluginsPath();
-            if (pluginsRoot != null && !pluginsRoot.isEmpty()) {
+            if (!pluginsRoot.isEmpty()) {
                 addCandidate(possibleDirs, Paths.get(pluginsRoot, PLUGIN_DIR_NAME, SDK_DIR_NAME).toFile());
                 addCandidate(possibleDirs, Paths.get(pluginsRoot, PLUGIN_ID, SDK_DIR_NAME).toFile());
             }
 
             // 使用系统路径下的 plugins 目录代替已废弃的 getPluginTempPath()
             String systemPath = PathManager.getSystemPath();
-            if (systemPath != null && !systemPath.isEmpty()) {
+            if (!systemPath.isEmpty()) {
                 Path sandboxPath = Paths.get(systemPath, "plugins");
                 addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_DIR_NAME).resolve(SDK_DIR_NAME).toFile());
                 addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_ID).resolve(SDK_DIR_NAME).toFile());
@@ -282,7 +282,55 @@ public class BridgeDirectoryResolver {
                         }
                     }
                 }
-                return null;
+
+                // 如果在插件目录或 lib 下找不到，尝试查找常见的 sandbox 顶级 plugins 目录和 system/config 下的 plugins
+                List<File> fallbackCandidates = new ArrayList<>();
+                try {
+                    // 向上查找祖先，寻找可能的 idea-sandbox 根目录或包含顶级 plugins 的目录
+                    File ancestor = pluginDir;
+                    int climbs = 0;
+                    while (climbs < 6) {
+                        File parent = ancestor.getParentFile();
+                        if (parent == null) break;
+
+                        File maybeTopPlugins = new File(parent, "plugins");
+                        if (maybeTopPlugins.exists() && maybeTopPlugins.isDirectory()) {
+                            fallbackCandidates.add(new File(maybeTopPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeTopPlugins, PLUGIN_ID + File.separator + SDK_ARCHIVE_NAME));
+                        }
+
+                        // system/config siblings under this parent
+                        File maybeSystemPlugins = new File(parent, "system/plugins");
+                        File maybeConfigPlugins = new File(parent, "config/plugins");
+                        if (maybeSystemPlugins.exists() && maybeSystemPlugins.isDirectory()) {
+                            fallbackCandidates.add(new File(maybeSystemPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeSystemPlugins, PLUGIN_ID + File.separator + SDK_ARCHIVE_NAME));
+                        }
+                        if (maybeConfigPlugins.exists() && maybeConfigPlugins.isDirectory()) {
+                            fallbackCandidates.add(new File(maybeConfigPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeConfigPlugins, PLUGIN_ID + File.separator + SDK_ARCHIVE_NAME));
+                        }
+
+                        ancestor = parent;
+                        climbs++;
+                    }
+                } catch (Throwable ignore) {
+                    // ignore fallback discovery errors
+                }
+
+                // 打印并尝试这些候选路径
+                for (File f : fallbackCandidates) {
+                    System.out.println("[BridgeResolver] 尝试候选路径: " + f.getAbsolutePath() + " (存在: " + f.exists() + ")");
+                    if (f.exists()) {
+                        archiveFile = f;
+                        break;
+                    }
+                }
+
+                if (!archiveFile.exists()) {
+                    return null;
+                }
+
             }
 
             File extractedDir = new File(pluginDir, SDK_DIR_NAME);
@@ -372,26 +420,27 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * 手动设置 claude-bridge 目录路径
+     * 手动设置 claude-bridge 目录路径.
      */
     public void setSdkDir(String path) {
         this.cachedSdkDir = new File(path);
     }
 
     /**
-     * 获取当前使用的 claude-bridge 目录
+     * 获取当前使用的 claude-bridge 目录.
      */
     public File getSdkDir() {
-        if (cachedSdkDir == null) {
-            return findSdkDir();
+        if (this.cachedSdkDir == null) {
+            return this.findSdkDir();
         }
-        return cachedSdkDir;
+        return this.cachedSdkDir;
     }
 
     /**
-     * 清除缓存
+     * 清除缓存.
      */
     public void clearCache() {
         this.cachedSdkDir = null;
     }
 }
+
