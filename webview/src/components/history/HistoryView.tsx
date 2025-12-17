@@ -7,6 +7,7 @@ interface HistoryViewProps {
   historyData: HistoryData | null;
   onLoadSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void; // 添加删除回调
+  onExportSession: (sessionId: string, title: string) => void; // 添加导出回调
 }
 
 const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string) => {
@@ -31,7 +32,7 @@ const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string
   return `${Math.max(seconds, 1)} ${t('history.timeAgo.secondsAgo')}`;
 };
 
-const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryViewProps) => {
+const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSession }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // 记录待删除的会话ID
@@ -93,6 +94,12 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryVie
     setDeletingSessionId(sessionId); // 显示确认对话框
   };
 
+  // 处理导出按钮点击(阻止事件冒泡,避免触发会话加载)
+  const handleExportClick = (e: React.MouseEvent, sessionId: string, title: string) => {
+    e.stopPropagation(); // 阻止点击事件冒泡到父元素
+    onExportSession(sessionId, title);
+  };
+
   // 确认删除
   const confirmDelete = () => {
     if (deletingSessionId) {
@@ -112,6 +119,15 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession }: HistoryVie
         <div className="history-item-title">{session.title}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className="history-item-time">{formatTimeAgo(session.lastTimestamp, t)}</div>
+          {/* 导出按钮 */}
+          <button
+            className="history-export-btn"
+            onClick={(e) => handleExportClick(e, session.sessionId, session.title)}
+            title={t('history.exportSession')}
+            aria-label={t('history.exportSession')}
+          >
+            <span className="codicon codicon-arrow-down"></span>
+          </button>
           {/* 删除按钮 */}
           <button
             className="history-delete-btn"

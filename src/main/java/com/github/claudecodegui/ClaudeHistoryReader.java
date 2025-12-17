@@ -629,6 +629,9 @@ public class ClaudeHistoryReader {
     /**
      * 获取指定项目的历史记录JSON字符串
      */
+    /**
+     * 获取项目数据的JSON字符串
+     */
     public String getProjectDataAsJson(String projectPath) {
         try {
             // 从 projects 目录读取会话列表
@@ -649,6 +652,58 @@ public class ClaudeHistoryReader {
             return gson.toJson(result);
         } catch (Exception e) {
             return gson.toJson(ApiResponse.error("读取项目数据失败: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 读取单个会话的所有消息
+     * @param projectPath 项目路径
+     * @param sessionId 会话ID
+     * @return 消息列表的JSON字符串
+     */
+    public String getSessionMessagesAsJson(String projectPath, String sessionId) {
+        try {
+            if (projectPath == null || projectPath.isEmpty() || sessionId == null || sessionId.isEmpty()) {
+                return gson.toJson(new ArrayList<>());
+            }
+
+            // 转换项目路径为安全的目录名
+            String sanitizedPath = PathUtils.sanitizePath(projectPath);
+            Path projectDir = PROJECTS_DIR.resolve(sanitizedPath);
+
+            if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
+                return gson.toJson(new ArrayList<>());
+            }
+
+            // 读取会话文件
+            Path sessionFile = projectDir.resolve(sessionId + ".jsonl");
+            if (!Files.exists(sessionFile)) {
+                return gson.toJson(new ArrayList<>());
+            }
+
+            List<ConversationMessage> messages = new ArrayList<>();
+
+            try (BufferedReader reader = Files.newBufferedReader(sessionFile)) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.trim().isEmpty()) continue;
+
+                    try {
+                        ConversationMessage msg = gson.fromJson(line, ConversationMessage.class);
+                        if (msg != null) {
+                            messages.add(msg);
+                        }
+                    } catch (Exception e) {
+                        // 跳过解析失败的行
+                    }
+                }
+            }
+
+            return gson.toJson(messages);
+        } catch (Exception e) {
+            System.err.println("[ClaudeHistoryReader] 读取会话消息失败: " + e.getMessage());
+            e.printStackTrace();
+            return gson.toJson(new ArrayList<>());
         }
     }
 

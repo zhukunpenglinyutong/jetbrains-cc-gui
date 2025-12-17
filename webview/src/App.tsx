@@ -258,6 +258,34 @@ const App = () => {
     window.addErrorMessage = (message) =>
       setMessages((prev) => [...prev, { type: 'error', content: message }]);
 
+    // 注册 toast 回调（后端调用）
+    window.addToast = (message, type) => {
+      addToast(message, type);
+    };
+
+    // 注册导出会话数据回调
+    window.onExportSessionData = (json) => {
+      try {
+        const messages = JSON.parse(json) as ClaudeMessage[];
+        const title = (window as any).__exportSessionTitle || 'session';
+        const sessionId = (window as any).__exportSessionId || 'unknown';
+
+        // 导入转换函数
+        import('./utils/exportMarkdown').then(({ convertMessagesToMarkdown, downloadMarkdown }) => {
+          const markdown = convertMessagesToMarkdown(messages, title);
+          const filename = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${sessionId.slice(0, 8)}.md`;
+          downloadMarkdown(markdown, filename);
+          // 注意：不在这里显示成功 toast，等待后端保存完成后再显示
+        }).catch(error => {
+          console.error('[Frontend] Failed to export session:', error);
+          addToast(t('history.exportFailed'), 'error');
+        });
+      } catch (error) {
+        console.error('[Frontend] Failed to parse export data:', error);
+        addToast(t('history.exportFailed'), 'error');
+      }
+    };
+
     // 注册斜杠命令回调（接收 SDK 返回的命令列表）
     resetSlashCommandsState(); // 重置状态，确保首次加载时能正确触发刷新
     resetFileReferenceState(); // 重置文件引用状态，防止 Promise 泄漏
@@ -735,6 +763,38 @@ const App = () => {
     }
   };
 
+  // 导出会话历史
+  const exportHistorySession = (sessionId: string, title: string) => {
+    // 发送导出请求到 Java 后端
+    sendBridgeMessage('export_session', sessionId);
+
+    // 存储会话标题，用于后续生成文件名
+    (window as any).__exportSessionTitle = title;
+    (window as any).__exportSessionId = sessionId;
+  };
+
+  // 导出当前会话
+  const exportCurrentSession = () => {
+    if (messages.length === 0) {
+      addToast(t('history.noSessions'), 'warning');
+      return;
+    }
+
+    // 使用当前会话的标题或生成一个默认标题
+    const title = sessionTitle;
+
+    // 导入转换函数并直接导出当前消息
+    import('./utils/exportMarkdown').then(({ convertMessagesToMarkdown, downloadMarkdown }) => {
+      const markdown = convertMessagesToMarkdown(messages, title);
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${timestamp}`;
+      downloadMarkdown(markdown, filename);
+    }).catch(error => {
+      console.error('[Frontend] Failed to export current session:', error);
+      addToast(t('history.exportFailed'), 'error');
+    });
+  };
+
   // 文案本地化映射
   const localizeMessage = (text: string): string => {
     const messageMap: Record<string, string> = {
@@ -1053,6 +1113,14 @@ const App = () => {
                 </button>
                 <button
                   className="icon-button"
+                  onClick={exportCurrentSession}
+                  data-tooltip={t('history.exportSession')}
+                  disabled={messages.length === 0}
+                >
+                  <span className="codicon codicon-arrow-down" />
+                </button>
+                <button
+                  className="icon-button"
                   onClick={() => setCurrentView('history')}
                   data-tooltip={t('common.history')}
                 >
@@ -1241,6 +1309,7 @@ const App = () => {
           historyData={historyData}
           onLoadSession={loadHistorySession}
           onDeleteSession={deleteHistorySession}
+          onExportSession={exportHistorySession}
         />
       )}
 

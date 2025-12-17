@@ -43,6 +43,11 @@ interface Window {
   setHistoryData?: (data: any) => void;
 
   /**
+   * Export session data callback
+   */
+  onExportSessionData?: (json: string) => void;
+
+  /**
    * Clear all messages
    */
   clearMessages?: () => void;
@@ -51,6 +56,11 @@ interface Window {
    * Add error message
    */
   addErrorMessage?: (message: string) => void;
+
+  /**
+   * Add toast notification (called from backend)
+   */
+  addToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 
   /**
    * Usage statistics update callback
