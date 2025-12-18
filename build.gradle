@@ -188,6 +188,16 @@ tasks.register('buildWebview', Exec) {
     doLast { println "Webview build completed." }
 }
 
+// 确保 processResources 在 buildWebview 之后执行
+// 使用 mustRunAfter 确保执行顺序，同时在 compileJava 前触发 buildWebview
+tasks.named('compileJava') {
+    dependsOn('buildWebview')
+}
+
+tasks.named('processResources') {
+    mustRunAfter('buildWebview')
+}
+
 tasks.register('packageAiBridge', Zip) {
     onlyIf { aiBridgeDir.exists() }
     archiveFileName = 'ai-bridge.zip'
