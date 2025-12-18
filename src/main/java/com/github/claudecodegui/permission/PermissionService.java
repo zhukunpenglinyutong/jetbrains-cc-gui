@@ -135,7 +135,7 @@ public class PermissionService {
             debugLog("INIT", "Permission directory created/verified: " + permissionDir);
         } catch (IOException e) {
             debugLog("INIT_ERROR", "Failed to create permission dir: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
         }
     }
 
@@ -406,7 +406,7 @@ public class PermissionService {
                 Thread.sleep(500);
             } catch (Exception e) {
                 debugLog("POLL_ERROR", "Error in poll loop: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("Error occurred", e);
                 try {
                     Thread.sleep(1000); // 出错后稍作等待
                 } catch (InterruptedException ex) {
@@ -536,7 +536,7 @@ public class PermissionService {
                         debugLog("DIALOG_COMPLETE", "Frontend dialog processing complete: allow=" + allow);
                     } catch (Exception e) {
                         debugLog("DIALOG_ERROR", "Error processing dialog result: " + e.getMessage());
-                        e.printStackTrace();
+                        LOG.error("Error occurred", e);
                     } finally {
                         processingRequests.remove(fileName);
                     }
@@ -545,7 +545,7 @@ public class PermissionService {
                     try {
                         writeResponse(requestId, false);
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        LOG.error("Error occurred", e);
                     }
                     notifyDecision(toolName, inputs, PermissionResponse.DENY);
                     processingRequests.remove(fileName);
@@ -605,7 +605,7 @@ public class PermissionService {
 
         } catch (Exception e) {
             debugLog("HANDLE_ERROR", "Error handling request: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
         } finally {
             processingRequests.remove(fileName);
         }
@@ -679,7 +679,7 @@ public class PermissionService {
             }
         } catch (IOException e) {
             debugLog("WRITE_ERROR", "Failed to write response file: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
         }
     }
 
@@ -692,14 +692,14 @@ public class PermissionService {
             try {
                 watchThread.join(1000);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                LOG.error("Error occurred", e);
             }
         }
         if (watchService != null) {
             try {
                 watchService.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                LOG.error("Error occurred", e);
             }
         }
     }
@@ -713,7 +713,7 @@ public class PermissionService {
         try {
             listener.onDecision(new PermissionDecision(toolName, inputs, response));
         } catch (Exception e) {
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
         }
     }
 }

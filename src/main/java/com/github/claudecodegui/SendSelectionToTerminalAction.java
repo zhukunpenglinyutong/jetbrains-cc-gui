@@ -196,7 +196,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
 
         } catch (Exception ex) {
             showError(project, "发送到聊天窗口失败: " + ex.getMessage());
-            ex.printStackTrace();
+            LOG.error("Error occurred", ex);
         }
     }
 
