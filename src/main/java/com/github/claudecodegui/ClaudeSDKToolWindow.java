@@ -482,7 +482,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 mainPanel.add(browserComponent, BorderLayout.CENTER);
 
             } catch (Exception e) {
-                e.printStackTrace();
+                LOG.error("Error occurred", e);
                 showErrorPanel();
             }
         }

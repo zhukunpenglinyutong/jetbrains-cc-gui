@@ -94,7 +94,7 @@ public class ToolInterceptor {
                 return null; // 超时视为拒绝
             }
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
             return null;
         }
 

@@ -617,7 +617,7 @@ public class CodemossSettingsService {
         } catch (Exception e) {
             String errorMsg = "通过 Node.js 读取数据库失败: " + e.getMessage();
             LOG.warn("[Backend] " + errorMsg);
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
             throw new IOException(errorMsg, e);
         }
 

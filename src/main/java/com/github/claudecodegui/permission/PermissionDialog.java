@@ -22,10 +22,13 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import com.intellij.openapi.diagnostic.Logger;
 /**
  * 权限请求对话框
  */
 public class PermissionDialog extends DialogWrapper {
+    private static final Logger LOG = Logger.getInstance(PermissionDialog.class);
+
     private final JBCefBrowser browser;
     private final JBCefJSQuery jsQuery;
     private final PermissionRequest request;
@@ -110,7 +113,7 @@ public class PermissionDialog extends DialogWrapper {
             browser.loadHTML(html);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
             browser.loadHTML("<html><body><h3>加载权限对话框失败</h3></body></html>");
         }
     }

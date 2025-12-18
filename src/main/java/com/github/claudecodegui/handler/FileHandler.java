@@ -268,17 +268,39 @@ public class FileHandler extends BaseMessageHandler {
                 }
 
                 final File finalFile = file;
+                final String canonicalPath;
+                try {
+                    canonicalPath = finalFile.getCanonicalPath();
+                } catch (Exception e) {
+                    LOG.error("无法获取规范路径: " + filePath, e);
+                    return;
+                }
 
                 // 使用 ReadAction.nonBlocking() 在后台线程中查找文件
                 ReadAction
                     .nonBlocking(() -> {
                         // 在后台线程中查找文件（这是慢操作）
-                        return LocalFileSystem.getInstance().findFileByIoFile(finalFile);
+                        // 先尝试刷新文件系统以确保能找到新创建的文件
+                        VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath);
+                        if (vf == null) {
+                            // 回退到使用 File 对象查找
+                            vf = LocalFileSystem.getInstance().findFileByIoFile(finalFile);
+                        }
+                        return vf;
                     })
                     .finishOnUiThread(ModalityState.nonModal(), virtualFile -> {
                         // 在 UI 线程中打开文件
                         if (virtualFile == null) {
-                            LOG.error("无法获取 VirtualFile: " + filePath);
+                            LOG.warn("无法获取 VirtualFile: " + filePath + ", 尝试使用规范路径: " + canonicalPath);
+                            // 最后尝试：在 UI 线程中再次刷新并查找
+                            VirtualFile retryVf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath);
+                            if (retryVf != null) {
+                                FileEditorManager.getInstance(context.getProject()).openFile(retryVf, true);
+                                LOG.info("重试成功打开文件: " + filePath);
+                            } else {
+                                LOG.error("最终无法获取 VirtualFile: " + filePath);
+                                callJavaScript("addErrorMessage", escapeJs("无法打开文件: " + filePath));
+                            }
                             return;
                         }
 
