@@ -58,7 +58,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 handleDeleteSession(content);
                 return true;
             case "export_session":
-                System.out.println("[HistoryHandler] 处理: export_session, sessionId=" + content);
+                LOG.info("[HistoryHandler] 处理: export_session, sessionId=" + content);
                 handleExportSession(content);
                 return true;
             default:
@@ -175,9 +175,14 @@ public class HistoryHandler extends BaseMessageHandler {
                     java.util.List<java.nio.file.Path> agentFiles = stream
                         .filter(path -> {
                             String filename = path.getFileName().toString();
-                            // 匹配 agent-*.jsonl 文件
-                            // 注意:这里删除所有 agent 文件,如果需要更精确的匹配,可以根据实际情况调整
-                            return filename.startsWith("agent-") && filename.endsWith(".jsonl");
+                            // 匹配 agent-*.jsonl 文件，并且需要属于当前会话
+                            if (!filename.startsWith("agent-") || !filename.endsWith(".jsonl")) {
+                                return false;
+                            }
+
+                            // 检查agent文件是否属于当前会话
+                            // 通过读取文件内容查找sessionId引用
+                            return isAgentFileRelatedToSession(path, sessionId);
                         })
                         .collect(java.util.stream.Collectors.toList());
 
@@ -208,7 +213,7 @@ public class HistoryHandler extends BaseMessageHandler {
      */
     private void handleExportSession(String content) {
         CompletableFuture.runAsync(() -> {
-            System.out.println("[HistoryHandler] ========== 开始导出会话 ==========");
+            LOG.info("[HistoryHandler] ========== 开始导出会话 ==========");
 
             try {
                 // 解析前端传来的JSON，获取 sessionId 和 title
@@ -217,9 +222,9 @@ public class HistoryHandler extends BaseMessageHandler {
                 String title = exportRequest.get("title").getAsString();
 
                 String projectPath = context.getProject().getBasePath();
-                System.out.println("[HistoryHandler] SessionId: " + sessionId);
-                System.out.println("[HistoryHandler] Title: " + title);
-                System.out.println("[HistoryHandler] ProjectPath: " + projectPath);
+                LOG.info("[HistoryHandler] SessionId: " + sessionId);
+                LOG.info("[HistoryHandler] Title: " + title);
+                LOG.info("[HistoryHandler] ProjectPath: " + projectPath);
 
                 ClaudeHistoryReader historyReader = new ClaudeHistoryReader();
                 String messagesJson = historyReader.getSessionMessagesAsJson(projectPath, sessionId);
@@ -232,7 +237,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
                 String wrappedJson = new com.google.gson.Gson().toJson(exportData);
 
-                System.out.println("[HistoryHandler] 读取到会话消息，准备注入到前端");
+                LOG.info("[HistoryHandler] 读取到会话消息，准备注入到前端");
 
                 String escapedJson = escapeJs(wrappedJson);
 
@@ -253,11 +258,10 @@ public class HistoryHandler extends BaseMessageHandler {
                     context.executeJavaScriptOnEDT(jsCode);
                 });
 
-                System.out.println("[HistoryHandler] ========== 导出会话完成 ==========");
+                LOG.info("[HistoryHandler] ========== 导出会话完成 ==========");
 
             } catch (Exception e) {
-                System.err.println("[HistoryHandler] ❌ 导出会话失败: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("[HistoryHandler] ❌ 导出会话失败: " + e.getMessage(), e);
 
                 SwingUtilities.invokeLater(() -> {
                     String jsCode = "if (window.addToast) { " +
@@ -267,5 +271,33 @@ public class HistoryHandler extends BaseMessageHandler {
                 });
             }
         });
+    }
+
+    /**
+     * 检查agent文件是否属于指定的会话
+     * 通过读取文件内容查找sessionId引用
+     */
+    private boolean isAgentFileRelatedToSession(java.nio.file.Path agentFilePath, String sessionId) {
+        try (java.io.BufferedReader reader = java.nio.file.Files.newBufferedReader(agentFilePath)) {
+            String line;
+            int lineCount = 0;
+            // 只读取前20行以提高性能（通常sessionId会在文件开头）
+            while ((line = reader.readLine()) != null && lineCount < 20) {
+                // 检查这一行是否包含sessionId
+                if (line.contains("\"sessionId\":\"" + sessionId + "\"") ||
+                    line.contains("\"parentSessionId\":\"" + sessionId + "\"")) {
+                    LOG.debug("[HistoryHandler] Agent文件 " + agentFilePath.getFileName() + " 属于会话 " + sessionId);
+                    return true;
+                }
+                lineCount++;
+            }
+            // 如果前20行都没找到，说明这个agent文件不属于当前会话
+            LOG.debug("[HistoryHandler] Agent文件 " + agentFilePath.getFileName() + " 不属于会话 " + sessionId);
+            return false;
+        } catch (Exception e) {
+            // 如果读取失败，为了安全起见，不删除这个文件
+            LOG.warn("[HistoryHandler] ⚠️ 无法读取agent文件 " + agentFilePath.getFileName() + ": " + e.getMessage());
+            return false;
+        }
     }
 }

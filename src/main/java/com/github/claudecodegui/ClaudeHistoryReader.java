@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 
 import com.github.claudecodegui.util.PathUtils;
+import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -17,6 +18,8 @@ import java.util.stream.Collectors;
  * 直接从本地文件系统读取Claude的历史数据
  */
 public class ClaudeHistoryReader {
+
+    private static final Logger LOG = Logger.getInstance(ClaudeHistoryReader.class);
 
     private static final String HOME_DIR = System.getProperty("user.home");
     private static final Path CLAUDE_DIR = Paths.get(HOME_DIR, ".claude");
@@ -210,7 +213,7 @@ public class ClaudeHistoryReader {
                             }
                         } catch (Exception e) {
                             // 跳过解析失败的行，记录日志用于调试
-                            System.err.println("[ClaudeHistoryReader] 解析消息行失败: " + e.getMessage() + " - 行内容: " + (line.length() > 100 ? line.substring(0, 100) + "..." : line));
+                            LOG.error("[ClaudeHistoryReader] 解析消息行失败: " + e.getMessage() + " - 行内容: " + (line.length() > 100 ? line.substring(0, 100) + "..." : line));
                         }
                     }
 
@@ -220,7 +223,7 @@ public class ClaudeHistoryReader {
 
                 } catch (Exception e) {
                     // 跳过读取失败的文件，记录日志用于调试
-                    System.err.println("[ClaudeHistoryReader] 读取会话文件失败: " + e.getMessage());
+                    LOG.error("[ClaudeHistoryReader] 读取会话文件失败: " + e.getMessage());
                 }
             });
 
@@ -694,15 +697,14 @@ public class ClaudeHistoryReader {
                         }
                     } catch (Exception e) {
                         // 跳过解析失败的行，记录日志用于调试
-                        System.err.println("[ClaudeHistoryReader] 导出时解析消息行失败: " + e.getMessage());
+                        LOG.error("[ClaudeHistoryReader] 导出时解析消息行失败: " + e.getMessage());
                     }
                 }
             }
 
             return gson.toJson(messages);
         } catch (Exception e) {
-            System.err.println("[ClaudeHistoryReader] 读取会话消息失败: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[ClaudeHistoryReader] 读取会话消息失败: " + e.getMessage(), e);
             return gson.toJson(new ArrayList<>());
         }
     }

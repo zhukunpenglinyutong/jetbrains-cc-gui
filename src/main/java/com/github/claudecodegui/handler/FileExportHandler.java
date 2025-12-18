@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
 import java.awt.*;
@@ -15,6 +16,8 @@ import java.util.concurrent.CompletableFuture;
  * 处理文件保存（支持 Markdown、JSON 等格式）
  */
 public class FileExportHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(FileExportHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
         "save_markdown",
@@ -35,11 +38,11 @@ public class FileExportHandler extends BaseMessageHandler {
     @Override
     public boolean handle(String type, String content) {
         if ("save_markdown".equals(type)) {
-            System.out.println("[FileExportHandler] 处理: save_markdown");
+            LOG.info("[FileExportHandler] 处理: save_markdown");
             handleSaveFile(content, ".md", "保存 Markdown 文件");
             return true;
         } else if ("save_json".equals(type)) {
-            System.out.println("[FileExportHandler] 处理: save_json");
+            LOG.info("[FileExportHandler] 处理: save_json");
             handleSaveFile(content, ".json", "保存 JSON 文件");
             return true;
         }
@@ -51,15 +54,15 @@ public class FileExportHandler extends BaseMessageHandler {
      */
     private void handleSaveFile(String jsonContent, String fileExtension, String dialogTitle) {
         try {
-            System.out.println("[FileExportHandler] ========== 开始保存文件 ==========");
-            System.out.println("[FileExportHandler] 文件类型: " + fileExtension);
+            LOG.info("[FileExportHandler] ========== 开始保存文件 ==========");
+            LOG.info("[FileExportHandler] 文件类型: " + fileExtension);
 
             // 解析 JSON
             JsonObject json = gson.fromJson(jsonContent, JsonObject.class);
             String content = json.get("content").getAsString();
             String filename = json.get("filename").getAsString();
 
-            System.out.println("[FileExportHandler] 文件名: " + filename);
+            LOG.info("[FileExportHandler] 文件名: " + filename);
 
             // 在 EDT 线程显示文件对话框并保存
             SwingUtilities.invokeLater(() -> {
@@ -102,7 +105,7 @@ public class FileExportHandler extends BaseMessageHandler {
                         CompletableFuture.runAsync(() -> {
                             try (FileWriter writer = new FileWriter(finalFileToSave)) {
                                 writer.write(content);
-                                System.out.println("[FileExportHandler] ✅ 文件保存成功: " + finalFileToSave.getAbsolutePath());
+                                LOG.info("[FileExportHandler] ✅ 文件保存成功: " + finalFileToSave.getAbsolutePath());
 
                                 // 通知前端成功
                                 SwingUtilities.invokeLater(() -> {
@@ -113,8 +116,7 @@ public class FileExportHandler extends BaseMessageHandler {
                                 });
 
                             } catch (IOException e) {
-                                System.err.println("[FileExportHandler] ❌ 保存文件失败: " + e.getMessage());
-                                e.printStackTrace();
+                                LOG.error("[FileExportHandler] ❌ 保存文件失败: " + e.getMessage(), e);
 
                                 // 通知前端失败
                                 SwingUtilities.invokeLater(() -> {
@@ -127,11 +129,10 @@ public class FileExportHandler extends BaseMessageHandler {
                             }
                         });
                     } else {
-                        System.out.println("[FileExportHandler] 用户取消了保存");
+                        LOG.info("[FileExportHandler] 用户取消了保存");
                     }
                 } catch (Exception e) {
-                    System.err.println("[FileExportHandler] ❌ 显示对话框失败: " + e.getMessage());
-                    e.printStackTrace();
+                    LOG.error("[FileExportHandler] ❌ 显示对话框失败: " + e.getMessage(), e);
 
                     String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "显示对话框失败");
                     String jsCode = "if (window.addToast) { " +
@@ -140,12 +141,11 @@ public class FileExportHandler extends BaseMessageHandler {
                     context.executeJavaScriptOnEDT(jsCode);
                 }
 
-                System.out.println("[FileExportHandler] ========== 保存文件完成 ==========");
+                LOG.info("[FileExportHandler] ========== 保存文件完成 ==========");
             });
 
         } catch (Exception e) {
-            System.err.println("[FileExportHandler] ❌ 处理保存请求失败: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[FileExportHandler] ❌ 处理保存请求失败: " + e.getMessage(), e);
 
             SwingUtilities.invokeLater(() -> {
                 String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
