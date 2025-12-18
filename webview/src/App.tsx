@@ -266,15 +266,40 @@ const App = () => {
     // 注册导出会话数据回调
     window.onExportSessionData = (json) => {
       try {
-        const messages = JSON.parse(json) as ClaudeMessage[];
+        // 后端返回的是 ConversationMessage[] 格式，需要转换为 ClaudeMessage[]
+        const conversationMessages = JSON.parse(json) as any[];
         const title = (window as any).__exportSessionTitle || 'session';
         const sessionId = (window as any).__exportSessionId || 'unknown';
 
+        // 转换为 ClaudeMessage 格式
+        const messages: ClaudeMessage[] = conversationMessages.map(msg => {
+          // 提取文本内容
+          let contentText = '';
+          if (msg.message?.content) {
+            if (typeof msg.message.content === 'string') {
+              contentText = msg.message.content;
+            } else if (Array.isArray(msg.message.content)) {
+              // 从数组中提取文本
+              contentText = msg.message.content
+                .filter((block: any) => block && block.type === 'text')
+                .map((block: any) => block.text || '')
+                .join('\n');
+            }
+          }
+
+          return {
+            type: msg.type || 'assistant',
+            content: contentText,
+            timestamp: msg.timestamp,
+            raw: msg // 保留原始数据
+          };
+        });
+
         // 导入转换函数
-        import('./utils/exportMarkdown').then(({ convertMessagesToMarkdown, downloadMarkdown }) => {
-          const markdown = convertMessagesToMarkdown(messages, title);
-          const filename = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${sessionId.slice(0, 8)}.md`;
-          downloadMarkdown(markdown, filename);
+        import('./utils/exportMarkdown').then(({ convertMessagesToJSON, downloadJSON }) => {
+          const json = convertMessagesToJSON(messages, title);
+          const filename = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${sessionId.slice(0, 8)}.json`;
+          downloadJSON(json, filename);
           // 注意：不在这里显示成功 toast，等待后端保存完成后再显示
         }).catch(error => {
           console.error('[Frontend] Failed to export session:', error);

@@ -12,12 +12,13 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * 文件导出处理器
- * 处理 Markdown 文件保存
+ * 处理文件保存（支持 Markdown、JSON 等格式）
  */
 public class FileExportHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
-        "save_markdown"
+        "save_markdown",
+        "save_json"
     };
 
     private final Gson gson = new Gson();
@@ -35,19 +36,24 @@ public class FileExportHandler extends BaseMessageHandler {
     public boolean handle(String type, String content) {
         if ("save_markdown".equals(type)) {
             System.out.println("[FileExportHandler] 处理: save_markdown");
-            handleSaveMarkdown(content);
+            handleSaveFile(content, ".md", "保存 Markdown 文件");
+            return true;
+        } else if ("save_json".equals(type)) {
+            System.out.println("[FileExportHandler] 处理: save_json");
+            handleSaveFile(content, ".json", "保存 JSON 文件");
             return true;
         }
         return false;
     }
 
     /**
-     * 处理保存 Markdown 文件
+     * 处理保存文件（支持多种格式）
      */
-    private void handleSaveMarkdown(String jsonContent) {
+    private void handleSaveFile(String jsonContent, String fileExtension, String dialogTitle) {
         CompletableFuture.runAsync(() -> {
             try {
-                System.out.println("[FileExportHandler] ========== 开始保存 Markdown 文件 ==========");
+                System.out.println("[FileExportHandler] ========== 开始保存文件 ==========");
+                System.out.println("[FileExportHandler] 文件类型: " + fileExtension);
 
                 // 解析 JSON
                 JsonObject json = gson.fromJson(jsonContent, JsonObject.class);
@@ -62,7 +68,7 @@ public class FileExportHandler extends BaseMessageHandler {
                     String projectPath = context.getProject().getBasePath();
 
                     // 使用 FileDialog 以获得原生系统对话框
-                    FileDialog fileDialog = new FileDialog((Frame) null, "保存 Markdown 文件", FileDialog.SAVE);
+                    FileDialog fileDialog = new FileDialog((Frame) null, dialogTitle, FileDialog.SAVE);
 
                     // 设置默认目录
                     if (projectPath != null) {
@@ -72,8 +78,8 @@ public class FileExportHandler extends BaseMessageHandler {
                     // 设置默认文件名
                     fileDialog.setFile(filename);
 
-                    // 设置文件过滤器 (macOS 会显示为 .md 格式)
-                    fileDialog.setFilenameFilter((dir, name) -> name.toLowerCase().endsWith(".md"));
+                    // 设置文件过滤器
+                    fileDialog.setFilenameFilter((dir, name) -> name.toLowerCase().endsWith(fileExtension));
 
                     // 显示对话框
                     fileDialog.setVisible(true);
@@ -85,10 +91,10 @@ public class FileExportHandler extends BaseMessageHandler {
                     if (selectedDir != null && selectedFile != null) {
                         File fileToSave = new File(selectedDir, selectedFile);
 
-                        // 确保文件扩展名是 .md
+                        // 确保文件扩展名正确
                         String path = fileToSave.getAbsolutePath();
-                        if (!path.toLowerCase().endsWith(".md")) {
-                            fileToSave = new File(path + ".md");
+                        if (!path.toLowerCase().endsWith(fileExtension)) {
+                            fileToSave = new File(path + fileExtension);
                         }
 
                         try {
@@ -121,7 +127,7 @@ public class FileExportHandler extends BaseMessageHandler {
                     }
                 });
 
-                System.out.println("[FileExportHandler] ========== 保存 Markdown 文件完成 ==========");
+                System.out.println("[FileExportHandler] ========== 保存文件完成 ==========");
 
             } catch (Exception e) {
                 System.err.println("[FileExportHandler] ❌ 处理保存请求失败: " + e.getMessage());
