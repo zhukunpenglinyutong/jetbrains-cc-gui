@@ -773,28 +773,6 @@ const App = () => {
     (window as any).__exportSessionId = sessionId;
   };
 
-  // 导出当前会话
-  const exportCurrentSession = () => {
-    if (messages.length === 0) {
-      addToast(t('history.noSessions'), 'warning');
-      return;
-    }
-
-    // 使用当前会话的标题或生成一个默认标题
-    const title = sessionTitle;
-
-    // 导入转换函数并直接导出当前消息
-    import('./utils/exportMarkdown').then(({ convertMessagesToMarkdown, downloadMarkdown }) => {
-      const markdown = convertMessagesToMarkdown(messages, title);
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const filename = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${timestamp}`;
-      downloadMarkdown(markdown, filename);
-    }).catch(error => {
-      console.error('[Frontend] Failed to export current session:', error);
-      addToast(t('history.exportFailed'), 'error');
-    });
-  };
-
   // 文案本地化映射
   const localizeMessage = (text: string): string => {
     const messageMap: Record<string, string> = {
@@ -1110,14 +1088,6 @@ const App = () => {
               <>
                 <button className="icon-button" onClick={createNewSession} data-tooltip={t('common.newSession')}>
                   <span className="codicon codicon-plus" />
-                </button>
-                <button
-                  className="icon-button"
-                  onClick={exportCurrentSession}
-                  data-tooltip={t('history.exportSession')}
-                  disabled={messages.length === 0}
-                >
-                  <span className="codicon codicon-arrow-down" />
                 </button>
                 <button
                   className="icon-button"

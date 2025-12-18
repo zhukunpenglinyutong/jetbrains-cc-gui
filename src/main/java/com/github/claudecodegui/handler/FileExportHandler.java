@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
 import javax.swing.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import java.awt.*;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -56,24 +56,34 @@ public class FileExportHandler extends BaseMessageHandler {
 
                 System.out.println("[FileExportHandler] 文件名: " + filename);
 
-                // 在 EDT 线程显示文件选择对话框
+                // 在 EDT 线程显示原生文件选择对话框
                 SwingUtilities.invokeAndWait(() -> {
                     // 获取项目路径作为默认目录
                     String projectPath = context.getProject().getBasePath();
-                    JFileChooser fileChooser = new JFileChooser(projectPath);
-                    fileChooser.setDialogTitle("保存 Markdown 文件");
-                    fileChooser.setSelectedFile(new File(filename));
 
-                    // 设置文件过滤器
-                    FileNameExtensionFilter filter = new FileNameExtensionFilter(
-                        "Markdown 文件 (*.md)", "md"
-                    );
-                    fileChooser.setFileFilter(filter);
+                    // 使用 FileDialog 以获得原生系统对话框
+                    FileDialog fileDialog = new FileDialog((Frame) null, "保存 Markdown 文件", FileDialog.SAVE);
 
-                    int result = fileChooser.showSaveDialog(null);
+                    // 设置默认目录
+                    if (projectPath != null) {
+                        fileDialog.setDirectory(projectPath);
+                    }
 
-                    if (result == JFileChooser.APPROVE_OPTION) {
-                        File fileToSave = fileChooser.getSelectedFile();
+                    // 设置默认文件名
+                    fileDialog.setFile(filename);
+
+                    // 设置文件过滤器 (macOS 会显示为 .md 格式)
+                    fileDialog.setFilenameFilter((dir, name) -> name.toLowerCase().endsWith(".md"));
+
+                    // 显示对话框
+                    fileDialog.setVisible(true);
+
+                    // 获取用户选择的文件
+                    String selectedDir = fileDialog.getDirectory();
+                    String selectedFile = fileDialog.getFile();
+
+                    if (selectedDir != null && selectedFile != null) {
+                        File fileToSave = new File(selectedDir, selectedFile);
 
                         // 确保文件扩展名是 .md
                         String path = fileToSave.getAbsolutePath();
