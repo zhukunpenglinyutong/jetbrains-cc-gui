@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -21,6 +22,8 @@ import java.util.concurrent.CompletableFuture;
  * 文件和命令相关消息处理器
  */
 public class FileHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(FileHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
         "list_files",
@@ -114,8 +117,7 @@ public class FileHandler extends BaseMessageHandler {
                     callJavaScript("window.onFileListResult", escapeJs(resultJson));
                 });
             } catch (Exception e) {
-                System.err.println("[FileHandler] Failed to list files: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("[FileHandler] Failed to list files: " + e.getMessage(), e);
             }
         });
     }
@@ -148,7 +150,7 @@ public class FileHandler extends BaseMessageHandler {
                     : (context.getProject().getBasePath() != null ?
                        context.getProject().getBasePath() : System.getProperty("user.home"));
 
-                System.out.println("[FileHandler] Getting slash commands from SDK, cwd=" + cwd);
+                LOG.info("[FileHandler] Getting slash commands from SDK, cwd=" + cwd);
 
                 // 调用 ClaudeSDKBridge 获取真实的斜杠命令
                 final String finalQuery = query;
@@ -177,11 +179,11 @@ public class FileHandler extends BaseMessageHandler {
                                 }
                             }
 
-                            System.out.println("[FileHandler] Got " + commands.size() + " commands from SDK (filtered from " + sdkCommands.size() + ")");
+                            LOG.info("[FileHandler] Got " + commands.size() + " commands from SDK (filtered from " + sdkCommands.size() + ")");
 
                             // 如果 SDK 没有返回命令，使用本地默认命令作为回退
                             if (commands.isEmpty() && sdkCommands.isEmpty()) {
-                                System.out.println("[FileHandler] SDK returned no commands, using local fallback");
+                                LOG.info("[FileHandler] SDK returned no commands, using local fallback");
                                 addCommand(commands, "/help", "显示帮助信息", finalQuery);
                                 addCommand(commands, "/clear", "清空对话历史", finalQuery);
                                 addCommand(commands, "/new", "创建新会话", finalQuery);
@@ -200,12 +202,11 @@ public class FileHandler extends BaseMessageHandler {
                                 context.executeJavaScriptOnEDT(js);
                             });
                         } catch (Exception e) {
-                            System.err.println("[FileHandler] Failed to process SDK commands: " + e.getMessage());
-                            e.printStackTrace();
+                            LOG.error("[FileHandler] Failed to process SDK commands: " + e.getMessage(), e);
                         }
                     })
                     .exceptionally(ex -> {
-                        System.err.println("[FileHandler] Failed to get commands from SDK: " + ex.getMessage());
+                        LOG.error("[FileHandler] Failed to get commands from SDK: " + ex.getMessage());
                         // 出错时使用本地默认命令
                         try {
                             Gson gson = new Gson();
@@ -227,14 +228,13 @@ public class FileHandler extends BaseMessageHandler {
                                 context.executeJavaScriptOnEDT(js);
                             });
                         } catch (Exception e) {
-                            System.err.println("[FileHandler] Failed to send fallback commands: " + e.getMessage());
+                            LOG.error("[FileHandler] Failed to send fallback commands: " + e.getMessage(), e);
                         }
                         return null;
                     });
 
             } catch (Exception e) {
-                System.err.println("[FileHandler] Failed to get commands: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("[FileHandler] Failed to get commands: " + e.getMessage(), e);
             }
         });
     }
@@ -243,7 +243,7 @@ public class FileHandler extends BaseMessageHandler {
      * 在编辑器中打开文件
      */
     private void handleOpenFile(String filePath) {
-        System.out.println("请求打开文件: " + filePath);
+        LOG.info("请求打开文件: " + filePath);
 
         // 先在普通线程中处理文件路径解析（不涉及 VFS 操作）
         CompletableFuture.runAsync(() -> {
@@ -253,14 +253,14 @@ public class FileHandler extends BaseMessageHandler {
                 // 如果文件不存在且是相对路径，尝试相对于项目根目录解析
                 if (!file.exists() && !file.isAbsolute() && context.getProject().getBasePath() != null) {
                     File projectFile = new File(context.getProject().getBasePath(), filePath);
-                    System.out.println("尝试相对于项目根目录解析: " + projectFile.getAbsolutePath());
+                    LOG.info("尝试相对于项目根目录解析: " + projectFile.getAbsolutePath());
                     if (projectFile.exists()) {
                         file = projectFile;
                     }
                 }
 
                 if (!file.exists()) {
-                    System.err.println("文件不存在: " + filePath);
+                    LOG.error("文件不存在: " + filePath);
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("addErrorMessage", escapeJs("无法打开文件: 文件不存在 (" + filePath + ")"));
                     }, ModalityState.nonModal());
@@ -278,18 +278,17 @@ public class FileHandler extends BaseMessageHandler {
                     .finishOnUiThread(ModalityState.nonModal(), virtualFile -> {
                         // 在 UI 线程中打开文件
                         if (virtualFile == null) {
-                            System.err.println("无法获取 VirtualFile: " + filePath);
+                            LOG.error("无法获取 VirtualFile: " + filePath);
                             return;
                         }
 
                         FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
-                        System.out.println("成功打开文件: " + filePath);
+                        LOG.info("成功打开文件: " + filePath);
                     })
                     .submit(AppExecutorUtil.getAppExecutorService());
 
             } catch (Exception e) {
-                System.err.println("打开文件失败: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("打开文件失败: " + e.getMessage(), e);
             }
         });
     }
@@ -302,7 +301,7 @@ public class FileHandler extends BaseMessageHandler {
             try {
                 BrowserUtil.browse(url);
             } catch (Exception e) {
-                System.err.println("无法打开浏览器: " + e.getMessage());
+                LOG.error("无法打开浏览器: " + e.getMessage(), e);
             }
         });
     }

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.util.EditorFileUtils;
@@ -24,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class ClaudeSession {
 
+    private static final Logger LOG = Logger.getInstance(ClaudeSession.class);
     private final Gson gson = new Gson();
 
     // 会话标识
@@ -178,7 +180,7 @@ public class ClaudeSession {
      */
     public void setCwd(String cwd) {
         this.cwd = cwd;
-        System.out.println("[ClaudeSession] Working directory updated to: " + cwd);
+        LOG.info("Working directory updated to: " + cwd);
     }
 
     /**
@@ -197,7 +199,7 @@ public class ClaudeSession {
             try {
                 // 检查并清理错误的 sessionId（如果是路径而不是 UUID）
                 if (sessionId != null && (sessionId.contains("/") || sessionId.contains("\\"))) {
-                    System.err.println("[ClaudeSession] Warning: sessionId looks like a path, resetting: " + sessionId);
+                    LOG.warn("sessionId looks like a path, resetting: " + sessionId);
                     sessionId = null;
                 }
 
@@ -219,7 +221,7 @@ public class ClaudeSession {
                             callback.onSessionIdReceived(sessionId);
                         }
                     } else {
-                        System.err.println("[ClaudeSession] Ignoring invalid sessionId: " + newSessionId);
+                        LOG.warn("Ignoring invalid sessionId: " + newSessionId);
                     }
                 }
 
@@ -236,7 +238,7 @@ public class ClaudeSession {
               if (ex instanceof java.util.concurrent.TimeoutException) {
                   String timeoutMsg = "启动 Channel 超时（" +
                       com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT + "秒），请重试";
-                  System.err.println("[ClaudeSession] " + timeoutMsg);
+                  LOG.warn(timeoutMsg);
                   this.error = timeoutMsg;
                   this.channelId = null;
                   updateState();
@@ -323,7 +325,7 @@ public class ClaudeSession {
                 userMessage.content = userDisplayText;
             }
         } catch (Exception e) {
-            System.err.println("[ClaudeSession] Failed to attach raw image blocks: " + e.getMessage());
+            LOG.warn("Failed to attach raw image blocks: " + e.getMessage());
         }
         messages.add(userMessage);
         notifyMessageUpdate();
@@ -357,7 +359,7 @@ public class ClaudeSession {
                         JsonObject openedFilesJson = new JsonObject();
                         if (activeFile != null) {
                             openedFilesJson.addProperty("active", activeFile);
-                            System.out.println("[ClaudeSession] Current active file: " + activeFile);
+                            LOG.debug("Current active file: " + activeFile);
 
                             // 如果有选中的代码，添加选中信息
                             if (selectionInfo != null) {
@@ -366,7 +368,7 @@ public class ClaudeSession {
                                 selectionJson.addProperty("endLine", (Integer) selectionInfo.get("endLine"));
                                 selectionJson.addProperty("selectedText", (String) selectionInfo.get("selectedText"));
                                 openedFilesJson.add("selection", selectionJson);
-                                System.out.println("[ClaudeSession] Code selection detected: lines " +
+                                LOG.debug("Code selection detected: lines " +
                                     selectionInfo.get("startLine") + "-" + selectionInfo.get("endLine"));
                             }
                         }
@@ -380,12 +382,12 @@ public class ClaudeSession {
                         }
                         if (othersArray.size() > 0) {
                             openedFilesJson.add("others", othersArray);
-                            System.out.println("[ClaudeSession] Other opened files count: " + othersArray.size());
+                            LOG.debug("Other opened files count: " + othersArray.size());
                         }
 
                         return openedFilesJson;
                     } catch (Exception e) {
-                        System.err.println("[ClaudeSession] Failed to get file info: " + e.getMessage());
+                        LOG.warn("Failed to get file info: " + e.getMessage());
                         // 返回空对象，不影响主流程
                         return new JsonObject();
                     }
@@ -430,7 +432,7 @@ public class ClaudeSession {
                             busy = false;
                             loading = false;
                             updateState();
-                            System.out.println("[ClaudeSession] Codex message end received");
+                            LOG.debug("Codex message end received");
                         }
                     }
 
@@ -494,7 +496,7 @@ public class ClaudeSession {
                             currentAssistantMessage.raw = mergedRaw;
                             notifyMessageUpdate();
                         } catch (Exception e) {
-                            System.err.println("Failed to parse assistant message JSON: " + e.getMessage());
+                            LOG.warn("Failed to parse assistant message JSON: " + e.getMessage());
                         }
                     } else if ("thinking".equals(type)) {
                         // 处理思考过程
@@ -504,7 +506,7 @@ public class ClaudeSession {
                             if (callback != null) {
                                 callback.onThinkingStatusChanged(true);
                             }
-                            System.out.println("[ClaudeSession] Thinking started");
+                            LOG.debug("Thinking started");
                         }
                     } else if ("content".equals(type) || "content_delta".equals(type)) {
                         // 处理流式内容片段（content 向后兼容，content_delta 用于图片消息流式响应）
@@ -514,7 +516,7 @@ public class ClaudeSession {
                             if (callback != null) {
                                 callback.onThinkingStatusChanged(false);
                             }
-                            System.out.println("[ClaudeSession] Thinking completed");
+                            LOG.debug("Thinking completed");
                         }
 
                         assistantContent.append(content);
@@ -533,7 +535,7 @@ public class ClaudeSession {
                         if (callback != null) {
                             callback.onSessionIdReceived(content);
                         }
-                        System.out.println("Captured session ID: " + content);
+                        LOG.info("Captured session ID: " + content);
                     } else if ("message_end".equals(type)) {
                         // 消息结束时立即更新 loading 状态，避免延迟
                         if (isThinking) {
@@ -545,12 +547,12 @@ public class ClaudeSession {
                         busy = false;
                         loading = false;
                         updateState();
-                        System.out.println("[ClaudeSession] Message end received, loading set to false");
+                        LOG.debug("Message end received, loading set to false");
                     } else if ("result".equals(type) && content.startsWith("{")) {
                         // 处理结果消息（包含最终的usage信息）
                         try {
                             JsonObject resultJson = gson.fromJson(content, JsonObject.class);
-                            System.out.println("[ClaudeSession] Result message received");
+                            LOG.debug("Result message received");
 
                             // 如果当前消息的raw中usage为0，则用result中的usage进行更新
                             if (currentAssistantMessage != null && currentAssistantMessage.raw != null) {
@@ -577,12 +579,12 @@ public class ClaudeSession {
                                         message.add("usage", resultUsage);
                                         currentAssistantMessage.raw = currentAssistantMessage.raw;
                                         notifyMessageUpdate();
-                                        System.out.println("[ClaudeSession] Updated assistant message usage from result message");
+                                        LOG.debug("Updated assistant message usage from result message");
                                     }
                                 }
                             }
                         } catch (Exception e) {
-                            System.err.println("[ClaudeSession] Failed to parse result message: " + e.getMessage());
+                            LOG.warn("Failed to parse result message: " + e.getMessage());
                         }
                     } else if ("slash_commands".equals(type)) {
                         // 处理斜杠命令列表
@@ -592,16 +594,16 @@ public class ClaudeSession {
                             for (int i = 0; i < commandsArray.size(); i++) {
                                 slashCommands.add(commandsArray.get(i).getAsString());
                             }
-                            System.out.println("[ClaudeSession] Received " + slashCommands.size() + " slash commands");
+                            LOG.debug("Received " + slashCommands.size() + " slash commands");
                             if (callback != null) {
                                 callback.onSlashCommandsReceived(slashCommands);
                             }
                         } catch (Exception e) {
-                            System.err.println("[ClaudeSession] Failed to parse slash commands: " + e.getMessage());
+                            LOG.warn("Failed to parse slash commands: " + e.getMessage());
                         }
                     } else if ("system".equals(type)) {
                         // 处理系统消息
-                        System.out.println("System message: " + content);
+                        LOG.debug("System message: " + content);
 
                         // 解析 system 消息中的 slash_commands 字段
                         try {
@@ -612,13 +614,13 @@ public class ClaudeSession {
                                 for (int i = 0; i < commandsArray.size(); i++) {
                                     slashCommands.add(commandsArray.get(i).getAsString());
                                 }
-                                System.out.println("[ClaudeSession] Extracted " + slashCommands.size() + " slash commands from system message");
+                                LOG.debug("Extracted " + slashCommands.size() + " slash commands from system message");
                                 if (callback != null) {
                                     callback.onSlashCommandsReceived(slashCommands);
                                 }
                             }
                         } catch (Exception e) {
-                            System.err.println("[ClaudeSession] Failed to extract slash commands from system message: " + e.getMessage());
+                            LOG.warn("Failed to extract slash commands from system message: " + e.getMessage());
                         }
                     }
                 }
@@ -704,14 +706,14 @@ public class ClaudeSession {
 
         return CompletableFuture.runAsync(() -> {
             try {
-                System.out.println("[ClaudeSession] Loading session from server: sessionId=" + sessionId + ", cwd=" + cwd);
+                LOG.info("Loading session from server: sessionId=" + sessionId + ", cwd=" + cwd);
                 List<JsonObject> serverMessages;
                 if ("codex".equals(provider)) {
                     serverMessages = codexSDKBridge.getSessionMessages(sessionId, cwd);
                 } else {
                     serverMessages = claudeSDKBridge.getSessionMessages(sessionId, cwd);
                 }
-                System.out.println("[ClaudeSession] Received " + serverMessages.size() + " messages from server");
+                LOG.debug("Received " + serverMessages.size() + " messages from server");
 
                 messages.clear();
                 for (JsonObject msg : serverMessages) {
@@ -724,11 +726,10 @@ public class ClaudeSession {
                     }
                 }
 
-                System.out.println("[ClaudeSession] Total messages in session: " + messages.size());
+                LOG.debug("Total messages in session: " + messages.size());
                 notifyMessageUpdate();
             } catch (Exception e) {
-                System.err.println("[ClaudeSession] Error loading session: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("Error loading session: " + e.getMessage(), e);
                 this.error = e.getMessage();
             } finally {
                 this.loading = false;
@@ -912,8 +913,7 @@ public class ClaudeSession {
                 return contentObj.get("text").getAsString();
             }
             // 记录无法解析的对象格式
-            System.err.println("[ClaudeSession] Warning: Content is an object but has no 'text' field: " +
-                contentObj.toString());
+            LOG.warn("Content is an object but has no 'text' field: " + contentObj.toString());
         }
 
         return "";
@@ -978,7 +978,7 @@ public class ClaudeSession {
      */
     public void setModel(String model) {
         this.model = model;
-        System.out.println("[ClaudeSession] Model updated to: " + model);
+        LOG.info("Model updated to: " + model);
     }
 
     /**
@@ -993,7 +993,7 @@ public class ClaudeSession {
      */
     public void setProvider(String provider) {
         this.provider = provider;
-        System.out.println("[ClaudeSession] Provider updated to: " + provider);
+        LOG.info("Provider updated to: " + provider);
     }
 
     /**

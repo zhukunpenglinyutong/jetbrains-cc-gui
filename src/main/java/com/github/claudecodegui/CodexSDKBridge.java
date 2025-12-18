@@ -2,6 +2,7 @@ package com.github.claudecodegui;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
@@ -25,6 +26,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class CodexSDKBridge {
 
+    private static final Logger LOG = Logger.getInstance(CodexSDKBridge.class);
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
 
     private final Gson gson = new Gson();
@@ -134,7 +136,7 @@ public class CodexSDKBridge {
             // SDK 内置的 codex 二进制文件路径
             File vendorDir = new File(bridgeDir, "node_modules/@openai/codex-sdk/vendor");
             if (!vendorDir.exists()) {
-                System.out.println("[CodexSDKBridge] vendor 目录不存在，跳过权限设置");
+                LOG.info("vendor 目录不存在，跳过权限设置");
                 return;
             }
 
@@ -151,15 +153,15 @@ public class CodexSDKBridge {
 
                 if (codexBinary.exists()) {
                     boolean success = codexBinary.setExecutable(true, false);
-                    System.out.println("[CodexSDKBridge] 设置执行权限: " + codexBinary.getAbsolutePath() + " -> " + success);
+                    LOG.info("设置执行权限: " + codexBinary.getAbsolutePath() + " -> " + success);
                 }
                 if (codexExe.exists()) {
                     boolean success = codexExe.setExecutable(true, false);
-                    System.out.println("[CodexSDKBridge] 设置执行权限: " + codexExe.getAbsolutePath() + " -> " + success);
+                    LOG.info("设置执行权限: " + codexExe.getAbsolutePath() + " -> " + success);
                 }
             }
         } catch (Exception e) {
-            System.err.println("[CodexSDKBridge] 设置执行权限失败: " + e.getMessage());
+            LOG.warn("设置执行权限失败: " + e.getMessage());
         }
     }
 
@@ -174,7 +176,7 @@ public class CodexSDKBridge {
         }
         result.addProperty("channelId", channelId);
         result.addProperty("message", "Codex channel ready (auto-launch on first send)");
-        System.out.println("[CodexSDKBridge] Channel ready for: " + channelId);
+        LOG.info("Channel ready for: " + channelId);
         return result;
     }
 
@@ -252,7 +254,7 @@ public class CodexSDKBridge {
                 pb.redirectErrorStream(true);
                 envConfigurator.updateProcessEnvironment(pb, node);
 
-                System.out.println("[CodexSDKBridge] Command: " + String.join(" ", command));
+                LOG.info("Command: " + String.join(" ", command));
 
                 Process process = null;
                 try {
@@ -264,7 +266,7 @@ public class CodexSDKBridge {
                         stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                         stdin.flush();
                     } catch (Exception e) {
-                        System.err.println("[CodexSDKBridge] Failed to write stdin: " + e.getMessage());
+                        LOG.warn("Failed to write stdin: " + e.getMessage());
                     }
 
                     try (BufferedReader reader = new BufferedReader(
@@ -276,13 +278,13 @@ public class CodexSDKBridge {
                             if (line.startsWith("[UNCAUGHT_ERROR]")
                                     || line.startsWith("[UNHANDLED_REJECTION]")
                                     || line.startsWith("[COMMAND_ERROR]")) {
-                                System.err.println("[Node.js ERROR] " + line);
+                                LOG.warn("[Node.js ERROR] " + line);
                                 lastNodeError[0] = line;
                             }
 
                             // 打印调试日志
                             if (line.contains("[DEBUG]")) {
-                                System.out.println("[Codex] " + line);
+                                LOG.debug("[Codex] " + line);
                             }
 
                             // 解析消息
@@ -378,7 +380,7 @@ public class CodexSDKBridge {
             try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String version = reader.readLine();
-                System.out.println("[CodexSDKBridge] Node.js 版本: " + version);
+                LOG.info("Node.js 版本: " + version);
             }
 
             int exitCode = process.waitFor();
@@ -390,14 +392,14 @@ public class CodexSDKBridge {
             File bridgeDir = directoryResolver.findSdkDir();
             File scriptFile = new File(bridgeDir, CHANNEL_SCRIPT);
             if (!scriptFile.exists()) {
-                System.err.println("[CodexSDKBridge] channel-manager.js not found at: " + scriptFile.getAbsolutePath());
+                LOG.error("channel-manager.js not found at: " + scriptFile.getAbsolutePath());
                 return false;
             }
 
-            System.out.println("[CodexSDKBridge] Environment check passed");
+            LOG.info("Environment check passed");
             return true;
         } catch (Exception e) {
-            System.err.println("[CodexSDKBridge] 环境检查失败: " + e.getMessage());
+            LOG.error("环境检查失败: " + e.getMessage());
             return false;
         }
     }
@@ -407,7 +409,7 @@ public class CodexSDKBridge {
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
         // Codex SDK 不支持获取历史消息
-        System.out.println("[CodexSDKBridge] getSessionMessages not supported by Codex SDK");
+        LOG.info("getSessionMessages not supported by Codex SDK");
         return new ArrayList<>();
     }
 }

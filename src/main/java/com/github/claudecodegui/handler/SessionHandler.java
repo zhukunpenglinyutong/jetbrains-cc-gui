@@ -5,6 +5,7 @@ import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
 import java.io.File;
@@ -17,6 +18,8 @@ import java.util.concurrent.CompletableFuture;
  * 处理消息发送、中断、重启、新建会话等
  */
 public class SessionHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(SessionHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
         "send_message",
@@ -39,19 +42,19 @@ public class SessionHandler extends BaseMessageHandler {
     public boolean handle(String type, String content) {
         switch (type) {
             case "send_message":
-                System.out.println("[SessionHandler] 处理: send_message");
+                LOG.debug("[SessionHandler] 处理: send_message");
                 handleSendMessage(content);
                 return true;
             case "send_message_with_attachments":
-                System.out.println("[SessionHandler] 处理: send_message_with_attachments");
+                LOG.debug("[SessionHandler] 处理: send_message_with_attachments");
                 handleSendMessageWithAttachments(content);
                 return true;
             case "interrupt_session":
-                System.out.println("[SessionHandler] 处理: interrupt_session");
+                LOG.debug("[SessionHandler] 处理: interrupt_session");
                 handleInterruptSession();
                 return true;
             case "restart_session":
-                System.out.println("[SessionHandler] 处理: restart_session");
+                LOG.debug("[SessionHandler] 处理: restart_session");
                 handleRestartSession();
                 return true;
             default:
@@ -69,7 +72,7 @@ public class SessionHandler extends BaseMessageHandler {
 
             if (!currentWorkingDir.equals(previousCwd)) {
                 context.getSession().setCwd(currentWorkingDir);
-                System.out.println("[SessionHandler] Updated working directory: " + currentWorkingDir);
+                LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
             context.getSession().setPermissionMode("default");
@@ -113,7 +116,7 @@ public class SessionHandler extends BaseMessageHandler {
             }
             sendMessageWithAttachments(text, atts);
         } catch (Exception e) {
-            System.err.println("[SessionHandler] 解析附件负载失败: " + e.getMessage());
+            LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
         }
     }
@@ -127,7 +130,7 @@ public class SessionHandler extends BaseMessageHandler {
             String previousCwd = context.getSession().getCwd();
             if (!currentWorkingDir.equals(previousCwd)) {
                 context.getSession().setCwd(currentWorkingDir);
-                System.out.println("[SessionHandler] Updated working directory: " + currentWorkingDir);
+                LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
             context.getSession().setPermissionMode("default");

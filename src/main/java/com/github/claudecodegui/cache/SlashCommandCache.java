@@ -2,6 +2,7 @@ package com.github.claudecodegui.cache;
 
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.*;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
@@ -29,6 +30,7 @@ import java.util.function.Consumer;
  * 4. 通知机制：缓存更新时通知前端
  */
 public class SlashCommandCache {
+    private static final Logger LOG = Logger.getInstance(SlashCommandCache.class);
     private final Project project;
     private final ClaudeSDKBridge sdkBridge;
     private final String cwd;
@@ -62,7 +64,7 @@ public class SlashCommandCache {
      * 初始化缓存系统
      */
     public void init() {
-        System.out.println("[SlashCommandCache] Initializing cache system");
+        LOG.info("Initializing cache system");
 
         // 1. 初始加载
         loadCommands();
@@ -110,19 +112,19 @@ public class SlashCommandCache {
 
         // 防抖：如果距离上次加载时间太短，跳过
         if (now - lastLoadTime < MIN_REFRESH_INTERVAL) {
-            System.out.println("[SlashCommandCache] Skipping load (too soon after last load)");
+            LOG.debug("Skipping load (too soon after last load)");
             return;
         }
 
         // 如果正在加载,跳过
         if (isLoading) {
-            System.out.println("[SlashCommandCache] Already loading, skipping");
+            LOG.debug("Already loading, skipping");
             return;
         }
 
         isLoading = true;
         long startTime = System.currentTimeMillis();
-        System.out.println("[SlashCommandCache] Loading slash commands from SDK");
+        LOG.info("Loading slash commands from SDK");
 
         // 添加超时机制：30秒超时
         sdkBridge.getSlashCommands(cwd)
@@ -132,12 +134,12 @@ public class SlashCommandCache {
                     if (commands != null && !commands.isEmpty()) {
                         cachedCommands = new ArrayList<>(commands);
                         lastLoadTime = System.currentTimeMillis();
-                        System.out.println("[SlashCommandCache] Loaded " + commands.size() + " commands in " + duration + "ms");
+                        LOG.info("Loaded " + commands.size() + " commands in " + duration + "ms");
 
                         // 通知所有监听器
                         notifyListeners();
                     } else {
-                        System.out.println("[SlashCommandCache] No commands received (took " + duration + "ms)");
+                        LOG.info("No commands received (took " + duration + "ms)");
                     }
                     isLoading = false;
                 }).exceptionally(ex -> {
@@ -145,9 +147,9 @@ public class SlashCommandCache {
                     isLoading = false;
 
                     if (ex.getCause() instanceof java.util.concurrent.TimeoutException) {
-                        System.err.println("[SlashCommandCache] Load commands timeout after " + LOAD_TIMEOUT_SECONDS + " seconds");
+                        LOG.error("Load commands timeout after " + LOAD_TIMEOUT_SECONDS + " seconds");
                     } else {
-                        System.err.println("[SlashCommandCache] Failed to load commands (took " + duration + "ms): " + ex.getMessage());
+                        LOG.error("Failed to load commands (took " + duration + "ms): " + ex.getMessage());
                     }
                     return null;
                 });
@@ -166,7 +168,7 @@ public class SlashCommandCache {
                 for (VFileEvent event : events) {
                     VirtualFile file = event.getFile();
                     if (file != null && isCommandFile(file)) {
-                        System.out.println("[SlashCommandCache] Command file changed: " + file.getPath());
+                        LOG.info("Command file changed: " + file.getPath());
                         // 延迟刷新，避免频繁触发
                         SwingUtilities.invokeLater(() -> {
                             try {
@@ -182,7 +184,7 @@ public class SlashCommandCache {
             }
         });
 
-        System.out.println("[SlashCommandCache] File watcher setup complete (using MessageBus)");
+        LOG.info("File watcher setup complete (using MessageBus)");
     }
 
     /**
@@ -206,12 +208,12 @@ public class SlashCommandCache {
             public void run() {
                 long now = System.currentTimeMillis();
                 if (now - lastLoadTime > CACHE_TTL) {
-                    System.out.println("[SlashCommandCache] Periodic check: refreshing cache");
+                    LOG.info("Periodic check: refreshing cache");
                     ApplicationManager.getApplication().invokeLater(() -> loadCommands());
                 }
             }
         }, CACHE_TTL, CACHE_TTL);
-        System.out.println("[SlashCommandCache] Periodic check scheduled (every 10 minutes)");
+        LOG.info("Periodic check scheduled (every 10 minutes)");
     }
 
     /**
@@ -223,7 +225,7 @@ public class SlashCommandCache {
             try {
                 listener.accept(commands);
             } catch (Exception e) {
-                System.err.println("[SlashCommandCache] Error notifying listener: " + e.getMessage());
+                LOG.error("Error notifying listener: " + e.getMessage());
             }
         }
     }
@@ -232,7 +234,7 @@ public class SlashCommandCache {
      * 清理资源
      */
     public void dispose() {
-        System.out.println("[SlashCommandCache] Disposing cache system");
+        LOG.info("Disposing cache system");
 
         // 断开消息总线连接
         if (messageBusConnection != null) {

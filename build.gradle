@@ -1,6 +1,12 @@
 plugins {
     id 'java'
+    id 'checkstyle'
     id 'org.jetbrains.intellij.platform' version '2.10.5'
+}
+
+checkstyle {
+    toolVersion = '10.12.5'
+    configFile = file('checkstyle.xml')
 }
 
 group = 'com.github.idea-claude-code-gui'
@@ -222,7 +228,7 @@ tasks.matching { it.name == 'preparePluginForDistribution' || it.name == 'compos
 }
 
 tasks.named('buildPlugin') {
-    dependsOn('packageAiBridge')
+    dependsOn('packageAiBridge', 'checkstyleMain')
 
     doLast {
         // 解压插件 zip，添加 ai-bridge.zip，然后重新打包

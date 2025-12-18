@@ -4,6 +4,7 @@ import com.github.claudecodegui.ClaudeHistoryReader;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
 import java.util.HashMap;
@@ -14,6 +15,8 @@ import java.util.concurrent.CompletableFuture;
  * 设置和使用统计相关消息处理器
  */
 public class SettingsHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(SettingsHandler.class);
 
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
 
@@ -86,11 +89,10 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
             }
 
-            System.out.println("[SettingsHandler] Setting permission mode to: " + mode);
+            LOG.info("[SettingsHandler] Setting permission mode to: " + mode);
             context.getSession().setPermissionMode(mode);
         } catch (Exception e) {
-            System.err.println("[SettingsHandler] Failed to set mode: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SettingsHandler] Failed to set mode: " + e.getMessage(), e);
         }
     }
 
@@ -117,12 +119,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
             }
 
-            System.out.println("[SettingsHandler] Setting model to: " + model);
+            LOG.info("[SettingsHandler] Setting model to: " + model);
 
             // 尝试从设置中获取实际配置的模型名称（支持容量后缀）
             String actualModel = resolveActualModelName(model);
             if (actualModel != null && !actualModel.equals(model)) {
-                System.out.println("[SettingsHandler] Resolved to actual model: " + actualModel);
+                LOG.info("[SettingsHandler] Resolved to actual model: " + actualModel);
                 context.setCurrentModel(actualModel);
             } else {
                 context.setCurrentModel(model);
@@ -140,8 +142,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 callJavaScript("window.onModelConfirmed", escapeJs(confirmedModel), escapeJs(confirmedProvider));
             });
         } catch (Exception e) {
-            System.err.println("[SettingsHandler] Failed to set model: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SettingsHandler] Failed to set model: " + e.getMessage(), e);
         }
     }
 
@@ -163,15 +164,14 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
             }
 
-            System.out.println("[SettingsHandler] Setting provider to: " + provider);
+            LOG.info("[SettingsHandler] Setting provider to: " + provider);
             context.setCurrentProvider(provider);
 
             if (context.getSession() != null) {
                 context.getSession().setProvider(provider);
             }
         } catch (Exception e) {
-            System.err.println("[SettingsHandler] Failed to set provider: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SettingsHandler] Failed to set provider: " + e.getMessage(), e);
         }
     }
 
@@ -194,8 +194,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 callJavaScript("window.updateNodePath", escapeJs(pathToSend));
             });
         } catch (Exception e) {
-            System.err.println("[SettingsHandler] Failed to get Node.js path: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SettingsHandler] Failed to get Node.js path: " + e.getMessage(), e);
         }
     }
 
@@ -203,8 +202,8 @@ public class SettingsHandler extends BaseMessageHandler {
      * 设置 Node.js 路径
      */
     private void handleSetNodePath(String content) {
-        System.out.println("[SettingsHandler] ========== handleSetNodePath START ==========");
-        System.out.println("[SettingsHandler] Received content: " + content);
+        LOG.debug("[SettingsHandler] ========== handleSetNodePath START ==========");
+        LOG.debug("[SettingsHandler] Received content: " + content);
         try {
             Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
@@ -224,7 +223,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 // 同时清除 Claude 和 Codex 的手动配置
                 context.getClaudeSDKBridge().setNodeExecutable(null);
                 context.getCodexSDKBridge().setNodeExecutable(null);
-                System.out.println("[SettingsHandler] Cleared manual Node.js path from settings");
+                LOG.info("[SettingsHandler] Cleared manual Node.js path from settings");
                 String detected = context.getClaudeSDKBridge().getNodeExecutable();
                 effectivePath = detected != null ? detected : "";
             } else {
@@ -232,7 +231,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 // 同时设置 Claude 和 Codex 的 Node.js 路径
                 context.getClaudeSDKBridge().setNodeExecutable(path);
                 context.getCodexSDKBridge().setNodeExecutable(path);
-                System.out.println("[SettingsHandler] Updated manual Node.js path from settings: " + path);
+                LOG.info("[SettingsHandler] Updated manual Node.js path from settings: " + path);
                 effectivePath = path;
             }
 
@@ -242,13 +241,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存。\n\n如果环境检查仍然失败，请关闭并重新打开工具窗口后重试。"));
             });
         } catch (Exception e) {
-            System.err.println("[SettingsHandler] Failed to set Node.js path: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SettingsHandler] Failed to set Node.js path: " + e.getMessage(), e);
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("保存 Node.js 路径失败: " + e.getMessage()));
             });
         }
-        System.out.println("[SettingsHandler] ========== handleSetNodePath END ==========");
+        LOG.debug("[SettingsHandler] ========== handleSetNodePath END ==========");
     }
 
     /**
@@ -308,8 +306,7 @@ public class SettingsHandler extends BaseMessageHandler {
                     callJavaScript("window.updateUsageStatistics", escapeJs(statsJsonFinal));
                 });
             } catch (Exception e) {
-                System.err.println("[SettingsHandler] Failed to get usage statistics: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("[SettingsHandler] Failed to get usage statistics: " + e.getMessage(), e);
                 SwingUtilities.invokeLater(() -> {
                     callJavaScript("window.showError", escapeJs("获取统计数据失败: " + e.getMessage()));
                 });
@@ -390,7 +387,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[SettingsHandler] Failed to resolve actual model name: " + e.getMessage());
+            LOG.error("[SettingsHandler] Failed to resolve actual model name: " + e.getMessage());
         }
 
         return null;
@@ -428,7 +425,7 @@ public class SettingsHandler extends BaseMessageHandler {
                     return (int)(value * 1_000);
                 }
             } catch (NumberFormatException e) {
-                System.err.println("[SettingsHandler] Failed to parse capacity from model name: " + model);
+                LOG.error("Failed to parse capacity from model name: " + model);
             }
         }
 

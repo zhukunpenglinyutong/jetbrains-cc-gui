@@ -1,5 +1,6 @@
 package com.github.claudecodegui.bridge;
 
+import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.util.PlatformUtils;
 
@@ -17,6 +18,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class NodeDetector {
 
+    private static final Logger LOG = Logger.getInstance(NodeDetector.class);
     // Windows 常见 Node.js 安装路径
     private static final String[] WINDOWS_NODE_PATHS = {
         // 官方安装程序默认路径
@@ -54,8 +56,8 @@ public class NodeDetector {
         }
 
         // 如果都找不到，最后回退
-        System.err.println("⚠️ 无法自动检测 Node.js 路径，使用默认值 'node'");
-        System.err.println(result.getUserFriendlyMessage());
+        LOG.warn("⚠️ 无法自动检测 Node.js 路径，使用默认值 'node'");
+        LOG.warn(result.getUserFriendlyMessage());
         cachedNodeExecutable = "node";
         return cachedNodeExecutable;
     }
@@ -66,9 +68,9 @@ public class NodeDetector {
      */
     public NodeDetectionResult detectNodeWithDetails() {
         List<String> triedPaths = new ArrayList<>();
-        System.out.println("正在查找 Node.js...");
-        System.out.println("  操作系统: " + System.getProperty("os.name"));
-        System.out.println("  平台类型: " + (PlatformUtils.isWindows() ? "Windows" :
+        LOG.info("正在查找 Node.js...");
+        LOG.info("  操作系统: " + System.getProperty("os.name"));
+        LOG.info("  平台类型: " + (PlatformUtils.isWindows() ? "Windows" :
             (PlatformUtils.isMac() ? "macOS" : "Linux/Unix")));
 
         // 1. 尝试使用系统命令查找 (where/which)
@@ -122,7 +124,7 @@ public class NodeDetector {
             ProcessBuilder pb = new ProcessBuilder("where", "node");
             String methodDesc = "Windows where 命令";
 
-            System.out.println("  尝试方法: " + methodDesc);
+            LOG.info("  尝试方法: " + methodDesc);
             Process process = pb.start();
 
             try (BufferedReader reader = new BufferedReader(
@@ -134,7 +136,7 @@ public class NodeDetector {
 
                     String version = verifyNodePath(path);
                     if (version != null) {
-                        System.out.println("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
+                        LOG.info("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
                         return NodeDetectionResult.success(
                             path, version,
                             NodeDetectionResult.DetectionMethod.WHERE_COMMAND,
@@ -149,7 +151,7 @@ public class NodeDetector {
                 process.destroyForcibly();
             }
         } catch (Exception e) {
-            System.out.println("  Windows where 命令查找失败: " + e.getMessage());
+            LOG.debug("  Windows where 命令查找失败: " + e.getMessage());
         }
         return null;
     }
@@ -163,7 +165,7 @@ public class NodeDetector {
     private NodeDetectionResult detectNodeViaShell(String shellPath, String shellName, List<String> triedPaths) {
         // 检查 shell 是否存在
         if (!new File(shellPath).exists()) {
-            System.out.println("  跳过 " + shellName + "（不存在）");
+            LOG.debug("  跳过 " + shellName + "（不存在）");
             return null;
         }
 
@@ -173,7 +175,7 @@ public class NodeDetector {
             ProcessBuilder pb = new ProcessBuilder(shellPath, "-l", "-c", "which node");
             String methodDesc = shellName + " which 命令";
 
-            System.out.println("  尝试方法: " + methodDesc);
+            LOG.info("  尝试方法: " + methodDesc);
             Process process = pb.start();
 
             try (BufferedReader reader = new BufferedReader(
@@ -187,7 +189,7 @@ public class NodeDetector {
 
                         String version = verifyNodePath(path);
                         if (version != null) {
-                            System.out.println("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
+                            LOG.info("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
                             return NodeDetectionResult.success(
                                 path, version,
                                 NodeDetectionResult.DetectionMethod.WHICH_COMMAND,
@@ -203,7 +205,7 @@ public class NodeDetector {
                 process.destroyForcibly();
             }
         } catch (Exception e) {
-            System.out.println("  " + shellName + " 命令查找失败: " + e.getMessage());
+            LOG.debug("  " + shellName + " 命令查找失败: " + e.getMessage());
         }
         return null;
     }
@@ -217,7 +219,7 @@ public class NodeDetector {
 
         if (PlatformUtils.isWindows()) {
             // Windows 路径：展开环境变量并添加
-            System.out.println("  正在检查 Windows 常见安装路径...");
+            LOG.info("  正在检查 Windows 常见安装路径...");
             for (String templatePath : WINDOWS_NODE_PATHS) {
                 String expandedPath = expandWindowsEnvVars(templatePath);
                 pathsToCheck.add(expandedPath);
@@ -237,14 +239,14 @@ public class NodeDetector {
                         if (versionDir.getName().startsWith("v")) {
                             String nodePath = versionDir.getAbsolutePath() + "\\node.exe";
                             pathsToCheck.add(nodePath);
-                            System.out.println("  发现 nvm-windows Node.js: " + nodePath);
+                            LOG.info("  发现 nvm-windows Node.js: " + nodePath);
                         }
                     }
                 }
             }
         } else {
             // macOS/Linux 路径
-            System.out.println("  正在检查 Unix/macOS 常见安装路径...");
+            LOG.info("  正在检查 Unix/macOS 常见安装路径...");
 
             // 动态查找 NVM 管理的版本
             File nvmDir = new File(userHome + "/.nvm/versions/node");
@@ -256,7 +258,7 @@ public class NodeDetector {
                         if (versionDir.isDirectory()) {
                             String nodePath = versionDir.getAbsolutePath() + "/bin/node";
                             pathsToCheck.add(nodePath);
-                            System.out.println("  发现 NVM Node.js: " + nodePath);
+                            LOG.info("  发现 NVM Node.js: " + nodePath);
                         }
                     }
                 }
@@ -286,7 +288,7 @@ public class NodeDetector {
                         for (File nodeDir : nodeDirs) {
                             String nodePath = nodeDir.getAbsolutePath() + "/bin/node";
                             pathsToCheck.add(nodePath);
-                            System.out.println("  发现 Homebrew Node.js: " + nodePath);
+                            LOG.info("  发现 Homebrew Node.js: " + nodePath);
                         }
                     }
                 }
@@ -306,19 +308,19 @@ public class NodeDetector {
 
             File nodeFile = new File(path);
             if (!nodeFile.exists()) {
-                System.out.println("  跳过不存在: " + path);
+                LOG.debug("  跳过不存在: " + path);
                 continue;
             }
 
             // Windows 不检查 canExecute()，因为行为不一致
             if (!PlatformUtils.isWindows() && !nodeFile.canExecute()) {
-                System.out.println("  跳过无执行权限: " + path);
+                LOG.debug("  跳过无执行权限: " + path);
                 continue;
             }
 
             String version = verifyNodePath(path);
             if (version != null) {
-                System.out.println("✓ 在已知路径找到 Node.js: " + path + " (" + version + ")");
+                LOG.info("✓ 在已知路径找到 Node.js: " + path + " (" + version + ")");
                 return NodeDetectionResult.success(path, version,
                     NodeDetectionResult.DetectionMethod.KNOWN_PATH, triedPaths);
             }
@@ -331,7 +333,7 @@ public class NodeDetector {
      * 通过 PATH 环境变量检测 Node.js
      */
     private NodeDetectionResult detectNodeViaPath(List<String> triedPaths) {
-        System.out.println("  正在检查 PATH 环境变量...");
+        LOG.info("  正在检查 PATH 环境变量...");
 
         // 使用平台兼容的方式获取 PATH
         String pathEnv = PlatformUtils.isWindows() ?
@@ -339,7 +341,7 @@ public class NodeDetector {
             System.getenv("PATH");
 
         if (pathEnv == null || pathEnv.isEmpty()) {
-            System.out.println("  PATH 环境变量为空");
+            LOG.debug("  PATH 环境变量为空");
             return null;
         }
 
@@ -357,7 +359,7 @@ public class NodeDetector {
 
             String version = verifyNodePath(nodePath);
             if (version != null) {
-                System.out.println("✓ 在 PATH 中找到 Node.js: " + nodePath + " (" + version + ")");
+                LOG.info("✓ 在 PATH 中找到 Node.js: " + nodePath + " (" + version + ")");
                 return NodeDetectionResult.success(nodePath, version,
                     NodeDetectionResult.DetectionMethod.PATH_VARIABLE, triedPaths);
             }
@@ -370,7 +372,7 @@ public class NodeDetector {
      * 回退检测：直接尝试执行 "node"
      */
     private NodeDetectionResult detectNodeViaFallback(List<String> triedPaths) {
-        System.out.println("  尝试直接调用 'node'（回退方案）...");
+        LOG.info("  尝试直接调用 'node'（回退方案）...");
         triedPaths.add("node (direct call)");
 
         try {
@@ -392,12 +394,12 @@ public class NodeDetector {
             int exitCode = process.exitValue();
             if (exitCode == 0 && version != null) {
                 version = version.trim();
-                System.out.println("✓ 直接调用 node 成功 (" + version + ")");
+                LOG.info("✓ 直接调用 node 成功 (" + version + ")");
                 return NodeDetectionResult.success("node", version,
                     NodeDetectionResult.DetectionMethod.FALLBACK, triedPaths);
             }
         } catch (Exception e) {
-            System.out.println("  直接调用 'node' 失败: " + e.getMessage());
+            LOG.debug("  直接调用 'node' 失败: " + e.getMessage());
         }
 
         return null;
@@ -430,7 +432,7 @@ public class NodeDetector {
                 return version.trim();
             }
         } catch (Exception e) {
-            System.out.println("    验证失败 [" + path + "]: " + e.getMessage());
+            LOG.debug("    验证失败 [" + path + "]: " + e.getMessage());
         }
         return null;
     }

@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
 import java.util.List;
@@ -11,6 +12,8 @@ import java.util.Map;
  * MCP 服务器管理消息处理器
  */
 public class McpServerHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(McpServerHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
         "get_mcp_servers",
@@ -65,8 +68,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 callJavaScript("window.updateMcpServers", escapeJs(serversJson));
             });
         } catch (Exception e) {
-            System.err.println("[McpServerHandler] Failed to get MCP servers: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[McpServerHandler] Failed to get MCP servers: " + e.getMessage(), e);
         }
     }
 
@@ -85,8 +87,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 handleGetMcpServers();
             });
         } catch (Exception e) {
-            System.err.println("[McpServerHandler] Failed to add MCP server: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[McpServerHandler] Failed to add MCP server: " + e.getMessage(), e);
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("添加 MCP 服务器失败: " + e.getMessage()));
             });
@@ -108,8 +109,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 handleGetMcpServers();
             });
         } catch (Exception e) {
-            System.err.println("[McpServerHandler] Failed to update MCP server: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[McpServerHandler] Failed to update MCP server: " + e.getMessage(), e);
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("更新 MCP 服务器失败: " + e.getMessage()));
             });
@@ -138,8 +138,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 });
             }
         } catch (Exception e) {
-            System.err.println("[McpServerHandler] Failed to delete MCP server: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[McpServerHandler] Failed to delete MCP server: " + e.getMessage(), e);
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("删除 MCP 服务器失败: " + e.getMessage()));
             });
@@ -161,8 +160,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 callJavaScript("window.mcpServerValidated", escapeJs(validationJson));
             });
         } catch (Exception e) {
-            System.err.println("[McpServerHandler] Failed to validate MCP server: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[McpServerHandler] Failed to validate MCP server: " + e.getMessage(), e);
         }
     }
 }
