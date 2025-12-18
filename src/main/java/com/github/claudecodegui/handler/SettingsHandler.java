@@ -124,7 +124,7 @@ public class SettingsHandler extends BaseMessageHandler {
             // 尝试从设置中获取实际配置的模型名称（支持容量后缀）
             String actualModel = resolveActualModelName(model);
             if (actualModel != null && !actualModel.equals(model)) {
-                System.out.println("[SettingsHandler] Resolved to actual model: " + actualModel);
+                LOG.info("[SettingsHandler] Resolved to actual model: " + actualModel);
                 context.setCurrentModel(actualModel);
             } else {
                 context.setCurrentModel(model);
@@ -387,7 +387,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[SettingsHandler] Failed to resolve actual model name: " + e.getMessage());
+            LOG.error("[SettingsHandler] Failed to resolve actual model name: " + e.getMessage());
         }
 
         return null;
@@ -425,7 +425,7 @@ public class SettingsHandler extends BaseMessageHandler {
                     return (int)(value * 1_000);
                 }
             } catch (NumberFormatException e) {
-                System.err.println("[SettingsHandler] Failed to parse capacity from model name: " + model);
+                LOG.error("Failed to parse capacity from model name: " + model);
             }
         }
 
