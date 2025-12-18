@@ -30,8 +30,13 @@ export const TokenIndicator = ({
 
   const formatTokens = (value?: number) => {
     if (typeof value !== 'number' || !isFinite(value)) return undefined;
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    // 始终使用 k (千) 为单位显示容量
+    // 例如: 1,000,000 → 1000k, 500,000 → 500k
+    if (value >= 1_000) {
+      const kValue = value / 1_000;
+      // 如果是整数，不显示小数点
+      return Number.isInteger(kValue) ? `${kValue}k` : `${kValue.toFixed(1)}k`;
+    }
     return `${value}`;
   };
 

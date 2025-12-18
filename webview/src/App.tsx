@@ -258,6 +258,60 @@ const App = () => {
     window.addErrorMessage = (message) =>
       setMessages((prev) => [...prev, { type: 'error', content: message }]);
 
+    // 注册 toast 回调（后端调用）
+    window.addToast = (message, type) => {
+      addToast(message, type);
+    };
+
+    // 注册导出会话数据回调
+    window.onExportSessionData = (json) => {
+      try {
+        // 解析后端返回的数据
+        const exportData = JSON.parse(json);
+        const conversationMessages = exportData.messages || [];
+        const title = exportData.title || 'session';
+        const sessionId = exportData.sessionId || 'unknown';
+
+        // 转换为 ClaudeMessage 格式
+        const messages: ClaudeMessage[] = conversationMessages.map((msg: any) => {
+          // 提取文本内容
+          let contentText = '';
+          if (msg.message?.content) {
+            if (typeof msg.message.content === 'string') {
+              contentText = msg.message.content;
+            } else if (Array.isArray(msg.message.content)) {
+              // 从数组中提取文本
+              contentText = msg.message.content
+                .filter((block: any) => block && block.type === 'text')
+                .map((block: any) => block.text || '')
+                .join('\n');
+            }
+          }
+
+          return {
+            type: msg.type || 'assistant',
+            content: contentText,
+            timestamp: msg.timestamp,
+            raw: msg // 保留原始数据
+          };
+        });
+
+        // 导入转换函数
+        import('./utils/exportMarkdown').then(({ convertMessagesToJSON, downloadJSON }) => {
+          const json = convertMessagesToJSON(messages, title);
+          const filename = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${sessionId.slice(0, 8)}.json`;
+          downloadJSON(json, filename);
+          // 注意：不在这里显示成功 toast，等待后端保存完成后再显示
+        }).catch(error => {
+          console.error('[Frontend] Failed to export session:', error);
+          addToast(t('history.exportFailed'), 'error');
+        });
+      } catch (error) {
+        console.error('[Frontend] Failed to parse export data:', error);
+        addToast(t('history.exportFailed'), 'error');
+      }
+    };
+
     // 注册斜杠命令回调（接收 SDK 返回的命令列表）
     resetSlashCommandsState(); // 重置状态，确保首次加载时能正确触发刷新
     resetFileReferenceState(); // 重置文件引用状态，防止 Promise 泄漏
@@ -739,6 +793,13 @@ const App = () => {
       // 显示成功提示
       addToast('会话已删除', 'success');
     }
+  };
+
+  // 导出会话历史
+  const exportHistorySession = (sessionId: string, title: string) => {
+    // 发送导出请求到 Java 后端，包含 sessionId 和 title
+    const exportData = JSON.stringify({ sessionId, title });
+    sendBridgeMessage('export_session', exportData);
   };
 
   // 文案本地化映射
@@ -1247,6 +1308,7 @@ const App = () => {
           historyData={historyData}
           onLoadSession={loadHistorySession}
           onDeleteSession={deleteHistorySession}
+          onExportSession={exportHistorySession}
         />
       )}
 

@@ -1,6 +1,7 @@
 package com.github.claudecodegui.ui;
 
 import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
 import java.awt.*;
@@ -12,6 +13,7 @@ import java.util.function.Consumer;
  */
 public class ErrorPanelBuilder {
 
+    private static final Logger LOG = Logger.getInstance(ErrorPanelBuilder.class);
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
 
     /**
@@ -69,7 +71,7 @@ public class ErrorPanelBuilder {
                 nodeField.setText(currentNodePath);
             }
         } catch (Exception e) {
-            System.err.println("[ErrorPanelBuilder] Failed to preload Node.js path: " + e.getMessage());
+            LOG.warn("Failed to preload Node.js path: " + e.getMessage());
         }
 
         JButton saveAndRetryButton = new JButton("保存并重试");

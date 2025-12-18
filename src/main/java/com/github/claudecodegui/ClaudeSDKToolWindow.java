@@ -1,6 +1,7 @@
 package com.github.claudecodegui;
 
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
@@ -33,6 +34,7 @@ import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.HtmlLoader;
+import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.cache.SlashCommandCache;
 import com.google.gson.Gson;
@@ -55,6 +57,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
+    private static final Logger LOG = Logger.getInstance(ClaudeSDKToolWindow.class);
     private static final Map<Project, ClaudeChatWindow> instances = new ConcurrentHashMap<>();
 
     /**
@@ -91,11 +94,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
      */
     public static class ClaudeChatWindow {
         private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
-        private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new java.util.HashMap<>();
-        static {
-            MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
-            MODEL_CONTEXT_LIMITS.put("claude-opus-4-5-20251101", 200_000);
-        }
 
         private final JPanel mainPanel;
         private final ClaudeSDKBridge claudeSDKBridge;
@@ -110,7 +108,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private JBCefBrowser browser;
         private ClaudeSession session;
-        private String currentModel = "claude-sonnet-4-5";
 
         private volatile boolean disposed = false;
         private volatile boolean initialized = false;
@@ -149,7 +146,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             registerInstance();
 
             this.initialized = true;
-            System.out.println("[ClaudeChatWindow] 窗口实例已完全初始化，项目: " + project.getName());
+            LOG.info("窗口实例已完全初始化，项目: " + project.getName());
 
             // 在构造函数结束后立即获取斜杠命令（不依赖 onLoadEnd 回调）
             // 使用异步调用避免阻塞 UI 线程
@@ -168,12 +165,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 java.io.File channelManager = new java.io.File(bridgeDir, "channel-manager.js");
                 if (bridgeDir.exists() && bridgeDir.isDirectory() && channelManager.exists()) {
                     claudeSDKBridge.setSdkTestDir(bridgeDir.getAbsolutePath());
-                    System.out.println("[ClaudeChatWindow] Overriding ai-bridge path to project directory: " + bridgeDir.getAbsolutePath());
+                    LOG.info("Overriding ai-bridge path to project directory: " + bridgeDir.getAbsolutePath());
                 } else {
-                    System.out.println("[ClaudeChatWindow] Project ai-bridge not found, using default resolver");
+                    LOG.info("Project ai-bridge not found, using default resolver");
                 }
             } catch (Exception e) {
-                System.err.println("[ClaudeChatWindow] Failed to override bridge path: " + e.getMessage());
+                LOG.warn("Failed to override bridge path: " + e.getMessage());
             }
         }
 
@@ -190,10 +187,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     // 同时设置 Claude 和 Codex 的 Node.js 路径
                     claudeSDKBridge.setNodeExecutable(path);
                     codexSDKBridge.setNodeExecutable(path);
-                    System.out.println("[ClaudeChatWindow] Using manually configured Node.js path: " + path);
+                    LOG.info("Using manually configured Node.js path: " + path);
                 }
             } catch (Exception e) {
-                System.err.println("[ClaudeChatWindow] Failed to load manual Node.js path: " + e.getMessage());
+                LOG.warn("Failed to load manual Node.js path: " + e.getMessage());
             }
         }
 
@@ -201,16 +198,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             try {
                 settingsService.applyActiveProviderToClaudeSettings();
             } catch (Exception e) {
-                System.err.println("[ClaudeChatWindow] Failed to sync active provider on startup: " + e.getMessage());
+                LOG.warn("Failed to sync active provider on startup: " + e.getMessage());
             }
         }
 
         private void setupPermissionService() {
             PermissionService permissionService = PermissionService.getInstance(project);
             permissionService.start();
-            permissionService.setDialogShower((toolName, inputs) ->
+            // 使用项目注册机制，支持多窗口场景
+            permissionService.registerDialogShower(project, (toolName, inputs) ->
                 permissionHandler.showFrontendPermissionDialog(toolName, inputs));
-            System.out.println("[ClaudeChatWindow] Started permission service with frontend dialog");
+            LOG.info("Started permission service with frontend dialog for project: " + project.getName());
         }
 
         private void initializeHandlers() {
@@ -237,6 +235,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new FileHandler(handlerContext));
             messageDispatcher.registerHandler(new SettingsHandler(handlerContext));
             messageDispatcher.registerHandler(new SessionHandler(handlerContext));
+            messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
 
             // 权限处理器（需要特殊回调）
             this.permissionHandler = new PermissionHandler(handlerContext);
@@ -248,7 +247,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             historyHandler.setSessionLoadCallback(this::loadHistorySession);
             messageDispatcher.registerHandler(historyHandler);
 
-            System.out.println("[ClaudeChatWindow] Registered " + messageDispatcher.getHandlerCount() + " message handlers");
+            LOG.info("Registered " + messageDispatcher.getHandlerCount() + " message handlers");
         }
 
         private void registerEditorListeners() {
@@ -324,7 +323,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         clearSelectionInfo();
                     }
                 } catch (Exception e) {
-                    System.err.println("[ClaudeChatWindow] Failed to update context info: " + e.getMessage());
+                    LOG.warn("Failed to update context info: " + e.getMessage());
                 }
             });
         }
@@ -332,14 +331,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void initializeSessionInfo() {
             String workingDirectory = determineWorkingDirectory();
             session.setSessionInfo(null, workingDirectory);
-            System.out.println("[ClaudeChatWindow] Initialized with working directory: " + workingDirectory);
+            LOG.info("Initialized with working directory: " + workingDirectory);
         }
 
         private void registerInstance() {
             synchronized (instances) {
                 ClaudeChatWindow oldInstance = instances.get(project);
                 if (oldInstance != null && oldInstance != this) {
-                    System.out.println("[ClaudeChatWindow] 警告: 项目 " + project.getName() + " 已存在窗口实例，将替换旧实例");
+                    LOG.warn("项目 " + project.getName() + " 已存在窗口实例，将替换旧实例");
                     oldInstance.dispose();
                 }
                 instances.put(project, this);
@@ -353,7 +352,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             try {
-                browser = new JBCefBrowser();
+                browser = JBCefBrowserFactory.create();
                 handlerContext.setBrowser(browser);
 
                 // 启用开发者工具（右键菜单）
@@ -370,7 +369,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 JBCefJSQuery getClipboardPathQuery = JBCefJSQuery.create(browserBase);
                 getClipboardPathQuery.addHandler((msg) -> {
                     try {
-                        System.out.println("[Java] Clipboard path request received");
+                        LOG.debug("Clipboard path request received");
                         Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
                         Transferable contents = clipboard.getContents(null);
 
@@ -381,14 +380,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             if (!files.isEmpty()) {
                                 File file = files.get(0);
                                 String filePath = file.getAbsolutePath();
-                                System.out.println("[Java] Returning file path from clipboard: " + filePath);
+                                LOG.debug("Returning file path from clipboard: " + filePath);
                                 return new JBCefJSQuery.Response(filePath);
                             }
                         }
-                        System.out.println("[Java] No file in clipboard");
+                        LOG.debug("No file in clipboard");
                         return new JBCefJSQuery.Response("");
                     } catch (Exception ex) {
-                        System.err.println("[Java] Error getting clipboard path: " + ex.getMessage());
+                        LOG.warn("Error getting clipboard path: " + ex.getMessage());
                         return new JBCefJSQuery.Response("");
                     }
                 });
@@ -398,7 +397,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 browser.getJBCefClient().addLoadHandler(new CefLoadHandlerAdapter() {
                     @Override
                     public void onLoadEnd(CefBrowser cefBrowser, CefFrame frame, int httpStatusCode) {
-                        System.out.println("[ClaudeChatWindow] onLoadEnd called, isMain=" + frame.isMain() + ", url=" + cefBrowser.getURL());
+                        LOG.debug("onLoadEnd called, isMain=" + frame.isMain() + ", url=" + cefBrowser.getURL());
 
                         // 只在主框架加载完成时执行
                         if (!frame.isMain()) {
@@ -439,7 +438,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
 
                         // 在浏览器加载完成后获取斜杠命令
-                        System.out.println("[ClaudeChatWindow] About to call fetchSlashCommandsOnStartup");
+                        LOG.debug("About to call fetchSlashCommandsOnStartup");
                         fetchSlashCommandsOnStartup();
                     }
                 }, browser.getCefBrowser());
@@ -463,7 +462,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                                 if (!files.isEmpty()) {
                                     File file = files.get(0); // 只处理第一个文件
                                     String filePath = file.getAbsolutePath();
-                                    System.out.println("[Java] Dropped file path: " + filePath);
+                                    LOG.debug("Dropped file path: " + filePath);
 
                                     // 通过 JavaScript 将路径传递到前端
                                     String jsCode = String.format(
@@ -476,8 +475,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                                 return;
                             }
                         } catch (Exception ex) {
-                            System.err.println("[Java] Drop error: " + ex.getMessage());
-                            ex.printStackTrace();
+                            LOG.warn("Drop error: " + ex.getMessage(), ex);
                         }
                         dtde.dropComplete(false);
                     }
@@ -487,7 +485,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 mainPanel.add(browserComponent, BorderLayout.CENTER);
 
             } catch (Exception e) {
-                e.printStackTrace();
+                LOG.error("Error occurred", e);
                 showErrorPanel();
             }
         }
@@ -518,13 +516,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     // 同时清除 Claude 和 Codex 的手动配置
                     claudeSDKBridge.setNodeExecutable(null);
                     codexSDKBridge.setNodeExecutable(null);
-                    System.out.println("[ClaudeChatWindow] Cleared manual Node.js path");
+                    LOG.info("Cleared manual Node.js path");
                 } else {
                     props.setValue(NODE_PATH_PROPERTY_KEY, manualPath);
                     // 同时设置 Claude 和 Codex 的 Node.js 路径
                     claudeSDKBridge.setNodeExecutable(manualPath);
                     codexSDKBridge.setNodeExecutable(manualPath);
-                    System.out.println("[ClaudeChatWindow] Saved manual Node.js path: " + manualPath);
+                    LOG.info("Saved manual Node.js path: " + manualPath);
                 }
 
                 SwingUtilities.invokeLater(() -> {
@@ -556,21 +554,21 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     }
 
                     if ("console.error".equals(logType)) {
-                        System.err.println(logMessage);
+                        LOG.warn(logMessage.toString());
                     } else if ("console.warn".equals(logType)) {
-                        System.out.println(logMessage);
+                        LOG.info(logMessage.toString());
                     } else {
-                        System.out.println(logMessage);
+                        LOG.debug(logMessage.toString());
                     }
                 } catch (Exception e) {
-                    System.err.println("[Backend] 解析控制台日志失败: " + e.getMessage());
+                    LOG.warn("解析控制台日志失败: " + e.getMessage());
                 }
                 return;
             }
 
             String[] parts = message.split(":", 2);
             if (parts.length < 1) {
-                System.err.println("[Backend] 错误: 消息格式无效");
+                LOG.error("消息格式无效");
                 return;
             }
 
@@ -589,12 +587,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
             // 特殊处理：刷新斜杠命令列表
             if ("refresh_slash_commands".equals(type)) {
-                System.out.println("[Backend] Received refresh_slash_commands request");
+                LOG.info("Received refresh_slash_commands request");
                 fetchSlashCommandsOnStartup();
                 return;
             }
 
-            System.err.println("[Backend] 警告: 未知的消息类型: " + type);
+            LOG.warn("未知的消息类型: " + type);
         }
 
         private void registerSessionLoadListener() {
@@ -609,12 +607,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return projectPath;
             }
             String userHome = System.getProperty("user.home");
-            System.out.println("[ClaudeChatWindow] WARNING: Using user home directory as fallback: " + userHome);
+            LOG.warn("Using user home directory as fallback: " + userHome);
             return userHome;
         }
 
         private void loadHistorySession(String sessionId, String projectPath) {
-            System.out.println("Loading history session: " + sessionId + " from project: " + projectPath);
+            LOG.info("Loading history session: " + sessionId + " from project: " + projectPath);
 
             callJavaScript("clearMessages");
 
@@ -660,7 +658,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 @Override
                 public void onSessionIdReceived(String sessionId) {
-                    System.out.println("Session ID: " + sessionId);
+                    LOG.info("Session ID: " + sessionId);
                 }
 
                 @Override
@@ -672,7 +670,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 public void onThinkingStatusChanged(boolean isThinking) {
                     SwingUtilities.invokeLater(() -> {
                         callJavaScript("showThinkingStatus", String.valueOf(isThinking));
-                        System.out.println("[ClaudeChatWindow] Thinking status changed: " + isThinking);
+                        LOG.debug("Thinking status changed: " + isThinking);
                     });
                 }
 
@@ -684,11 +682,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     // 2. 这里接收到的是旧格式（只有命令名，没有描述）
                     // 3. 如果发送到前端会覆盖完整的命令列表，导致 description 丢失
                     int incomingCount = slashCommands != null ? slashCommands.size() : 0;
-                    System.out.println("[ClaudeChatWindow] onSlashCommandsReceived called (old format, ignored). incoming=" + incomingCount);
+                    LOG.debug("onSlashCommandsReceived called (old format, ignored). incoming=" + incomingCount);
 
                     // 记录收到命令，但不发送到前端
                     if (slashCommands != null && !slashCommands.isEmpty() && !slashCommandsFetched) {
-                        System.out.println("[ClaudeChatWindow] Received " + incomingCount + " slash commands (old format), but keeping existing commands with descriptions");
+                        LOG.debug("Received " + incomingCount + " slash commands (old format), but keeping existing commands with descriptions");
                     }
                 }
             });
@@ -704,11 +702,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 cwd = project.getBasePath();
             }
 
-            System.out.println("[ClaudeChatWindow] Initializing slash command cache, cwd=" + cwd);
+            LOG.info("Initializing slash command cache, cwd=" + cwd);
 
             // 如果缓存已存在，先清理
             if (slashCommandCache != null) {
-                System.out.println("[ClaudeChatWindow] Disposing existing slash command cache");
+                LOG.debug("Disposing existing slash command cache");
                 slashCommandCache.dispose();
             }
 
@@ -719,23 +717,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             slashCommandCache.addUpdateListener(commands -> {
                 fetchedSlashCommandsCount = commands.size();
                 slashCommandsFetched = true;
-                System.out.println("[ClaudeChatWindow] Slash command cache listener triggered, count=" + commands.size());
+                LOG.debug("Slash command cache listener triggered, count=" + commands.size());
                 SwingUtilities.invokeLater(() -> {
                     try {
                         Gson gson = new Gson();
                         String commandsJson = gson.toJson(commands);
-                        System.out.println("[ClaudeChatWindow] Calling updateSlashCommands with JSON length=" + commandsJson.length());
+                        LOG.debug("Calling updateSlashCommands with JSON length=" + commandsJson.length());
                         callJavaScript("updateSlashCommands", JsUtils.escapeJs(commandsJson));
-                        System.out.println("[ClaudeChatWindow] Slash commands updated: " + commands.size() + " commands");
+                        LOG.info("Slash commands updated: " + commands.size() + " commands");
                     } catch (Exception e) {
-                        System.err.println("[ClaudeChatWindow] Failed to send slash commands to frontend: " + e.getMessage());
-                        e.printStackTrace();
+                        LOG.warn("Failed to send slash commands to frontend: " + e.getMessage(), e);
                     }
                 });
             });
 
             // 初始化缓存（开始加载 + 启动文件监听 + 定期检查）
-            System.out.println("[ClaudeChatWindow] Starting slash command cache initialization");
+            LOG.debug("Starting slash command cache initialization");
             slashCommandCache.init();
         }
 
@@ -757,25 +754,47 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void pushUsageUpdateFromMessages(List<ClaudeSession.Message> messages) {
             try {
+                LOG.debug("pushUsageUpdateFromMessages called with " + messages.size() + " messages");
+
                 JsonObject lastUsage = null;
                 for (int i = messages.size() - 1; i >= 0; i--) {
                     ClaudeSession.Message msg = messages.get(i);
-                    if (msg.type != ClaudeSession.Message.Type.ASSISTANT || msg.raw == null) continue;
-                    if (!msg.raw.has("message")) continue;
-                    JsonObject message = msg.raw.getAsJsonObject("message");
-                    if (message.has("usage")) {
-                        lastUsage = message.getAsJsonObject("usage");
+
+                    if (msg.type != ClaudeSession.Message.Type.ASSISTANT || msg.raw == null) {
+                        continue;
+                    }
+
+                    // 检查不同的可能结构
+                    if (msg.raw.has("message")) {
+                        JsonObject message = msg.raw.getAsJsonObject("message");
+                        if (message.has("usage")) {
+                            lastUsage = message.getAsJsonObject("usage");
+                            break;
+                        }
+                    }
+
+                    // 检查usage是否在raw的根级别
+                    if (msg.raw.has("usage")) {
+                        lastUsage = msg.raw.getAsJsonObject("usage");
                         break;
                     }
+                }
+
+                if (lastUsage == null) {
+                    LOG.debug("No usage info found in messages");
                 }
 
                 int inputTokens = lastUsage != null && lastUsage.has("input_tokens") ? lastUsage.get("input_tokens").getAsInt() : 0;
                 int cacheWriteTokens = lastUsage != null && lastUsage.has("cache_creation_input_tokens") ? lastUsage.get("cache_creation_input_tokens").getAsInt() : 0;
                 int cacheReadTokens = lastUsage != null && lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
+                int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
 
-                int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens;
-                int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
+                int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+                int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                 int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
+
+                LOG.debug("Pushing usage update: input=" + inputTokens + ", cacheWrite=" + cacheWriteTokens + ", cacheRead=" + cacheReadTokens + ", output=" + outputTokens + ", total=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
+
 
                 JsonObject usageUpdate = new JsonObject();
                 usageUpdate.addProperty("percentage", percentage);
@@ -786,18 +805,26 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 String usageJson = new Gson().toJson(usageUpdate);
                 SwingUtilities.invokeLater(() -> {
-                    String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "'); }";
                     if (browser != null && !disposed) {
+                        // 使用安全的调用方式，检查函数是否存在
+                        String js = "(function() {" +
+                                "  if (typeof window.onUsageUpdate === 'function') {" +
+                                "    window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "');" +
+                                "    console.log('[Backend->Frontend] Usage update sent successfully');" +
+                                "  } else {" +
+                                "    console.warn('[Backend->Frontend] window.onUsageUpdate not found');" +
+                                "  }" +
+                                "})();";
                         browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
                     }
                 });
             } catch (Exception e) {
-                System.err.println("[Backend] Failed to push usage update: " + e.getMessage());
+                LOG.warn("Failed to push usage update: " + e.getMessage(), e);
             }
         }
 
         private void createNewSession() {
-            System.out.println("[ClaudeSDKToolWindow] Creating new session...");
+            LOG.info("Creating new session...");
 
             // 清空前端消息显示（修复新建会话时消息不清空的bug）
             callJavaScript("clearMessages");
@@ -809,7 +836,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 : CompletableFuture.completedFuture(null);
 
             interruptFuture.thenRun(() -> {
-                System.out.println("[ClaudeSDKToolWindow] Old session interrupted, creating new session");
+                LOG.info("Old session interrupted, creating new session");
 
                 // 创建全新的 Session 对象
                 session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
@@ -824,16 +851,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 String workingDirectory = determineWorkingDirectory();
                 session.setSessionInfo(null, workingDirectory);
 
-                System.out.println("[ClaudeSDKToolWindow] New session created successfully");
-                System.out.println("[ClaudeSDKToolWindow]   - SessionId: null (new session)");
-                System.out.println("[ClaudeSDKToolWindow]   - Working directory: " + workingDirectory);
+                LOG.info("New session created successfully, working directory: " + workingDirectory);
 
                 // 更新前端状态
                 SwingUtilities.invokeLater(() -> {
                     callJavaScript("updateStatus", JsUtils.escapeJs("新会话已创建，可以开始提问"));
 
                     // 重置 Token 使用统计
-                    int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
+                    int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                     JsonObject usageUpdate = new JsonObject();
                     usageUpdate.addProperty("percentage", 0);
                     usageUpdate.addProperty("totalTokens", 0);
@@ -842,14 +867,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     usageUpdate.addProperty("maxTokens", maxTokens);
 
                     String usageJson = new Gson().toJson(usageUpdate);
-                    String js = "if (window.onUsageUpdate) { window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "'); }";
+
                     if (browser != null && !disposed) {
+                        // 使用安全的调用方式
+                        String js = "(function() {" +
+                                "  if (typeof window.onUsageUpdate === 'function') {" +
+                                "    window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "');" +
+                                "    console.log('[Backend->Frontend] Usage reset for new session');" +
+                                "  } else {" +
+                                "    console.warn('[Backend->Frontend] window.onUsageUpdate not found');" +
+                                "  }" +
+                                "})();";
                         browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
                     }
                 });
             }).exceptionally(ex -> {
-                System.err.println("[ClaudeSDKToolWindow] Failed to create new session: " + ex.getMessage());
-                ex.printStackTrace();
+                LOG.error("Failed to create new session: " + ex.getMessage(), ex);
                 SwingUtilities.invokeLater(() -> {
                     callJavaScript("updateStatus", JsUtils.escapeJs("创建新会话失败: " + ex.getMessage()));
                 });
@@ -879,14 +912,33 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void callJavaScript(String functionName, String... args) {
             if (disposed || browser == null) {
+                LOG.warn("无法调用 JS 函数 " + functionName + ": disposed=" + disposed + ", browser=" + (browser == null ? "null" : "exists"));
                 return;
             }
-            try {
-                String js = JsUtils.buildJsCall(functionName, args);
-                browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
-            } catch (Exception e) {
-                System.err.println("[ClaudeSDKToolWindow] 调用 JS 函数失败: " + functionName + ", 错误: " + e.getMessage());
-            }
+
+            SwingUtilities.invokeLater(() -> {
+                if (disposed || browser == null) {
+                    return;
+                }
+                try {
+                    String js = JsUtils.buildJsCall(functionName, args);
+
+                    // 先检查函数是否存在，再调用
+                    String checkAndCall =
+                        "(function() {" +
+                        "  if (typeof window." + functionName + " === 'function') {" +
+                        "    " + js +
+                        "    console.log('[Backend->Frontend] Successfully called " + functionName + "');" +
+                        "  } else {" +
+                        "    console.warn('[Backend->Frontend] Function " + functionName + " not found on window');" +
+                        "  }" +
+                        "})();";
+
+                    browser.getCefBrowser().executeJavaScript(checkAndCall, browser.getCefBrowser().getURL(), 0);
+                } catch (Exception e) {
+                    LOG.warn("调用 JS 函数失败: " + functionName + ", 错误: " + e.getMessage(), e);
+                }
+            });
         }
 
         /**
@@ -919,13 +971,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
          */
         static void addSelectionFromExternalInternal(Project project, String selectionInfo) {
             if (project == null) {
-                System.err.println("[ClaudeSDKToolWindow] 错误: project 参数为 null");
+                LOG.error("project 参数为 null");
                 return;
             }
 
             ClaudeChatWindow window = instances.get(project);
             if (window == null) {
-                System.err.println("[ClaudeSDKToolWindow] 错误: 找不到项目 " + project.getName() + " 的窗口实例");
+                LOG.error("找不到项目 " + project.getName() + " 的窗口实例");
                 return;
             }
 
@@ -973,7 +1025,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 slashCommandCache = null;
             }
 
-            System.out.println("[ClaudeSDKToolWindow] 开始清理窗口资源，项目: " + project.getName());
+            // 注销权限服务的 dialogShower，防止内存泄漏
+            try {
+                PermissionService permissionService = PermissionService.getInstance(project);
+                permissionService.unregisterDialogShower(project);
+            } catch (Exception e) {
+                LOG.warn("Failed to unregister dialog shower: " + e.getMessage());
+            }
+
+            LOG.info("开始清理窗口资源，项目: " + project.getName());
 
             disposed = true;
             handlerContext.setDisposed(true);
@@ -987,7 +1047,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             try {
                 if (session != null) session.interrupt();
             } catch (Exception e) {
-                System.err.println("[ClaudeSDKToolWindow] 清理会话失败: " + e.getMessage());
+                LOG.warn("清理会话失败: " + e.getMessage());
             }
 
             try {
@@ -996,12 +1056,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     browser = null;
                 }
             } catch (Exception e) {
-                System.err.println("[ClaudeSDKToolWindow] 清理浏览器失败: " + e.getMessage());
+                LOG.warn("清理浏览器失败: " + e.getMessage());
             }
 
             messageDispatcher.clear();
 
-            System.out.println("[ClaudeSDKToolWindow] 窗口资源已完全清理，项目: " + project.getName());
+            LOG.info("窗口资源已完全清理，项目: " + project.getName());
         }
     }
 }

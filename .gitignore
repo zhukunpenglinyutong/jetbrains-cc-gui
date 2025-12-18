@@ -64,3 +64,5 @@ webview/src/version/version.ts
 
 # 自定义沙箱目录（如果启用）
 .sandbox/
+logs/*.log
+.intellijPlatform/

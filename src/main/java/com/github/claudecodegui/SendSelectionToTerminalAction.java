@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.fileEditor.FileEditorManager;
@@ -25,6 +26,8 @@ import java.io.File;
  * 实现 DumbAware 接口允许在索引构建期间使用此功能
  */
 public class SendSelectionToTerminalAction extends AnAction implements DumbAware {
+
+    private static final Logger LOG = Logger.getInstance(SendSelectionToTerminalAction.class);
 
     /**
      * 执行Action的主要逻辑
@@ -50,14 +53,13 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
 
                     // 发送到插件的聊天窗口（在 UI 线程执行）
                     sendToChatWindow(project, selectionInfo);
-                    System.out.println("[SendSelectionToTerminalAction] 已添加到待发送: " + selectionInfo);
+                    LOG.info("已添加到待发送: " + selectionInfo);
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
 
         } catch (Exception ex) {
             showError(project, "发送失败: " + ex.getMessage());
-            System.err.println("[SendSelectionToTerminalAction] Error: " + ex.getMessage());
-            ex.printStackTrace();
+            LOG.error("Error: " + ex.getMessage(), ex);
         }
     }
 
@@ -148,11 +150,10 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         try {
             // 获取文件的绝对路径
             String absolutePath = file.getPath();
-            System.out.println("[SendSelectionToTerminalAction] 文件绝对路径: " + absolutePath);
+            LOG.debug("文件绝对路径: " + absolutePath);
             return absolutePath;
         } catch (Exception ex) {
-            System.err.println("[SendSelectionToTerminalAction] 获取文件路径异常: " + ex.getMessage());
-            ex.printStackTrace();
+            LOG.error("获取文件路径异常: " + ex.getMessage(), ex);
             return null;
         }
     }
@@ -176,7 +177,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
                             try {
                                 Thread.sleep(300); // 等待300ms确保界面加载完成
                                 ClaudeSDKToolWindow.addSelectionFromExternal(project, text);
-                                System.out.println("[SendSelectionToTerminalAction] 窗口已激活并发送内容到项目: " + project.getName());
+                                LOG.info("窗口已激活并发送内容到项目: " + project.getName());
                             } catch (InterruptedException e) {
                                 Thread.currentThread().interrupt();
                             }
@@ -187,7 +188,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
                     ClaudeSDKToolWindow.addSelectionFromExternal(project, text);
                     // 确保窗口获得焦点
                     toolWindow.activate(null, true);
-                    System.out.println("[SendSelectionToTerminalAction] 聊天窗口已激活并发送内容到项目: " + project.getName());
+                    LOG.info("聊天窗口已激活并发送内容到项目: " + project.getName());
                 }
             } else {
                 showError(project, "找不到 Claude Code GUI 工具窗口");
@@ -195,7 +196,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
 
         } catch (Exception ex) {
             showError(project, "发送到聊天窗口失败: " + ex.getMessage());
-            ex.printStackTrace();
+            LOG.error("Error occurred", ex);
         }
     }
 
@@ -203,7 +204,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
      * 显示错误信息
      */
     private void showError(@Nullable Project project, @NotNull String message) {
-        System.err.println("[SendSelectionToTerminalAction] " + message);
+        LOG.error(message);
         if (project != null) {
             ApplicationManager.getApplication().invokeLater(() -> {
                 com.intellij.openapi.ui.Messages.showErrorDialog(project, message, "错误");
@@ -215,7 +216,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
      * 显示信息提示
      */
     private void showInfo(@Nullable Project project, @NotNull String message) {
-        System.out.println("[SendSelectionToTerminalAction] " + message);
+        LOG.info(message);
         if (project != null) {
             ApplicationManager.getApplication().invokeLater(() -> {
                 com.intellij.openapi.ui.Messages.showInfoMessage(project, message, "提示");
