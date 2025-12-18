@@ -91,11 +91,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
      */
     public static class ClaudeChatWindow {
         private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
-        private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new java.util.HashMap<>();
-        static {
-            MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
-            MODEL_CONTEXT_LIMITS.put("claude-opus-4-5-20251101", 200_000);
-        }
 
         private final JPanel mainPanel;
         private final ClaudeSDKBridge claudeSDKBridge;
@@ -110,7 +105,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private JBCefBrowser browser;
         private ClaudeSession session;
-        private String currentModel = "claude-sonnet-4-5";
 
         private volatile boolean disposed = false;
         private volatile boolean initialized = false;
@@ -793,7 +787,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
 
                 int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
-                int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
+                int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                 int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 
                 System.out.println("[Backend] Pushing usage update: input=" + inputTokens + ", cacheWrite=" + cacheWriteTokens + ", cacheRead=" + cacheReadTokens + ", output=" + outputTokens + ", total=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
@@ -864,7 +858,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     callJavaScript("updateStatus", JsUtils.escapeJs("新会话已创建，可以开始提问"));
 
                     // 重置 Token 使用统计
-                    int maxTokens = MODEL_CONTEXT_LIMITS.getOrDefault(currentModel, 200_000);
+                    int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                     JsonObject usageUpdate = new JsonObject();
                     usageUpdate.addProperty("percentage", 0);
                     usageUpdate.addProperty("totalTokens", 0);

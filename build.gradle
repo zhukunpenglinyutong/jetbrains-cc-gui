@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.0-beta4'
+version = '0.1.0-beta4_1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
