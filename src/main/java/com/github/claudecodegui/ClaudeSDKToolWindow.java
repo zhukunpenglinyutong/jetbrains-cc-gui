@@ -204,9 +204,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void setupPermissionService() {
             PermissionService permissionService = PermissionService.getInstance(project);
             permissionService.start();
-            permissionService.setDialogShower((toolName, inputs) ->
+            // 使用项目注册机制，支持多窗口场景
+            permissionService.registerDialogShower(project, (toolName, inputs) ->
                 permissionHandler.showFrontendPermissionDialog(toolName, inputs));
-            LOG.info("Started permission service with frontend dialog");
+            LOG.info("Started permission service with frontend dialog for project: " + project.getName());
         }
 
         private void initializeHandlers() {
@@ -1020,6 +1021,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             if (slashCommandCache != null) {
                 slashCommandCache.dispose();
                 slashCommandCache = null;
+            }
+
+            // 注销权限服务的 dialogShower，防止内存泄漏
+            try {
+                PermissionService permissionService = PermissionService.getInstance(project);
+                permissionService.unregisterDialogShower(project);
+            } catch (Exception e) {
+                LOG.warn("Failed to unregister dialog shower: " + e.getMessage());
             }
 
             LOG.info("开始清理窗口资源，项目: " + project.getName());

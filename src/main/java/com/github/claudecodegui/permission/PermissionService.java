@@ -32,6 +32,9 @@ public class PermissionService {
     private final Map<String, Boolean> toolOnlyPermissionMemory = new ConcurrentHashMap<>();
     private volatile PermissionDecisionListener decisionListener;
 
+    // 多项目支持：按项目注册的权限对话框显示器
+    private final Map<Project, PermissionDialogShower> dialogShowers = new ConcurrentHashMap<>();
+
     // 调试日志辅助方法
     private void debugLog(String tag, String message) {
         LOG.debug(String.format("[%s] %s", tag, message));
@@ -121,8 +124,6 @@ public class PermissionService {
         CompletableFuture<Integer> showPermissionDialog(String toolName, JsonObject inputs);
     }
 
-    private volatile PermissionDialogShower dialogShower;
-
     private PermissionService(Project project) {
         this.project = project;
         // 使用临时目录进行通信
@@ -151,11 +152,202 @@ public class PermissionService {
     }
 
     /**
-     * 设置权限对话框显示器（用于显示前端弹窗）
+     * 注册权限对话框显示器（用于显示前端弹窗）
+     * 支持多项目：每个项目注册自己的显示器
+     *
+     * @param project 项目
+     * @param shower 权限对话框显示器
      */
+    public void registerDialogShower(Project project, PermissionDialogShower shower) {
+        if (project != null && shower != null) {
+            dialogShowers.put(project, shower);
+            debugLog("CONFIG", "Dialog shower registered for project: " + project.getName() +
+                ", total registered: " + dialogShowers.size());
+        }
+    }
+
+    /**
+     * 注销权限对话框显示器
+     * 在项目关闭时调用，防止内存泄漏
+     *
+     * @param project 项目
+     */
+    public void unregisterDialogShower(Project project) {
+        if (project != null) {
+            PermissionDialogShower removed = dialogShowers.remove(project);
+            debugLog("CONFIG", "Dialog shower unregistered for project: " + project.getName() +
+                ", was registered: " + (removed != null) + ", remaining: " + dialogShowers.size());
+        }
+    }
+
+    /**
+     * 设置权限对话框显示器（用于显示前端弹窗）
+     * @deprecated 使用 {@link #registerDialogShower(Project, PermissionDialogShower)} 代替
+     */
+    @Deprecated
     public void setDialogShower(PermissionDialogShower shower) {
-        this.dialogShower = shower;
-        debugLog("CONFIG", "Dialog shower set: " + (shower != null));
+        // 兼容旧代码：使用默认项目注册
+        if (shower != null && this.project != null) {
+            dialogShowers.put(this.project, shower);
+        }
+        debugLog("CONFIG", "Dialog shower set (legacy): " + (shower != null));
+    }
+
+    /**
+     * 根据文件路径匹配项目
+     * 从 inputs 中提取文件路径，然后找到对应的项目
+     *
+     * @param inputs 权限请求的输入参数
+     * @return 匹配的项目对应的 DialogShower，如果匹配不到则返回第一个注册的
+     */
+    private PermissionDialogShower findDialogShowerByInputs(JsonObject inputs) {
+        if (dialogShowers.isEmpty()) {
+            debugLog("MATCH_PROJECT", "No dialog showers registered");
+            return null;
+        }
+
+        // 只有一个项目时，直接返回
+        if (dialogShowers.size() == 1) {
+            Map.Entry<Project, PermissionDialogShower> entry = dialogShowers.entrySet().iterator().next();
+            debugLog("MATCH_PROJECT", "Single project registered: " + entry.getKey().getName());
+            return entry.getValue();
+        }
+
+        // 从 inputs 中提取文件路径
+        String filePath = extractFilePathFromInputs(inputs);
+        if (filePath == null || filePath.isEmpty()) {
+            debugLog("MATCH_PROJECT", "No file path found in inputs, using first registered project");
+            return dialogShowers.values().iterator().next();
+        }
+
+        // 规范化文件路径（统一使用 Unix 风格的 / 分隔符）
+        String normalizedFilePath = normalizePath(filePath);
+        debugLog("MATCH_PROJECT", "Extracted file path: " + filePath +
+            (filePath.equals(normalizedFilePath) ? "" : " (normalized: " + normalizedFilePath + ")"));
+
+        // 遍历所有项目，找到路径匹配的项目（选择最长匹配）
+        Project bestMatch = null;
+        int longestMatchLength = 0;
+
+        for (Map.Entry<Project, PermissionDialogShower> entry : dialogShowers.entrySet()) {
+            Project project = entry.getKey();
+            String projectPath = project.getBasePath();
+
+            if (projectPath != null) {
+                // 规范化项目路径
+                String normalizedProjectPath = normalizePath(projectPath);
+
+                // 使用新的路径匹配方法（检查路径分隔符）
+                if (isFileInProject(normalizedFilePath, normalizedProjectPath)) {
+                    if (normalizedProjectPath.length() > longestMatchLength) {
+                        longestMatchLength = normalizedProjectPath.length();
+                        bestMatch = project;
+                        debugLog("MATCH_PROJECT", "Found potential match: " + project.getName() +
+                            " (path: " + projectPath + ", length: " + normalizedProjectPath.length() + ")");
+                    }
+                }
+            }
+        }
+
+        if (bestMatch != null) {
+            debugLog("MATCH_PROJECT", "Matched project: " + bestMatch.getName() + " (path: " + bestMatch.getBasePath() + ")");
+            return dialogShowers.get(bestMatch);
+        }
+
+        // 匹配失败，使用第一个注册的项目
+        Map.Entry<Project, PermissionDialogShower> firstEntry = dialogShowers.entrySet().iterator().next();
+        debugLog("MATCH_PROJECT", "No matching project found, using first: " + firstEntry.getKey().getName());
+        return firstEntry.getValue();
+    }
+
+    /**
+     * 从 inputs 中提取文件路径
+     * 支持多种字段：file_path、path、command 中的路径等
+     */
+    private String extractFilePathFromInputs(JsonObject inputs) {
+        if (inputs == null) {
+            return null;
+        }
+
+        // 优先检查 file_path 字段（最常见）
+        if (inputs.has("file_path") && !inputs.get("file_path").isJsonNull()) {
+            return inputs.get("file_path").getAsString();
+        }
+
+        // 检查 path 字段
+        if (inputs.has("path") && !inputs.get("path").isJsonNull()) {
+            return inputs.get("path").getAsString();
+        }
+
+        // 检查 notebook_path 字段（Jupyter notebooks）
+        if (inputs.has("notebook_path") && !inputs.get("notebook_path").isJsonNull()) {
+            return inputs.get("notebook_path").getAsString();
+        }
+
+        // 从 command 字段中提取路径（尝试找到绝对路径）
+        if (inputs.has("command") && !inputs.get("command").isJsonNull()) {
+            String command = inputs.get("command").getAsString();
+            // 简单的路径提取：查找以 / 开头的路径（Unix）或包含 :\ 的路径（Windows）
+            String[] parts = command.split("\\s+");
+            for (String part : parts) {
+                if (part.startsWith("/") || (part.length() > 2 && part.charAt(1) == ':')) {
+                    // 去除可能的引号
+                    part = part.replace("\"", "").replace("'", "");
+                    if (part.length() > 1) {
+                        return part;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 规范化文件路径
+     * 统一路径分隔符为 Unix 风格 (/)，确保跨平台兼容性
+     *
+     * @param path 原始路径
+     * @return 规范化后的路径，如果输入为 null 则返回 null
+     */
+    private String normalizePath(String path) {
+        if (path == null) {
+            return null;
+        }
+        // 将 Windows 风格的反斜杠替换为正斜杠
+        return path.replace('\\', '/');
+    }
+
+    /**
+     * 检查文件路径是否属于项目路径
+     * 确保匹配的是完整的路径前缀，而不是字符串前缀
+     *
+     * 例如：
+     * - /home/user/my-app/file.txt 属于 /home/user/my-app ✓
+     * - /home/user/my-app-v2/file.txt 不属于 /home/user/my-app ✓
+     *
+     * @param filePath 文件路径（已规范化）
+     * @param projectPath 项目路径（已规范化）
+     * @return true 如果文件属于该项目
+     */
+    private boolean isFileInProject(String filePath, String projectPath) {
+        if (filePath == null || projectPath == null) {
+            return false;
+        }
+
+        // 完全相等的情况
+        if (filePath.equals(projectPath)) {
+            return true;
+        }
+
+        // 确保 projectPath 以分隔符结尾，避免前缀匹配错误
+        // 例如：/home/user/my-app/ 而不是 /home/user/my-app
+        String normalizedProjectPath = projectPath.endsWith("/")
+            ? projectPath
+            : projectPath + "/";
+
+        // 检查文件路径是否以 "项目路径/" 开头
+        return filePath.startsWith(normalizedProjectPath);
     }
 
     /**
@@ -284,8 +476,11 @@ public class PermissionService {
                 return;
             }
 
+            // 根据文件路径匹配项目，找到对应的前端弹窗显示器
+            PermissionDialogShower matchedDialogShower = findDialogShowerByInputs(inputs);
+
             // 如果有前端弹窗显示器，使用异步方式
-            if (dialogShower != null) {
+            if (matchedDialogShower != null) {
                 debugLog("DIALOG_SHOWER", "Using frontend dialog for: " + toolName);
 
                 // 立即删除请求文件，避免重复处理
@@ -302,7 +497,7 @@ public class PermissionService {
 
                 // 异步调用前端弹窗
                 debugLog("DIALOG_SHOW", "Calling dialogShower.showPermissionDialog for: " + toolName);
-                CompletableFuture<Integer> future = dialogShower.showPermissionDialog(toolName, inputs);
+                CompletableFuture<Integer> future = matchedDialogShower.showPermissionDialog(toolName, inputs);
 
                 // 异步处理结果
                 future.thenAccept(response -> {
