@@ -266,13 +266,14 @@ const App = () => {
     // 注册导出会话数据回调
     window.onExportSessionData = (json) => {
       try {
-        // 后端返回的是 ConversationMessage[] 格式，需要转换为 ClaudeMessage[]
-        const conversationMessages = JSON.parse(json) as any[];
-        const title = (window as any).__exportSessionTitle || 'session';
-        const sessionId = (window as any).__exportSessionId || 'unknown';
+        // 解析后端返回的数据
+        const exportData = JSON.parse(json);
+        const conversationMessages = exportData.messages || [];
+        const title = exportData.title || 'session';
+        const sessionId = exportData.sessionId || 'unknown';
 
         // 转换为 ClaudeMessage 格式
-        const messages: ClaudeMessage[] = conversationMessages.map(msg => {
+        const messages: ClaudeMessage[] = conversationMessages.map((msg: any) => {
           // 提取文本内容
           let contentText = '';
           if (msg.message?.content) {
@@ -790,12 +791,9 @@ const App = () => {
 
   // 导出会话历史
   const exportHistorySession = (sessionId: string, title: string) => {
-    // 发送导出请求到 Java 后端
-    sendBridgeMessage('export_session', sessionId);
-
-    // 存储会话标题，用于后续生成文件名
-    (window as any).__exportSessionTitle = title;
-    (window as any).__exportSessionId = sessionId;
+    // 发送导出请求到 Java 后端，包含 sessionId 和 title
+    const exportData = JSON.stringify({ sessionId, title });
+    sendBridgeMessage('export_session', exportData);
   };
 
   // 文案本地化映射

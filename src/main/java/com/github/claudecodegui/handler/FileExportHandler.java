@@ -50,20 +50,20 @@ public class FileExportHandler extends BaseMessageHandler {
      * 处理保存文件（支持多种格式）
      */
     private void handleSaveFile(String jsonContent, String fileExtension, String dialogTitle) {
-        CompletableFuture.runAsync(() -> {
-            try {
-                System.out.println("[FileExportHandler] ========== 开始保存文件 ==========");
-                System.out.println("[FileExportHandler] 文件类型: " + fileExtension);
+        try {
+            System.out.println("[FileExportHandler] ========== 开始保存文件 ==========");
+            System.out.println("[FileExportHandler] 文件类型: " + fileExtension);
 
-                // 解析 JSON
-                JsonObject json = gson.fromJson(jsonContent, JsonObject.class);
-                String content = json.get("content").getAsString();
-                String filename = json.get("filename").getAsString();
+            // 解析 JSON
+            JsonObject json = gson.fromJson(jsonContent, JsonObject.class);
+            String content = json.get("content").getAsString();
+            String filename = json.get("filename").getAsString();
 
-                System.out.println("[FileExportHandler] 文件名: " + filename);
+            System.out.println("[FileExportHandler] 文件名: " + filename);
 
-                // 在 EDT 线程显示原生文件选择对话框
-                SwingUtilities.invokeAndWait(() -> {
+            // 在 EDT 线程显示文件对话框并保存
+            SwingUtilities.invokeLater(() -> {
+                try {
                     // 获取项目路径作为默认目录
                     String projectPath = context.getProject().getBasePath();
 
@@ -97,50 +97,63 @@ public class FileExportHandler extends BaseMessageHandler {
                             fileToSave = new File(path + fileExtension);
                         }
 
-                        try {
-                            // 写入文件
-                            try (FileWriter writer = new FileWriter(fileToSave)) {
+                        // 写入文件 (在后台线程执行IO操作)
+                        File finalFileToSave = fileToSave;
+                        CompletableFuture.runAsync(() -> {
+                            try (FileWriter writer = new FileWriter(finalFileToSave)) {
                                 writer.write(content);
+                                System.out.println("[FileExportHandler] ✅ 文件保存成功: " + finalFileToSave.getAbsolutePath());
+
+                                // 通知前端成功
+                                SwingUtilities.invokeLater(() -> {
+                                    String jsCode = "if (window.addToast) { " +
+                                        "  window.addToast('文件已保存', 'success'); " +
+                                        "}";
+                                    context.executeJavaScriptOnEDT(jsCode);
+                                });
+
+                            } catch (IOException e) {
+                                System.err.println("[FileExportHandler] ❌ 保存文件失败: " + e.getMessage());
+                                e.printStackTrace();
+
+                                // 通知前端失败
+                                SwingUtilities.invokeLater(() -> {
+                                    String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "保存失败");
+                                    String jsCode = "if (window.addToast) { " +
+                                        "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +
+                                        "}";
+                                    context.executeJavaScriptOnEDT(jsCode);
+                                });
                             }
-
-                            System.out.println("[FileExportHandler] ✅ 文件保存成功: " + fileToSave.getAbsolutePath());
-
-                            // 通知前端成功
-                            String jsCode = "if (window.addToast) { " +
-                                "  window.addToast('文件已保存', 'success'); " +
-                                "}";
-                            context.executeJavaScriptOnEDT(jsCode);
-
-                        } catch (IOException e) {
-                            System.err.println("[FileExportHandler] ❌ 保存文件失败: " + e.getMessage());
-                            e.printStackTrace();
-
-                            // 通知前端失败
-                            String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "保存失败");
-                            String jsCode = "if (window.addToast) { " +
-                                "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +
-                                "}";
-                            context.executeJavaScriptOnEDT(jsCode);
-                        }
+                        });
                     } else {
                         System.out.println("[FileExportHandler] 用户取消了保存");
                     }
-                });
+                } catch (Exception e) {
+                    System.err.println("[FileExportHandler] ❌ 显示对话框失败: " + e.getMessage());
+                    e.printStackTrace();
 
-                System.out.println("[FileExportHandler] ========== 保存文件完成 ==========");
-
-            } catch (Exception e) {
-                System.err.println("[FileExportHandler] ❌ 处理保存请求失败: " + e.getMessage());
-                e.printStackTrace();
-
-                SwingUtilities.invokeLater(() -> {
-                    String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
+                    String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "显示对话框失败");
                     String jsCode = "if (window.addToast) { " +
                         "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +
                         "}";
                     context.executeJavaScriptOnEDT(jsCode);
-                });
-            }
-        });
+                }
+
+                System.out.println("[FileExportHandler] ========== 保存文件完成 ==========");
+            });
+
+        } catch (Exception e) {
+            System.err.println("[FileExportHandler] ❌ 处理保存请求失败: " + e.getMessage());
+            e.printStackTrace();
+
+            SwingUtilities.invokeLater(() -> {
+                String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
+                String jsCode = "if (window.addToast) { " +
+                    "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +
+                    "}";
+                context.executeJavaScriptOnEDT(jsCode);
+            });
+        }
     }
 }

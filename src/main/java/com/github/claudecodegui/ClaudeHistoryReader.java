@@ -209,7 +209,8 @@ public class ClaudeHistoryReader {
                                 messages.add(msg);
                             }
                         } catch (Exception e) {
-                            // 跳过解析失败的行
+                            // 跳过解析失败的行，记录日志用于调试
+                            System.err.println("[ClaudeHistoryReader] 解析消息行失败: " + e.getMessage() + " - 行内容: " + (line.length() > 100 ? line.substring(0, 100) + "..." : line));
                         }
                     }
 
@@ -218,7 +219,8 @@ public class ClaudeHistoryReader {
                     }
 
                 } catch (Exception e) {
-                    // 跳过读取失败的文件
+                    // 跳过读取失败的文件，记录日志用于调试
+                    System.err.println("[ClaudeHistoryReader] 读取会话文件失败: " + e.getMessage());
                 }
             });
 
@@ -627,9 +629,6 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 获取指定项目的历史记录JSON字符串
-     */
-    /**
      * 获取项目数据的JSON字符串
      */
     public String getProjectDataAsJson(String projectPath) {
@@ -694,7 +693,8 @@ public class ClaudeHistoryReader {
                             messages.add(msg);
                         }
                     } catch (Exception e) {
-                        // 跳过解析失败的行
+                        // 跳过解析失败的行，记录日志用于调试
+                        System.err.println("[ClaudeHistoryReader] 导出时解析消息行失败: " + e.getMessage());
                     }
                 }
             }
