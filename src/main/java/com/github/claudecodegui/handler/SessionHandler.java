@@ -5,6 +5,7 @@ import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
@@ -78,7 +79,7 @@ public class SessionHandler extends BaseMessageHandler {
             context.getSession().setPermissionMode("default");
 
             context.getSession().send(prompt).exceptionally(ex -> {
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
                 });
                 return null;
@@ -136,7 +137,7 @@ public class SessionHandler extends BaseMessageHandler {
             context.getSession().setPermissionMode("default");
 
             context.getSession().send(prompt, attachments).exceptionally(ex -> {
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
                 });
                 return null;
@@ -149,7 +150,7 @@ public class SessionHandler extends BaseMessageHandler {
      */
     private void handleInterruptSession() {
         context.getSession().interrupt().thenRun(() -> {
-            SwingUtilities.invokeLater(() -> {});
+            ApplicationManager.getApplication().invokeLater(() -> {});
         });
     }
 
@@ -158,7 +159,7 @@ public class SessionHandler extends BaseMessageHandler {
      */
     private void handleRestartSession() {
         context.getSession().restart().thenRun(() -> {
-            SwingUtilities.invokeLater(() -> {});
+            ApplicationManager.getApplication().invokeLater(() -> {});
         });
     }
 

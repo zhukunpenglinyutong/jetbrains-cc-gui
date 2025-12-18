@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeHistoryReader;
 import com.github.claudecodegui.util.JsUtils;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
@@ -80,7 +81,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
                 String escapedJson = escapeJs(historyJson);
 
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "console.log('[Backend->Frontend] Starting to inject history data');" +
                         "if (window.setHistoryData) { " +
                         "  try { " +
@@ -101,7 +102,7 @@ public class HistoryHandler extends BaseMessageHandler {
             } catch (Exception e) {
                 LOG.error("[HistoryHandler] ❌ 加载历史数据失败: " + e.getMessage(), e);
 
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
                     String jsCode = "if (window.setHistoryData) { " +
                         "  window.setHistoryData({ success: false, error: '" + errorMsg + "' }); " +
@@ -241,7 +242,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
                 String escapedJson = escapeJs(wrappedJson);
 
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "console.log('[Backend->Frontend] Starting to inject export data');" +
                         "if (window.onExportSessionData) { " +
                         "  try { " +
@@ -263,7 +264,7 @@ public class HistoryHandler extends BaseMessageHandler {
             } catch (Exception e) {
                 LOG.error("[HistoryHandler] ❌ 导出会话失败: " + e.getMessage(), e);
 
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "if (window.addToast) { " +
                         "  window.addToast('导出失败: " + escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误") + "', 'error'); " +
                         "}";

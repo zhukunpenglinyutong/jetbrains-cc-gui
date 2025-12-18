@@ -2,6 +2,7 @@ package com.github.claudecodegui.permission;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
@@ -559,7 +560,7 @@ public class PermissionService {
             // 降级方案：使用系统弹窗（同步阻塞）
             debugLog("FALLBACK_DIALOG", "Using system dialog (JOptionPane) for: " + toolName);
             CompletableFuture<Integer> future = new CompletableFuture<>();
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 int response = showSystemPermissionDialog(toolName, inputs);
                 future.complete(response);
             });

@@ -70,7 +70,7 @@ public class ToolInterceptor {
         AtomicBoolean userApproved = new AtomicBoolean(false);
         CountDownLatch latch = new CountDownLatch(1);
 
-        SwingUtilities.invokeLater(() -> {
+        ApplicationManager.getApplication().invokeLater(() -> {
             int result = JOptionPane.showConfirmDialog(
                 null,
                 "Claude 需要执行以下操作：\n\n" +
@@ -113,7 +113,7 @@ public class ToolInterceptor {
     public CompletableFuture<Boolean> showDetailedPermissionDialog(String toolName, Map<String, Object> inputs) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-        SwingUtilities.invokeLater(() -> {
+        ApplicationManager.getApplication().invokeLater(() -> {
             // 创建权限请求
             PermissionRequest request = new PermissionRequest(
                 UUID.randomUUID().toString(),

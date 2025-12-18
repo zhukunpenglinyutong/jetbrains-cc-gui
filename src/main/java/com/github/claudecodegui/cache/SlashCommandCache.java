@@ -170,7 +170,7 @@ public class SlashCommandCache {
                     if (file != null && isCommandFile(file)) {
                         LOG.info("Command file changed: " + file.getPath());
                         // 延迟刷新，避免频繁触发
-                        SwingUtilities.invokeLater(() -> {
+                        ApplicationManager.getApplication().invokeLater(() -> {
                             try {
                                 Thread.sleep(500); // 延迟 500ms
                             } catch (InterruptedException e) {

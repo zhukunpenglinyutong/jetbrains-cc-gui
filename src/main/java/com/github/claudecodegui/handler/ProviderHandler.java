@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
@@ -86,7 +87,7 @@ public class ProviderHandler extends BaseMessageHandler {
             Gson gson = new Gson();
             String providersJson = gson.toJson(providers);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateProviders", escapeJs(providersJson));
             });
         } catch (Exception e) {
@@ -103,7 +104,7 @@ public class ProviderHandler extends BaseMessageHandler {
             Gson gson = new Gson();
             String configJson = gson.toJson(config);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateCurrentClaudeConfig", escapeJs(configJson));
             });
         } catch (Exception e) {
@@ -120,12 +121,12 @@ public class ProviderHandler extends BaseMessageHandler {
             JsonObject provider = gson.fromJson(content, JsonObject.class);
             context.getSettingsService().addClaudeProvider(provider);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetProviders(); // 刷新列表
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to add provider: " + e.getMessage(), e);
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("添加供应商失败: " + e.getMessage()));
             });
         }
@@ -153,12 +154,12 @@ public class ProviderHandler extends BaseMessageHandler {
             }
 
             final boolean finalSynced = syncedActiveProvider;
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetProviders(); // 刷新列表
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to update provider: " + e.getMessage(), e);
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("更新供应商失败: " + e.getMessage()));
             });
         }
@@ -178,7 +179,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
             if (!data.has("id")) {
                 LOG.error("[ProviderHandler] ERROR: Missing 'id' field in request");
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("window.showError", escapeJs("删除失败: 请求中缺少供应商 ID"));
                 });
                 return;
@@ -192,7 +193,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
             if (result.isSuccess()) {
                 LOG.info("[ProviderHandler] Delete successful, refreshing provider list");
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     handleGetProviders(); // 刷新列表
                 });
             } else {
@@ -200,14 +201,14 @@ public class ProviderHandler extends BaseMessageHandler {
                 LOG.warn("[ProviderHandler] Delete provider failed: " + errorMsg);
                 LOG.warn("[ProviderHandler] Error type: " + result.getErrorType());
                 LOG.warn("[ProviderHandler] Error details: " + result.getErrorMessage());
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     LOG.debug("[ProviderHandler] Calling window.showError with: " + errorMsg);
                     callJavaScript("window.showError", escapeJs(errorMsg));
                 });
             }
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Exception in handleDeleteProvider: " + e.getMessage(), e);
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("删除供应商失败: " + e.getMessage()));
             });
         }
@@ -227,14 +228,14 @@ public class ProviderHandler extends BaseMessageHandler {
             context.getSettingsService().switchClaudeProvider(id);
             context.getSettingsService().applyActiveProviderToClaudeSettings();
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showSwitchSuccess", escapeJs("供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
                 handleGetProviders(); // 刷新供应商列表
                 handleGetCurrentClaudeConfig(); // 刷新 Claude CLI 配置显示
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to switch provider: " + e.getMessage(), e);
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("切换供应商失败: " + e.getMessage()));
             });
         }
@@ -249,7 +250,7 @@ public class ProviderHandler extends BaseMessageHandler {
             Gson gson = new Gson();
             String providerJson = gson.toJson(provider);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateActiveProvider", escapeJs(providerJson));
             });
         } catch (Exception e) {
@@ -341,7 +342,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
                 int count = context.getSettingsService().saveProviders(providers);
 
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     handleGetProviders(); // 刷新界面
                     sendInfoToFrontend("导入成功", "成功导入 " + count + " 个配置。");
                 });
