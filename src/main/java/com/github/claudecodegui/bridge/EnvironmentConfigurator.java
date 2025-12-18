@@ -1,5 +1,6 @@
 package com.github.claudecodegui.bridge;
 
+import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.util.PlatformUtils;
 
 import java.io.File;
@@ -15,6 +16,7 @@ import java.util.Map;
  */
 public class EnvironmentConfigurator {
 
+    private static final Logger LOG = Logger.getInstance(EnvironmentConfigurator.class);
     private static final String CLAUDE_PERMISSION_ENV = "CLAUDE_PERMISSION_DIR";
 
     private volatile String cachedPermissionDir = null;
@@ -132,7 +134,7 @@ public class EnvironmentConfigurator {
         try {
             Files.createDirectories(dir);
         } catch (IOException e) {
-            System.err.println("[EnvironmentConfigurator] Failed to prepare permission dir: " + dir + " (" + e.getMessage() + ")");
+            LOG.error("[EnvironmentConfigurator] Failed to prepare permission dir: " + dir + " (" + e.getMessage() + ")");
         }
         cachedPermissionDir = dir.toAbsolutePath().toString();
         return cachedPermissionDir;

@@ -2,6 +2,7 @@ package com.github.claudecodegui.permission;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
 import javax.swing.*;
@@ -15,7 +16,7 @@ import java.util.concurrent.*;
  */
 public class PermissionService {
 
-    private static final String LOG_TAG = "[PermissionService]";
+    private static final Logger LOG = Logger.getInstance(PermissionService.class);
 
     private static PermissionService instance;
     private final Project project;
@@ -33,13 +34,11 @@ public class PermissionService {
 
     // 调试日志辅助方法
     private void debugLog(String tag, String message) {
-        String timestamp = java.time.LocalDateTime.now().toString();
-        System.out.println(String.format("[%s]%s[%s] %s", timestamp, LOG_TAG, tag, message));
+        LOG.debug(String.format("[%s] %s", tag, message));
     }
 
     private void debugLog(String tag, String message, Object data) {
-        String timestamp = java.time.LocalDateTime.now().toString();
-        System.out.println(String.format("[%s]%s[%s] %s | Data: %s", timestamp, LOG_TAG, tag, message, gson.toJson(data)));
+        LOG.debug(String.format("[%s] %s | Data: %s", tag, message, this.gson.toJson(data)));
     }
 
     public enum PermissionResponse {

@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeHistoryReader;
 import com.github.claudecodegui.util.JsUtils;
+import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
 import java.util.concurrent.CompletableFuture;
@@ -11,6 +12,8 @@ import java.util.concurrent.CompletableFuture;
  * 处理历史数据加载和会话加载
  */
 public class HistoryHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(HistoryHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
         "load_history_data",
@@ -42,15 +45,15 @@ public class HistoryHandler extends BaseMessageHandler {
     public boolean handle(String type, String content) {
         switch (type) {
             case "load_history_data":
-                System.out.println("[HistoryHandler] 处理: load_history_data");
+                LOG.debug("[HistoryHandler] 处理: load_history_data");
                 handleLoadHistoryData();
                 return true;
             case "load_session":
-                System.out.println("[HistoryHandler] 处理: load_session");
+                LOG.debug("[HistoryHandler] 处理: load_session");
                 handleLoadSession(content);
                 return true;
             case "delete_session":
-                System.out.println("[HistoryHandler] 处理: delete_session, sessionId=" + content);
+                LOG.info("[HistoryHandler] 处理: delete_session, sessionId=" + content);
                 handleDeleteSession(content);
                 return true;
             default:
@@ -63,7 +66,7 @@ public class HistoryHandler extends BaseMessageHandler {
      */
     private void handleLoadHistoryData() {
         CompletableFuture.runAsync(() -> {
-            System.out.println("[HistoryHandler] ========== 开始加载历史数据 ==========");
+            LOG.info("[HistoryHandler] ========== 开始加载历史数据 ==========");
 
             try {
                 String projectPath = context.getProject().getBasePath();
@@ -91,8 +94,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 });
 
             } catch (Exception e) {
-                System.err.println("[HistoryHandler] ❌ 加载历史数据失败: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("[HistoryHandler] ❌ 加载历史数据失败: " + e.getMessage(), e);
 
                 SwingUtilities.invokeLater(() -> {
                     String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
@@ -110,12 +112,12 @@ public class HistoryHandler extends BaseMessageHandler {
      */
     private void handleLoadSession(String sessionId) {
         String projectPath = context.getProject().getBasePath();
-        System.out.println("[HistoryHandler] Loading history session: " + sessionId + " from project: " + projectPath);
+        LOG.info("[HistoryHandler] Loading history session: " + sessionId + " from project: " + projectPath);
 
         if (sessionLoadCallback != null) {
             sessionLoadCallback.onLoadSession(sessionId, projectPath);
         } else {
-            System.err.println("[HistoryHandler] WARNING: No session load callback set");
+            LOG.warn("[HistoryHandler] WARNING: No session load callback set");
         }
     }
 
@@ -127,9 +129,9 @@ public class HistoryHandler extends BaseMessageHandler {
         CompletableFuture.runAsync(() -> {
             try {
                 String projectPath = context.getProject().getBasePath();
-                System.out.println("[HistoryHandler] ========== 开始删除会话 ==========");
-                System.out.println("[HistoryHandler] SessionId: " + sessionId);
-                System.out.println("[HistoryHandler] ProjectPath: " + projectPath);
+                LOG.info("[HistoryHandler] ========== 开始删除会话 ==========");
+                LOG.info("[HistoryHandler] SessionId: " + sessionId);
+                LOG.info("[HistoryHandler] ProjectPath: " + projectPath);
 
                 // 使用 ClaudeHistoryReader 的逻辑获取项目会话目录
                 String homeDir = System.getProperty("user.home");
@@ -140,10 +142,10 @@ public class HistoryHandler extends BaseMessageHandler {
                 String sanitizedPath = com.github.claudecodegui.util.PathUtils.sanitizePath(projectPath);
                 java.nio.file.Path projectDir = projectsDir.resolve(sanitizedPath);
 
-                System.out.println("[HistoryHandler] 会话目录: " + projectDir);
+                LOG.info("[HistoryHandler] 会话目录: " + projectDir);
 
                 if (!java.nio.file.Files.exists(projectDir)) {
-                    System.err.println("[HistoryHandler] ❌ 项目目录不存在: " + projectDir);
+                    LOG.error("[HistoryHandler] ❌ 项目目录不存在: " + projectDir);
                     return;
                 }
 
@@ -153,10 +155,10 @@ public class HistoryHandler extends BaseMessageHandler {
 
                 if (java.nio.file.Files.exists(mainSessionFile)) {
                     java.nio.file.Files.delete(mainSessionFile);
-                    System.out.println("[HistoryHandler] ✅ 已删除主会话文件: " + mainSessionFile.getFileName());
+                    LOG.info("[HistoryHandler] ✅ 已删除主会话文件: " + mainSessionFile.getFileName());
                     mainDeleted = true;
                 } else {
-                    System.out.println("[HistoryHandler] ⚠️ 主会话文件不存在: " + mainSessionFile.getFileName());
+                    LOG.warn("[HistoryHandler] ⚠️ 主会话文件不存在: " + mainSessionFile.getFileName());
                 }
 
                 // 删除相关的 agent 文件
@@ -177,21 +179,20 @@ public class HistoryHandler extends BaseMessageHandler {
                     for (java.nio.file.Path agentFile : agentFiles) {
                         try {
                             java.nio.file.Files.delete(agentFile);
-                            System.out.println("[HistoryHandler] ✅ 已删除关联 agent 文件: " + agentFile.getFileName());
+                            LOG.info("[HistoryHandler] ✅ 已删除关联 agent 文件: " + agentFile.getFileName());
                             agentFilesDeleted++;
                         } catch (Exception e) {
-                            System.err.println("[HistoryHandler] ❌ 删除 agent 文件失败: " + agentFile.getFileName() + " - " + e.getMessage());
+                            LOG.error("[HistoryHandler] ❌ 删除 agent 文件失败: " + agentFile.getFileName() + " - " + e.getMessage(), e);
                         }
                     }
                 }
 
-                System.out.println("[HistoryHandler] ========== 删除会话完成 ==========");
-                System.out.println("[HistoryHandler] 主会话文件: " + (mainDeleted ? "已删除" : "未找到"));
-                System.out.println("[HistoryHandler] Agent 文件: 删除了 " + agentFilesDeleted + " 个");
+                LOG.info("[HistoryHandler] ========== 删除会话完成 ==========");
+                LOG.info("[HistoryHandler] 主会话文件: " + (mainDeleted ? "已删除" : "未找到"));
+                LOG.info("[HistoryHandler] Agent 文件: 删除了 " + agentFilesDeleted + " 个");
 
             } catch (Exception e) {
-                System.err.println("[HistoryHandler] ❌ 删除会话失败: " + e.getMessage());
-                e.printStackTrace();
+                LOG.error("[HistoryHandler] ❌ 删除会话失败: " + e.getMessage(), e);
             }
         });
     }

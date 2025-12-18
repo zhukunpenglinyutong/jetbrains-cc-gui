@@ -3,6 +3,7 @@ package com.github.claudecodegui.bridge;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.util.io.FileUtil;
 
@@ -29,6 +30,7 @@ import com.github.claudecodegui.util.PlatformUtils;
  */
 public class BridgeDirectoryResolver {
 
+    private static final Logger LOG = Logger.getInstance(BridgeDirectoryResolver.class);
     private static final String SDK_DIR_NAME = "ai-bridge";
     private static final String NODE_SCRIPT = "channel-manager.js";
     private static final String SDK_ARCHIVE_NAME = "ai-bridge.zip";
@@ -61,7 +63,7 @@ public class BridgeDirectoryResolver {
             return cachedSdkDir;
         }
 
-        System.out.println("正在查找 ai-bridge 目录...");
+        LOG.info("正在查找 ai-bridge 目录...");
 
         // 可能的位置列表
         List<File> possibleDirs = new ArrayList<>();
@@ -97,20 +99,20 @@ public class BridgeDirectoryResolver {
         for (File dir : possibleDirs) {
             if (isValidBridgeDir(dir)) {
                 cachedSdkDir = dir;
-                System.out.println("✓ 找到 ai-bridge 目录: " + cachedSdkDir.getAbsolutePath());
+                LOG.info("✓ 找到 ai-bridge 目录: " + cachedSdkDir.getAbsolutePath());
                 return cachedSdkDir;
             }
         }
 
         // 如果都找不到，打印调试信息
-        System.err.println("⚠️ 无法找到 ai-bridge 目录，已尝试以下位置：");
+        LOG.warn("⚠️ 无法找到 ai-bridge 目录，已尝试以下位置：");
         for (File dir : possibleDirs) {
-            System.err.println("  - " + dir.getAbsolutePath() + " (存在: " + dir.exists() + ")");
+            LOG.warn("  - " + dir.getAbsolutePath() + " (存在: " + dir.exists() + ")");
         }
 
         // 返回默认值
         cachedSdkDir = new File(currentDir, SDK_DIR_NAME);
-        System.err.println("  使用默认路径: " + cachedSdkDir.getAbsolutePath());
+        LOG.warn("  使用默认路径: " + cachedSdkDir.getAbsolutePath());
         return cachedSdkDir;
     }
 
@@ -137,10 +139,10 @@ public class BridgeDirectoryResolver {
         }
         File dir = new File(path.trim());
         if (isValidBridgeDir(dir)) {
-            System.out.println("✓ 使用 " + source + ": " + dir.getAbsolutePath());
+            LOG.info("✓ 使用 " + source + ": " + dir.getAbsolutePath());
             return dir;
         }
-        System.err.println("⚠️ " + source + " 指向无效目录: " + dir.getAbsolutePath());
+        LOG.warn("⚠️ " + source + " 指向无效目录: " + dir.getAbsolutePath());
         return null;
     }
 
@@ -153,7 +155,7 @@ public class BridgeDirectoryResolver {
                 addCandidate(possibleDirs, new File(pluginDir, SDK_DIR_NAME));
             }
         } catch (Throwable t) {
-            System.out.println("  无法从插件描述符推断: " + t.getMessage());
+            LOG.debug("  无法从插件描述符推断: " + t.getMessage());
         }
 
         try {
@@ -171,7 +173,7 @@ public class BridgeDirectoryResolver {
                 addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_ID).resolve(SDK_DIR_NAME).toFile());
             }
         } catch (Throwable t) {
-            System.out.println("  无法从插件路径推断: " + t.getMessage());
+            LOG.debug("  无法从插件路径推断: " + t.getMessage());
         }
     }
 
@@ -179,7 +181,7 @@ public class BridgeDirectoryResolver {
         try {
             CodeSource codeSource = BridgeDirectoryResolver.class.getProtectionDomain().getCodeSource();
             if (codeSource == null || codeSource.getLocation() == null) {
-                System.out.println("  无法从类路径推断: CodeSource 不可用");
+                LOG.debug("  无法从类路径推断: CodeSource 不可用");
                 return;
             }
             File location = new File(codeSource.getLocation().toURI());
@@ -196,7 +198,7 @@ public class BridgeDirectoryResolver {
                 classDir = classDir.getParentFile();
             }
         } catch (Exception e) {
-            System.out.println("  无法从类路径推断: " + e.getMessage());
+            LOG.debug("  无法从类路径推断: " + e.getMessage());
         }
     }
 
@@ -233,12 +235,12 @@ public class BridgeDirectoryResolver {
 
     private File ensureEmbeddedBridgeExtracted() {
         try {
-            System.out.println("[BridgeResolver] 尝试查找内嵌的 ai-bridge.zip...");
+            LOG.info("[BridgeResolver] 尝试查找内嵌的 ai-bridge.zip...");
 
             PluginId pluginId = PluginId.getId(PLUGIN_ID);
             IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
             if (descriptor == null) {
-                System.out.println("[BridgeResolver] 无法通过 PluginId 获取插件描述符: " + PLUGIN_ID);
+                LOG.info("[BridgeResolver] 无法通过 PluginId 获取插件描述符: " + PLUGIN_ID);
 
                 // 尝试通过遍历所有插件来查找
                 for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
@@ -247,11 +249,11 @@ public class BridgeDirectoryResolver {
                     // 匹配插件 ID 或名称
                     if (id.contains("claude") || id.contains("Claude") ||
                         (name != null && (name.contains("Claude") || name.contains("claude")))) {
-                        System.out.println("[BridgeResolver] 找到候选插件: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
+                        LOG.info("[BridgeResolver] 找到候选插件: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
                         File candidateDir = plugin.getPluginPath().toFile();
                         File candidateArchive = new File(candidateDir, SDK_ARCHIVE_NAME);
                         if (candidateArchive.exists()) {
-                            System.out.println("[BridgeResolver] 在候选插件中找到 ai-bridge.zip: " + candidateArchive.getAbsolutePath());
+                            LOG.info("[BridgeResolver] 在候选插件中找到 ai-bridge.zip: " + candidateArchive.getAbsolutePath());
                             descriptor = plugin;
                             break;
                         }
@@ -259,26 +261,26 @@ public class BridgeDirectoryResolver {
                 }
 
                 if (descriptor == null) {
-                    System.out.println("[BridgeResolver] 未能通过任何方式找到插件描述符");
+                    LOG.info("[BridgeResolver] 未能通过任何方式找到插件描述符");
                     return null;
                 }
             }
 
             File pluginDir = descriptor.getPluginPath().toFile();
-            System.out.println("[BridgeResolver] 插件目录: " + pluginDir.getAbsolutePath());
+            LOG.info("[BridgeResolver] 插件目录: " + pluginDir.getAbsolutePath());
 
             File archiveFile = new File(pluginDir, SDK_ARCHIVE_NAME);
-            System.out.println("[BridgeResolver] 查找压缩包: " + archiveFile.getAbsolutePath() + " (存在: " + archiveFile.exists() + ")");
+            LOG.info("[BridgeResolver] 查找压缩包: " + archiveFile.getAbsolutePath() + " (存在: " + archiveFile.exists() + ")");
 
             if (!archiveFile.exists()) {
                 // 尝试在 lib 目录下查找
                 File libDir = new File(pluginDir, "lib");
                 if (libDir.exists()) {
-                    System.out.println("[BridgeResolver] 检查 lib 目录: " + libDir.getAbsolutePath());
+                    LOG.info("[BridgeResolver] 检查 lib 目录: " + libDir.getAbsolutePath());
                     File[] files = libDir.listFiles();
                     if (files != null) {
                         for (File f : files) {
-                            System.out.println("[BridgeResolver]   - " + f.getName());
+                            LOG.info("[BridgeResolver]   - " + f.getName());
                         }
                     }
                 }
@@ -320,7 +322,7 @@ public class BridgeDirectoryResolver {
 
                 // 打印并尝试这些候选路径
                 for (File f : fallbackCandidates) {
-                    System.out.println("[BridgeResolver] 尝试候选路径: " + f.getAbsolutePath() + " (存在: " + f.exists() + ")");
+                    LOG.info("[BridgeResolver] 尝试候选路径: " + f.getAbsolutePath() + " (存在: " + f.exists() + ")");
                     if (f.exists()) {
                         archiveFile = f;
                         break;
@@ -346,20 +348,20 @@ public class BridgeDirectoryResolver {
                     return extractedDir;
                 }
 
-                System.out.println("未检测到已解压的 ai-bridge，开始解压: " + archiveFile.getAbsolutePath());
+                LOG.info("未检测到已解压的 ai-bridge，开始解压: " + archiveFile.getAbsolutePath());
                 deleteDirectory(extractedDir);
                 unzipArchive(archiveFile, extractedDir);
                 Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
             }
 
             if (isValidBridgeDir(extractedDir)) {
-                System.out.println("✓ ai-bridge 解压完成: " + extractedDir.getAbsolutePath());
+                LOG.info("✓ ai-bridge 解压完成: " + extractedDir.getAbsolutePath());
                 return extractedDir;
             }
 
-            System.err.println("⚠️ ai-bridge 解压后结构无效: " + extractedDir.getAbsolutePath());
+            LOG.warn("⚠️ ai-bridge 解压后结构无效: " + extractedDir.getAbsolutePath());
         } catch (Exception e) {
-            System.err.println("⚠️ 自动解压 ai-bridge 失败: " + e.getMessage());
+            LOG.error("⚠️ 自动解压 ai-bridge 失败: " + e.getMessage());
         }
         return null;
     }
@@ -384,7 +386,7 @@ public class BridgeDirectoryResolver {
         if (!PlatformUtils.deleteDirectoryWithRetry(dir, 3)) {
             // 如果重试失败，回退到 IntelliJ 的 FileUtil
             if (!FileUtil.delete(dir)) {
-                System.err.println("⚠️ 无法删除目录: " + dir.getAbsolutePath());
+                LOG.warn("⚠️ 无法删除目录: " + dir.getAbsolutePath());
             }
         }
     }

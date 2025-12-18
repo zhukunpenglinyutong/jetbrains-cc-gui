@@ -1,5 +1,6 @@
 package com.github.claudecodegui.util;
 
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.fileEditor.FileEditor;
@@ -18,6 +19,8 @@ import java.util.Map;
  * 用于获取 IDEA 中当前打开的文件信息
  */
 public class EditorFileUtils {
+
+    private static final Logger LOG = Logger.getInstance(EditorFileUtils.class);
 
     /**
      * 获取当前项目中所有打开的文件路径
@@ -46,7 +49,7 @@ public class EditorFileUtils {
             }
         } catch (Exception e) {
             // 捕获异常，避免影响主流程
-            System.err.println("[EditorFileUtils] Error getting opened files: " + e.getMessage());
+            LOG.error("[EditorFileUtils] Error getting opened files: " + e.getMessage());
         }
 
         return openedFiles;
@@ -72,7 +75,7 @@ public class EditorFileUtils {
                 return selectedFiles[0].getPath();
             }
         } catch (Exception e) {
-            System.err.println("[EditorFileUtils] Error getting active file: " + e.getMessage());
+            LOG.error("[EditorFileUtils] Error getting active file: " + e.getMessage());
         }
 
         return null;
@@ -114,13 +117,13 @@ public class EditorFileUtils {
                         selectionInfo.put("endLine", endLine);
                         selectionInfo.put("selectedText", selectedText);
 
-                        System.out.println("[EditorFileUtils] Selection detected: lines " + startLine + "-" + endLine);
+                        LOG.info("[EditorFileUtils] Selection detected: lines " + startLine + "-" + endLine);
                         return selectionInfo;
                     }
                 }
             }
         } catch (Exception e) {
-            System.err.println("[EditorFileUtils] Error getting selected code: " + e.getMessage());
+            LOG.error("[EditorFileUtils] Error getting selected code: " + e.getMessage());
         }
 
         return null;

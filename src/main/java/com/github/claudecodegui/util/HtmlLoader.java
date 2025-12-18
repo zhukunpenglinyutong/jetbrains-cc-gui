@@ -1,5 +1,7 @@
 package com.github.claudecodegui.util;
 
+import com.intellij.openapi.diagnostic.Logger;
+
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -10,6 +12,7 @@ import java.util.Base64;
  */
 public class HtmlLoader {
 
+    private static final Logger LOG = Logger.getInstance(HtmlLoader.class);
     private final Class<?> resourceClass;
 
     public HtmlLoader(Class<?> resourceClass) {
@@ -30,13 +33,13 @@ public class HtmlLoader {
                 if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
                     html = injectLocalLibraries(html);
                 } else {
-                    System.out.println("✓ 检测到打包好的现代前端资源，无需额外注入库文件");
+                    LOG.info("✓ 检测到打包好的现代前端资源，无需额外注入库文件");
                 }
 
                 return html;
             }
         } catch (Exception e) {
-            System.err.println("无法加载 claude-chat.html: " + e.getMessage());
+            LOG.error("无法加载 claude-chat.html: " + e.getMessage());
         }
 
         return generateFallbackHtml();
@@ -95,9 +98,9 @@ public class HtmlLoader {
 
             html = html.replace("<!-- LOCAL_LIBRARY_INJECTION_POINT -->", injectedLibs.toString());
 
-            System.out.println("✓ 成功注入本地库文件 (React + ReactDOM + Babel + Codicons)");
+            LOG.info("✓ 成功注入本地库文件 (React + ReactDOM + Babel + Codicons)");
         } catch (Exception e) {
-            System.err.println("✗ 注入本地库文件失败: " + e.getMessage());
+            LOG.error("✗ 注入本地库文件失败: " + e.getMessage());
         }
 
         return html;

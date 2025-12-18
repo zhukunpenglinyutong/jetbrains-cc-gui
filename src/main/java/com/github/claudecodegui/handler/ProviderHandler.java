@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
 import java.io.File;
@@ -17,6 +18,8 @@ import java.util.concurrent.CompletableFuture;
  * 处理供应商的增删改查和切换
  */
 public class ProviderHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(ProviderHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
         "get_providers",
@@ -87,8 +90,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 callJavaScript("window.updateProviders", escapeJs(providersJson));
             });
         } catch (Exception e) {
-            System.err.println("[ProviderHandler] Failed to get providers: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[ProviderHandler] Failed to get providers: " + e.getMessage(), e);
         }
     }
 
@@ -105,8 +107,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 callJavaScript("window.updateCurrentClaudeConfig", escapeJs(configJson));
             });
         } catch (Exception e) {
-            System.err.println("[ProviderHandler] Failed to get current claude config: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[ProviderHandler] Failed to get current claude config: " + e.getMessage(), e);
         }
     }
 
@@ -123,7 +124,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 handleGetProviders(); // 刷新列表
             });
         } catch (Exception e) {
-            System.err.println("[ProviderHandler] Failed to add provider: " + e.getMessage());
+            LOG.error("[ProviderHandler] Failed to add provider: " + e.getMessage(), e);
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("添加供应商失败: " + e.getMessage()));
             });
@@ -156,7 +157,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 handleGetProviders(); // 刷新列表
             });
         } catch (Exception e) {
-            System.err.println("[ProviderHandler] Failed to update provider: " + e.getMessage());
+            LOG.error("[ProviderHandler] Failed to update provider: " + e.getMessage(), e);
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("更新供应商失败: " + e.getMessage()));
             });
@@ -167,16 +168,16 @@ public class ProviderHandler extends BaseMessageHandler {
      * 删除供应商
      */
     private void handleDeleteProvider(String content) {
-        System.out.println("[ProviderHandler] ========== handleDeleteProvider START ==========");
-        System.out.println("[ProviderHandler] Received content: " + content);
+        LOG.debug("[ProviderHandler] ========== handleDeleteProvider START ==========");
+        LOG.debug("[ProviderHandler] Received content: " + content);
 
         try {
             Gson gson = new Gson();
             JsonObject data = gson.fromJson(content, JsonObject.class);
-            System.out.println("[ProviderHandler] Parsed JSON data: " + data);
+            LOG.debug("[ProviderHandler] Parsed JSON data: " + data);
 
             if (!data.has("id")) {
-                System.err.println("[ProviderHandler] ERROR: Missing 'id' field in request");
+                LOG.error("[ProviderHandler] ERROR: Missing 'id' field in request");
                 SwingUtilities.invokeLater(() -> {
                     callJavaScript("window.showError", escapeJs("删除失败: 请求中缺少供应商 ID"));
                 });
@@ -184,35 +185,34 @@ public class ProviderHandler extends BaseMessageHandler {
             }
 
             String id = data.get("id").getAsString();
-            System.out.println("[ProviderHandler] Deleting provider with ID: " + id);
+            LOG.info("[ProviderHandler] Deleting provider with ID: " + id);
 
             DeleteResult result = context.getSettingsService().deleteClaudeProvider(id);
-            System.out.println("[ProviderHandler] Delete result - success: " + result.isSuccess());
+            LOG.debug("[ProviderHandler] Delete result - success: " + result.isSuccess());
 
             if (result.isSuccess()) {
-                System.out.println("[ProviderHandler] Delete successful, refreshing provider list");
+                LOG.info("[ProviderHandler] Delete successful, refreshing provider list");
                 SwingUtilities.invokeLater(() -> {
                     handleGetProviders(); // 刷新列表
                 });
             } else {
                 String errorMsg = result.getUserFriendlyMessage();
-                System.err.println("[ProviderHandler] Delete provider failed: " + errorMsg);
-                System.err.println("[ProviderHandler] Error type: " + result.getErrorType());
-                System.err.println("[ProviderHandler] Error details: " + result.getErrorMessage());
+                LOG.warn("[ProviderHandler] Delete provider failed: " + errorMsg);
+                LOG.warn("[ProviderHandler] Error type: " + result.getErrorType());
+                LOG.warn("[ProviderHandler] Error details: " + result.getErrorMessage());
                 SwingUtilities.invokeLater(() -> {
-                    System.out.println("[ProviderHandler] Calling window.showError with: " + errorMsg);
+                    LOG.debug("[ProviderHandler] Calling window.showError with: " + errorMsg);
                     callJavaScript("window.showError", escapeJs(errorMsg));
                 });
             }
         } catch (Exception e) {
-            System.err.println("[ProviderHandler] Exception in handleDeleteProvider: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[ProviderHandler] Exception in handleDeleteProvider: " + e.getMessage(), e);
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("删除供应商失败: " + e.getMessage()));
             });
         }
 
-        System.out.println("[ProviderHandler] ========== handleDeleteProvider END ==========");
+        LOG.debug("[ProviderHandler] ========== handleDeleteProvider END ==========");
     }
 
     /**
@@ -233,7 +233,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 handleGetCurrentClaudeConfig(); // 刷新 Claude CLI 配置显示
             });
         } catch (Exception e) {
-            System.err.println("[ProviderHandler] Failed to switch provider: " + e.getMessage());
+            LOG.error("[ProviderHandler] Failed to switch provider: " + e.getMessage(), e);
             SwingUtilities.invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("切换供应商失败: " + e.getMessage()));
             });
@@ -253,8 +253,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 callJavaScript("window.updateActiveProvider", escapeJs(providerJson));
             });
         } catch (Exception e) {
-            System.err.println("[ProviderHandler] Failed to get active provider: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[ProviderHandler] Failed to get active provider: " + e.getMessage(), e);
         }
     }
 
@@ -269,11 +268,11 @@ public class ProviderHandler extends BaseMessageHandler {
             File ccSwitchDir = new File(userHome, ".cc-switch");
             File dbFile = new File(ccSwitchDir, "cc-switch.db");
 
-            System.out.println("[ProviderHandler] 操作系统: " + osName);
-            System.out.println("[ProviderHandler] 用户目录: " + userHome);
-            System.out.println("[ProviderHandler] cc-switch 目录: " + ccSwitchDir.getAbsolutePath());
-            System.out.println("[ProviderHandler] 数据库文件路径: " + dbFile.getAbsolutePath());
-            System.out.println("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
+            LOG.info("[ProviderHandler] 操作系统: " + osName);
+            LOG.info("[ProviderHandler] 用户目录: " + userHome);
+            LOG.info("[ProviderHandler] cc-switch 目录: " + ccSwitchDir.getAbsolutePath());
+            LOG.info("[ProviderHandler] 数据库文件路径: " + dbFile.getAbsolutePath());
+            LOG.info("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
 
             if (!dbFile.exists()) {
                 String errorMsg = "未找到 cc-switch 数据库文件\n" +
@@ -281,19 +280,19 @@ public class ProviderHandler extends BaseMessageHandler {
                                  "请确保:\n" +
                                  "1. 已安装 cc-switch 3.8.2 及以上版本\n" +
                                  "2. 至少配置过一个 Claude 供应商";
-                System.err.println("[ProviderHandler] " + errorMsg);
+                LOG.error("[ProviderHandler] " + errorMsg);
                 sendErrorToFrontend("文件未找到", errorMsg);
                 return;
             }
 
             CompletableFuture.runAsync(() -> {
                 try {
-                    System.out.println("[ProviderHandler] 开始读取数据库文件...");
+                    LOG.info("[ProviderHandler] 开始读取数据库文件...");
                     Gson gson = new Gson();
                     List<JsonObject> providers = context.getSettingsService().parseProvidersFromCcSwitchDb(dbFile.getPath());
 
                     if (providers.isEmpty()) {
-                        System.out.println("[ProviderHandler] 数据库中没有找到 Claude 供应商配置");
+                        LOG.info("[ProviderHandler] 数据库中没有找到 Claude 供应商配置");
                         sendInfoToFrontend("无数据", "未在数据库中找到有效的 Claude 供应商配置。");
                         return;
                     }
@@ -307,13 +306,12 @@ public class ProviderHandler extends BaseMessageHandler {
                     response.add("providers", providersArray);
 
                     String jsonStr = gson.toJson(response);
-                    System.out.println("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
+                    LOG.info("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
                     callJavaScript("import_preview_result", jsonStr);
 
                 } catch (Exception e) {
                     String errorDetails = "读取数据库失败: " + e.getMessage();
-                    System.err.println("[ProviderHandler] " + errorDetails);
-                    e.printStackTrace();
+                    LOG.error("[ProviderHandler] " + errorDetails, e);
                     sendErrorToFrontend("读取数据库失败", errorDetails);
                 }
             });
@@ -349,7 +347,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 });
 
             } catch (Exception e) {
-                e.printStackTrace();
+                LOG.error("Failed to save imported providers", e);
                 sendErrorToFrontend("保存失败", e.getMessage());
             }
         });

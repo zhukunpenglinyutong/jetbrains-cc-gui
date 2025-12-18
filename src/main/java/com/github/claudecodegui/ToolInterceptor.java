@@ -4,6 +4,7 @@ import com.google.gson.*;
 import com.github.claudecodegui.permission.PermissionDialog;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
 import javax.swing.*;
@@ -19,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class ToolInterceptor {
 
+    private static final Logger LOG = Logger.getInstance(ToolInterceptor.class);
     private final Project project;
     private final Set<String> controlledTools;
 
@@ -88,7 +90,7 @@ public class ToolInterceptor {
             // 设置30秒超时，防止无限等待
             boolean responded = latch.await(30, TimeUnit.SECONDS);
             if (!responded) {
-                System.err.println("权限请求超时，自动拒绝");
+                LOG.warn("权限请求超时，自动拒绝");
                 return null; // 超时视为拒绝
             }
         } catch (InterruptedException e) {

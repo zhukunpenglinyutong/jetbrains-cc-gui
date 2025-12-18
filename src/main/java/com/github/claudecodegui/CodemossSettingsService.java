@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.intellij.openapi.diagnostic.Logger;
 
 import com.github.claudecodegui.model.DeleteResult;
 
@@ -29,6 +30,7 @@ import java.util.HashMap;
  */
 public class CodemossSettingsService {
 
+    private static final Logger LOG = Logger.getInstance(CodemossSettingsService.class);
     private static final String CONFIG_DIR_NAME = ".codemoss";
     private static final String CONFIG_FILE_NAME = "config.json";
     private static final String BACKUP_FILE_NAME = "config.json.bak";
@@ -81,7 +83,7 @@ public class CodemossSettingsService {
         Path configDir = getConfigDir();
         if (!Files.exists(configDir)) {
             Files.createDirectories(configDir);
-            System.out.println("[CodemossSettings] Created config directory: " + configDir);
+            LOG.info("[CodemossSettings] Created config directory: " + configDir);
         }
     }
 
@@ -96,16 +98,16 @@ public class CodemossSettingsService {
         File configFile = new File(configPath);
 
         if (!configFile.exists()) {
-            System.out.println("[CodemossSettings] Config file not found, creating default: " + configPath);
+            LOG.info("[CodemossSettings] Config file not found, creating default: " + configPath);
             return createDefaultConfig();
         }
 
         try (FileReader reader = new FileReader(configFile)) {
             JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();
-            System.out.println("[CodemossSettings] Successfully read config from: " + configPath);
+            LOG.info("[CodemossSettings] Successfully read config from: " + configPath);
             return config;
         } catch (Exception e) {
-            System.err.println("[CodemossSettings] Failed to read config: " + e.getMessage());
+            LOG.warn("[CodemossSettings] Failed to read config: " + e.getMessage());
             return createDefaultConfig();
         }
     }
@@ -122,9 +124,9 @@ public class CodemossSettingsService {
         String configPath = getConfigPath();
         try (FileWriter writer = new FileWriter(configPath)) {
             gson.toJson(config, writer);
-            System.out.println("[CodemossSettings] Successfully wrote config to: " + configPath);
+            LOG.info("[CodemossSettings] Successfully wrote config to: " + configPath);
         } catch (Exception e) {
-            System.err.println("[CodemossSettings] Failed to write config: " + e.getMessage());
+            LOG.warn("[CodemossSettings] Failed to write config: " + e.getMessage());
             throw e;
         }
     }
@@ -136,7 +138,7 @@ public class CodemossSettingsService {
                 Files.copy(configPath, Paths.get(getBackupPath()), StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (Exception e) {
-            System.err.println("[CodemossSettings] Failed to backup config: " + e.getMessage());
+            LOG.warn("[CodemossSettings] Failed to backup config: " + e.getMessage());
         }
     }
 
@@ -174,9 +176,9 @@ public class CodemossSettingsService {
             // 写回 settings.json
             writeClaudeSettings(settings);
 
-            System.out.println("[CodemossSettings] Synced MCP configuration to ~/.claude/settings.json");
+            LOG.info("[CodemossSettings] Synced MCP configuration to ~/.claude/settings.json");
         } catch (Exception e) {
-            System.err.println("[CodemossSettings] Failed to sync MCP to Claude settings: " + e.getMessage());
+            LOG.warn("[CodemossSettings] Failed to sync MCP to Claude settings: " + e.getMessage());
         }
     }
 
@@ -202,7 +204,7 @@ public class CodemossSettingsService {
         try (FileReader reader = new FileReader(settingsFile)) {
             return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (Exception e) {
-            System.err.println("[CodemossSettings] Failed to read ~/.claude/settings.json: " + e.getMessage());
+            LOG.warn("[CodemossSettings] Failed to read ~/.claude/settings.json: " + e.getMessage());
             return createDefaultClaudeSettings();
         }
     }
@@ -277,7 +279,7 @@ public class CodemossSettingsService {
         }
         try (FileWriter writer = new FileWriter(settingsPath.toFile())) {
             gson.toJson(settings, writer);
-            System.out.println("[CodemossSettings] Synced settings to: " + settingsPath);
+            LOG.info("[CodemossSettings] Synced settings to: " + settingsPath);
         }
     }
 
@@ -415,7 +417,7 @@ public class CodemossSettingsService {
     public void applyActiveProviderToClaudeSettings() throws IOException {
         JsonObject activeProvider = getActiveClaudeProvider();
         if (activeProvider == null) {
-            System.out.println("[CodemossSettings] No active provider to sync to .claude/settings.json");
+            LOG.info("[CodemossSettings] No active provider to sync to .claude/settings.json");
             return;
         }
         applyProviderToClaudeSettings(activeProvider);
@@ -458,7 +460,7 @@ public class CodemossSettingsService {
         providers.add(id, provider);
 
         writeConfig(config);
-        System.out.println("[CodemossSettings] Added provider: " + id + " (not activated, user needs to manually switch)");
+        LOG.info("[CodemossSettings] Added provider: " + id + " (not activated, user needs to manually switch)");
     }
 
     /**
@@ -514,13 +516,13 @@ public class CodemossSettingsService {
     public List<JsonObject> parseProvidersFromCcSwitchDb(String dbPath) throws IOException {
         List<JsonObject> result = new ArrayList<>();
 
-        System.out.println("[Backend] 正在通过 Node.js 读取 cc-switch 数据库: " + dbPath);
+        LOG.info("[Backend] 正在通过 Node.js 读取 cc-switch 数据库: " + dbPath);
 
         // 获取 ai-bridge 目录路径（自动处理解压）
         String aiBridgePath = getAiBridgePath();
         String scriptPath = new File(aiBridgePath, "read-cc-switch-db.js").getAbsolutePath();
 
-        System.out.println("[Backend] 脚本路径: " + scriptPath);
+        LOG.info("[Backend] 脚本路径: " + scriptPath);
 
         // 检查脚本是否存在
         if (!new File(scriptPath).exists()) {
@@ -538,20 +540,20 @@ public class CodemossSettingsService {
                     File nodeFile = new File(savedNodePath.trim());
                     if (nodeFile.exists() && nodeFile.canExecute()) {
                         nodePath = savedNodePath.trim();
-                        System.out.println("[Backend] 使用用户配置的 Node.js 路径: " + nodePath);
+                        LOG.info("[Backend] 使用用户配置的 Node.js 路径: " + nodePath);
                     } else {
-                        System.out.println("[Backend] 用户配置的 Node.js 路径无效，将自动检测: " + savedNodePath);
+                        LOG.info("[Backend] 用户配置的 Node.js 路径无效，将自动检测: " + savedNodePath);
                     }
                 }
             } catch (Exception e) {
-                System.out.println("[Backend] 读取用户配置的 Node.js 路径失败: " + e.getMessage());
+                LOG.info("[Backend] 读取用户配置的 Node.js 路径失败: " + e.getMessage());
             }
 
             // 如果用户没有配置或配置无效，使用 NodeDetector 自动检测
             if (nodePath == null) {
                 com.github.claudecodegui.bridge.NodeDetector nodeDetector = new com.github.claudecodegui.bridge.NodeDetector();
                 nodePath = nodeDetector.findNodeExecutable();
-                System.out.println("[Backend] 自动检测到的 Node.js 路径: " + nodePath);
+                LOG.info("[Backend] 自动检测到的 Node.js 路径: " + nodePath);
             }
 
             // 构建 Node.js 命令
@@ -559,7 +561,7 @@ public class CodemossSettingsService {
             pb.directory(new File(aiBridgePath));
             pb.redirectErrorStream(true); // 合并错误输出到标准输出
 
-            System.out.println("[Backend] 执行命令: " + nodePath + " " + scriptPath + " " + dbPath);
+            LOG.info("[Backend] 执行命令: " + nodePath + " " + scriptPath + " " + dbPath);
 
             // 启动进程
             Process process = pb.start();
@@ -578,7 +580,7 @@ public class CodemossSettingsService {
             int exitCode = process.waitFor();
 
             String jsonOutput = output.toString();
-            System.out.println("[Backend] Node.js 输出: " + jsonOutput);
+            LOG.info("[Backend] Node.js 输出: " + jsonOutput);
 
             if (exitCode != 0) {
                 throw new IOException("Node.js 脚本执行失败 (退出码: " + exitCode + "): " + jsonOutput);
@@ -607,14 +609,14 @@ public class CodemossSettingsService {
             }
 
             int count = response.has("count") ? response.get("count").getAsInt() : result.size();
-            System.out.println("[Backend] 成功从数据库读取 " + count + " 个 Claude 供应商配置");
+            LOG.info("[Backend] 成功从数据库读取 " + count + " 个 Claude 供应商配置");
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Node.js 脚本执行被中断", e);
         } catch (Exception e) {
             String errorMsg = "通过 Node.js 读取数据库失败: " + e.getMessage();
-            System.err.println("[Backend] " + errorMsg);
+            LOG.warn("[Backend] " + errorMsg);
             e.printStackTrace();
             throw new IOException(errorMsg, e);
         }
@@ -635,7 +637,7 @@ public class CodemossSettingsService {
             throw new IOException("无法找到 ai-bridge 目录，请检查插件安装");
         }
 
-        System.out.println("[Backend] ai-bridge 目录: " + aiBridgeDir.getAbsolutePath());
+        LOG.info("[Backend] ai-bridge 目录: " + aiBridgeDir.getAbsolutePath());
         return aiBridgeDir.getAbsolutePath();
     }
 
@@ -651,7 +653,7 @@ public class CodemossSettingsService {
                 saveClaudeProvider(provider);
                 count++;
             } catch (Exception e) {
-                System.err.println("Failed to save provider " + provider.get("id") + ": " + e.getMessage());
+                LOG.warn("Failed to save provider " + provider.get("id") + ": " + e.getMessage());
             }
         }
         return count;
@@ -693,7 +695,7 @@ public class CodemossSettingsService {
         }
 
         writeConfig(config);
-        System.out.println("[CodemossSettings] Updated provider: " + id);
+        LOG.info("[CodemossSettings] Updated provider: " + id);
     }
 
     /**
@@ -734,9 +736,9 @@ public class CodemossSettingsService {
             // 创建配置备份（用于回滚）
             try {
                 Files.copy(configFilePath, backupFilePath, StandardCopyOption.REPLACE_EXISTING);
-                System.out.println("[CodemossSettings] Created backup: " + backupFilePath);
+                LOG.info("[CodemossSettings] Created backup: " + backupFilePath);
             } catch (IOException e) {
-                System.err.println("[CodemossSettings] Warning: Failed to create backup: " + e.getMessage());
+                LOG.warn("[CodemossSettings] Warning: Failed to create backup: " + e.getMessage());
                 // 备份失败不阻止删除操作，但记录警告
             }
 
@@ -749,16 +751,16 @@ public class CodemossSettingsService {
                 if (providers.size() > 0) {
                     String firstKey = providers.keySet().iterator().next();
                     claude.addProperty("current", firstKey);
-                    System.out.println("[CodemossSettings] Switched to provider: " + firstKey);
+                    LOG.info("[CodemossSettings] Switched to provider: " + firstKey);
                 } else {
                     claude.addProperty("current", "");
-                    System.out.println("[CodemossSettings] No remaining providers");
+                    LOG.info("[CodemossSettings] No remaining providers");
                 }
             }
 
             // 写入配置
             writeConfig(config);
-            System.out.println("[CodemossSettings] Deleted provider: " + id);
+            LOG.info("[CodemossSettings] Deleted provider: " + id);
 
             // 删除成功后移除备份
             try {
@@ -775,10 +777,10 @@ public class CodemossSettingsService {
                 try {
                     if (Files.exists(backupFilePath)) {
                         Files.copy(backupFilePath, configFilePath, StandardCopyOption.REPLACE_EXISTING);
-                        System.out.println("[CodemossSettings] Restored from backup after failure");
+                        LOG.info("[CodemossSettings] Restored from backup after failure");
                     }
                 } catch (IOException restoreEx) {
-                    System.err.println("[CodemossSettings] Failed to restore backup: " + restoreEx.getMessage());
+                    LOG.warn("[CodemossSettings] Failed to restore backup: " + restoreEx.getMessage());
                 }
             }
 
@@ -817,7 +819,7 @@ public class CodemossSettingsService {
 
         claude.addProperty("current", id);
         writeConfig(config);
-        System.out.println("[CodemossSettings] Switched to provider: " + id);
+        LOG.info("[CodemossSettings] Switched to provider: " + id);
     }
 
     /**
@@ -898,15 +900,15 @@ public class CodemossSettingsService {
                             }
                         }
 
-                        System.out.println("[CodemossSettings] Loaded " + result.size() + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
+                        LOG.info("[CodemossSettings] Loaded " + result.size() + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
                         return result;
                     }
                 } catch (Exception e) {
-                    System.err.println("[CodemossSettings] Failed to read ~/.claude.json: " + e.getMessage());
+                    LOG.warn("[CodemossSettings] Failed to read ~/.claude.json: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            System.err.println("[CodemossSettings] Error accessing ~/.claude.json: " + e.getMessage());
+            LOG.warn("[CodemossSettings] Error accessing ~/.claude.json: " + e.getMessage());
         }
 
         // 2. 回退到 ~/.codemoss/config.json（数组格式）
@@ -920,7 +922,7 @@ public class CodemossSettingsService {
             }
         }
 
-        System.out.println("[CodemossSettings] Loaded " + result.size() + " MCP servers from ~/.codemoss/config.json");
+        LOG.info("[CodemossSettings] Loaded " + result.size() + " MCP servers from ~/.codemoss/config.json");
         return result;
     }
 
@@ -988,7 +990,7 @@ public class CodemossSettingsService {
                     // 写回文件
                     try (FileWriter writer = new FileWriter(claudeJsonFile)) {
                         gson.toJson(claudeJson, writer);
-                        System.out.println("[CodemossSettings] Upserted MCP server in ~/.claude.json: " + serverId + " (enabled: " + isEnabled + ")");
+                        LOG.info("[CodemossSettings] Upserted MCP server in ~/.claude.json: " + serverId + " (enabled: " + isEnabled + ")");
 
                         // 同步到 settings.json
                         syncMcpToClaudeSettings();
@@ -998,7 +1000,7 @@ public class CodemossSettingsService {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[CodemossSettings] Error updating ~/.claude.json: " + e.getMessage());
+            LOG.warn("[CodemossSettings] Error updating ~/.claude.json: " + e.getMessage());
         }
 
         // 2. 回退到 ~/.codemoss/config.json
@@ -1029,7 +1031,7 @@ public class CodemossSettingsService {
         }
 
         writeConfig(config);
-        System.out.println("[CodemossSettings] Upserted MCP server in ~/.codemoss/config.json: " + serverId);
+        LOG.info("[CodemossSettings] Upserted MCP server in ~/.codemoss/config.json: " + serverId);
     }
 
     /**
@@ -1072,7 +1074,7 @@ public class CodemossSettingsService {
                             // 写回文件
                             try (FileWriter writer = new FileWriter(claudeJsonFile)) {
                                 gson.toJson(claudeJson, writer);
-                                System.out.println("[CodemossSettings] Deleted MCP server from ~/.claude.json: " + serverId);
+                                LOG.info("[CodemossSettings] Deleted MCP server from ~/.claude.json: " + serverId);
 
                                 // 同步到 settings.json
                                 syncMcpToClaudeSettings();
@@ -1085,7 +1087,7 @@ public class CodemossSettingsService {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[CodemossSettings] Error deleting from ~/.claude.json: " + e.getMessage());
+            LOG.warn("[CodemossSettings] Error deleting from ~/.claude.json: " + e.getMessage());
         }
 
         // 2. 回退到 ~/.codemoss/config.json
@@ -1106,7 +1108,7 @@ public class CodemossSettingsService {
             if (removed) {
                 config.add("mcpServers", newServers);
                 writeConfig(config);
-                System.out.println("[CodemossSettings] Deleted MCP server from ~/.codemoss/config.json: " + serverId);
+                LOG.info("[CodemossSettings] Deleted MCP server from ~/.codemoss/config.json: " + serverId);
             }
         }
 
@@ -1176,7 +1178,7 @@ public class CodemossSettingsService {
             result.add(skill);
         }
 
-        System.out.println("[CodemossSettings] Loaded " + result.size() + " skills");
+        LOG.info("[CodemossSettings] Loaded " + result.size() + " skills");
         return result;
     }
 
@@ -1216,7 +1218,7 @@ public class CodemossSettingsService {
         // 同步到 Claude settings
         syncSkillsToClaudeSettings();
 
-        System.out.println("[CodemossSettings] Upserted skill: " + id);
+        LOG.info("[CodemossSettings] Upserted skill: " + id);
     }
 
     /**
@@ -1226,13 +1228,13 @@ public class CodemossSettingsService {
         JsonObject config = readConfig();
 
         if (!config.has("skills")) {
-            System.out.println("[CodemossSettings] No skills found");
+            LOG.info("[CodemossSettings] No skills found");
             return false;
         }
 
         JsonObject skills = config.getAsJsonObject("skills");
         if (!skills.has(id)) {
-            System.out.println("[CodemossSettings] Skill not found: " + id);
+            LOG.info("[CodemossSettings] Skill not found: " + id);
             return false;
         }
 
@@ -1245,7 +1247,7 @@ public class CodemossSettingsService {
         // 同步到 Claude settings
         syncSkillsToClaudeSettings();
 
-        System.out.println("[CodemossSettings] Deleted skill: " + id);
+        LOG.info("[CodemossSettings] Deleted skill: " + id);
         return true;
     }
 
@@ -1325,6 +1327,6 @@ public class CodemossSettingsService {
         // 写入 Claude settings
         writeClaudeSettings(claudeSettings);
 
-        System.out.println("[CodemossSettings] Synced " + plugins.size() + " enabled skills to Claude settings");
+        LOG.info("[CodemossSettings] Synced " + plugins.size() + " enabled skills to Claude settings");
     }
 }

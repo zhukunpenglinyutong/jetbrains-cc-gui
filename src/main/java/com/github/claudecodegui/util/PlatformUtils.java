@@ -1,5 +1,7 @@
 package com.github.claudecodegui.util;
 
+import com.intellij.openapi.diagnostic.Logger;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -11,6 +13,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class PlatformUtils {
 
+    private static final Logger LOG = Logger.getInstance(PlatformUtils.class);
     // 平台类型缓存
     private static volatile PlatformType cachedPlatformType = null;
 
@@ -143,7 +146,7 @@ public class PlatformUtils {
             }
         }
 
-        System.err.println("⚠️ 文件删除失败（可能被锁定）: " + file.getAbsolutePath());
+        LOG.warn("⚠️ 文件删除失败（可能被锁定）: " + file.getAbsolutePath());
         return false;
     }
 
@@ -248,7 +251,7 @@ public class PlatformUtils {
                 return killer.waitFor(3, TimeUnit.SECONDS);
             }
         } catch (Exception e) {
-            System.err.println("⚠️ 终止进程失败 (PID: " + pid + "): " + e.getMessage());
+            LOG.warn("⚠️ 终止进程失败 (PID: " + pid + "): " + e.getMessage());
             return false;
         }
     }

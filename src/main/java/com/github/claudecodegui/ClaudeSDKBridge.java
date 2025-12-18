@@ -9,6 +9,7 @@ import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.model.NodeDetectionResult;
+import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -27,6 +28,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class ClaudeSDKBridge {
 
+    private static final Logger LOG = Logger.getInstance(ClaudeSDKBridge.class);
     private static final String NODE_SCRIPT = "simple-query.js";
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
 
@@ -596,7 +598,7 @@ public class ClaudeSDKBridge {
                                 if (line.startsWith("[UNCAUGHT_ERROR]")
                                         || line.startsWith("[UNHANDLED_REJECTION]")
                                         || line.startsWith("[COMMAND_ERROR]")) {
-                                    System.err.println("[Node.js ERROR] " + line);
+                                    LOG.warn("[Node.js ERROR] " + line);
                                     lastNodeError[0] = line;
                                 }
 

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.bridge;
 
+import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.util.PlatformUtils;
 
 import java.io.File;
@@ -20,6 +21,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class ProcessManager {
 
+    private static final Logger LOG = Logger.getInstance(ProcessManager.class);
     private static final String CLAUDE_TEMP_DIR_NAME = "claude-agent-tmp";
 
     private final Map<String, Process> activeChannelProcesses = new ConcurrentHashMap<>();
@@ -64,17 +66,17 @@ public class ProcessManager {
      */
     public void interruptChannel(String channelId) {
         if (channelId == null) {
-            System.out.println("[Interrupt] ChannelId is null, nothing to interrupt");
+            LOG.info("[Interrupt] ChannelId is null, nothing to interrupt");
             return;
         }
 
         Process process = activeChannelProcesses.get(channelId);
         if (process == null) {
-            System.out.println("[Interrupt] No active process found for channel: " + channelId);
+            LOG.info("[Interrupt] No active process found for channel: " + channelId);
             return;
         }
 
-        System.out.println("[Interrupt] Attempting to interrupt channel: " + channelId);
+        LOG.info("[Interrupt] Attempting to interrupt channel: " + channelId);
         interruptedChannels.add(channelId);
 
         // 使用平台感知的进程终止方法
@@ -87,7 +89,7 @@ public class ProcessManager {
             if (process.isAlive()) {
                 boolean terminated = process.waitFor(3, TimeUnit.SECONDS);
                 if (!terminated) {
-                    System.out.println("[Interrupt] Process still alive, force killing channel: " + channelId);
+                    LOG.info("[Interrupt] Process still alive, force killing channel: " + channelId);
                     process.destroyForcibly();
                     process.waitFor(2, TimeUnit.SECONDS);
                 }
@@ -98,9 +100,9 @@ public class ProcessManager {
             activeChannelProcesses.remove(channelId, process);
             // 验证进程确实已终止
             if (process.isAlive()) {
-                System.err.println("[Interrupt] Warning: Process may still be alive for channel: " + channelId);
+                LOG.warn("[Interrupt] Warning: Process may still be alive for channel: " + channelId);
             } else {
-                System.out.println("[Interrupt] Successfully terminated channel: " + channelId);
+                LOG.info("[Interrupt] Successfully terminated channel: " + channelId);
             }
         }
     }
@@ -110,7 +112,7 @@ public class ProcessManager {
      * 应在插件卸载或 IDEA 关闭时调用
      */
     public void cleanupAllProcesses() {
-        System.out.println("[ProcessManager] Cleaning up all active processes...");
+        LOG.info("[ProcessManager] Cleaning up all active processes...");
         int count = 0;
 
         for (Map.Entry<String, Process> entry : activeChannelProcesses.entrySet()) {
@@ -118,7 +120,7 @@ public class ProcessManager {
             Process process = entry.getValue();
 
             if (process != null && process.isAlive()) {
-                System.out.println("[ProcessManager] Terminating process for channel: " + channelId);
+                LOG.info("[ProcessManager] Terminating process for channel: " + channelId);
                 PlatformUtils.terminateProcess(process);
                 count++;
             }
@@ -127,7 +129,7 @@ public class ProcessManager {
         activeChannelProcesses.clear();
         interruptedChannels.clear();
 
-        System.out.println("[ProcessManager] Cleanup complete. Terminated " + count + " processes.");
+        LOG.info("[ProcessManager] Cleanup complete. Terminated " + count + " processes.");
     }
 
     /**
@@ -173,7 +175,7 @@ public class ProcessManager {
             Files.createDirectories(tempPath);
             return tempPath.toFile();
         } catch (IOException e) {
-            System.err.println("[ProcessManager] Failed to prepare temp dir: " + tempPath + ", reason: " + e.getMessage());
+            LOG.error("[ProcessManager] Failed to prepare temp dir: " + tempPath + ", reason: " + e.getMessage());
             return null;
         }
     }
@@ -218,7 +220,7 @@ public class ProcessManager {
                 try {
                     Files.deleteIfExists(file.toPath());
                 } catch (IOException e) {
-                    System.err.println("[ProcessManager] Failed to delete temp cwd file: " + file.getAbsolutePath());
+                    LOG.error("[ProcessManager] Failed to delete temp cwd file: " + file.getAbsolutePath());
                 }
             }
         }
