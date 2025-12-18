@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeHistoryReader;
+import com.github.claudecodegui.ClaudeSession;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
@@ -8,6 +9,7 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -123,16 +125,23 @@ public class SettingsHandler extends BaseMessageHandler {
 
             // 尝试从设置中获取实际配置的模型名称（支持容量后缀）
             String actualModel = resolveActualModelName(model);
+            String finalModelName;
             if (actualModel != null && !actualModel.equals(model)) {
                 LOG.info("[SettingsHandler] Resolved to actual model: " + actualModel);
                 context.setCurrentModel(actualModel);
+                finalModelName = actualModel;
             } else {
                 context.setCurrentModel(model);
+                finalModelName = model;
             }
 
             if (context.getSession() != null) {
                 context.getSession().setModel(model);
             }
+
+            // 计算新模型的上下文限制
+            int newMaxTokens = getModelContextLimit(finalModelName);
+            LOG.info("[SettingsHandler] Model context limit: " + newMaxTokens + " tokens for model: " + finalModelName);
 
             // 向前端发送确认回调，确保前后端状态同步
             final String confirmedModel = model;
@@ -140,10 +149,102 @@ public class SettingsHandler extends BaseMessageHandler {
             SwingUtilities.invokeLater(() -> {
                 // 发送模型确认
                 callJavaScript("window.onModelConfirmed", escapeJs(confirmedModel), escapeJs(confirmedProvider));
+
+                // 重新计算并推送 usage 更新，确保 maxTokens 根据新模型更新
+                pushUsageUpdateAfterModelChange(newMaxTokens);
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set model: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 在模型切换后推送 usage 更新
+     * 根据新模型的上下文限制重新计算百分比和 maxTokens
+     */
+    private void pushUsageUpdateAfterModelChange(int newMaxTokens) {
+        try {
+            ClaudeSession session = context.getSession();
+            if (session == null) {
+                // 即使没有会话，也要发送更新让前端知道新的 maxTokens
+                sendUsageUpdate(0, newMaxTokens);
+                return;
+            }
+
+            // 从当前会话中提取最新的 usage 信息
+            List<ClaudeSession.Message> messages = session.getMessages();
+            JsonObject lastUsage = null;
+
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                ClaudeSession.Message msg = messages.get(i);
+
+                if (msg.type != ClaudeSession.Message.Type.ASSISTANT || msg.raw == null) {
+                    continue;
+                }
+
+                // 检查不同的可能结构
+                if (msg.raw.has("message")) {
+                    JsonObject message = msg.raw.getAsJsonObject("message");
+                    if (message.has("usage")) {
+                        lastUsage = message.getAsJsonObject("usage");
+                        break;
+                    }
+                }
+
+                // 检查usage是否在raw的根级别
+                if (msg.raw.has("usage")) {
+                    lastUsage = msg.raw.getAsJsonObject("usage");
+                    break;
+                }
+            }
+
+            // 计算使用的 tokens
+            int inputTokens = lastUsage != null && lastUsage.has("input_tokens") ? lastUsage.get("input_tokens").getAsInt() : 0;
+            int cacheWriteTokens = lastUsage != null && lastUsage.has("cache_creation_input_tokens") ? lastUsage.get("cache_creation_input_tokens").getAsInt() : 0;
+            int cacheReadTokens = lastUsage != null && lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
+            int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
+
+            int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+
+            // 发送更新
+            sendUsageUpdate(usedTokens, newMaxTokens);
+
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to push usage update after model change: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 发送 usage 更新到前端
+     */
+    private void sendUsageUpdate(int usedTokens, int maxTokens) {
+        int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
+
+        LOG.info("[SettingsHandler] Sending usage update: usedTokens=" + usedTokens + ", maxTokens=" + maxTokens + ", percentage=" + percentage + "%");
+
+        // 构建 usage 更新数据
+        JsonObject usageUpdate = new JsonObject();
+        usageUpdate.addProperty("percentage", percentage);
+        usageUpdate.addProperty("totalTokens", usedTokens);
+        usageUpdate.addProperty("limit", maxTokens);
+        usageUpdate.addProperty("usedTokens", usedTokens);
+        usageUpdate.addProperty("maxTokens", maxTokens);
+
+        String usageJson = new Gson().toJson(usageUpdate);
+
+        // 推送到前端（必须在 EDT 线程中执行）
+        SwingUtilities.invokeLater(() -> {
+            if (context.getBrowser() != null && !context.isDisposed()) {
+                String js = "(function() {" +
+                        "  if (typeof window.onUsageUpdate === 'function') {" +
+                        "    window.onUsageUpdate('" + escapeJs(usageJson) + "');" +
+                        "  }" +
+                        "})();";
+                context.getBrowser().getCefBrowser().executeJavaScript(js, context.getBrowser().getCefBrowser().getURL(), 0);
+            } else {
+                LOG.warn("[SettingsHandler] Cannot send usage update: browser is null or disposed");
+            }
+        });
     }
 
     /**

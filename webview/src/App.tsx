@@ -266,13 +266,11 @@ const App = () => {
     // ChatInputBox 相关回调
     window.onUsageUpdate = (json) => {
       try {
-        console.log('[Frontend] onUsageUpdate raw:', json);
         const data = JSON.parse(json);
         if (typeof data.percentage === 'number') {
-          console.log('[Frontend] onUsageUpdate parsed percentage:', data.percentage, 'totalTokens:', data.totalTokens, 'limit:', data.limit);
-          setUsagePercentage(data.percentage);
           const used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
           const max = typeof data.maxTokens === 'number' ? data.maxTokens : (typeof data.limit === 'number' ? data.limit : undefined);
+          setUsagePercentage(data.percentage);
           setUsageUsedTokens(used);
           setUsageMaxTokens(max);
         }
