@@ -34,6 +34,7 @@ import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.HtmlLoader;
+import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.cache.SlashCommandCache;
 import com.google.gson.Gson;
@@ -350,7 +351,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             try {
-                browser = new JBCefBrowser();
+                browser = JBCefBrowserFactory.create();
                 handlerContext.setBrowser(browser);
 
                 // 启用开发者工具（右键菜单）

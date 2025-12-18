@@ -3,6 +3,7 @@ package com.github.claudecodegui.permission;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import com.google.gson.Gson;
@@ -58,7 +59,7 @@ public class PermissionDialog extends DialogWrapper {
         setResizable(false);
 
         // 创建 JCEF 浏览器
-        this.browser = new JBCefBrowser();
+        this.browser = JBCefBrowserFactory.create();
         JBCefBrowserBase browserBase = this.browser;
         this.jsQuery = JBCefJSQuery.create(browserBase);
 
