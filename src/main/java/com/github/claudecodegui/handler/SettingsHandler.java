@@ -4,6 +4,7 @@ import com.github.claudecodegui.ClaudeHistoryReader;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
@@ -137,7 +138,7 @@ public class SettingsHandler extends BaseMessageHandler {
             // 向前端发送确认回调，确保前后端状态同步
             final String confirmedModel = model;
             final String confirmedProvider = context.getCurrentProvider();
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 // 发送模型确认
                 callJavaScript("window.onModelConfirmed", escapeJs(confirmedModel), escapeJs(confirmedProvider));
             });
@@ -190,7 +191,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 effectivePath = detected != null ? detected : "";
             }
             final String pathToSend = effectivePath != null ? effectivePath : "";
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateNodePath", escapeJs(pathToSend));
             });
         } catch (Exception e) {
@@ -236,13 +237,13 @@ public class SettingsHandler extends BaseMessageHandler {
             }
 
             final String finalPath = effectivePath != null ? effectivePath : "";
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateNodePath", escapeJs(finalPath));
                 callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存。\n\n如果环境检查仍然失败，请关闭并重新打开工具窗口后重试。"));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set Node.js path: " + e.getMessage(), e);
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("保存 Node.js 路径失败: " + e.getMessage()));
             });
         }
@@ -302,12 +303,12 @@ public class SettingsHandler extends BaseMessageHandler {
 
                 final String statsJsonFinal = json;
 
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("window.updateUsageStatistics", escapeJs(statsJsonFinal));
                 });
             } catch (Exception e) {
                 LOG.error("[SettingsHandler] Failed to get usage statistics: " + e.getMessage(), e);
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("window.showError", escapeJs("获取统计数据失败: " + e.getMessage()));
                 });
             }

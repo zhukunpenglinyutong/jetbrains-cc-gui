@@ -4,6 +4,7 @@ import com.github.claudecodegui.ClaudeSDKBridge;
 import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.CodexSDKBridge;
 import com.github.claudecodegui.CodemossSettingsService;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
 
@@ -122,7 +123,7 @@ public class HandlerContext {
      */
     public void executeJavaScriptOnEDT(String jsCode) {
         if (browser != null && !disposed) {
-            javax.swing.SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 if (browser != null && !disposed) {
                     browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
                 }
