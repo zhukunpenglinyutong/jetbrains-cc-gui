@@ -470,7 +470,7 @@ export const ChatInputBox = ({
   const detectAndTriggerCompletion = useCallback(() => {
     if (!editableRef.current) return;
 
-    // 如果刚刚渲染了文件标签，跳过这次补全检测
+    // 如果刚刚渲染了文件标签,跳过这次补全检测
     if (justRenderedTagRef.current) {
       justRenderedTagRef.current = false;
       fileCompletion.close();
@@ -480,7 +480,8 @@ export const ChatInputBox = ({
 
     const text = getTextContent();
     const cursorPos = getCursorPosition(editableRef.current);
-    const trigger = detectTrigger(text, cursorPos);
+    // 传递 element 参数以便 detectTrigger 可以跳过文件标签
+    const trigger = detectTrigger(text, cursorPos, editableRef.current);
 
     // 关闭当前打开的补全
     if (!trigger) {

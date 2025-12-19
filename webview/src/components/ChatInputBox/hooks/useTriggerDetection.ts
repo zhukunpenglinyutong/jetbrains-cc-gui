@@ -90,9 +90,60 @@ export function getRectAtCharOffset(
 }
 
 /**
- * 检测 @ 文件引用触发
+ * 检查文本位置是否在文件标签内
+ * @param element - contenteditable 元素
+ * @param textPosition - 文本位置（基于 getTextContent 的虚拟位置）
+ * @returns 是否在文件标签内
  */
-function detectAtTrigger(text: string, cursorPosition: number): TriggerQuery | null {
+function isPositionInFileTag(element: HTMLElement, textPosition: number): boolean {
+  let position = 0;
+  let inFileTag = false;
+
+  const walk = (node: Node): boolean => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent?.length ?? 0;
+      if (position + len > textPosition) {
+        // 目标位置在这个文本节点内，不在文件标签内
+        return true;
+      }
+      position += len;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+
+      // 如果是文件标签，计算其虚拟长度 (@ + 文件路径)
+      if (el.classList.contains('file-tag')) {
+        const filePath = el.getAttribute('data-file-path') || '';
+        const tagLength = filePath.length + 1; // @ + 文件路径
+
+        if (position <= textPosition && textPosition < position + tagLength) {
+          // 目标位置在文件标签内
+          inFileTag = true;
+          return true;
+        }
+        position += tagLength;
+      } else {
+        // 递归处理子节点
+        for (const child of Array.from(node.childNodes)) {
+          if (walk(child)) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // 遍历所有子节点
+  for (const child of Array.from(element.childNodes)) {
+    if (walk(child)) break;
+  }
+
+  return inFileTag;
+}
+
+/**
+ * 检测 @ 文件引用触发
+ * 注意：跳过已渲染的文件标签，避免在文件标签后输入时错误触发
+ */
+function detectAtTrigger(text: string, cursorPosition: number, element?: HTMLElement): TriggerQuery | null {
   // 从光标位置向前查找 @
   let start = cursorPosition - 1;
   while (start >= 0) {
@@ -103,6 +154,13 @@ function detectAtTrigger(text: string, cursorPosition: number): TriggerQuery | n
     }
     // 找到 @
     if (char === '@') {
+      // 检查这个 @ 是否在文件标签内（已渲染的引用）
+      if (element && isPositionInFileTag(element, start)) {
+        // 在文件标签内，跳过这个 @，继续向前搜索
+        start--;
+        continue;
+      }
+
       const query = text.slice(start + 1, cursorPosition);
       return {
         trigger: '@',
@@ -172,10 +230,11 @@ export function useTriggerDetection() {
    */
   const detectTrigger = useCallback((
     text: string,
-    cursorPosition: number
+    cursorPosition: number,
+    element?: HTMLElement
   ): TriggerQuery | null => {
-    // 优先检测 @
-    const atTrigger = detectAtTrigger(text, cursorPosition);
+    // 优先检测 @（传递 element 以便跳过文件标签）
+    const atTrigger = detectAtTrigger(text, cursorPosition, element);
     if (atTrigger) return atTrigger;
 
     // 检测 /
