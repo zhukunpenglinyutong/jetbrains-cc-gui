@@ -20,7 +20,8 @@ public class HistoryHandler extends BaseMessageHandler {
         "load_history_data",
         "load_session",
         "delete_session",  // 新增:删除会话
-        "export_session"   // 新增:导出会话
+        "export_session",  // 新增:导出会话
+        "toggle_favorite"  // 新增:切换收藏状态
     };
 
     // 会话加载回调接口
@@ -62,13 +63,17 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] 处理: export_session, sessionId=" + content);
                 handleExportSession(content);
                 return true;
+            case "toggle_favorite":
+                LOG.info("[HistoryHandler] 处理: toggle_favorite, sessionId=" + content);
+                handleToggleFavorite(content);
+                return true;
             default:
                 return false;
         }
     }
 
     /**
-     * 加载并注入历史数据到前端
+     * 加载并注入历史数据到前端（包含收藏信息）
      */
     private void handleLoadHistoryData() {
         CompletableFuture.runAsync(() -> {
@@ -79,7 +84,10 @@ public class HistoryHandler extends BaseMessageHandler {
                 ClaudeHistoryReader historyReader = new ClaudeHistoryReader();
                 String historyJson = historyReader.getProjectDataAsJson(projectPath);
 
-                String escapedJson = escapeJs(historyJson);
+                // 加载收藏数据并合并到历史数据中
+                String enhancedJson = enhanceHistoryWithFavorites(historyJson);
+
+                String escapedJson = escapeJs(enhancedJson);
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "console.log('[Backend->Frontend] Starting to inject history data');" +
@@ -272,6 +280,109 @@ public class HistoryHandler extends BaseMessageHandler {
                 });
             }
         });
+    }
+
+    /**
+     * 切换收藏状态
+     */
+    private void handleToggleFavorite(String sessionId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                LOG.info("[HistoryHandler] ========== 切换收藏状态 ==========");
+                LOG.info("[HistoryHandler] SessionId: " + sessionId);
+
+                // 调用 Node.js favorites-service 切换收藏状态
+                String result = callNodeJsFavoritesService("toggleFavorite", sessionId);
+                LOG.info("[HistoryHandler] 收藏状态切换结果: " + result);
+
+            } catch (Exception e) {
+                LOG.error("[HistoryHandler] ❌ 切换收藏状态失败: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * 增强历史数据：添加收藏信息到每个会话
+     */
+    private String enhanceHistoryWithFavorites(String historyJson) {
+        try {
+            // 加载收藏数据
+            String favoritesJson = callNodeJsFavoritesService("loadFavorites", "");
+
+            // 解析历史数据和收藏数据
+            com.google.gson.JsonObject history = new com.google.gson.Gson().fromJson(historyJson, com.google.gson.JsonObject.class);
+            com.google.gson.JsonObject favorites = new com.google.gson.Gson().fromJson(favoritesJson, com.google.gson.JsonObject.class);
+
+            // 为每个会话添加收藏信息
+            if (history.has("sessions") && history.get("sessions").isJsonArray()) {
+                com.google.gson.JsonArray sessions = history.getAsJsonArray("sessions");
+                for (int i = 0; i < sessions.size(); i++) {
+                    com.google.gson.JsonObject session = sessions.get(i).getAsJsonObject();
+                    String sessionId = session.get("sessionId").getAsString();
+
+                    if (favorites.has(sessionId)) {
+                        com.google.gson.JsonObject favoriteInfo = favorites.getAsJsonObject(sessionId);
+                        session.addProperty("isFavorited", true);
+                        session.addProperty("favoritedAt", favoriteInfo.get("favoritedAt").getAsLong());
+                    } else {
+                        session.addProperty("isFavorited", false);
+                    }
+                }
+            }
+
+            // 将收藏数据也添加到历史数据中
+            history.add("favorites", favorites);
+
+            return new com.google.gson.Gson().toJson(history);
+
+        } catch (Exception e) {
+            LOG.warn("[HistoryHandler] ⚠️ 增强历史数据失败，返回原始数据: " + e.getMessage());
+            return historyJson;
+        }
+    }
+
+    /**
+     * 调用 Node.js favorites-service
+     */
+    private String callNodeJsFavoritesService(String functionName, String sessionId) throws Exception {
+        // 获取 ai-bridge 路径
+        String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
+        String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+
+        // 构建 Node.js 命令
+        String nodeScript = String.format(
+            "const { %s } = require('%s/services/favorites-service.cjs'); " +
+            "const result = %s('%s'); " +
+            "console.log(JSON.stringify(result));",
+            functionName,
+            bridgePath.replace("\\", "\\\\"),
+            functionName,
+            sessionId
+        );
+
+        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+
+        // 读取输出
+        StringBuilder output = new StringBuilder();
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
+        }
+
+        // 返回最后一行（JSON 输出）
+        String[] lines = output.toString().split("\n");
+        return lines.length > 0 ? lines[lines.length - 1] : "{}";
     }
 
     /**

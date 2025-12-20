@@ -61,6 +61,33 @@
     }
 }
 
+/* 收藏按钮样式 */
+.history-favorite-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* 默认隐藏 */
+    line-height: 1;
+
+    .codicon {
+        font-size: 14px;
+    }
+
+    /* 已收藏状态：始终显示金色星标 */
+    &.favorited {
+        opacity: 1;
+        color: #ffb638; /* 金色 */
+    }
+}
+
 /* 导出按钮样式 */
 .history-export-btn {
     background: transparent;
@@ -83,8 +110,19 @@
 }
 
 .history-item:hover .history-delete-btn,
-.history-item:hover .history-export-btn {
+.history-item:hover .history-export-btn,
+.history-item:hover .history-favorite-btn {
     opacity: 1; /* 鼠标悬停时显示 */
+}
+
+.history-favorite-btn:hover {
+    background-color: rgba(255, 182, 56, 0.15);
+    color: #ffb638; /* 金色表示收藏操作 */
+}
+
+.history-favorite-btn:active {
+    transform: scale(0.92);
+    background-color: rgba(255, 182, 56, 0.25);
 }
 
 .history-export-btn:hover {

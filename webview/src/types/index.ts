@@ -44,6 +44,8 @@ export interface HistorySessionSummary {
   title: string;
   messageCount: number;
   lastTimestamp?: string;
+  isFavorited?: boolean;
+  favoritedAt?: number;
 }
 
 export interface HistoryData {
@@ -51,4 +53,5 @@ export interface HistoryData {
   error?: string;
   sessions?: HistorySessionSummary[];
   total?: number;
+  favorites?: Record<string, { favoritedAt: number }>;
 }

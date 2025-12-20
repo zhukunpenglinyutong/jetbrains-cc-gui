@@ -8,6 +8,7 @@ interface HistoryViewProps {
   onLoadSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void; // 添加删除回调
   onExportSession: (sessionId: string, title: string) => void; // 添加导出回调
+  onToggleFavorite: (sessionId: string) => void; // 添加收藏切换回调
 }
 
 const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string) => {
@@ -32,7 +33,7 @@ const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string
   return `${Math.max(seconds, 1)} ${t('history.timeAgo.secondsAgo')}`;
 };
 
-const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSession }: HistoryViewProps) => {
+const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // 记录待删除的会话ID
@@ -43,7 +44,20 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSess
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const sessions = historyData?.sessions ?? [];
+  // 对会话进行排序：收藏的在上面（按收藏时间倒序），未收藏的在下面（保持原顺序）
+  const sessions = useMemo(() => {
+    const rawSessions = historyData?.sessions ?? [];
+
+    // 分离收藏和未收藏的会话
+    const favorited = rawSessions.filter(s => s.isFavorited);
+    const unfavorited = rawSessions.filter(s => !s.isFavorited);
+
+    // 收藏的会话按收藏时间倒序排序
+    favorited.sort((a, b) => (b.favoritedAt || 0) - (a.favoritedAt || 0));
+
+    // 合并：收藏的在前面，未收藏的在后面
+    return [...favorited, ...unfavorited];
+  }, [historyData?.sessions]);
 
   const infoBar = useMemo(() => {
     if (!historyData) {
@@ -100,6 +114,12 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSess
     onExportSession(sessionId, title);
   };
 
+  // 处理收藏按钮点击(阻止事件冒泡,避免触发会话加载)
+  const handleFavoriteClick = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation(); // 阻止点击事件冒泡到父元素
+    onToggleFavorite(sessionId);
+  };
+
   // 确认删除
   const confirmDelete = () => {
     if (deletingSessionId) {
@@ -119,6 +139,15 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSess
         <div className="history-item-title">{session.title}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className="history-item-time">{formatTimeAgo(session.lastTimestamp, t)}</div>
+          {/* 收藏按钮 */}
+          <button
+            className={`history-favorite-btn ${session.isFavorited ? 'favorited' : ''}`}
+            onClick={(e) => handleFavoriteClick(e, session.sessionId)}
+            title={session.isFavorited ? t('history.unfavoriteSession') : t('history.favoriteSession')}
+            aria-label={session.isFavorited ? t('history.unfavoriteSession') : t('history.favoriteSession')}
+          >
+            <span className={session.isFavorited ? 'codicon codicon-star-full' : 'codicon codicon-star-empty'}></span>
+          </button>
           {/* 导出按钮 */}
           <button
             className="history-export-btn"

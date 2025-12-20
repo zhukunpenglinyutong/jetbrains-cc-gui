@@ -802,6 +802,40 @@ const App = () => {
     sendBridgeMessage('export_session', exportData);
   };
 
+  // 切换收藏状态
+  const toggleFavoriteSession = (sessionId: string) => {
+    // 发送收藏切换请求到后端
+    sendBridgeMessage('toggle_favorite', sessionId);
+
+    // 立即更新前端状态
+    if (historyData && historyData.sessions) {
+      const updatedSessions = historyData.sessions.map(session => {
+        if (session.sessionId === sessionId) {
+          const isFavorited = !session.isFavorited;
+          return {
+            ...session,
+            isFavorited,
+            favoritedAt: isFavorited ? Date.now() : undefined
+          };
+        }
+        return session;
+      });
+
+      setHistoryData({
+        ...historyData,
+        sessions: updatedSessions
+      });
+
+      // 显示提示
+      const session = historyData.sessions.find(s => s.sessionId === sessionId);
+      if (session?.isFavorited) {
+        addToast(t('history.unfavorited'), 'success');
+      } else {
+        addToast(t('history.favorited'), 'success');
+      }
+    }
+  };
+
   // 文案本地化映射
   const localizeMessage = (text: string): string => {
     const messageMap: Record<string, string> = {
@@ -1309,6 +1343,7 @@ const App = () => {
           onLoadSession={loadHistorySession}
           onDeleteSession={deleteHistorySession}
           onExportSession={exportHistorySession}
+          onToggleFavorite={toggleFavoriteSession}
         />
       )}
 
