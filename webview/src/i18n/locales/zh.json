@@ -336,7 +336,12 @@
     "copyFile": "复制文件",
     "listFiles": "列出文件",
     "findFile": "查找文件",
-    "todoList": "任务列表"
+    "todoList": "任务列表",
+    "editFileTitle": "编辑文件",
+    "clickToOpen": "点击打开 {{filePath}}",
+    "showDiffInIdea": "在 IDEA 中显示变更",
+    "diffButton": "Diff",
+    "editPrefix": "编辑: {{fileName}}"
   },
   "skills": {
     "title": "Skills",

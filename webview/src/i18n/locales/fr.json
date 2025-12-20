@@ -332,7 +332,12 @@
     "copyFile": "Copier fichier",
     "listFiles": "Lister fichiers",
     "findFile": "Trouver fichier",
-    "todoList": "Liste de tâches"
+    "todoList": "Liste de tâches",
+    "editFileTitle": "Modifier fichier",
+    "clickToOpen": "Cliquez pour ouvrir {{filePath}}",
+    "showDiffInIdea": "Afficher les modifications dans IDEA",
+    "diffButton": "Diff",
+    "editPrefix": "Modifier: {{fileName}}"
   },
   "skills": {
     "title": "Skills",

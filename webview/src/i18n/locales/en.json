@@ -336,7 +336,12 @@
     "copyFile": "Copy File",
     "listFiles": "List Files",
     "findFile": "Find File",
-    "todoList": "Todo List"
+    "todoList": "Todo List",
+    "editFileTitle": "Edit File",
+    "clickToOpen": "Click to open {{filePath}}",
+    "showDiffInIdea": "Show changes in IDEA",
+    "diffButton": "Diff",
+    "editPrefix": "Edit: {{fileName}}"
   },
   "skills": {
     "title": "Skills",

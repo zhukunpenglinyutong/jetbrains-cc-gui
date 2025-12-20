@@ -332,7 +332,12 @@
     "copyFile": "複製文件",
     "listFiles": "列出文件",
     "findFile": "查找文件",
-    "todoList": "任務列表"
+    "todoList": "任務列表",
+    "editFileTitle": "編輯文件",
+    "clickToOpen": "點擊打開 {{filePath}}",
+    "showDiffInIdea": "在 IDEA 中顯示變更",
+    "diffButton": "Diff",
+    "editPrefix": "編輯: {{fileName}}"
   },
   "skills": {
     "title": "Skills",

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput } from '../../types';
-import { openFile } from '../../utils/bridge';
+import { openFile, refreshFile } from '../../utils/bridge';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 
@@ -103,12 +103,23 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
   const isMcpTool = lowerName.startsWith('mcp__');
   const isCollapsible = ['grep', 'glob', 'write', 'save-file'].includes(lowerName) || isMcpTool;
   const [expanded, setExpanded] = useState(false);
+  const hasRefreshed = useRef(false);
+
+  const filePath = input ? pickFilePath(input) : undefined;
+
+  // Auto-refresh file in IDEA when the component mounts for file-modifying tools
+  const isFileModifyingTool = ['write', 'write_to_file', 'save-file', 'notebook_edit'].includes(lowerName);
+  useEffect(() => {
+    if (filePath && isFileModifyingTool && !hasRefreshed.current) {
+      hasRefreshed.current = true;
+      refreshFile(filePath);
+    }
+  }, [filePath, isFileModifyingTool]);
 
   if (!input) {
     return null;
   }
 
-  const filePath = pickFilePath(input);
   const displayName = getToolDisplayName(t, name);
   const codicon = CODICON_MAP[(name ?? '').toLowerCase()] ?? 'codicon-tools';
 
