@@ -332,7 +332,12 @@
     "copyFile": "फ़ाइल कॉपी करें",
     "listFiles": "फ़ाइलें सूचीबद्ध करें",
     "findFile": "फ़ाइल खोजें",
-    "todoList": "कार्य सूची"
+    "todoList": "कार्य सूची",
+    "editFileTitle": "फ़ाइल संपादित करें",
+    "clickToOpen": "{{filePath}} खोलने के लिए क्लिक करें",
+    "showDiffInIdea": "IDEA में परिवर्तन दिखाएं",
+    "diffButton": "Diff",
+    "editPrefix": "संपादित करें: {{fileName}}"
   },
   "skills": {
     "title": "Skills",
