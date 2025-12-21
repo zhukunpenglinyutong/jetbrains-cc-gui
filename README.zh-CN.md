@@ -22,7 +22,7 @@
 
 ## 插件下载
 
-<iframe width="245px" height="48px" src="https://plugins.jetbrains.com/embeddable/install/29342" frameborder="0" style="border: none;"></iframe>
+[IDEA Claude Code GUI 下载](https://plugins.jetbrains.com/plugin/29342-claude-code-gui)
 
 ---
 

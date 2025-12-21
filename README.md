@@ -22,7 +22,7 @@ Currently in experimental stage, the product is not yet complete. Code is update
 
 ## Installation
 
-<iframe width="245px" height="48px" src="https://plugins.jetbrains.com/embeddable/install/29342" frameborder="0" style="border: none;"></iframe>
+[IDEA Claude Code GUI Installation](https://plugins.jetbrains.com/plugin/29342-claude-code-gui)
 
 ---
 
