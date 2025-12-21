@@ -170,7 +170,7 @@
         "apiKey": "API Key",
         "apiKeyPlaceholder": "sk-ant-...",
         "apiKeyHint": "请输入您的API Key",
-        "apiUrl": "请求地址 (API Endpoint)",
+        "apiUrl": "请求地址 (API Base URL)",
         "apiUrlPlaceholder": "https://api.anthropic.com",
         "apiUrlHint": "填写兼容 Claude API 的服务端口地址",
         "modelMapping": "模型映射（会注入到 JSON 的 env 里）",

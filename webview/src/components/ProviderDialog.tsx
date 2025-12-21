@@ -34,7 +34,7 @@ export default function ProviderDialog({
   const [remark, setRemark] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState('');
-  const [mainModel, setMainModel] = useState('');
+
   const [haikuModel, setHaikuModel] = useState('');
   const [sonnetModel, setSonnetModel] = useState('');
   const [opusModel, setOpusModel] = useState('');
@@ -75,7 +75,7 @@ export default function ProviderDialog({
         // 编辑模式下不填充默认值，避免覆盖用户实际使用的第三方代理 URL
         setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '');
         const env = provider.settingsConfig?.env || {};
-        setMainModel(env.ANTHROPIC_MODEL || '');
+
         setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
         setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
         setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
@@ -97,7 +97,7 @@ export default function ProviderDialog({
         setRemark('');
         setApiKey('');
         setApiUrl('');
-        setMainModel('');
+
         setHaikuModel('');
         setSonnetModel('');
         setOpusModel('');
@@ -143,11 +143,7 @@ export default function ProviderDialog({
     updateEnvField('ANTHROPIC_BASE_URL', newApiUrl);
   };
 
-  const handleMainModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setMainModel(value);
-    updateEnvField('ANTHROPIC_MODEL', value);
-  };
+
 
   const handleHaikuModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -189,11 +185,7 @@ export default function ProviderDialog({
         setApiUrl('');
       }
 
-      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_MODEL')) {
-        setMainModel(env.ANTHROPIC_MODEL || '');
-      } else {
-        setMainModel('');
-      }
+
 
       if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_DEFAULT_HAIKU_MODEL')) {
         setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
@@ -323,28 +315,6 @@ export default function ProviderDialog({
             <label>{t('settings.provider.dialog.modelMapping')}</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label htmlFor="mainModel">{t('settings.provider.dialog.mainModel')}</label>
-                <input
-                  id="mainModel"
-                  type="text"
-                  className="form-input"
-                  placeholder={t('settings.provider.dialog.mainModelPlaceholder')}
-                  value={mainModel}
-                  onChange={handleMainModelChange}
-                />
-              </div>
-              <div>
-                <label htmlFor="haikuModel">{t('settings.provider.dialog.haikuModel')}</label>
-                <input
-                  id="haikuModel"
-                  type="text"
-                  className="form-input"
-                  placeholder={t('settings.provider.dialog.haikuModelPlaceholder')}
-                  value={haikuModel}
-                  onChange={handleHaikuModelChange}
-                />
-              </div>
-              <div>
                 <label htmlFor="sonnetModel">{t('settings.provider.dialog.sonnetModel')}</label>
                 <input
                   id="sonnetModel"
@@ -364,6 +334,17 @@ export default function ProviderDialog({
                   placeholder={t('settings.provider.dialog.opusModelPlaceholder')}
                   value={opusModel}
                   onChange={handleOpusModelChange}
+                />
+              </div>
+              <div>
+                <label htmlFor="haikuModel">{t('settings.provider.dialog.haikuModel')}</label>
+                <input
+                  id="haikuModel"
+                  type="text"
+                  className="form-input"
+                  placeholder={t('settings.provider.dialog.haikuModelPlaceholder')}
+                  value={haikuModel}
+                  onChange={handleHaikuModelChange}
                 />
               </div>
             </div>
