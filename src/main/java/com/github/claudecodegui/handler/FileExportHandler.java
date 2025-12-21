@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
@@ -65,7 +66,7 @@ public class FileExportHandler extends BaseMessageHandler {
             LOG.info("[FileExportHandler] 文件名: " + filename);
 
             // 在 EDT 线程显示文件对话框并保存
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 try {
                     // 获取项目路径作为默认目录
                     String projectPath = context.getProject().getBasePath();
@@ -108,7 +109,7 @@ public class FileExportHandler extends BaseMessageHandler {
                                 LOG.info("[FileExportHandler] ✅ 文件保存成功: " + finalFileToSave.getAbsolutePath());
 
                                 // 通知前端成功
-                                SwingUtilities.invokeLater(() -> {
+                                ApplicationManager.getApplication().invokeLater(() -> {
                                     String jsCode = "if (window.addToast) { " +
                                         "  window.addToast('文件已保存', 'success'); " +
                                         "}";
@@ -119,7 +120,7 @@ public class FileExportHandler extends BaseMessageHandler {
                                 LOG.error("[FileExportHandler] ❌ 保存文件失败: " + e.getMessage(), e);
 
                                 // 通知前端失败
-                                SwingUtilities.invokeLater(() -> {
+                                ApplicationManager.getApplication().invokeLater(() -> {
                                     String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "保存失败");
                                     String jsCode = "if (window.addToast) { " +
                                         "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +
@@ -147,7 +148,7 @@ public class FileExportHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[FileExportHandler] ❌ 处理保存请求失败: " + e.getMessage(), e);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
                 String jsCode = "if (window.addToast) { " +
                     "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +

@@ -339,6 +339,7 @@ public class ClaudeSession {
         }
 
         this.lastModifiedTime = System.currentTimeMillis();
+        this.error = null;  // 清除之前的错误状态，避免重复显示
         this.busy = true;
         this.loading = true;  // 设置 loading 状态，前端显示"Claude 正在思考"
         updateState();
@@ -672,6 +673,7 @@ public class ClaudeSession {
                 } else {
                     claudeSDKBridge.interruptChannel(channelId);
                 }
+                this.error = null;  // 清除之前的错误状态
                 this.busy = false;
                 updateState();
             } catch (Exception e) {

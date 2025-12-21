@@ -395,18 +395,32 @@ public class CodemossSettingsService {
         }
 
         JsonObject settingsConfig = provider.getAsJsonObject("settingsConfig");
-        JsonObject claudeSettings = readClaudeSettings();
+        JsonObject oldClaudeSettings = readClaudeSettings();
 
-        // 同步所有 settingsConfig 中的字段到 claudeSettings
+        // 创建新的配置对象（完整替换，而不是合并）
+        JsonObject claudeSettings = new JsonObject();
+
+        // 1. 复制 settingsConfig 中的所有字段到新配置
         for (String key : settingsConfig.keySet()) {
-            if (settingsConfig.get(key).isJsonNull()) {
-                claudeSettings.remove(key);
-            } else {
+            if (!settingsConfig.get(key).isJsonNull()) {
                 claudeSettings.add(key, settingsConfig.get(key));
             }
         }
 
-        // 确保 codemossProviderId 字段存在
+        // 2. 保留系统字段（这些字段不应该被供应商配置覆盖）
+        // 保留 MCP 服务器配置
+        if (oldClaudeSettings.has("mcpServers")) {
+            claudeSettings.add("mcpServers", oldClaudeSettings.get("mcpServers"));
+        }
+        if (oldClaudeSettings.has("disabledMcpServers")) {
+            claudeSettings.add("disabledMcpServers", oldClaudeSettings.get("disabledMcpServers"));
+        }
+        // 保留 Skills/Plugins 配置
+        if (oldClaudeSettings.has("plugins")) {
+            claudeSettings.add("plugins", oldClaudeSettings.get("plugins"));
+        }
+
+        // 3. 添加供应商 ID 标识
         if (provider.has("id") && !provider.get("id").isJsonNull()) {
             claudeSettings.addProperty("codemossProviderId", provider.get("id").getAsString());
         }

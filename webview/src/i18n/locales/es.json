@@ -76,6 +76,14 @@
         "hint": "Ejecutar en terminal",
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "para obtener la ruta del ejecutable real de Node.js. Dejar vacío para detección automática."
+      },
+      "fontSize": {
+        "label": "Tamaño de fuente",
+        "level1": "Mínimo (80%)",
+        "level2": "Estándar (100%)",
+        "level3": "Más grande (110%)",
+        "level4": "Grande (120%)",
+        "level5": "Máximo (140%)"
       }
     },
     "providers": "Gestión de proveedores",
@@ -196,12 +204,26 @@
     "confirmDelete": "Confirmar eliminación",
     "deleteMessage": "��Estás seguro de que quieres eliminar esta sesión? Esta acción no se puede deshacer.",
     "deleteSession": "Eliminar esta sesión",
+    "exportSession": "Exportar sesión",
+    "exportSuccess": "Sesión exportada",
+    "exportFailed": "Falló la exportación",
+    "favoriteSession": "Marcar como favorito",
+    "unfavoriteSession": "Quitar favorito",
+    "favorited": "Marcado como favorito",
+    "unfavorited": "Favorito quitado",
     "loading": "Cargando historial...",
     "loadFailed": "Error al cargar",
     "noSessions": "Sin sesiones históricas",
     "noSessionsDesc": "No se encontraron registros de sesión de Claude en el proyecto actual",
     "totalSessions": "{{count}} sesiones · {{total}} mensajes",
     "messageCount": "{{count}} mensajes",
+    "searchPlaceholder": "Buscar título de sesión...",
+    "noSearchResults": "No se encontraron sesiones coincidentes",
+    "editTitle": "Editar título",
+    "saveTitleButton": "Guardar",
+    "cancelEditButton": "Cancelar",
+    "titleTooLong": "Título demasiado largo (máximo 50 caracteres)",
+    "titleUpdated": "Título actualizado",
     "timeAgo": {
       "yearsAgo": "hace años",
       "monthsAgo": "hace meses",
@@ -332,7 +354,12 @@
     "copyFile": "Copiar archivo",
     "listFiles": "Listar archivos",
     "findFile": "Buscar archivo",
-    "todoList": "Lista de tareas"
+    "todoList": "Lista de tareas",
+    "editFileTitle": "Editar archivo",
+    "clickToOpen": "Haga clic para abrir {{filePath}}",
+    "showDiffInIdea": "Mostrar cambios en IDEA",
+    "diffButton": "Diff",
+    "editPrefix": "Editar: {{fileName}}"
   },
   "skills": {
     "title": "Skills",

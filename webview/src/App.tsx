@@ -135,11 +135,28 @@ const App = () => {
     }
   };
 
-  // 初始化主题
+  // 初始化主题和字体缩放
   useEffect(() => {
+    // 初始化主题
     const savedTheme = localStorage.getItem('theme');
     const theme = (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
+
+    // 初始化字体缩放
+    const savedLevel = localStorage.getItem('fontSizeLevel');
+    const level = savedLevel ? parseInt(savedLevel, 10) : 2; // 默认档位 2 (100%)
+    const fontSizeLevel = (level >= 1 && level <= 5) ? level : 2;
+
+    // 将档位映射到缩放比例
+    const fontSizeMap: Record<number, number> = {
+      1: 0.8,   // 80%
+      2: 1.0,   // 100% (默认)
+      3: 1.1,   // 110%
+      4: 1.2,   // 120%
+      5: 1.4,   // 140%
+    };
+    const scale = fontSizeMap[fontSizeLevel] || 1.0;
+    document.documentElement.style.setProperty('--font-scale', scale.toString());
   }, []);
 
   // 从 LocalStorage 加载模型选择状态，并同步到后端
@@ -802,6 +819,68 @@ const App = () => {
     sendBridgeMessage('export_session', exportData);
   };
 
+  // 切换收藏状态
+  const toggleFavoriteSession = (sessionId: string) => {
+    // 发送收藏切换请求到后端
+    sendBridgeMessage('toggle_favorite', sessionId);
+
+    // 立即更新前端状态
+    if (historyData && historyData.sessions) {
+      const updatedSessions = historyData.sessions.map(session => {
+        if (session.sessionId === sessionId) {
+          const isFavorited = !session.isFavorited;
+          return {
+            ...session,
+            isFavorited,
+            favoritedAt: isFavorited ? Date.now() : undefined
+          };
+        }
+        return session;
+      });
+
+      setHistoryData({
+        ...historyData,
+        sessions: updatedSessions
+      });
+
+      // 显示提示
+      const session = historyData.sessions.find(s => s.sessionId === sessionId);
+      if (session?.isFavorited) {
+        addToast(t('history.unfavorited'), 'success');
+      } else {
+        addToast(t('history.favorited'), 'success');
+      }
+    }
+  };
+
+  // 更新会话标题
+  const updateHistoryTitle = (sessionId: string, newTitle: string) => {
+    // 发送更新标题请求到后端
+    const updateData = JSON.stringify({ sessionId, customTitle: newTitle });
+    sendBridgeMessage('update_title', updateData);
+
+    // 立即更新前端状态
+    if (historyData && historyData.sessions) {
+      const updatedSessions = historyData.sessions.map(session => {
+        if (session.sessionId === sessionId) {
+          return {
+            ...session,
+            title: newTitle
+          };
+        }
+        return session;
+      });
+
+      setHistoryData({
+        ...historyData,
+        sessions: updatedSessions
+      });
+
+      // 显示成功提示
+      addToast(t('history.titleUpdated'), 'success');
+    }
+  };
+
   // 文案本地化映射
   const localizeMessage = (text: string): string => {
     const messageMap: Record<string, string> = {
@@ -1309,6 +1388,8 @@ const App = () => {
           onLoadSession={loadHistorySession}
           onDeleteSession={deleteHistorySession}
           onExportSession={exportHistorySession}
+          onToggleFavorite={toggleFavoriteSession}
+          onUpdateTitle={updateHistoryTitle}
         />
       )}
 

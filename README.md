@@ -22,30 +22,20 @@ Currently in experimental stage, the product is not yet complete. Code is update
 
 ## Installation
 
-Plugin Download: [idea-claude-code-gui-0.1.0-beta1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/idea-claude-code-gui-0.1.0-beta1.zip)
-
-Plugin Installation Instructions
-
-```sh
-# 1. Download the idea-claude-code-gui-0.1.0-beta1.zip file
-
-# 2. IDEA - Settings - Plugins - Install Plugin from Disk - Select the downloaded idea-claude-code-gui-0.1.0-beta1.zip
-```
+<iframe width="245px" height="48px" src="https://plugins.jetbrains.com/embeddable/install/29342" frameborder="0" style="border: none;"></iframe>
 
 ---
 
 ### Current Progress
 
-##### **December 12 (v0.1.0-beta1)**
+##### **December 21 (v0.1.1)**
 
-- [x] P0 (feat) Added model mapping functionality (now you can easily configure various models, such as GLM, Deepseek, etc.)
-- [x] P0 (fix) Resolved configuration injection issue when ANTHROPIC_AUTH_TOKEN is set
-- [x] P1 (feat) Fixed issue with sending @ file paths
-- [x] P1 (fix) Fixed missing prompt when provider management import encounters errors
-- [x] P2 (feat) Added hover to view full path functionality
-- [x] P3 (fix) Fixed issue where files too long are not fully displayed
-- [x] P3 (fix) Updated some deprecated Java APIs
-- [x] P3 (ui) Modified some UI details
+- [x] Add font scaling feature
+- [x] Add DIFF comparison feature
+- [x] Add favorites feature
+- [x] Add title editing feature
+- [x] Add search history by title feature
+- [x] Fix alwaysThinkingEnabled configuration issue
 
 ---
 

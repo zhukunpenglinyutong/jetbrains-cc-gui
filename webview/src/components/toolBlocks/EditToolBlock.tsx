@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ToolInput } from '../../types';
-import { openFile } from '../../utils/bridge';
+import { openFile, showDiff, refreshFile } from '../../utils/bridge';
 import { getFileName } from '../../utils/helpers';
 import { getFileIcon } from '../../utils/fileIcons';
 import GenericToolBlock from './GenericToolBlock';
@@ -84,19 +85,29 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffResult {
 }
 
 const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const hasRefreshed = useRef(false);
+
+  const filePath =
+    (input?.file_path as string | undefined) ??
+    (input?.path as string | undefined) ??
+    (input?.target_file as string | undefined);
+
+  const oldString = (input?.old_string as string | undefined) ?? '';
+  const newString = (input?.new_string as string | undefined) ?? '';
+
+  // Auto-refresh file in IDEA when the component mounts (tool call completed)
+  useEffect(() => {
+    if (filePath && !hasRefreshed.current) {
+      hasRefreshed.current = true;
+      refreshFile(filePath);
+    }
+  }, [filePath]);
 
   if (!input) {
     return null;
   }
-
-  const filePath =
-    (input.file_path as string | undefined) ??
-    (input.path as string | undefined) ??
-    (input.target_file as string | undefined);
-
-  const oldString = (input.old_string as string | undefined) ?? '';
-  const newString = (input.new_string as string | undefined) ?? '';
 
   if (!oldString && !newString) {
     return <GenericToolBlock name={name} input={input} />;
@@ -115,6 +126,13 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
     }
   };
 
+  const handleShowDiff = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (filePath) {
+      showDiff(filePath, oldString, newString, t('tools.editPrefix', { fileName: getFileName(filePath) }));
+    }
+  };
+
   const getFileIconSvg = (path?: string) => {
     if (!path) return '';
     const name = getFileName(path);
@@ -129,12 +147,12 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
           <span className="codicon codicon-edit tool-title-icon" />
 
           <span className="tool-title-text">
-            编辑文件
+            {t('tools.editFileTitle')}
           </span>
           <span
             className="tool-title-summary clickable-file"
             onClick={handleFileClick}
-            title={`点击打开 ${filePath}`}
+            title={t('tools.clickToOpen', { filePath })}
             style={{ display: 'flex', alignItems: 'center' }}
           >
             <span 
@@ -160,13 +178,42 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
           )}
         </div>
 
-        <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--color-success)',
-            marginRight: '4px'
-        }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={handleShowDiff}
+            title={t('tools.showDiffInIdea')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '2px 6px',
+              fontSize: '11px',
+              color: 'var(--text-secondary)',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-primary)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--bg-hover)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--bg-tertiary)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
+          >
+            <span className="codicon codicon-diff" style={{ marginRight: '4px', fontSize: '12px' }} />
+            {t('tools.diffButton')}
+          </button>
+          <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--color-success)',
+          }} />
+        </div>
       </div>
 
       {expanded && (

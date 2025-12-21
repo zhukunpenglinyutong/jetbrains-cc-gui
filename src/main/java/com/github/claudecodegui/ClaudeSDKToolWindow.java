@@ -236,6 +236,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new SettingsHandler(handlerContext));
             messageDispatcher.registerHandler(new SessionHandler(handlerContext));
             messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
+            messageDispatcher.registerHandler(new DiffHandler(handlerContext));
 
             // 权限处理器（需要特殊回调）
             this.permissionHandler = new PermissionHandler(handlerContext);
@@ -525,7 +526,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     LOG.info("Saved manual Node.js path: " + manualPath);
                 }
 
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     mainPanel.removeAll();
                     createUIComponents();
                     mainPanel.revalidate();
@@ -597,7 +598,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void registerSessionLoadListener() {
             SessionLoadService.getInstance().setListener((sessionId, projectPath) -> {
-                SwingUtilities.invokeLater(() -> loadHistorySession(sessionId, projectPath));
+                ApplicationManager.getApplication().invokeLater(() -> loadHistorySession(sessionId, projectPath));
             });
         }
 
@@ -624,9 +625,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 ? projectPath : determineWorkingDirectory();
             session.setSessionInfo(sessionId, workingDir);
 
-            session.loadFromServer().thenRun(() -> SwingUtilities.invokeLater(() -> {}))
+            session.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {}))
                 .exceptionally(ex -> {
-                    SwingUtilities.invokeLater(() ->
+                    ApplicationManager.getApplication().invokeLater(() ->
                         callJavaScript("addErrorMessage", JsUtils.escapeJs("加载会话失败: " + ex.getMessage())));
                     return null;
                 });
@@ -636,7 +637,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             session.setCallback(new ClaudeSession.SessionCallback() {
                 @Override
                 public void onMessageUpdate(List<ClaudeSession.Message> messages) {
-                    SwingUtilities.invokeLater(() -> {
+                    ApplicationManager.getApplication().invokeLater(() -> {
                         String messagesJson = convertMessagesToJson(messages);
                         callJavaScript("updateMessages", JsUtils.escapeJs(messagesJson));
                     });
@@ -645,7 +646,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 @Override
                 public void onStateChange(boolean busy, boolean loading, String error) {
-                    SwingUtilities.invokeLater(() -> {
+                    ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("showLoading", String.valueOf(busy));
                         if (error != null) {
                             callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
@@ -663,12 +664,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 @Override
                 public void onPermissionRequested(PermissionRequest request) {
-                    SwingUtilities.invokeLater(() -> permissionHandler.showPermissionDialog(request));
+                    ApplicationManager.getApplication().invokeLater(() -> permissionHandler.showPermissionDialog(request));
                 }
 
                 @Override
                 public void onThinkingStatusChanged(boolean isThinking) {
-                    SwingUtilities.invokeLater(() -> {
+                    ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("showThinkingStatus", String.valueOf(isThinking));
                         LOG.debug("Thinking status changed: " + isThinking);
                     });
@@ -718,7 +719,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 fetchedSlashCommandsCount = commands.size();
                 slashCommandsFetched = true;
                 LOG.debug("Slash command cache listener triggered, count=" + commands.size());
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     try {
                         Gson gson = new Gson();
                         String commandsJson = gson.toJson(commands);
@@ -804,7 +805,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 usageUpdate.addProperty("maxTokens", maxTokens);
 
                 String usageJson = new Gson().toJson(usageUpdate);
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     if (browser != null && !disposed) {
                         // 使用安全的调用方式，检查函数是否存在
                         String js = "(function() {" +
@@ -854,7 +855,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 LOG.info("New session created successfully, working directory: " + workingDirectory);
 
                 // 更新前端状态
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("updateStatus", JsUtils.escapeJs("新会话已创建，可以开始提问"));
 
                     // 重置 Token 使用统计
@@ -883,7 +884,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 });
             }).exceptionally(ex -> {
                 LOG.error("Failed to create new session: " + ex.getMessage(), ex);
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("updateStatus", JsUtils.escapeJs("创建新会话失败: " + ex.getMessage()));
                 });
                 return null;
@@ -891,7 +892,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void interruptDueToPermissionDenial() {
-            this.session.interrupt().thenRun(() -> SwingUtilities.invokeLater(() -> {}));
+            this.session.interrupt().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {}));
         }
 
         /**
@@ -903,7 +904,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             if (this.disposed || this.browser == null) {
                 return;
             }
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 if (!this.disposed && this.browser != null) {
                     this.browser.getCefBrowser().executeJavaScript(jsCode, this.browser.getCefBrowser().getURL(), 0);
                 }
@@ -916,7 +917,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 if (disposed || browser == null) {
                     return;
                 }

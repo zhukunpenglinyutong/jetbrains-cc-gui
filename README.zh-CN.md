@@ -17,33 +17,25 @@
 > AI声明：本项目绝大部分代码由：Claude Code，Codex，Gemini，GLM生成；本人还在学习中，非佬
 
 <img width="850" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/2.png" />
+
 ---
 
+## 插件下载
 
-插件下载地址：[idea-claude-code-gui-0.1.0-beta1.zip](https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/idea-claude-code-gui-0.1.0-beta1.zip)
-
-插件使用方式
-
-```sh
-# 1.下载 idea-claude-code-gui-0.1.0-beta1.zip 文件
-
-# 2.IDEA - 设置 - 插件 - 从磁盘安装插件 - 选择下载的idea-claude-code-gui-0.1.0-beta1.zip 即可
-```
+<iframe width="245px" height="48px" src="https://plugins.jetbrains.com/embeddable/install/29342" frameborder="0" style="border: none;"></iframe>
 
 ---
 
 ### 目前进度
 
-##### **12月12日（v0.1.0-beta1）**
+##### **12月21日（v0.1.1）**
 
-- [x] P0（feat）增加了模型映射功能（现在可以方便配置各种模型了，例如GLM，Deepseek等等）
-- [x] P0（fix）解决在设置ANTHROPIC_AUTH_TOKEN下产生的配置未注入问题
-- [x] P1（feat）修复发送带@文件路径的问题
-- [x] P1（fix）修复供应商管理导入错误情况下，没有提示的问题
-- [x] P2（feat）增加悬停查看完整路径的功能
-- [x] P3（fix）修复文件太长展示不全的问题
-- [x] P3（fix）修改一些Java废弃的API
-- [x] P3（ui）修改了一些UI细节
+- [x] 增加字体缩放功能
+- [x] 增加DIFF对比功能
+- [x] 增加收藏功能
+- [x] 增加修改标题功能
+- [x] 增加根据标题搜索历史记录功能
+- [x] 修复 alwaysThinkingEnabled 失效问题
 
 ---
 

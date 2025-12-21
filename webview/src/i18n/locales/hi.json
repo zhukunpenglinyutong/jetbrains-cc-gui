@@ -76,6 +76,14 @@
         "hint": "टर्मिनल में चलाएं",
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "वास्तविक Node.js निष्पादन योग्य फ़ाइल पथ प्राप्त करें। खाली होने पर प्लगइन स्वचालित रूप से Node.js का पता लगाने का प्रयास करेगा।"
+      },
+      "fontSize": {
+        "label": "फ़ॉन्ट आकार",
+        "level1": "सबसे छोटा (80%)",
+        "level2": "मानक (100%)",
+        "level3": "बड़ा (110%)",
+        "level4": "अधिक बड़ा (120%)",
+        "level5": "सबसे बड़ा (140%)"
       }
     },
     "providers": "प्रदाता प्रबंधन",
@@ -196,12 +204,26 @@
     "confirmDelete": "हटाने की पुष्टि करें",
     "deleteMessage": "क्या आप इस सत्र को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।",
     "deleteSession": "इस सत्र को हटाएं",
+    "exportSession": "सत्र निर्यात करें",
+    "exportSuccess": "सत्र निर्यात किया गया",
+    "exportFailed": "निर्यात विफल",
+    "favoriteSession": "पसंदीदा में जोड़ें",
+    "unfavoriteSession": "पसंदीदा से हटाएं",
+    "favorited": "पसंदीदा में जोड़ा गया",
+    "unfavorited": "पसंदीदा से हटाया गया",
     "loading": "इतिहास लोड हो रहा है...",
     "loadFailed": "लोड विफल",
     "noSessions": "कोई इतिहास सत्र नहीं",
     "noSessionsDesc": "वर्तमान परियोजना में Claude सत्र रिकॉर्ड नहीं मिले",
     "totalSessions": "कुल {{count}} सत्र · {{total}} संदेश",
     "messageCount": "{{count}} संदेश",
+    "searchPlaceholder": "सत्र शीर्षक खोजें...",
+    "noSearchResults": "कोई मिलान सत्र नहीं मिला",
+    "editTitle": "शीर्षक संपादित करें",
+    "saveTitleButton": "सहेजें",
+    "cancelEditButton": "रद्द करें",
+    "titleTooLong": "शीर्षक बहुत लंबा (अधिकतम 50 वर्ण)",
+    "titleUpdated": "शीर्षक अपडेट किया गया",
     "timeAgo": {
       "yearsAgo": "साल पहले",
       "monthsAgo": "महीने पहले",
@@ -332,7 +354,12 @@
     "copyFile": "फ़ाइल कॉपी करें",
     "listFiles": "फ़ाइलें सूचीबद्ध करें",
     "findFile": "फ़ाइल खोजें",
-    "todoList": "कार्य सूची"
+    "todoList": "कार्य सूची",
+    "editFileTitle": "फ़ाइल संपादित करें",
+    "clickToOpen": "{{filePath}} खोलने के लिए क्लिक करें",
+    "showDiffInIdea": "IDEA में परिवर्तन दिखाएं",
+    "diffButton": "Diff",
+    "editPrefix": "संपादित करें: {{fileName}}"
   },
   "skills": {
     "title": "Skills",

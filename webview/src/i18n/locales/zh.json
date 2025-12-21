@@ -76,6 +76,14 @@
         "hint": "在终端中运行",
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "获取实际的 Node.js 可执行文件路径。为空时插件会自动尝试检测 Node.js。"
+      },
+      "fontSize": {
+        "label": "字体大小",
+        "level1": "最小（80%）",
+        "level2": "标准（100%）",
+        "level3": "较大（110%）",
+        "level4": "大（120%）",
+        "level5": "最大（140%）"
       }
     },
     "providers": "供应商管理",
@@ -162,7 +170,7 @@
         "apiKey": "API Key",
         "apiKeyPlaceholder": "sk-ant-...",
         "apiKeyHint": "请输入您的API Key",
-        "apiUrl": "请求地址 (API Endpoint)",
+        "apiUrl": "请求地址 (API Base URL)",
         "apiUrlPlaceholder": "https://api.anthropic.com",
         "apiUrlHint": "填写兼容 Claude API 的服务端口地址",
         "modelMapping": "模型映射（会注入到 JSON 的 env 里）",
@@ -199,12 +207,23 @@
     "exportSession": "导出会话",
     "exportSuccess": "会话已导出",
     "exportFailed": "导出失败",
+    "favoriteSession": "收藏会话",
+    "unfavoriteSession": "取消收藏",
+    "favorited": "已收藏",
+    "unfavorited": "已取消收藏",
     "loading": "加载历史记录中...",
     "loadFailed": "加载失败",
     "noSessions": "暂无历史会话",
     "noSessionsDesc": "当前项目下没有找到 Claude 会话记录",
     "totalSessions": "共 {{count}} 个会话 · {{total}} 条消息",
     "messageCount": "{{count}} 条消息",
+    "searchPlaceholder": "搜索会话标题...",
+    "noSearchResults": "未找到匹配的会话",
+    "editTitle": "编辑标题",
+    "saveTitleButton": "保存",
+    "cancelEditButton": "取消",
+    "titleTooLong": "标题过长（最多50个字符）",
+    "titleUpdated": "标题已更新",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "个月前",
@@ -336,7 +355,12 @@
     "copyFile": "复制文件",
     "listFiles": "列出文件",
     "findFile": "查找文件",
-    "todoList": "任务列表"
+    "todoList": "任务列表",
+    "editFileTitle": "编辑文件",
+    "clickToOpen": "点击打开 {{filePath}}",
+    "showDiffInIdea": "在 IDEA 中显示变更",
+    "diffButton": "Diff",
+    "editPrefix": "编辑: {{fileName}}"
   },
   "skills": {
     "title": "Skills",

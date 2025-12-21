@@ -1,5 +1,6 @@
 package com.github.claudecodegui.permission;
 
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.jcef.JBCefBrowser;
@@ -71,7 +72,7 @@ public class PermissionDialog extends DialogWrapper {
                 if (decisionCallback != null) {
                     decisionCallback.accept(decision);
                 }
-                SwingUtilities.invokeLater(() -> close(0));
+                ApplicationManager.getApplication().invokeLater(() -> close(0));
                 return null;
             }
             return null;

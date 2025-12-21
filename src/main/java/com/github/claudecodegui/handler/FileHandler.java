@@ -113,7 +113,7 @@ public class FileHandler extends BaseMessageHandler {
                 result.add("files", gson.toJsonTree(files));
                 String resultJson = gson.toJson(result);
 
-                SwingUtilities.invokeLater(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("window.onFileListResult", escapeJs(resultJson));
                 });
             } catch (Exception e) {
@@ -197,7 +197,7 @@ public class FileHandler extends BaseMessageHandler {
                             result.add("commands", gson.toJsonTree(commands));
                             String resultJson = gson.toJson(result);
 
-                            SwingUtilities.invokeLater(() -> {
+                            ApplicationManager.getApplication().invokeLater(() -> {
                                 String js = "if (window.onCommandListResult) { window.onCommandListResult('" + escapeJs(resultJson) + "'); }";
                                 context.executeJavaScriptOnEDT(js);
                             });
@@ -223,7 +223,7 @@ public class FileHandler extends BaseMessageHandler {
                             result.add("commands", gson.toJsonTree(commands));
                             String resultJson = gson.toJson(result);
 
-                            SwingUtilities.invokeLater(() -> {
+                            ApplicationManager.getApplication().invokeLater(() -> {
                                 String js = "if (window.onCommandListResult) { window.onCommandListResult('" + escapeJs(resultJson) + "'); }";
                                 context.executeJavaScriptOnEDT(js);
                             });
@@ -319,7 +319,7 @@ public class FileHandler extends BaseMessageHandler {
      * 打开浏览器
      */
     private void handleOpenBrowser(String url) {
-        SwingUtilities.invokeLater(() -> {
+        ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 BrowserUtil.browse(url);
             } catch (Exception e) {

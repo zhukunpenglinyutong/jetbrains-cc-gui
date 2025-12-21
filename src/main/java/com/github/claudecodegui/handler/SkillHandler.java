@@ -77,12 +77,12 @@ public class SkillHandler extends BaseMessageHandler {
             Gson gson = new Gson();
             String skillsJson = gson.toJson(skills);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateSkills", escapeJs(skillsJson));
             });
         } catch (Exception e) {
             LOG.error("[SkillHandler] Failed to get all skills: " + e.getMessage(), e);
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateSkills", escapeJs("{\"global\":{},\"local\":{}}"));
             });
         }
@@ -97,7 +97,7 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 JFileChooser chooser = new JFileChooser();
                 chooser.setDialogTitle("选择 Skill 文件或文件夹");
                 chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
@@ -117,7 +117,7 @@ public class SkillHandler extends BaseMessageHandler {
                             JsonObject importResult = SkillService.importSkills(paths, scope, workspaceRoot);
                             String resultJson = new Gson().toJson(importResult);
 
-                            SwingUtilities.invokeLater(() -> {
+                            ApplicationManager.getApplication().invokeLater(() -> {
                                 callJavaScript("window.skillImportResult", escapeJs(resultJson));
                             });
                         } catch (Exception e) {
@@ -125,7 +125,7 @@ public class SkillHandler extends BaseMessageHandler {
                             JsonObject errorResult = new JsonObject();
                             errorResult.addProperty("success", false);
                             errorResult.addProperty("error", e.getMessage());
-                            SwingUtilities.invokeLater(() -> {
+                            ApplicationManager.getApplication().invokeLater(() -> {
                                 callJavaScript("window.skillImportResult", escapeJs(new Gson().toJson(errorResult)));
                             });
                         }
@@ -152,7 +152,7 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject result = SkillService.deleteSkill(skillName, scope, enabled, workspaceRoot);
             String resultJson = gson.toJson(result);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillDeleteResult", escapeJs(resultJson));
             });
         } catch (Exception e) {
@@ -160,7 +160,7 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject errorResult = new JsonObject();
             errorResult.addProperty("success", false);
             errorResult.addProperty("error", e.getMessage());
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillDeleteResult", escapeJs(new Gson().toJson(errorResult)));
             });
         }
@@ -181,7 +181,7 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject result = SkillService.toggleSkill(skillName, scope, currentEnabled, workspaceRoot);
             String resultJson = gson.toJson(result);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillToggleResult", escapeJs(resultJson));
             });
         } catch (Exception e) {
@@ -189,7 +189,7 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject errorResult = new JsonObject();
             errorResult.addProperty("success", false);
             errorResult.addProperty("error", e.getMessage());
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillToggleResult", escapeJs(new Gson().toJson(errorResult)));
             });
         }

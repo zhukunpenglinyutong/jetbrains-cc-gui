@@ -33,38 +33,13 @@ export function setupApiKey() {
   let apiKeySource = 'default';
   let baseUrlSource = 'default';
 
-  // 🔥 统一配置优先级：系统环境变量 > settings.json
-  // 这样所有配置都遵循相同的优先级规则，避免混淆
-  if (settings?.env) {
-    console.log('[DEBUG] Loading environment variables from settings.json...');
-    const loadedVars = [];
+  // 🔥 配置优先级：只从 settings.json 读取，忽略系统环境变量
+  // 这样确保配置来源唯一，避免 shell 环境变量干扰
+  console.log('[DEBUG] Loading configuration from settings.json only (ignoring shell environment variables)...');
 
-    // 遍历所有环境变量并设置到 process.env
-    for (const [key, value] of Object.entries(settings.env)) {
-      // 只有当环境变量未被设置时才从配置文件读取（系统环境变量优先）
-      if (process.env[key] === undefined && value !== undefined && value !== null) {
-        process.env[key] = String(value);
-        loadedVars.push(key);
-      }
-    }
-
-    if (loadedVars.length > 0) {
-      console.log(`[DEBUG] Loaded ${loadedVars.length} environment variables:`, loadedVars.join(', '));
-    }
-  }
-
-  // 🔥 统一优先级：系统环境变量 > settings.json（与上面的通用逻辑一致）
   // 优先使用 ANTHROPIC_AUTH_TOKEN（Bearer 认证），回退到 ANTHROPIC_API_KEY（x-api-key 认证）
   // 这样可以兼容 Claude Code CLI 的两种认证方式
-  if (process.env.ANTHROPIC_AUTH_TOKEN) {
-    apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
-    authType = 'auth_token';  // Bearer 认证
-    apiKeySource = 'environment (ANTHROPIC_AUTH_TOKEN)';
-  } else if (process.env.ANTHROPIC_API_KEY) {
-    apiKey = process.env.ANTHROPIC_API_KEY;
-    authType = 'api_key';  // x-api-key 认证
-    apiKeySource = 'environment (ANTHROPIC_API_KEY)';
-  } else if (settings?.env?.ANTHROPIC_AUTH_TOKEN) {
+  if (settings?.env?.ANTHROPIC_AUTH_TOKEN) {
     apiKey = settings.env.ANTHROPIC_AUTH_TOKEN;
     authType = 'auth_token';  // Bearer 认证
     apiKeySource = 'settings.json (ANTHROPIC_AUTH_TOKEN)';
@@ -74,16 +49,13 @@ export function setupApiKey() {
     apiKeySource = 'settings.json (ANTHROPIC_API_KEY)';
   }
 
-  if (process.env.ANTHROPIC_BASE_URL) {
-    baseUrl = process.env.ANTHROPIC_BASE_URL;
-    baseUrlSource = 'environment';
-  } else if (settings?.env?.ANTHROPIC_BASE_URL) {
+  if (settings?.env?.ANTHROPIC_BASE_URL) {
     baseUrl = settings.env.ANTHROPIC_BASE_URL;
     baseUrlSource = 'settings.json';
   }
 
   if (!apiKey) {
-    console.error('[ERROR] API Key not configured. Please set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in environment or ~/.claude/settings.json');
+    console.error('[ERROR] API Key not configured. Please set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in ~/.claude/settings.json');
     throw new Error('API Key not configured');
   }
 

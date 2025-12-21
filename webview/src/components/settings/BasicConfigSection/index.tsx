@@ -24,6 +24,8 @@ const MoonIcon = () => (
 interface BasicConfigSectionProps {
   theme: 'light' | 'dark';
   onThemeChange: (theme: 'light' | 'dark') => void;
+  fontSizeLevel: number;
+  onFontSizeLevelChange: (level: number) => void;
   nodePath: string;
   onNodePathChange: (path: string) => void;
   onSaveNodePath: () => void;
@@ -33,6 +35,8 @@ interface BasicConfigSectionProps {
 const BasicConfigSection = ({
   theme,
   onThemeChange,
+  fontSizeLevel,
+  onFontSizeLevelChange,
   nodePath,
   onNodePathChange,
   onSaveNodePath,
@@ -129,6 +133,25 @@ const BasicConfigSection = ({
               {t(option.label)}
             </option>
           ))}
+        </select>
+      </div>
+
+      {/* 字体大小选择 */}
+      <div className={styles.fontSizeSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-text-size" />
+          <span className={styles.fieldLabel}>{t('settings.basic.fontSize.label')}</span>
+        </div>
+        <select
+          className={styles.fontSizeSelect}
+          value={fontSizeLevel}
+          onChange={(e) => onFontSizeLevelChange(Number(e.target.value))}
+        >
+          <option value={1}>{t('settings.basic.fontSize.level1')}</option>
+          <option value={2}>{t('settings.basic.fontSize.level2')}</option>
+          <option value={3}>{t('settings.basic.fontSize.level3')}</option>
+          <option value={4}>{t('settings.basic.fontSize.level4')}</option>
+          <option value={5}>{t('settings.basic.fontSize.level5')}</option>
         </select>
       </div>
 

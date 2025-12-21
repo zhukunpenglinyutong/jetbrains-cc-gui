@@ -76,6 +76,14 @@
         "hint": "Run in terminal",
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect."
+      },
+      "fontSize": {
+        "label": "Font Size",
+        "level1": "Smallest (80%)",
+        "level2": "Standard (100%)",
+        "level3": "Larger (110%)",
+        "level4": "Large (120%)",
+        "level5": "Largest (140%)"
       }
     },
     "providers": "Provider Management",
@@ -199,12 +207,23 @@
     "exportSession": "Export session",
     "exportSuccess": "Session exported",
     "exportFailed": "Export failed",
+    "favoriteSession": "Favorite session",
+    "unfavoriteSession": "Unfavorite session",
+    "favorited": "Favorited",
+    "unfavorited": "Unfavorited",
     "loading": "Loading history...",
     "loadFailed": "Load failed",
     "noSessions": "No history sessions",
     "noSessionsDesc": "No Claude session records found in current project",
     "totalSessions": "{{count}} sessions · {{total}} messages",
     "messageCount": "{{count}} messages",
+    "searchPlaceholder": "Search session titles...",
+    "noSearchResults": "No matching sessions found",
+    "editTitle": "Edit title",
+    "saveTitleButton": "Save",
+    "cancelEditButton": "Cancel",
+    "titleTooLong": "Title too long (max 50 characters)",
+    "titleUpdated": "Title updated",
     "timeAgo": {
       "yearsAgo": "years ago",
       "monthsAgo": "months ago",
@@ -336,7 +355,12 @@
     "copyFile": "Copy File",
     "listFiles": "List Files",
     "findFile": "Find File",
-    "todoList": "Todo List"
+    "todoList": "Todo List",
+    "editFileTitle": "Edit File",
+    "clickToOpen": "Click to open {{filePath}}",
+    "showDiffInIdea": "Show changes in IDEA",
+    "diffButton": "Diff",
+    "editPrefix": "Edit: {{fileName}}"
   },
   "skills": {
     "title": "Skills",

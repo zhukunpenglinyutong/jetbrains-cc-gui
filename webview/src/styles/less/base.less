@@ -18,11 +18,21 @@ html {
 }
 
 #app {
-    height: 100vh;
+    /* 
+     * 当使用 zoom 缩放时，容器的渲染尺寸会变大。
+     * 为了适应视口，我们需要反向调整容器的 CSS 尺寸。
+     * 例如：zoom: 1.2 (120%) 时，高度设置为 100vh / 1.2，
+     * 这样渲染出来的高度刚好是 100vh。
+     */
+    height: calc(100vh / var(--font-scale, 1));
+    width: calc(100vw / var(--font-scale, 1));
+    
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--border-primary);
     overflow: hidden;
+    /* 应用字体缩放 - 使用 zoom 属性缩放整个应用，包括所有 px 单位 */
+    zoom: var(--font-scale, 1);
 }
 
 /* Global Scrollbar Styles - Force Override */
