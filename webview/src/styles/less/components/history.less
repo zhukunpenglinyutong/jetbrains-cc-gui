@@ -144,3 +144,136 @@
     transform: scale(0.92);
     background-color: rgba(255, 59, 48, 0.25);
 }
+
+/* 编辑按钮样式 */
+.history-edit-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* 默认隐藏 */
+    line-height: 1;
+
+    .codicon {
+        font-size: 14px;
+    }
+}
+
+.history-item:hover .history-edit-btn {
+    opacity: 1; /* 鼠标悬停时显示 */
+}
+
+.history-edit-btn:hover {
+    background-color: rgba(10, 132, 255, 0.15);
+    color: #0a84ff; /* 蓝色表示编辑操作 */
+}
+
+.history-edit-btn:active {
+    transform: scale(0.92);
+    background-color: rgba(10, 132, 255, 0.25);
+}
+
+/* 标题编辑模式样式 */
+.history-title-edit-mode {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    margin-right: 16px;
+}
+
+/* 标题输入框样式 */
+.history-title-input {
+    flex: 1;
+    padding: 6px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid #0a84ff;
+    border-radius: 4px;
+    background-color: var(--color-history-hover);
+    color: var(--text-secondary);
+    outline: none;
+    transition: border-color 0.2s;
+
+    &:focus {
+        border-color: #0a84ff;
+        box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+    }
+}
+
+/* 保存按钮样式 */
+.history-title-save-btn {
+    background: transparent;
+    border: none;
+    color: #30d158; /* 绿色表示保存 */
+    cursor: pointer;
+    font-size: 16px;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+
+    .codicon {
+        font-size: 16px;
+    }
+}
+
+.history-title-save-btn:hover {
+    background-color: rgba(48, 209, 88, 0.15);
+}
+
+.history-title-save-btn:active {
+    transform: scale(0.92);
+    background-color: rgba(48, 209, 88, 0.25);
+}
+
+/* 取消按钮样式 */
+.history-title-cancel-btn {
+    background: transparent;
+    border: none;
+    color: #ff3b30; /* 红色表示取消 */
+    cursor: pointer;
+    font-size: 16px;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+
+    .codicon {
+        font-size: 16px;
+    }
+}
+
+.history-title-cancel-btn:hover {
+    background-color: rgba(255, 59, 48, 0.15);
+}
+
+.history-title-cancel-btn:active {
+    transform: scale(0.92);
+    background-color: rgba(255, 59, 48, 0.25);
+}
+
+/* 搜索框样式（已在组件中内联，这里添加额外的样式增强） */
+.history-search-input {
+    &:focus {
+        border-color: #0a84ff !important;
+        box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+    }
+
+    &::placeholder {
+        color: #666;
+    }
+}

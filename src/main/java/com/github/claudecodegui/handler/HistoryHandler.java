@@ -21,7 +21,8 @@ public class HistoryHandler extends BaseMessageHandler {
         "load_session",
         "delete_session",  // 新增:删除会话
         "export_session",  // 新增:导出会话
-        "toggle_favorite"  // 新增:切换收藏状态
+        "toggle_favorite", // 新增:切换收藏状态
+        "update_title"     // 新增:更新会话标题
     };
 
     // 会话加载回调接口
@@ -67,6 +68,10 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] 处理: toggle_favorite, sessionId=" + content);
                 handleToggleFavorite(content);
                 return true;
+            case "update_title":
+                LOG.info("[HistoryHandler] 处理: update_title");
+                handleUpdateTitle(content);
+                return true;
             default:
                 return false;
         }
@@ -87,7 +92,10 @@ public class HistoryHandler extends BaseMessageHandler {
                 // 加载收藏数据并合并到历史数据中
                 String enhancedJson = enhanceHistoryWithFavorites(historyJson);
 
-                String escapedJson = escapeJs(enhancedJson);
+                // 加载自定义标题并合并到历史数据中
+                String finalJson = enhanceHistoryWithTitles(enhancedJson);
+
+                String escapedJson = escapeJs(finalJson);
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "console.log('[Backend->Frontend] Starting to inject history data');" +
@@ -302,6 +310,52 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
+     * 更新会话标题
+     */
+    private void handleUpdateTitle(String content) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                LOG.info("[HistoryHandler] ========== 更新会话标题 ==========");
+
+                // 解析前端传来的JSON，获取 sessionId 和 customTitle
+                com.google.gson.JsonObject request = new com.google.gson.Gson().fromJson(content, com.google.gson.JsonObject.class);
+                String sessionId = request.get("sessionId").getAsString();
+                String customTitle = request.get("customTitle").getAsString();
+
+                LOG.info("[HistoryHandler] SessionId: " + sessionId);
+                LOG.info("[HistoryHandler] CustomTitle: " + customTitle);
+
+                // 调用 Node.js session-titles-service 更新标题
+                String result = callNodeJsTitlesServiceWithParams("updateTitle", sessionId, customTitle);
+                LOG.info("[HistoryHandler] 标题更新结果: " + result);
+
+                // 解析结果
+                com.google.gson.JsonObject resultObj = new com.google.gson.Gson().fromJson(result, com.google.gson.JsonObject.class);
+                boolean success = resultObj.get("success").getAsBoolean();
+
+                if (!success && resultObj.has("error")) {
+                    String error = resultObj.get("error").getAsString();
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        String jsCode = "if (window.addToast) { " +
+                            "  window.addToast('更新标题失败: " + escapeJs(error) + "', 'error'); " +
+                            "}";
+                        context.executeJavaScriptOnEDT(jsCode);
+                    });
+                }
+
+            } catch (Exception e) {
+                LOG.error("[HistoryHandler] ❌ 更新标题失败: " + e.getMessage(), e);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    String jsCode = "if (window.addToast) { " +
+                        "  window.addToast('更新标题失败: " + escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误") + "', 'error'); " +
+                        "}";
+                    context.executeJavaScriptOnEDT(jsCode);
+                });
+            }
+        });
+    }
+
+    /**
      * 增强历史数据：添加收藏信息到每个会话
      */
     private String enhanceHistoryWithFavorites(String historyJson) {
@@ -342,6 +396,45 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
+     * 增强历史数据：添加自定义标题到每个会话
+     */
+    private String enhanceHistoryWithTitles(String historyJson) {
+        try {
+            // 加载标题数据
+            String titlesJson = callNodeJsTitlesService("loadTitles", "", "");
+
+            // 解析历史数据和标题数据
+            com.google.gson.JsonObject history = new com.google.gson.Gson().fromJson(historyJson, com.google.gson.JsonObject.class);
+            com.google.gson.JsonObject titles = new com.google.gson.Gson().fromJson(titlesJson, com.google.gson.JsonObject.class);
+
+            // 为每个会话添加自定义标题
+            if (history.has("sessions") && history.get("sessions").isJsonArray()) {
+                com.google.gson.JsonArray sessions = history.getAsJsonArray("sessions");
+                for (int i = 0; i < sessions.size(); i++) {
+                    com.google.gson.JsonObject session = sessions.get(i).getAsJsonObject();
+                    String sessionId = session.get("sessionId").getAsString();
+
+                    if (titles.has(sessionId)) {
+                        com.google.gson.JsonObject titleInfo = titles.getAsJsonObject(sessionId);
+                        // 如果有自定义标题，则覆盖原始标题
+                        if (titleInfo.has("customTitle")) {
+                            String customTitle = titleInfo.get("customTitle").getAsString();
+                            session.addProperty("title", customTitle);
+                            session.addProperty("hasCustomTitle", true);
+                        }
+                    }
+                }
+            }
+
+            return new com.google.gson.Gson().toJson(history);
+
+        } catch (Exception e) {
+            LOG.warn("[HistoryHandler] ⚠️ 增强标题数据失败，返回原始数据: " + e.getMessage());
+            return historyJson;
+        }
+    }
+
+    /**
      * 调用 Node.js favorites-service
      */
     private String callNodeJsFavoritesService(String functionName, String sessionId) throws Exception {
@@ -358,6 +451,97 @@ public class HistoryHandler extends BaseMessageHandler {
             bridgePath.replace("\\", "\\\\"),
             functionName,
             sessionId
+        );
+
+        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+
+        // 读取输出
+        StringBuilder output = new StringBuilder();
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
+        }
+
+        // 返回最后一行（JSON 输出）
+        String[] lines = output.toString().split("\n");
+        return lines.length > 0 ? lines[lines.length - 1] : "{}";
+    }
+
+    /**
+     * 调用 Node.js session-titles-service（无参数版本，用于 loadTitles）
+     */
+    private String callNodeJsTitlesService(String functionName, String dummy1, String dummy2) throws Exception {
+        // 获取 ai-bridge 路径
+        String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
+        String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+
+        // 构建 Node.js 命令（loadTitles 不需要参数）
+        String nodeScript = String.format(
+            "const { %s } = require('%s/services/session-titles-service.cjs'); " +
+            "const result = %s(); " +
+            "console.log(JSON.stringify(result));",
+            functionName,
+            bridgePath.replace("\\", "\\\\"),
+            functionName
+        );
+
+        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+
+        // 读取输出
+        StringBuilder output = new StringBuilder();
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
+        }
+
+        // 返回最后一行（JSON 输出）
+        String[] lines = output.toString().split("\n");
+        return lines.length > 0 ? lines[lines.length - 1] : "{}";
+    }
+
+    /**
+     * 调用 Node.js session-titles-service（带参数版本，用于 updateTitle）
+     */
+    private String callNodeJsTitlesServiceWithParams(String functionName, String sessionId, String customTitle) throws Exception {
+        // 获取 ai-bridge 路径
+        String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
+        String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+
+        // 转义特殊字符
+        String escapedTitle = customTitle.replace("\\", "\\\\").replace("'", "\\'");
+
+        // 构建 Node.js 命令
+        String nodeScript = String.format(
+            "const { %s } = require('%s/services/session-titles-service.cjs'); " +
+            "const result = %s('%s', '%s'); " +
+            "console.log(JSON.stringify(result));",
+            functionName,
+            bridgePath.replace("\\", "\\\\"),
+            functionName,
+            sessionId,
+            escapedTitle
         );
 
         ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);

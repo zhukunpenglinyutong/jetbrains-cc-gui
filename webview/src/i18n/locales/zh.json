@@ -217,6 +217,13 @@
     "noSessionsDesc": "当前项目下没有找到 Claude 会话记录",
     "totalSessions": "共 {{count}} 个会话 · {{total}} 条消息",
     "messageCount": "{{count}} 条消息",
+    "searchPlaceholder": "搜索会话标题...",
+    "noSearchResults": "未找到匹配的会话",
+    "editTitle": "编辑标题",
+    "saveTitleButton": "保存",
+    "cancelEditButton": "取消",
+    "titleTooLong": "标题过长（最多50个字符）",
+    "titleUpdated": "标题已更新",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "个月前",

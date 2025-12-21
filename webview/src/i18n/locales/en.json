@@ -217,6 +217,13 @@
     "noSessionsDesc": "No Claude session records found in current project",
     "totalSessions": "{{count}} sessions · {{total}} messages",
     "messageCount": "{{count}} messages",
+    "searchPlaceholder": "Search session titles...",
+    "noSearchResults": "No matching sessions found",
+    "editTitle": "Edit title",
+    "saveTitleButton": "Save",
+    "cancelEditButton": "Cancel",
+    "titleTooLong": "Title too long (max 50 characters)",
+    "titleUpdated": "Title updated",
     "timeAgo": {
       "yearsAgo": "years ago",
       "monthsAgo": "months ago",

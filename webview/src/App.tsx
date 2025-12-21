@@ -853,6 +853,34 @@ const App = () => {
     }
   };
 
+  // 更新会话标题
+  const updateHistoryTitle = (sessionId: string, newTitle: string) => {
+    // 发送更新标题请求到后端
+    const updateData = JSON.stringify({ sessionId, customTitle: newTitle });
+    sendBridgeMessage('update_title', updateData);
+
+    // 立即更新前端状态
+    if (historyData && historyData.sessions) {
+      const updatedSessions = historyData.sessions.map(session => {
+        if (session.sessionId === sessionId) {
+          return {
+            ...session,
+            title: newTitle
+          };
+        }
+        return session;
+      });
+
+      setHistoryData({
+        ...historyData,
+        sessions: updatedSessions
+      });
+
+      // 显示成功提示
+      addToast(t('history.titleUpdated'), 'success');
+    }
+  };
+
   // 文案本地化映射
   const localizeMessage = (text: string): string => {
     const messageMap: Record<string, string> = {
@@ -1361,6 +1389,7 @@ const App = () => {
           onDeleteSession={deleteHistorySession}
           onExportSession={exportHistorySession}
           onToggleFavorite={toggleFavoriteSession}
+          onUpdateTitle={updateHistoryTitle}
         />
       )}
 
