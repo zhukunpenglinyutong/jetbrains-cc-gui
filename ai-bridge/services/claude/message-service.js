@@ -235,15 +235,29 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    console.log('[PERM_DEBUG] shouldUseCanUseTool:', shouldUseCanUseTool);
 	    console.log('[PERM_DEBUG] canUseTool function defined:', typeof canUseTool);
 
+	    // 🔧 从 settings.json 读取 Extended Thinking 配置
+	    const settings = loadClaudeSettings();
+	    const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? false;
+	    const configuredMaxThinkingTokens = settings?.maxThinkingTokens
+	      || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
+	      || 10000;
+
+	    // 根据配置决定是否启用 Extended Thinking
+	    // - 如果 alwaysThinkingEnabled 为 true，使用配置的 maxThinkingTokens 值
+	    // - 如果 alwaysThinkingEnabled 为 false，不设置 maxThinkingTokens（让 SDK 使用默认行为）
+	    const maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+
+	    console.log('[THINKING_DEBUG] alwaysThinkingEnabled:', alwaysThinkingEnabled);
+	    console.log('[THINKING_DEBUG] maxThinkingTokens:', maxThinkingTokens);
+
 	    const options = {
 	      cwd: workingDirectory,
 	      permissionMode: effectivePermissionMode,
 	      model: sdkModelName,
 	      maxTurns: 100,
-	      // 开启 Extended Thinking（扩展思考）功能
-	      // 设置思考过程的最大 token 数，这样 Claude 会在回复前先进行深度思考
+	      // Extended Thinking 配置（根据 settings.json 的 alwaysThinkingEnabled 决定）
 	      // 思考内容会通过 [THINKING] 标签输出给前端展示
-	      maxThinkingTokens: 10000,
+	      ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
 	      additionalDirectories: Array.from(
 	        new Set(
 	          [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
@@ -717,15 +731,30 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 
     // 注意：根据 SDK 文档，如果不指定 matcher，则该 Hook 会匹配所有工具
     // 这里统一使用一个全局 PreToolUse Hook，由 Hook 内部决定哪些工具自动放行
+
+    // 🔧 从 settings.json 读取 Extended Thinking 配置
+    const settings = loadClaudeSettings();
+    const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? false;
+    const configuredMaxThinkingTokens = settings?.maxThinkingTokens
+      || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
+      || 10000;
+
+    // 根据配置决定是否启用 Extended Thinking
+    // - 如果 alwaysThinkingEnabled 为 true，使用配置的 maxThinkingTokens 值
+    // - 如果 alwaysThinkingEnabled 为 false，不设置 maxThinkingTokens（让 SDK 使用默认行为）
+    const maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+
+    console.log('[THINKING_DEBUG] (withAttachments) alwaysThinkingEnabled:', alwaysThinkingEnabled);
+    console.log('[THINKING_DEBUG] (withAttachments) maxThinkingTokens:', maxThinkingTokens);
+
     const options = {
       cwd: workingDirectory,
       permissionMode: normalizedPermissionMode,
       model: sdkModelName,
       maxTurns: 100,
-      // 开启 Extended Thinking（扩展思考）功能
-      // 设置思考过程的最大 token 数，这样 Claude 会在回复前先进行深度思考
+      // Extended Thinking 配置（根据 settings.json 的 alwaysThinkingEnabled 决定）
       // 思考内容会通过 [THINKING] 标签输出给前端展示
-      maxThinkingTokens: 10000,
+      ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
       additionalDirectories: Array.from(
         new Set(
           [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
