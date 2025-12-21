@@ -51,9 +51,7 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
         ? env.ANTHROPIC_BASE_URL
         : null;
 
-    const envApiKey = process.env.ANTHROPIC_API_KEY ?? null;
-    const envBaseUrl = process.env.ANTHROPIC_BASE_URL ?? null;
-
+    // 注意：配置只从 settings.json 读取，不再检查 shell 环境变量
     let keySource = '未配置';
     let rawKey = null;
 
@@ -66,21 +64,16 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
       } else {
         keySource = '~/.claude/settings.json';
       }
-    } else if (envApiKey !== null) {
-      rawKey = String(envApiKey);
-      keySource = '环境变量 ANTHROPIC_API_KEY';
     }
 
     const keyPreview = rawKey && rawKey.length > 0
       ? `${rawKey.substring(0, 10)}...（长度 ${rawKey.length} 字符）`
       : '未配置（值为空或缺失）';
 
-		    let baseUrl = settingsBaseUrl || envBaseUrl || 'https://api.anthropic.com';
+		    let baseUrl = settingsBaseUrl || 'https://api.anthropic.com';
 		    let baseUrlSource;
 		    if (settingsBaseUrl) {
 		      baseUrlSource = '~/.claude/settings.json: ANTHROPIC_BASE_URL';
-		    } else if (envBaseUrl) {
-		      baseUrlSource = '环境变量 ANTHROPIC_BASE_URL';
 		    } else {
 		      baseUrlSource = '默认值（https://api.anthropic.com）';
 		    }

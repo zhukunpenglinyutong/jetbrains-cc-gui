@@ -250,7 +250,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 com.google.gson.JsonObject exportData = new com.google.gson.JsonObject();
                 exportData.addProperty("sessionId", sessionId);
                 exportData.addProperty("title", title);
-                exportData.add("messages", new com.google.gson.JsonParser().parse(messagesJson));
+                exportData.add("messages", com.google.gson.JsonParser.parseString(messagesJson));
 
                 String wrappedJson = new com.google.gson.Gson().toJson(exportData);
 

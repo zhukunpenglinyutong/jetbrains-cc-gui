@@ -1,10 +1,18 @@
+##### **12月21日（v0.1.0）**
+
+- [x] 增加字体缩放功能
+- [x] 增加DIFF对比功能
+- [x] 增加收藏功能
+- [x] 增加修改标题功能
+- [x] 增加根据标题搜索历史记录功能
+- [x] 修复 alwaysThinkingEnabled 失效问题
+
 ##### **12月18日（v0.1.0-beta4）**
 
 - [x] 解决 开启多个IDEA终端，权限弹窗 异常问题
 - [x] 支持消息导出功能 #hpstream
 - [x] 修复删除历史记录的某个小bug
 - [x] 整体优化部分逻辑代码 #gadfly3173e
-
 
 ##### **12月11日（v0.1.0）**
 
@@ -41,7 +49,6 @@
 <img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/5.png" />
 
 <img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/6.png" />
-
 
 ##### **12月2日（v0.0.8）**
 
