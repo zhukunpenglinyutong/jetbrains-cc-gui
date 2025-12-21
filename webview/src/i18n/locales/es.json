@@ -76,6 +76,14 @@
         "hint": "Ejecutar en terminal",
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "para obtener la ruta del ejecutable real de Node.js. Dejar vacío para detección automática."
+      },
+      "fontSize": {
+        "label": "Tamaño de fuente",
+        "level1": "Mínimo (80%)",
+        "level2": "Estándar (100%)",
+        "level3": "Más grande (110%)",
+        "level4": "Grande (120%)",
+        "level5": "Máximo (140%)"
       }
     },
     "providers": "Gestión de proveedores",

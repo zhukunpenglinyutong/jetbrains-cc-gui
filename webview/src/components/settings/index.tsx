@@ -81,6 +81,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
   });
 
+  // 字体缩放状态 (1-5，默认为 2，即 100%)
+  const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {
+    const savedLevel = localStorage.getItem('fontSizeLevel');
+    const level = savedLevel ? parseInt(savedLevel, 10) : 2;
+    return level >= 1 && level <= 5 ? level : 2;
+  });
+
   // Node.js 路径（手动指定时使用）
   const [nodePath, setNodePath] = useState('');
   const [savingNodePath, setSavingNodePath] = useState(false);
@@ -257,6 +264,25 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // 字体缩放处理
+  useEffect(() => {
+    // 将档位映射到缩放比例
+    const fontSizeMap: Record<number, number> = {
+      1: 0.8,   // 80%
+      2: 1.0,   // 100% (默认)
+      3: 1.1,   // 110%
+      4: 1.2,   // 120%
+      5: 1.4,   // 140%
+    };
+    const scale = fontSizeMap[fontSizeLevel] || 1.0;
+
+    // 应用到根元素
+    document.documentElement.style.setProperty('--font-scale', scale.toString());
+
+    // 保存到 localStorage
+    localStorage.setItem('fontSizeLevel', fontSizeLevel.toString());
+  }, [fontSizeLevel]);
+
   const loadProviders = () => {
     setLoading(true);
     sendToJava('get_providers:');
@@ -414,6 +440,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             <BasicConfigSection
               theme={theme}
               onThemeChange={setTheme}
+              fontSizeLevel={fontSizeLevel}
+              onFontSizeLevelChange={setFontSizeLevel}
               nodePath={nodePath}
               onNodePathChange={setNodePath}
               onSaveNodePath={handleSaveNodePath}

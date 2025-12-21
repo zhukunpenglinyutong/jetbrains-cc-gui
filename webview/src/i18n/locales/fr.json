@@ -76,6 +76,14 @@
         "hint": "Exécuter dans le terminal",
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "pour obtenir le chemin de l'exécutable Node.js réel. Laisser vide pour la détection automatique."
+      },
+      "fontSize": {
+        "label": "Taille de police",
+        "level1": "Minimale (80%)",
+        "level2": "Standard (100%)",
+        "level3": "Plus grande (110%)",
+        "level4": "Grande (120%)",
+        "level5": "Maximale (140%)"
       }
     },
     "providers": "Gestion des fournisseurs",

@@ -135,11 +135,28 @@ const App = () => {
     }
   };
 
-  // 初始化主题
+  // 初始化主题和字体缩放
   useEffect(() => {
+    // 初始化主题
     const savedTheme = localStorage.getItem('theme');
     const theme = (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
+
+    // 初始化字体缩放
+    const savedLevel = localStorage.getItem('fontSizeLevel');
+    const level = savedLevel ? parseInt(savedLevel, 10) : 2; // 默认档位 2 (100%)
+    const fontSizeLevel = (level >= 1 && level <= 5) ? level : 2;
+
+    // 将档位映射到缩放比例
+    const fontSizeMap: Record<number, number> = {
+      1: 0.8,   // 80%
+      2: 1.0,   // 100% (默认)
+      3: 1.1,   // 110%
+      4: 1.2,   // 120%
+      5: 1.4,   // 140%
+    };
+    const scale = fontSizeMap[fontSizeLevel] || 1.0;
+    document.documentElement.style.setProperty('--font-scale', scale.toString());
   }, []);
 
   // 从 LocalStorage 加载模型选择状态，并同步到后端

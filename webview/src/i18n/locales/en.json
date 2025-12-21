@@ -76,6 +76,14 @@
         "hint": "Run in terminal",
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect."
+      },
+      "fontSize": {
+        "label": "Font Size",
+        "level1": "Smallest (80%)",
+        "level2": "Standard (100%)",
+        "level3": "Larger (110%)",
+        "level4": "Large (120%)",
+        "level5": "Largest (140%)"
       }
     },
     "providers": "Provider Management",

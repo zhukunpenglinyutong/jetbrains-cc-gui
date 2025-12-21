@@ -76,6 +76,14 @@
         "hint": "在終端中執行",
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "獲取實際的 Node.js 可執行檔案路徑。為空時外掛會自動嘗試檢測 Node.js。"
+      },
+      "fontSize": {
+        "label": "字體大小",
+        "level1": "最小（80%）",
+        "level2": "標準（100%）",
+        "level3": "較大（110%）",
+        "level4": "大（120%）",
+        "level5": "最大（140%）"
       }
     },
     "providers": "供應商管理",
