@@ -478,6 +478,8 @@ public class ClaudeSDKBridge {
             final boolean[] hadSendError = {false};
             // 记录 Node.js 进程中最后一条错误日志，方便在 "Process exited with code" 时附加具体原因
             final String[] lastNodeError = {null};
+            // 记录 stderr 中的所有错误行，用于诊断
+            final StringBuilder stderrBuffer = new StringBuilder();
 
             try {
                 // 序列化附件
@@ -597,9 +599,20 @@ public class ClaudeSDKBridge {
                                 // 先捕获并输出 Node.js 侧的错误日志，便于在 IDE 日志中直接看到具体原因
                                 if (line.startsWith("[UNCAUGHT_ERROR]")
                                         || line.startsWith("[UNHANDLED_REJECTION]")
-                                        || line.startsWith("[COMMAND_ERROR]")) {
+                                        || line.startsWith("[COMMAND_ERROR]")
+                                        || line.startsWith("[SEND_ERROR]")
+                                        || line.startsWith("[API_ERROR]")
+                                        || line.contains("Error:")
+                                        || line.contains("error:")
+                                        || line.contains("ECONNREFUSED")
+                                        || line.contains("ETIMEDOUT")
+                                        || line.contains("ENOTFOUND")
+                                        || line.contains("socket hang up")
+                                        || line.contains("network")
+                                        || line.contains("timeout")) {
                                     LOG.warn("[Node.js ERROR] " + line);
                                     lastNodeError[0] = line;
+                                    stderrBuffer.append(line).append("\n");
                                 }
 
                                 // 打印权限/调试日志
@@ -689,17 +702,42 @@ public class ClaudeSDKBridge {
                             } else {
                                 String errorMsg = "Process exited with code: " + exitCode;
                                 
-                                // 针对 exitCode 1 (通常是环境配置问题) 提供更友好的提示
-                                if (exitCode == 1 && (lastNodeError[0] == null || lastNodeError[0].isEmpty())) {
-                                    String friendlyMsg = "Node环境配置错误，请前往设置页面检查 Node 路径配置。";
-                                    // 将友好提示放在最前面
-                                    errorMsg = friendlyMsg + " (" + errorMsg + ")";
+                                // 根据 lastNodeError 的内容智能判断错误类型
+                                String nodeErr = lastNodeError[0];
+                                if (nodeErr != null && !nodeErr.isEmpty()) {
+                                    // 网络相关错误
+                                    if (nodeErr.contains("ECONNREFUSED")
+                                            || nodeErr.contains("ETIMEDOUT")
+                                            || nodeErr.contains("ENOTFOUND")
+                                            || nodeErr.contains("socket hang up")
+                                            || nodeErr.contains("network")) {
+                                        String friendlyMsg = "网络连接失败，请检查网络连接和 API 配置。如果使用代理，请确保代理设置正确。";
+                                        errorMsg = friendlyMsg + "\n\n详细信息: " + nodeErr;
+                                    }
+                                    // API Key 相关错误
+                                    else if (nodeErr.contains("API")
+                                            || nodeErr.contains("authentication")
+                                            || nodeErr.contains("unauthorized")
+                                            || nodeErr.contains("401")
+                                            || nodeErr.contains("403")) {
+                                        String friendlyMsg = "API 认证失败，请检查 ~/.claude/settings.json 中的 API Key 配置。";
+                                        errorMsg = friendlyMsg + "\n\n详细信息: " + nodeErr;
+                                    }
+                                    // 其他错误，附加详细信息
+                                    else {
+                                        errorMsg = errorMsg + "\n\n详细信息: " + nodeErr;
+                                    }
+                                } else if (exitCode == 1) {
+                                    // exit code 1 但没有具体错误信息
+                                    String friendlyMsg = "Claude Code 进程异常退出。\n\n" +
+                                            "可能的原因：\n" +
+                                            "1. 网络连接不稳定\n" +
+                                            "2. API 配置问题（检查 ~/.claude/settings.json）\n" +
+                                            "3. Node.js 环境问题（检查设置页面的 Node 路径）\n\n" +
+                                            "建议：请在终端运行 'claude' 命令测试是否正常工作。";
+                                    errorMsg = friendlyMsg;
                                 }
 
-                                // 如果 Node.js 侧有明确的错误日志，将其附加到错误消息中，提升可读性
-                                if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
-                                    errorMsg = errorMsg + " | Last node error: " + lastNodeError[0];
-                                }
                                 result.success = false;
                                 result.error = errorMsg;
                                 callback.onError(errorMsg);

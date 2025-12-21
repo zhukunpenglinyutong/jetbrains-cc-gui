@@ -137,12 +137,14 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
     // 设置 API Key 并获取配置信息（包含认证类型）
-    const { baseUrl, authType, apiKeySource, baseUrlSource } = setupApiKey();
+    const { apiKey, baseUrl, authType, apiKeySource, baseUrlSource } = setupApiKey();
 
     // 检测是否使用自定义 Base URL
     if (isCustomBaseUrl(baseUrl)) {
       console.log('[DEBUG] Custom Base URL detected:', baseUrl);
-      console.log('[DEBUG] Will use system Claude CLI (not Anthropic SDK fallback)');
+      console.log('[DEBUG] Switching to Anthropic SDK fallback for third-party proxy support');
+      // 🔥 使用 Anthropic SDK 回退方案处理第三方代理
+      return await sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl, authType);
     }
 
     console.log('[DEBUG] sendMessage called with params:', {
@@ -586,7 +588,16 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
     // 设置 API Key 并获取配置信息（包含认证类型）
-    const { baseUrl, authType } = setupApiKey();
+    const { apiKey, baseUrl, authType } = setupApiKey();
+
+    // 检测是否使用自定义 Base URL
+    if (isCustomBaseUrl(baseUrl)) {
+      console.log('[DEBUG] Custom Base URL detected:', baseUrl);
+      // 🔥 第三方代理暂不支持附件，回退到纯文本模式
+      console.log('[DEBUG] Third-party proxy does not support attachments, falling back to text-only mode');
+      const textOnlyMessage = message + '\n\n[注意：当前使用第三方 API 代理，暂不支持图片附件功能，仅发送文本内容]';
+      return await sendMessageWithAnthropicSDK(textOnlyMessage, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl, authType);
+    }
 
     console.log('[MESSAGE_START]');
 
