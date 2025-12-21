@@ -405,8 +405,8 @@ export default function ProviderDialog({
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": ""
   },
-  "model": "opus",
-  "alwaysThinkingEnabled": false,
+  "model": "sonnet",
+  "alwaysThinkingEnabled": true,
   "ccSwitchProviderId": "default",
   "codemossProviderId": ""
 }`}

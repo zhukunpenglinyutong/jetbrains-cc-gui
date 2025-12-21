@@ -235,12 +235,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    console.log('[PERM_DEBUG] shouldUseCanUseTool:', shouldUseCanUseTool);
 	    console.log('[PERM_DEBUG] canUseTool function defined:', typeof canUseTool);
 
-	    // 🔧 从 settings.json 读取 Extended Thinking 配置
-	    const settings = loadClaudeSettings();
-	    const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? false;
-	    const configuredMaxThinkingTokens = settings?.maxThinkingTokens
-	      || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
-	      || 10000;
+    // 🔧 从 settings.json 读取 Extended Thinking 配置
+    const settings = loadClaudeSettings();
+    const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? true;
+    const configuredMaxThinkingTokens = settings?.maxThinkingTokens
+      || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
+      || 10000;
 
 	    // 根据配置决定是否启用 Extended Thinking
 	    // - 如果 alwaysThinkingEnabled 为 true，使用配置的 maxThinkingTokens 值
@@ -734,7 +734,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 
     // 🔧 从 settings.json 读取 Extended Thinking 配置
     const settings = loadClaudeSettings();
-    const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? false;
+    const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? true;
     const configuredMaxThinkingTokens = settings?.maxThinkingTokens
       || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
       || 10000;
