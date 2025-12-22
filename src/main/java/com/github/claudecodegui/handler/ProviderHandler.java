@@ -7,6 +7,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.vfs.VirtualFile;
 
 import javax.swing.*;
 import java.io.File;
@@ -31,6 +34,7 @@ public class ProviderHandler extends BaseMessageHandler {
         "switch_provider",
         "get_active_provider",
         "preview_cc_switch_import",
+        "open_file_chooser_for_cc_switch",
         "save_imported_providers"
     };
 
@@ -69,6 +73,9 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "preview_cc_switch_import":
                 handlePreviewCcSwitchImport();
+                return true;
+            case "open_file_chooser_for_cc_switch":
+                handleOpenFileChooserForCcSwitch();
                 return true;
             case "save_imported_providers":
                 handleSaveImportedProviders(content);
@@ -278,7 +285,7 @@ public class ProviderHandler extends BaseMessageHandler {
             if (!dbFile.exists()) {
                 String errorMsg = "未找到 cc-switch 数据库文件\n" +
                                  "路径: " + dbFile.getAbsolutePath() + "\n" +
-                                 "请确保:\n" +
+                                 "您可以主动选择cc-switch.db文件进行导入，或者检查：:\n" +
                                  "1. 已安装 cc-switch 3.8.2 及以上版本\n" +
                                  "2. 至少配置过一个 Claude 供应商";
                 LOG.error("[ProviderHandler] " + errorMsg);
@@ -316,6 +323,118 @@ public class ProviderHandler extends BaseMessageHandler {
                     sendErrorToFrontend("读取数据库失败", errorDetails);
                 }
             });
+        });
+    }
+
+    /**
+     * 打开文件选择器选择 cc-switch 数据库文件
+     */
+    private void handleOpenFileChooserForCcSwitch() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                // 创建文件选择器描述符
+                FileChooserDescriptor descriptor = new FileChooserDescriptor(
+                    true,   // chooseFiles - 允许选择文件
+                    false,  // chooseFolders - 不允许选择文件夹
+                    false,  // chooseJars - 不允许选择 JAR
+                    false,  // chooseJarsAsFiles - 不将 JAR 当作文件
+                    false,  // chooseJarContents - 不允许选择 JAR 内容
+                    false   // chooseMultiple - 不允许多选
+                );
+
+                descriptor.setTitle("选择 cc-switch 数据库文件");
+                descriptor.setDescription("请选择 cc-switch.db 或其副本文件");
+                descriptor.withFileFilter(file -> {
+                    String name = file.getName().toLowerCase();
+                    return name.endsWith(".db");
+                });
+
+                // 设置默认路径为用户主目录下的 .cc-switch
+                String userHome = System.getProperty("user.home");
+                File defaultDir = new File(userHome, ".cc-switch");
+                VirtualFile defaultVirtualFile = null;
+                if (defaultDir.exists()) {
+                    defaultVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+                        .findFileByPath(defaultDir.getAbsolutePath());
+                }
+
+                LOG.info("[ProviderHandler] 打开文件选择器，默认目录: " +
+                    (defaultVirtualFile != null ? defaultVirtualFile.getPath() : "用户主目录"));
+
+                // 打开文件选择器
+                VirtualFile[] selectedFiles = FileChooser.chooseFiles(
+                    descriptor,
+                    context.getProject(),
+                    defaultVirtualFile
+                );
+
+                if (selectedFiles.length == 0) {
+                    LOG.info("[ProviderHandler] 用户取消了文件选择");
+                    sendInfoToFrontend("已取消", "未选择文件");
+                    return;
+                }
+
+                VirtualFile selectedFile = selectedFiles[0];
+                String dbPath = selectedFile.getPath();
+                File dbFile = new File(dbPath);
+
+                LOG.info("[ProviderHandler] 用户选择的数据库文件路径: " + dbFile.getAbsolutePath());
+                LOG.info("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
+
+                if (!dbFile.exists()) {
+                    String errorMsg = "未找到数据库文件\n" +
+                                     "路径: " + dbFile.getAbsolutePath();
+                    LOG.error("[ProviderHandler] " + errorMsg);
+                    sendErrorToFrontend("文件未找到", errorMsg);
+                    return;
+                }
+
+                if (!dbFile.canRead()) {
+                    String errorMsg = "无法读取文件\n" +
+                                     "路径: " + dbFile.getAbsolutePath() + "\n" +
+                                     "请检查文件权限";
+                    LOG.error("[ProviderHandler] " + errorMsg);
+                    sendErrorToFrontend("权限错误", errorMsg);
+                    return;
+                }
+
+                // 异步读取数据库
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        LOG.info("[ProviderHandler] 开始读取用户选择的数据库文件...");
+                        Gson gson = new Gson();
+                        List<JsonObject> providers = context.getSettingsService().parseProvidersFromCcSwitchDb(dbFile.getPath());
+
+                        if (providers.isEmpty()) {
+                            LOG.info("[ProviderHandler] 数据库中没有找到 Claude 供应商配置");
+                            sendInfoToFrontend("无数据", "未在数据库中找到有效的 Claude 供应商配置。");
+                            return;
+                        }
+
+                        JsonArray providersArray = new JsonArray();
+                        for (JsonObject p : providers) {
+                            providersArray.add(p);
+                        }
+
+                        JsonObject response = new JsonObject();
+                        response.add("providers", providersArray);
+
+                        String jsonStr = gson.toJson(response);
+                        LOG.info("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
+                        callJavaScript("import_preview_result", jsonStr);
+
+                    } catch (Exception e) {
+                        String errorDetails = "读取数据库失败: " + e.getMessage();
+                        LOG.error("[ProviderHandler] " + errorDetails, e);
+                        sendErrorToFrontend("读取数据库失败", errorDetails);
+                    }
+                });
+
+            } catch (Exception e) {
+                String errorDetails = "打开文件选择器失败: " + e.getMessage();
+                LOG.error("[ProviderHandler] " + errorDetails, e);
+                sendErrorToFrontend("文件选择失败", errorDetails);
+            }
         });
     }
 

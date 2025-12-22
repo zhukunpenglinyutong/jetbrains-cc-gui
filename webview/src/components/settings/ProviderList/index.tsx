@@ -131,33 +131,40 @@ export default function ProviderList({
       //   - 再次导入 cc-switch 时，因为 ID 相同，还是会匹配到并提示"更新"。
       //   - 覆盖更新后，source 字段又回来了。
       // 所以，如果要彻底"断开"，我们需要修改 ID。
-      
+
       const oldId = convertingProvider.id;
       const newId = `${oldId}_local`; // 或者用 uuid，这里简单加后缀以示区分
-      
+
       // 2. 构造新配置
-      const newProvider = { 
+      const newProvider = {
           ...convertingProvider,
           id: newId,
           name: convertingProvider.name + ' (Local)', // 可选：修改名称避免混淆
       };
       delete newProvider.source;
-      
+
       // 3. 保存新配置（作为新增）
       sendToJava('add_provider', newProvider);
-      
+
       // 4. 删除旧配置
       sendToJava('delete_provider', { id: oldId });
-      
+
       setConvertingProvider(null);
       addToast(t('settings.provider.convertSuccess'), 'success');
-      
+
       if (editingCcSwitchProvider && editingCcSwitchProvider.id === convertingProvider.id) {
           setEditingCcSwitchProvider(null);
           // 继续编辑新的 provider
           onEdit(newProvider);
       }
     }
+  };
+
+  const handleSelectFileClick = () => {
+    setImportMenuOpen(false);
+    setIsImporting(true);
+    // 让后端打开系统文件选择器，这样可以获取正确的绝对路径
+    sendToJava('open_file_chooser_for_cc_switch');
   };
 
   return (
@@ -291,6 +298,13 @@ export default function ProviderList({
                 </div>
                 <div
                   className={styles.importMenuItem}
+                  onClick={handleSelectFileClick}
+                >
+                  <span className="codicon codicon-file" />
+                  {t('settings.provider.importFromCcSwitchFile')}
+                </div>
+                {/* <div
+                  className={styles.importMenuItem}
                   onClick={() => {
                     setImportMenuOpen(false);
                     addToast(t('settings.provider.featureComingSoon'), 'info');
@@ -308,7 +322,7 @@ export default function ProviderList({
                 >
                   <span className="codicon codicon-arrow-swap" />
                   {t('settings.provider.importFromClaudeRouter')}
-                </div>
+                </div> */}
               </div>
             )}
           </div>

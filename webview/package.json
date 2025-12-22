@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@lobehub/icons": "^2.43.1",
+    "antd": "^6.1.1",
     "i18next": "^25.7.2",
     "marked": "^17.0.1",
     "react": "^19.2.0",

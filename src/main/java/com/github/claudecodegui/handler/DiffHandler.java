@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.util.EditorFileUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -8,15 +9,11 @@ import com.intellij.diff.DiffManager;
 import com.intellij.diff.contents.DiffContent;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -105,44 +102,13 @@ public class DiffHandler extends BaseMessageHandler {
                     }
 
                     final File finalFile = file;
-                    final String canonicalPath;
-                    try {
-                        canonicalPath = finalFile.getCanonicalPath();
-                    } catch (Exception e) {
-                        LOG.error("Failed to get canonical path: " + filePath, e);
-                        return;
-                    }
 
-                    // 使用 ReadAction.nonBlocking() 在后台线程中查找文件
-                    ReadAction
-                        .nonBlocking(() -> {
-                            // 先强制刷新本地文件系统
-                            LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath);
-                            // 再次查找文件
-                            VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath);
-                            if (vf == null) {
-                                // 回退到使用 File 对象查找
-                                vf = LocalFileSystem.getInstance().findFileByIoFile(finalFile);
-                            }
-                            return vf;
-                        })
-                        .finishOnUiThread(ModalityState.nonModal(), virtualFile -> {
-                            // 在 UI 线程中执行刷新操作
-                            if (virtualFile == null) {
-                                LOG.warn("Could not find virtual file: " + filePath + ", retrying...");
-                                // 重试：在 UI 线程中再次刷新并查找
-                                VirtualFile retryVf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath);
-                                if (retryVf != null) {
-                                    performFileRefresh(retryVf, filePath);
-                                } else {
-                                    LOG.error("Failed to refresh file after retry: " + filePath);
-                                }
-                                return;
-                            }
-
-                            performFileRefresh(virtualFile, filePath);
-                        })
-                        .submit(AppExecutorUtil.getAppExecutorService());
+                    // 使用工具类方法异步刷新并查找文件
+                    EditorFileUtils.refreshAndFindFileAsync(
+                            finalFile,
+                            virtualFile -> performFileRefresh(virtualFile, filePath),
+                            () -> LOG.error("Failed to refresh file: " + filePath)
+                    );
 
                 } catch (Exception e) {
                     LOG.error("Failed to refresh file: " + filePath, e);
@@ -236,8 +202,7 @@ public class DiffHandler extends BaseMessageHandler {
                     if (afterContent == null) {
                         File file = new File(filePath);
                         if (file.exists()) {
-                            VirtualFile virtualFile = LocalFileSystem.getInstance()
-                                .refreshAndFindFileByPath(file.getCanonicalPath());
+                            VirtualFile virtualFile = EditorFileUtils.refreshAndFindFileSync(file);
                             if (virtualFile != null) {
                                 virtualFile.refresh(false, false);
                                 afterContent = new String(virtualFile.contentsToByteArray(), StandardCharsets.UTF_8);
