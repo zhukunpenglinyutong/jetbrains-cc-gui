@@ -130,6 +130,7 @@
       "allProviders": "All Providers",
       "import": "Import",
       "importFromCcSwitchUpdate": "Import/Update from cc-switch",
+      "importFromCcSwitchFile": "Select cc-switch.db File to Import",
       "importFromCcSwitchCli": "Import/Update from cc-switch CLI",
       "importFromClaudeRouter": "Import/Update from Claude Code Router",
       "featureComingSoon": "Feature not yet implemented, coming soon",

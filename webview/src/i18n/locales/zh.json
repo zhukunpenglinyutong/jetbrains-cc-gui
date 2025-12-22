@@ -130,6 +130,7 @@
       "allProviders": "所有供应商",
       "import": "导入",
       "importFromCcSwitchUpdate": "从cc-switch导入/更新",
+      "importFromCcSwitchFile": "选择 cc-switch.db 文件导入",
       "importFromCcSwitchCli": "从cc-switch CLI导入/更新",
       "importFromClaudeRouter": "从Claude Code Router导入/更新",
       "featureComingSoon": "功能暂未实现，敬请期待",
