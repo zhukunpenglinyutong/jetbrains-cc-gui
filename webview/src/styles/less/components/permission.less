@@ -396,6 +396,12 @@
     font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
     font-size: 12px;
     color: #e0e0e0;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 8px;
 }
 
 .permission-dialog-v3-command-header .command-arrow {
@@ -495,4 +501,38 @@
 .permission-dialog-v3-option.selected .option-key {
     color: #666666;
     background: rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 450px) {
+    .permission-dialog-v3 {
+        min-width: unset;
+        width: 92%;
+        max-width: 95%;
+        padding: 12px;
+        margin: 0 auto;
+    }
+
+    .permission-dialog-v3-title {
+        font-size: 14px;
+    }
+
+    .permission-dialog-v3-subtitle {
+        margin-bottom: 10px;
+    }
+
+    .permission-dialog-v3-command-box {
+        margin-bottom: 10px;
+    }
+
+    .permission-dialog-v3-command-header {
+        padding: 8px 10px;
+    }
+
+    .permission-dialog-v3-command-content {
+        padding: 8px 10px;
+    }
+
+    .permission-dialog-v3-option {
+        padding: 8px 10px;
+    }
 }
