@@ -1,18 +1,14 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.util.EditorFileUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.ide.BrowserUtil;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.ide.BrowserUtil;
-import com.intellij.util.concurrency.AppExecutorUtil;
 
-import javax.swing.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -268,46 +264,21 @@ public class FileHandler extends BaseMessageHandler {
                 }
 
                 final File finalFile = file;
-                final String canonicalPath;
-                try {
-                    canonicalPath = finalFile.getCanonicalPath();
-                } catch (Exception e) {
-                    LOG.error("无法获取规范路径: " + filePath, e);
-                    return;
-                }
 
-                // 使用 ReadAction.nonBlocking() 在后台线程中查找文件
-                ReadAction
-                    .nonBlocking(() -> {
-                        // 在后台线程中查找文件（这是慢操作）
-                        // 先尝试刷新文件系统以确保能找到新创建的文件
-                        VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath);
-                        if (vf == null) {
-                            // 回退到使用 File 对象查找
-                            vf = LocalFileSystem.getInstance().findFileByIoFile(finalFile);
-                        }
-                        return vf;
-                    })
-                    .finishOnUiThread(ModalityState.nonModal(), virtualFile -> {
-                        // 在 UI 线程中打开文件
-                        if (virtualFile == null) {
-                            LOG.warn("无法获取 VirtualFile: " + filePath + ", 尝试使用规范路径: " + canonicalPath);
-                            // 最后尝试：在 UI 线程中再次刷新并查找
-                            VirtualFile retryVf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath);
-                            if (retryVf != null) {
-                                FileEditorManager.getInstance(context.getProject()).openFile(retryVf, true);
-                                LOG.info("重试成功打开文件: " + filePath);
-                            } else {
-                                LOG.error("最终无法获取 VirtualFile: " + filePath);
-                                callJavaScript("addErrorMessage", escapeJs("无法打开文件: " + filePath));
-                            }
-                            return;
-                        }
-
-                        FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
-                        LOG.info("成功打开文件: " + filePath);
-                    })
-                    .submit(AppExecutorUtil.getAppExecutorService());
+                // 使用工具类方法异步刷新并查找文件
+                EditorFileUtils.refreshAndFindFileAsync(
+                        finalFile,
+                        virtualFile -> {
+                            // 成功找到文件，在编辑器中打开
+                            FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
+                            LOG.info("成功打开文件: " + filePath);
+                        },
+                        () -> {
+                            // 失败回调
+                            LOG.error("最终无法获取 VirtualFile: " + filePath);
+                        callJavaScript("addErrorMessage", escapeJs("无法打开文件: " + filePath));
+                    }
+                );
 
             } catch (Exception e) {
                 LOG.error("打开文件失败: " + e.getMessage(), e);
