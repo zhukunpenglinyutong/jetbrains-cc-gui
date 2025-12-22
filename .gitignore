@@ -66,3 +66,4 @@ webview/src/version/version.ts
 .sandbox/
 logs/*.log
 .intellijPlatform/
+/.idea/

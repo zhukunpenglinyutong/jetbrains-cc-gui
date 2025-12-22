@@ -27,7 +27,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_provider",
         "get_node_path",
         "set_node_path",
-        "get_usage_statistics"
+        "get_usage_statistics",
+        "get_working_directory",
+        "set_working_directory"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -66,6 +68,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "get_usage_statistics":
                 handleGetUsageStatistics(content);
+                return true;
+            case "get_working_directory":
+                handleGetWorkingDirectory();
+                return true;
+            case "set_working_directory":
+                handleSetWorkingDirectory(content);
                 return true;
             default:
                 return false;
@@ -313,6 +321,94 @@ public class SettingsHandler extends BaseMessageHandler {
                 });
             }
         });
+    }
+
+    /**
+     * 获取工作目录配置
+     */
+    private void handleGetWorkingDirectory() {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.updateWorkingDirectory", "{}");
+                });
+                return;
+            }
+
+            com.github.claudecodegui.CodemossSettingsService settingsService =
+                new com.github.claudecodegui.CodemossSettingsService();
+            String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
+
+            Gson gson = new Gson();
+            JsonObject response = new JsonObject();
+            response.addProperty("projectPath", projectPath);
+            response.addProperty("customWorkingDir", customWorkingDir != null ? customWorkingDir : "");
+
+            String json = gson.toJson(response);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateWorkingDirectory", escapeJs(json));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get working directory: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("获取工作目录配置失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 设置工作目录配置
+     */
+    private void handleSetWorkingDirectory(String content) {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("无法获取项目路径"));
+                });
+                return;
+            }
+
+            Gson gson = new Gson();
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String customWorkingDir = null;
+
+            if (json != null && json.has("customWorkingDir") && !json.get("customWorkingDir").isJsonNull()) {
+                customWorkingDir = json.get("customWorkingDir").getAsString();
+            }
+
+            // 验证自定义工作目录是否存在
+            if (customWorkingDir != null && !customWorkingDir.trim().isEmpty()) {
+                java.io.File workingDirFile = new java.io.File(customWorkingDir);
+                if (!workingDirFile.isAbsolute()) {
+                    workingDirFile = new java.io.File(projectPath, customWorkingDir);
+                }
+
+                if (!workingDirFile.exists() || !workingDirFile.isDirectory()) {
+                    final String errorPath = workingDirFile.getAbsolutePath();
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.showError", escapeJs("工作目录不存在: " + errorPath));
+                    });
+                    return;
+                }
+            }
+
+            com.github.claudecodegui.CodemossSettingsService settingsService =
+                new com.github.claudecodegui.CodemossSettingsService();
+            settingsService.setCustomWorkingDirectory(projectPath, customWorkingDir);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showSuccess", escapeJs("工作目录配置已保存"));
+            });
+
+            LOG.info("[SettingsHandler] Set custom working directory: " + customWorkingDir);
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set working directory: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("保存工作目录配置失败: " + e.getMessage()));
+            });
+        }
     }
 
     /**
