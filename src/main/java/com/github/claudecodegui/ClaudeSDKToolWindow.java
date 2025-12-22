@@ -604,12 +604,41 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private String determineWorkingDirectory() {
             String projectPath = project.getBasePath();
-            if (projectPath != null && new File(projectPath).exists()) {
-                return projectPath;
+
+            // 如果项目路径无效，回退到用户主目录
+            if (projectPath == null || !new File(projectPath).exists()) {
+                String userHome = System.getProperty("user.home");
+                LOG.warn("Using user home directory as fallback: " + userHome);
+                return userHome;
             }
-            String userHome = System.getProperty("user.home");
-            LOG.warn("Using user home directory as fallback: " + userHome);
-            return userHome;
+
+            // 尝试从配置中读取自定义工作目录
+            try {
+                CodemossSettingsService settingsService = new CodemossSettingsService();
+                String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
+
+                if (customWorkingDir != null && !customWorkingDir.isEmpty()) {
+                    // 如果是相对路径，拼接到项目根路径
+                    File workingDirFile = new File(customWorkingDir);
+                    if (!workingDirFile.isAbsolute()) {
+                        workingDirFile = new File(projectPath, customWorkingDir);
+                    }
+
+                    // 验证目录是否存在
+                    if (workingDirFile.exists() && workingDirFile.isDirectory()) {
+                        String resolvedPath = workingDirFile.getAbsolutePath();
+                        LOG.info("Using custom working directory: " + resolvedPath);
+                        return resolvedPath;
+                    } else {
+                        LOG.warn("Custom working directory does not exist: " + workingDirFile.getAbsolutePath() + ", falling back to project root");
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to read custom working directory: " + e.getMessage());
+            }
+
+            // 默认使用项目根路径
+            return projectPath;
         }
 
         private void loadHistorySession(String sessionId, String projectPath) {

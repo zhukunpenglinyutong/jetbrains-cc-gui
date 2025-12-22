@@ -301,6 +301,74 @@ public class CodemossSettingsService {
         return config;
     }
 
+    /**
+     * 获取自定义工作目录配置
+     * @param projectPath 项目根路径
+     * @return 自定义工作目录，如果未配置则返回 null
+     */
+    public String getCustomWorkingDirectory(String projectPath) throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("workingDirectories") || config.get("workingDirectories").isJsonNull()) {
+            return null;
+        }
+
+        JsonObject workingDirs = config.getAsJsonObject("workingDirectories");
+
+        if (workingDirs.has(projectPath) && !workingDirs.get(projectPath).isJsonNull()) {
+            return workingDirs.get(projectPath).getAsString();
+        }
+
+        return null;
+    }
+
+    /**
+     * 设置自定义工作目录
+     * @param projectPath 项目根路径
+     * @param customWorkingDir 自定义工作目录（相对于项目根路径或绝对路径）
+     */
+    public void setCustomWorkingDirectory(String projectPath, String customWorkingDir) throws IOException {
+        JsonObject config = readConfig();
+
+        // 确保 workingDirectories 节点存在
+        if (!config.has("workingDirectories")) {
+            config.add("workingDirectories", new JsonObject());
+        }
+
+        JsonObject workingDirs = config.getAsJsonObject("workingDirectories");
+
+        if (customWorkingDir == null || customWorkingDir.trim().isEmpty()) {
+            // 如果传入空值，移除配置
+            workingDirs.remove(projectPath);
+        } else {
+            // 设置自定义工作目录
+            workingDirs.addProperty(projectPath, customWorkingDir.trim());
+        }
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set custom working directory for " + projectPath + ": " + customWorkingDir);
+    }
+
+    /**
+     * 获取所有工作目录配置
+     * @return Map<projectPath, customWorkingDir>
+     */
+    public Map<String, String> getAllWorkingDirectories() throws IOException {
+        Map<String, String> result = new HashMap<>();
+        JsonObject config = readConfig();
+
+        if (!config.has("workingDirectories") || config.get("workingDirectories").isJsonNull()) {
+            return result;
+        }
+
+        JsonObject workingDirs = config.getAsJsonObject("workingDirectories");
+        for (String key : workingDirs.keySet()) {
+            result.put(key, workingDirs.get(key).getAsString());
+        }
+
+        return result;
+    }
+
     private JsonObject extractEnvConfig(JsonObject provider) {
         if (provider == null ||
             !provider.has("settingsConfig") ||

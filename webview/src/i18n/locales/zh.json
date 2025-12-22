@@ -77,6 +77,11 @@
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "获取实际的 Node.js 可执行文件路径。为空时插件会自动尝试检测 Node.js。"
       },
+      "workingDirectory": {
+        "label": "工作目录",
+        "placeholder": "例如 project1 或留空使用项目根目录",
+        "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
+      },
       "fontSize": {
         "label": "字体大小",
         "level1": "最小（80%）",

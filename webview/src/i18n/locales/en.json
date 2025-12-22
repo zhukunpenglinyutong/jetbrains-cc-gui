@@ -77,6 +77,11 @@
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect."
       },
+      "workingDirectory": {
+        "label": "Working Directory",
+        "placeholder": "e.g. project1 or leave empty to use project root",
+        "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
+      },
       "fontSize": {
         "label": "Font Size",
         "level1": "Smallest (80%)",

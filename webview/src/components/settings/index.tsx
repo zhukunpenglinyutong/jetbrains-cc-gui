@@ -92,6 +92,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   const [nodePath, setNodePath] = useState('');
   const [savingNodePath, setSavingNodePath] = useState(false);
 
+  // 工作目录配置
+  const [workingDirectory, setWorkingDirectory] = useState('');
+  const [savingWorkingDirectory, setSavingWorkingDirectory] = useState(false);
+
   // Toast 状态管理
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -196,6 +200,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       console.log('[SettingsView] window.showError called:', message);
       showAlert('error', '操作失败', message);
       setLoading(false);
+      setSavingNodePath(false);
+      setSavingWorkingDirectory(false);
     };
 
     window.showSwitchSuccess = (message: string) => {
@@ -209,12 +215,33 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       setSavingNodePath(false);
     };
 
+    window.updateWorkingDirectory = (jsonStr: string) => {
+      console.log('[SettingsView] window.updateWorkingDirectory called:', jsonStr);
+      try {
+        const data = JSON.parse(jsonStr);
+        setWorkingDirectory(data.customWorkingDir || '');
+        setSavingWorkingDirectory(false);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse working directory:', error);
+        setSavingWorkingDirectory(false);
+      }
+    };
+
+    window.showSuccess = (message: string) => {
+      console.log('[SettingsView] window.showSuccess called:', message);
+      showAlert('success', '操作成功', message);
+      setSavingNodePath(false);
+      setSavingWorkingDirectory(false);
+    };
+
     // 加载供应商列表
     loadProviders();
     // 加载 Claude CLI 当前配置
     loadClaudeConfig();
     // 加载 Node.js 路径
     sendToJava('get_node_path:');
+    // 加载工作目录配置
+    sendToJava('get_working_directory:');
 
     return () => {
       window.updateProviders = undefined;
@@ -223,6 +250,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       window.showError = undefined;
       window.showSwitchSuccess = undefined;
       window.updateNodePath = undefined;
+      window.updateWorkingDirectory = undefined;
+      window.showSuccess = undefined;
     };
   }, []);
 
@@ -297,6 +326,12 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setSavingNodePath(true);
     const payload = { path: (nodePath || '').trim() };
     sendToJava(`set_node_path:${JSON.stringify(payload)}`);
+  };
+
+  const handleSaveWorkingDirectory = () => {
+    setSavingWorkingDirectory(true);
+    const payload = { customWorkingDir: (workingDirectory || '').trim() };
+    sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
   };
 
   const handleEditProvider = (provider: ProviderConfig) => {
@@ -446,6 +481,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
               onNodePathChange={setNodePath}
               onSaveNodePath={handleSaveNodePath}
               savingNodePath={savingNodePath}
+              workingDirectory={workingDirectory}
+              onWorkingDirectoryChange={setWorkingDirectory}
+              onSaveWorkingDirectory={handleSaveWorkingDirectory}
+              savingWorkingDirectory={savingWorkingDirectory}
             />
           )}
 

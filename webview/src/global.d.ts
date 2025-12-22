@@ -155,6 +155,16 @@ interface Window {
   updateNodePath?: (path: string) => void;
 
   /**
+   * Update working directory configuration
+   */
+  updateWorkingDirectory?: (json: string) => void;
+
+  /**
+   * Show success message
+   */
+  showSuccess?: (message: string) => void;
+
+  /**
    * Update skills list
    */
   updateSkills?: (json: string) => void;
