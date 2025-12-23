@@ -8,7 +8,6 @@ import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
-import javax.swing.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -242,7 +241,7 @@ public class SettingsHandler extends BaseMessageHandler {
         String usageJson = new Gson().toJson(usageUpdate);
 
         // 推送到前端（必须在 EDT 线程中执行）
-        SwingUtilities.invokeLater(() -> {
+        ApplicationManager.getApplication().invokeLater(() -> {
             if (context.getBrowser() != null && !context.isDisposed()) {
                 String js = "(function() {" +
                         "  if (typeof window.onUsageUpdate === 'function') {" +
