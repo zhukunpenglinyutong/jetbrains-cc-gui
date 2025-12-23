@@ -419,44 +419,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             "};";
                         cefBrowser.executeJavaScript(clipboardPathInjection, cefBrowser.getURL(), 0);
 
-                        // 将控制台日志转发到 IDEA 控制台（异步，避免阻塞 UI）
+                        // 将控制台日志转发到 IDEA 控制台
                         String consoleForward =
                             "const originalLog = console.log;" +
                             "const originalError = console.error;" +
                             "const originalWarn = console.warn;" +
-                            "const _consoleQueue = [];" +
-                            "let _consoleFlushScheduled = false;" +
-                            "function _flushConsoleQueue() {" +
-                            "  _consoleFlushScheduled = false;" +
-                            "  if (_consoleQueue.length === 0) return;" +
-                            "  const batch = _consoleQueue.splice(0, _consoleQueue.length);" +
-                            "  batch.forEach(function(item) {" +
-                            "    try { window.sendToJava(JSON.stringify(item)); } catch(e) {}" +
-                            "  });" +
-                            "}" +
-                            "function _scheduleConsoleFlush() {" +
-                            "  if (_consoleFlushScheduled) return;" +
-                            "  _consoleFlushScheduled = true;" +
-                            "  if (typeof requestIdleCallback !== 'undefined') {" +
-                            "    requestIdleCallback(_flushConsoleQueue, {timeout: 100});" +
-                            "  } else {" +
-                            "    setTimeout(_flushConsoleQueue, 16);" +
-                            "  }" +
-                            "}" +
                             "console.log = function(...args) {" +
                             "  originalLog.apply(console, args);" +
-                            "  _consoleQueue.push({type: 'console.log', args: args});" +
-                            "  _scheduleConsoleFlush();" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.log', args: args}));" +
                             "};" +
                             "console.error = function(...args) {" +
                             "  originalError.apply(console, args);" +
-                            "  _consoleQueue.push({type: 'console.error', args: args});" +
-                            "  _scheduleConsoleFlush();" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.error', args: args}));" +
                             "};" +
                             "console.warn = function(...args) {" +
                             "  originalWarn.apply(console, args);" +
-                            "  _consoleQueue.push({type: 'console.warn', args: args});" +
-                            "  _scheduleConsoleFlush();" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.warn', args: args}));" +
                             "};";
                         cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
 

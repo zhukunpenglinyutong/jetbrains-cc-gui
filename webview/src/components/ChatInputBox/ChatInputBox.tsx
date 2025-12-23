@@ -58,8 +58,6 @@ export const ChatInputBox = ({
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
   const lastCompositionEndTimeRef = useRef<number>(0);
-  // 输入防抖计时器
-  const inputDebounceTimerRef = useRef<number | null>(null);
 
   // 路径映射：存储文件名/相对路径 -> 完整绝对路径的映射
   // 用于在 tooltip 中显示完整路径
@@ -468,9 +466,8 @@ export const ChatInputBox = ({
 
   /**
    * 检测并处理补全触发
-   * @param text - 可选的文本内容，如果不传则会调用 getTextContent()
    */
-  const detectAndTriggerCompletion = useCallback((text?: string) => {
+  const detectAndTriggerCompletion = useCallback(() => {
     if (!editableRef.current) return;
 
     // 如果刚刚渲染了文件标签,跳过这次补全检测
@@ -481,10 +478,10 @@ export const ChatInputBox = ({
       return;
     }
 
-    const currentText = text ?? getTextContent();
+    const text = getTextContent();
     const cursorPos = getCursorPosition(editableRef.current);
     // 传递 element 参数以便 detectTrigger 可以跳过文件标签
-    const trigger = detectTrigger(currentText, cursorPos, editableRef.current);
+    const trigger = detectTrigger(text, cursorPos, editableRef.current);
 
     // 关闭当前打开的补全
     if (!trigger) {
@@ -525,34 +522,21 @@ export const ChatInputBox = ({
   ]);
 
   /**
-   * 处理输入事件（带防抖）
-   * 对于补全检测和父组件通知使用防抖，避免频繁计算
+   * 处理输入事件
    */
   const handleInput = useCallback(() => {
-    // 立即更新 hasContent 状态（用于 UI 响应）
-    if (editableRef.current) {
-      const hasText = editableRef.current.textContent?.trim();
-      setHasContent(!!hasText);
-    }
+    const text = getTextContent();
+    const isEmpty = !text.trim();
+    setHasContent(!isEmpty);
 
     // 调整高度
     adjustHeight();
 
-    // 清除之前的防抖计时器
-    if (inputDebounceTimerRef.current) {
-      clearTimeout(inputDebounceTimerRef.current);
-    }
+    // 检测补全触发
+    detectAndTriggerCompletion();
 
-    // 防抖执行补全检测和父组件通知
-    inputDebounceTimerRef.current = window.setTimeout(() => {
-      const text = getTextContent();
-
-      // 检测补全触发
-      detectAndTriggerCompletion(text);
-
-      // 通知父组件
-      onInput?.(text);
-    }, 16); // 约 60fps，保证流畅性
+    // 通知父组件
+    onInput?.(text);
   }, [getTextContent, adjustHeight, detectAndTriggerCompletion, onInput]);
 
   /**
@@ -1393,13 +1377,6 @@ export const ChatInputBox = ({
     return () => {
       if (editableRef.current) {
         editableRef.current.removeEventListener('keydown', handleKeyDown);
-      }
-      // 清理防抖计时器
-      if (inputDebounceTimerRef.current) {
-        clearTimeout(inputDebounceTimerRef.current);
-      }
-      if (compositionTimeoutRef.current) {
-        clearTimeout(compositionTimeoutRef.current);
       }
       delete (window as any).handleFilePathFromJava;
       delete (window as any).insertCodeSnippetAtCursor;
