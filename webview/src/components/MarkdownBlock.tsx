@@ -1,6 +1,25 @@
 import { marked } from 'marked';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { openBrowser, openFile } from '../utils/bridge';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github-dark.css';
+import { markedHighlight } from 'marked-highlight';
+
+// 配置 marked 使用语法高亮
+marked.use(
+  markedHighlight({
+    highlight(code: string, lang: string) {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(code, { language: lang }).value;
+        } catch (err) {
+          console.error('[MarkdownBlock] Highlight error:', err);
+        }
+      }
+      return hljs.highlightAuto(code).value;
+    },
+  })
+);
 
 marked.setOptions({
   breaks: false,
@@ -13,6 +32,8 @@ interface MarkdownBlockProps {
 
 const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const html = useMemo(() => {
     try {
       // 去除内容末尾的换行符，避免产生额外空白
@@ -55,6 +76,7 @@ const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
   return (
     <>
       <div
+        ref={containerRef}
         className="markdown-content"
         dangerouslySetInnerHTML={{ __html: html }}
         onClick={handleClick}
