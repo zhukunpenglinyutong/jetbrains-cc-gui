@@ -160,6 +160,7 @@ const BasicConfigSection = ({
           <option value={3}>{t('settings.basic.fontSize.level3')}</option>
           <option value={4}>{t('settings.basic.fontSize.level4')}</option>
           <option value={5}>{t('settings.basic.fontSize.level5')}</option>
+          <option value={6}>{t('settings.basic.fontSize.level6')}</option>
         </select>
       </div>
 

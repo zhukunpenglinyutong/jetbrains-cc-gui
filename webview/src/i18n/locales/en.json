@@ -84,11 +84,12 @@
       },
       "fontSize": {
         "label": "Font Size",
-        "level1": "Smallest (80%)",
-        "level2": "Standard (100%)",
-        "level3": "Larger (110%)",
-        "level4": "Large (120%)",
-        "level5": "Largest (140%)"
+        "level1": "Small (80%)",
+        "level2": "Smaller (90%)",
+        "level3": "Standard (100%)",
+        "level4": "Larger (110%)",
+        "level5": "Large (120%)",
+        "level6": "Largest (140%)"
       }
     },
     "providers": "Provider Management",

@@ -144,16 +144,17 @@ const App = () => {
 
     // 初始化字体缩放
     const savedLevel = localStorage.getItem('fontSizeLevel');
-    const level = savedLevel ? parseInt(savedLevel, 10) : 2; // 默认档位 2 (100%)
-    const fontSizeLevel = (level >= 1 && level <= 5) ? level : 2;
+    const level = savedLevel ? parseInt(savedLevel, 10) : 3; // 默认档位 3 (100%)
+    const fontSizeLevel = (level >= 1 && level <= 6) ? level : 3;
 
     // 将档位映射到缩放比例
     const fontSizeMap: Record<number, number> = {
       1: 0.8,   // 80%
-      2: 1.0,   // 100% (默认)
-      3: 1.1,   // 110%
-      4: 1.2,   // 120%
-      5: 1.4,   // 140%
+      2: 0.9,   // 90%
+      3: 1.0,   // 100% (默认)
+      4: 1.1,   // 110%
+      5: 1.2,   // 120%
+      6: 1.4,   // 140%
     };
     const scale = fontSizeMap[fontSizeLevel] || 1.0;
     document.documentElement.style.setProperty('--font-scale', scale.toString());
@@ -1101,12 +1102,63 @@ const App = () => {
     return [];
   };
 
+  // 合并相邻的 Assistant 消息，解决历史记录中 Thinking 和 ToolUse 分离导致样式不一致的问题
+  const mergedMessages = useMemo(() => {
+    // 先过滤不需要显示的消息
+    const visible = messages.filter(shouldShowMessage);
+    if (visible.length === 0) return [];
+
+    const result: ClaudeMessage[] = [];
+    let current: ClaudeMessage | null = null;
+
+    for (const msg of visible) {
+      if (!current) {
+        current = msg;
+        continue;
+      }
+
+      if (current.type === 'assistant' && msg.type === 'assistant') {
+        // 合并逻辑
+        const blocks1 = normalizeBlocks(current.raw) || [];
+        const blocks2 = normalizeBlocks(msg.raw) || [];
+        const combinedBlocks = [...blocks1, ...blocks2];
+
+        // 构建新的 raw 对象
+        const newRaw: ClaudeRawMessage = {
+          ...(typeof current.raw === 'object' ? current.raw : {}),
+          content: combinedBlocks
+        };
+        
+        // 如果原始消息有 message.content，也需要更新它以保持一致性
+        if (newRaw.message && newRaw.message.content) {
+            newRaw.message.content = combinedBlocks;
+        }
+
+        const content1: string = current.content || '';
+        const content2: string = msg.content || '';
+        const newContent: string = (content1 && content2) ? `${content1}\n${content2}` : (content1 || content2);
+
+        current = {
+          ...current,
+          content: newContent,
+          raw: newRaw,
+        };
+      } else {
+        result.push(current);
+        current = msg;
+      }
+    }
+    if (current) result.push(current);
+    return result;
+  }, [messages]);
+
   const findToolResult = (toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') {
       return null;
     }
-    for (let i = messageIndex + 1; i < messages.length; i += 1) {
-      const candidate = messages[i];
+    // 使用 mergedMessages 进行查找
+    for (let i = messageIndex + 1; i < mergedMessages.length; i += 1) {
+      const candidate = mergedMessages[i];
       if (candidate.type !== 'user') {
         continue;
       }
@@ -1114,7 +1166,8 @@ const App = () => {
       if (!raw || typeof raw === 'string') {
         continue;
       }
-      const content = raw.content;
+      // 兼容 raw.content 和 raw.message.content
+      const content = raw.content ?? raw.message?.content;
       if (!Array.isArray(content)) {
         continue;
       }
@@ -1248,10 +1301,8 @@ const App = () => {
             </div>
           )}
 
-          {messages.map((message, messageIndex) => {
-            if (!shouldShowMessage(message)) {
-              return null;
-            }
+          {mergedMessages.map((message, messageIndex) => {
+            // mergedMessages 已经过滤了不显示的消息
 
             return (
               <div key={messageIndex} className={`message ${message.type}`}>

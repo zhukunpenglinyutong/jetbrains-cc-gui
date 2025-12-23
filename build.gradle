@@ -10,7 +10,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.2-beta1'
+version = '0.1.2-beta2'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
