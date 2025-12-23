@@ -165,6 +165,7 @@ export interface ModeInfo {
   icon: string;
   disabled?: boolean;
   tooltip?: string;
+  description?: string;  // 模式描述文案
 }
 
 /**
@@ -175,26 +176,30 @@ export const AVAILABLE_MODES: ModeInfo[] = [
     id: 'default',
     label: '默认模式',
     icon: 'codicon-comment-discussion',
-    tooltip: '标准权限行为'
+    tooltip: '标准权限行为',
+    description: '需要手动确认每个操作，适合谨慎使用'
   },
   {
     id: 'plan',
     label: '规划模式',
     icon: 'codicon-tasklist',
     disabled: true,
-    tooltip: '规划模式——无执行（暂不支持）'
+    tooltip: '规划模式——无执行（暂不支持）',
+    description: '仅规划不执行，暂不支持'
   },
   {
     id: 'acceptEdits',
     label: '代理模式',
     icon: 'codicon-robot',
-    tooltip: '自动接受文件编辑'
+    tooltip: '自动接受文件编辑',
+    description: '自动接受文件创建/编辑，减少确认步骤'
   },
   {
     id: 'bypassPermissions',
     label: '自动模式',
     icon: 'codicon-zap',
-    tooltip: '绕过所有权限检查'
+    tooltip: '绕过所有权限检查',
+    description: '完全自动化，绕过所有权限检查【谨慎使用】'
   },
 ];
 

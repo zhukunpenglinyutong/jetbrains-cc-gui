@@ -600,6 +600,13 @@
   margin-top: 2px;
 }
 
+.selector-option .mode-description {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: 2px;
+}
+
 .selector-option.disabled {
   opacity: 0.5;
   cursor: not-allowed !important;

@@ -413,6 +413,53 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 速度最快，适合快速答复"
       }
+    },
+    "codex": {
+      "gpt51codex": {
+        "label": "gpt-5.1-codex",
+        "description": "针对codex进行了优化"
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "针对codex进行了优化。更便宜、更快，但性能较差"
+      },
+      "gpt51": {
+        "label": "gpt-5.1",
+        "description": "具有广泛的世界知识和强大的一般推理能力"
+      }
+    }
+  },
+  "modes": {
+    "default": {
+      "label": "默认模式",
+      "tooltip": "标准权限行为",
+      "description": "需要手动确认每个操作，适合谨慎使用"
+    },
+    "plan": {
+      "label": "规划模式",
+      "tooltip": "规划模式——无执行（暂不支持）",
+      "description": "仅规划不执行，暂不支持"
+    },
+    "acceptEdits": {
+      "label": "代理模式",
+      "tooltip": "自动接受文件编辑",
+      "description": "自动接受文件创建/编辑，减少确认步骤"
+    },
+    "bypassPermissions": {
+      "label": "自动模式",
+      "tooltip": "绕过所有权限检查",
+      "description": "完全自动化，绕过所有权限检查【谨慎使用】"
+    }
+  },
+  "providers": {
+    "claude": {
+      "label": "Claude Code"
+    },
+    "codex": {
+      "label": "Codex Cli"
+    },
+    "gemini": {
+      "label": "Gemini Cli"
     }
   }
 }

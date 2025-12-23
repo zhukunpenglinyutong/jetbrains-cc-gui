@@ -38,6 +38,11 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
 
   const currentProvider = AVAILABLE_PROVIDERS.find(p => p.id === value) || AVAILABLE_PROVIDERS[0];
 
+  // Helper function to get translated provider label
+  const getProviderLabel = (providerId: string) => {
+    return t(`providers.${providerId}.label`);
+  };
+
   /**
    * 切换下拉菜单
    */
@@ -112,10 +117,10 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
           ref={buttonRef}
           className="selector-button"
           onClick={handleToggle}
-          title={`当前提供商: ${currentProvider.label}`}
+          title={`${t('config.switchProvider')}: ${getProviderLabel(currentProvider.id)}`}
         >
           <ProviderIcon providerId={currentProvider.id} size={12} />
-          <span>{currentProvider.label}</span>
+          <span>{getProviderLabel(currentProvider.id)}</span>
           <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
         </button>
 
@@ -142,7 +147,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
                 }}
               >
                 <ProviderIcon providerId={provider.id} size={16} />
-                <span>{provider.label}</span>
+                <span>{getProviderLabel(provider.id)}</span>
                 {provider.id === value && (
                   <span className="codicon codicon-check check-mark" />
                 )}

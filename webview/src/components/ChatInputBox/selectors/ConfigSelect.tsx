@@ -1,0 +1,252 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+import { Claude, OpenAI, Gemini } from '@lobehub/icons';
+import { AVAILABLE_MODES, AVAILABLE_PROVIDERS, type PermissionMode } from '../types';
+
+interface ConfigSelectProps {
+  permissionMode: PermissionMode;
+  onModeChange: (mode: PermissionMode) => void;
+  currentProvider: string;
+  onProviderChange: (providerId: string) => void;
+}
+
+/**
+ * Provider Icon Component
+ */
+const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: number }) => {
+  switch (providerId) {
+    case 'claude':
+      return <Claude.Avatar size={size} />;
+    case 'codex':
+      return <OpenAI.Avatar size={size} />;
+    case 'gemini':
+      return <Gemini.Avatar size={size} />;
+    default:
+      return <Claude.Avatar size={size} />;
+  }
+};
+
+/**
+ * ConfigSelect - Combined Configuration Selector
+ * Merges Permission Mode and CLI Tool Selection into a single dropdown
+ */
+export const ConfigSelect = ({ 
+  permissionMode, 
+  onModeChange, 
+  currentProvider: providerId, 
+  onProviderChange 
+}: ConfigSelectProps) => {
+  const { t } = useTranslation();
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'mode' | 'provider'>('none');
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const currentMode = AVAILABLE_MODES.find(m => m.id === permissionMode) || AVAILABLE_MODES[0];
+  const currentProviderInfo = AVAILABLE_PROVIDERS.find(p => p.id === providerId) || AVAILABLE_PROVIDERS[0];
+
+  // Helper function to get translated mode text
+  const getModeText = (modeId: PermissionMode, field: 'label' | 'tooltip' | 'description') => {
+    return t(`modes.${modeId}.${field}`);
+  };
+
+  const showToastMessage = useCallback((message: string) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => {
+      setShowToast(false);
+    }, 1500);
+  }, []);
+
+  const handleToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(!isOpen);
+    if (!isOpen) {
+      setActiveSubmenu('none');
+    }
+  }, [isOpen]);
+
+  const handleModeSelect = useCallback((mode: PermissionMode, disabled?: boolean) => {
+    if (disabled) return;
+    onModeChange(mode);
+    setIsOpen(false);
+    setActiveSubmenu('none');
+  }, [onModeChange]);
+
+  const handleProviderSelect = useCallback((pId: string) => {
+    const provider = AVAILABLE_PROVIDERS.find(p => p.id === pId);
+    if (!provider) return;
+
+    if (!provider.enabled) {
+      showToastMessage(t('settings.provider.featureComingSoon'));
+      return;
+    }
+
+    onProviderChange(pId);
+    setIsOpen(false);
+    setActiveSubmenu('none');
+  }, [onProviderChange, showToastMessage, t]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+        setActiveSubmenu('none');
+      }
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const renderModeSubmenu = () => (
+    <div
+      className="selector-dropdown"
+      style={{
+        position: 'absolute',
+        left: '4px', // Moved inside to cover parent
+        bottom: 0, 
+        marginLeft: '0',
+        zIndex: 10001,
+        minWidth: '220px',
+      }}
+    >
+      {AVAILABLE_MODES.map((mode) => (
+        <div
+          key={mode.id}
+          className={`selector-option ${mode.id === permissionMode ? 'selected' : ''} ${mode.disabled ? 'disabled' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleModeSelect(mode.id, mode.disabled);
+          }}
+          title={getModeText(mode.id, 'tooltip')}
+        >
+          <span className={`codicon ${mode.icon}`} />
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span>{getModeText(mode.id, 'label')}</span>
+            <span className="mode-description">{getModeText(mode.id, 'description')}</span>
+          </div>
+          {mode.id === permissionMode && <span className="codicon codicon-check check-mark" />}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderProviderSubmenu = () => (
+    <div
+      className="selector-dropdown"
+      style={{
+        position: 'absolute',
+        left: '100%',
+        bottom: 0,
+        marginLeft: '4px',
+        zIndex: 10001,
+        minWidth: '180px'
+      }}
+    >
+      {AVAILABLE_PROVIDERS.map((provider) => (
+        <div
+          key={provider.id}
+          className={`selector-option ${provider.id === providerId ? 'selected' : ''} ${!provider.enabled ? 'disabled' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleProviderSelect(provider.id);
+          }}
+        >
+          <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ProviderIcon providerId={provider.id} size={14} />
+          </div>
+          <span>{provider.label}</span>
+          {provider.id === providerId && <span className="codicon codicon-check check-mark" />}
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        ref={buttonRef}
+        className="selector-button"
+        onClick={handleToggle}
+        style={{ marginLeft: '5px', marginRight: '-2px' }}
+        title={t('settings.configure', 'Configure')}
+      >
+        <span className="codicon codicon-settings" />
+      </button>
+
+      {isOpen && (
+        <div
+          ref={dropdownRef}
+          className="selector-dropdown"
+          style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: 0,
+            marginBottom: '4px',
+            zIndex: 10000,
+            minWidth: '200px'
+          }}
+        >
+          {/* Permission Mode Item */}
+          <div 
+            className="selector-option" 
+            onMouseEnter={() => setActiveSubmenu('mode')}
+            onMouseLeave={() => setActiveSubmenu('none')}
+            style={{ position: 'relative' }}
+          >
+            <span className={`codicon ${currentMode.icon}`} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span>{getModeText(currentMode.id, 'label')}</span>
+            </div>
+            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
+            
+            {activeSubmenu === 'mode' && renderModeSubmenu()}
+          </div>
+
+          {/* CLI Tool Item */}
+          <div 
+            className="selector-option" 
+            onMouseEnter={() => setActiveSubmenu('provider')}
+            onMouseLeave={() => setActiveSubmenu('none')}
+            style={{ position: 'relative' }}
+          >
+            <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ProviderIcon providerId={currentProviderInfo.id} size={14} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span>{currentProviderInfo.label}</span>
+            </div>
+            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
+            
+            {activeSubmenu === 'provider' && renderProviderSubmenu()}
+          </div>
+        </div>
+      )}
+
+      {showToast && createPortal(
+        <div className="selector-toast" style={{ zIndex: 20000 }}>
+          {toastMessage}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
