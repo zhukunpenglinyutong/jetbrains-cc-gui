@@ -89,7 +89,6 @@ export const ContextBar: React.FC<ContextBarProps> = ({
           className="hidden-file-input"
           onChange={handleFileChange}
           style={{ display: 'none' }}
-          accept="image/*,.pdf,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml"
         />
         
         <div className="context-tool-divider" />
