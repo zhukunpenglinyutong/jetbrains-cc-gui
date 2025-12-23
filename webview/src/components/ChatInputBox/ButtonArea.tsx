@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 // TODO: 临时隐藏模式选择器,后续恢复
 // import type { ButtonAreaProps, PermissionMode } from './types';
-import type { ButtonAreaProps } from './types';
+import type { ButtonAreaProps, ModelInfo } from './types';
 // import { ModeSelect, ModelSelect } from './selectors';
 import { ModelSelect, ProviderSelect } from './selectors';
 // import { TokenIndicator } from './TokenIndicator';
@@ -30,6 +30,27 @@ export const ButtonArea = ({
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * 应用模型名称映射
+   * 将基础模型 ID 映射为实际的模型名称（如带容量后缀的版本）
+   */
+  const applyModelMapping = (model: ModelInfo, mapping: { haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
+    const modelKeyMap: Record<string, keyof typeof mapping> = {
+      'claude-sonnet-4-5': 'sonnet',
+      'claude-opus-4-5-20251101': 'opus',
+      'claude-haiku-4-5': 'haiku',
+    };
+
+    const key = modelKeyMap[model.id];
+    if (key && mapping[key]) {
+      const actualModel = String(mapping[key]).trim();
+      if (actualModel.length > 0) {
+        return { ...model, id: actualModel, label: actualModel };
+      }
+    }
+    return model;
+  };
+
   // 根据当前提供商选择模型列表
   const availableModels = (() => {
     if (currentProvider === 'codex') {
@@ -49,18 +70,7 @@ export const ButtonArea = ({
         sonnet?: string;
         opus?: string;
       };
-      return CLAUDE_MODELS.map((m) => {
-        if (m.id === 'claude-sonnet-4-5' && mapping.sonnet && String(mapping.sonnet).trim().length > 0) {
-          return { ...m, label: String(mapping.sonnet) };
-        }
-        if (m.id === 'claude-opus-4-5-20251101' && mapping.opus && String(mapping.opus).trim().length > 0) {
-          return { ...m, label: String(mapping.opus) };
-        }
-        if (m.id === 'claude-haiku-4-5' && mapping.haiku && String(mapping.haiku).trim().length > 0) {
-          return { ...m, label: String(mapping.haiku) };
-        }
-        return m;
-      });
+      return CLAUDE_MODELS.map((m) => applyModelMapping(m, mapping));
     } catch {
       return CLAUDE_MODELS;
     }
