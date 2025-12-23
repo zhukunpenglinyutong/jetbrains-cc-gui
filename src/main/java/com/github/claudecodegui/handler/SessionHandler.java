@@ -67,7 +67,13 @@ public class SessionHandler extends BaseMessageHandler {
      * 发送消息到 Claude
      */
     private void handleSendMessage(String prompt) {
+        // long handlerStartTime = System.currentTimeMillis();
+        // LOG.info("[PERF][" + handlerStartTime + "] SessionHandler.handleSendMessage 开始处理");
+
         CompletableFuture.runAsync(() -> {
+            // long asyncStartTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + asyncStartTime + "] 异步线程开始执行，等待时间: " + (asyncStartTime - handlerStartTime) + "ms");
+
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
 
@@ -77,6 +83,9 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             context.getSession().setPermissionMode("default");
+
+            // long beforeSendTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + beforeSendTime + "] 准备调用 session.send()，准备耗时: " + (beforeSendTime - asyncStartTime) + "ms");
 
             context.getSession().send(prompt).exceptionally(ex -> {
                 ApplicationManager.getApplication().invokeLater(() -> {

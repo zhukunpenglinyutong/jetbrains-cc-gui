@@ -2,7 +2,13 @@ const BRIDGE_UNAVAILABLE_WARNED = new Set<string>();
 
 const callBridge = (payload: string) => {
   if (window.sendToJava) {
-    console.log('[Bridge] Sending to Java:', payload.substring(0, 100));
+    // const timestamp = Date.now();
+    // console.log(`[Bridge][${timestamp}][PERF] Sending to Java:`, payload.substring(0, 100));
+    // // 记录消息发送时间，用于计算端到端延迟
+    // if (payload.startsWith('send_message')) {
+    //   console.log(`[Bridge][${timestamp}][PERF] >>> 用户消息发送开始 <<<`);
+    //   (window as any).__lastMessageSendTime = timestamp;
+    // }
     window.sendToJava(payload);
     return true;
   }

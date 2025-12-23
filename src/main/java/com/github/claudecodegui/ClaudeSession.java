@@ -259,6 +259,9 @@ public class ClaudeSession {
      * 发送消息（支持附件）
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments) {
+        // long sendStartTime = System.currentTimeMillis();
+        // LOG.info("[PERF][" + sendStartTime + "] ClaudeSession.send() 开始执行");
+
         // 规范化用户文本
         String normalizedInput = (input != null) ? input.trim() : "";
         // 添加用户消息到历史
@@ -344,9 +347,18 @@ public class ClaudeSession {
         this.loading = true;  // 设置 loading 状态，前端显示"Claude 正在思考"
         updateState();
 
+        // long beforeLaunchTime = System.currentTimeMillis();
+        // LOG.info("[PERF][" + beforeLaunchTime + "] 用户消息处理完成，准备 launchClaude()，耗时: " + (beforeLaunchTime - sendStartTime) + "ms");
+
         return launchClaude().thenCompose(chId -> {
+            // long afterLaunchTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + afterLaunchTime + "] launchClaude() 完成，耗时: " + (afterLaunchTime - beforeLaunchTime) + "ms");
+
             // 使用 ReadAction.nonBlocking() 在后台线程中安全地获取文件信息
             CompletableFuture<JsonObject> fileInfoFuture = new CompletableFuture<>();
+
+            // long beforeFileInfoTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + beforeFileInfoTime + "] 开始获取文件信息");
 
             ReadAction
                 .nonBlocking(() -> {
@@ -395,11 +407,16 @@ public class ClaudeSession {
                 })
                 .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), openedFilesJson -> {
                     // 文件信息获取完成，继续执行
+                    // long afterFileInfoTime = System.currentTimeMillis();
+                    // LOG.info("[PERF][" + afterFileInfoTime + "] 文件信息获取完成，耗时: " + (afterFileInfoTime - beforeFileInfoTime) + "ms");
                     fileInfoFuture.complete(openedFilesJson);
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
 
             return fileInfoFuture.thenCompose(openedFilesJson -> {
+            // long beforeSdkCallTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + beforeSdkCallTime + "] 准备调用 SDK sendMessage()");
+
             // 根据 provider 选择 SDK
             CompletableFuture<Void> sendFuture;
             if ("codex".equals(provider)) {
@@ -539,6 +556,9 @@ public class ClaudeSession {
                         LOG.info("Captured session ID: " + content);
                     } else if ("message_end".equals(type)) {
                         // 消息结束时立即更新 loading 状态，避免延迟
+                        // long messageEndTime = System.currentTimeMillis();
+                        // LOG.info("[PERF][" + messageEndTime + "] ClaudeSession 收到 message_end，立即更新状态");
+
                         if (isThinking) {
                             isThinking = false;
                             if (callback != null) {
@@ -548,7 +568,7 @@ public class ClaudeSession {
                         busy = false;
                         loading = false;
                         updateState();
-                        LOG.debug("Message end received, loading set to false");
+                        // LOG.info("[PERF][" + System.currentTimeMillis() + "] ClaudeSession updateState() 完成，loading=false 已发送");
                     } else if ("result".equals(type) && content.startsWith("{")) {
                         // 处理结果消息（包含最终的usage信息）
                         try {

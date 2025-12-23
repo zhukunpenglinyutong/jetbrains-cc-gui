@@ -247,6 +247,11 @@ const App = () => {
 
   useEffect(() => {
     window.updateMessages = (json) => {
+      // const timestamp = Date.now();
+      // const sendTime = (window as any).__lastMessageSendTime;
+      // if (sendTime) {
+      //   console.log(`[Frontend][${timestamp}][PERF] updateMessages 收到响应，距发送 ${timestamp - sendTime}ms`);
+      // }
       try {
         const parsed = JSON.parse(json) as ClaudeMessage[];
         setMessages(parsed);
@@ -262,6 +267,23 @@ const App = () => {
     };
     window.showLoading = (value) => {
       const isLoading = isTruthy(value);
+      // const timestamp = Date.now();
+      // const sendTime = (window as any).__lastMessageSendTime;
+
+      // if (isLoading) {
+      //   console.log(`[Frontend][${timestamp}][PERF] showLoading(true) - 开始加载`);
+      //   if (sendTime) {
+      //     console.log(`[Frontend][${timestamp}][PERF] 距消息发送 ${timestamp - sendTime}ms 后开始显示加载状态`);
+      //   }
+      // } else {
+      //   console.log(`[Frontend][${timestamp}][PERF] showLoading(false) - 加载完成`);
+      //   if (sendTime) {
+      //     console.log(`[Frontend][${timestamp}][PERF] >>> 总耗时: ${timestamp - sendTime}ms <<<`);
+      //     // 清除记录的发送时间
+      //     delete (window as any).__lastMessageSendTime;
+      //   }
+      // }
+
       setLoading(isLoading);
       // 开始加载时记录时间，结束时清除
       if (isLoading) {

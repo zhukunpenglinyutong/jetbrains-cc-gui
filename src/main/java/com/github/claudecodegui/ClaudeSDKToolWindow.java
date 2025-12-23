@@ -541,6 +541,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void handleJavaScriptMessage(String message) {
+            // long receiveTime = System.currentTimeMillis();
+
             // 处理控制台日志转发
             if (message.startsWith("{\"type\":\"console.")) {
                 try {
@@ -575,6 +577,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             String type = parts[0];
             String content = parts.length > 1 ? parts[1] : "";
+
+            // [PERF] 性能日志：记录消息接收时间
+            // if ("send_message".equals(type) || "send_message_with_attachments".equals(type)) {
+            //     LOG.info("[PERF][" + receiveTime + "] Java收到消息: type=" + type + ", 内容长度=" + content.length());
+            // }
 
             // 使用 Handler 分发器处理
             if (messageDispatcher.dispatch(type, content)) {
@@ -687,14 +694,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 @Override
                 public void onStateChange(boolean busy, boolean loading, String error) {
+                    // long callbackTime = System.currentTimeMillis();
+                    // LOG.info("[PERF][" + callbackTime + "] onStateChange 回调: busy=" + busy + ", loading=" + loading);
+
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        callJavaScript("showLoading", String.valueOf(busy));
+                        // long uiUpdateTime = System.currentTimeMillis();
+                        // LOG.info("[PERF][" + uiUpdateTime + "] invokeLater 执行，准备调用 showLoading(" + loading + ")，等待: " + (uiUpdateTime - callbackTime) + "ms");
+
+                        callJavaScript("showLoading", String.valueOf(loading));
                         if (error != null) {
                             callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
                         }
                         if (!busy && !loading) {
                             VirtualFileManager.getInstance().asyncRefresh(null);
                         }
+
+                        // LOG.info("[PERF][" + System.currentTimeMillis() + "] showLoading 调用完成");
                     });
                 }
 
