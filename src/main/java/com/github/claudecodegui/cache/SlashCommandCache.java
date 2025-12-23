@@ -42,8 +42,8 @@ public class SlashCommandCache {
 
     // 缓存策略配置
     private static final long CACHE_TTL = 10 * 60 * 1000; // 10分钟保底刷新
-    private static final long MIN_REFRESH_INTERVAL = 1000; // 最小刷新间隔 1秒（防抖）
-    private static final long LOAD_TIMEOUT_SECONDS = 30; // SDK 调用超时时间 30秒
+    private static final long MIN_REFRESH_INTERVAL = 500; // 最小刷新间隔 500ms（加快响应）
+    private static final long LOAD_TIMEOUT_SECONDS = 25; // SDK 调用超时时间 25秒（与 ClaudeSDKBridge 中的 20s 轮询配合）
 
     // 监听器
     private MessageBusConnection messageBusConnection;

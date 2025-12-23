@@ -808,10 +808,16 @@ public class ClaudeSDKBridge {
     /**
      * 获取斜杠命令列表.
      * 在插件启动时调用，获取完整的命令列表（包含 name 和 description）
+     *
+     * 关键修复：Node.js 进程输出 [SLASH_COMMANDS] 后不会自动退出，
+     * 因此一旦检测到数据就立即返回，不再等待进程结束。
      */
     public CompletableFuture<List<JsonObject>> getSlashCommands(String cwd) {
         return CompletableFuture.supplyAsync(() -> {
             Process process = null;
+            long startTime = System.currentTimeMillis();
+            LOG.info("[SlashCommands] Starting getSlashCommands, cwd=" + cwd);
+
             try {
                 String node = nodeDetector.findNodeExecutable();
 
@@ -841,53 +847,67 @@ public class ClaudeSDKBridge {
                 try (java.io.OutputStream stdin = process.getOutputStream()) {
                     stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                     stdin.flush();
+                    LOG.debug("[SlashCommands] Wrote stdin: " + stdinJson);
                 } catch (Exception e) {
-                    // ignore
+                    LOG.warn("[SlashCommands] Failed to write stdin: " + e.getMessage());
                 }
 
-                // 在单独线程中读取输出，避免 readLine 阻塞导致超时无效
-                StringBuilder output = new StringBuilder();
+                // 使用标志变量，一旦找到数据就立即退出
+                final boolean[] found = {false};
                 final String[] slashCommandsJson = {null};
+                final StringBuilder output = new StringBuilder();
+
                 Thread readerThread = new Thread(() -> {
                     try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
                         String line;
-                        while ((line = reader.readLine()) != null) {
+                        while (!found[0] && (line = reader.readLine()) != null) {
                             output.append(line).append("\n");
+                            LOG.debug("[SlashCommands] Read line: " + line.substring(0, Math.min(100, line.length())));
+
                             if (line.startsWith("[SLASH_COMMANDS]")) {
                                 slashCommandsJson[0] = line.substring("[SLASH_COMMANDS]".length()).trim();
+                                found[0] = true;  // 设置标志，立即停止读取
+                                LOG.info("[SlashCommands] Found SLASH_COMMANDS marker, data length=" + slashCommandsJson[0].length());
+                                break;  // 立即退出循环
                             }
                         }
                     } catch (Exception e) {
-                        // ignore
+                        LOG.debug("[SlashCommands] Reader thread exception: " + e.getMessage());
                     }
                 });
                 readerThread.start();
 
-                // 等待进程完成，超时 15 秒
-                boolean completed = process.waitFor(15, TimeUnit.SECONDS);
-                if (!completed) {
-                    process.destroyForcibly();
-                    readerThread.interrupt();
-                    return new ArrayList<>();
+                // 轮询等待，最多 20 秒
+                long deadline = System.currentTimeMillis() + 20000;
+                while (!found[0] && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(100);  // 每 100ms 检查一次
                 }
 
-                // 等待读取线程完成
-                readerThread.join(1000);
+                long elapsed = System.currentTimeMillis() - startTime;
 
+                // 无论是否找到数据，都立即终止进程
+                if (process.isAlive()) {
+                    process.destroyForcibly();
+                    LOG.debug("[SlashCommands] Process forcibly destroyed after " + elapsed + "ms");
+                }
+
+                // 解析结果
                 List<JsonObject> commands = new ArrayList<>();
 
-                // 优先使用 [SLASH_COMMANDS] 输出
-                if (slashCommandsJson[0] != null && !slashCommandsJson[0].isEmpty()) {
+                if (found[0] && slashCommandsJson[0] != null && !slashCommandsJson[0].isEmpty()) {
                     try {
                         JsonArray commandsArray = gson.fromJson(slashCommandsJson[0], JsonArray.class);
                         for (var cmd : commandsArray) {
                             commands.add(cmd.getAsJsonObject());
                         }
+                        LOG.info("[SlashCommands] Successfully parsed " + commands.size() + " commands in " + elapsed + "ms");
                         return commands;
                     } catch (Exception e) {
-                        // ignore
+                        LOG.warn("[SlashCommands] Failed to parse commands JSON: " + e.getMessage());
                     }
+                } else {
+                    LOG.warn("[SlashCommands] No commands found after " + elapsed + "ms, found=" + found[0]);
                 }
 
                 // 回退到解析最终 JSON 输出
@@ -903,16 +923,19 @@ public class ClaudeSDKBridge {
                                 for (var cmd : commandsArray) {
                                     commands.add(cmd.getAsJsonObject());
                                 }
+                                LOG.info("[SlashCommands] Fallback: parsed " + commands.size() + " commands from JSON");
                             }
                         }
                     } catch (Exception e) {
-                        // ignore
+                        LOG.debug("[SlashCommands] Fallback JSON parse failed: " + e.getMessage());
                     }
                 }
 
                 return commands;
 
             } catch (Exception e) {
+                long elapsed = System.currentTimeMillis() - startTime;
+                LOG.error("[SlashCommands] Exception after " + elapsed + "ms: " + e.getMessage());
                 return new ArrayList<>();
             } finally {
                 if (process != null && process.isAlive()) {

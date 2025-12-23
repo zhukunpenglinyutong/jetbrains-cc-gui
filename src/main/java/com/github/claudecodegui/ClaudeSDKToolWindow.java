@@ -148,9 +148,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             this.initialized = true;
             LOG.info("窗口实例已完全初始化，项目: " + project.getName());
 
-            // 在构造函数结束后立即获取斜杠命令（不依赖 onLoadEnd 回调）
-            // 使用异步调用避免阻塞 UI 线程
-            fetchSlashCommandsOnStartup();
+            // 注意：斜杠命令的加载现在由前端发起
+            // 前端在 bridge 准备好后会发送 frontend_ready 和 refresh_slash_commands 事件
+            // 这确保了前后端初始化时序正确
         }
 
         /**
@@ -438,9 +438,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             "};";
                         cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
 
-                        // 在浏览器加载完成后获取斜杠命令
-                        LOG.debug("About to call fetchSlashCommandsOnStartup");
-                        fetchSlashCommandsOnStartup();
+                        // 斜杠命令的加载现在由前端发起，通过 frontend_ready 事件触发
+                        // 不再在 onLoadEnd 中主动调用，避免时序问题
+                        LOG.debug("onLoadEnd completed, waiting for frontend_ready signal");
                     }
                 }, browser.getCefBrowser());
 
@@ -586,9 +586,21 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 createNewSession();
                 return;
             }
+
+            // 特殊处理：前端准备就绪信号
+            if ("frontend_ready".equals(type)) {
+                LOG.info("Received frontend_ready signal, frontend is now ready to receive data");
+                // 如果缓存中已有数据，立即发送
+                if (slashCommandCache != null && !slashCommandCache.isEmpty()) {
+                    LOG.info("Cache has data, sending immediately");
+                    sendCachedSlashCommands();
+                }
+                return;
+            }
+
             // 特殊处理：刷新斜杠命令列表
             if ("refresh_slash_commands".equals(type)) {
-                LOG.info("Received refresh_slash_commands request");
+                LOG.info("Received refresh_slash_commands request from frontend");
                 fetchSlashCommandsOnStartup();
                 return;
             }
@@ -764,6 +776,34 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 初始化缓存（开始加载 + 启动文件监听 + 定期检查）
             LOG.debug("Starting slash command cache initialization");
             slashCommandCache.init();
+        }
+
+        /**
+         * 发送缓存中的斜杠命令到前端
+         * 用于前端准备好后立即发送已缓存的数据
+         */
+        private void sendCachedSlashCommands() {
+            if (slashCommandCache == null || slashCommandCache.isEmpty()) {
+                LOG.debug("sendCachedSlashCommands: cache is empty or null");
+                return;
+            }
+
+            List<JsonObject> commands = slashCommandCache.getCommands();
+            if (commands.isEmpty()) {
+                LOG.debug("sendCachedSlashCommands: no commands in cache");
+                return;
+            }
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                try {
+                    Gson gson = new Gson();
+                    String commandsJson = gson.toJson(commands);
+                    LOG.info("sendCachedSlashCommands: sending " + commands.size() + " cached commands to frontend");
+                    callJavaScript("updateSlashCommands", JsUtils.escapeJs(commandsJson));
+                } catch (Exception e) {
+                    LOG.warn("sendCachedSlashCommands: failed to send: " + e.getMessage(), e);
+                }
+            });
         }
 
         private String convertMessagesToJson(List<ClaudeSession.Message> messages) {
