@@ -1,11 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-// TODO: 临时隐藏模式选择器,后续恢复
-// import type { ButtonAreaProps, PermissionMode } from './types';
-import type { ButtonAreaProps, ModelInfo } from './types';
-// import { ModeSelect, ModelSelect } from './selectors';
-import { ModelSelect, ProviderSelect } from './selectors';
-// import { TokenIndicator } from './TokenIndicator';
+import type { ButtonAreaProps, ModelInfo, PermissionMode } from './types';
+import { ModeSelect, ModelSelect, ProviderSelect } from './selectors';
 import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 
 /**
@@ -17,13 +13,11 @@ export const ButtonArea = ({
   hasInputContent = false,
   isLoading = false,
   selectedModel = 'claude-sonnet-4-5',
-  // TODO: 临时隐藏模式选择器,后续恢复
-  // permissionMode = 'default',
+  permissionMode = 'default',
   currentProvider = 'claude',
   onSubmit,
   onStop,
-  // TODO: 临时隐藏模式选择器,后续恢复
-  // onModeSelect,
+  onModeSelect,
   onModelSelect,
   onProviderSelect,
 }: ButtonAreaProps) => {
@@ -94,11 +88,10 @@ export const ButtonArea = ({
 
   /**
    * 处理模式选择
-   * TODO: 临时隐藏模式选择器,后续恢复
    */
-  // const handleModeSelect = useCallback((mode: PermissionMode) => {
-  //   onModeSelect?.(mode);
-  // }, [onModeSelect]);
+  const handleModeSelect = useCallback((mode: PermissionMode) => {
+    onModeSelect?.(mode);
+  }, [onModeSelect]);
 
   /**
    * 处理模型选择
@@ -118,13 +111,12 @@ export const ButtonArea = ({
     <div className="button-area">
       {/* 左侧：选择器 */}
       <div className="button-area-left">
-        {/* TODO: 临时隐藏模式选择器,后续恢复 */}
-        {/* <ModeSelect value={permissionMode} onChange={handleModeSelect} /> */}
+        <ModeSelect value={permissionMode} onChange={handleModeSelect} />
         <ProviderSelect value={currentProvider} onChange={handleProviderSelect} />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />
       </div>
 
-      {/* 右侧：工具按钮 */}
+      {/* 右侧:工具按钮 */}
       <div className="button-area-right">
         <div className="button-divider" />
 

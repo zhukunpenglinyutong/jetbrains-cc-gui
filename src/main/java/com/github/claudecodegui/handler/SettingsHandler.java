@@ -86,6 +86,9 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleSetMode(String content) {
         try {
+            // LOG.info("[SettingsHandler] ========== RECEIVED SET_MODE REQUEST ==========");
+            // LOG.info("[SettingsHandler] Raw content: " + content);
+
             String mode = content;
             if (content != null && !content.isEmpty()) {
                 try {
@@ -96,11 +99,25 @@ public class SettingsHandler extends BaseMessageHandler {
                     }
                 } catch (Exception e) {
                     // content 本身就是 mode
+                    // LOG.debug("[SettingsHandler] Content is not JSON, treating as plain string");
                 }
             }
 
-            LOG.info("[SettingsHandler] Setting permission mode to: " + mode);
-            context.getSession().setPermissionMode(mode);
+            // LOG.info("[SettingsHandler] Parsed permission mode: " + mode);
+
+            // 检查 session 是否存在
+            if (context.getSession() != null) {
+                // LOG.info("[SettingsHandler] Session exists, setting permission mode...");
+                context.getSession().setPermissionMode(mode);
+
+                // 验证设置是否成功
+                // String currentMode = context.getSession().getPermissionMode();
+                // LOG.info("[SettingsHandler] Session permission mode confirmed: " + currentMode);
+                // LOG.info("[SettingsHandler] Mode update " + (mode.equals(currentMode) ? "SUCCESS" : "FAILED"));
+            } else {
+                LOG.warn("[SettingsHandler] WARNING: Session is null! Cannot set permission mode");
+            }
+            // LOG.info("[SettingsHandler] =============================================");
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set mode: " + e.getMessage(), e);
         }

@@ -985,7 +985,12 @@ public class ClaudeSession {
      * 设置权限模式
      */
     public void setPermissionMode(String mode) {
+        // LOG.info("[ClaudeSession] ========== PERMISSION MODE CHANGE ==========");
+        // LOG.info("[ClaudeSession] Old mode: " + this.permissionMode);
+        // LOG.info("[ClaudeSession] New mode: " + mode);
         this.permissionMode = mode;
+        // LOG.info("[ClaudeSession] Permission mode updated successfully");
+        // LOG.info("[ClaudeSession] =============================================");
     }
 
     /**

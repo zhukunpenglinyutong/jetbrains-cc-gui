@@ -82,7 +82,8 @@ public class SessionHandler extends BaseMessageHandler {
                 LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
-            context.getSession().setPermissionMode("default");
+            // 权限模式由用户通过 UI 设置，不在这里覆盖
+            // context.getSession().setPermissionMode("default");  // 已移除：保留用户设置的权限模式
 
             // long beforeSendTime = System.currentTimeMillis();
             // LOG.info("[PERF][" + beforeSendTime + "] 准备调用 session.send()，准备耗时: " + (beforeSendTime - asyncStartTime) + "ms");
@@ -143,7 +144,8 @@ public class SessionHandler extends BaseMessageHandler {
                 LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
-            context.getSession().setPermissionMode("default");
+            // 权限模式由用户通过 UI 设置，不在这里覆盖
+            // context.getSession().setPermissionMode("default");  // 已移除：保留用户设置的权限模式
 
             context.getSession().send(prompt, attachments).exceptionally(ex -> {
                 ApplicationManager.getApplication().invokeLater(() -> {

@@ -663,9 +663,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void loadHistorySession(String sessionId, String projectPath) {
             LOG.info("Loading history session: " + sessionId + " from project: " + projectPath);
 
+            // 保存当前的 permission mode（如果存在旧 session）
+            String previousPermissionMode = (session != null) ? session.getPermissionMode() : "default";
+            // LOG.info("Preserving permission mode when loading history: " + previousPermissionMode);
+
             callJavaScript("clearMessages");
 
             session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
+
+            // 恢复之前保存的 permission mode
+            session.setPermissionMode(previousPermissionMode);
+            // LOG.info("Restored permission mode to loaded session: " + previousPermissionMode);
+
             handlerContext.setSession(session);
             setupSessionCallbacks();
 
@@ -911,6 +920,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void createNewSession() {
             LOG.info("Creating new session...");
 
+            // 保存当前的 permission mode（如果存在旧 session）
+            String previousPermissionMode = (session != null) ? session.getPermissionMode() : "default";
+            // LOG.info("Preserving permission mode from old session: " + previousPermissionMode);
+
             // 清空前端消息显示（修复新建会话时消息不清空的bug）
             callJavaScript("clearMessages");
 
@@ -925,6 +938,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 // 创建全新的 Session 对象
                 session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
+
+                // 恢复之前保存的 permission mode
+                session.setPermissionMode(previousPermissionMode);
+                // LOG.info("Restored permission mode to new session: " + previousPermissionMode);
 
                 // 更新 HandlerContext 中的 Session 引用（重要：确保所有 Handler 使用新 Session）
                 handlerContext.setSession(session);

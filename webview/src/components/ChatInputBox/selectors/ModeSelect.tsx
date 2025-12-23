@@ -8,7 +8,7 @@ interface ModeSelectProps {
 
 /**
  * ModeSelect - 模式选择器组件
- * 支持默认模式、代理模式、规划模式切换
+ * 支持默认模式、代理模式、规划模式、自动模式切换
  */
 export const ModeSelect = ({ value, onChange }: ModeSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -28,7 +28,8 @@ export const ModeSelect = ({ value, onChange }: ModeSelectProps) => {
   /**
    * 选择模式
    */
-  const handleSelect = useCallback((mode: PermissionMode) => {
+  const handleSelect = useCallback((mode: PermissionMode, disabled?: boolean) => {
+    if (disabled) return; // 禁用的选项不能选择
     onChange(mode);
     setIsOpen(false);
   }, [onChange]);
@@ -67,7 +68,7 @@ export const ModeSelect = ({ value, onChange }: ModeSelectProps) => {
         ref={buttonRef}
         className="selector-button"
         onClick={handleToggle}
-        title={`当前模式: ${currentMode.label}`}
+        title={currentMode.tooltip || `当前模式: ${currentMode.label}`}
       >
         <span className={`codicon ${currentMode.icon}`} />
         <span>{currentMode.label}</span>
@@ -89,8 +90,13 @@ export const ModeSelect = ({ value, onChange }: ModeSelectProps) => {
           {AVAILABLE_MODES.map((mode) => (
             <div
               key={mode.id}
-              className={`selector-option ${mode.id === value ? 'selected' : ''}`}
-              onClick={() => handleSelect(mode.id)}
+              className={`selector-option ${mode.id === value ? 'selected' : ''} ${mode.disabled ? 'disabled' : ''}`}
+              onClick={() => handleSelect(mode.id, mode.disabled)}
+              title={mode.tooltip}
+              style={{
+                opacity: mode.disabled ? 0.5 : 1,
+                cursor: mode.disabled ? 'not-allowed' : 'pointer',
+              }}
             >
               <span className={`codicon ${mode.icon}`} />
               <span>{mode.label}</span>

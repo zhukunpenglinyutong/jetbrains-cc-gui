@@ -163,16 +163,39 @@ export interface ModeInfo {
   id: PermissionMode;
   label: string;
   icon: string;
+  disabled?: boolean;
+  tooltip?: string;
 }
 
 /**
  * 预定义模式列表
  */
 export const AVAILABLE_MODES: ModeInfo[] = [
-  { id: 'default', label: '默认模式', icon: 'codicon-comment-discussion' },
-  { id: 'acceptEdits', label: '代理模式', icon: 'codicon-robot' },
-  { id: 'plan', label: '规划模式', icon: 'codicon-tasklist' },
-  { id: 'bypassPermissions', label: '自动模式', icon: 'codicon-zap' },
+  {
+    id: 'default',
+    label: '默认模式',
+    icon: 'codicon-comment-discussion',
+    tooltip: '标准权限行为'
+  },
+  {
+    id: 'plan',
+    label: '规划模式',
+    icon: 'codicon-tasklist',
+    disabled: true,
+    tooltip: '规划模式——无执行（暂不支持）'
+  },
+  {
+    id: 'acceptEdits',
+    label: '代理模式',
+    icon: 'codicon-robot',
+    tooltip: '自动接受文件编辑'
+  },
+  {
+    id: 'bypassPermissions',
+    label: '自动模式',
+    icon: 'codicon-zap',
+    tooltip: '绕过所有权限检查'
+  },
 ];
 
 /**
