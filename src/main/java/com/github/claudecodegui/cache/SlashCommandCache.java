@@ -124,13 +124,17 @@ public class SlashCommandCache {
 
         isLoading = true;
         long startTime = System.currentTimeMillis();
-        LOG.info("Loading slash commands from SDK");
+        LOG.info("Loading slash commands from SDK, cwd=" + cwd);
 
-        // 添加超时机制：30秒超时
-        sdkBridge.getSlashCommands(cwd)
-                .orTimeout(LOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        // 添加超时机制：25秒超时
+        CompletableFuture<List<JsonObject>> future = sdkBridge.getSlashCommands(cwd);
+        LOG.info("CompletableFuture created, setting up callbacks");
+
+        future.orTimeout(LOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .thenAccept(commands -> {
                     long duration = System.currentTimeMillis() - startTime;
+                    LOG.info("thenAccept triggered, commands=" + (commands != null ? commands.size() : "null") + ", duration=" + duration + "ms");
+
                     if (commands != null && !commands.isEmpty()) {
                         cachedCommands = new ArrayList<>(commands);
                         lastLoadTime = System.currentTimeMillis();
@@ -139,7 +143,9 @@ public class SlashCommandCache {
                         // 通知所有监听器
                         notifyListeners();
                     } else {
-                        LOG.info("No commands received (took " + duration + "ms)");
+                        LOG.warn("No commands received (took " + duration + "ms), commands=" + commands);
+                        // 即使没有命令也通知监听器，避免前端一直等待
+                        notifyListeners();
                     }
                     isLoading = false;
                 }).exceptionally(ex -> {
@@ -149,10 +155,15 @@ public class SlashCommandCache {
                     if (ex.getCause() instanceof java.util.concurrent.TimeoutException) {
                         LOG.error("Load commands timeout after " + LOAD_TIMEOUT_SECONDS + " seconds");
                     } else {
-                        LOG.error("Failed to load commands (took " + duration + "ms): " + ex.getMessage());
+                        LOG.error("Failed to load commands (took " + duration + "ms): " + ex.getMessage(), ex);
                     }
+
+                    // 即使失败也通知监听器，避免前端一直等待
+                    notifyListeners();
                     return null;
                 });
+
+        LOG.info("CompletableFuture callbacks registered");
     }
 
     /**

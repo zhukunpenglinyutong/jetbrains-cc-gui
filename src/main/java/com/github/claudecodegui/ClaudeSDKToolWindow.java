@@ -813,6 +813,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 初始化缓存（开始加载 + 启动文件监听 + 定期检查）
             LOG.debug("Starting slash command cache initialization");
             slashCommandCache.init();
+
+            // 添加超时保护：30秒后如果还没有收到任何通知，发送空列表给前端
+            Alarm timeoutAlarm = new Alarm(Alarm.ThreadToUse.POOLED_THREAD, project);
+            timeoutAlarm.addRequest(() -> {
+                if (!slashCommandsFetched) {
+                    LOG.warn("Slash command loading timeout (30s), sending empty list to frontend");
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        try {
+                            callJavaScript("updateSlashCommands", "[]");
+                            LOG.info("Sent empty slash commands list due to timeout");
+                        } catch (Exception e) {
+                            LOG.error("Failed to send timeout notification: " + e.getMessage(), e);
+                        }
+                    });
+                }
+            }, 30000); // 30秒超时
         }
 
         /**

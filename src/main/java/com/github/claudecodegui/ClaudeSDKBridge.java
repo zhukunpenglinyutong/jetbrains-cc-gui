@@ -871,13 +871,15 @@ public class ClaudeSDKBridge {
      * 因此一旦检测到数据就立即返回，不再等待进程结束。
      */
     public CompletableFuture<List<JsonObject>> getSlashCommands(String cwd) {
-        return CompletableFuture.supplyAsync(() -> {
+        LOG.info("[SlashCommands] getSlashCommands called, cwd=" + cwd + ", creating CompletableFuture");
+        CompletableFuture<List<JsonObject>> future = CompletableFuture.supplyAsync(() -> {
             Process process = null;
             long startTime = System.currentTimeMillis();
-            LOG.info("[SlashCommands] Starting getSlashCommands, cwd=" + cwd);
+            LOG.info("[SlashCommands] CompletableFuture execution started, thread=" + Thread.currentThread().getName());
 
             try {
                 String node = nodeDetector.findNodeExecutable();
+                LOG.info("[SlashCommands] Found node executable: " + node);
 
                 // 构建 stdin 输入 JSON
                 JsonObject stdinInput = new JsonObject();
@@ -891,6 +893,8 @@ public class ClaudeSDKBridge {
                 command.add("claude");  // provider
                 command.add("getSlashCommands");
 
+                LOG.info("[SlashCommands] Command: " + String.join(" ", command));
+
                 ProcessBuilder pb = new ProcessBuilder(command);
                 File workDir = bridgeDir;
                 pb.directory(workDir);
@@ -898,6 +902,7 @@ public class ClaudeSDKBridge {
                 envConfigurator.updateProcessEnvironment(pb, node);
                 pb.environment().put("CLAUDE_USE_STDIN", "true");
 
+                LOG.info("[SlashCommands] Starting process...");
                 process = pb.start();
                 final Process finalProcess = process;
 
@@ -993,14 +998,18 @@ public class ClaudeSDKBridge {
 
             } catch (Exception e) {
                 long elapsed = System.currentTimeMillis() - startTime;
-                LOG.error("[SlashCommands] Exception after " + elapsed + "ms: " + e.getMessage());
+                LOG.error("[SlashCommands] Exception after " + elapsed + "ms: " + e.getMessage(), e);
                 return new ArrayList<>();
             } finally {
                 if (process != null && process.isAlive()) {
                     process.destroyForcibly();
+                    LOG.debug("[SlashCommands] Process destroyed in finally block");
                 }
             }
         });
+
+        LOG.info("[SlashCommands] Returning CompletableFuture");
+        return future;
     }
 
     // ============================================================================
