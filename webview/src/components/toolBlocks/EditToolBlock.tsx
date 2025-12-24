@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput } from '../../types';
-import { openFile, showDiff, refreshFile } from '../../utils/bridge';
+import { openFile, showDiff } from '../../utils/bridge';
 import { getFileName } from '../../utils/helpers';
 import { getFileIcon } from '../../utils/fileIcons';
 import GenericToolBlock from './GenericToolBlock';
@@ -87,23 +87,22 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffResult {
 const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const hasRefreshed = useRef(false);
 
   const filePath =
     (input?.file_path as string | undefined) ??
+    (input?.filePath as string | undefined) ??
     (input?.path as string | undefined) ??
-    (input?.target_file as string | undefined);
+    (input?.target_file as string | undefined) ??
+    (input?.targetFile as string | undefined);
 
-  const oldString = (input?.old_string as string | undefined) ?? '';
-  const newString = (input?.new_string as string | undefined) ?? '';
-
-  // Auto-refresh file in IDEA when the component mounts (tool call completed)
-  useEffect(() => {
-    if (filePath && !hasRefreshed.current) {
-      hasRefreshed.current = true;
-      refreshFile(filePath);
-    }
-  }, [filePath]);
+  const oldString =
+    (input?.old_string as string | undefined) ??
+    (input?.oldString as string | undefined) ??
+    '';
+  const newString =
+    (input?.new_string as string | undefined) ??
+    (input?.newString as string | undefined) ??
+    '';
 
   if (!input) {
     return null;
@@ -313,4 +312,3 @@ const EditToolBlock = ({ name, input }: EditToolBlockProps) => {
 };
 
 export default EditToolBlock;
-

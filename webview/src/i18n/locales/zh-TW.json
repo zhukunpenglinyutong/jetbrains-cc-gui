@@ -362,6 +362,8 @@
     "todoList": "任務列表",
     "editFileTitle": "編輯文件",
     "clickToOpen": "點擊打開 {{filePath}}",
+    "refreshFileInIdea": "在 IDEA 中重新整理檔案",
+    "refreshFileInIdeaSuccess": "已手動重新整理本檔案在 IDEA 中的內容",
     "showDiffInIdea": "在 IDEA 中顯示變更",
     "diffButton": "Diff",
     "editPrefix": "編輯: {{fileName}}"

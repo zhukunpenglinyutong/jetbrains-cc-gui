@@ -369,6 +369,8 @@
     "todoList": "任务列表",
     "editFileTitle": "编辑文件",
     "clickToOpen": "点击打开 {{filePath}}",
+    "refreshFileInIdea": "在 IDEA 中刷新文件",
+    "refreshFileInIdeaSuccess": "已手动刷新本文件在IDEA中的内容",
     "showDiffInIdea": "在 IDEA 中显示变更",
     "diffButton": "Diff",
     "editPrefix": "编辑: {{fileName}}"

@@ -362,9 +362,11 @@
     "todoList": "Liste de tâches",
     "editFileTitle": "Modifier fichier",
     "clickToOpen": "Cliquez pour ouvrir {{filePath}}",
+    "refreshFileInIdea": "Actualiser le fichier dans IDEA",
+    "refreshFileInIdeaSuccess": "Contenu de ce fichier actualisé manuellement dans IDEA",
     "showDiffInIdea": "Afficher les modifications dans IDEA",
     "diffButton": "Diff",
-    "editPrefix": "Modifier: {{fileName}}"
+    "editPrefix": "Modifier : {{fileName}}"
   },
   "skills": {
     "title": "Skills",

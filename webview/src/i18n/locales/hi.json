@@ -362,6 +362,8 @@
     "todoList": "कार्य सूची",
     "editFileTitle": "फ़ाइल संपादित करें",
     "clickToOpen": "{{filePath}} खोलने के लिए क्लिक करें",
+    "refreshFileInIdea": "IDEA में फ़ाइल रीफ्रेश करें",
+    "refreshFileInIdeaSuccess": "इस फ़ाइल की सामग्री को IDEA में मैन्युअली रीफ्रेश किया गया",
     "showDiffInIdea": "IDEA में परिवर्तन दिखाएं",
     "diffButton": "Diff",
     "editPrefix": "संपादित करें: {{fileName}}"

@@ -369,6 +369,8 @@
     "todoList": "Todo List",
     "editFileTitle": "Edit File",
     "clickToOpen": "Click to open {{filePath}}",
+    "refreshFileInIdea": "Refresh file in IDEA",
+    "refreshFileInIdeaSuccess": "Manually refreshed this file in IDEA",
     "showDiffInIdea": "Show changes in IDEA",
     "diffButton": "Diff",
     "editPrefix": "Edit: {{fileName}}"
