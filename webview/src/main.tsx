@@ -6,6 +6,15 @@ import './i18n/config';
 import { setupSlashCommandsCallback } from './components/ChatInputBox/providers/slashCommandProvider';
 import { sendBridgeEvent } from './utils/bridge';
 
+const enableVConsole =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_VCONSOLE === 'true';
+
+if (enableVConsole) {
+  void import('vconsole').then(({ default: VConsole }) => {
+    new VConsole();
+  });
+}
+
 // 预注册 updateSlashCommands，避免后端调用早于 React 初始化
 if (typeof window !== 'undefined' && !window.updateSlashCommands) {
   console.log('[Main] Pre-registering updateSlashCommands placeholder');

@@ -260,6 +260,10 @@
     "switchProvider": "切换供应商",
     "link": "链接"
   },
+  "markdown": {
+    "copyCode": "复制代码",
+    "copySuccess": "复制成功"
+  },
   "usage": {
     "loading": "加载统计数据中...",
     "noData": "暂无统计数据",

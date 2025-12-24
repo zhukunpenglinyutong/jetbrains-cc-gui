@@ -254,6 +254,10 @@
     "switchProvider": "Cambiar proveedor",
     "link": "Enlace"
   },
+  "markdown": {
+    "copyCode": "Copiar código",
+    "copySuccess": "¡Copiado!"
+  },
   "usage": {
     "loading": "Cargando estadísticas...",
     "noData": "Sin datos estadísticos",

@@ -254,6 +254,10 @@
     "switchProvider": "切換供應商",
     "link": "連結"
   },
+  "markdown": {
+    "copyCode": "複製程式碼",
+    "copySuccess": "複製成功"
+  },
   "usage": {
     "loading": "載入統計資料中...",
     "noData": "暫無統計資料",

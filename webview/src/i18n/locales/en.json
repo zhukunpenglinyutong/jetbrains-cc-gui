@@ -260,6 +260,10 @@
     "switchProvider": "Switch provider",
     "link": "Link"
   },
+  "markdown": {
+    "copyCode": "Copy code",
+    "copySuccess": "Copied!"
+  },
   "usage": {
     "loading": "Loading statistics...",
     "noData": "No statistics data",
