@@ -73,6 +73,11 @@ interface Window {
   onModeChanged?: (mode: string) => void;
 
   /**
+   * Mode received callback - 后端主动推送权限模式（窗口初始化时调用）
+   */
+  onModeReceived?: (mode: string) => void;
+
+  /**
    * Model changed callback
    */
   onModelChanged?: (modelId: string) => void;

@@ -21,8 +21,10 @@ public class SettingsHandler extends BaseMessageHandler {
     private static final Logger LOG = Logger.getInstance(SettingsHandler.class);
 
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
+    private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
 
     private static final String[] SUPPORTED_TYPES = {
+        "get_mode",
         "set_mode",
         "set_model",
         "set_provider",
@@ -52,6 +54,9 @@ public class SettingsHandler extends BaseMessageHandler {
     @Override
     public boolean handle(String type, String content) {
         switch (type) {
+            case "get_mode":
+                handleGetMode();
+                return true;
             case "set_mode":
                 handleSetMode(content);
                 return true;
@@ -78,6 +83,38 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             default:
                 return false;
+        }
+    }
+
+    /**
+     * 获取当前权限模式
+     */
+    private void handleGetMode() {
+        try {
+            String currentMode = "default";  // 默认值
+
+            // 优先从 session 中获取
+            if (context.getSession() != null) {
+                String sessionMode = context.getSession().getPermissionMode();
+                if (sessionMode != null && !sessionMode.trim().isEmpty()) {
+                    currentMode = sessionMode;
+                }
+            } else {
+                // 如果 session 不存在，从持久化存储加载
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
+                if (savedMode != null && !savedMode.trim().isEmpty()) {
+                    currentMode = savedMode.trim();
+                }
+            }
+
+            final String modeToSend = currentMode;
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.onModeReceived", escapeJs(modeToSend));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get mode: " + e.getMessage(), e);
         }
     }
 
@@ -109,6 +146,11 @@ public class SettingsHandler extends BaseMessageHandler {
             if (context.getSession() != null) {
                 // LOG.info("[SettingsHandler] Session exists, setting permission mode...");
                 context.getSession().setPermissionMode(mode);
+
+                // 保存权限模式到持久化存储
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                props.setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
+                LOG.info("Saved permission mode to settings: " + mode);
 
                 // 验证设置是否成功
                 // String currentMode = context.getSession().getPermissionMode();

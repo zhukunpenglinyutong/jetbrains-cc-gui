@@ -94,6 +94,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
      */
     public static class ClaudeChatWindow {
         private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
+        private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
 
         private final JPanel mainPanel;
         private final ClaudeSDKBridge claudeSDKBridge;
@@ -176,6 +177,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void initializeSession() {
             this.session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
+            loadPermissionModeFromSettings();
         }
 
         private void loadNodePathFromSettings() {
@@ -191,6 +193,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 }
             } catch (Exception e) {
                 LOG.warn("Failed to load manual Node.js path: " + e.getMessage());
+            }
+        }
+
+        private void loadPermissionModeFromSettings() {
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
+                if (savedMode != null && !savedMode.trim().isEmpty()) {
+                    String mode = savedMode.trim();
+                    if (session != null) {
+                        session.setPermissionMode(mode);
+                        LOG.info("Loaded permission mode from settings: " + mode);
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to load permission mode: " + e.getMessage());
+            }
+        }
+
+        private void savePermissionModeToSettings(String mode) {
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                props.setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
+                LOG.info("Saved permission mode to settings: " + mode);
+            } catch (Exception e) {
+                LOG.warn("Failed to save permission mode: " + e.getMessage());
             }
         }
 
@@ -594,9 +622,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
 
-            // 特殊处理：前端准备就绪信号
+            // 特殊处理:前端准备就绪信号
             if ("frontend_ready".equals(type)) {
                 LOG.info("Received frontend_ready signal, frontend is now ready to receive data");
+
+                // 发送当前权限模式到前端
+                sendCurrentPermissionMode();
+
                 // 如果缓存中已有数据，立即发送
                 if (slashCommandCache != null && !slashCommandCache.isEmpty()) {
                     LOG.info("Cache has data, sending immediately");
@@ -664,7 +696,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             LOG.info("Loading history session: " + sessionId + " from project: " + projectPath);
 
             // 保存当前的 permission mode（如果存在旧 session）
-            String previousPermissionMode = (session != null) ? session.getPermissionMode() : "default";
+            String previousPermissionMode;
+            if (session != null) {
+                previousPermissionMode = session.getPermissionMode();
+            } else {
+                // 如果没有旧 session，从持久化存储加载
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
+                previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty()) ? savedMode.trim() : "default";
+            }
             // LOG.info("Preserving permission mode when loading history: " + previousPermissionMode);
 
             callJavaScript("clearMessages");
@@ -800,6 +840,34 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 初始化缓存（开始加载 + 启动文件监听 + 定期检查）
             LOG.debug("Starting slash command cache initialization");
             slashCommandCache.init();
+        }
+
+        /**
+         * 发送当前权限模式到前端
+         * 在前端准备就绪时调用，确保前端显示正确的权限模式
+         */
+        private void sendCurrentPermissionMode() {
+            try {
+                String currentMode = "default";  // 默认值
+
+                // 优先从 session 中获取
+                if (session != null) {
+                    String sessionMode = session.getPermissionMode();
+                    if (sessionMode != null && !sessionMode.trim().isEmpty()) {
+                        currentMode = sessionMode;
+                    }
+                }
+
+                final String modeToSend = currentMode;
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (!disposed && browser != null) {
+                        callJavaScript("window.onModeReceived", JsUtils.escapeJs(modeToSend));
+                    }
+                });
+            } catch (Exception e) {
+                LOG.error("Failed to send current permission mode: " + e.getMessage(), e);
+            }
         }
 
         /**

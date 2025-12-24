@@ -124,11 +124,9 @@ public class DiffHandler extends BaseMessageHandler {
      */
     private void performFileRefresh(VirtualFile virtualFile, String filePath) {
         try {
-            // 刷新文件内容
+            // 刷新文件系统，让 IDEA 检测到文件变化
+            // IDEA 会自动提示用户是否重新加载，避免强制刷新导致的冲突
             virtualFile.refresh(false, false);
-
-            // 如果文件已在编辑器中打开，重新加载
-            FileDocumentManager.getInstance().reloadFiles(virtualFile);
 
             LOG.info("File refreshed successfully: " + filePath);
         } catch (Exception e) {

@@ -374,7 +374,14 @@ const App = () => {
     };
 
     window.onModeChanged = (mode) => {
-      if (mode === 'default' || mode === 'plan' || mode === 'bypassPermissions') {
+      if (mode === 'default' || mode === 'plan' || mode === 'acceptEdits' || mode === 'bypassPermissions') {
+        setPermissionMode(mode);
+      }
+    };
+
+    // 后端主动推送权限模式（窗口初始化时调用）
+    window.onModeReceived = (mode) => {
+      if (mode === 'default' || mode === 'plan' || mode === 'acceptEdits' || mode === 'bypassPermissions') {
         setPermissionMode(mode);
       }
     };

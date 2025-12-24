@@ -183,6 +183,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	                    'selection:', hasSelection ? 'yes' : 'no',
 	                    'other files:', others?.length || 0);
 	        systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
+	        systemPromptAppend += 'Note: File paths may include line references in format `#LX-Y` (lines X to Y) or `#LX` (single line X).\n\n';
 
 	        if (hasActive) {
 	          systemPromptAppend += '**Currently Active File** (primary focus):\n';
@@ -623,6 +624,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
                     'selection:', hasSelection ? 'yes' : 'no',
                     'other files:', others?.length || 0);
         systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
+        systemPromptAppend += 'Note: File paths may include line references in format `#LX-Y` (lines X to Y) or `#LX` (single line X).\n\n';
 
         if (hasActive) {
           systemPromptAppend += '**Currently Active File** (primary focus):\n';
