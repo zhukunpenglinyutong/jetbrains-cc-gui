@@ -411,15 +411,15 @@
     "claude": {
       "sonnet45": {
         "label": "Sonnet 4.5",
-        "description": "Sonnet 4.5 · 默认推荐模型"
+        "description": "Sonnet 默认推荐模型"
       },
       "opus45": {
         "label": "Opus 4.5",
-        "description": "Opus 4.5 · 复杂任务最强性能"
+        "description": "Opus 复杂任务最强性能"
       },
       "haiku45": {
         "label": "Haiku 4.5",
-        "description": "Haiku 4.5 · 速度最快，适合快速答复"
+        "description": "Haiku 速度最快，适合快速答复"
       }
     },
     "codex": {

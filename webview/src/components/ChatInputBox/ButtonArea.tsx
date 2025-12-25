@@ -41,7 +41,9 @@ export const ButtonArea = ({
     if (key && mapping[key]) {
       const actualModel = String(mapping[key]).trim();
       if (actualModel.length > 0) {
-        return { ...model, id: actualModel, label: actualModel };
+        // 保持原始 id 作为唯一标识，只修改 label 为自定义名称
+        // 这样即使多个模型有相同的 displayName，id 仍然是唯一的
+        return { ...model, label: actualModel };
       }
     }
     return model;
