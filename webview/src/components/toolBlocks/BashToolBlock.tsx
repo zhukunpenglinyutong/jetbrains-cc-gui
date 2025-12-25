@@ -46,13 +46,7 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
           <span className="bash-tool-description">{description}</span>
         </div>
 
-        <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: isError ? 'var(--color-error)' : isCompleted ? 'var(--color-success)' : 'var(--color-warning)',
-            marginRight: '4px'
-        }} />
+        <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
       </div>
 
       {expanded && (

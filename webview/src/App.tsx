@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
@@ -1227,7 +1227,7 @@ const App = () => {
     return result;
   }, [messages]);
 
-  const findToolResult = (toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
+  const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') {
       return null;
     }
@@ -1258,7 +1258,7 @@ const App = () => {
     }
 
     return null;
-  };
+  }, [messages]);
 
   const sessionTitle = useMemo(() => {
     if (messages.length === 0) {

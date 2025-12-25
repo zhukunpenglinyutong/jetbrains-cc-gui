@@ -111,6 +111,8 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
   const isCompleted = result !== undefined && result !== null;
   const isError = isCompleted && result?.is_error === true;
 
+  console.log('[GenericToolBlock]', name, 'result:', result, 'isCompleted:', isCompleted, 'isError:', isError);
+
   if (!input) {
     return null;
   }
@@ -211,13 +213,7 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
             )}
         </div>
 
-        <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: isError ? 'var(--color-error)' : isCompleted ? 'var(--color-success)' : 'var(--color-warning)',
-            marginRight: '4px'
-        }} />
+        <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
       </div>
       {shouldShowDetails && (
         <div className="task-details">

@@ -568,6 +568,50 @@ public class ClaudeSession {
                         busy = false;
                         loading = false;
                         updateState();
+
+                        // 在消息结束后重新加载会话消息，以获取SDK写入历史文件的tool_result
+                        //
+                        // 重要说明：Claude Agent SDK 的工作机制
+                        // ========================================
+                        // 1. SDK 的 query() 函数返回 AsyncIterable，流式输出 assistant 消息
+                        // 2. 当 Claude 返回 tool_use 时，SDK 在内部自动：
+                        //    - 执行工具并获取结果
+                        //    - 构造包含 tool_result 的 user 消息
+                        //    - 将该消息发送回 Claude API（用户看不到这个过程）
+                        //    - 将完整对话（包括 tool_result）写入 JSONL 历史文件
+                        // 3. SDK 只向应用层发送最终的 assistant 响应，不发送 tool_result 消息
+                        // 4. 因此，实时流式会话中无法直接获取 tool_result
+                        // 5. 唯一的解决方案：在对话轮次结束后，从历史文件重新加载所有消息
+                        //
+                        // 这样前端的 findToolResult() 函数才能找到工具执行结果，
+                        // 工具块才能正确显示"已完成"状态和执行结果。
+                        if (sessionId != null && cwd != null) {
+                            LOG.debug("Reloading session messages to get tool_result (SDK does not send tool_result in streaming mode)");
+                            CompletableFuture.runAsync(() -> {
+                                try {
+                                    List<JsonObject> serverMessages;
+                                    if ("codex".equals(provider)) {
+                                        serverMessages = codexSDKBridge.getSessionMessages(sessionId, cwd);
+                                    } else {
+                                        serverMessages = claudeSDKBridge.getSessionMessages(sessionId, cwd);
+                                    }
+                                    LOG.debug("Reloaded " + serverMessages.size() + " messages from server");
+
+                                    messages.clear();
+                                    for (JsonObject msg : serverMessages) {
+                                        Message message = parseServerMessage(msg);
+                                        if (message != null) {
+                                            messages.add(message);
+                                        }
+                                    }
+
+                                    notifyMessageUpdate();
+                                    LOG.debug("Session messages reloaded successfully, tool_result should now be available");
+                                } catch (Exception e) {
+                                    LOG.warn("Failed to reload session messages: " + e.getMessage());
+                                }
+                            });
+                        }
                         // LOG.info("[PERF][" + System.currentTimeMillis() + "] ClaudeSession updateState() 完成，loading=false 已发送");
                     } else if ("result".equals(type) && content.startsWith("{")) {
                         // 处理结果消息（包含最终的usage信息）
@@ -598,7 +642,6 @@ public class ClaudeSession {
                                     JsonObject resultUsage = resultJson.getAsJsonObject("usage");
                                     if (message != null) {
                                         message.add("usage", resultUsage);
-                                        currentAssistantMessage.raw = currentAssistantMessage.raw;
                                         notifyMessageUpdate();
                                         LOG.debug("Updated assistant message usage from result message");
                                     }

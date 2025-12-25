@@ -255,12 +255,7 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
           >
             <span className="codicon codicon-refresh" style={{ fontSize: '12px' }} />
           </button>
-          <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: isError ? 'var(--color-error)' : isCompleted ? 'var(--color-success)' : 'var(--color-warning)',
-          }} />
+          <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
         </div>
       </div>
 
