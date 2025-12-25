@@ -203,4 +203,19 @@ interface Window {
    * Pending slash commands payload before provider initialization
    */
   __pendingSlashCommands?: string;
+
+  /**
+   * Open tabs result callback (for file picker dropdown)
+   */
+  onOpenTabsResult?: (json: string) => void;
+
+  /**
+   * File search result callback (for file picker dropdown)
+   */
+  onFileSearchResult?: (json: string) => void;
+
+  /**
+   * Add attachment from Java backend
+   */
+  addAttachmentFromJava?: (attachmentJson: string) => void;
 }

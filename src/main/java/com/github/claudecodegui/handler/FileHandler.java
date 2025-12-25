@@ -7,11 +7,20 @@ import com.intellij.ide.BrowserUtil;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.psi.search.FilenameIndex;
+import com.intellij.psi.search.GlobalSearchScope;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -25,8 +34,48 @@ public class FileHandler extends BaseMessageHandler {
         "list_files",
         "get_commands",
         "open_file",
-        "open_browser"
+        "open_browser",
+        "get_open_tabs",
+        "search_files",
+        "open_file_chooser"
     };
+
+    /**
+     * 文件扩展名到 MIME 类型的映射表
+     */
+    private static final Map<String, String> MIME_TYPE_MAP = new HashMap<>();
+    static {
+        // 文本文件
+        MIME_TYPE_MAP.put("txt", "text/plain");
+        MIME_TYPE_MAP.put("md", "text/markdown");
+        MIME_TYPE_MAP.put("html", "text/html");
+        MIME_TYPE_MAP.put("css", "text/css");
+
+        // 数据格式
+        MIME_TYPE_MAP.put("json", "application/json");
+        MIME_TYPE_MAP.put("xml", "application/xml");
+
+        // 脚本语言
+        MIME_TYPE_MAP.put("js", "application/javascript");
+        MIME_TYPE_MAP.put("java", "text/x-java-source");
+        MIME_TYPE_MAP.put("py", "text/x-python");
+
+        // 文档
+        MIME_TYPE_MAP.put("pdf", "application/pdf");
+
+        // 图片
+        MIME_TYPE_MAP.put("png", "image/png");
+        MIME_TYPE_MAP.put("jpg", "image/jpeg");
+        MIME_TYPE_MAP.put("jpeg", "image/jpeg");
+        MIME_TYPE_MAP.put("gif", "image/gif");
+        MIME_TYPE_MAP.put("svg", "image/svg+xml");
+        MIME_TYPE_MAP.put("webp", "image/webp");
+    }
+
+    /**
+     * 默认 MIME 类型
+     */
+    private static final String DEFAULT_MIME_TYPE = "application/octet-stream";
 
     public FileHandler(HandlerContext context) {
         super(context);
@@ -51,6 +100,15 @@ public class FileHandler extends BaseMessageHandler {
                 return true;
             case "open_browser":
                 handleOpenBrowser(content);
+                return true;
+            case "get_open_tabs":
+                handleGetOpenTabs(content);
+                return true;
+            case "search_files":
+                handleSearchFiles(content);
+                return true;
+            case "open_file_chooser":
+                handleOpenFileChooser(content);
                 return true;
             default:
                 return false;
@@ -472,5 +530,281 @@ public class FileHandler extends BaseMessageHandler {
 
             return aName.compareToIgnoreCase(bName);
         });
+    }
+
+    /**
+     * 处理获取打开的标签页请求
+     */
+    private void handleGetOpenTabs(String content) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                FileEditorManager fileEditorManager = FileEditorManager.getInstance(context.getProject());
+                VirtualFile[] openFiles = fileEditorManager.getOpenFiles();
+
+                List<JsonObject> tabs = new ArrayList<>();
+                int count = 0;
+                for (VirtualFile file : openFiles) {
+                    if (count >= 5) break; // 最多5个
+
+                    String relativePath = "";
+                    if (context.getProject().getBasePath() != null) {
+                        String basePath = context.getProject().getBasePath();
+                        String filePath = file.getPath();
+                        if (filePath.startsWith(basePath)) {
+                            relativePath = filePath.substring(basePath.length());
+                            if (relativePath.startsWith("/") || relativePath.startsWith("\\")) {
+                                relativePath = relativePath.substring(1);
+                            }
+                        } else {
+                            relativePath = file.getName();
+                        }
+                    } else {
+                        relativePath = file.getName();
+                    }
+
+                    JsonObject tab = new JsonObject();
+                    tab.addProperty("name", file.getName());
+                    tab.addProperty("path", relativePath.replace("\\", "/"));
+                    tab.addProperty("absolutePath", file.getPath().replace("\\", "/"));
+                    tabs.add(tab);
+                    count++;
+                }
+
+                Gson gson = new Gson();
+                JsonObject response = new JsonObject();
+                response.add("tabs", gson.toJsonTree(tabs));
+                String resultJson = gson.toJson(response);
+
+                callJavaScript("window.onOpenTabsResult", escapeJs(resultJson));
+                LOG.info("[FileHandler] Sent " + tabs.size() + " open tabs to frontend");
+            } catch (Exception e) {
+                LOG.error("[FileHandler] Failed to get open tabs: " + e.getMessage(), e);
+            }
+        }, ModalityState.nonModal());
+    }
+
+    /**
+     * 处理搜索文件请求
+     */
+    private void handleSearchFiles(String content) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String query = "";
+                if (content != null && !content.isEmpty()) {
+                    try {
+                        Gson gson = new Gson();
+                        JsonObject json = gson.fromJson(content, JsonObject.class);
+                        if (json.has("query")) {
+                            query = json.get("query").getAsString();
+                        }
+                    } catch (Exception e) {
+                        query = content;
+                    }
+                }
+
+                if (query == null || query.trim().isEmpty()) {
+                    // 空查询，返回空结果
+                    Gson gson = new Gson();
+                    JsonObject response = new JsonObject();
+                    response.add("files", gson.toJsonTree(new ArrayList<>()));
+                    String resultJson = gson.toJson(response);
+
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.onFileSearchResult", escapeJs(resultJson));
+                    });
+                    return;
+                }
+
+                final String finalQuery = query.toLowerCase();
+                LOG.info("[FileHandler] Searching files with query: " + finalQuery);
+
+                // 在 read action 中执行文件搜索
+                List<JsonObject> results = ApplicationManager.getApplication().runReadAction((com.intellij.openapi.util.Computable<List<JsonObject>>) () -> {
+                    List<JsonObject> searchResults = new ArrayList<>();
+
+                    try {
+                        // 使用 IntelliJ 的文件搜索 API
+                        GlobalSearchScope scope = GlobalSearchScope.projectScope(context.getProject());
+
+                        // 先尝试精确匹配
+                        Collection<VirtualFile> exactMatches = FilenameIndex.getVirtualFilesByName(
+                            finalQuery,
+                            scope
+                        );
+
+                        for (VirtualFile file : exactMatches) {
+                            if (searchResults.size() >= 10) break;
+
+                            String relativePath = "";
+                            if (context.getProject().getBasePath() != null) {
+                                String basePath = context.getProject().getBasePath();
+                                String filePath = file.getPath();
+                                if (filePath.startsWith(basePath)) {
+                                    relativePath = filePath.substring(basePath.length());
+                                    if (relativePath.startsWith("/") || relativePath.startsWith("\\")) {
+                                        relativePath = relativePath.substring(1);
+                                    }
+                                } else {
+                                    relativePath = file.getName();
+                                }
+                            } else {
+                                relativePath = file.getName();
+                            }
+
+                            JsonObject fileObj = new JsonObject();
+                            fileObj.addProperty("name", file.getName());
+                            fileObj.addProperty("path", relativePath.replace("\\", "/"));
+                            fileObj.addProperty("absolutePath", file.getPath().replace("\\", "/"));
+                            fileObj.addProperty("type", file.isDirectory() ? "directory" : "file");
+
+                            if (!file.isDirectory()) {
+                                String extension = file.getExtension();
+                                if (extension != null && !extension.isEmpty()) {
+                                    fileObj.addProperty("extension", extension);
+                                }
+                            }
+
+                            searchResults.add(fileObj);
+                        }
+
+                        // 如果精确匹配没有结果,尝试模糊搜索
+                        if (searchResults.isEmpty()) {
+                            // 获取项目中的所有文件名并进行模糊匹配
+                            String[] allFileNames = FilenameIndex.getAllFilenames(context.getProject());
+                            for (String fileName : allFileNames) {
+                                if (searchResults.size() >= 10) break;
+                                if (fileName.toLowerCase().contains(finalQuery)) {
+                                    // 获取该文件名的所有文件
+                                    Collection<VirtualFile> files = FilenameIndex.getVirtualFilesByName(
+                                        fileName,
+                                        scope
+                                    );
+                                    for (VirtualFile file : files) {
+                                        if (searchResults.size() >= 10) break;
+
+                                        String relativePath = "";
+                                        if (context.getProject().getBasePath() != null) {
+                                            String basePath = context.getProject().getBasePath();
+                                            String filePath = file.getPath();
+                                            if (filePath.startsWith(basePath)) {
+                                                relativePath = filePath.substring(basePath.length());
+                                                if (relativePath.startsWith("/") || relativePath.startsWith("\\")) {
+                                                    relativePath = relativePath.substring(1);
+                                                }
+                                            } else {
+                                                relativePath = file.getName();
+                                            }
+                                        } else {
+                                            relativePath = file.getName();
+                                        }
+
+                                        JsonObject fileObj = new JsonObject();
+                                        fileObj.addProperty("name", file.getName());
+                                        fileObj.addProperty("path", relativePath.replace("\\", "/"));
+                                        fileObj.addProperty("absolutePath", file.getPath().replace("\\", "/"));
+                                        fileObj.addProperty("type", file.isDirectory() ? "directory" : "file");
+
+                                        if (!file.isDirectory()) {
+                                            String extension = file.getExtension();
+                                            if (extension != null && !extension.isEmpty()) {
+                                                fileObj.addProperty("extension", extension);
+                                            }
+                                        }
+
+                                        searchResults.add(fileObj);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        LOG.error("[FileHandler] Error during file search: " + e.getMessage(), e);
+                    }
+
+                    return searchResults;
+                });
+
+                Gson gson = new Gson();
+                JsonObject response = new JsonObject();
+                response.add("files", gson.toJsonTree(results));
+                String resultJson = gson.toJson(response);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onFileSearchResult", escapeJs(resultJson));
+                    LOG.info("[FileHandler] Sent " + results.size() + " search results to frontend");
+                });
+            } catch (Exception e) {
+                LOG.error("[FileHandler] Failed to search files: " + e.getMessage(), e);
+                // 发送空结果
+                try {
+                    Gson gson = new Gson();
+                    JsonObject response = new JsonObject();
+                    response.add("files", gson.toJsonTree(new ArrayList<>()));
+                    String resultJson = gson.toJson(response);
+
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.onFileSearchResult", escapeJs(resultJson));
+                    });
+                } catch (Exception ex) {
+                    LOG.error("[FileHandler] Failed to send empty search results: " + ex.getMessage(), ex);
+                }
+            }
+        });
+    }
+
+    /**
+     * 处理打开文件选择器请求
+     */
+    private void handleOpenFileChooser(String content) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFileDescriptor();
+                descriptor.setTitle("选择文件");
+                descriptor.setDescription("选择要添加为附件的文件");
+
+                VirtualFile selectedFile = FileChooser.chooseFile(descriptor, context.getProject(), null);
+
+                if (selectedFile != null) {
+                    String filePath = selectedFile.getPath().replace("\\", "/");
+                    LOG.info("[FileHandler] File selected for attachment: " + filePath);
+
+                    // 读取文件内容并作为附件添加
+                    try {
+                        byte[] fileContent = selectedFile.contentsToByteArray();
+                        String base64Content = java.util.Base64.getEncoder().encodeToString(fileContent);
+
+                        // 构建附件 JSON
+                        JsonObject attachment = new JsonObject();
+                        attachment.addProperty("id", java.util.UUID.randomUUID().toString());
+                        attachment.addProperty("fileName", selectedFile.getName());
+
+                        // 确定 MIME 类型
+                        String mimeType = DEFAULT_MIME_TYPE;
+                        String extension = selectedFile.getExtension();
+                        if (extension != null) {
+                            mimeType = MIME_TYPE_MAP.getOrDefault(extension.toLowerCase(), DEFAULT_MIME_TYPE);
+                        }
+
+                        attachment.addProperty("mediaType", mimeType);
+                        attachment.addProperty("data", base64Content);
+
+                        Gson gson = new Gson();
+                        String attachmentJson = gson.toJson(attachment);
+
+                        // 调用前端方法添加附件
+                        String js = "if (window.addAttachmentFromJava) { window.addAttachmentFromJava('" + escapeJs(attachmentJson) + "'); }";
+                        context.executeJavaScriptOnEDT(js);
+
+                        LOG.info("[FileHandler] File added as attachment: " + selectedFile.getName() + " (" + fileContent.length + " bytes)");
+                    } catch (Exception e) {
+                        LOG.error("[FileHandler] Failed to read file content: " + e.getMessage(), e);
+                        callJavaScript("addErrorMessage", escapeJs("无法读取文件: " + e.getMessage()));
+                    }
+                } else {
+                    LOG.info("[FileHandler] File chooser cancelled");
+                }
+            } catch (Exception e) {
+                LOG.error("[FileHandler] Failed to open file chooser: " + e.getMessage(), e);
+            }
+        }, ModalityState.nonModal());
     }
 }

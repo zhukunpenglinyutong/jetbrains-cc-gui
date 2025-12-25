@@ -47,7 +47,25 @@
     "imagePreview": "预览",
     "context": "上下文",
     "usage": "上下文",
-    "usagePercentage": "上下文: {{percentage}}"
+    "usagePercentage": "上下文: {{percentage}}",
+    "fileChooser": {
+      "title": "选择文件",
+      "description": "选择要添加为附件的文件"
+    },
+    "errors": {
+      "cannotOpenFile": "无法打开文件: {{reason}}",
+      "fileNotExists": "文件不存在 ({{path}})",
+      "cannotReadFile": "无法读取文件: {{error}}"
+    },
+    "commands": {
+      "help": "显示帮助信息",
+      "clear": "清空对话历史",
+      "new": "创建新会话",
+      "history": "查看历史记录",
+      "model": "切换模型",
+      "settings": "打开设置",
+      "compact": "压缩对话上下文"
+    }
   },
   "settings": {
     "title": "设置",
@@ -469,5 +487,16 @@
     "gemini": {
       "label": "Gemini Cli"
     }
+  },
+  "filePicker": {
+    "addFromDiskTitle": "从磁盘添加文件",
+    "addFromDisk": "添加磁盘文件...",
+    "searchPlaceholder": "搜索项目文件...",
+    "clearSearch": "清除搜索",
+    "searchResults": "搜索结果",
+    "searching": "搜索中...",
+    "noMatches": "无匹配文件",
+    "openFiles": "打开的文件",
+    "noOpenFiles": "没有打开的文件"
   }
 }

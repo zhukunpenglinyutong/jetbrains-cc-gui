@@ -1,0 +1,195 @@
+/**
+ * FilePickerDropdown 组件样式
+ */
+
+/* ============================================================
+   File Picker Dropdown
+   ============================================================ */
+.file-picker-dropdown {
+  background: var(--dropdown-bg);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 320px;
+  max-width: 480px;
+  max-height: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-picker-section {
+  border-bottom: 1px solid var(--dropdown-border);
+}
+
+.file-picker-section:last-child {
+  border-bottom: none;
+}
+
+/* 添加文件按钮 */
+.file-picker-add-button {
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  transition: background 0.15s ease;
+}
+
+.file-picker-add-button:hover {
+  background: var(--dropdown-hover);
+}
+
+.file-picker-add-button .codicon {
+  font-size: 14px;
+}
+
+/* 搜索框 */
+.file-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--input-bg);
+  border-bottom: 1px solid var(--dropdown-border);
+}
+
+.file-picker-search .codicon-search {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.file-picker-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.file-picker-search-input::placeholder {
+  color: var(--input-placeholder);
+}
+
+.file-picker-search-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: background 0.15s ease;
+}
+
+.file-picker-search-clear:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+/* 分区标题 */
+.file-picker-section-title {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--context-bar-bg);
+}
+
+/* 文件列表 */
+.file-picker-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.file-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.file-picker-item:hover {
+  background: var(--dropdown-hover);
+}
+
+.file-picker-item-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-picker-item-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.file-picker-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.file-picker-item-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-picker-item-path {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 加载状态 */
+.file-picker-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.file-picker-loading .codicon {
+  font-size: 14px;
+}
+
+/* 空状态 */
+.file-picker-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.file-picker-empty .codicon {
+  font-size: 16px;
+}

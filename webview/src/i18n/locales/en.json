@@ -47,7 +47,25 @@
     "imagePreview": "Preview",
     "context": "Context",
     "usage": "Usage",
-    "usagePercentage": "Usage: {{percentage}}"
+    "usagePercentage": "Usage: {{percentage}}",
+    "fileChooser": {
+      "title": "Select File",
+      "description": "Select a file to add as attachment"
+    },
+    "errors": {
+      "cannotOpenFile": "Cannot open file: {{reason}}",
+      "fileNotExists": "File does not exist ({{path}})",
+      "cannotReadFile": "Cannot read file: {{error}}"
+    },
+    "commands": {
+      "help": "Show help information",
+      "clear": "Clear conversation history",
+      "new": "Create new session",
+      "history": "View history",
+      "model": "Switch model",
+      "settings": "Open settings",
+      "compact": "Compact conversation context"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -469,5 +487,16 @@
     "gemini": {
       "label": "Gemini Cli"
     }
+  },
+  "filePicker": {
+    "addFromDiskTitle": "Add file from disk",
+    "addFromDisk": "Add from disk...",
+    "searchPlaceholder": "Search project files...",
+    "clearSearch": "Clear search",
+    "searchResults": "Search Results",
+    "searching": "Searching...",
+    "noMatches": "No matching files",
+    "openFiles": "Open Files",
+    "noOpenFiles": "No open files"
   }
 }

@@ -1,6 +1,8 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
+import { FilePickerDropdown } from './FilePickerDropdown';
+import type { FileItem } from './types';
 
 interface ContextBarProps {
   activeFile?: string;
@@ -13,8 +15,8 @@ interface ContextBarProps {
   onAddAttachment?: (files: FileList) => void;
 }
 
-export const ContextBar: React.FC<ContextBarProps> = ({ 
-  activeFile, 
+export const ContextBar: React.FC<ContextBarProps> = ({
+  activeFile,
   selectedLines,
   percentage = 0,
   usedTokens,
@@ -24,11 +26,27 @@ export const ContextBar: React.FC<ContextBarProps> = ({
   onAddAttachment
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachButtonRef = useRef<HTMLDivElement>(null);
+  const [showFilePicker, setShowFilePicker] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{ bottom: number; left: number } | undefined>();
 
   const handleAttachClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    fileInputRef.current?.click();
+
+    // 计算下拉菜单位置 - 向上弹出
+    if (attachButtonRef.current) {
+      const rect = attachButtonRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+
+      setDropdownPosition({
+        // 使用 bottom 定位，让弹窗显示在按钮上方
+        bottom: viewportHeight - rect.top + 4, // 距离视口底部的距离
+        left: rect.left,
+      });
+    }
+
+    setShowFilePicker(true);
   }, []);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,6 +55,19 @@ export const ContextBar: React.FC<ContextBarProps> = ({
     }
     e.target.value = '';
   }, [onAddAttachment]);
+
+  const handleFileSelect = useCallback((file: FileItem) => {
+    // 直接调用全局函数将文件路径插入到输入框（带 @ 前缀）
+    const filePath = file.absolutePath || file.path;
+    if ((window as any).handleFilePathFromJava) {
+      (window as any).handleFilePathFromJava(filePath);
+    }
+    setShowFilePicker(false);
+  }, []);
+
+  const handleCloseFilePicker = useCallback(() => {
+    setShowFilePicker(false);
+  }, []);
 
   // Extract filename from path
   const getFileName = (path: string) => {
@@ -61,8 +92,9 @@ export const ContextBar: React.FC<ContextBarProps> = ({
     <div className="context-bar">
       {/* Tool Icons Group */}
       <div className="context-tools">
-        <div 
-          className="context-tool-btn" 
+        <div
+          ref={attachButtonRef}
+          className="context-tool-btn"
           onClick={handleAttachClick}
           title="Add attachment"
         >
@@ -80,8 +112,8 @@ export const ContextBar: React.FC<ContextBarProps> = ({
             />
           </div>
         )}
-        
-        {/* Hidden file input */}
+
+        {/* Hidden file input for fallback */}
         <input
           ref={fileInputRef}
           type="file"
@@ -90,23 +122,23 @@ export const ContextBar: React.FC<ContextBarProps> = ({
           onChange={handleFileChange}
           style={{ display: 'none' }}
         />
-        
+
         <div className="context-tool-divider" />
       </div>
 
       {/* Active Context Chip */}
       {displayText && (
-        <div 
-          className="context-item has-tooltip" 
+        <div
+          className="context-item has-tooltip"
           data-tooltip={fullDisplayText}
           style={{ cursor: 'default' }}
         >
           {activeFile && (
-            <span 
-              className="context-file-icon" 
-              style={{ 
-                marginRight: 4, 
-                display: 'inline-flex', 
+            <span
+              className="context-file-icon"
+              style={{
+                marginRight: 4,
+                display: 'inline-flex',
                 alignItems: 'center',
                 width: 16,
                 height: 16
@@ -117,13 +149,21 @@ export const ContextBar: React.FC<ContextBarProps> = ({
           <span className="context-text">
             <span dir="ltr">{displayText}</span>
           </span>
-          <span 
-            className="codicon codicon-close context-close" 
+          <span
+            className="codicon codicon-close context-close"
             onClick={onClearFile}
             title="Remove file context"
           />
         </div>
       )}
+
+      {/* File Picker Dropdown */}
+      <FilePickerDropdown
+        isVisible={showFilePicker}
+        onClose={handleCloseFilePicker}
+        onSelectFile={handleFileSelect}
+        position={dropdownPosition}
+      />
     </div>
   );
 };
