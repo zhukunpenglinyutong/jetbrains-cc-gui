@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
@@ -1026,7 +1026,9 @@ const App = () => {
     )) {
       return false;
     }
-
+    if (message.type === 'user' && text === '[tool_result]') {
+      return false;
+    }
     if (message.type === 'assistant') {
       return true;
     }
@@ -1069,6 +1071,10 @@ const App = () => {
         const type = candidate.type as string | undefined;
         if (type === 'text') {
           const rawText = typeof candidate.text === 'string' ? candidate.text : '';
+          // 某些回复包含占位文本 "(no content)", 直接忽略避免渲染空内容
+          if (rawText.trim() === '(no content)') {
+            return;
+          }
           blocks.push({
             type: 'text',
             text: localizeMessage(rawText),
@@ -1225,25 +1231,27 @@ const App = () => {
     return result;
   }, [messages]);
 
-  const findToolResult = (toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
+  const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') {
       return null;
     }
-    // 使用 mergedMessages 进行查找
-    for (let i = messageIndex + 1; i < mergedMessages.length; i += 1) {
-      const candidate = mergedMessages[i];
-      if (candidate.type !== 'user') {
-        continue;
-      }
+
+    // 注意：在原始 messages 数组中查找，而不是 mergedMessages
+    // 因为 tool_result 可能在被过滤掉的消息中
+    for (let i = 0; i < messages.length; i += 1) {
+      const candidate = messages[i];
       const raw = candidate.raw;
+
       if (!raw || typeof raw === 'string') {
         continue;
       }
       // 兼容 raw.content 和 raw.message.content
       const content = raw.content ?? raw.message?.content;
+
       if (!Array.isArray(content)) {
         continue;
       }
+
       const resultBlock = content.find(
         (block): block is ToolResultBlock =>
           Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
@@ -1252,8 +1260,9 @@ const App = () => {
         return resultBlock;
       }
     }
+
     return null;
-  };
+  }, [messages]);
 
   const sessionTitle = useMemo(() => {
     if (messages.length === 0) {
@@ -1466,7 +1475,7 @@ const App = () => {
                               ['edit', 'edit_file', 'replace_string', 'write_to_file'].includes(
                                 block.name.toLowerCase(),
                               ) ? (
-                              <EditToolBlock name={block.name} input={block.input} />
+                              <EditToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
                             ) : block.name &&
                               ['bash', 'run_terminal_cmd', 'execute_command'].includes(
                                 block.name.toLowerCase(),
@@ -1477,7 +1486,7 @@ const App = () => {
                                 result={findToolResult(block.id, messageIndex)}
                               />
                             ) : (
-                              <GenericToolBlock name={block.name} input={block.input} />
+                              <GenericToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
                             )}
                           </>
                         )}

@@ -77,6 +77,37 @@
     background-color: var(--color-error);
 }
 
+/* 工具调用状态指示器 */
+.tool-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.tool-status-indicator.pending {
+    background-color: var(--color-warning);
+    animation: breathing 1.5s ease-in-out infinite;
+}
+
+.tool-status-indicator.completed {
+    background-color: var(--color-success);
+}
+
+.tool-status-indicator.error {
+    background-color: var(--color-error);
+}
+
+@keyframes breathing {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(0.85);
+    }
+}
+
 .bash-tool-content {
     display: flex;
     flex-direction: column;
