@@ -1203,7 +1203,7 @@ public class ClaudeSession {
      * 创建权限请求（供SDK调用）
      */
     public PermissionRequest createPermissionRequest(String toolName, Map<String, Object> inputs, JsonObject suggestions) {
-        return permissionManager.createRequest(channelId, toolName, inputs, suggestions);
+        return permissionManager.createRequest(channelId, toolName, inputs, suggestions, project);
     }
 
     /**
