@@ -93,7 +93,15 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSess
     return (
       <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: '#858585' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📜</div>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            margin: '0 auto 16px',
+            border: '4px solid rgba(133, 133, 133, 0.2)',
+            borderTop: '4px solid #858585',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }}></div>
           <div>{t('history.loading')}</div>
         </div>
       </div>

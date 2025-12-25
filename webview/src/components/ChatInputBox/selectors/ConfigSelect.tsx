@@ -20,13 +20,13 @@ interface ConfigSelectProps {
 const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: number }) => {
   switch (providerId) {
     case 'claude':
-      return <Claude.Avatar size={size} />;
+      return <Claude size={size} />;
     case 'codex':
       return <OpenAI.Avatar size={size} />;
     case 'gemini':
       return <Gemini.Avatar size={size} />;
     default:
-      return <Claude.Avatar size={size} />;
+      return <Claude size={size} />;
   }
 };
 
@@ -250,8 +250,65 @@ export const ConfigSelect = ({
           {/* Divider */}
           <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
 
+          {/* Provider Item (Disabled) */}
+          <div
+            className="selector-option disabled"
+            style={{ position: 'relative', opacity: 0.5, cursor: 'not-allowed' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              showToastMessage(t('settings.provider.featureComingSoon'));
+            }}
+          >
+            <span className="codicon codicon-vm-connect" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span>供应商</span>
+            </div>
+            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
+          </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
+
+          {/* MCP Item (Disabled) */}
+          <div
+            className="selector-option disabled"
+            style={{ position: 'relative', opacity: 0.5, cursor: 'not-allowed' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              showToastMessage(t('settings.provider.featureComingSoon'));
+            }}
+          >
+            <span className="codicon codicon-server" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span>MCP</span>
+            </div>
+            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
+          </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
+
+          {/* Agent Item (Disabled) */}
+          <div
+            className="selector-option disabled"
+            style={{ position: 'relative', opacity: 0.5, cursor: 'not-allowed' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              showToastMessage(t('settings.provider.featureComingSoon'));
+            }}
+          >
+            <span className="codicon codicon-robot" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span>Agent</span>
+            </div>
+            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
+          </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
+
           {/* Thinking Switch Item */}
-          <div 
+          <div
             className="selector-option"
             onClick={(e) => {
               e.stopPropagation();
@@ -264,9 +321,9 @@ export const ConfigSelect = ({
               <span className="codicon codicon-lightbulb" />
               <span>{t('common.thinking')}</span>
             </div>
-            <Switch 
+            <Switch
               size="small"
-              checked={alwaysThinkingEnabled ?? false} 
+              checked={alwaysThinkingEnabled ?? false}
               onClick={(checked, e) => {
                  e.stopPropagation();
                  onToggleThinking?.(checked);
