@@ -554,6 +554,37 @@ public class ClaudeSession {
                             callback.onSessionIdReceived(content);
                         }
                         LOG.info("Captured session ID: " + content);
+                    } else if ("tool_result".equals(type) && content.startsWith("{")) {
+                        // 实时处理工具调用结果
+                        // 将 tool_result 添加到消息列表中，前端可以立即更新工具状态
+                        try {
+                            JsonObject toolResultBlock = gson.fromJson(content, JsonObject.class);
+                            String toolUseId = toolResultBlock.has("tool_use_id")
+                                ? toolResultBlock.get("tool_use_id").getAsString()
+                                : null;
+
+                            if (toolUseId != null) {
+                                // 构造包含 tool_result 的 user 消息
+                                JsonArray contentArray = new JsonArray();
+                                contentArray.add(toolResultBlock);
+
+                                JsonObject messageObj = new JsonObject();
+                                messageObj.add("content", contentArray);
+
+                                JsonObject rawUser = new JsonObject();
+                                rawUser.addProperty("type", "user");
+                                rawUser.add("message", messageObj);
+
+                                // 创建 user 消息并添加到消息列表
+                                Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", rawUser);
+                                messages.add(toolResultMessage);
+
+                                LOG.debug("Tool result received for tool_use_id: " + toolUseId);
+                                notifyMessageUpdate();
+                            }
+                        } catch (Exception e) {
+                            LOG.warn("Failed to parse tool_result JSON: " + e.getMessage());
+                        }
                     } else if ("message_end".equals(type)) {
                         // 消息结束时立即更新 loading 状态，避免延迟
                         // long messageEndTime = System.currentTimeMillis();
@@ -569,24 +600,17 @@ public class ClaudeSession {
                         loading = false;
                         updateState();
 
-                        // 在消息结束后重新加载会话消息，以获取SDK写入历史文件的tool_result
+                        // 在消息结束后重新加载会话消息，确保消息历史的完整性
                         //
-                        // 重要说明：Claude Agent SDK 的工作机制
+                        // 说明：
                         // ========================================
-                        // 1. SDK 的 query() 函数返回 AsyncIterable，流式输出 assistant 消息
-                        // 2. 当 Claude 返回 tool_use 时，SDK 在内部自动：
-                        //    - 执行工具并获取结果
-                        //    - 构造包含 tool_result 的 user 消息
-                        //    - 将该消息发送回 Claude API（用户看不到这个过程）
-                        //    - 将完整对话（包括 tool_result）写入 JSONL 历史文件
-                        // 3. SDK 只向应用层发送最终的 assistant 响应，不发送 tool_result 消息
-                        // 4. 因此，实时流式会话中无法直接获取 tool_result
-                        // 5. 唯一的解决方案：在对话轮次结束后，从历史文件重新加载所有消息
-                        //
-                        // 这样前端的 findToolResult() 函数才能找到工具执行结果，
-                        // 工具块才能正确显示"已完成"状态和执行结果。
+                        // 1. 现在我们已经通过 [TOOL_RESULT] 标签实时获取工具调用结果
+                        // 2. 前端可以在工具执行完成后立即看到结果，无需等待 message_end
+                        // 3. 但是，为了确保消息历史的完整性和一致性，
+                        //    我们仍然在 message_end 时重新加载会话消息
+                        // 4. 这样可以确保所有消息（包括可能遗漏的）都被正确加载
                         if (sessionId != null && cwd != null) {
-                            LOG.debug("Reloading session messages to get tool_result (SDK does not send tool_result in streaming mode)");
+                            LOG.debug("Reloading session messages for consistency check");
                             CompletableFuture.runAsync(() -> {
                                 try {
                                     List<JsonObject> serverMessages;
@@ -606,7 +630,7 @@ public class ClaudeSession {
                                     }
 
                                     notifyMessageUpdate();
-                                    LOG.debug("Session messages reloaded successfully, tool_result should now be available");
+                                    LOG.debug("Session messages reloaded successfully");
                                 } catch (Exception e) {
                                     LOG.warn("Failed to reload session messages: " + e.getMessage());
                                 }

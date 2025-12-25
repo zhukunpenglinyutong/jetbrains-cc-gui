@@ -333,6 +333,19 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
         }
       }
 
+      // 实时输出工具调用结果（user 消息中的 tool_result）
+      if (msg.type === 'user') {
+        const content = msg.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'tool_result') {
+              // 输出工具调用结果，前端可以实时更新工具状态
+              console.log('[TOOL_RESULT]', JSON.stringify(block));
+            }
+          }
+        }
+      }
+
       // 捕获并保存 session_id
       if (msg.type === 'system' && msg.session_id) {
         currentSessionId = msg.session_id;
@@ -820,6 +833,19 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    	          }
 	    	        } else if (typeof content === 'string') {
 	    	          console.log('[CONTENT]', content);
+	    	        }
+	    	      }
+
+	    	      // 实时输出工具调用结果（user 消息中的 tool_result）
+	    	      if (msg.type === 'user') {
+	    	        const content = msg.message?.content;
+	    	        if (Array.isArray(content)) {
+	    	          for (const block of content) {
+	    	            if (block.type === 'tool_result') {
+	    	              // 输出工具调用结果，前端可以实时更新工具状态
+	    	              console.log('[TOOL_RESULT]', JSON.stringify(block));
+	    	            }
+	    	          }
 	    	        }
 	    	      }
 

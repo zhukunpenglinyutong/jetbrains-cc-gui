@@ -1071,6 +1071,10 @@ const App = () => {
         const type = candidate.type as string | undefined;
         if (type === 'text') {
           const rawText = typeof candidate.text === 'string' ? candidate.text : '';
+          // 某些回复包含占位文本 "(no content)", 直接忽略避免渲染空内容
+          if (rawText.trim() === '(no content)') {
+            return;
+          }
           blocks.push({
             type: 'text',
             text: localizeMessage(rawText),

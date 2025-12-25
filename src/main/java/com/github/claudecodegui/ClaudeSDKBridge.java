@@ -685,6 +685,10 @@ public class ClaudeSDKBridge {
                                 } else if (line.startsWith("[SLASH_COMMANDS]")) {
                                     String slashCommandsJson = line.substring("[SLASH_COMMANDS]".length()).trim();
                                     callback.onMessage("slash_commands", slashCommandsJson);
+                                } else if (line.startsWith("[TOOL_RESULT]")) {
+                                    // 实时输出工具调用结果，前端可以立即更新工具状态
+                                    String toolResultJson = line.substring("[TOOL_RESULT]".length()).trim();
+                                    callback.onMessage("tool_result", toolResultJson);
                                 } else if (line.startsWith("[MESSAGE_START]")) {
                                     callback.onMessage("message_start", "");
                                 } else if (line.startsWith("[MESSAGE_END]")) {
