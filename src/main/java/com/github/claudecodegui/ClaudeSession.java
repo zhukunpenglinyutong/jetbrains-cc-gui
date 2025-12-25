@@ -811,8 +811,26 @@ public class ClaudeSession {
 
         if ("user".equals(type)) {
             String content = extractMessageContent(msg);
-            // 如果内容为空或只包含空白字符，不展示
+            // 如果内容为空或只包含空白字符，检查是否有 tool_result
+            // tool_result 消息需要保留，因为前端需要用它来显示工具调用结果
             if (content == null || content.trim().isEmpty()) {
+                // 检查是否包含 tool_result
+                if (msg.has("message") && msg.get("message").isJsonObject()) {
+                    JsonObject message = msg.getAsJsonObject("message");
+                    if (message.has("content") && message.get("content").isJsonArray()) {
+                        JsonArray contentArray = message.getAsJsonArray("content");
+                        for (int i = 0; i < contentArray.size(); i++) {
+                            JsonElement element = contentArray.get(i);
+                            if (element.isJsonObject()) {
+                                JsonObject block = element.getAsJsonObject();
+                                if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
+                                    // 包含 tool_result，保留此消息（使用占位符内容）
+                                    return new Message(Message.Type.USER, "[tool_result]", msg);
+                                }
+                            }
+                        }
+                    }
+                }
                 return null;
             }
             return new Message(Message.Type.USER, content, msg);

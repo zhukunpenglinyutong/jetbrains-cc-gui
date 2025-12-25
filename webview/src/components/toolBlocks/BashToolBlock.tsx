@@ -19,14 +19,13 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
   const command = (input.command as string | undefined) ?? '';
   const description = (input.description as string | undefined) ?? '';
 
-  let isError = false;
+  // Determine tool call status based on result
+  const isCompleted = result !== undefined && result !== null;
+  const isError = isCompleted && result?.is_error === true;
+
   let output = '';
 
   if (result) {
-    if (result.is_error) {
-      isError = true;
-    }
-
     const content = result.content;
     if (typeof content === 'string') {
       output = content;
@@ -51,7 +50,7 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
             width: '8px',
             height: '8px',
             borderRadius: '50%',
-            backgroundColor: 'var(--color-success)',
+            backgroundColor: isError ? 'var(--color-error)' : isCompleted ? 'var(--color-success)' : 'var(--color-warning)',
             marginRight: '4px'
         }} />
       </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ToolInput } from '../../types';
-import { openFile, refreshFile } from '../../utils/bridge';
+import type { ToolInput, ToolResultBlock } from '../../types';
+import { openFile } from '../../utils/bridge';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 
@@ -94,15 +94,22 @@ const omitFields = new Set([
 interface GenericToolBlockProps {
   name?: string;
   input?: ToolInput;
+  result?: ToolResultBlock | null;
 }
 
-const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
+const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
   const { t } = useTranslation();
   // Tools that should be collapsible (Grep, Glob, Write, and MCP tools)
   const lowerName = (name ?? '').toLowerCase();
   const isMcpTool = lowerName.startsWith('mcp__');
   const isCollapsible = ['grep', 'glob', 'write', 'save-file'].includes(lowerName) || isMcpTool;
   const [expanded, setExpanded] = useState(false);
+
+  const filePath = input ? pickFilePath(input) : undefined;
+
+  // Determine tool call status based on result
+  const isCompleted = result !== undefined && result !== null;
+  const isError = isCompleted && result?.is_error === true;
 
   if (!input) {
     return null;
@@ -112,7 +119,6 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
   const codicon = CODICON_MAP[(name ?? '').toLowerCase()] ?? 'codicon-tools';
 
   let summary: string | null = null;
-  const filePath = pickFilePath(input);
   if (filePath) {
     summary = getFileName(filePath);
   } else if (typeof input.command === 'string') {
@@ -155,16 +161,6 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
     e.stopPropagation();
     if (isFilePath) {
       openFile(filePath);
-    }
-  };
-
-  const isFileModifyingTool = ['write', 'write_to_file', 'save-file', 'notebook_edit'].includes(lowerName);
-  const canRefreshInIdea = Boolean(filePath && isFileModifyingTool && isFilePath);
-  const handleRefreshInIdea = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (filePath) {
-      refreshFile(filePath);
-      window.addToast?.(t('tools.refreshFileInIdeaSuccess'), 'success');
     }
   };
 
@@ -215,45 +211,13 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
             )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {canRefreshInIdea && (
-            <button
-              onClick={handleRefreshInIdea}
-              title={t('tools.refreshFileInIdea')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '2px 6px',
-                fontSize: '11px',
-                color: 'var(--text-secondary)',
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--bg-hover)';
-                e.currentTarget.style.color = 'var(--text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--bg-tertiary)';
-                e.currentTarget.style.color = 'var(--text-secondary)';
-              }}
-            >
-              <span className="codicon codicon-refresh" style={{ fontSize: '12px' }} />
-            </button>
-          )}
-
-          <div style={{
+        <div style={{
             width: '8px',
             height: '8px',
             borderRadius: '50%',
-            backgroundColor: 'var(--color-success)',
+            backgroundColor: isError ? 'var(--color-error)' : isCompleted ? 'var(--color-success)' : 'var(--color-warning)',
             marginRight: '4px'
-          }} />
-        </div>
+        }} />
       </div>
       {shouldShowDetails && (
         <div className="task-details">
@@ -272,3 +236,4 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
 };
 
 export default GenericToolBlock;
+
