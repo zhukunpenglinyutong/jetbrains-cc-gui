@@ -88,7 +88,6 @@ const App = () => {
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
-  const [inputValue, setInputValue] = useState('');
   const [, setProviderConfigVersion] = useState(0);
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
 
@@ -666,9 +665,6 @@ const App = () => {
     } else {
       sendBridgeMessage('send_message', text);
     }
-
-    // 清空输入框状态
-    setInputValue('');
   };
 
   /**
@@ -1538,11 +1534,9 @@ const App = () => {
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
             alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? false}
-            value={inputValue}
             placeholder={t('chat.inputPlaceholder')}
             onSubmit={handleSubmit}
             onStop={interruptSession}
-            onInput={setInputValue}
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}

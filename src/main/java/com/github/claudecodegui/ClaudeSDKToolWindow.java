@@ -74,7 +74,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
         ContentFactory contentFactory = ContentFactory.getInstance();
-        Content content = contentFactory.createContent(chatWindow.getContent(), "Claude Claude", false);
+        Content content = contentFactory.createContent(chatWindow.getContent(), "GUI", false);
         toolWindow.getContentManager().addContent(content);
 
         content.setDisposer(() -> {
