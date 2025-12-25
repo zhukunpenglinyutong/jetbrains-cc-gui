@@ -111,8 +111,6 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
   const isCompleted = result !== undefined && result !== null;
   const isError = isCompleted && result?.is_error === true;
 
-  console.log('[GenericToolBlock]', name, 'result:', result, 'isCompleted:', isCompleted, 'isError:', isError);
-
   if (!input) {
     return null;
   }

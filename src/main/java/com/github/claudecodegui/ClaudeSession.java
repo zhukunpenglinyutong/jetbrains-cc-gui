@@ -599,44 +599,6 @@ public class ClaudeSession {
                         busy = false;
                         loading = false;
                         updateState();
-
-                        // 在消息结束后重新加载会话消息，确保消息历史的完整性
-                        //
-                        // 说明：
-                        // ========================================
-                        // 1. 现在我们已经通过 [TOOL_RESULT] 标签实时获取工具调用结果
-                        // 2. 前端可以在工具执行完成后立即看到结果，无需等待 message_end
-                        // 3. 但是，为了确保消息历史的完整性和一致性，
-                        //    我们仍然在 message_end 时重新加载会话消息
-                        // 4. 这样可以确保所有消息（包括可能遗漏的）都被正确加载
-                        if (sessionId != null && cwd != null) {
-                            LOG.debug("Reloading session messages for consistency check");
-                            CompletableFuture.runAsync(() -> {
-                                try {
-                                    List<JsonObject> serverMessages;
-                                    if ("codex".equals(provider)) {
-                                        serverMessages = codexSDKBridge.getSessionMessages(sessionId, cwd);
-                                    } else {
-                                        serverMessages = claudeSDKBridge.getSessionMessages(sessionId, cwd);
-                                    }
-                                    LOG.debug("Reloaded " + serverMessages.size() + " messages from server");
-
-                                    messages.clear();
-                                    for (JsonObject msg : serverMessages) {
-                                        Message message = parseServerMessage(msg);
-                                        if (message != null) {
-                                            messages.add(message);
-                                        }
-                                    }
-
-                                    notifyMessageUpdate();
-                                    LOG.debug("Session messages reloaded successfully");
-                                } catch (Exception e) {
-                                    LOG.warn("Failed to reload session messages: " + e.getMessage());
-                                }
-                            });
-                        }
-                        // LOG.info("[PERF][" + System.currentTimeMillis() + "] ClaudeSession updateState() 完成，loading=false 已发送");
                     } else if ("result".equals(type) && content.startsWith("{")) {
                         // 处理结果消息（包含最终的usage信息）
                         try {
