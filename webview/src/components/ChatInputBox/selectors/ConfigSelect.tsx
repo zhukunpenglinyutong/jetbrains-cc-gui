@@ -159,9 +159,9 @@ export const ConfigSelect = ({
       className="selector-dropdown"
       style={{
         position: 'absolute',
-        left: '100%',
+        left: '4px',
         bottom: 0,
-        marginLeft: '4px',
+        marginLeft: '0',
         zIndex: 10001,
         minWidth: '180px'
       }}
