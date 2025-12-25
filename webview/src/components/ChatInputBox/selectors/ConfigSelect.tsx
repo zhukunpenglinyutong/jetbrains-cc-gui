@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Switch } from 'antd';
 import { Claude, OpenAI, Gemini } from '@lobehub/icons';
 import { AVAILABLE_MODES, AVAILABLE_PROVIDERS, type PermissionMode } from '../types';
 
@@ -9,6 +10,8 @@ interface ConfigSelectProps {
   onModeChange: (mode: PermissionMode) => void;
   currentProvider: string;
   onProviderChange: (providerId: string) => void;
+  alwaysThinkingEnabled?: boolean;
+  onToggleThinking?: (enabled: boolean) => void;
 }
 
 /**
@@ -35,7 +38,9 @@ export const ConfigSelect = ({
   permissionMode, 
   onModeChange, 
   currentProvider: providerId, 
-  onProviderChange 
+  onProviderChange,
+  alwaysThinkingEnabled,
+  onToggleThinking
 }: ConfigSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -221,6 +226,9 @@ export const ConfigSelect = ({
             {activeSubmenu === 'mode' && renderModeSubmenu()}
           </div>
 
+          {/* Divider */}
+          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
+
           {/* CLI Tool Item */}
           <div 
             className="selector-option" 
@@ -237,6 +245,33 @@ export const ConfigSelect = ({
             <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
             
             {activeSubmenu === 'provider' && renderProviderSubmenu()}
+          </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
+
+          {/* Thinking Switch Item */}
+          <div 
+            className="selector-option"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleThinking?.(!alwaysThinkingEnabled);
+            }}
+            onMouseEnter={() => setActiveSubmenu('none')}
+            style={{ justifyContent: 'space-between', cursor: 'pointer' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="codicon codicon-lightbulb" />
+              <span>{t('common.thinking')}</span>
+            </div>
+            <Switch 
+              size="small"
+              checked={alwaysThinkingEnabled ?? false} 
+              onClick={(checked, e) => {
+                 e.stopPropagation();
+                 onToggleThinking?.(checked);
+              }}
+            />
           </div>
         </div>
       )}

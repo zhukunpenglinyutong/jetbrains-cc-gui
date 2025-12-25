@@ -242,6 +242,8 @@
   },
   "toast": {
     "switchSuccess": "Changement réussi",
+    "thinkingEnabled": "Thinking enabled",
+    "thinkingDisabled": "Thinking disabled",
     "saveSuccess": "Enregistrement réussi",
     "deleteSuccess": "Suppression réussie",
     "operationFailed": "Opération échouée",

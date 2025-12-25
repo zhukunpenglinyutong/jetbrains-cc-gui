@@ -248,6 +248,8 @@
   },
   "toast": {
     "switchSuccess": "Switched successfully",
+    "thinkingEnabled": "Thinking enabled",
+    "thinkingDisabled": "Thinking disabled",
     "saveSuccess": "Saved successfully",
     "deleteSuccess": "Deleted successfully",
     "operationFailed": "Operation failed",

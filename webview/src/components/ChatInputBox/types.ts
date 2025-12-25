@@ -318,6 +318,8 @@ export interface ChatInputBoxProps {
   usageMaxTokens?: number;
   /** 是否显示使用量 */
   showUsage?: boolean;
+  /** 是否开启始终思考 */
+  alwaysThinkingEnabled?: boolean;
   /** 附件列表 */
   attachments?: Attachment[];
   /** 占位符文本 */
@@ -354,6 +356,8 @@ export interface ChatInputBoxProps {
   onModelSelect?: (modelId: string) => void;
   /** 切换提供商 */
   onProviderSelect?: (providerId: string) => void;
+  /** 切换思考模式 */
+  onToggleThinking?: (enabled: boolean) => void;
 }
 
 /**
@@ -379,6 +383,10 @@ export interface ButtonAreaProps {
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;
+  /** 是否开启始终思考 */
+  alwaysThinkingEnabled?: boolean;
+  /** 切换思考模式 */
+  onToggleThinking?: (enabled: boolean) => void;
 }
 
 /**

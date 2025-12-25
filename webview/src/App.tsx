@@ -90,6 +90,7 @@ const App = () => {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [inputValue, setInputValue] = useState('');
   const [, setProviderConfigVersion] = useState(0);
+  const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -414,12 +415,28 @@ const App = () => {
         const provider: ProviderConfig = JSON.parse(jsonStr);
         syncActiveProviderModelMapping(provider);
         setProviderConfigVersion(prev => prev + 1);
+        setActiveProviderConfig(provider);
       } catch (error) {
         console.error('[Frontend] Failed to parse active provider in App:', error);
       }
     };
 
-    sendBridgeMessage('get_active_provider');
+    // Retry getting active provider
+    let retryCount = 0;
+    const MAX_RETRIES = 30;
+    const requestActiveProvider = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_active_provider');
+      } else {
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          setTimeout(requestActiveProvider, 100);
+        } else {
+          console.warn('[Frontend] Failed to get active provider: bridge not available');
+        }
+      }
+    };
+    setTimeout(requestActiveProvider, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -684,6 +701,35 @@ const App = () => {
     // 切换 provider 时,同时发送对应的模型
     const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
     sendBridgeMessage('set_model', newModel);
+  };
+
+  /**
+   * 处理思考模式切换
+   */
+  const handleToggleThinking = (enabled: boolean) => {
+    if (!activeProviderConfig) return;
+
+    // 更新本地状态（乐观更新）
+    setActiveProviderConfig(prev => prev ? {
+      ...prev,
+      settingsConfig: {
+        ...prev.settingsConfig,
+        alwaysThinkingEnabled: enabled
+      }
+    } : null);
+
+    // 发送更新到后端
+    const payload = JSON.stringify({
+      id: activeProviderConfig.id,
+      updates: {
+        settingsConfig: {
+          ...(activeProviderConfig.settingsConfig || {}),
+          alwaysThinkingEnabled: enabled
+        }
+      }
+    });
+    sendBridgeMessage('update_provider', payload);
+    addToast(enabled ? t('toast.thinkingEnabled') : t('toast.thinkingDisabled'), 'success');
   };
 
   const interruptSession = () => {
@@ -1482,6 +1528,7 @@ const App = () => {
             usageUsedTokens={usageUsedTokens}
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
+            alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? false}
             value={inputValue}
             placeholder={t('chat.inputPlaceholder')}
             onSubmit={handleSubmit}
@@ -1490,6 +1537,7 @@ const App = () => {
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
+            onToggleThinking={handleToggleThinking}
             activeFile={contextInfo?.file}
             selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
               ? (contextInfo.startLine === contextInfo.endLine

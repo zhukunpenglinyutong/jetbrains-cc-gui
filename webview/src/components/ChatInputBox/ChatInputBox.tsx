@@ -43,6 +43,8 @@ export const ChatInputBox = ({
   activeFile,
   selectedLines,
   onClearContext,
+  alwaysThinkingEnabled,
+  onToggleThinking,
 }: ChatInputBoxProps) => {
   // 内部附件状态（如果外部未提供）
   const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
@@ -1503,9 +1505,9 @@ export const ChatInputBox = ({
         />
       </div>
 
-      {/* 底部工具栏 */}
+      {/* 底部按钮区域 */}
       <ButtonArea
-        disabled={disabled}
+        disabled={disabled || isLoading}
         hasInputContent={hasContent || attachments.length > 0}
         isLoading={isLoading}
         selectedModel={selectedModel}
@@ -1516,6 +1518,8 @@ export const ChatInputBox = ({
         onModeSelect={handleModeSelect}
         onModelSelect={handleModelSelect}
         onProviderSelect={onProviderSelect}
+        alwaysThinkingEnabled={alwaysThinkingEnabled}
+        onToggleThinking={onToggleThinking}
       />
 
       {/* @ 文件引用下拉菜单 */}

@@ -20,6 +20,8 @@ export const ButtonArea = ({
   onModeSelect,
   onModelSelect,
   onProviderSelect,
+  alwaysThinkingEnabled = false,
+  onToggleThinking,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,6 +118,8 @@ export const ButtonArea = ({
           onModeChange={handleModeSelect}
           currentProvider={currentProvider}
           onProviderChange={handleProviderSelect}
+          alwaysThinkingEnabled={alwaysThinkingEnabled}
+          onToggleThinking={onToggleThinking}
         />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />
       </div>

@@ -163,6 +163,9 @@ public class ProviderHandler extends BaseMessageHandler {
             final boolean finalSynced = syncedActiveProvider;
             ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetProviders(); // 刷新列表
+                if (finalSynced) {
+                    handleGetActiveProvider(); // 刷新当前激活的供应商配置
+                }
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to update provider: " + e.getMessage(), e);
@@ -239,6 +242,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 callJavaScript("window.showSwitchSuccess", escapeJs("供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
                 handleGetProviders(); // 刷新供应商列表
                 handleGetCurrentClaudeConfig(); // 刷新 Claude CLI 配置显示
+                handleGetActiveProvider(); // 刷新当前激活的供应商配置
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to switch provider: " + e.getMessage(), e);

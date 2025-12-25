@@ -242,6 +242,8 @@
   },
   "toast": {
     "switchSuccess": "स्विच सफल",
+    "thinkingEnabled": "Thinking enabled",
+    "thinkingDisabled": "Thinking disabled",
     "saveSuccess": "सहेजना सफल",
     "deleteSuccess": "हटाना सफल",
     "operationFailed": "ऑपरेशन विफल",
