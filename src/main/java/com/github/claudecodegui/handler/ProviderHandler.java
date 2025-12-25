@@ -319,7 +319,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
                     String jsonStr = gson.toJson(response);
                     LOG.info("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
-                    callJavaScript("import_preview_result", jsonStr);
+                    callJavaScript("import_preview_result", escapeJs(jsonStr));
 
                 } catch (Exception e) {
                     String errorDetails = "读取数据库失败: " + e.getMessage();
@@ -425,7 +425,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
                         String jsonStr = gson.toJson(response);
                         LOG.info("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
-                        callJavaScript("import_preview_result", jsonStr);
+                        callJavaScript("import_preview_result", escapeJs(jsonStr));
 
                     } catch (Exception e) {
                         String errorDetails = "读取数据库失败: " + e.getMessage();

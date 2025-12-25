@@ -1091,16 +1091,31 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     return;
                 }
                 try {
-                    String js = JsUtils.buildJsCall(functionName, args);
+                    String callee = functionName;
+                    if (functionName != null && !functionName.isEmpty() && !functionName.contains(".")) {
+                        callee = "window." + functionName;
+                    }
 
-                    // 先检查函数是否存在，再调用
+                    StringBuilder argsJs = new StringBuilder();
+                    if (args != null) {
+                        for (int i = 0; i < args.length; i++) {
+                            if (i > 0) argsJs.append(", ");
+                            String arg = args[i] == null ? "" : args[i];
+                            argsJs.append("'").append(arg).append("'");
+                        }
+                    }
+
                     String checkAndCall =
                         "(function() {" +
-                        "  if (typeof window." + functionName + " === 'function') {" +
-                        "    " + js +
-                        "    console.log('[Backend->Frontend] Successfully called " + functionName + "');" +
-                        "  } else {" +
-                        "    console.warn('[Backend->Frontend] Function " + functionName + " not found on window');" +
+                        "  try {" +
+                        "    if (typeof " + callee + " === 'function') {" +
+                        "      " + callee + "(" + argsJs + ");" +
+                        "      console.log('[Backend->Frontend] Successfully called " + functionName + "');" +
+                        "    } else {" +
+                        "      console.warn('[Backend->Frontend] Function " + functionName + " not found: ' + (typeof " + callee + "));" +
+                        "    }" +
+                        "  } catch (e) {" +
+                        "    console.error('[Backend->Frontend] Failed to call " + functionName + ":', e);" +
                         "  }" +
                         "})();";
 
