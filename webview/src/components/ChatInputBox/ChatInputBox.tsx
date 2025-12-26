@@ -1,16 +1,11 @@
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import type { Attachment, ChatInputBoxProps, PermissionMode, FileItem, CommandItem } from './types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Attachment, ChatInputBoxProps, CommandItem, FileItem, PermissionMode } from './types';
 import { ButtonArea } from './ButtonArea';
 import { AttachmentList } from './AttachmentList';
 import { ContextBar } from './ContextBar';
 import { CompletionDropdown } from './Dropdown';
-import { useTriggerDetection, useCompletionDropdown } from './hooks';
-import {
-  fileReferenceProvider,
-  fileToDropdownItem,
-  slashCommandProvider,
-  commandToDropdownItem,
-} from './providers';
+import { useCompletionDropdown, useTriggerDetection } from './hooks';
+import { commandToDropdownItem, fileReferenceProvider, fileToDropdownItem, slashCommandProvider, } from './providers';
 import { getFileIcon } from '../../utils/fileIcons';
 import { icon_folder } from '../../utils/icons';
 import './styles.css';
@@ -371,10 +366,10 @@ export const ChatInputBox = ({
   }, [fileCompletion, commandCompletion, escapeHtmlAttr, getTextContent]);
 
   // Tooltip 状态
-  const [tooltip, setTooltip] = useState<{ 
-    visible: boolean; 
-    text: string; 
-    top: number; 
+  const [tooltip, setTooltip] = useState<{
+    visible: boolean;
+    text: string;
+    top: number;
     left: number;
     tx?: string; // transform-x value
     arrowLeft?: string; // arrow left position
@@ -479,6 +474,11 @@ export const ChatInputBox = ({
   const detectAndTriggerCompletion = useCallback(() => {
     if (!editableRef.current) return;
 
+    // 组合输入期间不进行补全检测，避免干扰 IME 上屏和下划线状态
+    if (isComposing) {
+      return;
+    }
+
     // 如果刚刚渲染了文件标签,跳过这次补全检测
     if (justRenderedTagRef.current) {
       justRenderedTagRef.current = false;
@@ -539,6 +539,7 @@ export const ChatInputBox = ({
     getTriggerPosition,
     fileCompletion,
     commandCompletion,
+    isComposing,
   ]);
 
   // 创建防抖版本的 renderFileTags（延迟 300ms）
@@ -564,12 +565,14 @@ export const ChatInputBox = ({
     // 调整高度
     adjustHeight();
 
-    // 使用防抖版本的补全检测（延迟 150ms）
-    debouncedDetectCompletion();
+    // 组合输入期间不触发补全检测，待组合结束后统一处理
+    if (!isComposing) {
+      debouncedDetectCompletion();
+    }
 
     // 通知父组件
     onInput?.(text);
-  }, [getTextContent, adjustHeight, debouncedDetectCompletion, onInput]);
+  }, [getTextContent, adjustHeight, debouncedDetectCompletion, onInput, isComposing]);
 
   /**
    * 处理键盘按下事件（用于检测空格触发文件标签渲染）
@@ -1005,16 +1008,16 @@ export const ChatInputBox = ({
       const type = (ev as InputEvent).inputType;
       if (type === 'insertParagraph') {
         ev.preventDefault();
-	        // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
-	        if (completionSelectedRef.current) {
-	          completionSelectedRef.current = false;
-	          return;
-	        }
-	        // 补全菜单打开时不发送消息
-	        if (fileCompletion.isOpen || commandCompletion.isOpen) {
-	          return;
-	        }
-	        handleSubmit();
+        // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
+        if (completionSelectedRef.current) {
+          completionSelectedRef.current = false;
+          return;
+        }
+        // 补全菜单打开时不发送消息
+        if (fileCompletion.isOpen || commandCompletion.isOpen) {
+          return;
+        }
+        handleSubmit();
       }
     };
 
@@ -1046,13 +1049,19 @@ export const ChatInputBox = ({
    */
   const handleCompositionEnd = useCallback(() => {
     lastCompositionEndTimeRef.current = Date.now();
-    // 使用 setTimeout 延迟重置，确保在 keydown 之后执行
-    // 这可以防止在某些环境下 compositionend 和 keydown 的时序问题
+    setIsComposing(false);
+    // 增加稍长的延迟以确保低性能环境下 DOM/IME 状态稳定
     compositionTimeoutRef.current = window.setTimeout(() => {
       setIsComposing(false);
       compositionTimeoutRef.current = null;
-    }, 10);
-  }, []);
+      // 组合结束后，强制同步一次输入状态并触发文件标签渲染，清理可能残留的上屏字符/下划线
+      handleInput();
+      // 使用微小延迟确保 DOM 已更新
+      setTimeout(() => {
+        renderFileTags();
+      }, 0);
+    }, 40);
+  }, [handleInput, renderFileTags]);
 
   /**
    * 生成唯一 ID（兼容 JCEF）
@@ -1123,8 +1132,8 @@ export const ChatInputBox = ({
 
       // 尝试多种方式获取文本
       let text = e.clipboardData.getData('text/plain') ||
-                 e.clipboardData.getData('text/uri-list') ||
-                 e.clipboardData.getData('text/html');
+        e.clipboardData.getData('text/uri-list') ||
+        e.clipboardData.getData('text/html');
 
       // 如果还是没有文本，尝试从 file 类型的 item 中获取文件名/路径
       if (!text) {
@@ -1507,19 +1516,29 @@ export const ChatInputBox = ({
             const inputType = (e.nativeEvent as unknown as { inputType?: string }).inputType;
             if (inputType === 'insertParagraph') {
               e.preventDefault();
-	              // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
-	              if (completionSelectedRef.current) {
-	                completionSelectedRef.current = false;
-	                return;
-	              }
-	              // 补全菜单打开时不发送消息
-	              if (fileCompletion.isOpen || commandCompletion.isOpen) {
-	                return;
-	              }
-	              // 只有在非加载状态且非输入法组合状态时才允许提交
+              // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
+              if (completionSelectedRef.current) {
+                completionSelectedRef.current = false;
+                return;
+              }
+              // 补全菜单打开时不发送消息
+              if (fileCompletion.isOpen || commandCompletion.isOpen) {
+                return;
+              }
+              // 只有在非加载状态且非输入法组合状态时才允许提交
               if (!isLoading && !isComposing) {
                 handleSubmit();
               }
+            }
+            // 组合输入期间删除按键可能导致最后一个字残留，拦截并在下一周期强制同步
+            if (
+              (inputType === 'deleteContentBackward' || inputType === 'deleteContentForward') &&
+              isComposing
+            ) {
+              // 让浏览器先执行默认删除，再在下一轮事件循环同步内容
+              setTimeout(() => {
+                handleInput();
+              }, 0);
             }
           }}
           onCompositionStart={handleCompositionStart}
