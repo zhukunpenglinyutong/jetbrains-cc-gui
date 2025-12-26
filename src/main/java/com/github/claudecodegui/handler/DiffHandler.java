@@ -83,7 +83,7 @@ public class DiffHandler extends BaseMessageHandler {
 
                     // 添加短暂延迟，等待文件写入完成
                     try {
-                        TimeUnit.MILLISECONDS.sleep(100);
+                        TimeUnit.MILLISECONDS.sleep(300);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }

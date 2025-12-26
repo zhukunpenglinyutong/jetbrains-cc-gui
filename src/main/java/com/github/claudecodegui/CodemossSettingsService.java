@@ -334,6 +334,16 @@ public class CodemossSettingsService {
         if (!Files.exists(settingsPath.getParent())) {
             Files.createDirectories(settingsPath.getParent());
         }
+
+        // 强制写入 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC 配置
+        // 确保 env 对象存在
+        if (!settings.has("env") || settings.get("env").isJsonNull()) {
+            settings.add("env", new JsonObject());
+        }
+        JsonObject env = settings.getAsJsonObject("env");
+        // 强制设置为字符串类型的 "1"
+        env.addProperty("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1");
+
         try (FileWriter writer = new FileWriter(settingsPath.toFile())) {
             gson.toJson(settings, writer);
             LOG.info("[CodemossSettings] Synced settings to: " + settingsPath);
