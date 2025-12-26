@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ToolInput } from '../../types';
-import { openFile, refreshFile } from '../../utils/bridge';
+import type { ToolInput, ToolResultBlock } from '../../types';
+import { openFile } from '../../utils/bridge';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 
@@ -94,27 +94,22 @@ const omitFields = new Set([
 interface GenericToolBlockProps {
   name?: string;
   input?: ToolInput;
+  result?: ToolResultBlock | null;
 }
 
-const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
+const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
   const { t } = useTranslation();
   // Tools that should be collapsible (Grep, Glob, Write, and MCP tools)
   const lowerName = (name ?? '').toLowerCase();
   const isMcpTool = lowerName.startsWith('mcp__');
   const isCollapsible = ['grep', 'glob', 'write', 'save-file'].includes(lowerName) || isMcpTool;
   const [expanded, setExpanded] = useState(false);
-  const hasRefreshed = useRef(false);
 
   const filePath = input ? pickFilePath(input) : undefined;
 
-  // Auto-refresh file in IDEA when the component mounts for file-modifying tools
-  const isFileModifyingTool = ['write', 'write_to_file', 'save-file', 'notebook_edit'].includes(lowerName);
-  useEffect(() => {
-    if (filePath && isFileModifyingTool && !hasRefreshed.current) {
-      hasRefreshed.current = true;
-      refreshFile(filePath);
-    }
-  }, [filePath, isFileModifyingTool]);
+  // Determine tool call status based on result
+  const isCompleted = result !== undefined && result !== null;
+  const isError = isCompleted && result?.is_error === true;
 
   if (!input) {
     return null;
@@ -216,13 +211,7 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
             )}
         </div>
 
-        <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--color-success)',
-            marginRight: '4px'
-        }} />
+        <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
       </div>
       {shouldShowDetails && (
         <div className="task-details">

@@ -93,7 +93,15 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSess
     return (
       <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: '#858585' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📜</div>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            margin: '0 auto 16px',
+            border: '4px solid rgba(133, 133, 133, 0.2)',
+            borderTop: '4px solid #858585',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }}></div>
           <div>{t('history.loading')}</div>
         </div>
       </div>
@@ -338,37 +346,19 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSess
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid #3e3e42', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-        <div style={{ fontSize: '12px', color: '#858585' }}>{infoBar}</div>
+      <div className="history-header">
+        <div className="history-info">{infoBar}</div>
         {/* 搜索框 */}
-        <div style={{ position: 'relative', minWidth: '200px', maxWidth: '300px' }}>
+        <div className="history-search-container">
           <input
             type="text"
             className="history-search-input"
             placeholder={t('history.searchPlaceholder')}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '6px 32px 6px 12px',
-              fontSize: '12px',
-              border: '1px solid #3e3e42',
-              borderRadius: '4px',
-              backgroundColor: '#1e1e1e',
-              color: '#cccccc',
-              outline: 'none',
-            }}
           />
           <span
-            className="codicon codicon-search"
-            style={{
-              position: 'absolute',
-              right: '10px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: '#858585',
-              pointerEvents: 'none',
-            }}
+            className="codicon codicon-search history-search-icon"
           ></span>
         </div>
       </div>

@@ -259,6 +259,9 @@ public class ClaudeSession {
      * 发送消息（支持附件）
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments) {
+        // long sendStartTime = System.currentTimeMillis();
+        // LOG.info("[PERF][" + sendStartTime + "] ClaudeSession.send() 开始执行");
+
         // 规范化用户文本
         String normalizedInput = (input != null) ? input.trim() : "";
         // 添加用户消息到历史
@@ -344,9 +347,18 @@ public class ClaudeSession {
         this.loading = true;  // 设置 loading 状态，前端显示"Claude 正在思考"
         updateState();
 
+        // long beforeLaunchTime = System.currentTimeMillis();
+        // LOG.info("[PERF][" + beforeLaunchTime + "] 用户消息处理完成，准备 launchClaude()，耗时: " + (beforeLaunchTime - sendStartTime) + "ms");
+
         return launchClaude().thenCompose(chId -> {
+            // long afterLaunchTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + afterLaunchTime + "] launchClaude() 完成，耗时: " + (afterLaunchTime - beforeLaunchTime) + "ms");
+
             // 使用 ReadAction.nonBlocking() 在后台线程中安全地获取文件信息
             CompletableFuture<JsonObject> fileInfoFuture = new CompletableFuture<>();
+
+            // long beforeFileInfoTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + beforeFileInfoTime + "] 开始获取文件信息");
 
             ReadAction
                 .nonBlocking(() -> {
@@ -395,11 +407,16 @@ public class ClaudeSession {
                 })
                 .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), openedFilesJson -> {
                     // 文件信息获取完成，继续执行
+                    // long afterFileInfoTime = System.currentTimeMillis();
+                    // LOG.info("[PERF][" + afterFileInfoTime + "] 文件信息获取完成，耗时: " + (afterFileInfoTime - beforeFileInfoTime) + "ms");
                     fileInfoFuture.complete(openedFilesJson);
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
 
             return fileInfoFuture.thenCompose(openedFilesJson -> {
+            // long beforeSdkCallTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + beforeSdkCallTime + "] 准备调用 SDK sendMessage()");
+
             // 根据 provider 选择 SDK
             CompletableFuture<Void> sendFuture;
             if ("codex".equals(provider)) {
@@ -537,8 +554,42 @@ public class ClaudeSession {
                             callback.onSessionIdReceived(content);
                         }
                         LOG.info("Captured session ID: " + content);
+                    } else if ("tool_result".equals(type) && content.startsWith("{")) {
+                        // 实时处理工具调用结果
+                        // 将 tool_result 添加到消息列表中，前端可以立即更新工具状态
+                        try {
+                            JsonObject toolResultBlock = gson.fromJson(content, JsonObject.class);
+                            String toolUseId = toolResultBlock.has("tool_use_id")
+                                ? toolResultBlock.get("tool_use_id").getAsString()
+                                : null;
+
+                            if (toolUseId != null) {
+                                // 构造包含 tool_result 的 user 消息
+                                JsonArray contentArray = new JsonArray();
+                                contentArray.add(toolResultBlock);
+
+                                JsonObject messageObj = new JsonObject();
+                                messageObj.add("content", contentArray);
+
+                                JsonObject rawUser = new JsonObject();
+                                rawUser.addProperty("type", "user");
+                                rawUser.add("message", messageObj);
+
+                                // 创建 user 消息并添加到消息列表
+                                Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", rawUser);
+                                messages.add(toolResultMessage);
+
+                                LOG.debug("Tool result received for tool_use_id: " + toolUseId);
+                                notifyMessageUpdate();
+                            }
+                        } catch (Exception e) {
+                            LOG.warn("Failed to parse tool_result JSON: " + e.getMessage());
+                        }
                     } else if ("message_end".equals(type)) {
                         // 消息结束时立即更新 loading 状态，避免延迟
+                        // long messageEndTime = System.currentTimeMillis();
+                        // LOG.info("[PERF][" + messageEndTime + "] ClaudeSession 收到 message_end，立即更新状态");
+
                         if (isThinking) {
                             isThinking = false;
                             if (callback != null) {
@@ -548,7 +599,6 @@ public class ClaudeSession {
                         busy = false;
                         loading = false;
                         updateState();
-                        LOG.debug("Message end received, loading set to false");
                     } else if ("result".equals(type) && content.startsWith("{")) {
                         // 处理结果消息（包含最终的usage信息）
                         try {
@@ -578,7 +628,6 @@ public class ClaudeSession {
                                     JsonObject resultUsage = resultJson.getAsJsonObject("usage");
                                     if (message != null) {
                                         message.add("usage", resultUsage);
-                                        currentAssistantMessage.raw = currentAssistantMessage.raw;
                                         notifyMessageUpdate();
                                         LOG.debug("Updated assistant message usage from result message");
                                     }
@@ -791,8 +840,26 @@ public class ClaudeSession {
 
         if ("user".equals(type)) {
             String content = extractMessageContent(msg);
-            // 如果内容为空或只包含空白字符，不展示
+            // 如果内容为空或只包含空白字符，检查是否有 tool_result
+            // tool_result 消息需要保留，因为前端需要用它来显示工具调用结果
             if (content == null || content.trim().isEmpty()) {
+                // 检查是否包含 tool_result
+                if (msg.has("message") && msg.get("message").isJsonObject()) {
+                    JsonObject message = msg.getAsJsonObject("message");
+                    if (message.has("content") && message.get("content").isJsonArray()) {
+                        JsonArray contentArray = message.getAsJsonArray("content");
+                        for (int i = 0; i < contentArray.size(); i++) {
+                            JsonElement element = contentArray.get(i);
+                            if (element.isJsonObject()) {
+                                JsonObject block = element.getAsJsonObject();
+                                if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
+                                    // 包含 tool_result，保留此消息（使用占位符内容）
+                                    return new Message(Message.Type.USER, "[tool_result]", msg);
+                                }
+                            }
+                        }
+                    }
+                }
                 return null;
             }
             return new Message(Message.Type.USER, content, msg);
@@ -965,7 +1032,12 @@ public class ClaudeSession {
      * 设置权限模式
      */
     public void setPermissionMode(String mode) {
+        // LOG.info("[ClaudeSession] ========== PERMISSION MODE CHANGE ==========");
+        // LOG.info("[ClaudeSession] Old mode: " + this.permissionMode);
+        // LOG.info("[ClaudeSession] New mode: " + mode);
         this.permissionMode = mode;
+        // LOG.info("[ClaudeSession] Permission mode updated successfully");
+        // LOG.info("[ClaudeSession] =============================================");
     }
 
     /**
@@ -1131,7 +1203,7 @@ public class ClaudeSession {
      * 创建权限请求（供SDK调用）
      */
     public PermissionRequest createPermissionRequest(String toolName, Map<String, Object> inputs, JsonObject suggestions) {
-        return permissionManager.createRequest(channelId, toolName, inputs, suggestions);
+        return permissionManager.createRequest(channelId, toolName, inputs, suggestions, project);
     }
 
     /**

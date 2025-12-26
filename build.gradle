@@ -10,7 +10,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.1'
+version = '0.1.2-beta7'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -69,25 +69,14 @@ patchPluginXml {
                 if (t.startsWith('- ')) {
                     if (!inList) { sb.append('<ul>'); inList = true }
                     def item = t.substring(2)
-                    // escape HTML special chars for safety
+                    // remove checkbox markers like [x] or [ ]
+                    if (item.startsWith('[') && item.length() > 3 && item.charAt(2) == ']') {
+                        item = item.substring(3).trim()
+                    }
                     item = item.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                     sb.append('<li>' + item + '</li>')
                 } else if (t.startsWith('![') || t.startsWith('<img')) {
-                    if (inList) { sb.append('</ul>'); inList = false }
-                    // convert markdown image syntax to img tag if necessary
-                    if (t.startsWith('![')) {
-                        def pattern = Pattern.compile(/!\[(.*?)\]\((.*?)\)/)
-                        def matcher = pattern.matcher(t)
-                        if (matcher.find()) {
-                            def alt = matcher.group(1)
-                            def src = matcher.group(2)
-                            sb.append("<img alt=\"${alt}\" src=\"${src}\" width=\"500\" />")
-                        } else {
-                            sb.append(t)
-                        }
-                    } else {
-                        sb.append(t)
-                    }
+                    // skip images
                 } else if (t.length() == 0) {
                     if (inList) { sb.append('</ul>'); inList = false }
                     sb.append('<br/>')
@@ -149,6 +138,13 @@ tasks.named('runIde') {
     systemProperty 'idea.is.internal', 'true'
     systemProperty 'idea.plugin.in.sandbox.mode', 'true'
 
+    // 配置日志输出到控制台
+    systemProperty 'idea.log.debug.categories', '#com.github.claudecodegui'
+
+    // 重定向标准输出
+    standardOutput = System.out
+    errorOutput = System.err
+
     // 复制自定义配置到sandbox
     doFirst {
         def sandboxConfig = file('sandbox-idea.properties')
@@ -174,8 +170,11 @@ def aiBridgeArchive = new File(aiBridgePackDir, 'ai-bridge.zip')
 
 // 自动构建 webview
 def webviewDir = file('webview')
+def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() }
+def enableVConsoleInWebview = requestedTasks.any { it.contains('runide') }
 tasks.register('buildWebview', Exec) {
     workingDir webviewDir
+    environment 'VITE_ENABLE_VCONSOLE', enableVConsoleInWebview ? 'true' : 'false'
 
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         commandLine 'cmd', '/c', 'npm', 'run', 'build'
@@ -281,4 +280,3 @@ tasks.named('buildPlugin') {
         }
     }
 }
-

@@ -67,7 +67,13 @@ public class SessionHandler extends BaseMessageHandler {
      * 发送消息到 Claude
      */
     private void handleSendMessage(String prompt) {
+        // long handlerStartTime = System.currentTimeMillis();
+        // LOG.info("[PERF][" + handlerStartTime + "] SessionHandler.handleSendMessage 开始处理");
+
         CompletableFuture.runAsync(() -> {
+            // long asyncStartTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + asyncStartTime + "] 异步线程开始执行，等待时间: " + (asyncStartTime - handlerStartTime) + "ms");
+
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
 
@@ -76,7 +82,11 @@ public class SessionHandler extends BaseMessageHandler {
                 LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
-            context.getSession().setPermissionMode("default");
+            // 权限模式由用户通过 UI 设置，不在这里覆盖
+            // context.getSession().setPermissionMode("default");  // 已移除：保留用户设置的权限模式
+
+            // long beforeSendTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + beforeSendTime + "] 准备调用 session.send()，准备耗时: " + (beforeSendTime - asyncStartTime) + "ms");
 
             context.getSession().send(prompt).exceptionally(ex -> {
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -134,7 +144,8 @@ public class SessionHandler extends BaseMessageHandler {
                 LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
-            context.getSession().setPermissionMode("default");
+            // 权限模式由用户通过 UI 设置，不在这里覆盖
+            // context.getSession().setPermissionMode("default");  // 已移除：保留用户设置的权限模式
 
             context.getSession().send(prompt, attachments).exceptionally(ex -> {
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -168,9 +179,41 @@ public class SessionHandler extends BaseMessageHandler {
      */
     private String determineWorkingDirectory() {
         String projectPath = context.getProject().getBasePath();
-        if (projectPath != null && new File(projectPath).exists()) {
-            return projectPath;
+
+        // 如果项目路径无效，回退到用户主目录
+        if (projectPath == null || !new File(projectPath).exists()) {
+            String userHome = System.getProperty("user.home");
+            LOG.warn("[SessionHandler] Using user home directory as fallback: " + userHome);
+            return userHome;
         }
-        return System.getProperty("user.home");
+
+        // 尝试从配置中读取自定义工作目录
+        try {
+            com.github.claudecodegui.CodemossSettingsService settingsService =
+                new com.github.claudecodegui.CodemossSettingsService();
+            String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
+
+            if (customWorkingDir != null && !customWorkingDir.isEmpty()) {
+                // 如果是相对路径，拼接到项目根路径
+                File workingDirFile = new File(customWorkingDir);
+                if (!workingDirFile.isAbsolute()) {
+                    workingDirFile = new File(projectPath, customWorkingDir);
+                }
+
+                // 验证目录是否存在
+                if (workingDirFile.exists() && workingDirFile.isDirectory()) {
+                    String resolvedPath = workingDirFile.getAbsolutePath();
+                    LOG.info("[SessionHandler] Using custom working directory: " + resolvedPath);
+                    return resolvedPath;
+                } else {
+                    LOG.warn("[SessionHandler] Custom working directory does not exist: " + workingDirFile.getAbsolutePath() + ", falling back to project root");
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[SessionHandler] Failed to read custom working directory: " + e.getMessage());
+        }
+
+        // 默认使用项目根路径
+        return projectPath;
     }
 }

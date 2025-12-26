@@ -30,6 +30,10 @@ interface BasicConfigSectionProps {
   onNodePathChange: (path: string) => void;
   onSaveNodePath: () => void;
   savingNodePath: boolean;
+  workingDirectory?: string;
+  onWorkingDirectoryChange?: (dir: string) => void;
+  onSaveWorkingDirectory?: () => void;
+  savingWorkingDirectory?: boolean;
 }
 
 const BasicConfigSection = ({
@@ -41,6 +45,10 @@ const BasicConfigSection = ({
   onNodePathChange,
   onSaveNodePath,
   savingNodePath,
+  workingDirectory = '',
+  onWorkingDirectoryChange = () => {},
+  onSaveWorkingDirectory = () => {},
+  savingWorkingDirectory = false,
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
 
@@ -152,6 +160,7 @@ const BasicConfigSection = ({
           <option value={3}>{t('settings.basic.fontSize.level3')}</option>
           <option value={4}>{t('settings.basic.fontSize.level4')}</option>
           <option value={5}>{t('settings.basic.fontSize.level5')}</option>
+          <option value={6}>{t('settings.basic.fontSize.level6')}</option>
         </select>
       </div>
 
@@ -186,6 +195,41 @@ const BasicConfigSection = ({
           <span className="codicon codicon-info" />
           <span>
             {t('settings.basic.nodePath.hint')} <code>{t('settings.basic.nodePath.hintCommand')}</code> {t('settings.basic.nodePath.hintText')}
+          </span>
+        </small>
+      </div>
+
+      {/* 工作目录配置 */}
+      <div className={styles.workingDirSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-folder" />
+          <span className={styles.fieldLabel}>{t('settings.basic.workingDirectory.label')}</span>
+        </div>
+        <div className={styles.nodePathInputWrapper}>
+          <input
+            type="text"
+            className={styles.nodePathInput}
+            placeholder={t('settings.basic.workingDirectory.placeholder')}
+            value={workingDirectory}
+            onChange={(e) => onWorkingDirectoryChange(e.target.value)}
+          />
+          <button
+            className={styles.saveBtn}
+            onClick={onSaveWorkingDirectory}
+            disabled={savingWorkingDirectory}
+          >
+            {savingWorkingDirectory && (
+              <span
+                className="codicon codicon-loading codicon-modifier-spin"
+              />
+            )}
+            {t('common.save')}
+          </button>
+        </div>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>
+            {t('settings.basic.workingDirectory.hint')}
           </span>
         </small>
       </div>

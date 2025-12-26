@@ -77,13 +77,19 @@
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect."
       },
+      "workingDirectory": {
+        "label": "Working Directory",
+        "placeholder": "e.g. project1 or leave empty to use project root",
+        "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
+      },
       "fontSize": {
         "label": "Font Size",
-        "level1": "Smallest (80%)",
-        "level2": "Standard (100%)",
-        "level3": "Larger (110%)",
-        "level4": "Large (120%)",
-        "level5": "Largest (140%)"
+        "level1": "Small (80%)",
+        "level2": "Smaller (90%)",
+        "level3": "Standard (100%)",
+        "level4": "Larger (110%)",
+        "level5": "Large (120%)",
+        "level6": "Largest (140%)"
       }
     },
     "providers": "Provider Management",
@@ -130,6 +136,7 @@
       "allProviders": "All Providers",
       "import": "Import",
       "importFromCcSwitchUpdate": "Import/Update from cc-switch",
+      "importFromCcSwitchFile": "Select cc-switch.db File to Import",
       "importFromCcSwitchCli": "Import/Update from cc-switch CLI",
       "importFromClaudeRouter": "Import/Update from Claude Code Router",
       "featureComingSoon": "Feature not yet implemented, coming soon",
@@ -241,6 +248,9 @@
   },
   "toast": {
     "switchSuccess": "Switched successfully",
+    "thinkingEnabled": "Thinking enabled",
+    "thinkingDisabled": "Thinking disabled",
+    "configLoading": "Configuration loading, please try again",
     "saveSuccess": "Saved successfully",
     "deleteSuccess": "Deleted successfully",
     "operationFailed": "Operation failed",
@@ -252,6 +262,10 @@
     "switch": "Switch",
     "switchProvider": "Switch provider",
     "link": "Link"
+  },
+  "markdown": {
+    "copyCode": "Copy code",
+    "copySuccess": "Copied!"
   },
   "usage": {
     "loading": "Loading statistics...",
@@ -358,6 +372,8 @@
     "todoList": "Todo List",
     "editFileTitle": "Edit File",
     "clickToOpen": "Click to open {{filePath}}",
+    "refreshFileInIdea": "Refresh file in IDEA",
+    "refreshFileInIdeaSuccess": "Manually refreshed this file in IDEA",
     "showDiffInIdea": "Show changes in IDEA",
     "diffButton": "Diff",
     "editPrefix": "Edit: {{fileName}}"
@@ -406,6 +422,53 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Fastest for quick answers"
       }
+    },
+    "codex": {
+      "gpt51codex": {
+        "label": "gpt-5.1-codex",
+        "description": "Optimized for codex"
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "Optimized for codex. Cheaper and faster, but lower performance"
+      },
+      "gpt51": {
+        "label": "gpt-5.1",
+        "description": "Broad world knowledge and strong general reasoning capabilities"
+      }
+    }
+  },
+  "modes": {
+    "default": {
+      "label": "Default Mode",
+      "tooltip": "Standard permission behavior",
+      "description": "Requires manual confirmation for each operation, suitable for cautious use"
+    },
+    "plan": {
+      "label": "Plan Mode",
+      "tooltip": "Plan mode - No execution (not supported yet)",
+      "description": "Planning only without execution, not supported yet"
+    },
+    "acceptEdits": {
+      "label": "Agent Mode",
+      "tooltip": "Automatically accept file edits",
+      "description": "Automatically accept file creation/editing, reducing confirmation steps"
+    },
+    "bypassPermissions": {
+      "label": "Auto Mode",
+      "tooltip": "Bypass all permission checks",
+      "description": "Fully automated, bypassing all permission checks [Use with caution]"
+    }
+  },
+  "providers": {
+    "claude": {
+      "label": "Claude Code"
+    },
+    "codex": {
+      "label": "Codex Cli"
+    },
+    "gemini": {
+      "label": "Gemini Cli"
     }
   }
 }

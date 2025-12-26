@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './components/MarkdownBlock';
 import HistoryView from './components/history/HistoryView';
@@ -88,8 +88,9 @@ const App = () => {
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
-  const [inputValue, setInputValue] = useState('');
   const [, setProviderConfigVersion] = useState(0);
+  const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
+  const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -144,16 +145,17 @@ const App = () => {
 
     // 初始化字体缩放
     const savedLevel = localStorage.getItem('fontSizeLevel');
-    const level = savedLevel ? parseInt(savedLevel, 10) : 2; // 默认档位 2 (100%)
-    const fontSizeLevel = (level >= 1 && level <= 5) ? level : 2;
+    const level = savedLevel ? parseInt(savedLevel, 10) : 3; // 默认档位 3 (100%)
+    const fontSizeLevel = (level >= 1 && level <= 6) ? level : 3;
 
     // 将档位映射到缩放比例
     const fontSizeMap: Record<number, number> = {
       1: 0.8,   // 80%
-      2: 1.0,   // 100% (默认)
-      3: 1.1,   // 110%
-      4: 1.2,   // 120%
-      5: 1.4,   // 140%
+      2: 0.9,   // 90%
+      3: 1.0,   // 100% (默认)
+      4: 1.1,   // 110%
+      5: 1.2,   // 120%
+      6: 1.4,   // 140%
     };
     const scale = fontSizeMap[fontSizeLevel] || 1.0;
     document.documentElement.style.setProperty('--font-scale', scale.toString());
@@ -246,6 +248,11 @@ const App = () => {
 
   useEffect(() => {
     window.updateMessages = (json) => {
+      // const timestamp = Date.now();
+      // const sendTime = (window as any).__lastMessageSendTime;
+      // if (sendTime) {
+      //   console.log(`[Frontend][${timestamp}][PERF] updateMessages 收到响应，距发送 ${timestamp - sendTime}ms`);
+      // }
       try {
         const parsed = JSON.parse(json) as ClaudeMessage[];
         setMessages(parsed);
@@ -261,6 +268,23 @@ const App = () => {
     };
     window.showLoading = (value) => {
       const isLoading = isTruthy(value);
+      // const timestamp = Date.now();
+      // const sendTime = (window as any).__lastMessageSendTime;
+
+      // if (isLoading) {
+      //   console.log(`[Frontend][${timestamp}][PERF] showLoading(true) - 开始加载`);
+      //   if (sendTime) {
+      //     console.log(`[Frontend][${timestamp}][PERF] 距消息发送 ${timestamp - sendTime}ms 后开始显示加载状态`);
+      //   }
+      // } else {
+      //   console.log(`[Frontend][${timestamp}][PERF] showLoading(false) - 加载完成`);
+      //   if (sendTime) {
+      //     console.log(`[Frontend][${timestamp}][PERF] >>> 总耗时: ${timestamp - sendTime}ms <<<`);
+      //     // 清除记录的发送时间
+      //     delete (window as any).__lastMessageSendTime;
+      //   }
+      // }
+
       setLoading(isLoading);
       // 开始加载时记录时间，结束时清除
       if (isLoading) {
@@ -337,13 +361,11 @@ const App = () => {
     // ChatInputBox 相关回调
     window.onUsageUpdate = (json) => {
       try {
-        console.log('[Frontend] onUsageUpdate raw:', json);
         const data = JSON.parse(json);
         if (typeof data.percentage === 'number') {
-          console.log('[Frontend] onUsageUpdate parsed percentage:', data.percentage, 'totalTokens:', data.totalTokens, 'limit:', data.limit);
-          setUsagePercentage(data.percentage);
           const used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
           const max = typeof data.maxTokens === 'number' ? data.maxTokens : (typeof data.limit === 'number' ? data.limit : undefined);
+          setUsagePercentage(data.percentage);
           setUsageUsedTokens(used);
           setUsageMaxTokens(max);
         }
@@ -353,7 +375,14 @@ const App = () => {
     };
 
     window.onModeChanged = (mode) => {
-      if (mode === 'default' || mode === 'plan' || mode === 'bypassPermissions') {
+      if (mode === 'default' || mode === 'plan' || mode === 'acceptEdits' || mode === 'bypassPermissions') {
+        setPermissionMode(mode);
+      }
+    };
+
+    // 后端主动推送权限模式（窗口初始化时调用）
+    window.onModeReceived = (mode) => {
+      if (mode === 'default' || mode === 'plan' || mode === 'acceptEdits' || mode === 'bypassPermissions') {
         setPermissionMode(mode);
       }
     };
@@ -386,12 +415,61 @@ const App = () => {
         const provider: ProviderConfig = JSON.parse(jsonStr);
         syncActiveProviderModelMapping(provider);
         setProviderConfigVersion(prev => prev + 1);
+        setActiveProviderConfig(provider);
       } catch (error) {
         console.error('[Frontend] Failed to parse active provider in App:', error);
       }
     };
 
-    sendBridgeMessage('get_active_provider');
+    window.updateThinkingEnabled = (jsonStr: string) => {
+      const trimmed = (jsonStr || '').trim();
+      try {
+        const data = JSON.parse(trimmed);
+        if (typeof data === 'boolean') {
+          setClaudeSettingsAlwaysThinkingEnabled(data);
+          return;
+        }
+        if (data && typeof data.enabled === 'boolean') {
+          setClaudeSettingsAlwaysThinkingEnabled(data.enabled);
+          return;
+        }
+      } catch {
+        if (trimmed === 'true' || trimmed === 'false') {
+          setClaudeSettingsAlwaysThinkingEnabled(trimmed === 'true');
+        }
+      }
+    };
+
+    // Retry getting active provider
+    let retryCount = 0;
+    const MAX_RETRIES = 30;
+    const requestActiveProvider = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_active_provider');
+      } else {
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          setTimeout(requestActiveProvider, 100);
+        } else {
+          console.warn('[Frontend] Failed to get active provider: bridge not available');
+        }
+      }
+    };
+    setTimeout(requestActiveProvider, 200);
+
+    let thinkingRetryCount = 0;
+    const MAX_THINKING_RETRIES = 30;
+    const requestThinkingEnabled = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_thinking_enabled');
+      } else {
+        thinkingRetryCount++;
+        if (thinkingRetryCount < MAX_THINKING_RETRIES) {
+          setTimeout(requestThinkingEnabled, 100);
+        }
+      }
+    };
+    setTimeout(requestThinkingEnabled, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -621,9 +699,6 @@ const App = () => {
     } else {
       sendBridgeMessage('send_message', text);
     }
-
-    // 清空输入框状态
-    setInputValue('');
   };
 
   /**
@@ -656,6 +731,40 @@ const App = () => {
     // 切换 provider 时,同时发送对应的模型
     const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
     sendBridgeMessage('set_model', newModel);
+  };
+
+  /**
+   * 处理思考模式切换
+   */
+  const handleToggleThinking = (enabled: boolean) => {
+    if (!activeProviderConfig) {
+      setClaudeSettingsAlwaysThinkingEnabled(enabled);
+      sendBridgeMessage('set_thinking_enabled', JSON.stringify({ enabled }));
+      addToast(enabled ? t('toast.thinkingEnabled') : t('toast.thinkingDisabled'), 'success');
+      return;
+    }
+
+    // 更新本地状态（乐观更新）
+    setActiveProviderConfig(prev => prev ? {
+      ...prev,
+      settingsConfig: {
+        ...prev.settingsConfig,
+        alwaysThinkingEnabled: enabled
+      }
+    } : null);
+
+    // 发送更新到后端
+    const payload = JSON.stringify({
+      id: activeProviderConfig.id,
+      updates: {
+        settingsConfig: {
+          ...(activeProviderConfig.settingsConfig || {}),
+          alwaysThinkingEnabled: enabled
+        }
+      }
+    });
+    sendBridgeMessage('update_provider', payload);
+    addToast(enabled ? t('toast.thinkingEnabled') : t('toast.thinkingDisabled'), 'success');
   };
 
   const interruptSession = () => {
@@ -952,7 +1061,9 @@ const App = () => {
     )) {
       return false;
     }
-
+    if (message.type === 'user' && text === '[tool_result]') {
+      return false;
+    }
     if (message.type === 'assistant') {
       return true;
     }
@@ -995,6 +1106,10 @@ const App = () => {
         const type = candidate.type as string | undefined;
         if (type === 'text') {
           const rawText = typeof candidate.text === 'string' ? candidate.text : '';
+          // 某些回复包含占位文本 "(no content)", 直接忽略避免渲染空内容
+          if (rawText.trim() === '(no content)') {
+            return;
+          }
           blocks.push({
             type: 'text',
             text: localizeMessage(rawText),
@@ -1101,23 +1216,77 @@ const App = () => {
     return [];
   };
 
-  const findToolResult = (toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
+  // 合并相邻的 Assistant 消息，解决历史记录中 Thinking 和 ToolUse 分离导致样式不一致的问题
+  const mergedMessages = useMemo(() => {
+    // 先过滤不需要显示的消息
+    const visible = messages.filter(shouldShowMessage);
+    if (visible.length === 0) return [];
+
+    const result: ClaudeMessage[] = [];
+    let current: ClaudeMessage | null = null;
+
+    for (const msg of visible) {
+      if (!current) {
+        current = msg;
+        continue;
+      }
+
+      if (current.type === 'assistant' && msg.type === 'assistant') {
+        // 合并逻辑
+        const blocks1 = normalizeBlocks(current.raw) || [];
+        const blocks2 = normalizeBlocks(msg.raw) || [];
+        const combinedBlocks = [...blocks1, ...blocks2];
+
+        // 构建新的 raw 对象
+        const newRaw: ClaudeRawMessage = {
+          ...(typeof current.raw === 'object' ? current.raw : {}),
+          content: combinedBlocks
+        };
+        
+        // 如果原始消息有 message.content，也需要更新它以保持一致性
+        if (newRaw.message && newRaw.message.content) {
+            newRaw.message.content = combinedBlocks;
+        }
+
+        const content1: string = current.content || '';
+        const content2: string = msg.content || '';
+        const newContent: string = (content1 && content2) ? `${content1}\n${content2}` : (content1 || content2);
+
+        current = {
+          ...current,
+          content: newContent,
+          raw: newRaw,
+        };
+      } else {
+        result.push(current);
+        current = msg;
+      }
+    }
+    if (current) result.push(current);
+    return result;
+  }, [messages]);
+
+  const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') {
       return null;
     }
-    for (let i = messageIndex + 1; i < messages.length; i += 1) {
+
+    // 注意：在原始 messages 数组中查找，而不是 mergedMessages
+    // 因为 tool_result 可能在被过滤掉的消息中
+    for (let i = 0; i < messages.length; i += 1) {
       const candidate = messages[i];
-      if (candidate.type !== 'user') {
-        continue;
-      }
       const raw = candidate.raw;
+
       if (!raw || typeof raw === 'string') {
         continue;
       }
-      const content = raw.content;
+      // 兼容 raw.content 和 raw.message.content
+      const content = raw.content ?? raw.message?.content;
+
       if (!Array.isArray(content)) {
         continue;
       }
+
       const resultBlock = content.find(
         (block): block is ToolResultBlock =>
           Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
@@ -1126,8 +1295,9 @@ const App = () => {
         return resultBlock;
       }
     }
+
     return null;
-  };
+  }, [messages]);
 
   const sessionTitle = useMemo(() => {
     if (messages.length === 0) {
@@ -1248,10 +1418,8 @@ const App = () => {
             </div>
           )}
 
-          {messages.map((message, messageIndex) => {
-            if (!shouldShowMessage(message)) {
-              return null;
-            }
+          {mergedMessages.map((message, messageIndex) => {
+            // mergedMessages 已经过滤了不显示的消息
 
             return (
               <div key={messageIndex} className={`message ${message.type}`}>
@@ -1342,7 +1510,7 @@ const App = () => {
                               ['edit', 'edit_file', 'replace_string', 'write_to_file'].includes(
                                 block.name.toLowerCase(),
                               ) ? (
-                              <EditToolBlock name={block.name} input={block.input} />
+                              <EditToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
                             ) : block.name &&
                               ['bash', 'run_terminal_cmd', 'execute_command'].includes(
                                 block.name.toLowerCase(),
@@ -1353,7 +1521,7 @@ const App = () => {
                                 result={findToolResult(block.id, messageIndex)}
                               />
                             ) : (
-                              <GenericToolBlock name={block.name} input={block.input} />
+                              <GenericToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
                             )}
                           </>
                         )}
@@ -1404,14 +1572,14 @@ const App = () => {
             usageUsedTokens={usageUsedTokens}
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
-            value={inputValue}
+            alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
             placeholder={t('chat.inputPlaceholder')}
             onSubmit={handleSubmit}
             onStop={interruptSession}
-            onInput={setInputValue}
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
+            onToggleThinking={handleToggleThinking}
             activeFile={contextInfo?.file}
             selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
               ? (contextInfo.startLine === contextInfo.endLine

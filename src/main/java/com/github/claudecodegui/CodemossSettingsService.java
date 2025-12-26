@@ -272,11 +272,78 @@ public class CodemossSettingsService {
         return result;
     }
 
+    public Boolean getAlwaysThinkingEnabledFromClaudeSettings() throws IOException {
+        JsonObject claudeSettings = readClaudeSettings();
+        if (!claudeSettings.has("alwaysThinkingEnabled") || claudeSettings.get("alwaysThinkingEnabled").isJsonNull()) {
+            return null;
+        }
+        try {
+            return claudeSettings.get("alwaysThinkingEnabled").getAsBoolean();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public void setAlwaysThinkingEnabledInClaudeSettings(boolean enabled) throws IOException {
+        JsonObject claudeSettings = readClaudeSettings();
+        claudeSettings.addProperty("alwaysThinkingEnabled", enabled);
+        writeClaudeSettings(claudeSettings);
+    }
+
+    public boolean setAlwaysThinkingEnabledInActiveProvider(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has("claude") || config.get("claude").isJsonNull()) {
+            return false;
+        }
+
+        JsonObject claude = config.getAsJsonObject("claude");
+        if (!claude.has("current") || claude.get("current").isJsonNull()) {
+            return false;
+        }
+
+        String currentId = claude.get("current").getAsString();
+        if (currentId == null || currentId.trim().isEmpty()) {
+            return false;
+        }
+
+        if (!claude.has("providers") || claude.get("providers").isJsonNull()) {
+            return false;
+        }
+
+        JsonObject providers = claude.getAsJsonObject("providers");
+        if (!providers.has(currentId) || providers.get(currentId).isJsonNull()) {
+            return false;
+        }
+
+        JsonObject provider = providers.getAsJsonObject(currentId);
+        JsonObject settingsConfig;
+        if (provider.has("settingsConfig") && provider.get("settingsConfig").isJsonObject()) {
+            settingsConfig = provider.getAsJsonObject("settingsConfig");
+        } else {
+            settingsConfig = new JsonObject();
+            provider.add("settingsConfig", settingsConfig);
+        }
+
+        settingsConfig.addProperty("alwaysThinkingEnabled", enabled);
+        writeConfig(config);
+        return true;
+    }
+
     private void writeClaudeSettings(JsonObject settings) throws IOException {
         Path settingsPath = getClaudeSettingsPath();
         if (!Files.exists(settingsPath.getParent())) {
             Files.createDirectories(settingsPath.getParent());
         }
+
+        // 强制写入 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC 配置
+        // 确保 env 对象存在
+        if (!settings.has("env") || settings.get("env").isJsonNull()) {
+            settings.add("env", new JsonObject());
+        }
+        JsonObject env = settings.getAsJsonObject("env");
+        // 强制设置为字符串类型的 "1"
+        env.addProperty("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1");
+
         try (FileWriter writer = new FileWriter(settingsPath.toFile())) {
             gson.toJson(settings, writer);
             LOG.info("[CodemossSettings] Synced settings to: " + settingsPath);
@@ -299,6 +366,74 @@ public class CodemossSettingsService {
         config.add("claude", claude);
 
         return config;
+    }
+
+    /**
+     * 获取自定义工作目录配置
+     * @param projectPath 项目根路径
+     * @return 自定义工作目录，如果未配置则返回 null
+     */
+    public String getCustomWorkingDirectory(String projectPath) throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("workingDirectories") || config.get("workingDirectories").isJsonNull()) {
+            return null;
+        }
+
+        JsonObject workingDirs = config.getAsJsonObject("workingDirectories");
+
+        if (workingDirs.has(projectPath) && !workingDirs.get(projectPath).isJsonNull()) {
+            return workingDirs.get(projectPath).getAsString();
+        }
+
+        return null;
+    }
+
+    /**
+     * 设置自定义工作目录
+     * @param projectPath 项目根路径
+     * @param customWorkingDir 自定义工作目录（相对于项目根路径或绝对路径）
+     */
+    public void setCustomWorkingDirectory(String projectPath, String customWorkingDir) throws IOException {
+        JsonObject config = readConfig();
+
+        // 确保 workingDirectories 节点存在
+        if (!config.has("workingDirectories")) {
+            config.add("workingDirectories", new JsonObject());
+        }
+
+        JsonObject workingDirs = config.getAsJsonObject("workingDirectories");
+
+        if (customWorkingDir == null || customWorkingDir.trim().isEmpty()) {
+            // 如果传入空值，移除配置
+            workingDirs.remove(projectPath);
+        } else {
+            // 设置自定义工作目录
+            workingDirs.addProperty(projectPath, customWorkingDir.trim());
+        }
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set custom working directory for " + projectPath + ": " + customWorkingDir);
+    }
+
+    /**
+     * 获取所有工作目录配置
+     * @return Map<projectPath, customWorkingDir>
+     */
+    public Map<String, String> getAllWorkingDirectories() throws IOException {
+        Map<String, String> result = new HashMap<>();
+        JsonObject config = readConfig();
+
+        if (!config.has("workingDirectories") || config.get("workingDirectories").isJsonNull()) {
+            return result;
+        }
+
+        JsonObject workingDirs = config.getAsJsonObject("workingDirectories");
+        for (String key : workingDirs.keySet()) {
+            result.put(key, workingDirs.get(key).getAsString());
+        }
+
+        return result;
     }
 
     private JsonObject extractEnvConfig(JsonObject provider) {

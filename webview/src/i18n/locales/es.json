@@ -79,11 +79,12 @@
       },
       "fontSize": {
         "label": "Tamaño de fuente",
-        "level1": "Mínimo (80%)",
-        "level2": "Estándar (100%)",
-        "level3": "Más grande (110%)",
-        "level4": "Grande (120%)",
-        "level5": "Máximo (140%)"
+        "level1": "Pequeño (80%)",
+        "level2": "Más pequeño (90%)",
+        "level3": "Estándar (100%)",
+        "level4": "Más grande (110%)",
+        "level5": "Grande (120%)",
+        "level6": "Máximo (140%)"
       }
     },
     "providers": "Gestión de proveedores",
@@ -241,6 +242,8 @@
   },
   "toast": {
     "switchSuccess": "Cambio exitoso",
+    "thinkingEnabled": "Thinking enabled",
+    "thinkingDisabled": "Thinking disabled",
     "saveSuccess": "Guardado exitoso",
     "deleteSuccess": "Eliminación exitosa",
     "operationFailed": "Operación fallida",
@@ -252,6 +255,10 @@
     "switch": "Cambiar",
     "switchProvider": "Cambiar proveedor",
     "link": "Enlace"
+  },
+  "markdown": {
+    "copyCode": "Copiar código",
+    "copySuccess": "¡Copiado!"
   },
   "usage": {
     "loading": "Cargando estadísticas...",
@@ -356,7 +363,9 @@
     "findFile": "Buscar archivo",
     "todoList": "Lista de tareas",
     "editFileTitle": "Editar archivo",
-    "clickToOpen": "Haga clic para abrir {{filePath}}",
+    "clickToOpen": "Haz clic para abrir {{filePath}}",
+    "refreshFileInIdea": "Actualizar archivo en IDEA",
+    "refreshFileInIdeaSuccess": "Se ha actualizado manualmente el contenido de este archivo en IDEA",
     "showDiffInIdea": "Mostrar cambios en IDEA",
     "diffButton": "Diff",
     "editPrefix": "Editar: {{fileName}}"

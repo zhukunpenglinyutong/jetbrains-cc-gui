@@ -119,6 +119,11 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
         <img src="https://avatars.githubusercontent.com/u/74449531?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
       </a>
     </td>
+    <td align="center">
+      <a href="https://github.com/Rinimabi">
+        <img src="https://avatars.githubusercontent.com/u/18625271?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+      </a>
+    </td>
   </tr>
 </table>
 

@@ -40,6 +40,61 @@
     color: var(--text-tertiary);
 }
 
+/* 历史记录头部样式 */
+.history-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-secondary);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.history-info {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+/* 搜索容器样式 */
+.history-search-container {
+    position: relative;
+    min-width: 200px;
+    max-width: 300px;
+}
+
+/* 搜索框样式 */
+.history-search-input {
+    width: 100%;
+    padding: 6px 32px 6px 12px;
+    font-size: 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s;
+
+    &:focus {
+        border-color: #0a84ff !important;
+        box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+    }
+
+    &::placeholder {
+        color: var(--text-placeholder);
+    }
+}
+
+/* 搜索图标样式 */
+.history-search-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
 /* 删除按钮样式 */
 .history-delete-btn {
     background: transparent;
@@ -264,16 +319,4 @@
 .history-title-cancel-btn:active {
     transform: scale(0.92);
     background-color: rgba(255, 59, 48, 0.25);
-}
-
-/* 搜索框样式（已在组件中内联，这里添加额外的样式增强） */
-.history-search-input {
-    &:focus {
-        border-color: #0a84ff !important;
-        box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
-    }
-
-    &::placeholder {
-        color: #666;
-    }
 }

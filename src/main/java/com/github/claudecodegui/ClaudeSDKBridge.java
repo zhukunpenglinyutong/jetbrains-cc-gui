@@ -466,12 +466,9 @@ public class ClaudeSDKBridge {
         MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
-            long sendStartTime = System.currentTimeMillis();
-            // System.out.println("[ClaudeSDKBridge] ====== 消息发送开始 ======");
-            // System.out.println("[ClaudeSDKBridge] 消息内容: " + (message != null ? message.substring(0, Math.min(50, message.length())) + "..." : "null"));
-            // System.out.println("[ClaudeSDKBridge] SessionId: " + sessionId);
-            // System.out.println("[ClaudeSDKBridge] CWD: " + cwd);
-            // System.out.println("[ClaudeSDKBridge] Model: " + model);
+            // long sendStartTime = System.currentTimeMillis();
+            // LOG.info("[PERF][" + sendStartTime + "] ClaudeSDKBridge.sendMessage() 开始执行");
+            // LOG.info("[PERF] 消息内容: " + (message != null ? message.substring(0, Math.min(50, message.length())) + "..." : "null"));
 
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
@@ -479,8 +476,21 @@ public class ClaudeSDKBridge {
             // 记录 Node.js 进程中最后一条错误日志，方便在 "Process exited with code" 时附加具体原因
             final String[] lastNodeError = {null};
 
+            // // [PERF] 记录关键时间点
+            // final long[] perfTimestamps = new long[10];
+            // // 0: 开始序列化附件
+            // // 1: 附件序列化完成
+            // // 2: 进程启动前
+            // // 3: 进程启动后
+            // // 4: stdin 写入完成
+            // // 5: 第一行输出
+            // // 6: 第一个 content_delta
+            // // 7: message_end
+            // // 8: 进程结束
+
             try {
                 // 序列化附件
+                // perfTimestamps[0] = System.currentTimeMillis();
                 String attachmentsJson = null;
                 boolean hasAttachments = attachments != null && !attachments.isEmpty();
                 if (hasAttachments) {
@@ -499,6 +509,8 @@ public class ClaudeSDKBridge {
                         hasAttachments = false;
                     }
                 }
+                // perfTimestamps[1] = System.currentTimeMillis();
+                // LOG.info("[PERF][" + perfTimestamps[1] + "] 附件序列化完成，耗时: " + (perfTimestamps[1] - perfTimestamps[0]) + "ms");
 
                 String node = nodeDetector.findNodeExecutable();
                 File workDir = directoryResolver.findSdkDir();
@@ -563,25 +575,33 @@ public class ClaudeSDKBridge {
 
                 Process process = null;
                 try {
-                    // System.out.println("[ClaudeSDKBridge] 正在启动 Node.js 进程...");
-                    // System.out.println("[ClaudeSDKBridge] 命令: " + String.join(" ", command));
+                    // perfTimestamps[2] = System.currentTimeMillis();
+                    // LOG.info("[PERF][" + perfTimestamps[2] + "] 准备启动 Node.js 进程，准备耗时: " + (perfTimestamps[2] - perfTimestamps[1]) + "ms");
+
                     process = pb.start();
-                    // System.out.println("[ClaudeSDKBridge] Node.js 进程已启动，PID: " + process.pid());
+
+                    // perfTimestamps[3] = System.currentTimeMillis();
+                    // LOG.info("[PERF][" + perfTimestamps[3] + "] Node.js 进程已启动，PID: " + process.pid() + "，启动耗时: " + (perfTimestamps[3] - perfTimestamps[2]) + "ms");
+
                     processManager.registerProcess(channelId, process);
 
                     // 通过 stdin 写入所有参数（包括消息和附件）
                     try (java.io.OutputStream stdin = process.getOutputStream()) {
                         stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                         stdin.flush();
-                        // System.out.println("[ClaudeSDKBridge] 已写入 stdin 数据，长度: " + stdinJson.length() + " 字节");
+                        // perfTimestamps[4] = System.currentTimeMillis();
+                        // LOG.info("[PERF][" + perfTimestamps[4] + "] stdin 写入完成，数据长度: " + stdinJson.length() + " 字节，写入耗时: " + (perfTimestamps[4] - perfTimestamps[3]) + "ms");
                     } catch (Exception e) {
-                        // System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
+                        // LOG.warn("[PERF] stdin 写入失败: " + e.getMessage());
                     }
 
                     try {
-                        // System.out.println("[ClaudeSDKBridge] 开始读取 Node.js 输出...");
+                        // LOG.info("[PERF] 开始读取 Node.js 输出...");
                         long lastOutputTime = System.currentTimeMillis();
                         int lineCount = 0;
+                        // final boolean[] firstLineReceived = {false};
+                        // final boolean[] firstContentReceived = {false};
+
                         try (BufferedReader reader = new BufferedReader(
                             new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 
@@ -589,6 +609,15 @@ public class ClaudeSDKBridge {
                             while ((line = reader.readLine()) != null) {
                                 lineCount++;
                                 long now = System.currentTimeMillis();
+
+                                // // [PERF] 记录第一行输出时间
+                                // if (!firstLineReceived[0]) {
+                                //     firstLineReceived[0] = true;
+                                //     perfTimestamps[5] = now;
+                                //     LOG.info("[PERF][" + now + "] >>> 收到第一行输出 <<<，距 stdin 写入: " + (now - perfTimestamps[4]) + "ms，距开始: " + (now - sendStartTime) + "ms");
+                                //     LOG.info("[PERF] 第一行内容: " + line.substring(0, Math.min(100, line.length())));
+                                // }
+
                                 // 每 30 秒打印一次状态，或者收到第一行输出时
                                 // if (lineCount == 1 || now - lastOutputTime > 30000) {
                                 //     System.out.println("[ClaudeSDKBridge] 已读取 " + lineCount + " 行输出，耗时 " + (now - sendStartTime) / 1000 + " 秒");
@@ -638,6 +667,14 @@ public class ClaudeSDKBridge {
                                 } else if (line.startsWith("[CONTENT_DELTA]")) {
                                     String delta = line.substring("[CONTENT_DELTA]".length()).trim();
                                     assistantContent.append(delta);
+
+                                    // // [PERF] 记录第一个 content_delta
+                                    // if (!firstContentReceived[0]) {
+                                    //     firstContentReceived[0] = true;
+                                    //     perfTimestamps[6] = now;
+                                    //     LOG.info("[PERF][" + now + "] >>> 收到第一个 content_delta <<<，距开始: " + (now - sendStartTime) + "ms");
+                                    // }
+
                                     callback.onMessage("content_delta", delta);
                                 } else if (line.startsWith("[THINKING]")) {
                                     String thinkingContent = line.substring("[THINKING]".length()).trim();
@@ -648,10 +685,19 @@ public class ClaudeSDKBridge {
                                 } else if (line.startsWith("[SLASH_COMMANDS]")) {
                                     String slashCommandsJson = line.substring("[SLASH_COMMANDS]".length()).trim();
                                     callback.onMessage("slash_commands", slashCommandsJson);
+                                } else if (line.startsWith("[TOOL_RESULT]")) {
+                                    // 实时输出工具调用结果，前端可以立即更新工具状态
+                                    String toolResultJson = line.substring("[TOOL_RESULT]".length()).trim();
+                                    callback.onMessage("tool_result", toolResultJson);
                                 } else if (line.startsWith("[MESSAGE_START]")) {
                                     callback.onMessage("message_start", "");
                                 } else if (line.startsWith("[MESSAGE_END]")) {
+                                    // perfTimestamps[7] = now;
+                                    // LOG.info("[PERF][" + now + "] >>> 收到 MESSAGE_END <<<，距开始: " + (now - sendStartTime) + "ms");
+                                    // 立即通知前端消息结束，不等待进程退出
                                     callback.onMessage("message_end", "");
+                                    // 标记响应完成时间，用于计算用户体验时间
+                                    // LOG.info("[PERF][" + now + "] 用户可见响应完成，距开始: " + (now - sendStartTime) + "ms");
                                 }
                             }
                         }
@@ -670,9 +716,25 @@ public class ClaudeSDKBridge {
 	                        // }
 	                        process.waitFor();
 
-                        long totalTime = System.currentTimeMillis() - sendStartTime;
-                        // System.out.println("[ClaudeSDKBridge] ====== 消息发送完成 ======");
-                        // System.out.println("[ClaudeSDKBridge] 总耗时: " + totalTime / 1000 + " 秒");
+                        // perfTimestamps[8] = System.currentTimeMillis();
+                        // long totalTime = perfTimestamps[8] - sendStartTime;
+                        // LOG.info("[PERF][" + perfTimestamps[8] + "] ====== 消息发送完成 ======");
+                        // LOG.info("[PERF] 总耗时: " + totalTime + "ms (" + (totalTime / 1000) + "秒)");
+                        // LOG.info("[PERF] 耗时分解:");
+                        // LOG.info("[PERF]   - 附件序列化: " + (perfTimestamps[1] - perfTimestamps[0]) + "ms");
+                        // LOG.info("[PERF]   - 进程准备: " + (perfTimestamps[2] - perfTimestamps[1]) + "ms");
+                        // LOG.info("[PERF]   - 进程启动: " + (perfTimestamps[3] - perfTimestamps[2]) + "ms");
+                        // LOG.info("[PERF]   - stdin 写入: " + (perfTimestamps[4] - perfTimestamps[3]) + "ms");
+                        // if (perfTimestamps[5] > 0) {
+                        //     LOG.info("[PERF]   - 等待第一行输出: " + (perfTimestamps[5] - perfTimestamps[4]) + "ms");
+                        // }
+                        // if (perfTimestamps[6] > 0) {
+                        //     LOG.info("[PERF]   - 首个 content_delta: " + (perfTimestamps[6] - sendStartTime) + "ms (距开始)");
+                        // }
+                        // if (perfTimestamps[7] > 0) {
+                        //     LOG.info("[PERF]   - MESSAGE_END: " + (perfTimestamps[7] - sendStartTime) + "ms (距开始)");
+                        // }
+                        // LOG.info("[PERF]   - 进程结束: " + (perfTimestamps[8] - (perfTimestamps[7] > 0 ? perfTimestamps[7] : perfTimestamps[4])) + "ms");
 
                         int exitCode = process.exitValue();
                         boolean wasInterrupted = processManager.wasInterrupted(channelId);
@@ -806,11 +868,18 @@ public class ClaudeSDKBridge {
     }
 
     /**
-     * 获取斜杠命令列表
+     * 获取斜杠命令列表.
      * 在插件启动时调用，获取完整的命令列表（包含 name 和 description）
+     *
+     * 关键修复：Node.js 进程输出 [SLASH_COMMANDS] 后不会自动退出，
+     * 因此一旦检测到数据就立即返回，不再等待进程结束。
      */
     public CompletableFuture<List<JsonObject>> getSlashCommands(String cwd) {
         return CompletableFuture.supplyAsync(() -> {
+            Process process = null;
+            long startTime = System.currentTimeMillis();
+            LOG.info("[SlashCommands] Starting getSlashCommands, cwd=" + cwd);
+
             try {
                 String node = nodeDetector.findNodeExecutable();
 
@@ -833,52 +902,74 @@ public class ClaudeSDKBridge {
                 envConfigurator.updateProcessEnvironment(pb, node);
                 pb.environment().put("CLAUDE_USE_STDIN", "true");
 
-                Process process = pb.start();
+                process = pb.start();
+                final Process finalProcess = process;
 
                 // 通过 stdin 写入参数
                 try (java.io.OutputStream stdin = process.getOutputStream()) {
                     stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                     stdin.flush();
+                    LOG.debug("[SlashCommands] Wrote stdin: " + stdinJson);
                 } catch (Exception e) {
-                    // System.err.println("[ClaudeSDKBridge] Failed to write stdin: " + e.getMessage());
+                    LOG.warn("[SlashCommands] Failed to write stdin: " + e.getMessage());
                 }
 
-                StringBuilder output = new StringBuilder();
-                String slashCommandsJson = null;
-                try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        output.append(line).append("\n");
-                        // 捕获 [SLASH_COMMANDS] 输出
-                        if (line.startsWith("[SLASH_COMMANDS]")) {
-                            slashCommandsJson = line.substring("[SLASH_COMMANDS]".length()).trim();
+                // 使用标志变量，一旦找到数据就立即退出
+                final boolean[] found = {false};
+                final String[] slashCommandsJson = {null};
+                final StringBuilder output = new StringBuilder();
+
+                Thread readerThread = new Thread(() -> {
+                    try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                        String line;
+                        while (!found[0] && (line = reader.readLine()) != null) {
+                            output.append(line).append("\n");
+                            LOG.debug("[SlashCommands] Read line: " + line.substring(0, Math.min(100, line.length())));
+
+                            if (line.startsWith("[SLASH_COMMANDS]")) {
+                                slashCommandsJson[0] = line.substring("[SLASH_COMMANDS]".length()).trim();
+                                found[0] = true;  // 设置标志，立即停止读取
+                                LOG.info("[SlashCommands] Found SLASH_COMMANDS marker, data length=" + slashCommandsJson[0].length());
+                                break;  // 立即退出循环
+                            }
                         }
+                    } catch (Exception e) {
+                        LOG.debug("[SlashCommands] Reader thread exception: " + e.getMessage());
                     }
+                });
+                readerThread.start();
+
+                // 轮询等待，最多 20 秒
+                long deadline = System.currentTimeMillis() + 20000;
+                while (!found[0] && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(100);  // 每 100ms 检查一次
                 }
 
-                // 添加超时：等待最多 30 秒
-                boolean completed = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
-                if (!completed) {
-                    // System.err.println("[ClaudeSDKBridge] getSlashCommands timeout after 30 seconds");
+                long elapsed = System.currentTimeMillis() - startTime;
+
+                // 无论是否找到数据，都立即终止进程
+                if (process.isAlive()) {
                     process.destroyForcibly();
-                    throw new RuntimeException("getSlashCommands timeout after 30 seconds");
+                    LOG.debug("[SlashCommands] Process forcibly destroyed after " + elapsed + "ms");
                 }
 
+                // 解析结果
                 List<JsonObject> commands = new ArrayList<>();
 
-                // 优先使用 [SLASH_COMMANDS] 输出
-                if (slashCommandsJson != null && !slashCommandsJson.isEmpty()) {
+                if (found[0] && slashCommandsJson[0] != null && !slashCommandsJson[0].isEmpty()) {
                     try {
-                        JsonArray commandsArray = gson.fromJson(slashCommandsJson, JsonArray.class);
-                        // System.out.println("[ClaudeSDKBridge] Loaded " + commandsArray.size() + " slash commands");
+                        JsonArray commandsArray = gson.fromJson(slashCommandsJson[0], JsonArray.class);
                         for (var cmd : commandsArray) {
                             commands.add(cmd.getAsJsonObject());
                         }
+                        LOG.info("[SlashCommands] Successfully parsed " + commands.size() + " commands in " + elapsed + "ms");
                         return commands;
                     } catch (Exception e) {
-                        // System.err.println("[ClaudeSDKBridge] Failed to parse slash commands: " + e.getMessage());
+                        LOG.warn("[SlashCommands] Failed to parse commands JSON: " + e.getMessage());
                     }
+                } else {
+                    LOG.warn("[SlashCommands] No commands found after " + elapsed + "ms, found=" + found[0]);
                 }
 
                 // 回退到解析最终 JSON 输出
@@ -891,23 +982,27 @@ public class ClaudeSDKBridge {
                         if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
                             if (jsonResult.has("commands")) {
                                 JsonArray commandsArray = jsonResult.getAsJsonArray("commands");
-                                // System.out.println("[ClaudeSDKBridge] Found " + commandsArray.size() + " slash commands from JSON");
                                 for (var cmd : commandsArray) {
                                     commands.add(cmd.getAsJsonObject());
                                 }
+                                LOG.info("[SlashCommands] Fallback: parsed " + commands.size() + " commands from JSON");
                             }
                         }
                     } catch (Exception e) {
-                        // System.err.println("[ClaudeSDKBridge] Failed to parse JSON result: " + e.getMessage());
+                        LOG.debug("[SlashCommands] Fallback JSON parse failed: " + e.getMessage());
                     }
                 }
 
                 return commands;
 
             } catch (Exception e) {
-                // System.err.println("[ClaudeSDKBridge] getSlashCommands exception: " + e.getMessage());
-                // e.printStackTrace();
+                long elapsed = System.currentTimeMillis() - startTime;
+                LOG.error("[SlashCommands] Exception after " + elapsed + "ms: " + e.getMessage());
                 return new ArrayList<>();
+            } finally {
+                if (process != null && process.isAlive()) {
+                    process.destroyForcibly();
+                }
             }
         });
     }

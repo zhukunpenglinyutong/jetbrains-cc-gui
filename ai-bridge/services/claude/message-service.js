@@ -183,6 +183,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	                    'selection:', hasSelection ? 'yes' : 'no',
 	                    'other files:', others?.length || 0);
 	        systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
+	        systemPromptAppend += 'Note: File paths may include line references in format `#LX-Y` (lines X to Y) or `#LX` (single line X).\n\n';
 
 	        if (hasActive) {
 	          systemPromptAppend += '**Currently Active File** (primary focus):\n';
@@ -329,6 +330,19 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
           }
         } else if (typeof content === 'string') {
           console.log('[CONTENT]', content);
+        }
+      }
+
+      // 实时输出工具调用结果（user 消息中的 tool_result）
+      if (msg.type === 'user') {
+        const content = msg.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'tool_result') {
+              // 输出工具调用结果，前端可以实时更新工具状态
+              console.log('[TOOL_RESULT]', JSON.stringify(block));
+            }
+          }
         }
       }
 
@@ -623,6 +637,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
                     'selection:', hasSelection ? 'yes' : 'no',
                     'other files:', others?.length || 0);
         systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
+        systemPromptAppend += 'Note: File paths may include line references in format `#LX-Y` (lines X to Y) or `#LX` (single line X).\n\n';
 
         if (hasActive) {
           systemPromptAppend += '**Currently Active File** (primary focus):\n';
@@ -818,6 +833,19 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    	          }
 	    	        } else if (typeof content === 'string') {
 	    	          console.log('[CONTENT]', content);
+	    	        }
+	    	      }
+
+	    	      // 实时输出工具调用结果（user 消息中的 tool_result）
+	    	      if (msg.type === 'user') {
+	    	        const content = msg.message?.content;
+	    	        if (Array.isArray(content)) {
+	    	          for (const block of content) {
+	    	            if (block.type === 'tool_result') {
+	    	              // 输出工具调用结果，前端可以实时更新工具状态
+	    	              console.log('[TOOL_RESULT]', JSON.stringify(block));
+	    	            }
+	    	          }
 	    	        }
 	    	      }
 

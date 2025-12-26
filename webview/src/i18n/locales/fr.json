@@ -79,11 +79,12 @@
       },
       "fontSize": {
         "label": "Taille de police",
-        "level1": "Minimale (80%)",
-        "level2": "Standard (100%)",
-        "level3": "Plus grande (110%)",
-        "level4": "Grande (120%)",
-        "level5": "Maximale (140%)"
+        "level1": "Petite (80%)",
+        "level2": "Plus petite (90%)",
+        "level3": "Standard (100%)",
+        "level4": "Plus grande (110%)",
+        "level5": "Grande (120%)",
+        "level6": "Maximale (140%)"
       }
     },
     "providers": "Gestion des fournisseurs",
@@ -241,6 +242,8 @@
   },
   "toast": {
     "switchSuccess": "Changement réussi",
+    "thinkingEnabled": "Thinking enabled",
+    "thinkingDisabled": "Thinking disabled",
     "saveSuccess": "Enregistrement réussi",
     "deleteSuccess": "Suppression réussie",
     "operationFailed": "Opération échouée",
@@ -252,6 +255,10 @@
     "switch": "Basculer",
     "switchProvider": "Changer de fournisseur",
     "link": "Lien"
+  },
+  "markdown": {
+    "copyCode": "Copier le code",
+    "copySuccess": "Copié !"
   },
   "usage": {
     "loading": "Chargement des statistiques...",
@@ -357,9 +364,11 @@
     "todoList": "Liste de tâches",
     "editFileTitle": "Modifier fichier",
     "clickToOpen": "Cliquez pour ouvrir {{filePath}}",
+    "refreshFileInIdea": "Actualiser le fichier dans IDEA",
+    "refreshFileInIdeaSuccess": "Contenu de ce fichier actualisé manuellement dans IDEA",
     "showDiffInIdea": "Afficher les modifications dans IDEA",
     "diffButton": "Diff",
-    "editPrefix": "Modifier: {{fileName}}"
+    "editPrefix": "Modifier : {{fileName}}"
   },
   "skills": {
     "title": "Skills",

@@ -79,11 +79,12 @@
       },
       "fontSize": {
         "label": "फ़ॉन्ट आकार",
-        "level1": "सबसे छोटा (80%)",
-        "level2": "मानक (100%)",
-        "level3": "बड़ा (110%)",
-        "level4": "अधिक बड़ा (120%)",
-        "level5": "सबसे बड़ा (140%)"
+        "level1": "छोटा (80%)",
+        "level2": "छोटा (90%)",
+        "level3": "मानक (100%)",
+        "level4": "बड़ा (110%)",
+        "level5": "अधिक बड़ा (120%)",
+        "level6": "सबसे बड़ा (140%)"
       }
     },
     "providers": "प्रदाता प्रबंधन",
@@ -241,6 +242,8 @@
   },
   "toast": {
     "switchSuccess": "स्विच सफल",
+    "thinkingEnabled": "Thinking enabled",
+    "thinkingDisabled": "Thinking disabled",
     "saveSuccess": "सहेजना सफल",
     "deleteSuccess": "हटाना सफल",
     "operationFailed": "ऑपरेशन विफल",
@@ -252,6 +255,10 @@
     "switch": "स्विच",
     "switchProvider": "प्रदाता स्विच करें",
     "link": "लिंक"
+  },
+  "markdown": {
+    "copyCode": "कोड कॉपी करें",
+    "copySuccess": "कॉपी हो गया"
   },
   "usage": {
     "loading": "सांख्यिकी लोड हो रही है...",
@@ -357,6 +364,8 @@
     "todoList": "कार्य सूची",
     "editFileTitle": "फ़ाइल संपादित करें",
     "clickToOpen": "{{filePath}} खोलने के लिए क्लिक करें",
+    "refreshFileInIdea": "IDEA में फ़ाइल रीफ्रेश करें",
+    "refreshFileInIdeaSuccess": "इस फ़ाइल की सामग्री को IDEA में मैन्युअली रीफ्रेश किया गया",
     "showDiffInIdea": "IDEA में परिवर्तन दिखाएं",
     "diffButton": "Diff",
     "editPrefix": "संपादित करें: {{fileName}}"

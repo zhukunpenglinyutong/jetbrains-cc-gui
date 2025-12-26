@@ -1,11 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-// TODO: 临时隐藏模式选择器,后续恢复
-// import type { ButtonAreaProps, PermissionMode } from './types';
-import type { ButtonAreaProps } from './types';
-// import { ModeSelect, ModelSelect } from './selectors';
-import { ModelSelect, ProviderSelect } from './selectors';
-// import { TokenIndicator } from './TokenIndicator';
+import type { ButtonAreaProps, ModelInfo, PermissionMode } from './types';
+import { ConfigSelect, ModelSelect, ModeSelect } from './selectors';
 import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 
 /**
@@ -17,18 +13,41 @@ export const ButtonArea = ({
   hasInputContent = false,
   isLoading = false,
   selectedModel = 'claude-sonnet-4-5',
-  // TODO: 临时隐藏模式选择器,后续恢复
-  // permissionMode = 'default',
+  permissionMode = 'default',
   currentProvider = 'claude',
   onSubmit,
   onStop,
-  // TODO: 临时隐藏模式选择器,后续恢复
-  // onModeSelect,
+  onModeSelect,
   onModelSelect,
   onProviderSelect,
+  alwaysThinkingEnabled = false,
+  onToggleThinking,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * 应用模型名称映射
+   * 将基础模型 ID 映射为实际的模型名称（如带容量后缀的版本）
+   */
+  const applyModelMapping = (model: ModelInfo, mapping: { haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
+    const modelKeyMap: Record<string, keyof typeof mapping> = {
+      'claude-sonnet-4-5': 'sonnet',
+      'claude-opus-4-5-20251101': 'opus',
+      'claude-haiku-4-5': 'haiku',
+    };
+
+    const key = modelKeyMap[model.id];
+    if (key && mapping[key]) {
+      const actualModel = String(mapping[key]).trim();
+      if (actualModel.length > 0) {
+        // 保持原始 id 作为唯一标识，只修改 label 为自定义名称
+        // 这样即使多个模型有相同的 displayName，id 仍然是唯一的
+        return { ...model, label: actualModel };
+      }
+    }
+    return model;
+  };
 
   // 根据当前提供商选择模型列表
   const availableModels = (() => {
@@ -49,18 +68,7 @@ export const ButtonArea = ({
         sonnet?: string;
         opus?: string;
       };
-      return CLAUDE_MODELS.map((m) => {
-        if (m.id === 'claude-sonnet-4-5' && mapping.sonnet && String(mapping.sonnet).trim().length > 0) {
-          return { ...m, label: String(mapping.sonnet) };
-        }
-        if (m.id === 'claude-opus-4-5-20251101' && mapping.opus && String(mapping.opus).trim().length > 0) {
-          return { ...m, label: String(mapping.opus) };
-        }
-        if (m.id === 'claude-haiku-4-5' && mapping.haiku && String(mapping.haiku).trim().length > 0) {
-          return { ...m, label: String(mapping.haiku) };
-        }
-        return m;
-      });
+      return CLAUDE_MODELS.map((m) => applyModelMapping(m, mapping));
     } catch {
       return CLAUDE_MODELS;
     }
@@ -84,11 +92,10 @@ export const ButtonArea = ({
 
   /**
    * 处理模式选择
-   * TODO: 临时隐藏模式选择器,后续恢复
    */
-  // const handleModeSelect = useCallback((mode: PermissionMode) => {
-  //   onModeSelect?.(mode);
-  // }, [onModeSelect]);
+  const handleModeSelect = useCallback((mode: PermissionMode) => {
+    onModeSelect?.(mode);
+  }, [onModeSelect]);
 
   /**
    * 处理模型选择
@@ -108,13 +115,17 @@ export const ButtonArea = ({
     <div className="button-area">
       {/* 左侧：选择器 */}
       <div className="button-area-left">
-        {/* TODO: 临时隐藏模式选择器,后续恢复 */}
-        {/* <ModeSelect value={permissionMode} onChange={handleModeSelect} /> */}
-        <ProviderSelect value={currentProvider} onChange={handleProviderSelect} />
+        <ConfigSelect 
+          currentProvider={currentProvider}
+          onProviderChange={handleProviderSelect}
+          alwaysThinkingEnabled={alwaysThinkingEnabled}
+          onToggleThinking={onToggleThinking}
+        />
+        <ModeSelect value={permissionMode} onChange={handleModeSelect} />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />
       </div>
 
-      {/* 右侧：工具按钮 */}
+      {/* 右侧:工具按钮 */}
       <div className="button-area-right">
         <div className="button-divider" />
 

@@ -74,7 +74,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
         ContentFactory contentFactory = ContentFactory.getInstance();
-        Content content = contentFactory.createContent(chatWindow.getContent(), "Claude Claude", false);
+        Content content = contentFactory.createContent(chatWindow.getContent(), "GUI", false);
         toolWindow.getContentManager().addContent(content);
 
         content.setDisposer(() -> {
@@ -94,6 +94,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
      */
     public static class ClaudeChatWindow {
         private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
+        private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
 
         private final JPanel mainPanel;
         private final ClaudeSDKBridge claudeSDKBridge;
@@ -148,9 +149,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             this.initialized = true;
             LOG.info("窗口实例已完全初始化，项目: " + project.getName());
 
-            // 在构造函数结束后立即获取斜杠命令（不依赖 onLoadEnd 回调）
-            // 使用异步调用避免阻塞 UI 线程
-            fetchSlashCommandsOnStartup();
+            // 注意：斜杠命令的加载现在由前端发起
+            // 前端在 bridge 准备好后会发送 frontend_ready 和 refresh_slash_commands 事件
+            // 这确保了前后端初始化时序正确
         }
 
         /**
@@ -176,6 +177,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void initializeSession() {
             this.session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
+            loadPermissionModeFromSettings();
         }
 
         private void loadNodePathFromSettings() {
@@ -191,6 +193,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 }
             } catch (Exception e) {
                 LOG.warn("Failed to load manual Node.js path: " + e.getMessage());
+            }
+        }
+
+        private void loadPermissionModeFromSettings() {
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
+                if (savedMode != null && !savedMode.trim().isEmpty()) {
+                    String mode = savedMode.trim();
+                    if (session != null) {
+                        session.setPermissionMode(mode);
+                        LOG.info("Loaded permission mode from settings: " + mode);
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to load permission mode: " + e.getMessage());
+            }
+        }
+
+        private void savePermissionModeToSettings(String mode) {
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                props.setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
+                LOG.info("Saved permission mode to settings: " + mode);
+            } catch (Exception e) {
+                LOG.warn("Failed to save permission mode: " + e.getMessage());
             }
         }
 
@@ -438,9 +466,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             "};";
                         cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
 
-                        // 在浏览器加载完成后获取斜杠命令
-                        LOG.debug("About to call fetchSlashCommandsOnStartup");
-                        fetchSlashCommandsOnStartup();
+                        // 斜杠命令的加载现在由前端发起，通过 frontend_ready 事件触发
+                        // 不再在 onLoadEnd 中主动调用，避免时序问题
+                        LOG.debug("onLoadEnd completed, waiting for frontend_ready signal");
                     }
                 }, browser.getCefBrowser());
 
@@ -541,6 +569,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void handleJavaScriptMessage(String message) {
+            // long receiveTime = System.currentTimeMillis();
+
             // 处理控制台日志转发
             if (message.startsWith("{\"type\":\"console.")) {
                 try {
@@ -576,6 +606,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             String type = parts[0];
             String content = parts.length > 1 ? parts[1] : "";
 
+            // [PERF] 性能日志：记录消息接收时间
+            // if ("send_message".equals(type) || "send_message_with_attachments".equals(type)) {
+            //     LOG.info("[PERF][" + receiveTime + "] Java收到消息: type=" + type + ", 内容长度=" + content.length());
+            // }
+
             // 使用 Handler 分发器处理
             if (messageDispatcher.dispatch(type, content)) {
                 return;
@@ -586,9 +621,25 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 createNewSession();
                 return;
             }
+
+            // 特殊处理:前端准备就绪信号
+            if ("frontend_ready".equals(type)) {
+                LOG.info("Received frontend_ready signal, frontend is now ready to receive data");
+
+                // 发送当前权限模式到前端
+                sendCurrentPermissionMode();
+
+                // 如果缓存中已有数据，立即发送
+                if (slashCommandCache != null && !slashCommandCache.isEmpty()) {
+                    LOG.info("Cache has data, sending immediately");
+                    sendCachedSlashCommands();
+                }
+                return;
+            }
+
             // 特殊处理：刷新斜杠命令列表
             if ("refresh_slash_commands".equals(type)) {
-                LOG.info("Received refresh_slash_commands request");
+                LOG.info("Received refresh_slash_commands request from frontend");
                 fetchSlashCommandsOnStartup();
                 return;
             }
@@ -604,20 +655,66 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private String determineWorkingDirectory() {
             String projectPath = project.getBasePath();
-            if (projectPath != null && new File(projectPath).exists()) {
-                return projectPath;
+
+            // 如果项目路径无效，回退到用户主目录
+            if (projectPath == null || !new File(projectPath).exists()) {
+                String userHome = System.getProperty("user.home");
+                LOG.warn("Using user home directory as fallback: " + userHome);
+                return userHome;
             }
-            String userHome = System.getProperty("user.home");
-            LOG.warn("Using user home directory as fallback: " + userHome);
-            return userHome;
+
+            // 尝试从配置中读取自定义工作目录
+            try {
+                CodemossSettingsService settingsService = new CodemossSettingsService();
+                String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
+
+                if (customWorkingDir != null && !customWorkingDir.isEmpty()) {
+                    // 如果是相对路径，拼接到项目根路径
+                    File workingDirFile = new File(customWorkingDir);
+                    if (!workingDirFile.isAbsolute()) {
+                        workingDirFile = new File(projectPath, customWorkingDir);
+                    }
+
+                    // 验证目录是否存在
+                    if (workingDirFile.exists() && workingDirFile.isDirectory()) {
+                        String resolvedPath = workingDirFile.getAbsolutePath();
+                        LOG.info("Using custom working directory: " + resolvedPath);
+                        return resolvedPath;
+                    } else {
+                        LOG.warn("Custom working directory does not exist: " + workingDirFile.getAbsolutePath() + ", falling back to project root");
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to read custom working directory: " + e.getMessage());
+            }
+
+            // 默认使用项目根路径
+            return projectPath;
         }
 
         private void loadHistorySession(String sessionId, String projectPath) {
             LOG.info("Loading history session: " + sessionId + " from project: " + projectPath);
 
+            // 保存当前的 permission mode（如果存在旧 session）
+            String previousPermissionMode;
+            if (session != null) {
+                previousPermissionMode = session.getPermissionMode();
+            } else {
+                // 如果没有旧 session，从持久化存储加载
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
+                previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty()) ? savedMode.trim() : "default";
+            }
+            // LOG.info("Preserving permission mode when loading history: " + previousPermissionMode);
+
             callJavaScript("clearMessages");
 
             session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
+
+            // 恢复之前保存的 permission mode
+            session.setPermissionMode(previousPermissionMode);
+            // LOG.info("Restored permission mode to loaded session: " + previousPermissionMode);
+
             handlerContext.setSession(session);
             setupSessionCallbacks();
 
@@ -646,14 +743,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 @Override
                 public void onStateChange(boolean busy, boolean loading, String error) {
+                    // long callbackTime = System.currentTimeMillis();
+                    // LOG.info("[PERF][" + callbackTime + "] onStateChange 回调: busy=" + busy + ", loading=" + loading);
+
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        callJavaScript("showLoading", String.valueOf(busy));
+                        // long uiUpdateTime = System.currentTimeMillis();
+                        // LOG.info("[PERF][" + uiUpdateTime + "] invokeLater 执行，准备调用 showLoading(" + loading + ")，等待: " + (uiUpdateTime - callbackTime) + "ms");
+
+                        callJavaScript("showLoading", String.valueOf(loading));
                         if (error != null) {
                             callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
                         }
                         if (!busy && !loading) {
                             VirtualFileManager.getInstance().asyncRefresh(null);
                         }
+
+                        // LOG.info("[PERF][" + System.currentTimeMillis() + "] showLoading 调用完成");
                     });
                 }
 
@@ -735,6 +840,62 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 初始化缓存（开始加载 + 启动文件监听 + 定期检查）
             LOG.debug("Starting slash command cache initialization");
             slashCommandCache.init();
+        }
+
+        /**
+         * 发送当前权限模式到前端
+         * 在前端准备就绪时调用，确保前端显示正确的权限模式
+         */
+        private void sendCurrentPermissionMode() {
+            try {
+                String currentMode = "default";  // 默认值
+
+                // 优先从 session 中获取
+                if (session != null) {
+                    String sessionMode = session.getPermissionMode();
+                    if (sessionMode != null && !sessionMode.trim().isEmpty()) {
+                        currentMode = sessionMode;
+                    }
+                }
+
+                final String modeToSend = currentMode;
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (!disposed && browser != null) {
+                        callJavaScript("window.onModeReceived", JsUtils.escapeJs(modeToSend));
+                    }
+                });
+            } catch (Exception e) {
+                LOG.error("Failed to send current permission mode: " + e.getMessage(), e);
+            }
+        }
+
+        /**
+         * 发送缓存中的斜杠命令到前端
+         * 用于前端准备好后立即发送已缓存的数据
+         */
+        private void sendCachedSlashCommands() {
+            if (slashCommandCache == null || slashCommandCache.isEmpty()) {
+                LOG.debug("sendCachedSlashCommands: cache is empty or null");
+                return;
+            }
+
+            List<JsonObject> commands = slashCommandCache.getCommands();
+            if (commands.isEmpty()) {
+                LOG.debug("sendCachedSlashCommands: no commands in cache");
+                return;
+            }
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                try {
+                    Gson gson = new Gson();
+                    String commandsJson = gson.toJson(commands);
+                    LOG.info("sendCachedSlashCommands: sending " + commands.size() + " cached commands to frontend");
+                    callJavaScript("updateSlashCommands", JsUtils.escapeJs(commandsJson));
+                } catch (Exception e) {
+                    LOG.warn("sendCachedSlashCommands: failed to send: " + e.getMessage(), e);
+                }
+            });
         }
 
         private String convertMessagesToJson(List<ClaudeSession.Message> messages) {
@@ -827,6 +988,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void createNewSession() {
             LOG.info("Creating new session...");
 
+            // 保存当前的 permission mode（如果存在旧 session）
+            String previousPermissionMode = (session != null) ? session.getPermissionMode() : "default";
+            // LOG.info("Preserving permission mode from old session: " + previousPermissionMode);
+
             // 清空前端消息显示（修复新建会话时消息不清空的bug）
             callJavaScript("clearMessages");
 
@@ -841,6 +1006,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 // 创建全新的 Session 对象
                 session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
+
+                // 恢复之前保存的 permission mode
+                session.setPermissionMode(previousPermissionMode);
+                // LOG.info("Restored permission mode to new session: " + previousPermissionMode);
 
                 // 更新 HandlerContext 中的 Session 引用（重要：确保所有 Handler 使用新 Session）
                 handlerContext.setSession(session);
@@ -922,16 +1091,31 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     return;
                 }
                 try {
-                    String js = JsUtils.buildJsCall(functionName, args);
+                    String callee = functionName;
+                    if (functionName != null && !functionName.isEmpty() && !functionName.contains(".")) {
+                        callee = "window." + functionName;
+                    }
 
-                    // 先检查函数是否存在，再调用
+                    StringBuilder argsJs = new StringBuilder();
+                    if (args != null) {
+                        for (int i = 0; i < args.length; i++) {
+                            if (i > 0) argsJs.append(", ");
+                            String arg = args[i] == null ? "" : args[i];
+                            argsJs.append("'").append(arg).append("'");
+                        }
+                    }
+
                     String checkAndCall =
                         "(function() {" +
-                        "  if (typeof window." + functionName + " === 'function') {" +
-                        "    " + js +
-                        "    console.log('[Backend->Frontend] Successfully called " + functionName + "');" +
-                        "  } else {" +
-                        "    console.warn('[Backend->Frontend] Function " + functionName + " not found on window');" +
+                        "  try {" +
+                        "    if (typeof " + callee + " === 'function') {" +
+                        "      " + callee + "(" + argsJs + ");" +
+                        "      console.log('[Backend->Frontend] Successfully called " + functionName + "');" +
+                        "    } else {" +
+                        "      console.warn('[Backend->Frontend] Function " + functionName + " not found: ' + (typeof " + callee + "));" +
+                        "    }" +
+                        "  } catch (e) {" +
+                        "    console.error('[Backend->Frontend] Failed to call " + functionName + ":', e);" +
                         "  }" +
                         "})();";
 

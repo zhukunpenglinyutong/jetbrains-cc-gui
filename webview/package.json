@@ -21,10 +21,14 @@
   },
   "dependencies": {
     "@lobehub/icons": "^2.43.1",
+    "antd": "^6.1.1",
+    "highlight.js": "^11.11.1",
     "i18next": "^25.7.2",
     "marked": "^17.0.1",
+    "marked-highlight": "^2.2.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-i18next": "^16.4.1"
+    "react-i18next": "^16.4.1",
+    "vconsole": "^3.15.1"
   }
 }

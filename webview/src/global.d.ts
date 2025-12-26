@@ -73,6 +73,11 @@ interface Window {
   onModeChanged?: (mode: string) => void;
 
   /**
+   * Mode received callback - 后端主动推送权限模式（窗口初始化时调用）
+   */
+  onModeReceived?: (mode: string) => void;
+
+  /**
    * Model changed callback
    */
   onModelChanged?: (modelId: string) => void;
@@ -134,6 +139,8 @@ interface Window {
    */
   updateActiveProvider?: (providerId: string) => void;
 
+  updateThinkingEnabled?: (json: string) => void;
+
   /**
    * Update current Claude config
    */
@@ -153,6 +160,16 @@ interface Window {
    * Update Node.js path
    */
   updateNodePath?: (path: string) => void;
+
+  /**
+   * Update working directory configuration
+   */
+  updateWorkingDirectory?: (json: string) => void;
+
+  /**
+   * Show success message
+   */
+  showSuccess?: (message: string) => void;
 
   /**
    * Update skills list

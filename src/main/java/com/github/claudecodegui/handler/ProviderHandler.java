@@ -7,6 +7,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.vfs.VirtualFile;
 
 import javax.swing.*;
 import java.io.File;
@@ -25,12 +28,15 @@ public class ProviderHandler extends BaseMessageHandler {
     private static final String[] SUPPORTED_TYPES = {
         "get_providers",
         "get_current_claude_config",
+        "get_thinking_enabled",
+        "set_thinking_enabled",
         "add_provider",
         "update_provider",
         "delete_provider",
         "switch_provider",
         "get_active_provider",
         "preview_cc_switch_import",
+        "open_file_chooser_for_cc_switch",
         "save_imported_providers"
     };
 
@@ -52,6 +58,12 @@ public class ProviderHandler extends BaseMessageHandler {
             case "get_current_claude_config":
                 handleGetCurrentClaudeConfig();
                 return true;
+            case "get_thinking_enabled":
+                handleGetThinkingEnabled();
+                return true;
+            case "set_thinking_enabled":
+                handleSetThinkingEnabled(content);
+                return true;
             case "add_provider":
                 handleAddProvider(content);
                 return true;
@@ -70,11 +82,71 @@ public class ProviderHandler extends BaseMessageHandler {
             case "preview_cc_switch_import":
                 handlePreviewCcSwitchImport();
                 return true;
+            case "open_file_chooser_for_cc_switch":
+                handleOpenFileChooserForCcSwitch();
+                return true;
             case "save_imported_providers":
                 handleSaveImportedProviders(content);
                 return true;
             default:
                 return false;
+        }
+    }
+
+    private void handleGetThinkingEnabled() {
+        try {
+            Boolean enabled = context.getSettingsService().getAlwaysThinkingEnabledFromClaudeSettings();
+            boolean value = enabled != null ? enabled : true;
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("enabled", value);
+            payload.addProperty("explicit", enabled != null);
+
+            Gson gson = new Gson();
+            String json = gson.toJson(payload);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateThinkingEnabled", escapeJs(json));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to get thinking enabled: " + e.getMessage(), e);
+        }
+    }
+
+    private void handleSetThinkingEnabled(String content) {
+        try {
+            Gson gson = new Gson();
+            Boolean enabled = null;
+            if (content != null && !content.trim().isEmpty()) {
+                try {
+                    JsonObject data = gson.fromJson(content, JsonObject.class);
+                    if (data != null && data.has("enabled") && !data.get("enabled").isJsonNull()) {
+                        enabled = data.get("enabled").getAsBoolean();
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (enabled == null) {
+                enabled = Boolean.parseBoolean(content != null ? content.trim() : "false");
+            }
+
+            context.getSettingsService().setAlwaysThinkingEnabledInClaudeSettings(enabled);
+            try {
+                context.getSettingsService().setAlwaysThinkingEnabledInActiveProvider(enabled);
+            } catch (Exception ignored) {
+            }
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("enabled", enabled);
+            payload.addProperty("explicit", true);
+            String json = gson.toJson(payload);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateThinkingEnabled", escapeJs(json));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to set thinking enabled: " + e.getMessage(), e);
         }
     }
 
@@ -156,6 +228,9 @@ public class ProviderHandler extends BaseMessageHandler {
             final boolean finalSynced = syncedActiveProvider;
             ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetProviders(); // 刷新列表
+                if (finalSynced) {
+                    handleGetActiveProvider(); // 刷新当前激活的供应商配置
+                }
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to update provider: " + e.getMessage(), e);
@@ -232,6 +307,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 callJavaScript("window.showSwitchSuccess", escapeJs("供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
                 handleGetProviders(); // 刷新供应商列表
                 handleGetCurrentClaudeConfig(); // 刷新 Claude CLI 配置显示
+                handleGetActiveProvider(); // 刷新当前激活的供应商配置
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to switch provider: " + e.getMessage(), e);
@@ -278,7 +354,7 @@ public class ProviderHandler extends BaseMessageHandler {
             if (!dbFile.exists()) {
                 String errorMsg = "未找到 cc-switch 数据库文件\n" +
                                  "路径: " + dbFile.getAbsolutePath() + "\n" +
-                                 "请确保:\n" +
+                                 "您可以主动选择cc-switch.db文件进行导入，或者检查：:\n" +
                                  "1. 已安装 cc-switch 3.8.2 及以上版本\n" +
                                  "2. 至少配置过一个 Claude 供应商";
                 LOG.error("[ProviderHandler] " + errorMsg);
@@ -308,7 +384,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
                     String jsonStr = gson.toJson(response);
                     LOG.info("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
-                    callJavaScript("import_preview_result", jsonStr);
+                    callJavaScript("import_preview_result", escapeJs(jsonStr));
 
                 } catch (Exception e) {
                     String errorDetails = "读取数据库失败: " + e.getMessage();
@@ -316,6 +392,118 @@ public class ProviderHandler extends BaseMessageHandler {
                     sendErrorToFrontend("读取数据库失败", errorDetails);
                 }
             });
+        });
+    }
+
+    /**
+     * 打开文件选择器选择 cc-switch 数据库文件
+     */
+    private void handleOpenFileChooserForCcSwitch() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                // 创建文件选择器描述符
+                FileChooserDescriptor descriptor = new FileChooserDescriptor(
+                    true,   // chooseFiles - 允许选择文件
+                    false,  // chooseFolders - 不允许选择文件夹
+                    false,  // chooseJars - 不允许选择 JAR
+                    false,  // chooseJarsAsFiles - 不将 JAR 当作文件
+                    false,  // chooseJarContents - 不允许选择 JAR 内容
+                    false   // chooseMultiple - 不允许多选
+                );
+
+                descriptor.setTitle("选择 cc-switch 数据库文件");
+                descriptor.setDescription("请选择 cc-switch.db 或其副本文件");
+                descriptor.withFileFilter(file -> {
+                    String name = file.getName().toLowerCase();
+                    return name.endsWith(".db");
+                });
+
+                // 设置默认路径为用户主目录下的 .cc-switch
+                String userHome = System.getProperty("user.home");
+                File defaultDir = new File(userHome, ".cc-switch");
+                VirtualFile defaultVirtualFile = null;
+                if (defaultDir.exists()) {
+                    defaultVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+                        .findFileByPath(defaultDir.getAbsolutePath());
+                }
+
+                LOG.info("[ProviderHandler] 打开文件选择器，默认目录: " +
+                    (defaultVirtualFile != null ? defaultVirtualFile.getPath() : "用户主目录"));
+
+                // 打开文件选择器
+                VirtualFile[] selectedFiles = FileChooser.chooseFiles(
+                    descriptor,
+                    context.getProject(),
+                    defaultVirtualFile
+                );
+
+                if (selectedFiles.length == 0) {
+                    LOG.info("[ProviderHandler] 用户取消了文件选择");
+                    sendInfoToFrontend("已取消", "未选择文件");
+                    return;
+                }
+
+                VirtualFile selectedFile = selectedFiles[0];
+                String dbPath = selectedFile.getPath();
+                File dbFile = new File(dbPath);
+
+                LOG.info("[ProviderHandler] 用户选择的数据库文件路径: " + dbFile.getAbsolutePath());
+                LOG.info("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
+
+                if (!dbFile.exists()) {
+                    String errorMsg = "未找到数据库文件\n" +
+                                     "路径: " + dbFile.getAbsolutePath();
+                    LOG.error("[ProviderHandler] " + errorMsg);
+                    sendErrorToFrontend("文件未找到", errorMsg);
+                    return;
+                }
+
+                if (!dbFile.canRead()) {
+                    String errorMsg = "无法读取文件\n" +
+                                     "路径: " + dbFile.getAbsolutePath() + "\n" +
+                                     "请检查文件权限";
+                    LOG.error("[ProviderHandler] " + errorMsg);
+                    sendErrorToFrontend("权限错误", errorMsg);
+                    return;
+                }
+
+                // 异步读取数据库
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        LOG.info("[ProviderHandler] 开始读取用户选择的数据库文件...");
+                        Gson gson = new Gson();
+                        List<JsonObject> providers = context.getSettingsService().parseProvidersFromCcSwitchDb(dbFile.getPath());
+
+                        if (providers.isEmpty()) {
+                            LOG.info("[ProviderHandler] 数据库中没有找到 Claude 供应商配置");
+                            sendInfoToFrontend("无数据", "未在数据库中找到有效的 Claude 供应商配置。");
+                            return;
+                        }
+
+                        JsonArray providersArray = new JsonArray();
+                        for (JsonObject p : providers) {
+                            providersArray.add(p);
+                        }
+
+                        JsonObject response = new JsonObject();
+                        response.add("providers", providersArray);
+
+                        String jsonStr = gson.toJson(response);
+                        LOG.info("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
+                        callJavaScript("import_preview_result", escapeJs(jsonStr));
+
+                    } catch (Exception e) {
+                        String errorDetails = "读取数据库失败: " + e.getMessage();
+                        LOG.error("[ProviderHandler] " + errorDetails, e);
+                        sendErrorToFrontend("读取数据库失败", errorDetails);
+                    }
+                });
+
+            } catch (Exception e) {
+                String errorDetails = "打开文件选择器失败: " + e.getMessage();
+                LOG.error("[ProviderHandler] " + errorDetails, e);
+                sendErrorToFrontend("文件选择失败", errorDetails);
+            }
         });
     }
 

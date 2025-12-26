@@ -33,6 +33,7 @@ export interface ProviderConfig {
       ANTHROPIC_DEFAULT_HAIKU_MODEL?: string;
       [key: string]: any;
     };
+    alwaysThinkingEnabled?: boolean;
     permissions?: {
       allow?: string[];
       deny?: string[];

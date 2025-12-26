@@ -163,16 +163,44 @@ export interface ModeInfo {
   id: PermissionMode;
   label: string;
   icon: string;
+  disabled?: boolean;
+  tooltip?: string;
+  description?: string;  // 模式描述文案
 }
 
 /**
  * 预定义模式列表
  */
 export const AVAILABLE_MODES: ModeInfo[] = [
-  { id: 'default', label: '默认模式', icon: 'codicon-comment-discussion' },
-  { id: 'acceptEdits', label: '代理模式', icon: 'codicon-robot' },
-  { id: 'plan', label: '规划模式', icon: 'codicon-tasklist' },
-  { id: 'bypassPermissions', label: '自动模式', icon: 'codicon-zap' },
+  {
+    id: 'default',
+    label: '默认模式',
+    icon: 'codicon-comment-discussion',
+    tooltip: '标准权限行为',
+    description: '需要手动确认每个操作，适合谨慎使用'
+  },
+  {
+    id: 'plan',
+    label: '规划模式',
+    icon: 'codicon-tasklist',
+    disabled: true,
+    tooltip: '规划模式——无执行（暂不支持）',
+    description: '仅规划不执行，暂不支持'
+  },
+  {
+    id: 'acceptEdits',
+    label: '代理模式',
+    icon: 'codicon-robot',
+    tooltip: '自动接受文件编辑',
+    description: '自动接受文件创建/编辑，减少确认步骤'
+  },
+  {
+    id: 'bypassPermissions',
+    label: '自动模式',
+    icon: 'codicon-zap',
+    tooltip: '绕过所有权限检查',
+    description: '完全自动化，绕过所有权限检查【谨慎使用】'
+  },
 ];
 
 /**
@@ -290,6 +318,8 @@ export interface ChatInputBoxProps {
   usageMaxTokens?: number;
   /** 是否显示使用量 */
   showUsage?: boolean;
+  /** 是否开启始终思考 */
+  alwaysThinkingEnabled?: boolean;
   /** 附件列表 */
   attachments?: Attachment[];
   /** 占位符文本 */
@@ -326,6 +356,8 @@ export interface ChatInputBoxProps {
   onModelSelect?: (modelId: string) => void;
   /** 切换提供商 */
   onProviderSelect?: (providerId: string) => void;
+  /** 切换思考模式 */
+  onToggleThinking?: (enabled: boolean) => void;
 }
 
 /**
@@ -351,6 +383,10 @@ export interface ButtonAreaProps {
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;
+  /** 是否开启始终思考 */
+  alwaysThinkingEnabled?: boolean;
+  /** 切换思考模式 */
+  onToggleThinking?: (enabled: boolean) => void;
 }
 
 /**

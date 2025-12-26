@@ -77,13 +77,19 @@
         "hintCommand": "node -p \"process.execPath\"",
         "hintText": "获取实际的 Node.js 可执行文件路径。为空时插件会自动尝试检测 Node.js。"
       },
+      "workingDirectory": {
+        "label": "工作目录",
+        "placeholder": "例如 project1 或留空使用项目根目录",
+        "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
+      },
       "fontSize": {
         "label": "字体大小",
-        "level1": "最小（80%）",
-        "level2": "标准（100%）",
-        "level3": "较大（110%）",
-        "level4": "大（120%）",
-        "level5": "最大（140%）"
+        "level1": "小（80%）",
+        "level2": "较小（90%）",
+        "level3": "标准（100%）",
+        "level4": "较大（110%）",
+        "level5": "大（120%）",
+        "level6": "最大（140%）"
       }
     },
     "providers": "供应商管理",
@@ -130,6 +136,7 @@
       "allProviders": "所有供应商",
       "import": "导入",
       "importFromCcSwitchUpdate": "从cc-switch导入/更新",
+      "importFromCcSwitchFile": "选择 cc-switch.db 文件导入",
       "importFromCcSwitchCli": "从cc-switch CLI导入/更新",
       "importFromClaudeRouter": "从Claude Code Router导入/更新",
       "featureComingSoon": "功能暂未实现，敬请期待",
@@ -241,6 +248,9 @@
   },
   "toast": {
     "switchSuccess": "切换成功",
+    "thinkingEnabled": "思考已开启",
+    "thinkingDisabled": "思考已关闭",
+    "configLoading": "配置加载中，请稍后再试",
     "saveSuccess": "保存成功",
     "deleteSuccess": "删除成功",
     "operationFailed": "操作失败",
@@ -252,6 +262,10 @@
     "switch": "切换",
     "switchProvider": "切换供应商",
     "link": "链接"
+  },
+  "markdown": {
+    "copyCode": "复制代码",
+    "copySuccess": "复制成功"
   },
   "usage": {
     "loading": "加载统计数据中...",
@@ -358,6 +372,8 @@
     "todoList": "任务列表",
     "editFileTitle": "编辑文件",
     "clickToOpen": "点击打开 {{filePath}}",
+    "refreshFileInIdea": "在 IDEA 中刷新文件",
+    "refreshFileInIdeaSuccess": "已手动刷新本文件在IDEA中的内容",
     "showDiffInIdea": "在 IDEA 中显示变更",
     "diffButton": "Diff",
     "editPrefix": "编辑: {{fileName}}"
@@ -396,16 +412,63 @@
     "claude": {
       "sonnet45": {
         "label": "Sonnet 4.5",
-        "description": "Sonnet 4.5 · 默认推荐模型"
+        "description": "Sonnet 默认推荐模型"
       },
       "opus45": {
         "label": "Opus 4.5",
-        "description": "Opus 4.5 · 复杂任务最强性能"
+        "description": "Opus 复杂任务最强性能"
       },
       "haiku45": {
         "label": "Haiku 4.5",
-        "description": "Haiku 4.5 · 速度最快，适合快速答复"
+        "description": "Haiku 速度最快，适合快速答复"
       }
+    },
+    "codex": {
+      "gpt51codex": {
+        "label": "gpt-5.1-codex",
+        "description": "针对codex进行了优化"
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "针对codex进行了优化。更便宜、更快，但性能较差"
+      },
+      "gpt51": {
+        "label": "gpt-5.1",
+        "description": "具有广泛的世界知识和强大的一般推理能力"
+      }
+    }
+  },
+  "modes": {
+    "default": {
+      "label": "默认模式",
+      "tooltip": "标准权限行为",
+      "description": "需要手动确认每个操作，适合谨慎使用"
+    },
+    "plan": {
+      "label": "规划模式",
+      "tooltip": "规划模式——无执行（暂不支持）",
+      "description": "仅规划不执行，暂不支持"
+    },
+    "acceptEdits": {
+      "label": "代理模式",
+      "tooltip": "自动接受文件编辑",
+      "description": "自动接受文件创建/编辑，减少确认步骤"
+    },
+    "bypassPermissions": {
+      "label": "自动模式",
+      "tooltip": "绕过所有权限检查",
+      "description": "完全自动化，绕过所有权限检查【谨慎使用】"
+    }
+  },
+  "providers": {
+    "claude": {
+      "label": "Claude Code"
+    },
+    "codex": {
+      "label": "Codex Cli"
+    },
+    "gemini": {
+      "label": "Gemini Cli"
     }
   }
 }

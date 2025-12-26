@@ -79,11 +79,12 @@
       },
       "fontSize": {
         "label": "字體大小",
-        "level1": "最小（80%）",
-        "level2": "標準（100%）",
-        "level3": "較大（110%）",
-        "level4": "大（120%）",
-        "level5": "最大（140%）"
+        "level1": "小（80%）",
+        "level2": "較小（90%）",
+        "level3": "標準（100%）",
+        "level4": "較大（110%）",
+        "level5": "大（120%）",
+        "level6": "最大（140%）"
       }
     },
     "providers": "供應商管理",
@@ -241,6 +242,8 @@
   },
   "toast": {
     "switchSuccess": "切換成功",
+    "thinkingEnabled": "思考已開啟",
+    "thinkingDisabled": "思考已關閉",
     "saveSuccess": "儲存成功",
     "deleteSuccess": "刪除成功",
     "operationFailed": "操作失敗",
@@ -252,6 +255,10 @@
     "switch": "切換",
     "switchProvider": "切換供應商",
     "link": "連結"
+  },
+  "markdown": {
+    "copyCode": "複製程式碼",
+    "copySuccess": "複製成功"
   },
   "usage": {
     "loading": "載入統計資料中...",
@@ -357,6 +364,8 @@
     "todoList": "任務列表",
     "editFileTitle": "編輯文件",
     "clickToOpen": "點擊打開 {{filePath}}",
+    "refreshFileInIdea": "在 IDEA 中重新整理檔案",
+    "refreshFileInIdeaSuccess": "已手動重新整理本檔案在 IDEA 中的內容",
     "showDiffInIdea": "在 IDEA 中顯示變更",
     "diffButton": "Diff",
     "editPrefix": "編輯: {{fileName}}"
