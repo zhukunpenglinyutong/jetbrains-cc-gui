@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ButtonAreaProps, ModelInfo, PermissionMode } from './types';
-import { ConfigSelect, ModelSelect } from './selectors';
+import { ConfigSelect, ModelSelect, ModeSelect } from './selectors';
 import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 
 /**
@@ -116,13 +116,12 @@ export const ButtonArea = ({
       {/* 左侧：选择器 */}
       <div className="button-area-left">
         <ConfigSelect 
-          permissionMode={permissionMode} 
-          onModeChange={handleModeSelect}
           currentProvider={currentProvider}
           onProviderChange={handleProviderSelect}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}
         />
+        <ModeSelect value={permissionMode} onChange={handleModeSelect} />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />
       </div>
 

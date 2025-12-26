@@ -3,11 +3,9 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Switch } from 'antd';
 import { Claude, OpenAI, Gemini } from '@lobehub/icons';
-import { AVAILABLE_MODES, AVAILABLE_PROVIDERS, type PermissionMode } from '../types';
+import { AVAILABLE_PROVIDERS } from '../types';
 
 interface ConfigSelectProps {
-  permissionMode: PermissionMode;
-  onModeChange: (mode: PermissionMode) => void;
   currentProvider: string;
   onProviderChange: (providerId: string) => void;
   alwaysThinkingEnabled?: boolean;
@@ -32,11 +30,9 @@ const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: nu
 
 /**
  * ConfigSelect - Combined Configuration Selector
- * Merges Permission Mode and CLI Tool Selection into a single dropdown
+ * Contains CLI Tool Selection and Thinking Switch
  */
 export const ConfigSelect = ({ 
-  permissionMode, 
-  onModeChange, 
   currentProvider: providerId, 
   onProviderChange,
   alwaysThinkingEnabled,
@@ -44,20 +40,14 @@ export const ConfigSelect = ({
 }: ConfigSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'mode' | 'provider'>('none');
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'provider'>('none');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentMode = AVAILABLE_MODES.find(m => m.id === permissionMode) || AVAILABLE_MODES[0];
   const currentProviderInfo = AVAILABLE_PROVIDERS.find(p => p.id === providerId) || AVAILABLE_PROVIDERS[0];
-
-  // Helper function to get translated mode text
-  const getModeText = (modeId: PermissionMode, field: 'label' | 'tooltip' | 'description') => {
-    return t(`modes.${modeId}.${field}`);
-  };
 
   const showToastMessage = useCallback((message: string) => {
     setToastMessage(message);
@@ -74,13 +64,6 @@ export const ConfigSelect = ({
       setActiveSubmenu('none');
     }
   }, [isOpen]);
-
-  const handleModeSelect = useCallback((mode: PermissionMode, disabled?: boolean) => {
-    if (disabled) return;
-    onModeChange(mode);
-    setIsOpen(false);
-    setActiveSubmenu('none');
-  }, [onModeChange]);
 
   const handleProviderSelect = useCallback((pId: string) => {
     const provider = AVAILABLE_PROVIDERS.find(p => p.id === pId);
@@ -120,39 +103,6 @@ export const ConfigSelect = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]);
-
-  const renderModeSubmenu = () => (
-    <div
-      className="selector-dropdown"
-      style={{
-        position: 'absolute',
-        left: '100%',
-        bottom: 0,
-        marginLeft: '-30px',
-        zIndex: 10001,
-        minWidth: '220px',
-      }}
-    >
-      {AVAILABLE_MODES.map((mode) => (
-        <div
-          key={mode.id}
-          className={`selector-option ${mode.id === permissionMode ? 'selected' : ''} ${mode.disabled ? 'disabled' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleModeSelect(mode.id, mode.disabled);
-          }}
-          title={getModeText(mode.id, 'tooltip')}
-        >
-          <span className={`codicon ${mode.icon}`} />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span>{getModeText(mode.id, 'label')}</span>
-            <span className="mode-description">{getModeText(mode.id, 'description')}</span>
-          </div>
-          {mode.id === permissionMode && <span className="codicon codicon-check check-mark" />}
-        </div>
-      ))}
-    </div>
-  );
 
   const renderProviderSubmenu = () => (
     <div
@@ -210,36 +160,6 @@ export const ConfigSelect = ({
             minWidth: '200px'
           }}
         >
-          {/* Permission Mode Item */}
-          <div 
-            className="selector-option" 
-            onMouseLeave={() => setActiveSubmenu('none')}
-            style={{ position: 'relative' }}
-          >
-            <span className={`codicon ${currentMode.icon}`} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span>{getModeText(currentMode.id, 'label')}</span>
-            </div>
-            <div 
-              onMouseEnter={() => setActiveSubmenu('mode')}
-              style={{ 
-                marginLeft: 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                alignSelf: 'stretch',
-                paddingLeft: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              <span className="codicon codicon-chevron-right" style={{ fontSize: '12px' }} />
-            </div>
-            
-            {activeSubmenu === 'mode' && renderModeSubmenu()}
-          </div>
-
-          {/* Divider */}
-          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
-
           {/* CLI Tool Item */}
           <div 
             className="selector-option" 
