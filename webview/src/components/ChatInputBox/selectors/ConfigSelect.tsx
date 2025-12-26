@@ -163,6 +163,7 @@ export const ConfigSelect = ({
           {/* CLI Tool Item */}
           <div 
             className="selector-option" 
+            onMouseEnter={() => setActiveSubmenu('provider')}
             onMouseLeave={() => setActiveSubmenu('none')}
             style={{ position: 'relative' }}
           >
@@ -173,7 +174,6 @@ export const ConfigSelect = ({
               <span>{currentProviderInfo.label}</span>
             </div>
             <div 
-              onMouseEnter={() => setActiveSubmenu('provider')}
               style={{ 
                 marginLeft: 'auto',
                 display: 'flex',
