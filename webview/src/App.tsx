@@ -90,6 +90,7 @@ const App = () => {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [, setProviderConfigVersion] = useState(0);
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
+  const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -420,6 +421,25 @@ const App = () => {
       }
     };
 
+    window.updateThinkingEnabled = (jsonStr: string) => {
+      const trimmed = (jsonStr || '').trim();
+      try {
+        const data = JSON.parse(trimmed);
+        if (typeof data === 'boolean') {
+          setClaudeSettingsAlwaysThinkingEnabled(data);
+          return;
+        }
+        if (data && typeof data.enabled === 'boolean') {
+          setClaudeSettingsAlwaysThinkingEnabled(data.enabled);
+          return;
+        }
+      } catch {
+        if (trimmed === 'true' || trimmed === 'false') {
+          setClaudeSettingsAlwaysThinkingEnabled(trimmed === 'true');
+        }
+      }
+    };
+
     // Retry getting active provider
     let retryCount = 0;
     const MAX_RETRIES = 30;
@@ -436,6 +456,20 @@ const App = () => {
       }
     };
     setTimeout(requestActiveProvider, 200);
+
+    let thinkingRetryCount = 0;
+    const MAX_THINKING_RETRIES = 30;
+    const requestThinkingEnabled = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_thinking_enabled');
+      } else {
+        thinkingRetryCount++;
+        if (thinkingRetryCount < MAX_THINKING_RETRIES) {
+          setTimeout(requestThinkingEnabled, 100);
+        }
+      }
+    };
+    setTimeout(requestThinkingEnabled, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -704,12 +738,9 @@ const App = () => {
    */
   const handleToggleThinking = (enabled: boolean) => {
     if (!activeProviderConfig) {
-      // 配置尚未加载完成，显示提示并重新请求配置
-      addToast(t('toast.configLoading', '配置加载中，请稍后再试'), 'info');
-      // 尝试重新请求 active provider 配置
-      if (window.sendToJava) {
-        sendBridgeMessage('get_active_provider');
-      }
+      setClaudeSettingsAlwaysThinkingEnabled(enabled);
+      sendBridgeMessage('set_thinking_enabled', JSON.stringify({ enabled }));
+      addToast(enabled ? t('toast.thinkingEnabled') : t('toast.thinkingDisabled'), 'success');
       return;
     }
 
@@ -1541,7 +1572,7 @@ const App = () => {
             usageUsedTokens={usageUsedTokens}
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
-            alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? false}
+            alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
             placeholder={t('chat.inputPlaceholder')}
             onSubmit={handleSubmit}
             onStop={interruptSession}

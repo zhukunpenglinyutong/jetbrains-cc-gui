@@ -139,6 +139,8 @@ interface Window {
    */
   updateActiveProvider?: (providerId: string) => void;
 
+  updateThinkingEnabled?: (json: string) => void;
+
   /**
    * Update current Claude config
    */

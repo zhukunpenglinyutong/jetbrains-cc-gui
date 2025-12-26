@@ -28,6 +28,8 @@ public class ProviderHandler extends BaseMessageHandler {
     private static final String[] SUPPORTED_TYPES = {
         "get_providers",
         "get_current_claude_config",
+        "get_thinking_enabled",
+        "set_thinking_enabled",
         "add_provider",
         "update_provider",
         "delete_provider",
@@ -56,6 +58,12 @@ public class ProviderHandler extends BaseMessageHandler {
             case "get_current_claude_config":
                 handleGetCurrentClaudeConfig();
                 return true;
+            case "get_thinking_enabled":
+                handleGetThinkingEnabled();
+                return true;
+            case "set_thinking_enabled":
+                handleSetThinkingEnabled(content);
+                return true;
             case "add_provider":
                 handleAddProvider(content);
                 return true;
@@ -82,6 +90,63 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             default:
                 return false;
+        }
+    }
+
+    private void handleGetThinkingEnabled() {
+        try {
+            Boolean enabled = context.getSettingsService().getAlwaysThinkingEnabledFromClaudeSettings();
+            boolean value = enabled != null ? enabled : true;
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("enabled", value);
+            payload.addProperty("explicit", enabled != null);
+
+            Gson gson = new Gson();
+            String json = gson.toJson(payload);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateThinkingEnabled", escapeJs(json));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to get thinking enabled: " + e.getMessage(), e);
+        }
+    }
+
+    private void handleSetThinkingEnabled(String content) {
+        try {
+            Gson gson = new Gson();
+            Boolean enabled = null;
+            if (content != null && !content.trim().isEmpty()) {
+                try {
+                    JsonObject data = gson.fromJson(content, JsonObject.class);
+                    if (data != null && data.has("enabled") && !data.get("enabled").isJsonNull()) {
+                        enabled = data.get("enabled").getAsBoolean();
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (enabled == null) {
+                enabled = Boolean.parseBoolean(content != null ? content.trim() : "false");
+            }
+
+            context.getSettingsService().setAlwaysThinkingEnabledInClaudeSettings(enabled);
+            try {
+                context.getSettingsService().setAlwaysThinkingEnabledInActiveProvider(enabled);
+            } catch (Exception ignored) {
+            }
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("enabled", enabled);
+            payload.addProperty("explicit", true);
+            String json = gson.toJson(payload);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateThinkingEnabled", escapeJs(json));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to set thinking enabled: " + e.getMessage(), e);
         }
     }
 

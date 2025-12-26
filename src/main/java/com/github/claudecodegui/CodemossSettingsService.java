@@ -272,6 +272,63 @@ public class CodemossSettingsService {
         return result;
     }
 
+    public Boolean getAlwaysThinkingEnabledFromClaudeSettings() throws IOException {
+        JsonObject claudeSettings = readClaudeSettings();
+        if (!claudeSettings.has("alwaysThinkingEnabled") || claudeSettings.get("alwaysThinkingEnabled").isJsonNull()) {
+            return null;
+        }
+        try {
+            return claudeSettings.get("alwaysThinkingEnabled").getAsBoolean();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public void setAlwaysThinkingEnabledInClaudeSettings(boolean enabled) throws IOException {
+        JsonObject claudeSettings = readClaudeSettings();
+        claudeSettings.addProperty("alwaysThinkingEnabled", enabled);
+        writeClaudeSettings(claudeSettings);
+    }
+
+    public boolean setAlwaysThinkingEnabledInActiveProvider(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has("claude") || config.get("claude").isJsonNull()) {
+            return false;
+        }
+
+        JsonObject claude = config.getAsJsonObject("claude");
+        if (!claude.has("current") || claude.get("current").isJsonNull()) {
+            return false;
+        }
+
+        String currentId = claude.get("current").getAsString();
+        if (currentId == null || currentId.trim().isEmpty()) {
+            return false;
+        }
+
+        if (!claude.has("providers") || claude.get("providers").isJsonNull()) {
+            return false;
+        }
+
+        JsonObject providers = claude.getAsJsonObject("providers");
+        if (!providers.has(currentId) || providers.get(currentId).isJsonNull()) {
+            return false;
+        }
+
+        JsonObject provider = providers.getAsJsonObject(currentId);
+        JsonObject settingsConfig;
+        if (provider.has("settingsConfig") && provider.get("settingsConfig").isJsonObject()) {
+            settingsConfig = provider.getAsJsonObject("settingsConfig");
+        } else {
+            settingsConfig = new JsonObject();
+            provider.add("settingsConfig", settingsConfig);
+        }
+
+        settingsConfig.addProperty("alwaysThinkingEnabled", enabled);
+        writeConfig(config);
+        return true;
+    }
+
     private void writeClaudeSettings(JsonObject settings) throws IOException {
         Path settingsPath = getClaudeSettingsPath();
         if (!Files.exists(settingsPath.getParent())) {
