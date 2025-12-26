@@ -250,6 +250,7 @@
     "switchSuccess": "Switched successfully",
     "thinkingEnabled": "Thinking enabled",
     "thinkingDisabled": "Thinking disabled",
+    "configLoading": "Configuration loading, please try again",
     "saveSuccess": "Saved successfully",
     "deleteSuccess": "Deleted successfully",
     "operationFailed": "Operation failed",

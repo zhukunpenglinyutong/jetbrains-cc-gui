@@ -250,6 +250,7 @@
     "switchSuccess": "切换成功",
     "thinkingEnabled": "思考已开启",
     "thinkingDisabled": "思考已关闭",
+    "configLoading": "配置加载中，请稍后再试",
     "saveSuccess": "保存成功",
     "deleteSuccess": "删除成功",
     "operationFailed": "操作失败",

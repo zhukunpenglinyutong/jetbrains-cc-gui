@@ -703,7 +703,15 @@ const App = () => {
    * 处理思考模式切换
    */
   const handleToggleThinking = (enabled: boolean) => {
-    if (!activeProviderConfig) return;
+    if (!activeProviderConfig) {
+      // 配置尚未加载完成，显示提示并重新请求配置
+      addToast(t('toast.configLoading', '配置加载中，请稍后再试'), 'info');
+      // 尝试重新请求 active provider 配置
+      if (window.sendToJava) {
+        sendBridgeMessage('get_active_provider');
+      }
+      return;
+    }
 
     // 更新本地状态（乐观更新）
     setActiveProviderConfig(prev => prev ? {

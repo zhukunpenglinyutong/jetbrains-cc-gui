@@ -126,9 +126,9 @@ export const ConfigSelect = ({
       className="selector-dropdown"
       style={{
         position: 'absolute',
-        left: '4px', // Moved inside to cover parent
-        bottom: 0, 
-        marginLeft: '0',
+        left: '100%',
+        bottom: 0,
+        marginLeft: '-30px',
         zIndex: 10001,
         minWidth: '220px',
       }}
@@ -159,9 +159,9 @@ export const ConfigSelect = ({
       className="selector-dropdown"
       style={{
         position: 'absolute',
-        left: '4px',
+        left: '100%',
         bottom: 0,
-        marginLeft: '0',
+        marginLeft: '-30px',
         zIndex: 10001,
         minWidth: '180px'
       }}
@@ -213,7 +213,6 @@ export const ConfigSelect = ({
           {/* Permission Mode Item */}
           <div 
             className="selector-option" 
-            onMouseEnter={() => setActiveSubmenu('mode')}
             onMouseLeave={() => setActiveSubmenu('none')}
             style={{ position: 'relative' }}
           >
@@ -221,7 +220,19 @@ export const ConfigSelect = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               <span>{getModeText(currentMode.id, 'label')}</span>
             </div>
-            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
+            <div 
+              onMouseEnter={() => setActiveSubmenu('mode')}
+              style={{ 
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                alignSelf: 'stretch',
+                paddingLeft: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              <span className="codicon codicon-chevron-right" style={{ fontSize: '12px' }} />
+            </div>
             
             {activeSubmenu === 'mode' && renderModeSubmenu()}
           </div>
@@ -232,7 +243,6 @@ export const ConfigSelect = ({
           {/* CLI Tool Item */}
           <div 
             className="selector-option" 
-            onMouseEnter={() => setActiveSubmenu('provider')}
             onMouseLeave={() => setActiveSubmenu('none')}
             style={{ position: 'relative' }}
           >
@@ -242,7 +252,19 @@ export const ConfigSelect = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               <span>{currentProviderInfo.label}</span>
             </div>
-            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
+            <div 
+              onMouseEnter={() => setActiveSubmenu('provider')}
+              style={{ 
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                alignSelf: 'stretch',
+                paddingLeft: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              <span className="codicon codicon-chevron-right" style={{ fontSize: '12px' }} />
+            </div>
             
             {activeSubmenu === 'provider' && renderProviderSubmenu()}
           </div>
