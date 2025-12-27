@@ -109,7 +109,7 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
               display: 'flex',
               flexDirection: 'column',
               gap: '8px',
-              fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+              fontFamily: 'var(--idea-editor-font-family, monospace)',
               fontSize: '12px',
             }}
           >

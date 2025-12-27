@@ -9,6 +9,7 @@ import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.model.NodeDetectionResult;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
@@ -31,6 +32,7 @@ public class ClaudeSDKBridge {
     private static final Logger LOG = Logger.getInstance(ClaudeSDKBridge.class);
     private static final String NODE_SCRIPT = "simple-query.js";
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
+    private static final String SLASH_COMMANDS_CHANNEL_ID = "__slash_commands__";
 
     private final Gson gson = new Gson();
     private final NodeDetector nodeDetector = new NodeDetector();
@@ -903,6 +905,7 @@ public class ClaudeSDKBridge {
                 pb.environment().put("CLAUDE_USE_STDIN", "true");
 
                 process = pb.start();
+                processManager.registerProcess(SLASH_COMMANDS_CHANNEL_ID, process);
                 final Process finalProcess = process;
 
                 // 通过 stdin 写入参数
@@ -950,7 +953,7 @@ public class ClaudeSDKBridge {
 
                 // 无论是否找到数据，都立即终止进程
                 if (process.isAlive()) {
-                    process.destroyForcibly();
+                    PlatformUtils.terminateProcess(process);
                     LOG.debug("[SlashCommands] Process forcibly destroyed after " + elapsed + "ms");
                 }
 
@@ -1000,8 +1003,14 @@ public class ClaudeSDKBridge {
                 LOG.error("[SlashCommands] Exception after " + elapsed + "ms: " + e.getMessage());
                 return new ArrayList<>();
             } finally {
-                if (process != null && process.isAlive()) {
-                    process.destroyForcibly();
+                if (process != null) {
+                    try {
+                        if (process.isAlive()) {
+                            PlatformUtils.terminateProcess(process);
+                        }
+                    } finally {
+                        processManager.unregisterProcess(SLASH_COMMANDS_CHANNEL_ID, process);
+                    }
                 }
             }
         });

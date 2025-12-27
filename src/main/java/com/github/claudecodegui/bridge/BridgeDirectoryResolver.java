@@ -48,17 +48,23 @@ public class BridgeDirectoryResolver {
      */
     public File findSdkDir() {
         if (cachedSdkDir != null && cachedSdkDir.exists()) {
+            LOG.info("[BridgeResolver] 使用缓存路径: " + cachedSdkDir.getAbsolutePath());
             return cachedSdkDir;
         }
 
         File configuredDir = resolveConfiguredBridgeDir();
         if (configuredDir != null) {
+            LOG.info("[BridgeResolver] 使用配置路径: " + configuredDir.getAbsolutePath());
             cachedSdkDir = configuredDir;
             return cachedSdkDir;
         }
 
         File embeddedDir = ensureEmbeddedBridgeExtracted();
         if (embeddedDir != null) {
+            LOG.info("[BridgeResolver] 使用嵌入式路径: " + embeddedDir.getAbsolutePath());
+            // 验证 node_modules 是否存在
+            File nodeModules = new File(embeddedDir, "node_modules");
+            LOG.info("[BridgeResolver] node_modules 存在: " + nodeModules.exists());
             cachedSdkDir = embeddedDir;
             return cachedSdkDir;
         }
@@ -99,7 +105,9 @@ public class BridgeDirectoryResolver {
         for (File dir : possibleDirs) {
             if (isValidBridgeDir(dir)) {
                 cachedSdkDir = dir;
-                LOG.info("✓ 找到 ai-bridge 目录: " + cachedSdkDir.getAbsolutePath());
+                LOG.info("[BridgeResolver] ✓ 使用 fallback 路径: " + cachedSdkDir.getAbsolutePath());
+                File nodeModules = new File(cachedSdkDir, "node_modules");
+                LOG.info("[BridgeResolver] node_modules 存在: " + nodeModules.exists());
                 return cachedSdkDir;
             }
         }

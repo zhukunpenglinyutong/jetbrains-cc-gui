@@ -169,8 +169,9 @@
     padding: 12px;
     overflow-x: auto;
     margin: 10px 0;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 12.5px;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-size: var(--idea-editor-font-size, 12.5px);
+    line-height: var(--idea-editor-line-spacing, 1.5);
     max-width: 100%; /* 防止超出容器 */
     box-sizing: border-box; /* 包含 padding 在宽度内 */
 }
@@ -255,7 +256,7 @@
 }
 
 .markdown-content code {
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     background-color: var(--color-code-inline-bg);
     padding: 2px 4px;
     border-radius: 3px;
@@ -400,7 +401,7 @@
     padding-left: 12px;
     border-left: 2px solid var(--color-thinking-border);
     color: var(--color-thinking-text);
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     font-size: 12.5px;
     white-space: pre-wrap;
     line-height: 1.5;
@@ -478,7 +479,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     font-size: 12px;
 }
 
@@ -496,7 +497,7 @@
     padding: 6px 12px;
     background: var(--color-tool-bg-secondary);
     border-top: 1px solid var(--border-primary);
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     font-size: 12px;
     color: var(--color-tool-param-text);
     max-width: 100%;
