@@ -51,6 +51,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Claude SDK 聊天工具窗口
@@ -103,23 +108,35 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             LOG.info("[ShutdownHook] IDEA 正在关闭，清理所有 Node.js 进程...");
 
-            // 复制实例列表，避免并发修改
-            for (ClaudeChatWindow window : new java.util.ArrayList<>(instances.values())) {
-                try {
-                    if (window != null && window.claudeSDKBridge != null) {
-                        window.claudeSDKBridge.cleanupAllProcesses();
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                Future<?> future = executor.submit(() -> {
+                    // 复制实例列表，避免并发修改
+                    for (ClaudeChatWindow window : new java.util.ArrayList<>(instances.values())) {
+                        try {
+                            if (window != null && window.claudeSDKBridge != null) {
+                                window.claudeSDKBridge.cleanupAllProcesses();
+                            }
+                            if (window != null && window.codexSDKBridge != null) {
+                                window.codexSDKBridge.cleanupAllProcesses();
+                            }
+                        } catch (Exception e) {
+                            // Shutdown hook 中不要抛出异常
+                            LOG.error("[ShutdownHook] 清理进程时出错: " + e.getMessage());
+                        }
                     }
-                    if (window != null && window.codexSDKBridge != null) {
-                        window.codexSDKBridge.cleanupAllProcesses();
-                    }
-                } catch (Exception e) {
-                    // Shutdown hook 中不要抛出异常
-                    //System.err.println("[ShutdownHook] 清理进程时出错: " + e.getMessage());
-                    LOG.error("[ShutdownHook] 清理进程时出错: " + e.getMessage());
-                }
-            }
+                });
 
-            LOG.info("[ShutdownHook] Node.js 进程清理完成");
+                // 最多等待3秒
+                future.get(3, TimeUnit.SECONDS);
+                LOG.info("[ShutdownHook] Node.js 进程清理完成");
+            } catch (TimeoutException e) {
+                LOG.warn("[ShutdownHook] 清理进程超时(3秒)，强制退出");
+            } catch (Exception e) {
+                LOG.error("[ShutdownHook] 清理进程失败: " + e.getMessage());
+            } finally {
+                executor.shutdownNow();
+            }
         }, "Claude-Process-Cleanup-Hook"));
 
         LOG.info("[ShutdownHook] JVM Shutdown Hook 已注册");
@@ -508,13 +525,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                         // 传递 IDEA 编辑器字体配置到前端
                         String fontConfig = FontConfigService.getEditorFontConfigJson();
+                        LOG.info("[FontSync] 获取到的字体配置: " + fontConfig);
                         String fontConfigInjection = String.format(
                             "if (window.applyIdeaFontConfig) { window.applyIdeaFontConfig(%s); } " +
                             "else { window.__pendingFontConfig = %s; }",
                             fontConfig, fontConfig
                         );
                         cefBrowser.executeJavaScript(fontConfigInjection, cefBrowser.getURL(), 0);
-                        LOG.debug("Font config injected: " + fontConfig);
+                        LOG.info("[FontSync] 字体配置已注入到前端");
 
                         // 斜杠命令的加载现在由前端发起，通过 frontend_ready 事件触发
                         // 不再在 onLoadEnd 中主动调用，避免时序问题

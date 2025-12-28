@@ -67,3 +67,16 @@ html {
 *::-webkit-scrollbar-corner {
     background: transparent !important;
 }
+
+/* 全局字体覆盖 - 让整个插件都使用 IDEA 编辑器字体 */
+* {
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace) !important;
+}
+
+/* 保护字体图标 - 确保 codicon 图标正常显示 */
+.codicon,
+.codicon[class*='codicon-'],
+[class*='codicon-']::before,
+[class*='codicon-']::after {
+    font-family: 'codicon' !important;
+}
