@@ -15,6 +15,32 @@ if (enableVConsole) {
   });
 }
 
+/**
+ * 应用 IDEA 编辑器字体配置到 CSS 变量
+ */
+function applyFontConfig(config: { fontFamily: string; fontSize: number; lineSpacing: number }) {
+  const root = document.documentElement;
+
+  // 构建字体族字符串，添加回退字体
+  const fontFamily = `'${config.fontFamily}', 'Consolas', monospace`;
+
+  root.style.setProperty('--idea-editor-font-family', fontFamily);
+  root.style.setProperty('--idea-editor-font-size', `${config.fontSize}px`);
+  root.style.setProperty('--idea-editor-line-spacing', String(config.lineSpacing));
+
+  console.log('[Main] Applied IDEA font config:', config);
+}
+
+// 注册 applyIdeaFontConfig 函数
+window.applyIdeaFontConfig = applyFontConfig;
+
+// 检查是否有待处理的字体配置（Java 端可能先于 JS 执行）
+if (window.__pendingFontConfig) {
+  console.log('[Main] Found pending font config, applying...');
+  applyFontConfig(window.__pendingFontConfig);
+  delete window.__pendingFontConfig;
+}
+
 // 预注册 updateSlashCommands，避免后端调用早于 React 初始化
 if (typeof window !== 'undefined' && !window.updateSlashCommands) {
   console.log('[Main] Pre-registering updateSlashCommands placeholder');

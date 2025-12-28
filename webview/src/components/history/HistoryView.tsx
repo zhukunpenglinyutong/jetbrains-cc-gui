@@ -336,7 +336,7 @@ const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSess
         </div>
         <div className="history-item-meta">
           <span>{t('history.messageCount', { count: session.messageCount })}</span>
-          <span style={{ fontFamily: 'monospace', color: '#666' }}>{session.sessionId.slice(0, 8)}</span>
+          <span style={{ fontFamily: 'var(--idea-editor-font-family, monospace)', color: '#666' }}>{session.sessionId.slice(0, 8)}</span>
         </div>
       </div>
     );

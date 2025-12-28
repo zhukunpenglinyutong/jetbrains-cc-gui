@@ -188,7 +188,7 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
               style={{
                 marginLeft: '12px',
                 fontSize: '12px',
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: 'var(--idea-editor-font-family, monospace)',
                 fontWeight: 600,
               }}
             >
@@ -209,6 +209,7 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
               justifyContent: 'center',
               padding: '2px 6px',
               fontSize: '11px',
+              fontFamily: 'inherit',
               color: 'var(--text-secondary)',
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border-primary)',
@@ -237,6 +238,7 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
               justifyContent: 'center',
               padding: '2px 6px',
               fontSize: '11px',
+              fontFamily: 'inherit',
               color: 'var(--text-secondary)',
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border-primary)',
@@ -264,7 +266,7 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
           <div
             style={{
               // 使用等宽字体确保制表符与空格宽度一致
-              fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+              fontFamily: 'var(--idea-editor-font-family, monospace)',
               fontSize: '12px',
               lineHeight: 1.5,
               background: '#1e1e1e',

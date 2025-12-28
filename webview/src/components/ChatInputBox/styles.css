@@ -488,6 +488,7 @@
   outline: none;
   color: var(--text-primary);
   font-size: 14px;
+  font-family: inherit;
   line-height: 1.5;
   word-wrap: break-word;
   white-space: pre-wrap;
@@ -513,6 +514,7 @@
   padding: 4px 4px;
   border-top: none;
   background: rgba(0, 0, 0, 0.1);
+  font-family: inherit;
 }
 
 .button-area-left {
@@ -540,6 +542,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   font-size: 11px;
+  font-family: inherit;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
@@ -561,6 +564,7 @@
   min-width: 140px;
   padding: 4px 0;
   white-space: nowrap;
+  font-family: inherit;
 }
 
 .selector-option {
@@ -571,6 +575,7 @@
   cursor: pointer;
   color: var(--text-primary);
   font-size: 12px;
+  font-family: inherit;
   transition: background 0.1s;
 }
 
@@ -597,6 +602,7 @@
   font-size: 11px;
   color: var(--text-secondary);
   font-style: italic;
+  font-family: inherit;
   margin-top: 2px;
 }
 
@@ -604,6 +610,7 @@
   font-size: 11px;
   color: var(--text-secondary);
   font-style: italic;
+  font-family: inherit;
   margin-top: 2px;
 }
 

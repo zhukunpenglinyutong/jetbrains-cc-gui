@@ -205,4 +205,23 @@ interface Window {
    * Pending slash commands payload before provider initialization
    */
   __pendingSlashCommands?: string;
+
+  /**
+   * Apply IDEA editor font configuration (called from Java backend)
+   * @param config Font configuration object containing fontFamily, fontSize, lineSpacing
+   */
+  applyIdeaFontConfig?: (config: {
+    fontFamily: string;
+    fontSize: number;
+    lineSpacing: number;
+  }) => void;
+
+  /**
+   * Pending font config before applyIdeaFontConfig is registered
+   */
+  __pendingFontConfig?: {
+    fontFamily: string;
+    fontSize: number;
+    lineSpacing: number;
+  };
 }
