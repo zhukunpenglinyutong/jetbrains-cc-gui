@@ -229,4 +229,9 @@ interface Window {
     fontSize: number;
     lineSpacing: number;
   };
+
+  /**
+   * Update MCP server connection status
+   */
+  updateMcpServerStatus?: (json: string) => void;
 }

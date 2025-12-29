@@ -890,6 +890,73 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	}
 
 /**
+ * 获取 MCP 服务器状态
+ * 通过 SDK 的 mcpServerStatus() 方法获取当前配置的 MCP 服务器状态
+ * 这个方法不需要发送消息，可以在插件启动时调用
+ */
+export async function getMcpServerStatus(cwd = null) {
+  try {
+    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
+
+    setupApiKey();
+
+    if (!process.env.HOME) {
+      const os = await import('os');
+      process.env.HOME = os.homedir();
+    }
+
+    const workingDirectory = selectWorkingDirectory(cwd);
+    try {
+      process.chdir(workingDirectory);
+    } catch (chdirError) {
+      console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
+    }
+
+    const inputStream = new AsyncStream();
+
+    const result = query({
+      prompt: inputStream,
+      options: {
+        cwd: workingDirectory,
+        permissionMode: 'default',
+        maxTurns: 0,
+        canUseTool: async () => ({
+          behavior: 'deny',
+          message: 'Config loading only'
+        }),
+        tools: { type: 'preset', preset: 'claude_code' },
+        settingSources: ['user', 'project', 'local'],
+        stderr: (data) => {
+          if (data && data.trim()) {
+            console.log(`[SDK-STDERR] ${data.trim()}`);
+          }
+        }
+      }
+    });
+
+    inputStream.done();
+
+    const mcpStatus = await result.mcpServerStatus?.() || [];
+
+    await result.return?.();
+
+    console.log('[MCP_SERVER_STATUS]', JSON.stringify(mcpStatus));
+
+    console.log(JSON.stringify({
+      success: true,
+      servers: mcpStatus
+    }));
+  } catch (error) {
+    console.error('[GET_MCP_SERVER_STATUS_ERROR]', error.message);
+    console.log(JSON.stringify({
+      success: false,
+      error: error.message,
+      servers: []
+    }));
+  }
+}
+
+/**
  * 获取斜杠命令列表
  * 通过 SDK 的 supportedCommands() 方法获取完整的命令列表
  * 这个方法不需要发送消息，可以在插件启动时调用

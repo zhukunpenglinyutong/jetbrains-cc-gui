@@ -133,3 +133,15 @@ export interface McpServerValidationResult {
   errors?: string[];
   warnings?: string[];
 }
+
+/**
+ * MCP 服务器状态信息
+ */
+export interface McpServerStatusInfo {
+  name: string;
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending';
+  serverInfo?: {
+    name: string;
+    version: string;
+  };
+}

@@ -33,6 +33,7 @@ public class ClaudeSDKBridge {
     private static final String NODE_SCRIPT = "simple-query.js";
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
     private static final String SLASH_COMMANDS_CHANNEL_ID = "__slash_commands__";
+    private static final String MCP_STATUS_CHANNEL_ID = "__mcp_status__";
 
     private final Gson gson = new Gson();
     private final NodeDetector nodeDetector = new NodeDetector();
@@ -1016,9 +1017,148 @@ public class ClaudeSDKBridge {
         });
     }
 
-    // ============================================================================
-    // 工具方法
-    // ============================================================================
+    /**
+     * Get MCP server status list.
+     * Fetches MCP server connectivity information via Claude SDK mcpServerStatus().
+     *
+     * @param cwd working directory
+     * @return list of MCP server status entries
+     */
+    public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
+        return CompletableFuture.supplyAsync(() -> {
+             Process process = null;
+            long startTime = System.currentTimeMillis();
+            LOG.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd);
+
+            try {
+                String node = this.nodeDetector.findNodeExecutable();
+
+                JsonObject stdinInput = new JsonObject();
+                stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+                String stdinJson = this.gson.toJson(stdinInput);
+
+                List<String> command = new ArrayList<>();
+                command.add(node);
+                File bridgeDir = this.directoryResolver.findSdkDir();
+                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                command.add("claude");
+                command.add("getMcpServerStatus");
+
+                ProcessBuilder pb = new ProcessBuilder(command);
+                pb.directory(bridgeDir);
+                pb.redirectErrorStream(true);
+                this.envConfigurator.updateProcessEnvironment(pb, node);
+                pb.environment().put("CLAUDE_USE_STDIN", "true");
+
+                process = pb.start();
+                this.processManager.registerProcess(MCP_STATUS_CHANNEL_ID, process);
+                final Process finalProcess = process;
+
+                try (java.io.OutputStream stdin = process.getOutputStream()) {
+                    stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
+                    stdin.flush();
+                    LOG.debug("[McpStatus] Wrote stdin: " + stdinJson);
+                } catch (Exception e) {
+                    LOG.warn("[McpStatus] Failed to write stdin: " + e.getMessage());
+                }
+
+                final boolean[] found = {false};
+                final String[] mcpStatusJson = {null};
+                final StringBuilder output = new StringBuilder();
+
+                Thread readerThread = new Thread(() -> {
+                    try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                        String line;
+                        while (!found[0] && (line = reader.readLine()) != null) {
+                            output.append(line).append("\n");
+                            LOG.debug("[McpStatus] Read line: " + line.substring(0, Math.min(100, line.length())));
+
+                            if (line.startsWith("[MCP_SERVER_STATUS]")) {
+                                mcpStatusJson[0] = line.substring("[MCP_SERVER_STATUS]".length()).trim();
+                                found[0] = true;
+                                LOG.info("[McpStatus] Found MCP_SERVER_STATUS marker, data length=" + mcpStatusJson[0].length());
+                                break;
+                            }
+                        }
+                    } catch (Exception e) {
+                        LOG.debug("[McpStatus] Reader thread exception: " + e.getMessage());
+                    }
+                });
+                readerThread.start();
+
+                long deadline = System.currentTimeMillis() + 30000;
+                while (!found[0] && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(100);
+                }
+
+                long elapsed = System.currentTimeMillis() - startTime;
+
+                if (process.isAlive()) {
+                    PlatformUtils.terminateProcess(process);
+                    LOG.debug("[McpStatus] Process forcibly destroyed after " + elapsed + "ms");
+                }
+
+                List<JsonObject> servers = new ArrayList<>();
+
+                if (found[0] && mcpStatusJson[0] != null && !mcpStatusJson[0].isEmpty()) {
+                    try {
+                        JsonArray serversArray = this.gson.fromJson(mcpStatusJson[0], JsonArray.class);
+                        for (var server : serversArray) {
+                            servers.add(server.getAsJsonObject());
+                        }
+                        LOG.info("[McpStatus] Parsed " + servers.size() + " MCP servers in " + elapsed + "ms");
+                        return servers;
+                    } catch (Exception e) {
+                        LOG.warn("[McpStatus] Failed to parse MCP status JSON: " + e.getMessage());
+                    }
+                } else {
+                    LOG.warn("[McpStatus] No MCP status found after " + elapsed + "ms, found=" + found[0]);
+                }
+
+                String outputStr = output.toString().trim();
+                int jsonStart = outputStr.lastIndexOf("{");
+                if (jsonStart != -1) {
+                    String jsonStr = outputStr.substring(jsonStart);
+                    try {
+                        JsonObject jsonResult = this.gson.fromJson(jsonStr, JsonObject.class);
+                        if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
+                            if (jsonResult.has("servers")) {
+                                JsonArray serversArray = jsonResult.getAsJsonArray("servers");
+                                for (var server : serversArray) {
+                                    servers.add(server.getAsJsonObject());
+                                }
+                                LOG.info("[McpStatus] Fallback parsed " + servers.size() + " MCP servers from JSON");
+                            }
+                        }
+                    } catch (Exception e) {
+                        LOG.debug("[McpStatus] Fallback JSON parse failed: " + e.getMessage());
+                    }
+                }
+
+                return servers;
+
+            } catch (Exception e) {
+                long elapsed = System.currentTimeMillis() - startTime;
+                LOG.error("[McpStatus] Exception after " + elapsed + "ms: " + e.getMessage());
+                return new ArrayList<>();
+            } finally {
+                if (process != null) {
+                    try {
+                        if (process.isAlive()) {
+                            PlatformUtils.terminateProcess(process);
+                        }
+                    } finally {
+                        this.processManager.unregisterProcess(MCP_STATUS_CHANNEL_ID, process);
+                    }
+                }
+            }
+        });
+    }
+
+     // ============================================================================
+     // 工具方法
+     // ============================================================================
 
     private String extractBetween(String text, String start, String end) {
         int startIdx = text.indexOf(start);

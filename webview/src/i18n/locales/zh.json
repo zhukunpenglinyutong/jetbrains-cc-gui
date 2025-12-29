@@ -346,7 +346,14 @@
       "memory": "知识图谱和记忆存储工具",
       "sequentialThinking": "顺序思考和推理工具",
       "context7": "文档搜索和上下文检索工具"
-    }
+    },
+    "connectionStatus": "连接状态",
+    "serverVersion": "服务器版本",
+    "statusConnected": "已连接",
+    "statusFailed": "连接失败",
+    "statusNeedsAuth": "需要认证",
+    "statusPending": "连接中...",
+    "statusUnknown": "未知"
   },
   "tools": {
     "toolCall": "工具调用",
