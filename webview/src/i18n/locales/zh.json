@@ -370,6 +370,7 @@
     "listFiles": "列出文件",
     "findFile": "查找文件",
     "todoList": "任务列表",
+    "updatePlan": "更新计划",
     "editFileTitle": "编辑文件",
     "clickToOpen": "点击打开 {{filePath}}",
     "refreshFileInIdea": "在 IDEA 中刷新文件",
@@ -424,16 +425,16 @@
       }
     },
     "codex": {
-      "gpt51codex": {
-        "label": "gpt-5.1-codex",
-        "description": "针对codex进行了优化"
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "默认模型"
       },
       "gpt51codexMini": {
         "label": "gpt-5.1-codex-mini",
         "description": "针对codex进行了优化。更便宜、更快，但性能较差"
       },
-      "gpt51": {
-        "label": "gpt-5.1",
+      "gpt52": {
+        "label": "gpt-5.2",
         "description": "具有广泛的世界知识和强大的一般推理能力"
       }
     }
@@ -458,6 +459,23 @@
       "label": "自动模式",
       "tooltip": "绕过所有权限检查",
       "description": "完全自动化，绕过所有权限检查【谨慎使用】"
+    }
+  },
+  "codexModes": {
+    "default": {
+      "label": "建议模式",
+      "tooltip": "Codex approval_policy=untrusted：执行命令或写文件前都会弹窗确认。",
+      "description": "最安全的选择，每一步都需要你亲自批准。"
+    },
+    "acceptEdits": {
+      "label": "自动编辑",
+      "tooltip": "Codex approval_policy=auto-edit：自动 apply_patch 写文件，命令仍需审批。",
+      "description": "自动处理文件创建/编辑，但运行命令前仍会询问。"
+    },
+    "bypassPermissions": {
+      "label": "全自动",
+      "tooltip": "Codex approval_policy=never：命令与写入直接执行（workspace 沙箱仍生效）。",
+      "description": "完全免审批，写文件和执行命令立即生效，仅受沙箱限制。"
     }
   },
   "providers": {

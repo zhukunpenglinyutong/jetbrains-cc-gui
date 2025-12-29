@@ -424,16 +424,16 @@
       }
     },
     "codex": {
-      "gpt51codex": {
-        "label": "gpt-5.1-codex",
-        "description": "Optimized for codex"
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "Default model"
       },
       "gpt51codexMini": {
         "label": "gpt-5.1-codex-mini",
         "description": "Optimized for codex. Cheaper and faster, but lower performance"
       },
-      "gpt51": {
-        "label": "gpt-5.1",
+      "gpt52": {
+        "label": "gpt-5.2",
         "description": "Broad world knowledge and strong general reasoning capabilities"
       }
     }
@@ -458,6 +458,28 @@
       "label": "Auto Mode",
       "tooltip": "Bypass all permission checks",
       "description": "Fully automated, bypassing all permission checks [Use with caution]"
+    }
+  },
+  "codexModes": {
+    "default": {
+      "label": "Suggest (approval)",
+      "tooltip": "Codex approval_policy=untrusted – prompts before editing files or running shell commands.",
+      "description": "Safest option. Every write or command requires your approval."
+    },
+    "plan": {
+      "label": "Plan Mode",
+      "tooltip": "Planning only (not supported yet)",
+      "description": "Outlines steps without executing (coming soon)"
+    },
+    "acceptEdits": {
+      "label": "Auto Edit",
+      "tooltip": "Codex approval_policy=auto-edit – automatically applies file patches, still asks before shell commands.",
+      "description": "Auto-create and edit files via apply_patch while keeping command approvals."
+    },
+    "bypassPermissions": {
+      "label": "Full Auto",
+      "tooltip": "Codex approval_policy=never – runs commands and writes files without prompting (workspace sandbox still enforced).",
+      "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
   "providers": {

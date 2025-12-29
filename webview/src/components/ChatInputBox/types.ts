@@ -238,9 +238,9 @@ export const CLAUDE_MODELS: ModelInfo[] = [
  */
 export const CODEX_MODELS: ModelInfo[] = [
   {
-    id: 'gpt-5.1-codex',
-    label: 'gpt-5.1-codex',
-    description: '针对codex进行了优化'
+    id: 'gpt-5.1-codex-max',
+    label: 'gpt-5.1-codex-max',
+    description: '默认模型'
   },
   {
     id: 'gpt-5.1-codex-mini',
@@ -248,8 +248,8 @@ export const CODEX_MODELS: ModelInfo[] = [
     description: '针对codex进行了优化。更便宜、更快，但性能较差'
   },
   {
-    id: 'gpt-5.1',
-    label: 'gpt-5.1',
+    id: 'gpt-5.2',
+    label: 'gpt-5.2',
     description: '具有广泛的世界知识和强大的一般推理能力'
   },
 ];
@@ -274,7 +274,7 @@ export interface ProviderInfo {
  */
 export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
-  { id: 'codex', label: 'Codex Cli', icon: 'codicon-terminal', enabled: false },
+  { id: 'codex', label: 'Codex Cli', icon: 'codicon-terminal', enabled: true },
   { id: 'gemini', label: 'Gemini Cli', icon: 'codicon-terminal', enabled: false },
 ];
 

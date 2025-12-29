@@ -1,6 +1,8 @@
 package com.github.claudecodegui;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -182,13 +184,16 @@ public class CodexSDKBridge {
 
     /**
      * 发送消息到 Codex（流式响应）
+     *
+     * Note: Codex uses threadId instead of sessionId
+     * Note: Codex does not support attachments
      */
     public CompletableFuture<SDKResult> sendMessage(
         String channelId,
         String message,
-        String sessionId,
+        String threadId,  // Codex uses threadId, not sessionId
         String cwd,
-        List<ClaudeSession.Attachment> attachments,
+        List<ClaudeSession.Attachment> attachments,  // Ignored for Codex
         String permissionMode,
         String model,
         MessageCallback callback
@@ -208,12 +213,14 @@ public class CodexSDKBridge {
                 setCodexExecutablePermission(bridgeDir);
 
                 // 构建 stdin 输入 JSON
+                // Note: Codex uses 'threadId' (not 'sessionId')
                 JsonObject stdinInput = new JsonObject();
                 stdinInput.addProperty("message", message);
-                stdinInput.addProperty("threadId", sessionId != null ? sessionId : "");
+                stdinInput.addProperty("threadId", threadId != null ? threadId : "");
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+                stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
                 stdinInput.addProperty("model", model != null ? model : "");
-                // 添加 API 配置
+                // API 配置
                 stdinInput.addProperty("baseUrl", baseUrl != null ? baseUrl : "");
                 stdinInput.addProperty("apiKey", apiKey != null ? apiKey : "");
                 String stdinJson = gson.toJson(stdinInput);
@@ -293,8 +300,32 @@ public class CodexSDKBridge {
                             } else if (line.startsWith("[MESSAGE_END]")) {
                                 callback.onMessage("message_end", "");
                             } else if (line.startsWith("[THREAD_ID]")) {
-                                String threadId = line.substring("[THREAD_ID]".length()).trim();
-                                callback.onMessage("session_id", threadId);
+                                String receivedThreadId = line.substring("[THREAD_ID]".length()).trim();
+                                callback.onMessage("session_id", receivedThreadId);
+                            } else if (line.startsWith("[MESSAGE]")) {
+                                String jsonStr = line.substring("[MESSAGE]".length()).trim();
+                                try {
+                                    JsonObject msg = gson.fromJson(jsonStr, JsonObject.class);
+                                    if (msg != null) {
+                                        result.messages.add(msg);
+                                        String msgType = msg.has("type") && !msg.get("type").isJsonNull()
+                                                ? msg.get("type").getAsString()
+                                                : "unknown";
+
+                                        if ("assistant".equals(msgType)) {
+                                            try {
+                                                String extracted = extractAssistantText(msg);
+                                                if (extracted != null && !extracted.isEmpty()) {
+                                                    assistantContent.append(extracted);
+                                                }
+                                            } catch (Exception ignored) {
+                                            }
+                                        }
+
+                                        callback.onMessage(msgType, jsonStr);
+                                    }
+                                } catch (Exception ignored) {
+                                }
                             } else if (line.startsWith("[CONTENT_DELTA]")) {
                                 String delta = line.substring("[CONTENT_DELTA]".length()).trim();
                                 assistantContent.append(delta);
@@ -411,5 +442,35 @@ public class CodexSDKBridge {
         // Codex SDK 不支持获取历史消息
         LOG.info("getSessionMessages not supported by Codex SDK");
         return new ArrayList<>();
+    }
+
+    private String extractAssistantText(JsonObject msg) {
+        if (msg == null) return "";
+        if (!msg.has("message") || !msg.get("message").isJsonObject()) return "";
+
+        JsonObject message = msg.getAsJsonObject("message");
+        if (!message.has("content") || message.get("content").isJsonNull()) return "";
+
+        JsonElement contentEl = message.get("content");
+        if (contentEl.isJsonPrimitive()) {
+            return contentEl.getAsString();
+        }
+        if (!contentEl.isJsonArray()) {
+            return "";
+        }
+
+        JsonArray arr = contentEl.getAsJsonArray();
+        StringBuilder sb = new StringBuilder();
+        for (JsonElement el : arr) {
+            if (!el.isJsonObject()) continue;
+            JsonObject block = el.getAsJsonObject();
+            if (!block.has("type") || block.get("type").isJsonNull()) continue;
+            String type = block.get("type").getAsString();
+            if ("text".equals(type) && block.has("text") && !block.get("text").isJsonNull()) {
+                if (sb.length() > 0) sb.append("\n");
+                sb.append(block.get("text").getAsString());
+            }
+        }
+        return sb.toString();
     }
 }

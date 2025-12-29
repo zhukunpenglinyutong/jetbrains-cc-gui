@@ -24,17 +24,8 @@
 
 // 共用工具
 import { readStdinData } from './utils/stdin-utils.js';
-
-// Claude 服务
-import {
-  sendMessage as claudeSendMessage,
-  sendMessageWithAttachments as claudeSendMessageWithAttachments,
-  getSlashCommands as claudeGetSlashCommands
-} from './services/claude/message-service.js';
-import { getSessionMessages as claudeGetSessionMessages } from './services/claude/session-service.js';
-
-// Codex 服务 (暂时禁用 - SDK 已卸载)
-// import { sendMessage as codexSendMessage } from './services/codex/message-service.js';
+import { handleClaudeCommand } from './channels/claude-channel.js';
+import { handleCodexCommand } from './channels/codex-channel.js';
 
 // 命令行参数解析
 const provider = process.argv[2];
@@ -60,66 +51,16 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-/**
- * Claude 命令处理
- */
-async function handleClaudeCommand(command, args, stdinData) {
-  switch (command) {
-    case 'send': {
-      if (stdinData && stdinData.message !== undefined) {
-        const { message, sessionId, cwd, permissionMode, model, openedFiles } = stdinData;
-        await claudeSendMessage(message, sessionId || '', cwd || '', permissionMode || '', model || '', openedFiles || null);
-      } else {
-        await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
-      }
-      break;
-    }
-
-    case 'sendWithAttachments': {
-      if (stdinData && stdinData.message !== undefined) {
-        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles } = stdinData;
-        await claudeSendMessageWithAttachments(
-          message,
-          sessionId || '',
-          cwd || '',
-          permissionMode || '',
-          model || '',
-          attachments ? { attachments, openedFiles } : { openedFiles }
-        );
-      } else {
-        await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);
-      }
-      break;
-    }
-
-    case 'getSession':
-      await claudeGetSessionMessages(args[0], args[1]);
-      break;
-
-    case 'getSlashCommands': {
-      // 获取斜杠命令列表
-      const cwd = stdinData?.cwd || args[0] || null;
-      await claudeGetSlashCommands(cwd);
-      break;
-    }
-
-    default:
-      throw new Error(`Unknown Claude command: ${command}`);
-  }
-}
-
-/**
- * Codex 命令处理 (暂时禁用 - SDK 已卸载)
- */
-async function handleCodexCommand(command, args, stdinData) {
-  throw new Error('Codex support is temporarily disabled. SDK not installed.');
-}
+const providerHandlers = {
+  claude: handleClaudeCommand,
+  codex: handleCodexCommand
+};
 
 // 执行命令
 (async () => {
   try {
     // 验证 provider
-    if (!provider || !['claude', 'codex'].includes(provider)) {
+    if (!provider || !providerHandlers[provider]) {
       console.error('Invalid provider. Use "claude" or "codex"');
       console.log(JSON.stringify({
         success: false,
@@ -142,11 +83,8 @@ async function handleCodexCommand(command, args, stdinData) {
     const stdinData = await readStdinData(provider);
 
     // 根据 provider 分发
-    if (provider === 'claude') {
-      await handleClaudeCommand(command, args, stdinData);
-    } else if (provider === 'codex') {
-      await handleCodexCommand(command, args, stdinData);
-    }
+    const handler = providerHandlers[provider];
+    await handler(command, args, stdinData);
 
   } catch (error) {
     console.error('[COMMAND_ERROR]', error.message);

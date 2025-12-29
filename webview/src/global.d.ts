@@ -58,6 +58,11 @@ interface Window {
   addErrorMessage?: (message: string) => void;
 
   /**
+   * Add single history message (used for Codex session loading)
+   */
+  addHistoryMessage?: (message: any) => void;
+
+  /**
    * Add toast notification (called from backend)
    */
   addToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;

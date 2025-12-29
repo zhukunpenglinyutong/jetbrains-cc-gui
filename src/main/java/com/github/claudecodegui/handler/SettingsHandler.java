@@ -91,7 +91,7 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleGetMode() {
         try {
-            String currentMode = "default";  // 默认值
+            String currentMode = "bypassPermissions";  // 默认值
 
             // 优先从 session 中获取
             if (context.getSession() != null) {

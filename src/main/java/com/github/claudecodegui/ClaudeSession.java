@@ -56,7 +56,7 @@ public class ClaudeSession {
     private final PermissionManager permissionManager = new PermissionManager();
 
     // 权限模式（传递给SDK）
-    private String permissionMode = "default";
+    private String permissionMode = "bypassPermissions";
 
     // 模型名称（传递给SDK）
     private String model = "claude-sonnet-4-5";
@@ -117,6 +117,8 @@ public class ClaudeSession {
                 callback.onPermissionRequested(request);
             }
         });
+
+        syncPermissionModeWithManager(permissionMode);
     }
 
     public void setCallback(SessionCallback callback) {
@@ -434,8 +436,24 @@ public class ClaudeSession {
 
                     @Override
                     public void onMessage(String type, String content) {
-                        // Codex 的简化处理（主要是 content_delta）
-                        if ("content_delta".equals(type)) {
+                        if (("assistant".equals(type) || "user".equals(type)) && content.startsWith("{")) {
+                            try {
+                                JsonObject msgJson = gson.fromJson(content, JsonObject.class);
+                                Message parsed = parseServerMessage(msgJson);
+                                if (parsed != null) {
+                                    messages.add(parsed);
+                                    notifyMessageUpdate();
+                                }
+                            } catch (Exception e) {
+                                LOG.debug("Failed to parse Codex [MESSAGE] JSON: " + e.getMessage());
+                            }
+                        } else if ("content_delta".equals(type) || "content".equals(type)) {
+                            // 兼容旧版 Codex 输出（CONTENT_DELTA/CONTENT）
+                            if (content == null || content.isEmpty()) {
+                                return;
+                            }
+                            LOG.debug("Codex " + type + " received, length: " + content.length() +
+                                ", preview: " + content.substring(0, Math.min(100, content.length())));
                             assistantContent.append(content);
 
                             if (currentAssistantMessage == null) {
@@ -444,8 +462,13 @@ public class ClaudeSession {
                             } else {
                                 currentAssistantMessage.content = assistantContent.toString();
                             }
-
                             notifyMessageUpdate();
+                        } else if ("session_id".equals(type)) {
+                            ClaudeSession.this.sessionId = content;
+                            if (callback != null) {
+                                callback.onSessionIdReceived(content);
+                            }
+                            LOG.info("Captured Codex thread ID: " + content);
                         } else if ("message_end".equals(type)) {
                             busy = false;
                             loading = false;
@@ -1036,6 +1059,7 @@ public class ClaudeSession {
         // LOG.info("[ClaudeSession] Old mode: " + this.permissionMode);
         // LOG.info("[ClaudeSession] New mode: " + mode);
         this.permissionMode = mode;
+        syncPermissionModeWithManager(mode);
         // LOG.info("[ClaudeSession] Permission mode updated successfully");
         // LOG.info("[ClaudeSession] =============================================");
     }
@@ -1045,6 +1069,14 @@ public class ClaudeSession {
      */
     public String getPermissionMode() {
         return permissionMode;
+    }
+
+    private void syncPermissionModeWithManager(String mode) {
+        PermissionManager.PermissionMode managerMode = PermissionManager.PermissionMode.DEFAULT;
+        if (mode != null && mode.equalsIgnoreCase("bypassPermissions")) {
+            managerMode = PermissionManager.PermissionMode.ALLOW_ALL;
+        }
+        permissionManager.setPermissionMode(managerMode);
     }
 
     /**

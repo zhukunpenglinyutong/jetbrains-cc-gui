@@ -10,7 +10,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.2-beta7'
+version = '0.1.3-test'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -203,6 +203,8 @@ tasks.register('packageAiBridge', Zip) {
     destinationDirectory = aiBridgePackDir
     from(aiBridgeDir)
     exclude('node_modules/.pnpm/**')
+    // 排除 Linux 平台的 Codex vendor 二进制文件，减少约 102MB 包体积
+    exclude('node_modules/@openai/codex-sdk/vendor/*-linux-*')
     includeEmptyDirs = true
 }
 
