@@ -162,46 +162,15 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
   };
 
   return (
-    <div className="task-container">
-      <div className="task-header" onClick={() => setExpanded((prev) => !prev)}>
-        <div className="task-title-section">
-          <span className="codicon codicon-edit tool-title-icon" />
-
-          <span className="tool-title-text">
-            {t('tools.editFileTitle')}
-          </span>
-          <span
-            className="tool-title-summary clickable-file"
-            onClick={handleFileClick}
-            title={t('tools.clickToOpen', { filePath })}
-            style={{ display: 'flex', alignItems: 'center' }}
-          >
-            <span 
-              style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
-              dangerouslySetInnerHTML={{ __html: getFileIconSvg(filePath) }} 
-            />
-            {getFileName(filePath) || filePath}
-          </span>
-          
-          {(diff.additions > 0 || diff.deletions > 0) && (
-            <span
-              style={{
-                marginLeft: '12px',
-                fontSize: '12px',
-                fontFamily: 'var(--idea-editor-font-family, monospace)',
-                fontWeight: 600,
-              }}
-            >
-              {diff.additions > 0 && <span style={{ color: '#89d185' }}>+{diff.additions}</span>}
-              {diff.additions > 0 && diff.deletions > 0 && <span style={{ margin: '0 4px' }} />}
-              {diff.deletions > 0 && <span style={{ color: '#ff6b6b' }}>-{diff.deletions}</span>}
-            </span>
-          )}
-        </div>
-
+    <div style={{ margin: '12px 0' }}>
+      {/* Top Row: Buttons (Right aligned) */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px', paddingRight: '4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
-            onClick={handleShowDiff}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleShowDiff(e);
+            }}
             title={t('tools.showDiffInIdea')}
             style={{
               display: 'flex',
@@ -216,6 +185,7 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
               borderRadius: '4px',
               cursor: 'pointer',
               transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'var(--bg-hover)';
@@ -230,7 +200,10 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
             {t('tools.diffButton')}
           </button>
           <button
-            onClick={handleRefreshInIdea}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRefreshInIdea(e);
+            }}
             title={t('tools.refreshFileInIdea')}
             style={{
               display: 'flex',
@@ -257,11 +230,51 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
           >
             <span className="codicon codicon-refresh" style={{ fontSize: '12px' }} />
           </button>
-          <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
         </div>
       </div>
 
-      {expanded && (
+      <div className="task-container" style={{ margin: 0 }}>
+        <div className="task-header" onClick={() => setExpanded((prev) => !prev)}>
+          <div className="task-title-section">
+            <span className="codicon codicon-edit tool-title-icon" />
+
+            <span className="tool-title-text">
+              {t('tools.editFileTitle')}
+            </span>
+            <span
+              className="tool-title-summary clickable-file"
+              onClick={handleFileClick}
+              title={t('tools.clickToOpen', { filePath })}
+              style={{ display: 'flex', alignItems: 'center' }}
+            >
+              <span 
+                style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
+                dangerouslySetInnerHTML={{ __html: getFileIconSvg(filePath) }} 
+              />
+              {getFileName(filePath) || filePath}
+            </span>
+            
+            {(diff.additions > 0 || diff.deletions > 0) && (
+              <span
+                style={{
+                  marginLeft: '12px',
+                  fontSize: '12px',
+                  fontFamily: 'var(--idea-editor-font-family, monospace)',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {diff.additions > 0 && <span style={{ color: '#89d185' }}>+{diff.additions}</span>}
+                {diff.additions > 0 && diff.deletions > 0 && <span style={{ margin: '0 4px' }} />}
+                {diff.deletions > 0 && <span style={{ color: '#ff6b6b' }}>-{diff.deletions}</span>}
+              </span>
+            )}
+          </div>
+
+          <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} style={{ flexShrink: 0, marginLeft: '8px' }} />
+        </div>
+
+        {expanded && (
         <div className="task-details" style={{ padding: 0, borderTop: '1px solid var(--border-primary)' }}>
           <div
             style={{
@@ -352,7 +365,8 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
             })}
           </div>
         </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
