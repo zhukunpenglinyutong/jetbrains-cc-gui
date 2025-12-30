@@ -964,3 +964,81 @@ export async function getSlashCommands(cwd = null) {
     }));
   }
 }
+
+/**
+ * 获取 MCP 服务器连接状态
+ * 通过 SDK 的 mcpServerStatus() 方法获取所有配置的 MCP 服务器的连接状态
+ * @param {string} cwd - 工作目录（可选）
+ */
+export async function getMcpServerStatus(cwd = null) {
+  try {
+    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
+
+    // 设置 API Key
+    setupApiKey();
+
+    // 确保 HOME 环境变量设置正确
+    if (!process.env.HOME) {
+      const os = await import('os');
+      process.env.HOME = os.homedir();
+    }
+
+    // 智能确定工作目录
+    const workingDirectory = selectWorkingDirectory(cwd);
+    try {
+      process.chdir(workingDirectory);
+    } catch (chdirError) {
+      console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
+    }
+
+    // 创建一个空的输入流
+    const inputStream = new AsyncStream();
+
+    // 调用 query 函数，使用空输入流
+    const result = query({
+      prompt: inputStream,
+      options: {
+        cwd: workingDirectory,
+        permissionMode: 'default',
+        maxTurns: 0,
+        canUseTool: async () => ({
+          behavior: 'deny',
+          message: 'Config loading only'
+        }),
+        tools: { type: 'preset', preset: 'claude_code' },
+        settingSources: ['user', 'project', 'local'],
+        stderr: (data) => {
+          if (data && data.trim()) {
+            console.log(`[SDK-STDERR] ${data.trim()}`);
+          }
+        }
+      }
+    });
+
+    // 立即关闭输入流
+    inputStream.done();
+
+    // 获取 MCP 服务器状态
+    // SDK 返回的格式是 McpServerStatus[]，包含 name, status, serverInfo
+    const mcpStatus = await result.mcpServerStatus?.() || [];
+
+    // 清理资源
+    await result.return?.();
+
+    // 输出 MCP 服务器状态
+    console.log('[MCP_SERVER_STATUS]', JSON.stringify(mcpStatus));
+
+    console.log(JSON.stringify({
+      success: true,
+      servers: mcpStatus
+    }));
+
+  } catch (error) {
+    console.error('[GET_MCP_SERVER_STATUS_ERROR]', error.message);
+    console.log(JSON.stringify({
+      success: false,
+      error: error.message,
+      servers: []
+    }));
+  }
+}

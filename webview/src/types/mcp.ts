@@ -125,6 +125,21 @@ export interface McpPreset {
 export type McpServerStatus = 'connected' | 'checking' | 'error' | 'unknown';
 
 /**
+ * MCP 服务器连接状态信息 (来自 Claude SDK)
+ */
+export interface McpServerStatusInfo {
+  /** 服务器名称 */
+  name: string;
+  /** 连接状态 */
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending';
+  /** 服务器信息 (连接成功时可用) */
+  serverInfo?: {
+    name: string;
+    version: string;
+  };
+}
+
+/**
  * MCP 服务器验证结果
  */
 export interface McpServerValidationResult {
