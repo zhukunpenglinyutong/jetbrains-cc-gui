@@ -340,6 +340,13 @@
     "added": "已添加",
     "linkCopied": "链接已复制，请到浏览器打开",
     "copyFailed": "复制失败，请手动复制",
+    "connectionStatus": "连接状态",
+    "serverVersion": "服务器版本",
+    "statusConnected": "已连接",
+    "statusFailed": "连接失败",
+    "statusNeedsAuth": "需要认证",
+    "statusPending": "连接中...",
+    "statusUnknown": "未知",
     "presets": {
       "fetch": "Web 内容获取工具，可以抓取网页内容",
       "time": "时间和时区工具",

@@ -18,6 +18,7 @@ public class McpServerHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
         "get_mcp_servers",
+        "get_mcp_server_status",
         "add_mcp_server",
         "update_mcp_server",
         "delete_mcp_server",
@@ -38,6 +39,9 @@ public class McpServerHandler extends BaseMessageHandler {
         switch (type) {
             case "get_mcp_servers":
                 handleGetMcpServers();
+                return true;
+            case "get_mcp_server_status":
+                handleGetMcpServerStatus();
                 return true;
             case "add_mcp_server":
                 handleAddMcpServer(content);
@@ -70,6 +74,38 @@ public class McpServerHandler extends BaseMessageHandler {
             });
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to get MCP servers: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取 MCP 服务器连接状态.
+     * 通过 Claude SDK 获取实时的 MCP 服务器连接状态
+     */
+    private void handleGetMcpServerStatus() {
+        try {
+            String cwd = context.getProject() != null
+                ? context.getProject().getBasePath()
+                : null;
+
+            context.getClaudeSDKBridge().getMcpServerStatus(cwd)
+                .thenAccept(statusList -> {
+                    Gson gson = new Gson();
+                    String statusJson = gson.toJson(statusList);
+
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.updateMcpServerStatus", escapeJs(statusJson));
+                    });
+                })
+                .exceptionally(e -> {
+                    LOG.error("[McpServerHandler] Failed to get MCP server status: "
+                        + e.getMessage(), e);
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.updateMcpServerStatus", escapeJs("[]"));
+                    });
+                    return null;
+                });
+        } catch (Exception e) {
+            LOG.error("[McpServerHandler] Failed to get MCP server status: " + e.getMessage(), e);
         }
     }
 
