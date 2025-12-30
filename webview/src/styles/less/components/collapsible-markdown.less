@@ -1,0 +1,52 @@
+.collapsible-block {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    
+    .collapsible-content {
+        transition: max-height 0.3s ease-out;
+        position: relative;
+    }
+
+    .collapse-overlay {
+        position: absolute;
+        bottom: 0;
+        left: -14px; /* Negate padding from .message.user .message-content */
+        width: calc(100% + 28px);
+        height: 60px; /* Increased gradient height for smoother fade */
+        background: linear-gradient(to bottom, rgba(0, 95, 184, 0), var(--color-message-user-bg));
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .collapse-toggle {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 2px 0;
+        margin-left: -14px; /* Negate padding */
+        margin-right: -14px;
+        margin-bottom: -10px;
+        margin-top: 0; 
+        width: calc(100% + 28px);
+        
+        cursor: pointer;
+        background: rgba(0, 0, 0, 0.1);
+        
+        /* Match bubble border radius */
+        border-bottom-right-radius: 2px;
+        border-bottom-left-radius: 12px;
+        
+        color: rgba(255, 255, 255, 0.8);
+        transition: background 0.2s;
+        height: 20px; 
+        
+        &:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        .codicon {
+            font-size: 14px;
+        }
+    }
+}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './components/MarkdownBlock';
+import CollapsibleMarkdownBlock from './components/CollapsibleMarkdownBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
 import ConfirmDialog from './components/ConfirmDialog';
@@ -1439,7 +1440,13 @@ const App = () => {
                   ) : (
                     getContentBlocks(message).map((block, blockIndex) => (
                       <div key={`${messageIndex}-${blockIndex}`} className="content-block">
-                        {block.type === 'text' && <MarkdownBlock content={block.text ?? ''} />}
+                        {block.type === 'text' && (
+                          message.type === 'user' ? (
+                            <CollapsibleMarkdownBlock content={block.text ?? ''} />
+                          ) : (
+                            <MarkdownBlock content={block.text ?? ''} />
+                          )
+                        )}
                         {block.type === 'image' && block.src && (
                           <div
                             className={`message-image-block ${message.type === 'user' ? 'user-image' : ''}`}
