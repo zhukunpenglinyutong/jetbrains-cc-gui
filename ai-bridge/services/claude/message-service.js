@@ -82,18 +82,13 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 		      ? 'Claude Code 运行被中断（可能是响应超时或用户取消）：'
 		      : 'Claude Code 出现错误：';
 		
-		    const tailLine = isAbortError
-		      ? '提示：如果你没有手动中断请求，这通常是由于响应超时、网络问题或后端服务异常导致的。你也可以检查 ~/.claude/settings.json 中的配置是否正确。'
-		      : '请检查 ~/.claude/settings.json 或插件设置中的 Claude Code 配置，确认 API Key 与 Base URL 是否正确。';
-		
 		    const userMessage = [
 	      heading,
 	      `- 错误信息: ${rawError}`,
 	      `- 当前 API Key 来源: ${keySource}`,
 	      `- 当前 API Key 预览: ${keyPreview}`,
 	      `- 当前 Base URL: ${baseUrl}（来源: ${baseUrlSource}）`,
-	      '',
-	      tailLine
+	      ''
 	    ].join('\n');
 
 	    return {
