@@ -334,7 +334,7 @@
 }
 
 .info-value.command {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     font-size: 12px;
     padding: 4px 8px;
     border-radius: 4px;
@@ -633,7 +633,7 @@
 }
 
 .line-num {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     font-size: 12px;
     line-height: 1.6;
     color: var(--vscode-editorLineNumber-foreground, var(--text-tertiary));
@@ -648,7 +648,7 @@
     border: none;
     background: transparent;
     color: var(--vscode-input-foreground, var(--text-primary));
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     font-size: 12px;
     line-height: 1.6;
     resize: none;
@@ -957,7 +957,7 @@
     padding: 2px 6px;
     background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.1));
     border-radius: 3px;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     font-size: 11px;
     color: var(--vscode-textPreformat-foreground, var(--text-primary));
 }

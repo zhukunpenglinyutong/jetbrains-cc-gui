@@ -80,7 +80,7 @@
     background: #1e1e1e;
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: var(--idea-editor-font-family, monospace);
 }
 
 .permission-dialog-value.tool-name {
@@ -107,14 +107,14 @@
     color: #9cdcfe;
     font-weight: 600;
     margin-right: 8px;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: var(--idea-editor-font-family, monospace);
 }
 
 .permission-dialog-param .param-value {
     color: #ce9178;
     word-break: break-all;
     white-space: pre-wrap;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: var(--idea-editor-font-family, monospace);
 }
 
 .permission-dialog-remember {
@@ -270,14 +270,14 @@
     color: #9cdcfe;
     font-weight: 600;
     margin-right: 6px;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: var(--idea-editor-font-family, monospace);
 }
 
 .permission-dialog-v2-param .param-value {
     color: #ce9178;
     word-break: break-all;
     white-space: pre-wrap;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: var(--idea-editor-font-family, monospace);
 }
 
 .permission-dialog-v2-options {
@@ -393,7 +393,7 @@
 }
 
 .permission-dialog-v3-command-header .command-path {
-    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     font-size: 12px;
     color: #e0e0e0;
     flex: 1;
@@ -440,7 +440,7 @@
 
 .permission-dialog-v3-command-content pre {
     margin: 0;
-    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     font-size: 12px;
     line-height: 1.5;
     color: #c084fc;

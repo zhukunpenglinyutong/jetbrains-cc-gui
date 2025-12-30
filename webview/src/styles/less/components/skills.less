@@ -140,7 +140,7 @@
 
 /* 路径显示样式 */
 .info-value.path {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     font-size: 12px;
     padding: 4px 8px;
     border-radius: 4px;
@@ -406,7 +406,7 @@
 }
 
 .skill-dialog .code-block {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     font-size: 12px;
     padding: 12px;
     border-radius: 6px;
@@ -724,7 +724,7 @@
 .skill-card .skill-path {
     font-size: 12px;
     color: var(--text-tertiary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-family: var(--idea-editor-font-family, monospace);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

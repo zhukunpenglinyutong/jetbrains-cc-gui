@@ -36,6 +36,7 @@ import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.cache.SlashCommandCache;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -50,6 +51,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Claude SDK 聊天工具窗口
@@ -59,6 +65,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     private static final Logger LOG = Logger.getInstance(ClaudeSDKToolWindow.class);
     private static final Map<Project, ClaudeChatWindow> instances = new ConcurrentHashMap<>();
+    private static volatile boolean shutdownHookRegistered = false;
 
     /**
      * 获取指定项目的聊天窗口实例.
@@ -72,6 +79,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
+        // 注册 JVM Shutdown Hook（只注册一次）
+        registerShutdownHook();
+
         ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(chatWindow.getContent(), "GUI", false);
@@ -83,6 +93,53 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 window.dispose();
             }
         });
+    }
+
+    /**
+     * 注册 JVM Shutdown Hook，确保在 IDEA 关闭时清理所有 Node.js 进程
+     * 这是最后的保底机制，即使 dispose() 未被正常调用也能清理进程
+     */
+    private static synchronized void registerShutdownHook() {
+        if (shutdownHookRegistered) {
+            return;
+        }
+        shutdownHookRegistered = true;
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOG.info("[ShutdownHook] IDEA 正在关闭，清理所有 Node.js 进程...");
+
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                Future<?> future = executor.submit(() -> {
+                    // 复制实例列表，避免并发修改
+                    for (ClaudeChatWindow window : new java.util.ArrayList<>(instances.values())) {
+                        try {
+                            if (window != null && window.claudeSDKBridge != null) {
+                                window.claudeSDKBridge.cleanupAllProcesses();
+                            }
+                            if (window != null && window.codexSDKBridge != null) {
+                                window.codexSDKBridge.cleanupAllProcesses();
+                            }
+                        } catch (Exception e) {
+                            // Shutdown hook 中不要抛出异常
+                            LOG.error("[ShutdownHook] 清理进程时出错: " + e.getMessage());
+                        }
+                    }
+                });
+
+                // 最多等待3秒
+                future.get(3, TimeUnit.SECONDS);
+                LOG.info("[ShutdownHook] Node.js 进程清理完成");
+            } catch (TimeoutException e) {
+                LOG.warn("[ShutdownHook] 清理进程超时(3秒)，强制退出");
+            } catch (Exception e) {
+                LOG.error("[ShutdownHook] 清理进程失败: " + e.getMessage());
+            } finally {
+                executor.shutdownNow();
+            }
+        }, "Claude-Process-Cleanup-Hook"));
+
+        LOG.info("[ShutdownHook] JVM Shutdown Hook 已注册");
     }
 
     public static void addSelectionFromExternal(Project project, String selectionInfo) {
@@ -465,6 +522,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             "  window.sendToJava(JSON.stringify({type: 'console.warn', args: args}));" +
                             "};";
                         cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
+
+                        // 传递 IDEA 编辑器字体配置到前端
+                        String fontConfig = FontConfigService.getEditorFontConfigJson();
+                        LOG.info("[FontSync] 获取到的字体配置: " + fontConfig);
+                        String fontConfigInjection = String.format(
+                            "if (window.applyIdeaFontConfig) { window.applyIdeaFontConfig(%s); } " +
+                            "else { window.__pendingFontConfig = %s; }",
+                            fontConfig, fontConfig
+                        );
+                        cefBrowser.executeJavaScript(fontConfigInjection, cefBrowser.getURL(), 0);
+                        LOG.info("[FontSync] 字体配置已注入到前端");
 
                         // 斜杠命令的加载现在由前端发起，通过 frontend_ready 事件触发
                         // 不再在 onLoadEnd 中主动调用，避免时序问题
@@ -1233,6 +1301,31 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 if (session != null) session.interrupt();
             } catch (Exception e) {
                 LOG.warn("清理会话失败: " + e.getMessage());
+            }
+
+            // 清理所有活跃的 Node.js 子进程
+            try {
+                if (claudeSDKBridge != null) {
+                    int activeCount = claudeSDKBridge.getActiveProcessCount();
+                    if (activeCount > 0) {
+                        LOG.info("正在清理 " + activeCount + " 个活跃的 Claude 进程...");
+                    }
+                    claudeSDKBridge.cleanupAllProcesses();
+                }
+            } catch (Exception e) {
+                LOG.warn("清理 Claude 进程失败: " + e.getMessage());
+            }
+
+            try {
+                if (codexSDKBridge != null) {
+                    int activeCount = codexSDKBridge.getActiveProcessCount();
+                    if (activeCount > 0) {
+                        LOG.info("正在清理 " + activeCount + " 个活跃的 Codex 进程...");
+                    }
+                    codexSDKBridge.cleanupAllProcesses();
+                }
+            } catch (Exception e) {
+                LOG.warn("清理 Codex 进程失败: " + e.getMessage());
             }
 
             try {

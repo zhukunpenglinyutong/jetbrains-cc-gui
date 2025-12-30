@@ -130,7 +130,7 @@
     border: 1px solid var(--border-primary);
     border-radius: 6px;
     padding: 10px 12px;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     font-size: 13px;
     color: var(--text-primary);
     white-space: pre-wrap;
@@ -139,7 +139,7 @@
 
 .bash-output-block {
     margin-top: 8px;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     font-size: 12px;
     white-space: pre-wrap;
     display: flex;

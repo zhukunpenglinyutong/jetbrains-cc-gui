@@ -153,7 +153,7 @@
     background: var(--bg-primary);
     padding: 4px 8px;
     border-radius: 4px;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     font-size: 12px;
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
@@ -280,5 +280,5 @@
     background: var(--bg-tertiary);
     color: var(--text-primary);
     font-size: 13px;
-    font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    font-family: var(--idea-editor-font-family, monospace);
 }

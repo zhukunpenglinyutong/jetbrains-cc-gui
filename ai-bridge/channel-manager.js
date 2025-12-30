@@ -22,24 +22,53 @@
  * - 消息和其他参数通过 stdin 以 JSON 格式传递
  */
 
+// 启动诊断日志（帮助排查 exit code 1 问题）
+console.log('[STARTUP] channel-manager.js 开始加载...');
+console.log('[STARTUP] Node.js 版本:', process.version);
+console.log('[STARTUP] 当前工作目录:', process.cwd());
+console.log('[STARTUP] HOME 环境变量:', process.env.HOME || process.env.USERPROFILE || '未设置');
+
 // 共用工具
 import { readStdinData } from './utils/stdin-utils.js';
 
 // Claude 服务
-import {
-  sendMessage as claudeSendMessage,
-  sendMessageWithAttachments as claudeSendMessageWithAttachments,
-  getSlashCommands as claudeGetSlashCommands
-} from './services/claude/message-service.js';
-import { getSessionMessages as claudeGetSessionMessages } from './services/claude/session-service.js';
+console.log('[STARTUP] 正在加载 Claude 服务模块...');
+let claudeSendMessage, claudeSendMessageWithAttachments, claudeGetSlashCommands, claudeGetSessionMessages;
+try {
+  const messageService = await import('./services/claude/message-service.js');
+  claudeSendMessage = messageService.sendMessage;
+  claudeSendMessageWithAttachments = messageService.sendMessageWithAttachments;
+  claudeGetSlashCommands = messageService.getSlashCommands;
+  console.log('[STARTUP] message-service.js 加载成功');
+
+  const sessionService = await import('./services/claude/session-service.js');
+  claudeGetSessionMessages = sessionService.getSessionMessages;
+  console.log('[STARTUP] session-service.js 加载成功');
+} catch (importError) {
+  console.error('[STARTUP_ERROR] 模块加载失败:', importError.message);
+  console.error('[STARTUP_ERROR] 错误类型:', importError.name);
+  if (importError.code === 'ERR_MODULE_NOT_FOUND') {
+    console.error('[STARTUP_ERROR] 可能原因: node_modules 未安装或依赖缺失');
+    console.error('[STARTUP_ERROR] 请在 ai-bridge 目录运行: npm install');
+  }
+  console.log(JSON.stringify({
+    success: false,
+    error: '模块加载失败: ' + importError.message
+  }));
+  process.exit(1);
+}
 
 // Codex 服务 (暂时禁用 - SDK 已卸载)
 // import { sendMessage as codexSendMessage } from './services/codex/message-service.js';
+
+// 启动成功标记
+console.log('[STARTUP] 所有模块加载完成');
 
 // 命令行参数解析
 const provider = process.argv[2];
 const command = process.argv[3];
 const args = process.argv.slice(4);
+console.log('[STARTUP] 命令参数: provider=' + provider + ', command=' + command);
 
 // 错误处理
 process.on('uncaughtException', (error) => {

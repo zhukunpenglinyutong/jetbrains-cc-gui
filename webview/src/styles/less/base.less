@@ -4,6 +4,14 @@
     box-sizing: border-box;
 }
 
+/* IDEA 编辑器字体变量（由 Java 端动态注入） */
+:root {
+    /* 默认值，会被 Java 端的 applyIdeaFontConfig 覆盖 */
+    --idea-editor-font-family: 'JetBrains Mono', 'Consolas', monospace;
+    --idea-editor-font-size: 14px;
+    --idea-editor-line-spacing: 1.5;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background: var(--bg-primary);
@@ -58,4 +66,17 @@ html {
 
 *::-webkit-scrollbar-corner {
     background: transparent !important;
+}
+
+/* 全局字体覆盖 - 让整个插件都使用 IDEA 编辑器字体 */
+* {
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace) !important;
+}
+
+/* 保护字体图标 - 确保 codicon 图标正常显示 */
+.codicon,
+.codicon[class*='codicon-'],
+[class*='codicon-']::before,
+[class*='codicon-']::after {
+    font-family: 'codicon' !important;
 }
