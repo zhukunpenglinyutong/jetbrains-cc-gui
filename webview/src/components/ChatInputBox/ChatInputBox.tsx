@@ -157,28 +157,8 @@ export const ChatInputBox = ({
     // 从 DOM 中提取纯文本，包括文件标签的原始引用格式
     let text = '';
 
-    // 优化：使用 TreeWalker 替代递归，性能更好
-    const walker = document.createTreeWalker(
-      editableRef.current,
-      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-      {
-        acceptNode: (node) => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            return NodeFilter.FILTER_ACCEPT;
-          }
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node as HTMLElement;
-            if (element.classList.contains('file-tag')) {
-              return NodeFilter.FILTER_ACCEPT;
-            }
-          }
-          return NodeFilter.FILTER_SKIP;
-        }
-      }
-    );
-
-    let node: Node | null;
-    while ((node = walker.nextNode())) {
+    // 使用递归遍历，但遇到 file-tag 时只读取 data-file-path 并不再深入
+    const walk = (node: Node) => {
       if (node.nodeType === Node.TEXT_NODE) {
         text += node.textContent || '';
       } else if (node.nodeType === Node.ELEMENT_NODE) {
@@ -186,9 +166,15 @@ export const ChatInputBox = ({
         if (element.classList.contains('file-tag')) {
           const filePath = element.getAttribute('data-file-path') || '';
           text += `@${filePath}`;
+          // 不遍历 file-tag 的子节点，避免重复读取文件名和关闭按钮文本
+        } else {
+          // 继续遍历子节点
+          node.childNodes.forEach(walk);
         }
       }
-    }
+    };
+
+    editableRef.current.childNodes.forEach(walk);
 
     // 去除末尾的换行符（\n, \r, \r\n）
     return text.replace(/[\r\n]+$/, '');
@@ -1235,8 +1221,8 @@ export const ChatInputBox = ({
 
     // 没有图片文件，处理文本（文件路径或其他文本）
     if (text && text.trim()) {
-      // 自动添加 @ 前缀（如果还没有）
-      const textToInsert = text.startsWith('@') ? text : `@${text}`;
+      // 自动添加 @ 前缀（如果还没有），并添加空格以触发渲染
+      const textToInsert = (text.startsWith('@') ? text : `@${text}`) + ' ';
 
       // 获取当前光标位置
       const selection = window.getSelection();
@@ -1355,8 +1341,8 @@ export const ChatInputBox = ({
     (window as any).handleFilePathFromJava = (filePath: string) => {
       if (!editableRef.current) return;
 
-      // 插入文件路径到输入框（自动添加 @ 前缀）
-      const pathToInsert = filePath.startsWith('@') ? filePath : `@${filePath}`;
+      // 插入文件路径到输入框（自动添加 @ 前缀），并添加空格以触发渲染
+      const pathToInsert = (filePath.startsWith('@') ? filePath : `@${filePath}`) + ' ';
 
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
