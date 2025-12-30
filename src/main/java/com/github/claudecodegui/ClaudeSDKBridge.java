@@ -590,8 +590,9 @@ public class ClaudeSDKBridge {
                     LOG.info("[ClaudeSDKBridge] Node.js 进程已启动，PID: " + process.pid());
 
                     // 短暂等待检查进程是否立即退出（通常表示启动失败）
+                    // 增加等待时间到 500ms，确保能捕获模块加载阶段的错误
                     try {
-                        Thread.sleep(100);
+                        Thread.sleep(500);
                         if (!process.isAlive()) {
                             int earlyExitCode = process.exitValue();
                             LOG.error("[ClaudeSDKBridge] 进程启动后立即退出，exitCode: " + earlyExitCode);
@@ -599,12 +600,23 @@ public class ClaudeSDKBridge {
                             try (BufferedReader earlyReader = new BufferedReader(
                                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                                 StringBuilder earlyOutput = new StringBuilder();
+                                StringBuilder errorDetails = new StringBuilder();
                                 String line;
                                 while ((line = earlyReader.readLine()) != null) {
                                     earlyOutput.append(line).append("\n");
                                     LOG.error("[ClaudeSDKBridge] 进程输出: " + line);
+                                    // 特别关注错误标记行
+                                    if (line.startsWith("[STARTUP_ERROR]")
+                                            || line.startsWith("[UNCAUGHT_ERROR]")
+                                            || line.startsWith("[UNHANDLED_REJECTION]")
+                                            || line.startsWith("[COMMAND_ERROR]")) {
+                                        errorDetails.append(line).append("\n");
+                                    }
                                 }
-                                if (earlyOutput.length() > 0) {
+                                // 优先使用具体错误信息，否则使用全部输出
+                                if (errorDetails.length() > 0) {
+                                    lastNodeError[0] = errorDetails.toString().trim();
+                                } else if (earlyOutput.length() > 0) {
                                     lastNodeError[0] = earlyOutput.toString().trim();
                                 }
                             }
@@ -656,7 +668,13 @@ public class ClaudeSDKBridge {
                                 // 先捕获并输出 Node.js 侧的错误日志，便于在 IDE 日志中直接看到具体原因
                                 if (line.startsWith("[UNCAUGHT_ERROR]")
                                         || line.startsWith("[UNHANDLED_REJECTION]")
-                                        || line.startsWith("[COMMAND_ERROR]")) {
+                                        || line.startsWith("[COMMAND_ERROR]")
+                                        || line.startsWith("[STARTUP_ERROR]")
+                                        || line.startsWith("[ERROR]")
+                                        || line.startsWith("[STDIN_ERROR]")
+                                        || line.startsWith("[STDIN_PARSE_ERROR]")
+                                        || line.startsWith("[GET_SESSION_ERROR]")
+                                        || line.startsWith("[PERSIST_ERROR]")) {
                                     LOG.warn("[Node.js ERROR] " + line);
                                     lastNodeError[0] = line;
                                 }
