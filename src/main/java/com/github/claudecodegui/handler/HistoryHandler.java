@@ -218,6 +218,10 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] 主会话文件: " + (mainDeleted ? "已删除" : "未找到"));
                 LOG.info("[HistoryHandler] Agent 文件: 删除了 " + agentFilesDeleted + " 个");
 
+                // 删除完成后，重新加载历史数据并推送给前端
+                LOG.info("[HistoryHandler] 重新加载历史数据...");
+                handleLoadHistoryData();
+
             } catch (Exception e) {
                 LOG.error("[HistoryHandler] ❌ 删除会话失败: " + e.getMessage(), e);
             }

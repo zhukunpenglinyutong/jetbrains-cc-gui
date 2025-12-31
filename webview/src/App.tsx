@@ -76,6 +76,7 @@ const App = () => {
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // 权限弹窗状态
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
@@ -233,6 +234,22 @@ const App = () => {
       console.error('Failed to save model selection state:', error);
     }
   }, [currentProvider, selectedClaudeModel, selectedCodexModel]);
+
+  // 检查当前会话是否还存在（防止显示已删除的会话）
+  useEffect(() => {
+    if (currentView === 'chat' && historyData?.sessions) {
+      // 如果有消息但没有有效的会话ID，或者会话ID对应的会话不存在，清空界面
+      if (messages.length > 0) {
+        if (!currentSessionId || !historyData.sessions.some(s => s.sessionId === currentSessionId)) {
+          console.log('[App] 当前会话已被删除或无效，清空聊天界面');
+          setMessages([]);
+          setCurrentSessionId(null);
+          setUsagePercentage(0);
+          setUsageUsedTokens(0);
+        }
+      }
+    }
+  }, [currentView, currentSessionId, historyData, messages.length]);
 
   // Toast helper functions
   const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
@@ -799,7 +816,7 @@ const App = () => {
     setShowNewSessionConfirm(false);
     sendBridgeMessage('create_new_session');
     setMessages([]);
-    // 移除通知：正在创建新会话...
+    setCurrentSessionId(null);
     // 重置使用量显示为 0%
     setUsagePercentage(0);
     setUsageUsedTokens(0);
@@ -818,6 +835,7 @@ const App = () => {
     // 直接创建新会话，不再弹出第二个确认框
     sendBridgeMessage('create_new_session');
     setMessages([]);
+    setCurrentSessionId(null);
     setUsagePercentage(0);
     setUsageUsedTokens(0);
     setUsageMaxTokens((prev) => prev ?? 272000);
@@ -897,6 +915,7 @@ const App = () => {
 
   const loadHistorySession = (sessionId: string) => {
     sendBridgeMessage('load_session', sessionId);
+    setCurrentSessionId(sessionId);
     setCurrentView('chat');
   };
 
@@ -916,6 +935,15 @@ const App = () => {
         sessions: updatedSessions,
         total: updatedTotal
       });
+
+      // 如果删除的是当前会话，清空消息并重置状态
+      if (sessionId === currentSessionId) {
+        setMessages([]);
+        setCurrentSessionId(null);
+        setUsagePercentage(0);
+        setUsageUsedTokens(0);
+        sendBridgeMessage('create_new_session');
+      }
 
       // 显示成功提示
       addToast('会话已删除', 'success');
