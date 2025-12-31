@@ -523,7 +523,7 @@
   gap: 4px;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .button-area-right {
