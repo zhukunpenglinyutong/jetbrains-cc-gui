@@ -363,18 +363,64 @@ public class ClaudeSession {
             ReadAction
                 .nonBlocking(() -> {
                     try {
-                        // 在后台线程中获取当前打开的文件信息（这是读操作，不会修改数据）
+                        /*
+                         * ========== 编辑器上下文信息采集 ==========
+                         *
+                         * 此处采集用户在 IDEA 编辑器中的工作环境信息，用于帮助 AI 理解用户当前的代码上下文。
+                         * 这些信息会被构建成 JSON 格式，最终附加到发送给 AI 的系统提示词中。
+                         *
+                         * 采集的信息按优先级分为三层：
+                         * 1. active (当前激活的文件) - 优先级最高，AI 的主要关注点
+                         * 2. selection (用户选中的代码) - 如果存在，则是 AI 应该重点分析的核心对象
+                         * 3. others (其他打开的文件) - 优先级最低，作为潜在的上下文参考
+                         *
+                         * 注意：这是只读操作，不会修改任何数据
+                         */
+
                         String activeFile = EditorFileUtils.getCurrentActiveFile(project);
                         List<String> allOpenedFiles = EditorFileUtils.getOpenedFiles(project);
                         Map<String, Object> selectionInfo = EditorFileUtils.getSelectedCodeInfo(project);
 
-                        // 构建 openedFiles 对象，区分激活文件和其他文件
+                        /*
+                         * ========== 构建上下文 JSON 对象 ==========
+                         *
+                         * JSON 结构说明：
+                         * {
+                         *   "active": "文件路径",           // 用户当前正在查看的文件（主要焦点）
+                         *   "selection": {                 // 用户选中的代码（核心分析对象）
+                         *     "startLine": 起始行号,
+                         *     "endLine": 结束行号,
+                         *     "selectedText": "选中的代码内容"
+                         *   },
+                         *   "others": ["文件1", "文件2"]   // 其他打开的文件（次要参考）
+                         * }
+                         *
+                         * 这个 JSON 对象会被传递到 Node.js 层（message-service.js），
+                         * 然后被转换为系统提示词的一部分，格式如下：
+                         *
+                         * ## Currently Open Files in IDE
+                         * **Currently Active File** (primary focus):
+                         * - /path/to/file.java#L20-24
+                         *
+                         * **Selected Code** (this is what the user is specifically asking about):
+                         * ```java
+                         * 用户选中的代码内容
+                         * ```
+                         * This selected code is the PRIMARY FOCUS.
+                         *
+                         * **Other Open Files** (potentially relevant):
+                         * - /path/to/other1.java
+                         * - /path/to/other2.java
+                         */
                         JsonObject openedFilesJson = new JsonObject();
+
                         if (activeFile != null) {
+                            // 添加当前激活的文件路径
                             openedFilesJson.addProperty("active", activeFile);
                             LOG.debug("Current active file: " + activeFile);
 
-                            // 如果有选中的代码，添加选中信息
+                            // 如果用户选中了代码，添加选中信息
+                            // 这是最重要的上下文信息，AI 应该将其作为主要分析目标
                             if (selectionInfo != null) {
                                 JsonObject selectionJson = new JsonObject();
                                 selectionJson.addProperty("startLine", (Integer) selectionInfo.get("startLine"));
@@ -386,7 +432,8 @@ public class ClaudeSession {
                             }
                         }
 
-                        // 其他打开的文件（排除激活文件）
+                        // 添加其他打开的文件（排除激活文件，避免重复）
+                        // 这些文件可能与用户的问题相关，但不是主要焦点
                         JsonArray othersArray = new JsonArray();
                         for (String file : allOpenedFiles) {
                             if (!file.equals(activeFile)) {

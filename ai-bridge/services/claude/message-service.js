@@ -14,6 +14,7 @@ import { AsyncStream } from '../../utils/async-stream.js';
 import { canUseTool } from '../../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
+import { buildIDEContextPrompt } from '../system-prompts.js';
 
 /**
  * 发送消息（支持会话恢复）
@@ -167,53 +168,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[DEBUG] Model mapping:', model, '->', sdkModelName);
 
 	    // Build systemPrompt.append content (for adding opened files context)
-	    let systemPromptAppend = '';
-	    if (openedFiles && typeof openedFiles === 'object') {
-	      const { active, selection, others } = openedFiles;
-	      const hasActive = active && active.trim() !== '';
-	      const hasSelection = selection && selection.selectedText;
-	      const hasOthers = Array.isArray(others) && others.length > 0;
-
-	      if (hasActive || hasOthers) {
-	        console.log('[DEBUG] Building systemPrompt.append with active file:', active,
-	                    'selection:', hasSelection ? 'yes' : 'no',
-	                    'other files:', others?.length || 0);
-	        systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
-	        systemPromptAppend += 'Note: File paths may include line references in format `#LX-Y` (lines X to Y) or `#LX` (single line X).\n\n';
-
-	        if (hasActive) {
-	          systemPromptAppend += '**Currently Active File** (primary focus):\n';
-	          systemPromptAppend += `- ${active}`;
-
-	          // If there's a code selection, highlight it
-	          if (hasSelection) {
-	            systemPromptAppend += ` (lines ${selection.startLine}-${selection.endLine} selected)\n\n`;
-	            systemPromptAppend += '**Selected Code** (this is what the user is specifically asking about):\n';
-	            systemPromptAppend += '```\n';
-	            systemPromptAppend += selection.selectedText;
-	            systemPromptAppend += '\n```\n\n';
-	            systemPromptAppend += 'This selected code is the PRIMARY FOCUS. The user\'s question is most likely about this specific code section.\n';
-	          } else {
-	            systemPromptAppend += '\n\n';
-	            systemPromptAppend += 'This is the file the user is currently viewing/editing. It should be the main focus when answering questions.\n';
-	          }
-	        }
-
-	        if (hasOthers) {
-	          if (hasActive) {
-	            systemPromptAppend += '\n**Other Open Files** (potentially relevant):\n';
-	          } else {
-	            systemPromptAppend += 'User has the following files open:\n';
-	          }
-	          others.forEach(file => {
-	            systemPromptAppend += `- ${file}\n`;
-	          });
-	          if (hasActive && !hasSelection) {
-	            systemPromptAppend += '\nThese files may be related to the question, but are not the primary focus.';
-	          }
-	        }
-	      }
-	    }
+	    // 使用统一的提示词管理模块构建 IDE 上下文提示词
+	    const systemPromptAppend = buildIDEContextPrompt(openedFiles);
 
 	    // 准备选项
 	    // 注意：不再传递 pathToClaudeCodeExecutable，让 SDK 自动使用内置 cli.js
@@ -621,53 +577,8 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     const openedFiles = stdinData?.openedFiles || null;
 
     // Build systemPrompt.append content (for adding opened files context)
-    let systemPromptAppend = '';
-    if (openedFiles && typeof openedFiles === 'object') {
-      const { active, selection, others } = openedFiles;
-      const hasActive = active && active.trim() !== '';
-      const hasSelection = selection && selection.selectedText;
-      const hasOthers = Array.isArray(others) && others.length > 0;
-
-      if (hasActive || hasOthers) {
-        console.log('[DEBUG] (withAttachments) Building systemPrompt.append with active file:', active,
-                    'selection:', hasSelection ? 'yes' : 'no',
-                    'other files:', others?.length || 0);
-        systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
-        systemPromptAppend += 'Note: File paths may include line references in format `#LX-Y` (lines X to Y) or `#LX` (single line X).\n\n';
-
-        if (hasActive) {
-          systemPromptAppend += '**Currently Active File** (primary focus):\n';
-          systemPromptAppend += `- ${active}`;
-
-          // If there's a code selection, highlight it
-          if (hasSelection) {
-            systemPromptAppend += ` (lines ${selection.startLine}-${selection.endLine} selected)\n\n`;
-            systemPromptAppend += '**Selected Code** (this is what the user is specifically asking about):\n';
-            systemPromptAppend += '```\n';
-            systemPromptAppend += selection.selectedText;
-            systemPromptAppend += '\n```\n\n';
-            systemPromptAppend += 'This selected code is the PRIMARY FOCUS. The user\'s question is most likely about this specific code section.\n';
-          } else {
-            systemPromptAppend += '\n\n';
-            systemPromptAppend += 'This is the file the user is currently viewing/editing. It should be the main focus when answering questions.\n';
-          }
-        }
-
-        if (hasOthers) {
-          if (hasActive) {
-            systemPromptAppend += '\n**Other Open Files** (potentially relevant):\n';
-          } else {
-            systemPromptAppend += 'User has the following files open:\n';
-          }
-          others.forEach(file => {
-            systemPromptAppend += `- ${file}\n`;
-          });
-          if (hasActive && !hasSelection) {
-            systemPromptAppend += '\nThese files may be related to the question, but are not the primary focus.';
-          }
-        }
-      }
-    }
+    // 使用统一的提示词管理模块构建 IDE 上下文提示词
+    const systemPromptAppend = buildIDEContextPrompt(openedFiles);
 
     // 构建用户消息内容块
     const contentBlocks = buildContentBlocks(attachments, message);
