@@ -12,7 +12,7 @@ interface ToastProps {
   duration?: number;
 }
 
-const Toast: React.FC<ToastProps> = ({ message, onDismiss, duration = 3000 }) => {
+const Toast: React.FC<ToastProps> = ({ message, onDismiss, duration = 1000 }) => {
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
