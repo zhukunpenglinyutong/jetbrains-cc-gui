@@ -85,6 +85,10 @@
         "level4": "Más grande (110%)",
         "level5": "Grande (120%)",
         "level6": "Máximo (140%)"
+      },
+      "editorFont": {
+        "label": "Fuente (sigue la fuente del editor)",
+        "hint": "No editable aquí. Para modificar, ve a Configuración de IDEA → Editor → Fuente (reinicia IDEA para que la fuente del plugin surta efecto)"
       }
     },
     "providers": "Gestión de proveedores",

@@ -234,4 +234,9 @@ interface Window {
    * Update enhanced prompt result (for prompt enhancer feature)
    */
   updateEnhancedPrompt?: (result: string) => void;
+
+  /**
+   * Editor font config received callback - 接收 IDEA 编辑器字体配置
+   */
+  onEditorFontConfigReceived?: (json: string) => void;
 }

@@ -90,6 +90,10 @@
         "level4": "Larger (110%)",
         "level5": "Large (120%)",
         "level6": "Largest (140%)"
+      },
+      "editorFont": {
+        "label": "Font (follows editor font)",
+        "hint": "Not editable here. To modify, go to IDEA Settings → Editor → Font (restart IDEA for plugin font to take effect)"
       }
     },
     "providers": "Provider Management",
