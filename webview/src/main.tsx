@@ -6,12 +6,21 @@ import './i18n/config';
 import { setupSlashCommandsCallback } from './components/ChatInputBox/providers/slashCommandProvider';
 import { sendBridgeEvent } from './utils/bridge';
 
+// vConsole 调试工具
 const enableVConsole =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_VCONSOLE === 'true';
 
 if (enableVConsole) {
   void import('vconsole').then(({ default: VConsole }) => {
     new VConsole();
+    // 将 vConsole 按钮移到左下角，避免遮挡右下角的发送按钮
+    setTimeout(() => {
+      const vcSwitch = document.getElementById('__vconsole') as HTMLElement;
+      if (vcSwitch) {
+        vcSwitch.style.left = '10px';
+        vcSwitch.style.right = 'auto';
+      }
+    }, 100);
   });
 }
 

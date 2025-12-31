@@ -370,6 +370,8 @@ export interface ButtonAreaProps {
   hasInputContent?: boolean;
   /** 是否在对话中 */
   isLoading?: boolean;
+  /** 是否正在增强提示词 */
+  isEnhancing?: boolean;
   /** 当前模型 */
   selectedModel?: string;
   /** 当前模式 */
@@ -383,6 +385,8 @@ export interface ButtonAreaProps {
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;
+  /** 增强提示词回调 */
+  onEnhancePrompt?: () => void;
   /** 是否开启始终思考 */
   alwaysThinkingEnabled?: boolean;
   /** 切换思考模式 */
