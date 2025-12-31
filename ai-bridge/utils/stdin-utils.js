@@ -21,20 +21,30 @@ export async function readStdinData(provider = 'claude') {
 
     stdin.setEncoding('utf8');
 
+    // 清理函数：移除所有监听器并停止读取
+    const cleanup = () => {
+      stdin.removeListener('readable', onReadable);
+      stdin.removeListener('end', onEnd);
+      stdin.removeListener('error', onError);
+      stdin.pause();
+    };
+
     // 设置超时，避免无限等待
     const timeout = setTimeout(() => {
+      cleanup();
       resolve(null);
     }, 5000);
 
-    stdin.on('readable', () => {
+    const onReadable = () => {
       let chunk;
       while ((chunk = stdin.read()) !== null) {
         data += chunk;
       }
-    });
+    };
 
-    stdin.on('end', () => {
+    const onEnd = () => {
       clearTimeout(timeout);
+      cleanup();
       if (data.trim()) {
         try {
           const parsed = JSON.parse(data.trim());
@@ -46,12 +56,17 @@ export async function readStdinData(provider = 'claude') {
       } else {
         resolve(null);
       }
-    });
+    };
 
-    stdin.on('error', (err) => {
+    const onError = (err) => {
       clearTimeout(timeout);
+      cleanup();
       console.error('[STDIN_ERROR]', err.message);
       resolve(null);
-    });
+    };
+
+    stdin.on('readable', onReadable);
+    stdin.on('end', onEnd);
+    stdin.on('error', onError);
   });
 }
