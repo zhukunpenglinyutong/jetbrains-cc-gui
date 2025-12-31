@@ -4,6 +4,7 @@ import { ButtonArea } from './ButtonArea';
 import { AttachmentList } from './AttachmentList';
 import { ContextBar } from './ContextBar';
 import { CompletionDropdown } from './Dropdown';
+import { PromptEnhancerDialog } from './PromptEnhancerDialog';
 import { useCompletionDropdown, useTriggerDetection } from './hooks';
 import { commandToDropdownItem, fileReferenceProvider, fileToDropdownItem, slashCommandProvider, } from './providers';
 import { getFileIcon } from '../../utils/fileIcons';
@@ -67,6 +68,12 @@ export const ChatInputBox = ({
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
   const lastCompositionEndTimeRef = useRef<number>(0);
+
+  // 增强提示词状态
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [showEnhancerDialog, setShowEnhancerDialog] = useState(false);
+  const [originalPrompt, setOriginalPrompt] = useState('');
+  const [enhancedPrompt, setEnhancedPrompt] = useState('');
 
   // 路径映射：存储文件名/相对路径 -> 完整绝对路径的映射
   // 用于在 tooltip 中显示完整路径
@@ -148,8 +155,7 @@ export const ChatInputBox = ({
 
   /**
    * 获取输入框纯文本内容（优化版，带缓存）
-   * 注意：在某些浏览器/环境（如 JCEF）中，innerText 可能在末尾包含换行符
-   * 这里统一去除末尾的换行符，确保获取的内容干净
+   * 保留用户输入的原始格式，包括换行符和空白字符
    */
   const getTextContent = useCallback(() => {
     if (!editableRef.current) return '';
@@ -163,7 +169,18 @@ export const ChatInputBox = ({
         text += node.textContent || '';
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         const element = node as HTMLElement;
-        if (element.classList.contains('file-tag')) {
+        const tagName = element.tagName.toLowerCase();
+
+        // 处理换行元素
+        if (tagName === 'br') {
+          text += '\n';
+        } else if (tagName === 'div' || tagName === 'p') {
+          // div 和 p 元素前添加换行（如果不是第一个元素）
+          if (text.length > 0 && !text.endsWith('\n')) {
+            text += '\n';
+          }
+          node.childNodes.forEach(walk);
+        } else if (element.classList.contains('file-tag')) {
           const filePath = element.getAttribute('data-file-path') || '';
           text += `@${filePath}`;
           // 不遍历 file-tag 的子节点，避免重复读取文件名和关闭按钮文本
@@ -176,8 +193,18 @@ export const ChatInputBox = ({
 
     editableRef.current.childNodes.forEach(walk);
 
-    // 去除末尾的换行符（\n, \r, \r\n）
-    return text.replace(/[\r\n]+$/, '');
+    // 只移除 JCEF 环境可能添加的末尾单个换行符（不影响用户输入的换行）
+    // 如果末尾有多个换行，只移除最后一个（JCEF 添加的）
+    if (text.endsWith('\n') && editableRef.current.childNodes.length > 0) {
+      const lastChild = editableRef.current.lastChild;
+      // 只有当最后一个节点不是 br 标签时，才移除末尾换行（说明是 JCEF 添加的）
+      if (lastChild?.nodeType !== Node.ELEMENT_NODE ||
+          (lastChild as HTMLElement).tagName?.toLowerCase() !== 'br') {
+        text = text.slice(0, -1);
+      }
+    }
+
+    return text;
   }, []);
 
   /**
@@ -573,11 +600,13 @@ export const ChatInputBox = ({
 
   /**
    * 处理提交
+   * 保留用户输入的原始格式（空格、换行、缩进等）
    */
   const handleSubmit = useCallback(() => {
-    const content = getTextContent().trim();
+    const content = getTextContent();
 
-    if (!content && attachments.length === 0) {
+    // 只在判断是否为空时使用 trim，不修改实际发送的内容
+    if (!content.trim() && attachments.length === 0) {
       return;
     }
     if (isLoading) {
@@ -607,6 +636,79 @@ export const ChatInputBox = ({
     fileCompletion,
     commandCompletion,
   ]);
+
+  /**
+   * 处理增强提示词
+   */
+  const handleEnhancePrompt = useCallback(() => {
+    const content = getTextContent().trim();
+    if (!content) {
+      return;
+    }
+
+    // 设置原始提示词并打开对话框
+    setOriginalPrompt(content);
+    setEnhancedPrompt('');
+    setShowEnhancerDialog(true);
+    setIsEnhancing(true);
+
+    // 调用后端进行提示词增强，传递当前选择的模型
+    if (window.sendToJava) {
+      window.sendToJava(`enhance_prompt:${JSON.stringify({ prompt: content, model: selectedModel })}`);
+    }
+  }, [getTextContent, selectedModel]);
+
+  /**
+   * 处理使用增强后的提示词
+   */
+  const handleUseEnhancedPrompt = useCallback(() => {
+    if (enhancedPrompt && editableRef.current) {
+      // 用增强后的提示词替换输入框内容
+      editableRef.current.innerText = enhancedPrompt;
+      setHasContent(true);
+      onInput?.(enhancedPrompt);
+    }
+    setShowEnhancerDialog(false);
+    setIsEnhancing(false);
+  }, [enhancedPrompt, onInput]);
+
+  /**
+   * 处理保留原始提示词
+   */
+  const handleKeepOriginalPrompt = useCallback(() => {
+    setShowEnhancerDialog(false);
+    setIsEnhancing(false);
+  }, []);
+
+  /**
+   * 关闭增强提示词对话框
+   */
+  const handleCloseEnhancerDialog = useCallback(() => {
+    setShowEnhancerDialog(false);
+    setIsEnhancing(false);
+  }, []);
+
+  // 注册增强提示词结果回调
+  useEffect(() => {
+    // 接收增强后的提示词
+    window.updateEnhancedPrompt = (result: string) => {
+      try {
+        const data = JSON.parse(result);
+        if (data.success && data.enhancedPrompt) {
+          setEnhancedPrompt(data.enhancedPrompt);
+        } else {
+          setEnhancedPrompt(data.error || '增强失败');
+        }
+      } catch {
+        setEnhancedPrompt(result);
+      }
+      setIsEnhancing(false);
+    };
+
+    return () => {
+      delete window.updateEnhancedPrompt;
+    };
+  }, []);
 
   /**
    * 处理 Mac 风格的光标移动、文本选择和删除操作
@@ -927,6 +1029,14 @@ export const ChatInputBox = ({
 
       const shift = (ev as KeyboardEvent).shiftKey === true;
 
+      // ⌘/ 快捷键：增强提示词
+      if (ev.key === '/' && ev.metaKey && !ev.shiftKey && !ev.altKey) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        handleEnhancePrompt();
+        return;
+      }
+
       // Mac 风格的光标移动快捷键和删除操作（已在 React 事件中处理，这里不需要处理）
       const isMacCursorMovementOrDelete =
         (ev.key === 'ArrowLeft' && ev.metaKey) ||
@@ -1016,7 +1126,7 @@ export const ChatInputBox = ({
       el.removeEventListener('keyup', nativeKeyUp, { capture: true } as any);
       el.removeEventListener('beforeinput', nativeBeforeInput as EventListener, { capture: true } as any);
     };
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion]);
+  }, [isComposing, handleSubmit, handleEnhancePrompt, fileCompletion, commandCompletion]);
 
   /**
    * 处理 IME 组合开始
@@ -1541,6 +1651,7 @@ export const ChatInputBox = ({
         disabled={disabled || isLoading}
         hasInputContent={hasContent || attachments.length > 0}
         isLoading={isLoading}
+        isEnhancing={isEnhancing}
         selectedModel={selectedModel}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
@@ -1549,6 +1660,7 @@ export const ChatInputBox = ({
         onModeSelect={handleModeSelect}
         onModelSelect={handleModelSelect}
         onProviderSelect={onProviderSelect}
+        onEnhancePrompt={handleEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}
       />
@@ -1597,6 +1709,17 @@ export const ChatInputBox = ({
           {tooltip.text}
         </div>
       )}
+
+      {/* 增强提示词对话框 */}
+      <PromptEnhancerDialog
+        isOpen={showEnhancerDialog}
+        isLoading={isEnhancing}
+        originalPrompt={originalPrompt}
+        enhancedPrompt={enhancedPrompt}
+        onUseEnhanced={handleUseEnhancedPrompt}
+        onKeepOriginal={handleKeepOriginalPrompt}
+        onClose={handleCloseEnhancerDialog}
+      />
     </div>
   );
 };

@@ -33,6 +33,7 @@ public class ClaudeSDKBridge {
     private static final String NODE_SCRIPT = "simple-query.js";
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
     private static final String SLASH_COMMANDS_CHANNEL_ID = "__slash_commands__";
+    private static final String MCP_STATUS_CHANNEL_ID = "__mcp_status__";
 
     private final Gson gson = new Gson();
     private final NodeDetector nodeDetector = new NodeDetector();
@@ -590,8 +591,9 @@ public class ClaudeSDKBridge {
                     LOG.info("[ClaudeSDKBridge] Node.js 进程已启动，PID: " + process.pid());
 
                     // 短暂等待检查进程是否立即退出（通常表示启动失败）
+                    // 增加等待时间到 500ms，确保能捕获模块加载阶段的错误
                     try {
-                        Thread.sleep(100);
+                        Thread.sleep(500);
                         if (!process.isAlive()) {
                             int earlyExitCode = process.exitValue();
                             LOG.error("[ClaudeSDKBridge] 进程启动后立即退出，exitCode: " + earlyExitCode);
@@ -599,12 +601,23 @@ public class ClaudeSDKBridge {
                             try (BufferedReader earlyReader = new BufferedReader(
                                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                                 StringBuilder earlyOutput = new StringBuilder();
+                                StringBuilder errorDetails = new StringBuilder();
                                 String line;
                                 while ((line = earlyReader.readLine()) != null) {
                                     earlyOutput.append(line).append("\n");
                                     LOG.error("[ClaudeSDKBridge] 进程输出: " + line);
+                                    // 特别关注错误标记行
+                                    if (line.startsWith("[STARTUP_ERROR]")
+                                            || line.startsWith("[UNCAUGHT_ERROR]")
+                                            || line.startsWith("[UNHANDLED_REJECTION]")
+                                            || line.startsWith("[COMMAND_ERROR]")) {
+                                        errorDetails.append(line).append("\n");
+                                    }
                                 }
-                                if (earlyOutput.length() > 0) {
+                                // 优先使用具体错误信息，否则使用全部输出
+                                if (errorDetails.length() > 0) {
+                                    lastNodeError[0] = errorDetails.toString().trim();
+                                } else if (earlyOutput.length() > 0) {
                                     lastNodeError[0] = earlyOutput.toString().trim();
                                 }
                             }
@@ -656,7 +669,13 @@ public class ClaudeSDKBridge {
                                 // 先捕获并输出 Node.js 侧的错误日志，便于在 IDE 日志中直接看到具体原因
                                 if (line.startsWith("[UNCAUGHT_ERROR]")
                                         || line.startsWith("[UNHANDLED_REJECTION]")
-                                        || line.startsWith("[COMMAND_ERROR]")) {
+                                        || line.startsWith("[COMMAND_ERROR]")
+                                        || line.startsWith("[STARTUP_ERROR]")
+                                        || line.startsWith("[ERROR]")
+                                        || line.startsWith("[STDIN_ERROR]")
+                                        || line.startsWith("[STDIN_PARSE_ERROR]")
+                                        || line.startsWith("[GET_SESSION_ERROR]")
+                                        || line.startsWith("[PERSIST_ERROR]")) {
                                     LOG.warn("[Node.js ERROR] " + line);
                                     lastNodeError[0] = line;
                                 }
@@ -1125,6 +1144,157 @@ public class ClaudeSDKBridge {
                         }
                     } finally {
                         processManager.unregisterProcess(SLASH_COMMANDS_CHANNEL_ID, process);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * 获取 MCP 服务器连接状态.
+     * 通过 Claude SDK 的 mcpServerStatus() 方法获取所有配置的 MCP 服务器的连接状态
+     *
+     * @param cwd 工作目录
+     * @return MCP 服务器状态列表，每个元素包含 name, status, serverInfo
+     */
+    public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
+        return CompletableFuture.supplyAsync(() -> {
+            Process process = null;
+            long startTime = System.currentTimeMillis();
+            LOG.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd);
+
+            try {
+                String node = nodeDetector.findNodeExecutable();
+
+                // 构建 stdin 输入 JSON
+                JsonObject stdinInput = new JsonObject();
+                stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+                String stdinJson = this.gson.toJson(stdinInput);
+
+                List<String> command = new ArrayList<>();
+                command.add(node);
+                File bridgeDir = directoryResolver.findSdkDir();
+                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                command.add("claude");  // provider
+                command.add("getMcpServerStatus");
+
+                ProcessBuilder pb = new ProcessBuilder(command);
+                File workDir = bridgeDir;
+                pb.directory(workDir);
+                pb.redirectErrorStream(true);
+                envConfigurator.updateProcessEnvironment(pb, node);
+                pb.environment().put("CLAUDE_USE_STDIN", "true");
+
+                process = pb.start();
+                processManager.registerProcess(MCP_STATUS_CHANNEL_ID, process);
+                final Process finalProcess = process;
+
+                // 通过 stdin 写入参数
+                try (java.io.OutputStream stdin = process.getOutputStream()) {
+                    stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
+                    stdin.flush();
+                    LOG.debug("[McpStatus] Wrote stdin: " + stdinJson);
+                } catch (Exception e) {
+                    LOG.warn("[McpStatus] Failed to write stdin: " + e.getMessage());
+                }
+
+                // 使用标志变量，一旦找到数据就立即退出
+                final boolean[] found = {false};
+                final String[] mcpStatusJson = {null};
+                final StringBuilder output = new StringBuilder();
+
+                Thread readerThread = new Thread(() -> {
+                    try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                        String line;
+                        while (!found[0] && (line = reader.readLine()) != null) {
+                            output.append(line).append("\n");
+                            LOG.debug("[McpStatus] Read line: "
+                                + line.substring(0, Math.min(100, line.length())));
+
+                            if (line.startsWith("[MCP_SERVER_STATUS]")) {
+                                mcpStatusJson[0] = line.substring("[MCP_SERVER_STATUS]".length()).trim();
+                                found[0] = true;
+                                LOG.info("[McpStatus] Found MCP_SERVER_STATUS marker, data length="
+                                    + mcpStatusJson[0].length());
+                                break;
+                            }
+                        }
+                    } catch (Exception e) {
+                        LOG.debug("[McpStatus] Reader thread exception: " + e.getMessage());
+                    }
+                });
+                readerThread.start();
+
+                // 轮询等待，最多 30 秒
+                long deadline = System.currentTimeMillis() + 30000;
+                while (!found[0] && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(100);
+                }
+
+                long elapsed = System.currentTimeMillis() - startTime;
+
+                // 无论是否找到数据，都立即终止进程
+                if (process.isAlive()) {
+                    PlatformUtils.terminateProcess(process);
+                    LOG.debug("[McpStatus] Process forcibly destroyed after " + elapsed + "ms");
+                }
+
+                // 解析结果
+                List<JsonObject> servers = new ArrayList<>();
+
+                if (found[0] && mcpStatusJson[0] != null && !mcpStatusJson[0].isEmpty()) {
+                    try {
+                        JsonArray serversArray = this.gson.fromJson(mcpStatusJson[0], JsonArray.class);
+                        for (var server : serversArray) {
+                            servers.add(server.getAsJsonObject());
+                        }
+                        LOG.info("[McpStatus] Successfully parsed " + servers.size()
+                            + " MCP servers in " + elapsed + "ms");
+                        return servers;
+                    } catch (Exception e) {
+                        LOG.warn("[McpStatus] Failed to parse MCP status JSON: " + e.getMessage());
+                    }
+                } else {
+                    LOG.warn("[McpStatus] No MCP status found after " + elapsed + "ms, found=" + found[0]);
+                }
+
+                // 回退到解析最终 JSON 输出
+                String outputStr = output.toString().trim();
+                int jsonStart = outputStr.lastIndexOf("{");
+                if (jsonStart != -1) {
+                    String jsonStr = outputStr.substring(jsonStart);
+                    try {
+                        JsonObject jsonResult = this.gson.fromJson(jsonStr, JsonObject.class);
+                        if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
+                            if (jsonResult.has("servers")) {
+                                JsonArray serversArray = jsonResult.getAsJsonArray("servers");
+                                for (var server : serversArray) {
+                                    servers.add(server.getAsJsonObject());
+                                }
+                                LOG.info("[McpStatus] Fallback: parsed " + servers.size()
+                                    + " MCP servers from JSON");
+                            }
+                        }
+                    } catch (Exception e) {
+                        LOG.debug("[McpStatus] Fallback JSON parse failed: " + e.getMessage());
+                    }
+                }
+
+                return servers;
+
+            } catch (Exception e) {
+                long elapsed = System.currentTimeMillis() - startTime;
+                LOG.error("[McpStatus] Exception after " + elapsed + "ms: " + e.getMessage());
+                return new ArrayList<>();
+            } finally {
+                if (process != null) {
+                    try {
+                        if (process.isAlive()) {
+                            PlatformUtils.terminateProcess(process);
+                        }
+                    } finally {
+                        processManager.unregisterProcess(MCP_STATUS_CHANNEL_ID, process);
                     }
                 }
             }

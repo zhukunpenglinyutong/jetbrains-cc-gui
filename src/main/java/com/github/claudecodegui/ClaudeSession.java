@@ -267,9 +267,10 @@ public class ClaudeSession {
         // 添加用户消息到历史
         Message userMessage = new Message(Message.Type.USER, normalizedInput);
         try {
-            if (attachments != null && !attachments.isEmpty()) {
-                com.google.gson.JsonArray contentArr = new com.google.gson.JsonArray();
+            com.google.gson.JsonArray contentArr = new com.google.gson.JsonArray();
+            String userDisplayText = normalizedInput;
 
+            if (attachments != null && !attachments.isEmpty()) {
                 // 添加图片块（使用与 claude-code 相同的格式，包含完整 base64 数据）
                 for (Attachment att : attachments) {
                     if (att == null) continue;
@@ -288,7 +289,6 @@ public class ClaudeSession {
                 }
 
                 // 当用户未输入文本时，提供一个占位说明
-                String userDisplayText = normalizedInput;
                 if (userDisplayText.isEmpty()) {
                     int imageCount = 0;
                     java.util.List<String> names = new java.util.ArrayList<>();
@@ -313,22 +313,26 @@ public class ClaudeSession {
                     }
                     userDisplayText = "已上传附件: " + nameSummary;
                 }
-
-                // 添加文本块
-                com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
-                textBlock.addProperty("type", "text");
-                textBlock.addProperty("text", userDisplayText);
-                contentArr.add(textBlock);
-
-                com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
-                messageObj.add("content", contentArr);
-                com.google.gson.JsonObject rawUser = new com.google.gson.JsonObject();
-                rawUser.add("message", messageObj);
-                userMessage.raw = rawUser;
-                userMessage.content = userDisplayText;
             }
+
+            // 添加文本块（始终添加，确保 raw 字段不为空）
+            com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
+            textBlock.addProperty("type", "text");
+            textBlock.addProperty("text", userDisplayText);
+            contentArr.add(textBlock);
+
+            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+            messageObj.add("content", contentArr);
+            com.google.gson.JsonObject rawUser = new com.google.gson.JsonObject();
+            rawUser.add("message", messageObj);
+            userMessage.raw = rawUser;
+            userMessage.content = userDisplayText;
+
+            LOG.info("[ClaudeSession] Created user message: content=" +
+                    (userDisplayText.length() > 50 ? userDisplayText.substring(0, 50) + "..." : userDisplayText) +
+                    ", hasRaw=true, contentBlocks=" + contentArr.size());
         } catch (Exception e) {
-            LOG.warn("Failed to attach raw image blocks: " + e.getMessage());
+            LOG.warn("Failed to build user message raw: " + e.getMessage());
         }
         messages.add(userMessage);
         notifyMessageUpdate();
@@ -363,18 +367,64 @@ public class ClaudeSession {
             ReadAction
                 .nonBlocking(() -> {
                     try {
-                        // 在后台线程中获取当前打开的文件信息（这是读操作，不会修改数据）
+                        /*
+                         * ========== 编辑器上下文信息采集 ==========
+                         *
+                         * 此处采集用户在 IDEA 编辑器中的工作环境信息，用于帮助 AI 理解用户当前的代码上下文。
+                         * 这些信息会被构建成 JSON 格式，最终附加到发送给 AI 的系统提示词中。
+                         *
+                         * 采集的信息按优先级分为三层：
+                         * 1. active (当前激活的文件) - 优先级最高，AI 的主要关注点
+                         * 2. selection (用户选中的代码) - 如果存在，则是 AI 应该重点分析的核心对象
+                         * 3. others (其他打开的文件) - 优先级最低，作为潜在的上下文参考
+                         *
+                         * 注意：这是只读操作，不会修改任何数据
+                         */
+
                         String activeFile = EditorFileUtils.getCurrentActiveFile(project);
                         List<String> allOpenedFiles = EditorFileUtils.getOpenedFiles(project);
                         Map<String, Object> selectionInfo = EditorFileUtils.getSelectedCodeInfo(project);
 
-                        // 构建 openedFiles 对象，区分激活文件和其他文件
+                        /*
+                         * ========== 构建上下文 JSON 对象 ==========
+                         *
+                         * JSON 结构说明：
+                         * {
+                         *   "active": "文件路径",           // 用户当前正在查看的文件（主要焦点）
+                         *   "selection": {                 // 用户选中的代码（核心分析对象）
+                         *     "startLine": 起始行号,
+                         *     "endLine": 结束行号,
+                         *     "selectedText": "选中的代码内容"
+                         *   },
+                         *   "others": ["文件1", "文件2"]   // 其他打开的文件（次要参考）
+                         * }
+                         *
+                         * 这个 JSON 对象会被传递到 Node.js 层（message-service.js），
+                         * 然后被转换为系统提示词的一部分，格式如下：
+                         *
+                         * ## Currently Open Files in IDE
+                         * **Currently Active File** (primary focus):
+                         * - /path/to/file.java#L20-24
+                         *
+                         * **Selected Code** (this is what the user is specifically asking about):
+                         * ```java
+                         * 用户选中的代码内容
+                         * ```
+                         * This selected code is the PRIMARY FOCUS.
+                         *
+                         * **Other Open Files** (potentially relevant):
+                         * - /path/to/other1.java
+                         * - /path/to/other2.java
+                         */
                         JsonObject openedFilesJson = new JsonObject();
+
                         if (activeFile != null) {
+                            // 添加当前激活的文件路径
                             openedFilesJson.addProperty("active", activeFile);
                             LOG.debug("Current active file: " + activeFile);
 
-                            // 如果有选中的代码，添加选中信息
+                            // 如果用户选中了代码，添加选中信息
+                            // 这是最重要的上下文信息，AI 应该将其作为主要分析目标
                             if (selectionInfo != null) {
                                 JsonObject selectionJson = new JsonObject();
                                 selectionJson.addProperty("startLine", (Integer) selectionInfo.get("startLine"));
@@ -386,7 +436,8 @@ public class ClaudeSession {
                             }
                         }
 
-                        // 其他打开的文件（排除激活文件）
+                        // 添加其他打开的文件（排除激活文件，避免重复）
+                        // 这些文件可能与用户的问题相关，但不是主要焦点
                         JsonArray othersArray = new JsonArray();
                         for (String file : allOpenedFiles) {
                             if (!file.equals(activeFile)) {

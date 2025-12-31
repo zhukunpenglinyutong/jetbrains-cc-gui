@@ -115,13 +115,15 @@ export async function requestPermissionFromJava(toolName, input) {
     }
 
     // 对于某些明显的危险操作，直接拒绝
+    // 获取用户主目录用于路径检查
+    const userHomeDir = process.env.HOME || process.env.USERPROFILE || require('os').homedir();
     const dangerousPatterns = [
       '/etc/',
       '/System/',
       '/usr/',
       '/bin/',
-      '~/.ssh/',
-      '~/.aws/'
+      `${userHomeDir}/.ssh/`,
+      `${userHomeDir}/.aws/`
     ];
 
     // 检查文件路径是否包含危险模式

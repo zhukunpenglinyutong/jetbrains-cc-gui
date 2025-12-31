@@ -96,6 +96,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   const [workingDirectory, setWorkingDirectory] = useState('');
   const [savingWorkingDirectory, setSavingWorkingDirectory] = useState(false);
 
+  // IDEA 编辑器字体配置（只读展示）
+  const [editorFontConfig, setEditorFontConfig] = useState<{
+    fontFamily: string;
+    fontSize: number;
+    lineSpacing: number;
+  } | undefined>();
+
   // Toast 状态管理
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -234,6 +241,15 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       setSavingWorkingDirectory(false);
     };
 
+    window.onEditorFontConfigReceived = (jsonStr: string) => {
+      try {
+        const config = JSON.parse(jsonStr);
+        setEditorFontConfig(config);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse editor font config:', error);
+      }
+    };
+
     // 加载供应商列表
     loadProviders();
     // 加载 Claude CLI 当前配置
@@ -242,6 +258,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     sendToJava('get_node_path:');
     // 加载工作目录配置
     sendToJava('get_working_directory:');
+    // 加载 IDEA 编辑器字体配置
+    sendToJava('get_editor_font_config:');
 
     return () => {
       window.updateProviders = undefined;
@@ -252,6 +270,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       window.updateNodePath = undefined;
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
+      window.onEditorFontConfigReceived = undefined;
     };
   }, []);
 
@@ -486,6 +505,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
               onWorkingDirectoryChange={setWorkingDirectory}
               onSaveWorkingDirectory={handleSaveWorkingDirectory}
               savingWorkingDirectory={savingWorkingDirectory}
+              editorFontConfig={editorFontConfig}
             />
           )}
 

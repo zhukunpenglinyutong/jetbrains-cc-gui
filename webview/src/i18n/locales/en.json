@@ -90,6 +90,10 @@
         "level4": "Larger (110%)",
         "level5": "Large (120%)",
         "level6": "Largest (140%)"
+      },
+      "editorFont": {
+        "label": "Font (follows editor font)",
+        "hint": "Not editable here. To modify, go to IDEA Settings → Editor → Font (restart IDEA for plugin font to take effect)"
       }
     },
     "providers": "Provider Management",
@@ -197,7 +201,11 @@
         "showApiKey": "Show",
         "hideApiKey": "Hide",
         "confirmAdd": "Confirm Add",
-        "saveChanges": "Save Changes"
+        "saveChanges": "Save Changes",
+        "codeView": "Code",
+        "visualView": "Visual",
+        "formatJson": "Format",
+        "invalidJson": "Invalid JSON format, please switch to code view to fix"
       }
     },
     "comingSoon": "Coming soon...",
@@ -340,6 +348,13 @@
     "added": "Added",
     "linkCopied": "Link copied, please open in browser",
     "copyFailed": "Copy failed, please copy manually",
+    "connectionStatus": "Connection Status",
+    "serverVersion": "Server Version",
+    "statusConnected": "Connected",
+    "statusFailed": "Connection Failed",
+    "statusNeedsAuth": "Needs Authentication",
+    "statusPending": "Connecting...",
+    "statusUnknown": "Unknown",
     "presets": {
       "fetch": "Web content fetching tool for scraping web pages",
       "time": "Time and timezone utilities",
@@ -470,5 +485,18 @@
     "gemini": {
       "label": "Gemini Cli"
     }
+  },
+  "promptEnhancer": {
+    "title": "Prompt Enhancer",
+    "tooltip": "Rewrite prompt to provide more context and improve agent responses",
+    "shortcut": "⌘/",
+    "enhancing": "Enhancing prompt...",
+    "originalPrompt": "Original Prompt",
+    "enhancedPrompt": "Enhanced Prompt",
+    "useEnhanced": "Use Enhanced",
+    "keepOriginal": "Keep Original",
+    "enhanceFailed": "Failed to enhance prompt",
+    "emptyPrompt": "Please enter a prompt first",
+    "copyEnhanced": "Copy Enhanced"
   }
 }

@@ -220,6 +220,8 @@ export function useCompletionDropdown<T>({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
+        // 防止除零错误：当没有可选择项时，保持 activeIndex 为 0
+        if (selectableCount === 0) return true;
         setState(prev => ({
           ...prev,
           activeIndex: (prev.activeIndex + 1) % selectableCount,
@@ -229,6 +231,8 @@ export function useCompletionDropdown<T>({
 
       case 'ArrowUp':
         e.preventDefault();
+        // 防止除零错误：当没有可选择项时，保持 activeIndex 为 0
+        if (selectableCount === 0) return true;
         setState(prev => ({
           ...prev,
           activeIndex: (prev.activeIndex - 1 + selectableCount) % selectableCount,

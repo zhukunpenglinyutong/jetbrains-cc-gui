@@ -90,6 +90,10 @@
         "level4": "较大（110%）",
         "level5": "大（120%）",
         "level6": "最大（140%）"
+      },
+      "editorFont": {
+        "label": "字体（跟随编辑器字体）",
+        "hint": "此处暂时不可修改，如需修改，请在 IDEA 设置 → 编辑器 → 字体 中调整（重启 IDEA 后本插件字体生效）"
       }
     },
     "providers": "供应商管理",
@@ -197,7 +201,11 @@
         "showApiKey": "显示",
         "hideApiKey": "隐藏",
         "confirmAdd": "确认添加",
-        "saveChanges": "保存更改"
+        "saveChanges": "保存更改",
+        "codeView": "代码",
+        "visualView": "可视化",
+        "formatJson": "格式化",
+        "invalidJson": "JSON 格式错误，请切换到代码视图修正"
       }
     },
     "comingSoon": "功能即将推出...",
@@ -340,6 +348,13 @@
     "added": "已添加",
     "linkCopied": "链接已复制，请到浏览器打开",
     "copyFailed": "复制失败，请手动复制",
+    "connectionStatus": "连接状态",
+    "serverVersion": "服务器版本",
+    "statusConnected": "已连接",
+    "statusFailed": "连接失败",
+    "statusNeedsAuth": "需要认证",
+    "statusPending": "连接中...",
+    "statusUnknown": "未知",
     "presets": {
       "fetch": "Web 内容获取工具，可以抓取网页内容",
       "time": "时间和时区工具",
@@ -470,5 +485,18 @@
     "gemini": {
       "label": "Gemini Cli"
     }
+  },
+  "promptEnhancer": {
+    "title": "增强提示词",
+    "tooltip": "重写提示词以提供更多上下文并改善 AI 响应",
+    "shortcut": "⌘/",
+    "enhancing": "正在增强提示词...",
+    "originalPrompt": "原始提示词",
+    "enhancedPrompt": "增强后的提示词",
+    "useEnhanced": "使用增强版本",
+    "keepOriginal": "保留原始版本",
+    "enhanceFailed": "增强提示词失败",
+    "emptyPrompt": "请先输入提示词",
+    "copyEnhanced": "复制增强版本"
   }
 }

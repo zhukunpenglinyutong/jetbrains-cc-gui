@@ -91,37 +91,61 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
   <tr>
     <td align="center">
       <a href="https://github.com/zhukunpenglinyutong">
-        <img src="https://avatars.githubusercontent.com/u/31264015?size=100" width="100" height="100" alt="mcowger" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/31264015?size=100" width="100" height="100" alt="zhukunpenglinyutong" style="border-radius: 50%; border: 3px solid #ff6b35; box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);" />
+        <div>🔥🔥🔥</div>
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/M1sury">
-        <img src="https://avatars.githubusercontent.com/u/64764195?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/64764195?size=100" width="100" height="100" alt="M1sury" style="border-radius: 50%;" />
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/gadfly3173">
-        <img src="https://avatars.githubusercontent.com/u/28685179?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/28685179?size=100" width="100" height="100" alt="gadfly3173" style="border-radius: 50%; border: 3px solid #ff6b35; box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);" />
+        <div>🔥</div>
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/song782360037">
-        <img src="https://avatars.githubusercontent.com/u/66980578?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/66980578?size=100" width="100" height="100" alt="song782360037" style="border-radius: 50%;" />
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/hpstream">
-        <img src="https://avatars.githubusercontent.com/u/18394192?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/18394192?size=100" width="100" height="100" alt="hpstream" style="border-radius: 50%;" />
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/imblowsnow">
-        <img src="https://avatars.githubusercontent.com/u/74449531?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/74449531?size=100" width="100" height="100" alt="imblowsnow" style="border-radius: 50%;" />
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/Rinimabi">
-        <img src="https://avatars.githubusercontent.com/u/18625271?size=100" width="100" height="100" alt="bhaktatejas922" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/18625271?size=100" width="100" height="100" alt="Rinimabi" style="border-radius: 50%;" />
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/GotoFox">
+        <img src="https://avatars.githubusercontent.com/u/68596145?size=100" width="100" height="100" alt="GotoFox" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/changshunxu520">
+        <img src="https://avatars.githubusercontent.com/u/16171624?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/lie5860">
+        <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/buddhist-coder">
+        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>

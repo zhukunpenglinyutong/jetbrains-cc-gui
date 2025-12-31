@@ -14,6 +14,7 @@ import { AsyncStream } from '../../utils/async-stream.js';
 import { canUseTool } from '../../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
+import { buildIDEContextPrompt } from '../system-prompts.js';
 
 /**
  * 发送消息（支持会话恢复）
@@ -88,6 +89,7 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 	      `- 当前 API Key 来源: ${keySource}`,
 	      `- 当前 API Key 预览: ${keyPreview}`,
 	      `- 当前 Base URL: ${baseUrl}（来源: ${baseUrlSource}）`,
+	      `- tip：cli可以读取 环境变量 或者 setting.json 两种方式；本插件为了避免产生问题，只支持读取setting.json 内容，您可以在 本插件右上角设置 - 供应商管理配置下即可使用`,
 	      ''
 	    ].join('\n');
 
@@ -166,53 +168,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[DEBUG] Model mapping:', model, '->', sdkModelName);
 
 	    // Build systemPrompt.append content (for adding opened files context)
-	    let systemPromptAppend = '';
-	    if (openedFiles && typeof openedFiles === 'object') {
-	      const { active, selection, others } = openedFiles;
-	      const hasActive = active && active.trim() !== '';
-	      const hasSelection = selection && selection.selectedText;
-	      const hasOthers = Array.isArray(others) && others.length > 0;
-
-	      if (hasActive || hasOthers) {
-	        console.log('[DEBUG] Building systemPrompt.append with active file:', active,
-	                    'selection:', hasSelection ? 'yes' : 'no',
-	                    'other files:', others?.length || 0);
-	        systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
-	        systemPromptAppend += 'Note: File paths may include line references in format `#LX-Y` (lines X to Y) or `#LX` (single line X).\n\n';
-
-	        if (hasActive) {
-	          systemPromptAppend += '**Currently Active File** (primary focus):\n';
-	          systemPromptAppend += `- ${active}`;
-
-	          // If there's a code selection, highlight it
-	          if (hasSelection) {
-	            systemPromptAppend += ` (lines ${selection.startLine}-${selection.endLine} selected)\n\n`;
-	            systemPromptAppend += '**Selected Code** (this is what the user is specifically asking about):\n';
-	            systemPromptAppend += '```\n';
-	            systemPromptAppend += selection.selectedText;
-	            systemPromptAppend += '\n```\n\n';
-	            systemPromptAppend += 'This selected code is the PRIMARY FOCUS. The user\'s question is most likely about this specific code section.\n';
-	          } else {
-	            systemPromptAppend += '\n\n';
-	            systemPromptAppend += 'This is the file the user is currently viewing/editing. It should be the main focus when answering questions.\n';
-	          }
-	        }
-
-	        if (hasOthers) {
-	          if (hasActive) {
-	            systemPromptAppend += '\n**Other Open Files** (potentially relevant):\n';
-	          } else {
-	            systemPromptAppend += 'User has the following files open:\n';
-	          }
-	          others.forEach(file => {
-	            systemPromptAppend += `- ${file}\n`;
-	          });
-	          if (hasActive && !hasSelection) {
-	            systemPromptAppend += '\nThese files may be related to the question, but are not the primary focus.';
-	          }
-	        }
-	      }
-	    }
+	    // 使用统一的提示词管理模块构建 IDE 上下文提示词
+	    const systemPromptAppend = buildIDEContextPrompt(openedFiles);
 
 	    // 准备选项
 	    // 注意：不再传递 pathToClaudeCodeExecutable，让 SDK 自动使用内置 cli.js
@@ -620,53 +577,8 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     const openedFiles = stdinData?.openedFiles || null;
 
     // Build systemPrompt.append content (for adding opened files context)
-    let systemPromptAppend = '';
-    if (openedFiles && typeof openedFiles === 'object') {
-      const { active, selection, others } = openedFiles;
-      const hasActive = active && active.trim() !== '';
-      const hasSelection = selection && selection.selectedText;
-      const hasOthers = Array.isArray(others) && others.length > 0;
-
-      if (hasActive || hasOthers) {
-        console.log('[DEBUG] (withAttachments) Building systemPrompt.append with active file:', active,
-                    'selection:', hasSelection ? 'yes' : 'no',
-                    'other files:', others?.length || 0);
-        systemPromptAppend = '\n\n## Currently Open Files in IDE\n\n';
-        systemPromptAppend += 'Note: File paths may include line references in format `#LX-Y` (lines X to Y) or `#LX` (single line X).\n\n';
-
-        if (hasActive) {
-          systemPromptAppend += '**Currently Active File** (primary focus):\n';
-          systemPromptAppend += `- ${active}`;
-
-          // If there's a code selection, highlight it
-          if (hasSelection) {
-            systemPromptAppend += ` (lines ${selection.startLine}-${selection.endLine} selected)\n\n`;
-            systemPromptAppend += '**Selected Code** (this is what the user is specifically asking about):\n';
-            systemPromptAppend += '```\n';
-            systemPromptAppend += selection.selectedText;
-            systemPromptAppend += '\n```\n\n';
-            systemPromptAppend += 'This selected code is the PRIMARY FOCUS. The user\'s question is most likely about this specific code section.\n';
-          } else {
-            systemPromptAppend += '\n\n';
-            systemPromptAppend += 'This is the file the user is currently viewing/editing. It should be the main focus when answering questions.\n';
-          }
-        }
-
-        if (hasOthers) {
-          if (hasActive) {
-            systemPromptAppend += '\n**Other Open Files** (potentially relevant):\n';
-          } else {
-            systemPromptAppend += 'User has the following files open:\n';
-          }
-          others.forEach(file => {
-            systemPromptAppend += `- ${file}\n`;
-          });
-          if (hasActive && !hasSelection) {
-            systemPromptAppend += '\nThese files may be related to the question, but are not the primary focus.';
-          }
-        }
-      }
-    }
+    // 使用统一的提示词管理模块构建 IDE 上下文提示词
+    const systemPromptAppend = buildIDEContextPrompt(openedFiles);
 
     // 构建用户消息内容块
     const contentBlocks = buildContentBlocks(attachments, message);
@@ -961,6 +873,84 @@ export async function getSlashCommands(cwd = null) {
       success: false,
       error: error.message,
       commands: []
+    }));
+  }
+}
+
+/**
+ * 获取 MCP 服务器连接状态
+ * 通过 SDK 的 mcpServerStatus() 方法获取所有配置的 MCP 服务器的连接状态
+ * @param {string} cwd - 工作目录（可选）
+ */
+export async function getMcpServerStatus(cwd = null) {
+  try {
+    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
+
+    // 设置 API Key
+    setupApiKey();
+
+    // 确保 HOME 环境变量设置正确
+    if (!process.env.HOME) {
+      const os = await import('os');
+      process.env.HOME = os.homedir();
+    }
+
+    // 智能确定工作目录
+    const workingDirectory = selectWorkingDirectory(cwd);
+    try {
+      process.chdir(workingDirectory);
+    } catch (chdirError) {
+      console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
+    }
+
+    // 创建一个空的输入流
+    const inputStream = new AsyncStream();
+
+    // 调用 query 函数，使用空输入流
+    const result = query({
+      prompt: inputStream,
+      options: {
+        cwd: workingDirectory,
+        permissionMode: 'default',
+        maxTurns: 0,
+        canUseTool: async () => ({
+          behavior: 'deny',
+          message: 'Config loading only'
+        }),
+        tools: { type: 'preset', preset: 'claude_code' },
+        settingSources: ['user', 'project', 'local'],
+        stderr: (data) => {
+          if (data && data.trim()) {
+            console.log(`[SDK-STDERR] ${data.trim()}`);
+          }
+        }
+      }
+    });
+
+    // 立即关闭输入流
+    inputStream.done();
+
+    // 获取 MCP 服务器状态
+    // SDK 返回的格式是 McpServerStatus[]，包含 name, status, serverInfo
+    const mcpStatus = await result.mcpServerStatus?.() || [];
+
+    // 清理资源
+    await result.return?.();
+
+    // 输出 MCP 服务器状态
+    console.log('[MCP_SERVER_STATUS]', JSON.stringify(mcpStatus));
+
+    console.log(JSON.stringify({
+      success: true,
+      servers: mcpStatus
+    }));
+
+  } catch (error) {
+    console.error('[GET_MCP_SERVER_STATUS_ERROR]', error.message);
+    console.log(JSON.stringify({
+      success: false,
+      error: error.message,
+      servers: []
     }));
   }
 }

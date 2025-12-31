@@ -130,6 +130,11 @@ interface Window {
   updateMcpServers?: (json: string) => void;
 
   /**
+   * Update MCP server connection status
+   */
+  updateMcpServerStatus?: (json: string) => void;
+
+  /**
    * Update providers list
    */
   updateProviders?: (json: string) => void;
@@ -224,4 +229,14 @@ interface Window {
     fontSize: number;
     lineSpacing: number;
   };
+
+  /**
+   * Update enhanced prompt result (for prompt enhancer feature)
+   */
+  updateEnhancedPrompt?: (result: string) => void;
+
+  /**
+   * Editor font config received callback - 接收 IDEA 编辑器字体配置
+   */
+  onEditorFontConfigReceived?: (json: string) => void;
 }

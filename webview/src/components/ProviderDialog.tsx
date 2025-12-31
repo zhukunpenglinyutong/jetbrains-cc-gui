@@ -64,6 +64,17 @@ export default function ProviderDialog({
     }
   };
 
+  // 格式化 JSON
+  const handleFormatJson = () => {
+    try {
+      const parsed = JSON.parse(jsonConfig);
+      setJsonConfig(JSON.stringify(parsed, null, 2));
+      setJsonError('');
+    } catch (err) {
+      setJsonError(t('settings.provider.dialog.jsonError'));
+    }
+  };
+
   // 初始化表单
   useEffect(() => {
     if (isOpen) {
@@ -371,6 +382,20 @@ export default function ProviderDialog({
               <p className="section-desc" style={{ marginBottom: '12px', fontSize: '12px', color: '#999' }}>
                 {t('settings.provider.dialog.jsonConfigDescription')}
               </p>
+
+              {/* 工具栏 */}
+              <div className="json-toolbar">
+                <button
+                  type="button"
+                  className="format-btn"
+                  onClick={handleFormatJson}
+                  title={t('settings.provider.dialog.formatJson') || '格式化 JSON'}
+                >
+                  <span className="codicon codicon-symbol-keyword" />
+                  {t('settings.provider.dialog.formatJson') || '格式化'}
+                </button>
+              </div>
+
               <div className="json-editor-wrapper">
                 <textarea
                   className="json-editor"

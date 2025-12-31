@@ -1,9 +1,32 @@
 package com.github.claudecodegui;
 
+import com.github.claudecodegui.cache.SlashCommandCache;
+import com.github.claudecodegui.handler.*;
+import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.permission.PermissionService;
+import com.github.claudecodegui.ui.ErrorPanelBuilder;
+import com.github.claudecodegui.util.FontConfigService;
+import com.github.claudecodegui.util.HtmlLoader;
+import com.github.claudecodegui.util.JBCefBrowserFactory;
+import com.github.claudecodegui.util.JsUtils;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.EditorFactory;
+import com.intellij.openapi.editor.event.SelectionEvent;
+import com.intellij.openapi.editor.event.SelectionListener;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
+import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.ui.content.Content;
@@ -11,51 +34,26 @@ import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
-import com.intellij.ide.util.PropertiesComponent;
-import com.intellij.openapi.vfs.VirtualFileManager;
-import com.intellij.openapi.fileEditor.FileEditorManager;
-import com.intellij.openapi.fileEditor.FileEditorManagerListener;
-import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
-import com.intellij.openapi.editor.event.SelectionListener;
-import com.intellij.openapi.editor.event.SelectionEvent;
-import com.intellij.openapi.editor.EditorFactory;
-import com.intellij.util.messages.MessageBusConnection;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.util.Alarm;
+import com.intellij.util.messages.MessageBusConnection;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefLoadHandlerAdapter;
 import org.jetbrains.annotations.NotNull;
 
-import com.github.claudecodegui.handler.*;
-import com.github.claudecodegui.permission.PermissionRequest;
-import com.github.claudecodegui.permission.PermissionService;
-import com.github.claudecodegui.ui.ErrorPanelBuilder;
-import com.github.claudecodegui.util.HtmlLoader;
-import com.github.claudecodegui.util.JBCefBrowserFactory;
-import com.github.claudecodegui.util.JsUtils;
-import com.github.claudecodegui.util.FontConfigService;
-import com.github.claudecodegui.cache.SlashCommandCache;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-
 import javax.swing.*;
 import java.awt.*;
-import java.awt.datatransfer.*;
-import java.awt.dnd.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetAdapter;
+import java.awt.dnd.DropTargetDropEvent;
+import java.io.File;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.io.File;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
 /**
  * Claude SDK 聊天工具窗口
@@ -84,7 +82,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
         ContentFactory contentFactory = ContentFactory.getInstance();
-        Content content = contentFactory.createContent(chatWindow.getContent(), "GUI", false);
+        Content content = contentFactory.createContent(chatWindow.getContent(), "", false);
         toolWindow.getContentManager().addContent(content);
 
         content.setDisposer(() -> {
@@ -219,8 +217,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             try {
                 String basePath = project.getBasePath();
                 if (basePath == null) return;
-                java.io.File bridgeDir = new java.io.File(basePath, "ai-bridge");
-                java.io.File channelManager = new java.io.File(bridgeDir, "channel-manager.js");
+                File bridgeDir = new File(basePath, "ai-bridge");
+                File channelManager = new File(bridgeDir, "channel-manager.js");
                 if (bridgeDir.exists() && bridgeDir.isDirectory() && channelManager.exists()) {
                     claudeSDKBridge.setSdkTestDir(bridgeDir.getAbsolutePath());
                     LOG.info("Overriding ai-bridge path to project directory: " + bridgeDir.getAbsolutePath());
@@ -322,6 +320,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new SessionHandler(handlerContext));
             messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
             messageDispatcher.registerHandler(new DiffHandler(handlerContext));
+            messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
 
             // 权限处理器（需要特殊回调）
             this.permissionHandler = new PermissionHandler(handlerContext);
@@ -802,8 +801,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             session.setCallback(new ClaudeSession.SessionCallback() {
                 @Override
                 public void onMessageUpdate(List<ClaudeSession.Message> messages) {
+                    LOG.info("[ClaudeSDKToolWindow] onMessageUpdate called, message count: " + messages.size());
+                    if (!messages.isEmpty()) {
+                        ClaudeSession.Message first = messages.get(0);
+                        LOG.info("[ClaudeSDKToolWindow] First message: type=" + first.type +
+                                ", content=" + (first.content != null ? first.content.substring(0, Math.min(50, first.content.length())) : "null") +
+                                ", hasRaw=" + (first.raw != null));
+                    }
                     ApplicationManager.getApplication().invokeLater(() -> {
                         String messagesJson = convertMessagesToJson(messages);
+                        LOG.info("[ClaudeSDKToolWindow] Calling updateMessages, json length: " + messagesJson.length());
                         callJavaScript("updateMessages", JsUtils.escapeJs(messagesJson));
                     });
                     pushUsageUpdateFromMessages(messages);

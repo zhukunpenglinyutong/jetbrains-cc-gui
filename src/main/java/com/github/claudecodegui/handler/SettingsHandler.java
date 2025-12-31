@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeHistoryReader;
 import com.github.claudecodegui.ClaudeSession;
+import com.github.claudecodegui.util.FontConfigService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
@@ -32,7 +33,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_node_path",
         "get_usage_statistics",
         "get_working_directory",
-        "set_working_directory"
+        "set_working_directory",
+        "get_editor_font_config"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -80,6 +82,9 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_working_directory":
                 handleSetWorkingDirectory(content);
+                return true;
+            case "get_editor_font_config":
+                handleGetEditorFontConfig();
                 return true;
             default:
                 return false;
@@ -567,6 +572,22 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("保存工作目录配置失败: " + e.getMessage()));
             });
+        }
+    }
+
+    /**
+     * 获取 IDEA 编辑器字体配置
+     */
+    private void handleGetEditorFontConfig() {
+        try {
+            JsonObject fontConfig = FontConfigService.getEditorFontConfig();
+            String fontConfigJson = fontConfig.toString();
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.onEditorFontConfigReceived", escapeJs(fontConfigJson));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get editor font config: " + e.getMessage(), e);
         }
     }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './components/MarkdownBlock';
+import CollapsibleTextBlock from './components/CollapsibleTextBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
 import ConfirmDialog from './components/ConfirmDialog';
@@ -75,6 +76,7 @@ const App = () => {
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // 权限弹窗状态
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
@@ -233,6 +235,22 @@ const App = () => {
     }
   }, [currentProvider, selectedClaudeModel, selectedCodexModel]);
 
+  // 检查当前会话是否还存在（防止显示已删除的会话）
+  useEffect(() => {
+    if (currentView === 'chat' && historyData?.sessions) {
+      // 如果有消息但没有有效的会话ID，或者会话ID对应的会话不存在，清空界面
+      if (messages.length > 0) {
+        if (!currentSessionId || !historyData.sessions.some(s => s.sessionId === currentSessionId)) {
+          console.log('[App] 当前会话已被删除或无效，清空聊天界面');
+          setMessages([]);
+          setCurrentSessionId(null);
+          setUsagePercentage(0);
+          setUsageUsedTokens(0);
+        }
+      }
+    }
+  }, [currentView, currentSessionId, historyData, messages.length]);
+
   // Toast helper functions
   const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
     // Don't show toast for default status
@@ -254,10 +272,16 @@ const App = () => {
       //   console.log(`[Frontend][${timestamp}][PERF] updateMessages 收到响应，距发送 ${timestamp - sendTime}ms`);
       // }
       try {
+        console.log('[Frontend] updateMessages received, json length:', json?.length);
         const parsed = JSON.parse(json) as ClaudeMessage[];
+        console.log('[Frontend] updateMessages parsed, count:', parsed.length, 'types:', parsed.map(m => m.type).join(','));
+        if (parsed.length > 0) {
+          console.log('[Frontend] First message:', JSON.stringify(parsed[0]).substring(0, 200));
+        }
         setMessages(parsed);
       } catch (error) {
         console.error('[Frontend] Failed to parse messages:', error);
+        console.error('[Frontend] Raw JSON:', json?.substring(0, 500));
       }
     };
 
@@ -798,7 +822,7 @@ const App = () => {
     setShowNewSessionConfirm(false);
     sendBridgeMessage('create_new_session');
     setMessages([]);
-    // 移除通知：正在创建新会话...
+    setCurrentSessionId(null);
     // 重置使用量显示为 0%
     setUsagePercentage(0);
     setUsageUsedTokens(0);
@@ -817,6 +841,7 @@ const App = () => {
     // 直接创建新会话，不再弹出第二个确认框
     sendBridgeMessage('create_new_session');
     setMessages([]);
+    setCurrentSessionId(null);
     setUsagePercentage(0);
     setUsageUsedTokens(0);
     setUsageMaxTokens((prev) => prev ?? 272000);
@@ -896,6 +921,7 @@ const App = () => {
 
   const loadHistorySession = (sessionId: string) => {
     sendBridgeMessage('load_session', sessionId);
+    setCurrentSessionId(sessionId);
     setCurrentView('chat');
   };
 
@@ -915,6 +941,15 @@ const App = () => {
         sessions: updatedSessions,
         total: updatedTotal
       });
+
+      // 如果删除的是当前会话，清空消息并重置状态
+      if (sessionId === currentSessionId) {
+        setMessages([]);
+        setCurrentSessionId(null);
+        setUsagePercentage(0);
+        setUsageUsedTokens(0);
+        sendBridgeMessage('create_new_session');
+      }
 
       // 显示成功提示
       addToast('会话已删除', 'success');
@@ -1047,6 +1082,7 @@ const App = () => {
   const shouldShowMessage = (message: ClaudeMessage) => {
     // 过滤 isMeta 消息（如 "Caveat: The messages below were generated..."）
     if (message.raw && typeof message.raw === 'object' && 'isMeta' in message.raw && message.raw.isMeta === true) {
+      console.log('[Frontend] shouldShowMessage: filtered isMeta message');
       return false;
     }
 
@@ -1059,9 +1095,11 @@ const App = () => {
       text.includes('<command-message>') ||
       text.includes('<command-args>')
     )) {
+      console.log('[Frontend] shouldShowMessage: filtered command message');
       return false;
     }
     if (message.type === 'user' && text === '[tool_result]') {
+      console.log('[Frontend] shouldShowMessage: filtered tool_result');
       return false;
     }
     if (message.type === 'assistant') {
@@ -1076,14 +1114,19 @@ const App = () => {
       const rawBlocks = normalizeBlocks(message.raw);
       if (Array.isArray(rawBlocks) && rawBlocks.length > 0) {
         // 确保至少有一个非空的内容块
-        return rawBlocks.some(block => {
+        const hasValidBlock = rawBlocks.some(block => {
           if (block.type === 'text') {
             return block.text && block.text.trim().length > 0;
           }
           // 图片、工具使用等其他类型的块都应该显示
           return true;
         });
+        if (!hasValidBlock) {
+          console.log('[Frontend] shouldShowMessage: user message filtered - no valid blocks', { type: message.type, text: text?.substring(0, 100), rawBlocks });
+        }
+        return hasValidBlock;
       }
+      console.log('[Frontend] shouldShowMessage: user message filtered - empty content', { type: message.type, text: text?.substring(0, 100), hasRaw: !!message.raw });
       return false;
     }
     return true;
@@ -1439,7 +1482,13 @@ const App = () => {
                   ) : (
                     getContentBlocks(message).map((block, blockIndex) => (
                       <div key={`${messageIndex}-${blockIndex}`} className="content-block">
-                        {block.type === 'text' && <MarkdownBlock content={block.text ?? ''} />}
+                        {block.type === 'text' && (
+                          message.type === 'user' ? (
+                            <CollapsibleTextBlock content={block.text ?? ''} />
+                          ) : (
+                            <MarkdownBlock content={block.text ?? ''} />
+                          )
+                        )}
                         {block.type === 'image' && block.src && (
                           <div
                             className={`message-image-block ${message.type === 'user' ? 'user-image' : ''}`}

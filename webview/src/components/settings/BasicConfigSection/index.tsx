@@ -34,6 +34,11 @@ interface BasicConfigSectionProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  editorFontConfig?: {
+    fontFamily: string;
+    fontSize: number;
+    lineSpacing: number;
+  };
 }
 
 const BasicConfigSection = ({
@@ -49,6 +54,7 @@ const BasicConfigSection = ({
   onWorkingDirectoryChange = () => {},
   onSaveWorkingDirectory = () => {},
   savingWorkingDirectory = false,
+  editorFontConfig,
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
 
@@ -162,6 +168,21 @@ const BasicConfigSection = ({
           <option value={5}>{t('settings.basic.fontSize.level5')}</option>
           <option value={6}>{t('settings.basic.fontSize.level6')}</option>
         </select>
+      </div>
+
+      {/* IDEA 编辑器字体展示 - 只读 */}
+      <div className={styles.editorFontSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-symbol-text" />
+          <span className={styles.fieldLabel}>{t('settings.basic.editorFont.label')}</span>
+        </div>
+        <div className={styles.fontInfoDisplay}>
+          {editorFontConfig?.fontFamily || '-'}
+        </div>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.editorFont.hint')}</span>
+        </small>
       </div>
 
       {/* Node.js 路径配置 */}
