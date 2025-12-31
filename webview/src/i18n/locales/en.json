@@ -201,7 +201,11 @@
         "showApiKey": "Show",
         "hideApiKey": "Hide",
         "confirmAdd": "Confirm Add",
-        "saveChanges": "Save Changes"
+        "saveChanges": "Save Changes",
+        "codeView": "Code",
+        "visualView": "Visual",
+        "formatJson": "Format",
+        "invalidJson": "Invalid JSON format, please switch to code view to fix"
       }
     },
     "comingSoon": "Coming soon...",

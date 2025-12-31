@@ -267,6 +267,37 @@
     margin-top: 12px;
 }
 
+.json-toolbar {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.format-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.format-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.format-btn .codicon {
+    font-size: 14px;
+}
+
 .json-editor-wrapper {
     position: relative;
 }
@@ -274,11 +305,45 @@
 .json-editor {
     width: 100%;
     min-height: 200px;
+    max-height: 500px;
     padding: 12px;
     border: 1px solid var(--border-secondary);
     border-radius: 4px;
     background: var(--bg-tertiary);
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: calc(13px * 0.9);
     font-family: var(--idea-editor-font-family, monospace);
+    overflow: auto;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.json-editor:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+/* Provider Dialog 中的 JSON 编辑器样式覆盖 */
+.provider-dialog .json-editor {
+    display: block;
+    width: 100%;
+    min-height: 200px;
+    max-height: 500px;
+    padding: 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: calc(13px * 0.9);
+    font-family: var(--idea-editor-font-family, monospace);
+    overflow: auto;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.provider-dialog .json-editor:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
 }

@@ -201,7 +201,11 @@
         "showApiKey": "显示",
         "hideApiKey": "隐藏",
         "confirmAdd": "确认添加",
-        "saveChanges": "保存更改"
+        "saveChanges": "保存更改",
+        "codeView": "代码",
+        "visualView": "可视化",
+        "formatJson": "格式化",
+        "invalidJson": "JSON 格式错误，请切换到代码视图修正"
       }
     },
     "comingSoon": "功能即将推出...",
