@@ -229,4 +229,9 @@ interface Window {
     fontSize: number;
     lineSpacing: number;
   };
+
+  /**
+   * Update enhanced prompt result (for prompt enhancer feature)
+   */
+  updateEnhancedPrompt?: (result: string) => void;
 }

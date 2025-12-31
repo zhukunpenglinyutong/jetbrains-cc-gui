@@ -477,5 +477,18 @@
     "gemini": {
       "label": "Gemini Cli"
     }
+  },
+  "promptEnhancer": {
+    "title": "增强提示词",
+    "tooltip": "重写提示词以提供更多上下文并改善 AI 响应",
+    "shortcut": "⌘/",
+    "enhancing": "正在增强提示词...",
+    "originalPrompt": "原始提示词",
+    "enhancedPrompt": "增强后的提示词",
+    "useEnhanced": "使用增强版本",
+    "keepOriginal": "保留原始版本",
+    "enhanceFailed": "增强提示词失败",
+    "emptyPrompt": "请先输入提示词",
+    "copyEnhanced": "复制增强版本"
   }
 }

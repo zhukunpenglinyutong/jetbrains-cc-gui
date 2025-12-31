@@ -4,6 +4,7 @@ import { ButtonArea } from './ButtonArea';
 import { AttachmentList } from './AttachmentList';
 import { ContextBar } from './ContextBar';
 import { CompletionDropdown } from './Dropdown';
+import { PromptEnhancerDialog } from './PromptEnhancerDialog';
 import { useCompletionDropdown, useTriggerDetection } from './hooks';
 import { commandToDropdownItem, fileReferenceProvider, fileToDropdownItem, slashCommandProvider, } from './providers';
 import { getFileIcon } from '../../utils/fileIcons';
@@ -67,6 +68,12 @@ export const ChatInputBox = ({
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
   const lastCompositionEndTimeRef = useRef<number>(0);
+
+  // 增强提示词状态
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [showEnhancerDialog, setShowEnhancerDialog] = useState(false);
+  const [originalPrompt, setOriginalPrompt] = useState('');
+  const [enhancedPrompt, setEnhancedPrompt] = useState('');
 
   // 路径映射：存储文件名/相对路径 -> 完整绝对路径的映射
   // 用于在 tooltip 中显示完整路径
@@ -609,6 +616,79 @@ export const ChatInputBox = ({
   ]);
 
   /**
+   * 处理增强提示词
+   */
+  const handleEnhancePrompt = useCallback(() => {
+    const content = getTextContent().trim();
+    if (!content) {
+      return;
+    }
+
+    // 设置原始提示词并打开对话框
+    setOriginalPrompt(content);
+    setEnhancedPrompt('');
+    setShowEnhancerDialog(true);
+    setIsEnhancing(true);
+
+    // 调用后端进行提示词增强，传递当前选择的模型
+    if (window.sendToJava) {
+      window.sendToJava(`enhance_prompt:${JSON.stringify({ prompt: content, model: selectedModel })}`);
+    }
+  }, [getTextContent, selectedModel]);
+
+  /**
+   * 处理使用增强后的提示词
+   */
+  const handleUseEnhancedPrompt = useCallback(() => {
+    if (enhancedPrompt && editableRef.current) {
+      // 用增强后的提示词替换输入框内容
+      editableRef.current.innerText = enhancedPrompt;
+      setHasContent(true);
+      onInput?.(enhancedPrompt);
+    }
+    setShowEnhancerDialog(false);
+    setIsEnhancing(false);
+  }, [enhancedPrompt, onInput]);
+
+  /**
+   * 处理保留原始提示词
+   */
+  const handleKeepOriginalPrompt = useCallback(() => {
+    setShowEnhancerDialog(false);
+    setIsEnhancing(false);
+  }, []);
+
+  /**
+   * 关闭增强提示词对话框
+   */
+  const handleCloseEnhancerDialog = useCallback(() => {
+    setShowEnhancerDialog(false);
+    setIsEnhancing(false);
+  }, []);
+
+  // 注册增强提示词结果回调
+  useEffect(() => {
+    // 接收增强后的提示词
+    window.updateEnhancedPrompt = (result: string) => {
+      try {
+        const data = JSON.parse(result);
+        if (data.success && data.enhancedPrompt) {
+          setEnhancedPrompt(data.enhancedPrompt);
+        } else {
+          setEnhancedPrompt(data.error || '增强失败');
+        }
+      } catch {
+        setEnhancedPrompt(result);
+      }
+      setIsEnhancing(false);
+    };
+
+    return () => {
+      delete window.updateEnhancedPrompt;
+    };
+  }, []);
+
+  /**
    * 处理 Mac 风格的光标移动、文本选择和删除操作
    */
   const handleMacCursorMovement = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -927,6 +1007,14 @@ export const ChatInputBox = ({
 
       const shift = (ev as KeyboardEvent).shiftKey === true;
 
+      // ⌘/ 快捷键：增强提示词
+      if (ev.key === '/' && ev.metaKey && !ev.shiftKey && !ev.altKey) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        handleEnhancePrompt();
+        return;
+      }
+
       // Mac 风格的光标移动快捷键和删除操作（已在 React 事件中处理，这里不需要处理）
       const isMacCursorMovementOrDelete =
         (ev.key === 'ArrowLeft' && ev.metaKey) ||
@@ -1016,7 +1104,7 @@ export const ChatInputBox = ({
       el.removeEventListener('keyup', nativeKeyUp, { capture: true } as any);
       el.removeEventListener('beforeinput', nativeBeforeInput as EventListener, { capture: true } as any);
     };
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion]);
+  }, [isComposing, handleSubmit, handleEnhancePrompt, fileCompletion, commandCompletion]);
 
   /**
    * 处理 IME 组合开始
@@ -1541,6 +1629,7 @@ export const ChatInputBox = ({
         disabled={disabled || isLoading}
         hasInputContent={hasContent || attachments.length > 0}
         isLoading={isLoading}
+        isEnhancing={isEnhancing}
         selectedModel={selectedModel}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
@@ -1549,6 +1638,7 @@ export const ChatInputBox = ({
         onModeSelect={handleModeSelect}
         onModelSelect={handleModelSelect}
         onProviderSelect={onProviderSelect}
+        onEnhancePrompt={handleEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}
       />
@@ -1597,6 +1687,17 @@ export const ChatInputBox = ({
           {tooltip.text}
         </div>
       )}
+
+      {/* 增强提示词对话框 */}
+      <PromptEnhancerDialog
+        isOpen={showEnhancerDialog}
+        isLoading={isEnhancing}
+        originalPrompt={originalPrompt}
+        enhancedPrompt={enhancedPrompt}
+        onUseEnhanced={handleUseEnhancedPrompt}
+        onKeepOriginal={handleKeepOriginalPrompt}
+        onClose={handleCloseEnhancerDialog}
+      />
     </div>
   );
 };

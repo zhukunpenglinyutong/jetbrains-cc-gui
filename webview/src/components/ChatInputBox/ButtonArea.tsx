@@ -6,12 +6,13 @@ import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 
 /**
  * ButtonArea - 底部工具栏组件
- * 包含模式选择、模型选择、附件按钮、发送/停止按钮
+ * 包含模式选择、模型选择、附件按钮、增强提示词按钮、发送/停止按钮
  */
 export const ButtonArea = ({
   disabled = false,
   hasInputContent = false,
   isLoading = false,
+  isEnhancing = false,
   selectedModel = 'claude-sonnet-4-5',
   permissionMode = 'default',
   currentProvider = 'claude',
@@ -20,6 +21,7 @@ export const ButtonArea = ({
   onModeSelect,
   onModelSelect,
   onProviderSelect,
+  onEnhancePrompt,
   alwaysThinkingEnabled = false,
   onToggleThinking,
 }: ButtonAreaProps) => {
@@ -111,11 +113,19 @@ export const ButtonArea = ({
     onProviderSelect?.(providerId);
   }, [onProviderSelect]);
 
+  /**
+   * 处理增强提示词按钮点击
+   */
+  const handleEnhanceClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEnhancePrompt?.();
+  }, [onEnhancePrompt]);
+
   return (
     <div className="button-area">
       {/* 左侧：选择器 */}
       <div className="button-area-left">
-        <ConfigSelect 
+        <ConfigSelect
           currentProvider={currentProvider}
           onProviderChange={handleProviderSelect}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
@@ -128,6 +138,16 @@ export const ButtonArea = ({
       {/* 右侧:工具按钮 */}
       <div className="button-area-right">
         <div className="button-divider" />
+
+        {/* 增强提示词按钮 */}
+        <button
+          className="enhance-prompt-button"
+          onClick={handleEnhanceClick}
+          disabled={disabled || !hasInputContent || isLoading || isEnhancing}
+          title={`${t('promptEnhancer.tooltip')} (${t('promptEnhancer.shortcut')})`}
+        >
+          <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
+        </button>
 
         {/* 发送/停止按钮 */}
         {isLoading ? (
