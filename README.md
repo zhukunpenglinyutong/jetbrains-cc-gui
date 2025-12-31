@@ -90,9 +90,9 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
 <table>
   <tr>
     <td align="center">
-      <a href="https://github.com/zhukunpenglinyutong">
+      <a href="https://github.com/zhukunpenglinyutong" style="text-decoration: none;">
         <img src="https://avatars.githubusercontent.com/u/31264015?size=100" width="100" height="100" alt="zhukunpenglinyutong" style="border-radius: 50%; border: 3px solid #ff6b35; box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);" />
-        <div style="font-size: 20px; margin-top: 5px; text-decoration: none;">🔥🔥🔥</div>
+        <div style="font-size: 20px; margin-top: 5px;">🔥🔥🔥</div>
       </a>
     </td>
     <td align="center">
@@ -101,7 +101,7 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
       </a>
     </td>
     <td align="center">
-      <a href="https://github.com/gadfly3173">
+      <a href="https://github.com/gadfly3173" style="text-decoration: none;">
         <img src="https://avatars.githubusercontent.com/u/28685179?size=100" width="100" height="100" alt="gadfly3173" style="border-radius: 50%; border: 3px solid #ff6b35; box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);" />
         <div style="font-size: 20px; margin-top: 5px; text-decoration: none;">🔥</div>
       </a>

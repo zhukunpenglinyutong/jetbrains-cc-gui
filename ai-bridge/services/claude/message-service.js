@@ -88,6 +88,7 @@ import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 	      `- 当前 API Key 来源: ${keySource}`,
 	      `- 当前 API Key 预览: ${keyPreview}`,
 	      `- 当前 Base URL: ${baseUrl}（来源: ${baseUrlSource}）`,
+	      `- tip：cli可以读取 环境变量 或者 setting.json 两种方式；本插件为了避免产生问题，只支持读取setting.json 内容，您可以在 本插件右上角设置 - 供应商管理配置下即可使用`,
 	      ''
 	    ].join('\n');
 

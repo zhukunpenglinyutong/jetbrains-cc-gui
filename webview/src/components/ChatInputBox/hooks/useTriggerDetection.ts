@@ -2,6 +2,13 @@ import { useCallback } from 'react';
 import type { TriggerQuery, DropdownPosition } from '../types';
 
 /**
+ * 辅助函数：检查文本是否以换行符结尾
+ */
+function textEndsWithNewline(text: string | null): boolean {
+  return text !== null && text.length > 0 && text.endsWith('\n');
+}
+
+/**
  * 获取指定字符偏移位置的屏幕坐标
  * 注意：需要与 getTextContent 返回的文本格式一致
  * 文件标签会被转换为 @文件路径 格式，需要计算其虚拟长度
@@ -13,10 +20,13 @@ export function getRectAtCharOffset(
   let position = 0;
   let targetNode: Node | null = null;
   let targetOffset = 0;
+  // 跟踪当前是否以换行结尾，与 getTextContent 的 text.endsWith('\n') 逻辑一致
+  let endsWithNewline = false;
 
   const walk = (node: Node): boolean => {
     if (node.nodeType === Node.TEXT_NODE) {
-      const len = node.textContent?.length ?? 0;
+      const text = node.textContent ?? '';
+      const len = text.length;
       if (position + len >= charOffset) {
         // 找到目标文本节点
         targetNode = node;
@@ -24,8 +34,46 @@ export function getRectAtCharOffset(
         return true;
       }
       position += len;
+      // 更新换行状态
+      endsWithNewline = textEndsWithNewline(text);
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
+      const tagName = el.tagName.toLowerCase();
+
+      // 处理 <br> 标签 - 与 getTextContent 保持一致
+      if (tagName === 'br') {
+        if (position + 1 >= charOffset) {
+          // 目标位置在换行符处
+          targetNode = el;
+          targetOffset = 0;
+          return true;
+        }
+        position += 1; // br 标签对应一个换行符
+        endsWithNewline = true;
+        return false;
+      }
+
+      // 处理块级元素 (div, p) - 与 getTextContent 保持一致
+      // getTextContent 逻辑: if (text.length > 0 && !text.endsWith('\n')) { text += '\n'; }
+      if (tagName === 'div' || tagName === 'p') {
+        // 只有在 position > 0 且不以换行结尾时才添加隐式换行
+        if (position > 0 && !endsWithNewline) {
+          if (position + 1 >= charOffset) {
+            // 目标位置在块级元素的隐式换行处
+            targetNode = el;
+            targetOffset = 0;
+            return true;
+          }
+          position += 1;
+          endsWithNewline = true;
+        }
+
+        // 递归处理子节点
+        for (const child of Array.from(el.childNodes)) {
+          if (walk(child)) return true;
+        }
+        return false;
+      }
 
       // 如果是文件标签，计算其虚拟长度 (@ + 文件路径)
       if (el.classList.contains('file-tag')) {
@@ -34,14 +82,13 @@ export function getRectAtCharOffset(
 
         if (position + tagLength >= charOffset) {
           // 目标位置在文件标签内，返回标签末尾位置
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          range.collapse(false); // 折叠到末尾
           targetNode = el;
           targetOffset = 0;
           return true;
         }
         position += tagLength;
+        // 文件路径不以换行结尾
+        endsWithNewline = false;
       } else {
         // 递归处理子节点
         for (const child of Array.from(node.childNodes)) {
@@ -98,17 +145,51 @@ export function getRectAtCharOffset(
 function isPositionInFileTag(element: HTMLElement, textPosition: number): boolean {
   let position = 0;
   let inFileTag = false;
+  // 跟踪当前是否以换行结尾，与 getTextContent 的 text.endsWith('\n') 逻辑一致
+  let endsWithNewline = false;
 
   const walk = (node: Node): boolean => {
     if (node.nodeType === Node.TEXT_NODE) {
-      const len = node.textContent?.length ?? 0;
+      const text = node.textContent ?? '';
+      const len = text.length;
       if (position + len > textPosition) {
         // 目标位置在这个文本节点内，不在文件标签内
         return true;
       }
       position += len;
+      endsWithNewline = textEndsWithNewline(text);
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
+      const tagName = el.tagName.toLowerCase();
+
+      // 处理 <br> 标签 - 与 getTextContent 保持一致
+      if (tagName === 'br') {
+        if (position + 1 > textPosition) {
+          // 目标位置在换行符处
+          return true;
+        }
+        position += 1;
+        endsWithNewline = true;
+        return false;
+      }
+
+      // 处理块级元素 (div, p) - 与 getTextContent 保持一致
+      if (tagName === 'div' || tagName === 'p') {
+        // 只有在 position > 0 且不以换行结尾时才添加隐式换行
+        if (position > 0 && !endsWithNewline) {
+          if (position + 1 > textPosition) {
+            return true;
+          }
+          position += 1;
+          endsWithNewline = true;
+        }
+
+        // 递归处理子节点
+        for (const child of Array.from(el.childNodes)) {
+          if (walk(child)) return true;
+        }
+        return false;
+      }
 
       // 如果是文件标签，计算其虚拟长度 (@ + 文件路径)
       if (el.classList.contains('file-tag')) {
@@ -121,6 +202,7 @@ function isPositionInFileTag(element: HTMLElement, textPosition: number): boolea
           return true;
         }
         position += tagLength;
+        endsWithNewline = false;
       } else {
         // 递归处理子节点
         for (const child of Array.from(node.childNodes)) {
@@ -178,21 +260,16 @@ function detectAtTrigger(text: string, cursorPosition: number, element?: HTMLEle
  * 检测 / 斜杠命令触发（仅行首）
  */
 function detectSlashTrigger(text: string, cursorPosition: number): TriggerQuery | null {
-  // console.log('[detectSlashTrigger] Input:', { text, cursorPosition, textLength: text.length });
-
   // 从光标位置向前查找 /
   let start = cursorPosition - 1;
   while (start >= 0) {
     const char = text[start];
-    // console.log('[detectSlashTrigger] Checking char:', { start, char, charCode: char?.charCodeAt(0) });
 
     // 遇到空格或换行，停止搜索
     if (char === ' ' || char === '\t') {
-      // console.log('[detectSlashTrigger] Found space/tab, returning null');
       return null;
     }
     if (char === '\n') {
-      // console.log('[detectSlashTrigger] Found newline, returning null');
       return null;
     }
 
@@ -200,10 +277,8 @@ function detectSlashTrigger(text: string, cursorPosition: number): TriggerQuery 
     if (char === '/') {
       // 检查 / 前是否为行首
       const isLineStart = start === 0 || text[start - 1] === '\n';
-      // console.log('[detectSlashTrigger] Found /, isLineStart:', isLineStart);
       if (isLineStart) {
         const query = text.slice(start + 1, cursorPosition);
-        // console.log('[detectSlashTrigger] Returning trigger:', { trigger: '/', query, start, end: cursorPosition });
         return {
           trigger: '/',
           query,
@@ -211,12 +286,10 @@ function detectSlashTrigger(text: string, cursorPosition: number): TriggerQuery 
           end: cursorPosition,
         };
       }
-      // console.log('[detectSlashTrigger] / not at line start, returning null');
       return null;
     }
     start--;
   }
-  // console.log('[detectSlashTrigger] Loop ended, returning null');
   return null;
 }
 
@@ -273,44 +346,80 @@ export function useTriggerDetection() {
 
     const range = selection.getRangeAt(0);
 
-    // 如果光标容器是 element 本身，使用 endOffset 计算子节点索引
-    if (range.endContainer === element) {
-      let position = 0;
-      const childNodes = Array.from(element.childNodes);
-      for (let i = 0; i < range.endOffset && i < childNodes.length; i++) {
-        const child = childNodes[i];
-        if (child.nodeType === Node.TEXT_NODE) {
-          position += child.textContent?.length || 0;
-        } else if (child.nodeType === Node.ELEMENT_NODE) {
-          const el = child as HTMLElement;
-          if (el.classList.contains('file-tag')) {
-            const filePath = el.getAttribute('data-file-path') || '';
-            position += filePath.length + 1; // @ + 文件路径（空格由后面的文本节点提供）
-          } else {
-            position += el.textContent?.length || 0;
-          }
-        }
-      }
-      return position;
-    }
-
     // 遍历 DOM 节点计算光标位置，与 getTextContent 保持一致
     let position = 0;
     let found = false;
+    // 跟踪当前是否以换行结尾，与 getTextContent 的 text.endsWith('\n') 逻辑一致
+    let endsWithNewline = false;
 
     const walk = (node: Node): boolean => {
       if (found) return true;
 
       if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent ?? '';
         // 检查光标是否在这个文本节点中
         if (range.endContainer === node) {
           position += range.endOffset;
           found = true;
           return true;
         }
-        position += node.textContent?.length || 0;
+        position += text.length;
+        endsWithNewline = textEndsWithNewline(text);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         const el = node as HTMLElement;
+        const tagName = el.tagName.toLowerCase();
+
+        // 处理 <br> 标签 - 与 getTextContent 保持一致
+        if (tagName === 'br') {
+          // 检查光标是否在 br 元素上
+          if (range.endContainer === el || (range.endContainer === element && el === element.childNodes[range.endOffset - 1])) {
+            found = true;
+            return true;
+          }
+          position += 1;
+          endsWithNewline = true;
+          return false;
+        }
+
+        // 处理块级元素 (div, p) - 与 getTextContent 保持一致
+        if (tagName === 'div' || tagName === 'p') {
+          // 只有在 position > 0 且不以换行结尾时才添加隐式换行
+          if (position > 0 && !endsWithNewline) {
+            position += 1; // 块级元素前的隐式换行
+            endsWithNewline = true;
+          }
+
+          // 检查光标是否直接在这个元素上
+          if (range.endContainer === el) {
+            // 光标在元素节点中，计算到 endOffset 位置的子节点
+            const children = Array.from(el.childNodes);
+            for (let i = 0; i < range.endOffset && i < children.length; i++) {
+              const child = children[i];
+              if (child.nodeType === Node.TEXT_NODE) {
+                position += child.textContent?.length || 0;
+              } else if (child.nodeType === Node.ELEMENT_NODE) {
+                const childEl = child as HTMLElement;
+                const childTag = childEl.tagName.toLowerCase();
+                if (childTag === 'br') {
+                  position += 1;
+                } else if (childEl.classList.contains('file-tag')) {
+                  const filePath = childEl.getAttribute('data-file-path') || '';
+                  position += filePath.length + 1;
+                } else {
+                  position += childEl.textContent?.length || 0;
+                }
+              }
+            }
+            found = true;
+            return true;
+          }
+
+          // 递归处理子节点
+          for (const child of Array.from(el.childNodes)) {
+            if (walk(child)) return true;
+          }
+          return false;
+        }
 
         // 如果是文件标签，计算其转换后的长度 (@ + 文件路径)
         if (el.classList.contains('file-tag')) {
@@ -325,6 +434,7 @@ export function useTriggerDetection() {
             return true;
           }
           position += tagLength;
+          endsWithNewline = false;
         } else {
           // 检查光标是否在这个元素节点中（但不是文件标签）
           if (range.endContainer === el) {
@@ -334,6 +444,17 @@ export function useTriggerDetection() {
               const child = children[i];
               if (child.nodeType === Node.TEXT_NODE) {
                 position += child.textContent?.length || 0;
+              } else if (child.nodeType === Node.ELEMENT_NODE) {
+                const childEl = child as HTMLElement;
+                const childTag = childEl.tagName.toLowerCase();
+                if (childTag === 'br') {
+                  position += 1;
+                } else if (childEl.classList.contains('file-tag')) {
+                  const filePath = childEl.getAttribute('data-file-path') || '';
+                  position += filePath.length + 1;
+                } else {
+                  position += childEl.textContent?.length || 0;
+                }
               }
             }
             found = true;
