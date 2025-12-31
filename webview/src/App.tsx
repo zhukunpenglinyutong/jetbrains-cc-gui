@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './components/MarkdownBlock';
-import CollapsibleMarkdownBlock from './components/CollapsibleMarkdownBlock';
+import CollapsibleTextBlock from './components/CollapsibleTextBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
 import ConfirmDialog from './components/ConfirmDialog';
@@ -1470,7 +1470,7 @@ const App = () => {
                       <div key={`${messageIndex}-${blockIndex}`} className="content-block">
                         {block.type === 'text' && (
                           message.type === 'user' ? (
-                            <CollapsibleMarkdownBlock content={block.text ?? ''} />
+                            <CollapsibleTextBlock content={block.text ?? ''} />
                           ) : (
                             <MarkdownBlock content={block.text ?? ''} />
                           )

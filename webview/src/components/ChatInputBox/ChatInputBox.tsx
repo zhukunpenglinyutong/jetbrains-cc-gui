@@ -155,8 +155,7 @@ export const ChatInputBox = ({
 
   /**
    * 获取输入框纯文本内容（优化版，带缓存）
-   * 注意：在某些浏览器/环境（如 JCEF）中，innerText 可能在末尾包含换行符
-   * 这里统一去除末尾的换行符，确保获取的内容干净
+   * 保留用户输入的原始格式，包括换行符和空白字符
    */
   const getTextContent = useCallback(() => {
     if (!editableRef.current) return '';
@@ -170,7 +169,18 @@ export const ChatInputBox = ({
         text += node.textContent || '';
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         const element = node as HTMLElement;
-        if (element.classList.contains('file-tag')) {
+        const tagName = element.tagName.toLowerCase();
+
+        // 处理换行元素
+        if (tagName === 'br') {
+          text += '\n';
+        } else if (tagName === 'div' || tagName === 'p') {
+          // div 和 p 元素前添加换行（如果不是第一个元素）
+          if (text.length > 0 && !text.endsWith('\n')) {
+            text += '\n';
+          }
+          node.childNodes.forEach(walk);
+        } else if (element.classList.contains('file-tag')) {
           const filePath = element.getAttribute('data-file-path') || '';
           text += `@${filePath}`;
           // 不遍历 file-tag 的子节点，避免重复读取文件名和关闭按钮文本
@@ -183,8 +193,18 @@ export const ChatInputBox = ({
 
     editableRef.current.childNodes.forEach(walk);
 
-    // 去除末尾的换行符（\n, \r, \r\n）
-    return text.replace(/[\r\n]+$/, '');
+    // 只移除 JCEF 环境可能添加的末尾单个换行符（不影响用户输入的换行）
+    // 如果末尾有多个换行，只移除最后一个（JCEF 添加的）
+    if (text.endsWith('\n') && editableRef.current.childNodes.length > 0) {
+      const lastChild = editableRef.current.lastChild;
+      // 只有当最后一个节点不是 br 标签时，才移除末尾换行（说明是 JCEF 添加的）
+      if (lastChild?.nodeType !== Node.ELEMENT_NODE ||
+          (lastChild as HTMLElement).tagName?.toLowerCase() !== 'br') {
+        text = text.slice(0, -1);
+      }
+    }
+
+    return text;
   }, []);
 
   /**
@@ -580,11 +600,13 @@ export const ChatInputBox = ({
 
   /**
    * 处理提交
+   * 保留用户输入的原始格式（空格、换行、缩进等）
    */
   const handleSubmit = useCallback(() => {
-    const content = getTextContent().trim();
+    const content = getTextContent();
 
-    if (!content && attachments.length === 0) {
+    // 只在判断是否为空时使用 trim，不修改实际发送的内容
+    if (!content.trim() && attachments.length === 0) {
       return;
     }
     if (isLoading) {

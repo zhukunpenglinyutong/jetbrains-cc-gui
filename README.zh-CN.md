@@ -143,6 +143,11 @@ AGPL-3.0
         <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
       </a>
     </td>
+    <td align="center">
+      <a href="https://github.com/buddhist-coder">
+        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+      </a>
+    </td>
   </tr>
 </table>
 
