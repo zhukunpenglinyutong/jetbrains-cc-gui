@@ -75,7 +75,8 @@
         "placeholder": "例如 C:\\Program Files\\nodejs\\node.exe 或 /usr/local/bin/node",
         "hint": "在终端中运行",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "获取实际的 Node.js 可执行文件路径。为空时插件会自动尝试检测 Node.js。"
+        "hintText": "获取实际的 Node.js 可执行文件路径。为空时插件会自动尝试检测 Node.js。",
+        "versionTooLow": "Node.js 版本过低，插件需要 v{{minVersion}} 或更高版本才能正常运行"
       },
       "workingDirectory": {
         "label": "工作目录",

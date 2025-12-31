@@ -75,7 +75,8 @@
         "placeholder": "ej. C:\\Program Files\\nodejs\\node.exe o /usr/local/bin/node",
         "hint": "Ejecutar en terminal",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "para obtener la ruta del ejecutable real de Node.js. Dejar vacío para detección automática."
+        "hintText": "para obtener la ruta del ejecutable real de Node.js. Dejar vacío para detección automática.",
+        "versionTooLow": "La versión de Node.js es demasiado baja. El plugin requiere v{{minVersion}} o superior para funcionar correctamente"
       },
       "fontSize": {
         "label": "Tamaño de fuente",

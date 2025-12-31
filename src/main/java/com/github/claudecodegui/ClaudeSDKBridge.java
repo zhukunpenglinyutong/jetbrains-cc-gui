@@ -91,6 +91,43 @@ public class ClaudeSDKBridge {
         return nodeDetector.getNodeExecutable();
     }
 
+    /**
+     * 清除 Node.js 检测缓存.
+     */
+    public void clearNodeCache() {
+        nodeDetector.clearCache();
+    }
+
+    /**
+     * 验证指定路径的 Node.js 并返回版本号.
+     * @param path Node.js 路径
+     * @return 版本号，验证失败返回 null
+     */
+    public String verifyNodePath(String path) {
+        return nodeDetector.verifyNodePath(path);
+    }
+
+    /**
+     * 获取缓存的 Node.js 版本
+     */
+    public String getCachedNodeVersion() {
+        return nodeDetector.getCachedNodeVersion();
+    }
+
+    /**
+     * 获取缓存的 Node.js 路径
+     */
+    public String getCachedNodePath() {
+        return nodeDetector.getCachedNodePath();
+    }
+
+    /**
+     * 验证并缓存指定路径的 Node.js
+     */
+    public NodeDetectionResult verifyAndCacheNodePath(String path) {
+        return nodeDetector.verifyAndCacheNodePath(path);
+    }
+
     // ============================================================================
     // Bridge 目录相关方法（委托给 BridgeDirectoryResolver）
     // ============================================================================
@@ -410,7 +447,7 @@ public class ClaudeSDKBridge {
             try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String version = reader.readLine();
-                // System.out.println("Node.js 版本: " + version);
+                LOG.info("Node.js 版本: " + version);
             }
 
             int exitCode = process.waitFor();

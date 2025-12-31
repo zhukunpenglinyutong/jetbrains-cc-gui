@@ -30,6 +30,8 @@ interface BasicConfigSectionProps {
   onNodePathChange: (path: string) => void;
   onSaveNodePath: () => void;
   savingNodePath: boolean;
+  nodeVersion?: string | null;
+  minNodeVersion?: number;
   workingDirectory?: string;
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
@@ -50,6 +52,8 @@ const BasicConfigSection = ({
   onNodePathChange,
   onSaveNodePath,
   savingNodePath,
+  nodeVersion,
+  minNodeVersion = 18,
   workingDirectory = '',
   onWorkingDirectoryChange = () => {},
   onSaveWorkingDirectory = () => {},
@@ -57,6 +61,21 @@ const BasicConfigSection = ({
   editorFontConfig,
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
+
+  // 解析主版本号
+  const parseMajorVersion = (version: string | null | undefined): number => {
+    if (!version) return 0;
+    const versionStr = version.startsWith('v') ? version.substring(1) : version;
+    const dotIndex = versionStr.indexOf('.');
+    if (dotIndex > 0) {
+      return parseInt(versionStr.substring(0, dotIndex), 10) || 0;
+    }
+    return parseInt(versionStr, 10) || 0;
+  };
+
+  // 检查版本是否过低
+  const majorVersion = parseMajorVersion(nodeVersion);
+  const isVersionTooLow = nodeVersion && majorVersion > 0 && majorVersion < minNodeVersion;
 
   // 当前语言
   const currentLanguage = i18n.language || 'zh';
@@ -190,7 +209,18 @@ const BasicConfigSection = ({
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-terminal" />
           <span className={styles.fieldLabel}>{t('settings.basic.nodePath.label')}</span>
+          {nodeVersion && (
+            <span className={`${styles.versionBadge} ${isVersionTooLow ? styles.versionBadgeError : styles.versionBadgeOk}`}>
+              {nodeVersion}
+            </span>
+          )}
         </div>
+        {isVersionTooLow && (
+          <div className={styles.versionWarning}>
+            <span className="codicon codicon-warning" />
+            {t('settings.basic.nodePath.versionTooLow', { minVersion: minNodeVersion })}
+          </div>
+        )}
         <div className={styles.nodePathInputWrapper}>
           <input
             type="text"

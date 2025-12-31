@@ -1,5 +1,6 @@
 package com.github.claudecodegui;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -700,7 +701,7 @@ public class CodemossSettingsService {
 
             // 如果用户没有配置或配置无效，使用 NodeDetector 自动检测
             if (nodePath == null) {
-                com.github.claudecodegui.bridge.NodeDetector nodeDetector = new com.github.claudecodegui.bridge.NodeDetector();
+                NodeDetector nodeDetector = new NodeDetector();
                 nodePath = nodeDetector.findNodeExecutable();
                 LOG.info("[Backend] 自动检测到的 Node.js 路径: " + nodePath);
             }

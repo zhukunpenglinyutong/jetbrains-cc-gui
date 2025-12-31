@@ -1,5 +1,6 @@
 package com.github.claudecodegui;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.cache.SlashCommandCache;
 import com.github.claudecodegui.handler.*;
 import com.github.claudecodegui.permission.PermissionRequest;
@@ -431,9 +432,41 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void createUIComponents() {
+            PropertiesComponent props = PropertiesComponent.getInstance();
+            String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
+            com.github.claudecodegui.model.NodeDetectionResult nodeResult = null;
+
+            if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
+                String trimmed = savedNodePath.trim();
+                claudeSDKBridge.setNodeExecutable(trimmed);
+                codexSDKBridge.setNodeExecutable(trimmed);
+                nodeResult = claudeSDKBridge.verifyAndCacheNodePath(trimmed);
+                if (nodeResult == null || !nodeResult.isFound()) {
+                    showInvalidNodePathPanel(trimmed, nodeResult != null ? nodeResult.getErrorMessage() : null);
+                    return;
+                }
+            } else {
+                nodeResult = claudeSDKBridge.detectNodeWithDetails();
+                if (nodeResult != null && nodeResult.isFound() && nodeResult.getNodePath() != null) {
+                    props.setValue(NODE_PATH_PROPERTY_KEY, nodeResult.getNodePath());
+                    claudeSDKBridge.setNodeExecutable(nodeResult.getNodePath());
+                    codexSDKBridge.setNodeExecutable(nodeResult.getNodePath());
+                }
+            }
+
             if (!claudeSDKBridge.checkEnvironment()) {
                 showErrorPanel();
                 return;
+            }
+
+            if (nodeResult == null) {
+                nodeResult = claudeSDKBridge.detectNodeWithDetails();
+            }
+            if (nodeResult != null && nodeResult.isFound() && nodeResult.getNodeVersion() != null) {
+                if (!NodeDetector.isVersionSupported(nodeResult.getNodeVersion())) {
+                    showVersionErrorPanel(nodeResult.getNodeVersion());
+                    return;
+                }
             }
 
             try {
@@ -581,7 +614,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 mainPanel.add(browserComponent, BorderLayout.CENTER);
 
             } catch (Exception e) {
-                LOG.error("Error occurred", e);
+                LOG.error("Failed to create UI components: " + e.getMessage(), e);
                 showErrorPanel();
             }
         }
@@ -598,6 +631,37 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 "环境检查失败",
                 message,
                 claudeSDKBridge.getNodeExecutable(),
+                this::handleNodePathSave
+            );
+            mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
+        private void showVersionErrorPanel(String currentVersion) {
+            int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
+            String message = "Node.js 版本过低\n\n" +
+                "当前版本: " + currentVersion + "\n" +
+                "最低要求: v" + minVersion + "\n\n" +
+                "请升级 Node.js 到 v" + minVersion + " 或更高版本后重试。\n\n" +
+                "当前检测到的 Node.js 路径: " + claudeSDKBridge.getNodeExecutable();
+
+            JPanel errorPanel = ErrorPanelBuilder.build(
+                "Node.js 版本不满足要求",
+                message,
+                claudeSDKBridge.getNodeExecutable(),
+                this::handleNodePathSave
+            );
+            mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
+        private void showInvalidNodePathPanel(String path, String errMsg) {
+            String message = "保存的 Node.js 路径不可用: " + path + "\n\n" +
+                (errMsg != null ? errMsg + "\n\n" : "") +
+                "请在下方重新保存正确的 Node.js 路径。";
+
+            JPanel errorPanel = ErrorPanelBuilder.build(
+                "Node.js 路径不可用",
+                message,
+                path,
                 this::handleNodePathSave
             );
             mainPanel.add(errorPanel, BorderLayout.CENTER);
