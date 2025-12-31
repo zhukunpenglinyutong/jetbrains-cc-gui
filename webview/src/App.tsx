@@ -272,10 +272,16 @@ const App = () => {
       //   console.log(`[Frontend][${timestamp}][PERF] updateMessages 收到响应，距发送 ${timestamp - sendTime}ms`);
       // }
       try {
+        console.log('[Frontend] updateMessages received, json length:', json?.length);
         const parsed = JSON.parse(json) as ClaudeMessage[];
+        console.log('[Frontend] updateMessages parsed, count:', parsed.length, 'types:', parsed.map(m => m.type).join(','));
+        if (parsed.length > 0) {
+          console.log('[Frontend] First message:', JSON.stringify(parsed[0]).substring(0, 200));
+        }
         setMessages(parsed);
       } catch (error) {
         console.error('[Frontend] Failed to parse messages:', error);
+        console.error('[Frontend] Raw JSON:', json?.substring(0, 500));
       }
     };
 
@@ -1076,6 +1082,7 @@ const App = () => {
   const shouldShowMessage = (message: ClaudeMessage) => {
     // 过滤 isMeta 消息（如 "Caveat: The messages below were generated..."）
     if (message.raw && typeof message.raw === 'object' && 'isMeta' in message.raw && message.raw.isMeta === true) {
+      console.log('[Frontend] shouldShowMessage: filtered isMeta message');
       return false;
     }
 
@@ -1088,9 +1095,11 @@ const App = () => {
       text.includes('<command-message>') ||
       text.includes('<command-args>')
     )) {
+      console.log('[Frontend] shouldShowMessage: filtered command message');
       return false;
     }
     if (message.type === 'user' && text === '[tool_result]') {
+      console.log('[Frontend] shouldShowMessage: filtered tool_result');
       return false;
     }
     if (message.type === 'assistant') {
@@ -1105,14 +1114,19 @@ const App = () => {
       const rawBlocks = normalizeBlocks(message.raw);
       if (Array.isArray(rawBlocks) && rawBlocks.length > 0) {
         // 确保至少有一个非空的内容块
-        return rawBlocks.some(block => {
+        const hasValidBlock = rawBlocks.some(block => {
           if (block.type === 'text') {
             return block.text && block.text.trim().length > 0;
           }
           // 图片、工具使用等其他类型的块都应该显示
           return true;
         });
+        if (!hasValidBlock) {
+          console.log('[Frontend] shouldShowMessage: user message filtered - no valid blocks', { type: message.type, text: text?.substring(0, 100), rawBlocks });
+        }
+        return hasValidBlock;
       }
+      console.log('[Frontend] shouldShowMessage: user message filtered - empty content', { type: message.type, text: text?.substring(0, 100), hasRaw: !!message.raw });
       return false;
     }
     return true;

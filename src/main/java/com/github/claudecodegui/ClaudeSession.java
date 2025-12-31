@@ -267,9 +267,10 @@ public class ClaudeSession {
         // 添加用户消息到历史
         Message userMessage = new Message(Message.Type.USER, normalizedInput);
         try {
-            if (attachments != null && !attachments.isEmpty()) {
-                com.google.gson.JsonArray contentArr = new com.google.gson.JsonArray();
+            com.google.gson.JsonArray contentArr = new com.google.gson.JsonArray();
+            String userDisplayText = normalizedInput;
 
+            if (attachments != null && !attachments.isEmpty()) {
                 // 添加图片块（使用与 claude-code 相同的格式，包含完整 base64 数据）
                 for (Attachment att : attachments) {
                     if (att == null) continue;
@@ -288,7 +289,6 @@ public class ClaudeSession {
                 }
 
                 // 当用户未输入文本时，提供一个占位说明
-                String userDisplayText = normalizedInput;
                 if (userDisplayText.isEmpty()) {
                     int imageCount = 0;
                     java.util.List<String> names = new java.util.ArrayList<>();
@@ -313,22 +313,26 @@ public class ClaudeSession {
                     }
                     userDisplayText = "已上传附件: " + nameSummary;
                 }
-
-                // 添加文本块
-                com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
-                textBlock.addProperty("type", "text");
-                textBlock.addProperty("text", userDisplayText);
-                contentArr.add(textBlock);
-
-                com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
-                messageObj.add("content", contentArr);
-                com.google.gson.JsonObject rawUser = new com.google.gson.JsonObject();
-                rawUser.add("message", messageObj);
-                userMessage.raw = rawUser;
-                userMessage.content = userDisplayText;
             }
+
+            // 添加文本块（始终添加，确保 raw 字段不为空）
+            com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
+            textBlock.addProperty("type", "text");
+            textBlock.addProperty("text", userDisplayText);
+            contentArr.add(textBlock);
+
+            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+            messageObj.add("content", contentArr);
+            com.google.gson.JsonObject rawUser = new com.google.gson.JsonObject();
+            rawUser.add("message", messageObj);
+            userMessage.raw = rawUser;
+            userMessage.content = userDisplayText;
+
+            LOG.info("[ClaudeSession] Created user message: content=" +
+                    (userDisplayText.length() > 50 ? userDisplayText.substring(0, 50) + "..." : userDisplayText) +
+                    ", hasRaw=true, contentBlocks=" + contentArr.size());
         } catch (Exception e) {
-            LOG.warn("Failed to attach raw image blocks: " + e.getMessage());
+            LOG.warn("Failed to build user message raw: " + e.getMessage());
         }
         messages.add(userMessage);
         notifyMessageUpdate();

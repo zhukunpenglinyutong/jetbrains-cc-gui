@@ -801,8 +801,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             session.setCallback(new ClaudeSession.SessionCallback() {
                 @Override
                 public void onMessageUpdate(List<ClaudeSession.Message> messages) {
+                    LOG.info("[ClaudeSDKToolWindow] onMessageUpdate called, message count: " + messages.size());
+                    if (!messages.isEmpty()) {
+                        ClaudeSession.Message first = messages.get(0);
+                        LOG.info("[ClaudeSDKToolWindow] First message: type=" + first.type +
+                                ", content=" + (first.content != null ? first.content.substring(0, Math.min(50, first.content.length())) : "null") +
+                                ", hasRaw=" + (first.raw != null));
+                    }
                     ApplicationManager.getApplication().invokeLater(() -> {
                         String messagesJson = convertMessagesToJson(messages);
+                        LOG.info("[ClaudeSDKToolWindow] Calling updateMessages, json length: " + messagesJson.length());
                         callJavaScript("updateMessages", JsUtils.escapeJs(messagesJson));
                     });
                     pushUsageUpdateFromMessages(messages);
