@@ -274,6 +274,7 @@ export const ChatInputBox = ({
       const fullMatch = match[0];
       const filePath = match[1];
       const matchIndex = match.index || 0;
+
       // 添加匹配前的文本
       if (matchIndex > lastIndex) {
         const textBefore = currentText.substring(lastIndex, matchIndex);
@@ -286,6 +287,20 @@ export const ChatInputBox = ({
 
       // 获取纯文件名（不含行号，用于获取 ICON）
       const pureFileName = pureFilePath.split(/[/\\]/).pop() || pureFilePath;
+
+      // 验证路径是否为有效引用（必须在 pathMappingRef 中存在）
+      // 只有用户从下拉列表中选择的文件才会被记录到 pathMappingRef
+      const isValidReference =
+        pathMappingRef.current.has(pureFilePath) ||
+        pathMappingRef.current.has(pureFileName) ||
+        pathMappingRef.current.has(filePath);
+
+      // 如果不是有效引用，保留原始文本，不渲染为标签
+      if (!isValidReference) {
+        newHTML += fullMatch;
+        lastIndex = matchIndex + fullMatch.length;
+        return;
+      }
 
       // 获取显示文件名（包含行号，用于显示）
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
@@ -305,7 +320,6 @@ export const ChatInputBox = ({
       const escapedPath = escapeHtmlAttr(filePath);
 
       // 尝试从路径映射中获取完整路径（用于 tooltip 显示）
-      // 优先级：pureFilePath -> pureFileName -> 原路径（去掉行号进行查找）
       const fullPath =
         pathMappingRef.current.get(pureFilePath) ||
         pathMappingRef.current.get(pureFileName) ||
@@ -313,8 +327,6 @@ export const ChatInputBox = ({
       const escapedFullPath = escapeHtmlAttr(fullPath);
 
       // 创建文件标签 HTML
-      // data-file-path: 存储原始路径（用于提取文本时还原）
-      // data-tooltip: 存储完整路径（用于悬停显示）
       newHTML += `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`;
       newHTML += `<span class="file-tag-icon">${iconSvg}</span>`;
       newHTML += `<span class="file-tag-text">${displayFileName}</span>`;

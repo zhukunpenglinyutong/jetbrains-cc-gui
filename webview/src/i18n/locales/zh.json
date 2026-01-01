@@ -263,7 +263,8 @@
     "deleteSuccess": "删除成功",
     "operationFailed": "操作失败",
     "copySuccess": "{{label}}已复制到剪切板",
-    "copyFailed": "复制失败"
+    "copyFailed": "复制失败",
+    "newSessionCreated": "新会话已创建"
   },
   "config": {
     "clickToCopy": "点击复制",
