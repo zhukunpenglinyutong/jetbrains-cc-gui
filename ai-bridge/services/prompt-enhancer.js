@@ -16,10 +16,12 @@ import { mapModelIdToSdkName } from '../utils/model-utils.js';
 import { homedir } from 'os';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import http from 'http';
 
 // ACE MCP 配置
 const ACE_SERVER_NAMES = ['auggie-mcp', 'auggie', 'augment', 'ace'];  // 可能的 ACE 服务器名称
 const ACE_TIMEOUT_MS = 30000;  // ACE 调用超时时间（毫秒），增加到 30 秒以支持大型项目
+const ACE_PROXY_TIMEOUT_MS = 15000;  // 代理服务调用超时（更短，因为已经预热）
 
 let claudeSdk = null;
 
@@ -102,13 +104,83 @@ function checkAceMcpAvailability() {
 }
 
 /**
- * 连接到 ACE MCP 服务器并调用 codebase-retrieval 工具
+ * 通过 HTTP 代理服务调用 ACE MCP
+ * 这是首选方式，因为代理服务维护了持久连接，避免重复索引
+ *
+ * @param {string} informationRequest - 要检索的信息描述
+ * @param {number} proxyPort - 代理服务端口
+ * @returns {Promise<string | null>} 检索到的上下文，失败返回 null
+ */
+async function getAceContextViaProxy(informationRequest, proxyPort) {
+  return new Promise((resolve) => {
+    console.log(`[PromptEnhancer] [ACE-Proxy] 通过代理服务调用 ACE (端口: ${proxyPort})`);
+    console.log(`[PromptEnhancer] [ACE-Proxy] 请求内容: ${informationRequest.substring(0, 100)}...`);
+
+    const postData = JSON.stringify({ query: informationRequest });
+
+    const options = {
+      hostname: '127.0.0.1',
+      port: proxyPort,
+      path: '/retrieve',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: ACE_PROXY_TIMEOUT_MS
+    };
+
+    const req = http.request(options, (res) => {
+      let data = '';
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        try {
+          const result = JSON.parse(data);
+
+          if (result.success && result.context) {
+            console.log(`[PromptEnhancer] [ACE-Proxy] 成功! 返回上下文长度: ${result.context.length} 字符`);
+            resolve(result.context);
+          } else {
+            console.log(`[PromptEnhancer] [ACE-Proxy] 返回失败: ${result.error || '空结果'}`);
+            resolve(null);
+          }
+        } catch (e) {
+          console.log(`[PromptEnhancer] [ACE-Proxy] 解析响应失败: ${e.message}`);
+          resolve(null);
+        }
+      });
+    });
+
+    req.on('error', (e) => {
+      console.log(`[PromptEnhancer] [ACE-Proxy] 请求失败: ${e.message}`);
+      resolve(null);
+    });
+
+    req.on('timeout', () => {
+      console.log('[PromptEnhancer] [ACE-Proxy] 请求超时');
+      req.destroy();
+      resolve(null);
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
+
+/**
+ * 连接到 ACE MCP 服务器并调用 codebase-retrieval 工具（直接连接方式）
+ * 当代理服务不可用时使用此方法作为回退
+ *
  * @param {string} informationRequest - 要检索的信息描述
  * @param {Object} serverConfig - MCP 服务器配置
  * @param {string} serverName - 服务器名称
  * @returns {Promise<string | null>} 检索到的上下文，失败返回 null
  */
-async function getAceContext(informationRequest, serverConfig, serverName, projectPath) {
+async function getAceContextDirect(informationRequest, serverConfig, serverName, projectPath) {
   try {
     const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
     const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
@@ -214,6 +286,35 @@ async function getAceContext(informationRequest, serverConfig, serverName, proje
     console.log(`[PromptEnhancer] [ACE] 错误堆栈: ${error.stack}`);
     return null;
   }
+}
+
+/**
+ * 获取 ACE 上下文（统一入口）
+ * 优先使用代理服务，如果代理不可用则回退到直接连接
+ *
+ * @param {string} informationRequest - 要检索的信息描述
+ * @param {Object} serverConfig - MCP 服务器配置
+ * @param {string} serverName - 服务器名称
+ * @param {string} projectPath - 项目路径
+ * @param {number} proxyPort - 代理服务端口（可选，由 Java 端传入）
+ * @returns {Promise<string | null>} 检索到的上下文，失败返回 null
+ */
+async function getAceContext(informationRequest, serverConfig, serverName, projectPath, proxyPort) {
+  // 如果有代理端口，优先使用代理服务
+  if (proxyPort && proxyPort > 0) {
+    console.log(`[PromptEnhancer] [ACE] 使用代理服务模式 (端口: ${proxyPort})`);
+    const result = await getAceContextViaProxy(informationRequest, proxyPort);
+
+    if (result) {
+      return result;
+    }
+
+    console.log('[PromptEnhancer] [ACE] 代理服务调用失败，回退到直接连接模式');
+  }
+
+  // 回退到直接连接
+  console.log('[PromptEnhancer] [ACE] 使用直接连接模式');
+  return getAceContextDirect(informationRequest, serverConfig, serverName, projectPath);
 }
 
 /**
@@ -469,9 +570,10 @@ function buildFullPrompt(originalPrompt, context) {
  * @param {string} systemPrompt - 系统提示词
  * @param {string} model - 使用的模型（可选，前端模型 ID）
  * @param {Object} context - 上下文信息（可选）
+ * @param {number} aceProxyPort - ACE 代理服务端口（可选，由 Java 端传入）
  * @returns {Promise<string>} - 增强后的提示词
  */
-async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
+async function enhancePrompt(originalPrompt, systemPrompt, model, context, aceProxyPort) {
   try {
     const sdk = await ensureClaudeSdk();
     const { query } = sdk;
@@ -532,7 +634,12 @@ ${context?.currentFile?.path ? `\n当前文件: ${context.currentFile.path}` : '
 ${context?.selectedCode ? `\n用户选中了一段代码` : ''}
 请检索与此任务相关的代码上下文。`;
 
-      const aceContext = await getAceContext(aceRequest, aceStatus.serverConfig, aceStatus.serverName, projectPath);
+      // 如果有代理端口，优先使用代理服务
+      if (aceProxyPort && aceProxyPort > 0) {
+        console.log(`[PromptEnhancer] [ACE] 使用 Java 端提供的代理端口: ${aceProxyPort}`);
+      }
+
+      const aceContext = await getAceContext(aceRequest, aceStatus.serverConfig, aceStatus.serverName, projectPath, aceProxyPort);
 
       if (aceContext) {
         console.log('[PromptEnhancer] [ACE] ★★★ ACE 上下文获取成功! 使用 ACE 增强模式 ★★★');
@@ -608,15 +715,38 @@ ${context?.selectedCode ? `\n用户选中了一段代码` : ''}
 }
 
 /**
+ * 解析命令行参数
+ */
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const result = { aceProxyPort: null };
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--ace-proxy-port' && args[i + 1]) {
+      result.aceProxyPort = parseInt(args[i + 1], 10);
+      i++;
+    }
+  }
+
+  return result;
+}
+
+/**
  * 主函数
  */
 async function main() {
   try {
+    // 解析命令行参数
+    const cmdArgs = parseArgs();
+
     // 读取 stdin 输入
     const input = await readStdin();
     const data = JSON.parse(input);
 
     const { prompt, systemPrompt, model, context } = data;
+
+    // 从输入数据或命令行参数获取代理端口
+    const aceProxyPort = data.aceProxyPort || cmdArgs.aceProxyPort;
 
     if (!prompt) {
       console.log('[ENHANCED]');
@@ -642,8 +772,13 @@ async function main() {
       console.log(`[PromptEnhancer] 未收到上下文信息`);
     }
 
-    // 增强提示词（传递上下文信息）
-    const enhancedPrompt = await enhancePrompt(prompt, systemPrompt, model, context);
+    // 记录 ACE 代理端口
+    if (aceProxyPort) {
+      console.log(`[PromptEnhancer] ACE 代理端口: ${aceProxyPort}`);
+    }
+
+    // 增强提示词（传递上下文信息和代理端口）
+    const enhancedPrompt = await enhancePrompt(prompt, systemPrompt, model, context, aceProxyPort);
 
     // 输出结果
     // 将换行符替换为特殊标记，避免 Java 端 readLine() 只读取第一行

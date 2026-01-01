@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
+import com.github.claudecodegui.service.AceMcpService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -354,10 +355,32 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             }
             LOG.info("[PromptEnhancer] AI Bridge 目录: " + bridgeDir.getAbsolutePath());
 
+            // 获取 ACE MCP 代理端口
+            int aceProxyPort = -1;
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath != null) {
+                try {
+                    AceMcpService aceMcpService = AceMcpService.getInstance(context.getProject(), projectPath);
+                    aceProxyPort = aceMcpService.getProxyPort();
+                    if (aceProxyPort > 0) {
+                        LOG.info("[PromptEnhancer] ACE MCP 代理端口: " + aceProxyPort);
+                    } else {
+                        LOG.info("[PromptEnhancer] ACE MCP 代理服务未就绪");
+                    }
+                } catch (Exception e) {
+                    LOG.warn("[PromptEnhancer] 获取 ACE MCP 代理端口失败: " + e.getMessage());
+                }
+            }
+
             // 构建命令
             List<String> command = new ArrayList<>();
             command.add(nodeExecutable);
             command.add(new File(bridgeDir, "services/prompt-enhancer.js").getAbsolutePath());
+            // 添加 ACE 代理端口参数
+            if (aceProxyPort > 0) {
+                command.add("--ace-proxy-port");
+                command.add(String.valueOf(aceProxyPort));
+            }
             LOG.info("[PromptEnhancer] 执行命令: " + String.join(" ", command));
 
             ProcessBuilder pb = new ProcessBuilder(command);
@@ -376,6 +399,10 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             stdinInput.addProperty("systemPrompt", ENHANCE_SYSTEM_PROMPT);
             if (model != null && !model.isEmpty()) {
                 stdinInput.addProperty("model", model);
+            }
+            // 添加 ACE 代理端口到输入数据（备用方式）
+            if (aceProxyPort > 0) {
+                stdinInput.addProperty("aceProxyPort", aceProxyPort);
             }
             // 添加上下文信息
             if (contextObj != null) {
