@@ -14,6 +14,12 @@ import { loadClaudeSdk, isClaudeSdkAvailable } from '../utils/sdk-loader.js';
 import { setupApiKey, loadClaudeSettings } from '../config/api-config.js';
 import { mapModelIdToSdkName } from '../utils/model-utils.js';
 import { homedir } from 'os';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+// ACE MCP 配置
+const ACE_SERVER_NAMES = ['auggie-mcp', 'auggie', 'augment', 'ace'];  // 可能的 ACE 服务器名称
+const ACE_TIMEOUT_MS = 30000;  // ACE 调用超时时间（毫秒），增加到 30 秒以支持大型项目
 
 let claudeSdk = null;
 
@@ -35,6 +41,231 @@ const MAX_CURSOR_CONTEXT_LENGTH = 1000;     // 光标上下文最大长度
 const MAX_CURRENT_FILE_LENGTH = 3000;       // 当前文件内容最大长度
 const MAX_RELATED_FILES_LENGTH = 2000;      // 相关文件总长度限制
 const MAX_SINGLE_RELATED_FILE_LENGTH = 500; // 单个相关文件最大长度
+
+// 缓存 ACE MCP 客户端连接
+let aceClientCache = null;
+
+/**
+ * 读取 MCP 服务器配置
+ * @returns {Object} MCP 服务器配置对象
+ */
+function readMcpConfig() {
+  try {
+    const claudeJsonPath = join(homedir(), '.claude.json');
+    const content = readFileSync(claudeJsonPath, 'utf-8');
+    const config = JSON.parse(content);
+    return config.mcpServers || {};
+  } catch (error) {
+    console.log('[PromptEnhancer] 读取 MCP 配置失败:', error.message);
+    return {};
+  }
+}
+
+/**
+ * 检测 ACE MCP 服务器是否可用
+ * @returns {{ available: boolean, serverName: string | null, serverConfig: Object | null }}
+ */
+function checkAceMcpAvailability() {
+  const mcpConfig = readMcpConfig();
+  const configKeys = Object.keys(mcpConfig);
+
+  console.log('[PromptEnhancer] 检测 ACE MCP 可用性，已配置的服务器:', configKeys.join(', ') || '无');
+
+  // 查找 ACE 服务器
+  for (const serverName of configKeys) {
+    const normalizedName = serverName.toLowerCase().replace(/[-_\s]/g, '');
+
+    // 检查是否匹配 ACE 服务器名称
+    for (const aceName of ACE_SERVER_NAMES) {
+      if (normalizedName.includes(aceName.replace(/[-_\s]/g, ''))) {
+        const serverConfig = mcpConfig[serverName];
+
+        // 验证配置有效性（需要有 command）
+        if (serverConfig && serverConfig.command) {
+          console.log(`[PromptEnhancer] 找到 ACE MCP 服务器: ${serverName}`);
+          return {
+            available: true,
+            serverName,
+            serverConfig
+          };
+        }
+      }
+    }
+  }
+
+  console.log('[PromptEnhancer] 未找到 ACE MCP 服务器');
+  return {
+    available: false,
+    serverName: null,
+    serverConfig: null
+  };
+}
+
+/**
+ * 连接到 ACE MCP 服务器并调用 codebase-retrieval 工具
+ * @param {string} informationRequest - 要检索的信息描述
+ * @param {Object} serverConfig - MCP 服务器配置
+ * @param {string} serverName - 服务器名称
+ * @returns {Promise<string | null>} 检索到的上下文，失败返回 null
+ */
+async function getAceContext(informationRequest, serverConfig, serverName, projectPath) {
+  try {
+    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+    const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+
+    console.log(`[PromptEnhancer] [ACE] 开始连接 ACE MCP 服务器: ${serverName}`);
+    console.log(`[PromptEnhancer] [ACE] 命令: ${serverConfig.command} ${(serverConfig.args || []).join(' ')}`);
+    console.log(`[PromptEnhancer] [ACE] 工作目录: ${projectPath || '未指定'}`);
+
+    // 创建传输层，设置正确的工作目录
+    const transportOptions = {
+      command: serverConfig.command,
+      args: serverConfig.args || [],
+      env: { ...process.env, ...(serverConfig.env || {}) }
+    };
+
+    // 如果有项目路径，设置为工作目录
+    if (projectPath) {
+      transportOptions.cwd = projectPath;
+    }
+
+    const transport = new StdioClientTransport(transportOptions);
+
+    // 创建客户端
+    const client = new Client({
+      name: 'prompt-enhancer',
+      version: '1.0.0'
+    }, {
+      capabilities: {}
+    });
+
+    // 连接到服务器
+    console.log('[PromptEnhancer] [ACE] 正在连接...');
+    await client.connect(transport);
+    console.log('[PromptEnhancer] [ACE] 连接成功!');
+
+    // 设置超时
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('ACE 调用超时')), ACE_TIMEOUT_MS);
+    });
+
+    try {
+      // 调用 codebase-retrieval 工具
+      console.log('[PromptEnhancer] [ACE] 调用 codebase-retrieval 工具...');
+      console.log(`[PromptEnhancer] [ACE] 请求内容: ${informationRequest.substring(0, 100)}...`);
+
+      const callPromise = client.callTool({
+        name: 'codebase-retrieval',
+        arguments: {
+          information_request: informationRequest
+        }
+      });
+
+      const result = await Promise.race([callPromise, timeoutPromise]);
+      clearTimeout(timeoutId);
+      console.log('[PromptEnhancer] [ACE] 收到响应');
+
+      // 关闭连接
+      await client.close();
+      console.log('[PromptEnhancer] [ACE] 连接已关闭');
+
+      // 解析结果
+      if (result && result.content) {
+        console.log(`[PromptEnhancer] [ACE] 响应内容块数量: ${result.content.length}`);
+        const textContent = result.content
+          .filter(c => c.type === 'text')
+          .map(c => c.text)
+          .join('\n');
+
+        if (textContent.trim()) {
+          console.log(`[PromptEnhancer] [ACE] 成功! 返回上下文长度: ${textContent.length} 字符`);
+          console.log(`[PromptEnhancer] [ACE] 上下文预览: ${textContent.substring(0, 200)}...`);
+          return textContent;
+        }
+      }
+
+      console.log('[PromptEnhancer] [ACE] 返回空结果');
+      return null;
+    } catch (innerError) {
+      clearTimeout(timeoutId);
+      console.log(`[PromptEnhancer] [ACE] 调用失败: ${innerError.message}`);
+
+      // 确保关闭连接
+      try {
+        await client.close();
+        console.log('[PromptEnhancer] [ACE] 连接已关闭（错误后清理）');
+      } catch (closeError) {
+        console.log(`[PromptEnhancer] [ACE] 关闭连接失败: ${closeError.message}`);
+      }
+
+      // 强制终止子进程
+      try {
+        transport.close();
+        console.log('[PromptEnhancer] [ACE] 传输层已关闭');
+      } catch (transportError) {
+        console.log(`[PromptEnhancer] [ACE] 关闭传输层失败: ${transportError.message}`);
+      }
+
+      return null;
+    }
+  } catch (error) {
+    console.log(`[PromptEnhancer] [ACE] 连接失败: ${error.message}`);
+    console.log(`[PromptEnhancer] [ACE] 错误堆栈: ${error.stack}`);
+    return null;
+  }
+}
+
+/**
+ * 使用 ACE 上下文构建完整提示词
+ * @param {string} originalPrompt - 原始提示词
+ * @param {Object} context - 上下文信息
+ * @param {string} aceContext - ACE 返回的上下文
+ * @returns {string} 完整提示词
+ */
+function buildFullPromptWithAce(originalPrompt, context, aceContext) {
+  const contextParts = [];
+
+  // 添加 ACE 上下文（优先级最高）
+  if (aceContext) {
+    contextParts.push(`## ACE 代码库上下文（由 Augment Context Engine 提供）\n\n${aceContext}`);
+  }
+
+  // 添加选中的代码（如果有）
+  if (context?.selectedCode) {
+    const truncatedCode = truncateText(context.selectedCode, MAX_SELECTED_CODE_LENGTH);
+    contextParts.push(`## 用户选中的代码\n\n\`\`\`\n${truncatedCode}\n\`\`\``);
+  }
+
+  // 添加当前文件信息（如果有）
+  if (context?.currentFile?.path) {
+    let fileInfo = `## 当前文件\n\n路径: ${context.currentFile.path}`;
+    if (context.currentFile.language) {
+      fileInfo += `\n语言: ${context.currentFile.language}`;
+    }
+    contextParts.push(fileInfo);
+  }
+
+  // 添加光标位置信息（如果有）
+  if (context?.cursorPosition) {
+    const pos = context.cursorPosition;
+    let cursorInfo = `## 光标位置\n\n第 ${pos.line} 行，第 ${pos.column} 列`;
+    if (context.cursorContext) {
+      const truncatedContext = truncateText(context.cursorContext, MAX_CURSOR_CONTEXT_LENGTH);
+      cursorInfo += `\n\n光标周围代码:\n\`\`\`\n${truncatedContext}\n\`\`\``;
+    }
+    contextParts.push(cursorInfo);
+  }
+
+  // 构建完整提示词
+  let fullPrompt = `## 用户原始提示词\n\n${originalPrompt}`;
+
+  if (contextParts.length > 0) {
+    fullPrompt += '\n\n---\n\n# 上下文信息\n\n' + contextParts.join('\n\n');
+  }
+
+  return fullPrompt;
+}
 
 /**
  * 从 stdin 读取输入
@@ -261,8 +492,61 @@ async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
     // 使用用户主目录作为工作目录
     const workingDirectory = homedir();
 
-    // 构建包含上下文信息的完整提示词
-    const fullPrompt = buildFullPrompt(originalPrompt, context);
+    // 尝试使用 ACE MCP 获取上下文
+    console.log('[PromptEnhancer] ========== ACE MCP 检测开始 ==========');
+    let fullPrompt;
+    const aceStatus = checkAceMcpAvailability();
+
+    if (aceStatus.available) {
+      console.log('[PromptEnhancer] [ACE] ACE MCP 可用! 服务器: ' + aceStatus.serverName);
+      console.log('[PromptEnhancer] [ACE] 尝试获取上下文...');
+
+      // 从当前文件路径提取项目路径
+      let projectPath = null;
+      if (context?.currentFile?.path) {
+        // 尝试找到项目根目录（包含 .git, pom.xml, package.json 等的目录）
+        const { dirname, join: pathJoin } = await import('path');
+        const { existsSync } = await import('fs');
+
+        let currentDir = dirname(context.currentFile.path);
+        const projectMarkers = ['.git', 'pom.xml', 'build.gradle', 'package.json', '.project'];
+
+        // 向上查找项目根目录
+        while (currentDir && currentDir !== '/' && currentDir !== dirname(currentDir)) {
+          for (const marker of projectMarkers) {
+            if (existsSync(pathJoin(currentDir, marker))) {
+              projectPath = currentDir;
+              break;
+            }
+          }
+          if (projectPath) break;
+          currentDir = dirname(currentDir);
+        }
+
+        console.log(`[PromptEnhancer] [ACE] 检测到项目路径: ${projectPath || '未找到'}`);
+      }
+
+      // 构建 ACE 检索请求
+      const aceRequest = `用户正在编写代码，需要帮助完成以下任务：${originalPrompt}
+${context?.currentFile?.path ? `\n当前文件: ${context.currentFile.path}` : ''}
+${context?.selectedCode ? `\n用户选中了一段代码` : ''}
+请检索与此任务相关的代码上下文。`;
+
+      const aceContext = await getAceContext(aceRequest, aceStatus.serverConfig, aceStatus.serverName, projectPath);
+
+      if (aceContext) {
+        console.log('[PromptEnhancer] [ACE] ★★★ ACE 上下文获取成功! 使用 ACE 增强模式 ★★★');
+        fullPrompt = buildFullPromptWithAce(originalPrompt, context, aceContext);
+      } else {
+        console.log('[PromptEnhancer] [ACE] ACE 上下文获取失败，回退到默认模式');
+        fullPrompt = buildFullPrompt(originalPrompt, context);
+      }
+    } else {
+      console.log('[PromptEnhancer] [ACE] ACE MCP 不可用，使用默认模式');
+      fullPrompt = buildFullPrompt(originalPrompt, context);
+    }
+    console.log('[PromptEnhancer] ========== ACE MCP 检测结束 ==========');
+
     console.log(`[PromptEnhancer] 完整提示词长度: ${fullPrompt.length}`);
 
     // 准备选项
