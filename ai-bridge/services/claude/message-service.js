@@ -5,6 +5,7 @@
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import Anthropic from '@anthropic-ai/sdk';
+import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
 import { randomUUID } from 'crypto';
 
 import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
@@ -29,14 +30,14 @@ import { buildIDEContextPrompt } from '../system-prompts.js';
 			    const rawError = error?.message || String(error);
 			    const errorName = error?.name || 'Error';
 			    const errorStack = error?.stack || null;
-	
+
 			    // 之前这里对 AbortError / "Claude Code process aborted by user" 做了超时提示
 			    // 现在统一走错误处理逻辑，但仍然在 details 中记录是否为超时/中断类错误，方便排查
 			    const isAbortError =
 			      errorName === 'AbortError' ||
 			      rawError.includes('Claude Code process aborted by user') ||
 			      rawError.includes('The operation was aborted');
-	
+
 		    const settings = loadClaudeSettings();
 	    const env = settings?.env || {};
 
@@ -78,11 +79,11 @@ import { buildIDEContextPrompt } from '../system-prompts.js';
 		    } else {
 		      baseUrlSource = '默认值（https://api.anthropic.com）';
 		    }
-		
+
 		    const heading = isAbortError
 		      ? 'Claude Code 运行被中断（可能是响应超时或用户取消）：'
 		      : 'Claude Code 出现错误：';
-		
+
 		    const userMessage = [
 	      heading,
 	      `- 错误信息: ${rawError}`,
@@ -238,19 +239,19 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     }
 
 	    console.log('[DEBUG] Query started, waiting for messages...');
-	
+
 	    // 调用 query 函数
 	    const result = query({
 	      prompt: message,
 	      options
 	    });
-	
+
 		// 设置 60 秒超时，超时后通过 AbortController 取消查询（已发现严重问题，暂时注释掉自动超时逻辑）
 		// timeoutId = setTimeout(() => {
 		//   console.log('[DEBUG] Query timeout after 60 seconds, aborting...');
 		//   abortController.abort();
 		// }, 60000);
-	
+
 	    console.log('[DEBUG] Starting message loop...');
 
     let currentSessionId = resumeSessionId;
@@ -347,7 +348,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      success: true,
 	      sessionId: currentSessionId
 	    }));
-	
+
 	  } catch (error) {
 	    const payload = buildConfigErrorPayload(error);
 	    console.error('[SEND_ERROR]', JSON.stringify(payload));
@@ -383,6 +384,9 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       // 优先使用 Bearer（ANTHROPIC_AUTH_TOKEN），避免继续发送 x-api-key
       delete process.env.ANTHROPIC_API_KEY;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
+    } else if (authType === 'aws_bedrock') {
+        console.log('[DEBUG] Using AWS_BEDROCK authentication (AWS_BEDROCK)');
+        client = new AnthropicBedrock();
     } else {
       console.log('[DEBUG] Using API Key authentication (ANTHROPIC_API_KEY)');
       // 使用 apiKey 参数（x-api-key 认证）
@@ -708,7 +712,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	      options.resume = resumeSessionId;
 	      console.log('[RESUMING]', resumeSessionId);
 	    }
-	
+
 		    const result = query({
 		      prompt: inputStream,
 		      options
@@ -719,7 +723,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    //   console.log('[DEBUG] Query with attachments timeout after 30 seconds, aborting...');
 	    //   abortController.abort();
 	    // }, 30000);
-	
+
 		    let currentSessionId = resumeSessionId;
 
 		    try {
