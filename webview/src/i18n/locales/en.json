@@ -263,7 +263,8 @@
     "deleteSuccess": "Deleted successfully",
     "operationFailed": "Operation failed",
     "copySuccess": "{{label}} copied to clipboard",
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "newSessionCreated": "New session created"
   },
   "config": {
     "clickToCopy": "Click to copy",

@@ -77,6 +77,8 @@ const App = () => {
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  // 标志位：是否抑制下一次 updateStatus 触发的 toast（用于删除当前会话后自动创建新会话的场景）
+  const suppressNextStatusToastRef = useRef(false);
 
   // 权限弹窗状态
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
@@ -238,10 +240,11 @@ const App = () => {
   // 检查当前会话是否还存在（防止显示已删除的会话）
   useEffect(() => {
     if (currentView === 'chat' && historyData?.sessions) {
-      // 如果有消息但没有有效的会话ID，或者会话ID对应的会话不存在，清空界面
-      if (messages.length > 0) {
-        if (!currentSessionId || !historyData.sessions.some(s => s.sessionId === currentSessionId)) {
-          console.log('[App] 当前会话已被删除或无效，清空聊天界面');
+      // 只有当 currentSessionId 存在且在历史记录中找不到时才清空
+      // 注意：currentSessionId 为 null 表示新会话，这是合法的，不应该清空
+      if (messages.length > 0 && currentSessionId) {
+        if (!historyData.sessions.some(s => s.sessionId === currentSessionId)) {
+          console.log('[App] 当前会话已被删除，清空聊天界面');
           setMessages([]);
           setCurrentSessionId(null);
           setUsagePercentage(0);
@@ -287,6 +290,11 @@ const App = () => {
 
     window.updateStatus = (text) => {
       setStatus(text);
+      // 检查是否需要抑制 toast（删除当前会话后自动创建新会话的场景）
+      if (suppressNextStatusToastRef.current) {
+        suppressNextStatusToastRef.current = false;
+        return;
+      }
       // Show toast notification for status changes
       addToast(text);
     };
@@ -705,6 +713,14 @@ const App = () => {
     };
     setMessages((prev) => [...prev, userMessage]);
 
+    // 发送消息后强制滚动到底部，确保用户能看到"正在生成响应"提示和新内容
+    isUserAtBottomRef.current = true;
+    requestAnimationFrame(() => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+    });
+
     if (hasAttachments) {
       try {
         const payload = JSON.stringify({
@@ -828,6 +844,7 @@ const App = () => {
     setUsageUsedTokens(0);
     // 保留 maxTokens，等待后端推送；如果此前已知模型，可按默认 272K 预估
     setUsageMaxTokens((prev) => prev ?? 272000);
+    addToast(t('toast.newSessionCreated'), 'success');
   };
 
   const handleCancelNewSession = () => {
@@ -845,6 +862,7 @@ const App = () => {
     setUsagePercentage(0);
     setUsageUsedTokens(0);
     setUsageMaxTokens((prev) => prev ?? 272000);
+    addToast(t('toast.newSessionCreated'), 'success');
   };
 
   const handleCancelInterrupt = () => {
@@ -948,6 +966,8 @@ const App = () => {
         setCurrentSessionId(null);
         setUsagePercentage(0);
         setUsageUsedTokens(0);
+        // 设置标志位，抑制后端 createNewSession 触发的 updateStatus toast
+        suppressNextStatusToastRef.current = true;
         sendBridgeMessage('create_new_session');
       }
 
