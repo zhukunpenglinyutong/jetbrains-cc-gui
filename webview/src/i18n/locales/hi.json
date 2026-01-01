@@ -75,7 +75,8 @@
         "placeholder": "जैसे C:\\Program Files\\nodejs\\node.exe या /usr/local/bin/node",
         "hint": "टर्मिनल में चलाएं",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "वास्तविक Node.js निष्पादन योग्य फ़ाइल पथ प्राप्त करें। खाली होने पर प्लगइन स्वचालित रूप से Node.js का पता लगाने का प्रयास करेगा।"
+        "hintText": "वास्तविक Node.js निष्पादन योग्य फ़ाइल पथ प्राप्त करें। खाली होने पर प्लगइन स्वचालित रूप से Node.js का पता लगाने का प्रयास करेगा।",
+        "versionTooLow": "Node.js संस्करण बहुत पुराना है। प्लगइन को ठीक से चलाने के लिए v{{minVersion}} या उच्चतर की आवश्यकता है"
       },
       "fontSize": {
         "label": "फ़ॉन्ट आकार",

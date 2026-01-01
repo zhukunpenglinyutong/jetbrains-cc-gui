@@ -90,6 +90,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
   // Node.js 路径（手动指定时使用）
   const [nodePath, setNodePath] = useState('');
+  const [nodeVersion, setNodeVersion] = useState<string | null>(null);
+  const [minNodeVersion, setMinNodeVersion] = useState(18);
   const [savingNodePath, setSavingNodePath] = useState(false);
 
   // 工作目录配置
@@ -216,9 +218,19 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       showSwitchSuccess(message);
     };
 
-    window.updateNodePath = (path: string) => {
-      console.log('[SettingsView] window.updateNodePath called:', path);
-      setNodePath(path || '');
+    window.updateNodePath = (jsonStr: string) => {
+      console.log('[SettingsView] window.updateNodePath called:', jsonStr);
+      try {
+        const data = JSON.parse(jsonStr);
+        setNodePath(data.path || '');
+        setNodeVersion(data.version || null);
+        if (data.minVersion) {
+          setMinNodeVersion(data.minVersion);
+        }
+      } catch {
+        // 兼容旧格式（纯字符串路径）
+        setNodePath(jsonStr || '');
+      }
       setSavingNodePath(false);
     };
 
@@ -501,6 +513,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
               onNodePathChange={setNodePath}
               onSaveNodePath={handleSaveNodePath}
               savingNodePath={savingNodePath}
+              nodeVersion={nodeVersion}
+              minNodeVersion={minNodeVersion}
               workingDirectory={workingDirectory}
               onWorkingDirectoryChange={setWorkingDirectory}
               onSaveWorkingDirectory={handleSaveWorkingDirectory}

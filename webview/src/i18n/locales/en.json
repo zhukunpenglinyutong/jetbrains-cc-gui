@@ -75,7 +75,8 @@
         "placeholder": "e.g. C:\\Program Files\\nodejs\\node.exe or /usr/local/bin/node",
         "hint": "Run in terminal",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect."
+        "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect.",
+        "versionTooLow": "Node.js version is too low. The plugin requires v{{minVersion}} or higher to run properly"
       },
       "workingDirectory": {
         "label": "Working Directory",
