@@ -4,11 +4,12 @@ import MarkdownBlock from './components/MarkdownBlock';
 import CollapsibleTextBlock from './components/CollapsibleTextBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
+import type { SettingsTab } from './components/settings/SettingsSidebar';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
+import type { Attachment, PermissionMode, SelectedAgent } from './components/ChatInputBox/types';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from './components/ChatInputBox/providers';
 import {
   BashToolBlock,
@@ -72,11 +73,14 @@ const App = () => {
   const [isThinking, setIsThinking] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  // 标志位：是否抑制下一次 updateStatus 触发的 toast（用于删除当前会话后自动创建新会话的场景）
+  const suppressNextStatusToastRef = useRef(false);
 
   // 权限弹窗状态
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
@@ -93,6 +97,7 @@ const App = () => {
   const [, setProviderConfigVersion] = useState(0);
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
   const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
+  const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -235,13 +240,44 @@ const App = () => {
     }
   }, [currentProvider, selectedClaudeModel, selectedCodexModel]);
 
+  // 加载选中的智能体
+  useEffect(() => {
+    let retryCount = 0;
+    const MAX_RETRIES = 10; // 减少到10次，总共1秒
+    let timeoutId: number | undefined;
+
+    const loadSelectedAgent = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_selected_agent');
+        console.log('[Frontend] Requested selected agent');
+      } else {
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          timeoutId = window.setTimeout(loadSelectedAgent, 100);
+        } else {
+          console.warn('[Frontend] Failed to load selected agent: bridge not available after', MAX_RETRIES, 'retries');
+          // 即使加载失败，也不影响其他功能的使用
+        }
+      }
+    };
+
+    timeoutId = window.setTimeout(loadSelectedAgent, 200); // 减少初始延迟到200ms
+
+    return () => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
   // 检查当前会话是否还存在（防止显示已删除的会话）
   useEffect(() => {
     if (currentView === 'chat' && historyData?.sessions) {
-      // 如果有消息但没有有效的会话ID，或者会话ID对应的会话不存在，清空界面
-      if (messages.length > 0) {
-        if (!currentSessionId || !historyData.sessions.some(s => s.sessionId === currentSessionId)) {
-          console.log('[App] 当前会话已被删除或无效，清空聊天界面');
+      // 只有当 currentSessionId 存在且在历史记录中找不到时才清空
+      // 注意：currentSessionId 为 null 表示新会话，这是合法的，不应该清空
+      if (messages.length > 0 && currentSessionId) {
+        if (!historyData.sessions.some(s => s.sessionId === currentSessionId)) {
+          console.log('[App] 当前会话已被删除，清空聊天界面');
           setMessages([]);
           setCurrentSessionId(null);
           setUsagePercentage(0);
@@ -287,6 +323,11 @@ const App = () => {
 
     window.updateStatus = (text) => {
       setStatus(text);
+      // 检查是否需要抑制 toast（删除当前会话后自动创建新会话的场景）
+      if (suppressNextStatusToastRef.current) {
+        suppressNextStatusToastRef.current = false;
+        return;
+      }
       // Show toast notification for status changes
       addToast(text);
     };
@@ -550,6 +591,65 @@ const App = () => {
       console.log('[Frontend] clearSelectionInfo called');
       setContextInfo(null);
     };
+
+    // 接收选中的智能体回调
+    window.onSelectedAgentReceived = (json) => {
+      console.log('[Frontend] onSelectedAgentReceived:', json);
+      try {
+        if (!json || json === 'null' || json === '{}') {
+          setSelectedAgent(null);
+          return;
+        }
+        const data = JSON.parse(json);
+        const agentFromNewShape = data?.agent;
+        const agentFromLegacyShape = data;
+
+        const agentData = agentFromNewShape?.id ? agentFromNewShape : (agentFromLegacyShape?.id ? agentFromLegacyShape : null);
+        if (!agentData) {
+          setSelectedAgent(null);
+          return;
+        }
+
+        setSelectedAgent({
+          id: agentData.id,
+          name: agentData.name || '',
+          prompt: agentData.prompt,
+        });
+      } catch (error) {
+        console.error('[Frontend] Failed to parse selected agent:', error);
+        setSelectedAgent(null);
+      }
+    };
+
+    // 智能体选择变更确认回调
+    window.onSelectedAgentChanged = (json) => {
+      console.log('[Frontend] onSelectedAgentChanged:', json);
+      try {
+        if (!json || json === 'null' || json === '{}') {
+          setSelectedAgent(null);
+          return;
+        }
+
+        const data = JSON.parse(json);
+        if (data?.success === false) {
+          return;
+        }
+
+        const agentData = data?.agent;
+        if (!agentData || !agentData.id) {
+          setSelectedAgent(null);
+          return;
+        }
+
+        setSelectedAgent({
+          id: agentData.id,
+          name: agentData.name || '',
+          prompt: agentData.prompt,
+        });
+      } catch (error) {
+        console.error('[Frontend] Failed to parse selected agent changed:', error);
+      }
+    };
   }, []); // 移除 currentProvider 依赖，因为现在使用 ref 获取最新值
 
   useEffect(() => {
@@ -705,6 +805,15 @@ const App = () => {
     };
     setMessages((prev) => [...prev, userMessage]);
 
+    // 发送消息后强制滚动到底部，确保用户能看到"正在生成响应"提示和新内容
+    isUserAtBottomRef.current = true;
+    requestAnimationFrame(() => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+    });
+
+    // 发送消息（智能体提示词由后端自动注入）
     if (hasAttachments) {
       try {
         const payload = JSON.stringify({
@@ -755,6 +864,22 @@ const App = () => {
     // 切换 provider 时,同时发送对应的模型
     const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
     sendBridgeMessage('set_model', newModel);
+  };
+
+  /**
+   * 处理智能体选择
+   */
+  const handleAgentSelect = (agent: SelectedAgent | null) => {
+    setSelectedAgent(agent);
+    if (agent) {
+      sendBridgeMessage('set_selected_agent', JSON.stringify({
+        id: agent.id,
+        name: agent.name,
+        prompt: agent.prompt,
+      }));
+    } else {
+      sendBridgeMessage('set_selected_agent', '');
+    }
   };
 
   /**
@@ -828,6 +953,7 @@ const App = () => {
     setUsageUsedTokens(0);
     // 保留 maxTokens，等待后端推送；如果此前已知模型，可按默认 272K 预估
     setUsageMaxTokens((prev) => prev ?? 272000);
+    addToast(t('toast.newSessionCreated'), 'success');
   };
 
   const handleCancelNewSession = () => {
@@ -845,6 +971,7 @@ const App = () => {
     setUsagePercentage(0);
     setUsageUsedTokens(0);
     setUsageMaxTokens((prev) => prev ?? 272000);
+    addToast(t('toast.newSessionCreated'), 'success');
   };
 
   const handleCancelInterrupt = () => {
@@ -948,6 +1075,8 @@ const App = () => {
         setCurrentSessionId(null);
         setUsagePercentage(0);
         setUsageUsedTokens(0);
+        // 设置标志位，抑制后端 createNewSession 触发的 updateStatus toast
+        suppressNextStatusToastRef.current = true;
         sendBridgeMessage('create_new_session');
       }
 
@@ -1419,7 +1548,10 @@ const App = () => {
                 </button>
                 <button
                   className="icon-button"
-                  onClick={() => setCurrentView('settings')}
+                  onClick={() => {
+                    setSettingsInitialTab(undefined);
+                    setCurrentView('settings');
+                  }}
                   data-tooltip={t('common.settings')}
                 >
                   <span className="codicon codicon-settings-gear" />
@@ -1431,7 +1563,7 @@ const App = () => {
       )}
 
       {currentView === 'settings' ? (
-        <SettingsView onClose={() => setCurrentView('chat')} />
+        <SettingsView onClose={() => setCurrentView('chat')} initialTab={settingsInitialTab} />
       ) : currentView === 'chat' ? (
         <>
           <div className="messages-container" ref={messagesContainerRef}>
@@ -1629,6 +1761,8 @@ const App = () => {
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
             onToggleThinking={handleToggleThinking}
+            selectedAgent={selectedAgent}
+            onAgentSelect={handleAgentSelect}
             activeFile={contextInfo?.file}
             selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
               ? (contextInfo.startLine === contextInfo.endLine
@@ -1636,6 +1770,10 @@ const App = () => {
                   : `L${contextInfo.startLine}-${contextInfo.endLine}`)
               : undefined}
             onClearContext={() => setContextInfo(null)}
+            onOpenAgentSettings={() => {
+              setSettingsInitialTab('agents');
+              setCurrentView('settings');
+            }}
           />
         </div>
       )}

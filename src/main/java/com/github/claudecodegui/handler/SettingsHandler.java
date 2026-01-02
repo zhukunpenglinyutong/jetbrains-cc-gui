@@ -2,6 +2,8 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeHistoryReader;
 import com.github.claudecodegui.ClaudeSession;
+import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.util.FontConfigService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -349,22 +351,42 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取 Node.js 路径
+     * 获取 Node.js 路径和版本信息.
      */
     private void handleGetNodePath() {
         try {
             PropertiesComponent props = PropertiesComponent.getInstance();
             String saved = props.getValue(NODE_PATH_PROPERTY_KEY);
-            String effectivePath;
+            String pathToSend = "";
+            String versionToSend = null;
+
             if (saved != null && !saved.trim().isEmpty()) {
-                effectivePath = saved.trim();
+                pathToSend = saved.trim();
+                NodeDetectionResult result = context.getClaudeSDKBridge().verifyAndCacheNodePath(pathToSend);
+                if (result != null && result.isFound()) {
+                    versionToSend = result.getNodeVersion();
+                }
             } else {
-                String detected = context.getClaudeSDKBridge().getNodeExecutable();
-                effectivePath = detected != null ? detected : "";
+                NodeDetectionResult detected = context.getClaudeSDKBridge().detectNodeWithDetails();
+                if (detected != null && detected.isFound() && detected.getNodePath() != null) {
+                    pathToSend = detected.getNodePath();
+                    versionToSend = detected.getNodeVersion();
+                    props.setValue(NODE_PATH_PROPERTY_KEY, pathToSend);
+                    // 使用 verifyAndCacheNodePath 而不是 setNodeExecutable，确保版本信息被缓存
+                    context.getClaudeSDKBridge().verifyAndCacheNodePath(pathToSend);
+                    context.getCodexSDKBridge().setNodeExecutable(pathToSend);
+                }
             }
-            final String pathToSend = effectivePath != null ? effectivePath : "";
+
+            final String finalPath = pathToSend;
+            final String finalVersion = versionToSend;
+
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.updateNodePath", escapeJs(pathToSend));
+                JsonObject response = new JsonObject();
+                response.addProperty("path", finalPath);
+                response.addProperty("version", finalVersion);
+                response.addProperty("minVersion", NodeDetector.MIN_NODE_MAJOR_VERSION);
+                callJavaScript("window.updateNodePath", escapeJs(new Gson().toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get Node.js path: " + e.getMessage(), e);
@@ -372,7 +394,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 设置 Node.js 路径
+     * 设置 Node.js 路径.
      */
     private void handleSetNodePath(String content) {
         LOG.debug("[SettingsHandler] ========== handleSetNodePath START ==========");
@@ -390,28 +412,59 @@ public class SettingsHandler extends BaseMessageHandler {
             }
 
             PropertiesComponent props = PropertiesComponent.getInstance();
-            String effectivePath;
+            String finalPath = "";
+            String versionToSend = null;
+            boolean verifySuccess = false;
+            String failureMsg = null;
+
             if (path == null || path.isEmpty()) {
                 props.unsetValue(NODE_PATH_PROPERTY_KEY);
-                // 同时清除 Claude 和 Codex 的手动配置
                 context.getClaudeSDKBridge().setNodeExecutable(null);
                 context.getCodexSDKBridge().setNodeExecutable(null);
                 LOG.info("[SettingsHandler] Cleared manual Node.js path from settings");
-                String detected = context.getClaudeSDKBridge().getNodeExecutable();
-                effectivePath = detected != null ? detected : "";
+
+                NodeDetectionResult detected = context.getClaudeSDKBridge().detectNodeWithDetails();
+                if (detected != null && detected.isFound() && detected.getNodePath() != null) {
+                    finalPath = detected.getNodePath();
+                    versionToSend = detected.getNodeVersion();
+                    props.setValue(NODE_PATH_PROPERTY_KEY, finalPath);
+                    // 使用 verifyAndCacheNodePath 确保版本信息被缓存
+                    context.getClaudeSDKBridge().verifyAndCacheNodePath(finalPath);
+                    context.getCodexSDKBridge().setNodeExecutable(finalPath);
+                    verifySuccess = true;
+                }
             } else {
                 props.setValue(NODE_PATH_PROPERTY_KEY, path);
-                // 同时设置 Claude 和 Codex 的 Node.js 路径
-                context.getClaudeSDKBridge().setNodeExecutable(path);
+                NodeDetectionResult result = context.getClaudeSDKBridge().verifyAndCacheNodePath(path);
                 context.getCodexSDKBridge().setNodeExecutable(path);
                 LOG.info("[SettingsHandler] Updated manual Node.js path from settings: " + path);
-                effectivePath = path;
+                finalPath = path;
+                if (result != null && result.isFound()) {
+                    versionToSend = result.getNodeVersion();
+                    verifySuccess = true;
+                } else {
+                    failureMsg = result != null ? result.getErrorMessage() : "无法验证指定的 Node.js 路径";
+                }
             }
 
-            final String finalPath = effectivePath != null ? effectivePath : "";
+            final boolean successFlag = verifySuccess;
+            final String failureMsgFinal = failureMsg;
+            final String finalPathToSend = finalPath;
+            final String finalVersionToSend = versionToSend;
+
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.updateNodePath", escapeJs(finalPath));
-                callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存。\n\n如果环境检查仍然失败，请关闭并重新打开工具窗口后重试。"));
+                JsonObject response = new JsonObject();
+                response.addProperty("path", finalPathToSend);
+                response.addProperty("version", finalVersionToSend);
+                response.addProperty("minVersion", NodeDetector.MIN_NODE_MAJOR_VERSION);
+                callJavaScript("window.updateNodePath", escapeJs(gson.toJson(response)));
+
+                if (successFlag) {
+                    callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存。\n\n如果环境检查仍然失败，请关闭并重新打开工具窗口后重试。"));
+                } else {
+                    String msg = failureMsgFinal != null ? failureMsgFinal : "无法验证指定的 Node.js 路径";
+                    callJavaScript("window.showError", escapeJs("保存的 Node.js 路径无效: " + msg));
+                }
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set Node.js path: " + e.getMessage(), e);

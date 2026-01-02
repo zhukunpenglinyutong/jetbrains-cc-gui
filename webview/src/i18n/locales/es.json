@@ -75,7 +75,8 @@
         "placeholder": "ej. C:\\Program Files\\nodejs\\node.exe o /usr/local/bin/node",
         "hint": "Ejecutar en terminal",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "para obtener la ruta del ejecutable real de Node.js. Dejar vacío para detección automática."
+        "hintText": "para obtener la ruta del ejecutable real de Node.js. Dejar vacío para detección automática.",
+        "versionTooLow": "La versión de Node.js es demasiado baja. El plugin requiere v{{minVersion}} o superior para funcionar correctamente"
       },
       "fontSize": {
         "label": "Tamaño de fuente",
@@ -201,7 +202,39 @@
     "comingSoon": "Próximamente...",
     "permissionsComingSoon": "Configuración de permisos próximamente...",
     "agentsComingSoon": "Configuración de agentes próximamente...",
-    "skillsComingSoon": "Configuración de habilidades próximamente..."
+    "skillsComingSoon": "Configuración de habilidades próximamente...",
+    "agent": {
+      "title": "Agentes",
+      "create": "Crear",
+      "createAgent": "Crear Agente",
+      "createAgentHint": "Haz clic para ir a la página de configuración de agentes",
+      "customAgents": "Agentes personalizados",
+      "noAgents": "No hay agentes personalizados",
+      "noAgentsDropdown": "No hay agentes",
+      "loadFailed": "Error al cargar",
+      "loading": "Cargando...",
+      "menu": "Menú",
+      "addSuccess": "Agente creado exitosamente",
+      "updateSuccess": "Agente actualizado exitosamente",
+      "deleteSuccess": "Agente eliminado exitosamente",
+      "operationSuccess": "Operación exitosa",
+      "operationFailed": "Operación fallida",
+      "deleteConfirmTitle": "Confirmar eliminación",
+      "deleteConfirmMessage": "¿Estás seguro de que quieres eliminar el agente \"{{name}}\"? Esta acción no se puede deshacer.",
+      "clearAgent": "Limpiar agente seleccionado",
+      "dialog": {
+        "addTitle": "Crear Agente",
+        "editTitle": "Editar Agente",
+        "name": "Nombre",
+        "namePlaceholder": "Ingresa el nombre del agente",
+        "nameRequired": "Por favor ingresa el nombre del agente",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Ingresa el rol, tono, flujo de trabajo, preferencias de herramientas y reglas del agente. (Opcional)",
+        "promptHint": "El prompt se enviará al AI como instrucciones del sistema al inicio de la conversación",
+        "confirmAdd": "Crear",
+        "saveChanges": "Guardar"
+      }
+    }
   },
   "history": {
     "title": "Historial de sesiones",

@@ -6,7 +6,15 @@ import { ContextBar } from './ContextBar';
 import { CompletionDropdown } from './Dropdown';
 import { PromptEnhancerDialog } from './PromptEnhancerDialog';
 import { useCompletionDropdown, useTriggerDetection } from './hooks';
-import { commandToDropdownItem, fileReferenceProvider, fileToDropdownItem, slashCommandProvider, } from './providers';
+import {
+  commandToDropdownItem,
+  fileReferenceProvider,
+  fileToDropdownItem,
+  slashCommandProvider,
+  agentProvider,
+  agentToDropdownItem,
+  type AgentItem,
+} from './providers';
 import { getFileIcon } from '../../utils/fileIcons';
 import { icon_folder } from '../../utils/icons';
 import './styles.css';
@@ -53,6 +61,9 @@ export const ChatInputBox = ({
   onClearContext,
   alwaysThinkingEnabled,
   onToggleThinking,
+  selectedAgent,
+  onAgentSelect,
+  onOpenAgentSettings,
 }: ChatInputBoxProps) => {
   // 内部附件状态（如果外部未提供）
   const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
@@ -150,6 +161,58 @@ export const ChatInputBox = ({
       selection?.addRange(range);
 
       handleInput();
+    },
+  });
+
+  // 智能体选择补全 Hook (行首 # 触发)
+  const agentCompletion = useCompletionDropdown<AgentItem>({
+    trigger: '#',
+    provider: agentProvider,
+    toDropdownItem: agentToDropdownItem,
+    onSelect: (agent, query) => {
+      // 跳过加载中和空状态的特殊项
+      if (agent.id === '__loading__' || agent.id === '__empty__' || agent.id === '__empty_state__') return;
+
+      // 处理创建智能体
+      if (agent.id === '__create_new__') {
+        onOpenAgentSettings?.();
+        // 清除输入框中的 # 触发文本
+        if (editableRef.current && query) {
+          const text = getTextContent();
+          const newText = agentCompletion.replaceText(text, '', query);
+          editableRef.current.innerText = newText;
+          
+          const range = document.createRange();
+          const selection = window.getSelection();
+          range.selectNodeContents(editableRef.current);
+          range.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          
+          handleInput();
+        }
+        return;
+      }
+
+      // 选择智能体：不插入文本，而是调用 onAgentSelect 回调
+      onAgentSelect?.({ id: agent.id, name: agent.name, prompt: agent.prompt });
+
+      // 清除输入框中的 # 触发文本
+      if (editableRef.current && query) {
+        const text = getTextContent();
+        const newText = agentCompletion.replaceText(text, '', query);
+        editableRef.current.innerText = newText;
+
+        // 设置光标位置
+        const range = document.createRange();
+        const selection = window.getSelection();
+        range.selectNodeContents(editableRef.current);
+        range.collapse(false);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+
+        handleInput();
+      }
     },
   });
 
@@ -274,6 +337,7 @@ export const ChatInputBox = ({
       const fullMatch = match[0];
       const filePath = match[1];
       const matchIndex = match.index || 0;
+
       // 添加匹配前的文本
       if (matchIndex > lastIndex) {
         const textBefore = currentText.substring(lastIndex, matchIndex);
@@ -286,6 +350,20 @@ export const ChatInputBox = ({
 
       // 获取纯文件名（不含行号，用于获取 ICON）
       const pureFileName = pureFilePath.split(/[/\\]/).pop() || pureFilePath;
+
+      // 验证路径是否为有效引用（必须在 pathMappingRef 中存在）
+      // 只有用户从下拉列表中选择的文件才会被记录到 pathMappingRef
+      const isValidReference =
+        pathMappingRef.current.has(pureFilePath) ||
+        pathMappingRef.current.has(pureFileName) ||
+        pathMappingRef.current.has(filePath);
+
+      // 如果不是有效引用，保留原始文本，不渲染为标签
+      if (!isValidReference) {
+        newHTML += fullMatch;
+        lastIndex = matchIndex + fullMatch.length;
+        return;
+      }
 
       // 获取显示文件名（包含行号，用于显示）
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
@@ -305,7 +383,6 @@ export const ChatInputBox = ({
       const escapedPath = escapeHtmlAttr(filePath);
 
       // 尝试从路径映射中获取完整路径（用于 tooltip 显示）
-      // 优先级：pureFilePath -> pureFileName -> 原路径（去掉行号进行查找）
       const fullPath =
         pathMappingRef.current.get(pureFilePath) ||
         pathMappingRef.current.get(pureFileName) ||
@@ -313,8 +390,6 @@ export const ChatInputBox = ({
       const escapedFullPath = escapeHtmlAttr(fullPath);
 
       // 创建文件标签 HTML
-      // data-file-path: 存储原始路径（用于提取文本时还原）
-      // data-tooltip: 存储完整路径（用于悬停显示）
       newHTML += `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`;
       newHTML += `<span class="file-tag-icon">${iconSvg}</span>`;
       newHTML += `<span class="file-tag-text">${displayFileName}</span>`;
@@ -459,7 +534,7 @@ export const ChatInputBox = ({
    */
   const clearInput = useCallback(() => {
     if (editableRef.current) {
-      editableRef.current.innerText = '';
+      editableRef.current.innerHTML = '';
       editableRef.current.style.height = 'auto';
       setHasContent(false);
     }
@@ -482,7 +557,7 @@ export const ChatInputBox = ({
   }, []);
 
   /**
-   * 检测并处理补全触发（优化：只在输入 @ 或 / 时才启动检测）
+   * 检测并处理补全触发（优化：只在输入 @ 或 / 或 # 时才启动检测）
    */
   const detectAndTriggerCompletion = useCallback(() => {
     if (!editableRef.current) return;
@@ -497,6 +572,7 @@ export const ChatInputBox = ({
       justRenderedTagRef.current = false;
       fileCompletion.close();
       commandCompletion.close();
+      agentCompletion.close();
       return;
     }
 
@@ -506,10 +582,12 @@ export const ChatInputBox = ({
     // 优化：快速检查文本中是否包含触发字符，如果没有则直接返回
     const hasAtSymbol = text.includes('@');
     const hasSlashSymbol = text.includes('/');
+    const hasHashSymbol = text.includes('#');
 
-    if (!hasAtSymbol && !hasSlashSymbol) {
+    if (!hasAtSymbol && !hasSlashSymbol && !hasHashSymbol) {
       fileCompletion.close();
       commandCompletion.close();
+      agentCompletion.close();
       return;
     }
 
@@ -520,6 +598,7 @@ export const ChatInputBox = ({
     if (!trigger) {
       fileCompletion.close();
       commandCompletion.close();
+      agentCompletion.close();
       return;
     }
 
@@ -530,6 +609,7 @@ export const ChatInputBox = ({
     // 根据触发符号打开对应的补全
     if (trigger.trigger === '@') {
       commandCompletion.close();
+      agentCompletion.close();
       if (!fileCompletion.isOpen) {
         fileCompletion.open(position, trigger);
         fileCompletion.updateQuery(trigger);
@@ -538,11 +618,21 @@ export const ChatInputBox = ({
       }
     } else if (trigger.trigger === '/') {
       fileCompletion.close();
+      agentCompletion.close();
       if (!commandCompletion.isOpen) {
         commandCompletion.open(position, trigger);
         commandCompletion.updateQuery(trigger);
       } else {
         commandCompletion.updateQuery(trigger);
+      }
+    } else if (trigger.trigger === '#') {
+      fileCompletion.close();
+      commandCompletion.close();
+      if (!agentCompletion.isOpen) {
+        agentCompletion.open(position, trigger);
+        agentCompletion.updateQuery(trigger);
+      } else {
+        agentCompletion.updateQuery(trigger);
       }
     }
   }, [
@@ -552,6 +642,7 @@ export const ChatInputBox = ({
     getTriggerPosition,
     fileCompletion,
     commandCompletion,
+    agentCompletion,
     isComposing,
   ]);
 
@@ -574,6 +665,11 @@ export const ChatInputBox = ({
     const text = getTextContent();
     const isEmpty = !text.trim();
     setHasContent(!isEmpty);
+
+    // 如果内容为空，清空 innerHTML 以确保 :empty 伪类生效（显示 placeholder）
+    if (isEmpty && editableRef.current) {
+      editableRef.current.innerHTML = '';
+    }
 
     // 调整高度
     adjustHeight();
@@ -616,6 +712,7 @@ export const ChatInputBox = ({
     // 关闭补全菜单
     fileCompletion.close();
     commandCompletion.close();
+    agentCompletion.close();
 
     onSubmit?.(content, attachments.length > 0 ? attachments : undefined);
 
@@ -635,6 +732,7 @@ export const ChatInputBox = ({
     externalAttachments,
     fileCompletion,
     commandCompletion,
+    agentCompletion,
   ]);
 
   /**
@@ -953,6 +1051,19 @@ export const ChatInputBox = ({
       }
     }
 
+    if (agentCompletion.isOpen) {
+      const handled = agentCompletion.handleKeyDown(e.nativeEvent);
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+        // 如果是回车键选中，标记防止后续发送消息
+        if (e.key === 'Enter') {
+          completionSelectedRef.current = true;
+        }
+        return;
+      }
+    }
+
     // 检查是否刚刚结束组合输入（防止 IME 确认时的回车误触）
     // 如果 compositionend 和 keydown 间隔很短，说明这个 keydown 可能是 IME 确认的回车
     const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
@@ -966,7 +1077,7 @@ export const ChatInputBox = ({
     }
 
     // Shift+Enter 允许换行（默认行为）
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion]);
+  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion]);
 
   const handleKeyUp = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     const isEnterKey =
@@ -986,11 +1097,11 @@ export const ChatInputBox = ({
         submittedOnEnterRef.current = false;
         return;
       }
-      if (!fileCompletion.isOpen && !commandCompletion.isOpen) {
+      if (!fileCompletion.isOpen && !commandCompletion.isOpen && !agentCompletion.isOpen) {
         // 不在 keyup 中处理发送逻辑，统一由 keydown 处理，避免 IME 状态下的误发送
       }
     }
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion]);
+  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion]);
 
   // 受控模式：当外部 value 改变时更新输入框内容
   useEffect(() => {
@@ -1063,7 +1174,7 @@ export const ChatInputBox = ({
       }
 
       // 补全菜单打开时，不在原生事件中处理（React onKeyDown 已处理，避免重复）
-      if (fileCompletion.isOpen || commandCompletion.isOpen) {
+      if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
         return;
       }
 
@@ -1094,7 +1205,7 @@ export const ChatInputBox = ({
           submittedOnEnterRef.current = false;
           return;
         }
-        if (!fileCompletion.isOpen && !commandCompletion.isOpen) {
+        if (!fileCompletion.isOpen && !commandCompletion.isOpen && !agentCompletion.isOpen) {
           // 不在 keyup 中处理发送逻辑，统一由 keydown 处理
         }
       }
@@ -1110,7 +1221,7 @@ export const ChatInputBox = ({
           return;
         }
         // 补全菜单打开时不发送消息
-        if (fileCompletion.isOpen || commandCompletion.isOpen) {
+        if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
           return;
         }
         handleSubmit();
@@ -1126,7 +1237,7 @@ export const ChatInputBox = ({
       el.removeEventListener('keyup', nativeKeyUp, { capture: true } as any);
       el.removeEventListener('beforeinput', nativeBeforeInput as EventListener, { capture: true } as any);
     };
-  }, [isComposing, handleSubmit, handleEnhancePrompt, fileCompletion, commandCompletion]);
+  }, [isComposing, handleSubmit, handleEnhancePrompt, fileCompletion, commandCompletion, agentCompletion]);
 
   /**
    * 处理 IME 组合开始
@@ -1592,6 +1703,8 @@ export const ChatInputBox = ({
         showUsage={showUsage}
         onClearFile={onClearContext}
         onAddAttachment={handleAddAttachment}
+        selectedAgent={selectedAgent}
+        onClearAgent={() => onAgentSelect?.(null)}
       />
 
       {/* 输入区域 */}
@@ -1618,7 +1731,7 @@ export const ChatInputBox = ({
                 return;
               }
               // 补全菜单打开时不发送消息
-              if (fileCompletion.isOpen || commandCompletion.isOpen) {
+              if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
                 return;
               }
               // 只有在非加载状态且非输入法组合状态时才允许提交
@@ -1663,6 +1776,10 @@ export const ChatInputBox = ({
         onEnhancePrompt={handleEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}
+        selectedAgent={selectedAgent}
+        onAgentSelect={(agent) => onAgentSelect?.(agent)}
+        onOpenAgentSettings={onOpenAgentSettings}
+        onClearAgent={() => onAgentSelect?.(null)}
       />
 
       {/* @ 文件引用下拉菜单 */}
@@ -1690,6 +1807,20 @@ export const ChatInputBox = ({
         onClose={commandCompletion.close}
         onSelect={(_, index) => commandCompletion.selectIndex(index)}
         onMouseEnter={commandCompletion.handleMouseEnter}
+      />
+
+      {/* # 智能体选择下拉菜单 */}
+      <CompletionDropdown
+        isVisible={agentCompletion.isOpen}
+        position={agentCompletion.position}
+        width={350}
+        items={agentCompletion.items}
+        selectedIndex={agentCompletion.activeIndex}
+        loading={agentCompletion.loading}
+        emptyText="无可用智能体"
+        onClose={agentCompletion.close}
+        onSelect={(_, index) => agentCompletion.selectIndex(index)}
+        onMouseEnter={agentCompletion.handleMouseEnter}
       />
 
       {/* 悬浮提示 Tooltip (使用 Portal 或 Fixed 定位以突破 overflow 限制) */}

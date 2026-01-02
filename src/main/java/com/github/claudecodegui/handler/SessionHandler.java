@@ -1,7 +1,7 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeSession;
-import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -11,7 +11,6 @@ import com.intellij.openapi.diagnostic.Logger;
 import javax.swing.*;
 import java.io.File;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -67,13 +66,23 @@ public class SessionHandler extends BaseMessageHandler {
      * 发送消息到 Claude
      */
     private void handleSendMessage(String prompt) {
-        // long handlerStartTime = System.currentTimeMillis();
-        // LOG.info("[PERF][" + handlerStartTime + "] SessionHandler.handleSendMessage 开始处理");
+        String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
+        if (nodeVersion == null) {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
+            });
+            return;
+        }
+        if (!NodeDetector.isVersionSupported(nodeVersion)) {
+            int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("addErrorMessage", escapeJs(
+                    "Node.js 版本过低 (" + nodeVersion + ")，插件需要 v" + minVersion + " 或更高版本才能正常运行。请在设置中配置正确的 Node.js 路径。"));
+            });
+            return;
+        }
 
         CompletableFuture.runAsync(() -> {
-            // long asyncStartTime = System.currentTimeMillis();
-            // LOG.info("[PERF][" + asyncStartTime + "] 异步线程开始执行，等待时间: " + (asyncStartTime - handlerStartTime) + "ms");
-
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
 
@@ -82,11 +91,6 @@ public class SessionHandler extends BaseMessageHandler {
                 LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
-            // 权限模式由用户通过 UI 设置，不在这里覆盖
-            // context.getSession().setPermissionMode("default");  // 已移除：保留用户设置的权限模式
-
-            // long beforeSendTime = System.currentTimeMillis();
-            // LOG.info("[PERF][" + beforeSendTime + "] 准备调用 session.send()，准备耗时: " + (beforeSendTime - asyncStartTime) + "ms");
 
             context.getSession().send(prompt).exceptionally(ex -> {
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -136,6 +140,23 @@ public class SessionHandler extends BaseMessageHandler {
      * 发送带附件的消息到 Claude
      */
     private void sendMessageWithAttachments(String prompt, List<ClaudeSession.Attachment> attachments) {
+        // 版本检查（与 handleSendMessage 保持一致）
+        String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
+        if (nodeVersion == null) {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
+            });
+            return;
+        }
+        if (!NodeDetector.isVersionSupported(nodeVersion)) {
+            int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("addErrorMessage", escapeJs(
+                    "Node.js 版本过低 (" + nodeVersion + ")，插件需要 v" + minVersion + " 或更高版本才能正常运行。请在设置中配置正确的 Node.js 路径。"));
+            });
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
@@ -143,9 +164,6 @@ public class SessionHandler extends BaseMessageHandler {
                 context.getSession().setCwd(currentWorkingDir);
                 LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
-
-            // 权限模式由用户通过 UI 设置，不在这里覆盖
-            // context.getSession().setPermissionMode("default");  // 已移除：保留用户设置的权限模式
 
             context.getSession().send(prompt, attachments).exceptionally(ex -> {
                 ApplicationManager.getApplication().invokeLater(() -> {

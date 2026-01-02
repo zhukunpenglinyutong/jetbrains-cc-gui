@@ -213,6 +213,33 @@
   margin-bottom: 24px;
 }
 
+.versionBadge {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.versionBadgeOk {
+  color: var(--color-success, #3fb950);
+}
+
+.versionBadgeError {
+  color: var(--color-error, #f85149);
+}
+
+.versionWarning {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-error, #f85149);
+  font-size: 13px;
+  margin-bottom: 8px;
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
 .nodePathInputWrapper {
   display: flex;
   flex-wrap: wrap;

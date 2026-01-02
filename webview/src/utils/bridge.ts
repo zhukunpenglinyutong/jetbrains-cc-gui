@@ -20,7 +20,7 @@ const callBridge = (payload: string) => {
 };
 
 export const sendBridgeEvent = (event: string, content = '') => {
-  callBridge(`${event}:${content}`);
+  return callBridge(`${event}:${content}`);
 };
 
 export const openFile = (filePath?: string) => {

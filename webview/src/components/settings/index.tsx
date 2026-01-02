@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../types/provider';
+import type { AgentConfig } from '../../types/agent';
 import { type ClaudeConfig } from './ConfigInfoDisplay';
 import AlertDialog from '../AlertDialog';
 import type { AlertType } from '../AlertDialog';
 import ConfirmDialog from '../ConfirmDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
 import ProviderDialog from '../ProviderDialog';
+import AgentDialog from '../AgentDialog';
 
 // 导入拆分后的组件
 import SettingsHeader from './SettingsHeader';
@@ -16,12 +18,14 @@ import ProviderManageSection from './ProviderManageSection';
 import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
 import CommunitySection from './CommunitySection';
+import AgentSection from './AgentSection';
 import { SkillsSettingsSection } from '../skills';
 
 import styles from './style.module.less';
 
 interface SettingsViewProps {
   onClose: () => void;
+  initialTab?: SettingsTab;
 }
 
 const sendToJava = (message: string) => {
@@ -35,9 +39,9 @@ const sendToJava = (message: string) => {
 // 自动折叠阈值（窗口宽度）
 const AUTO_COLLAPSE_THRESHOLD = 900;
 
-const SettingsView = ({ onClose }: SettingsViewProps) => {
+const SettingsView = ({ onClose, initialTab }: SettingsViewProps) => {
   const { t } = useTranslation();
-  const [currentTab, setCurrentTab] = useState<SettingsTab>('basic');
+  const [currentTab, setCurrentTab] = useState<SettingsTab>(initialTab || 'basic');
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -74,6 +78,18 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     provider: ProviderConfig | null;
   }>({ isOpen: false, provider: null });
 
+  // Agent 智能体相关状态
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agentDialog, setAgentDialog] = useState<{
+    isOpen: boolean;
+    agent: AgentConfig | null;
+  }>({ isOpen: false, agent: null });
+  const [deleteAgentConfirm, setDeleteAgentConfirm] = useState<{
+    isOpen: boolean;
+    agent: AgentConfig | null;
+  }>({ isOpen: false, agent: null });
+
   // 主题状态
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     // 从 localStorage 读取主题设置
@@ -90,6 +106,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
   // Node.js 路径（手动指定时使用）
   const [nodePath, setNodePath] = useState('');
+  const [nodeVersion, setNodeVersion] = useState<string | null>(null);
+  const [minNodeVersion, setMinNodeVersion] = useState(18);
   const [savingNodePath, setSavingNodePath] = useState(false);
 
   // 工作目录配置
@@ -216,9 +234,20 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       showSwitchSuccess(message);
     };
 
-    window.updateNodePath = (path: string) => {
-      console.log('[SettingsView] window.updateNodePath called:', path);
-      setNodePath(path || '');
+    window.updateNodePath = (jsonStr: string) => {
+      console.log('[SettingsView] window.updateNodePath called:', jsonStr);
+      try {
+        const data = JSON.parse(jsonStr);
+        setNodePath(data.path || '');
+        setNodeVersion(data.version || null);
+        if (data.minVersion) {
+          setMinNodeVersion(data.minVersion);
+        }
+      } catch (e) {
+        // 兼容旧格式（纯字符串路径）
+        console.warn('[SettingsView] Failed to parse updateNodePath JSON, fallback to legacy format:', e);
+        setNodePath(jsonStr || '');
+      }
       setSavingNodePath(false);
     };
 
@@ -250,8 +279,51 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       }
     };
 
+    // Agent 智能体回调
+    const previousUpdateAgents = window.updateAgents;
+    window.updateAgents = (jsonStr: string) => {
+      // 清除超时定时器（如果存在）
+      const timeoutId = (window as any).__agentsLoadingTimeoutId;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        (window as any).__agentsLoadingTimeoutId = undefined;
+      }
+
+      try {
+        const agentsList: AgentConfig[] = JSON.parse(jsonStr);
+        setAgents(agentsList);
+        setAgentsLoading(false);
+        console.log('[SettingsView] Successfully loaded', agentsList.length, 'agents');
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse agents:', error);
+        setAgentsLoading(false);
+      }
+
+      previousUpdateAgents?.(jsonStr);
+    };
+
+    window.agentOperationResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        if (result.success) {
+          const operationMessages: Record<string, string> = {
+            add: t('settings.agent.addSuccess'),
+            update: t('settings.agent.updateSuccess'),
+            delete: t('settings.agent.deleteSuccess'),
+          };
+          addToast(operationMessages[result.operation] || t('settings.agent.operationSuccess'), 'success');
+        } else {
+          addToast(result.error || t('settings.agent.operationFailed'), 'error');
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse agent operation result:', error);
+      }
+    };
+
     // 加载供应商列表
     loadProviders();
+    // 加载智能体列表
+    loadAgents();
     // 加载 Claude CLI 当前配置
     loadClaudeConfig();
     // 加载 Node.js 路径
@@ -262,6 +334,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     sendToJava('get_editor_font_config:');
 
     return () => {
+      // 清理超时定时器
+      const timeoutId = (window as any).__agentsLoadingTimeoutId;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        (window as any).__agentsLoadingTimeoutId = undefined;
+      }
+
       window.updateProviders = undefined;
       window.updateActiveProvider = undefined;
       window.updateCurrentClaudeConfig = undefined;
@@ -271,8 +350,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
       window.onEditorFontConfigReceived = undefined;
+      window.updateAgents = previousUpdateAgents;
+      window.agentOperationResult = undefined;
     };
-  }, []);
+  }, [t]);
 
   // 监听窗口大小变化
   useEffect(() => {
@@ -335,6 +416,32 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
   const loadProviders = () => {
     setLoading(true);
     sendToJava('get_providers:');
+  };
+
+  const loadAgents = (retryCount = 0) => {
+    const MAX_RETRIES = 2;
+    const TIMEOUT = 3000; // 3秒超时
+
+    setAgentsLoading(true);
+    sendToJava('get_agents:');
+
+    // 设置超时定时器
+    const timeoutId = setTimeout(() => {
+      console.warn('[SettingsView] loadAgents timeout, attempt:', retryCount + 1);
+
+      if (retryCount < MAX_RETRIES) {
+        // 重试
+        loadAgents(retryCount + 1);
+      } else {
+        // 达到最大重试次数，停止加载
+        console.error('[SettingsView] loadAgents failed after', MAX_RETRIES, 'retries');
+        setAgentsLoading(false);
+        setAgents([]); // 显示空列表，允许用户继续使用
+      }
+    }, TIMEOUT);
+
+    // 将超时ID存储到window对象，以便回调时清除
+    (window as any).__agentsLoadingTimeoutId = timeoutId;
   };
 
   const loadClaudeConfig = () => {
@@ -473,6 +580,66 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setDeleteConfirm({ isOpen: false, provider: null });
   };
 
+  // ==================== Agent 智能体处理函数 ====================
+  const handleAddAgent = () => {
+    setAgentDialog({ isOpen: true, agent: null });
+  };
+
+  const handleEditAgent = (agent: AgentConfig) => {
+    setAgentDialog({ isOpen: true, agent });
+  };
+
+  const handleDeleteAgent = (agent: AgentConfig) => {
+    setDeleteAgentConfirm({ isOpen: true, agent });
+  };
+
+  const handleCloseAgentDialog = () => {
+    setAgentDialog({ isOpen: false, agent: null });
+  };
+
+  const handleSaveAgentFromDialog = (data: { name: string; prompt: string }) => {
+    const isAdding = !agentDialog.agent;
+
+    if (isAdding) {
+      // 添加新智能体
+      const newAgent = {
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+        name: data.name,
+        prompt: data.prompt,
+      };
+      sendToJava(`add_agent:${JSON.stringify(newAgent)}`);
+    } else if (agentDialog.agent) {
+      // 更新现有智能体
+      const updateData = {
+        id: agentDialog.agent.id,
+        updates: {
+          name: data.name,
+          prompt: data.prompt,
+        },
+      };
+      sendToJava(`update_agent:${JSON.stringify(updateData)}`);
+    }
+
+    setAgentDialog({ isOpen: false, agent: null });
+    // 智能体操作后重新加载列表（包含超时保护）
+    loadAgents();
+  };
+
+  const confirmDeleteAgent = () => {
+    const agent = deleteAgentConfirm.agent;
+    if (!agent) return;
+
+    const data = { id: agent.id };
+    sendToJava(`delete_agent:${JSON.stringify(data)}`);
+    setDeleteAgentConfirm({ isOpen: false, agent: null });
+    // 删除后重新加载列表（包含超时保护）
+    loadAgents();
+  };
+
+  const cancelDeleteAgent = () => {
+    setDeleteAgentConfirm({ isOpen: false, agent: null });
+  };
+
   return (
     <div className={styles.settingsPage}>
       {/* 顶部标题栏 */}
@@ -501,6 +668,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
               onNodePathChange={setNodePath}
               onSaveNodePath={handleSaveNodePath}
               savingNodePath={savingNodePath}
+              nodeVersion={nodeVersion}
+              minNodeVersion={minNodeVersion}
               workingDirectory={workingDirectory}
               onWorkingDirectoryChange={setWorkingDirectory}
               onSaveWorkingDirectory={handleSaveWorkingDirectory}
@@ -534,7 +703,15 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
           {currentTab === 'permissions' && <PlaceholderSection type="permissions" />}
 
           {/* Agents */}
-          {currentTab === 'agents' && <PlaceholderSection type="agents" />}
+          {currentTab === 'agents' && (
+            <AgentSection
+              agents={agents}
+              loading={agentsLoading}
+              onAdd={handleAddAgent}
+              onEdit={handleEditAgent}
+              onDelete={handleDeleteAgent}
+            />
+          )}
 
           {/* Skills */}
           {currentTab === 'skills' && <SkillsSettingsSection />}
@@ -573,6 +750,25 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
         onDelete={handleDeleteProvider}
         canDelete={true}
         addToast={addToast}
+      />
+
+      {/* 智能体添加/编辑弹窗 */}
+      <AgentDialog
+        isOpen={agentDialog.isOpen}
+        agent={agentDialog.agent}
+        onClose={handleCloseAgentDialog}
+        onSave={handleSaveAgentFromDialog}
+      />
+
+      {/* 智能体删除确认弹窗 */}
+      <ConfirmDialog
+        isOpen={deleteAgentConfirm.isOpen}
+        title={t('settings.agent.deleteConfirmTitle')}
+        message={t('settings.agent.deleteConfirmMessage', { name: deleteAgentConfirm.agent?.name || '' })}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={confirmDeleteAgent}
+        onCancel={cancelDeleteAgent}
       />
 
       {/* Toast 通知 */}

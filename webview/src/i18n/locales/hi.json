@@ -75,7 +75,8 @@
         "placeholder": "जैसे C:\\Program Files\\nodejs\\node.exe या /usr/local/bin/node",
         "hint": "टर्मिनल में चलाएं",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "वास्तविक Node.js निष्पादन योग्य फ़ाइल पथ प्राप्त करें। खाली होने पर प्लगइन स्वचालित रूप से Node.js का पता लगाने का प्रयास करेगा।"
+        "hintText": "वास्तविक Node.js निष्पादन योग्य फ़ाइल पथ प्राप्त करें। खाली होने पर प्लगइन स्वचालित रूप से Node.js का पता लगाने का प्रयास करेगा।",
+        "versionTooLow": "Node.js संस्करण बहुत पुराना है। प्लगइन को ठीक से चलाने के लिए v{{minVersion}} या उच्चतर की आवश्यकता है"
       },
       "fontSize": {
         "label": "फ़ॉन्ट आकार",
@@ -201,7 +202,39 @@
     "comingSoon": "सुविधा जल्द आ रही है...",
     "permissionsComingSoon": "अनुमति कॉन्फ़िगरेशन सुविधा जल्द आ रही है...",
     "agentsComingSoon": "Agents कॉन्फ़िगरेशन सुविधा जल्द आ रही है...",
-    "skillsComingSoon": "Skills कॉन्फ़िगरेशन सुविधा जल्द आ रही है..."
+    "skillsComingSoon": "Skills कॉन्फ़िगरेशन सुविधा जल्द आ रही है...",
+    "agent": {
+      "title": "एजेंट",
+      "create": "बनाएं",
+      "createAgent": "एजेंट बनाएं",
+      "createAgentHint": "एजेंट सेटिंग्स पेज पर जाने के लिए क्लिक करें",
+      "customAgents": "कस्टम एजेंट",
+      "noAgents": "कोई कस्टम एजेंट नहीं",
+      "noAgentsDropdown": "कोई एजेंट नहीं",
+      "loadFailed": "लोड विफल",
+      "loading": "लोड हो रहा है...",
+      "menu": "मेनू",
+      "addSuccess": "एजेंट सफलतापूर्वक बनाया गया",
+      "updateSuccess": "एजेंट सफलतापूर्वक अपडेट किया गया",
+      "deleteSuccess": "एजेंट सफलतापूर्वक हटाया गया",
+      "operationSuccess": "ऑपरेशन सफल",
+      "operationFailed": "ऑपरेशन विफल",
+      "deleteConfirmTitle": "हटाने की पुष्टि करें",
+      "deleteConfirmMessage": "क्या आप एजेंट \"{{name}}\" को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।",
+      "clearAgent": "चयनित एजेंट साफ़ करें",
+      "dialog": {
+        "addTitle": "एजेंट बनाएं",
+        "editTitle": "एजेंट संपादित करें",
+        "name": "नाम",
+        "namePlaceholder": "एजेंट का नाम दर्ज करें",
+        "nameRequired": "कृपया एजेंट का नाम दर्ज करें",
+        "prompt": "प्रॉम्प्ट",
+        "promptPlaceholder": "एजेंट की भूमिका, स्वर, कार्यप्रवाह, टूल प्राथमिकताएं और नियम दर्ज करें। (वैकल्पिक)",
+        "promptHint": "प्रॉम्प्ट बातचीत की शुरुआत में AI को सिस्टम निर्देश के रूप में भेजा जाएगा",
+        "confirmAdd": "बनाएं",
+        "saveChanges": "सहेजें"
+      }
+    }
   },
   "history": {
     "title": "इतिहास सत्र",

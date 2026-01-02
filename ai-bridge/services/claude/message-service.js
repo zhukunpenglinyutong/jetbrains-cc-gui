@@ -121,7 +121,7 @@ import { buildIDEContextPrompt } from '../system-prompts.js';
   }
 }
 
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null) {
 	  let timeoutId;
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
@@ -168,9 +168,11 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const sdkModelName = mapModelIdToSdkName(model);
     console.log('[DEBUG] Model mapping:', model, '->', sdkModelName);
 
-	    // Build systemPrompt.append content (for adding opened files context)
-	    // 使用统一的提示词管理模块构建 IDE 上下文提示词
-	    const systemPromptAppend = buildIDEContextPrompt(openedFiles);
+	    // Build systemPrompt.append content (for adding opened files context and agent prompt)
+	    // 使用统一的提示词管理模块构建 IDE 上下文提示词（包括智能体提示词）
+	    console.log('[Agent] message-service.sendMessage received agentPrompt:', agentPrompt ? `✓ (${agentPrompt.length} chars)` : '✗ null');
+	    const systemPromptAppend = buildIDEContextPrompt(openedFiles, agentPrompt);
+	    console.log('[Agent] systemPromptAppend built:', systemPromptAppend ? `✓ (${systemPromptAppend.length} chars)` : '✗ empty');
 
 	    // 准备选项
 	    // 注意：不再传递 pathToClaudeCodeExecutable，让 SDK 自动使用内置 cli.js
@@ -577,12 +579,15 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     // 加载附件
     const attachments = await loadAttachments(stdinData);
 
-    // 提取打开的文件列表（从 stdinData）
+    // 提取打开的文件列表和智能体提示词（从 stdinData）
     const openedFiles = stdinData?.openedFiles || null;
+    const agentPrompt = stdinData?.agentPrompt || null;
+    console.log('[Agent] message-service.sendMessageWithAttachments received agentPrompt:', agentPrompt ? `✓ (${agentPrompt.length} chars)` : '✗ null');
 
-    // Build systemPrompt.append content (for adding opened files context)
-    // 使用统一的提示词管理模块构建 IDE 上下文提示词
-    const systemPromptAppend = buildIDEContextPrompt(openedFiles);
+    // Build systemPrompt.append content (for adding opened files context and agent prompt)
+    // 使用统一的提示词管理模块构建 IDE 上下文提示词（包括智能体提示词）
+    const systemPromptAppend = buildIDEContextPrompt(openedFiles, agentPrompt);
+    console.log('[Agent] systemPromptAppend built (with attachments):', systemPromptAppend ? `✓ (${systemPromptAppend.length} chars)` : '✗ empty');
 
     // 构建用户消息内容块
     const contentBlocks = buildContentBlocks(attachments, message);

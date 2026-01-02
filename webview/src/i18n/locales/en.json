@@ -75,7 +75,8 @@
         "placeholder": "e.g. C:\\Program Files\\nodejs\\node.exe or /usr/local/bin/node",
         "hint": "Run in terminal",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect."
+        "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect.",
+        "versionTooLow": "Node.js version is too low. The plugin requires v{{minVersion}} or higher to run properly"
       },
       "workingDirectory": {
         "label": "Working Directory",
@@ -211,7 +212,39 @@
     "comingSoon": "Coming soon...",
     "permissionsComingSoon": "Permissions configuration coming soon...",
     "agentsComingSoon": "Agents configuration coming soon...",
-    "skillsComingSoon": "Skills configuration coming soon..."
+    "skillsComingSoon": "Skills configuration coming soon...",
+    "agent": {
+      "title": "Agents",
+      "create": "Create",
+      "createAgent": "Create Agent",
+      "createAgentHint": "Click to go to agent settings page to create",
+      "customAgents": "Custom Agents",
+      "noAgents": "No custom agents",
+      "noAgentsDropdown": "No agents",
+      "loadFailed": "Load failed",
+      "loading": "Loading...",
+      "menu": "Menu",
+      "addSuccess": "Agent created successfully",
+      "updateSuccess": "Agent updated successfully",
+      "deleteSuccess": "Agent deleted successfully",
+      "operationSuccess": "Operation successful",
+      "operationFailed": "Operation failed",
+      "deleteConfirmTitle": "Confirm Delete",
+      "deleteConfirmMessage": "Are you sure you want to delete agent \"{{name}}\"? This action cannot be undone.",
+      "clearAgent": "Clear selected agent",
+      "dialog": {
+        "addTitle": "Create Agent",
+        "editTitle": "Edit Agent",
+        "name": "Name",
+        "namePlaceholder": "Enter agent name",
+        "nameRequired": "Please enter agent name",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Enter the agent's role, tone, workflow, tool preferences and rules. (Optional)",
+        "promptHint": "The prompt will be sent to AI as system instructions at the start of conversation",
+        "confirmAdd": "Create",
+        "saveChanges": "Save"
+      }
+    }
   },
   "history": {
     "title": "History",
@@ -263,7 +296,8 @@
     "deleteSuccess": "Deleted successfully",
     "operationFailed": "Operation failed",
     "copySuccess": "{{label}} copied to clipboard",
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "newSessionCreated": "New session created"
   },
   "config": {
     "clickToCopy": "Click to copy",

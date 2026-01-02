@@ -8,10 +8,8 @@ const HIDDEN_COMMANDS = new Set([
   '/clear',
   '/context',
   '/cost',
-  '/init',
   '/pr-comments',
   '/release-notes',
-  '/review',
   '/security-review',
   '/todo',
 ]);
@@ -27,6 +25,7 @@ let loadingState: LoadingState = 'idle';
 let lastRefreshTime = 0;
 let callbackRegistered = false;
 let retryCount = 0;
+let pendingWaiters: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
 
 const MIN_REFRESH_INTERVAL = 2000;
 const LOADING_TIMEOUT = 8000;
@@ -41,6 +40,8 @@ export function resetSlashCommandsState() {
   loadingState = 'idle';
   lastRefreshTime = 0;
   retryCount = 0;
+  pendingWaiters.forEach(w => w.reject(new Error('Slash commands state reset')));
+  pendingWaiters = [];
   console.log('[SlashCommand] State reset');
 }
 
@@ -60,42 +61,54 @@ export function setupSlashCommandsCallback() {
       const parsed = JSON.parse(json);
       let commands: CommandItem[] = [];
 
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        if (typeof parsed[0] === 'object' && parsed[0] !== null && 'name' in parsed[0]) {
-          const sdkCommands: SDKSlashCommand[] = parsed;
-          commands = sdkCommands.map(cmd => ({
-            id: cmd.name.replace(/^\//, ''),
-            label: cmd.name.startsWith('/') ? cmd.name : `/${cmd.name}`,
-            description: cmd.description || '',
-            category: getCategoryFromCommand(cmd.name),
-          }));
-        } else if (typeof parsed[0] === 'string') {
-          const commandNames: string[] = parsed;
-          commands = commandNames.map(name => ({
-            id: name.replace(/^\//, ''),
-            label: name.startsWith('/') ? name : `/${name}`,
-            description: '',
-            category: getCategoryFromCommand(name),
-          }));
+      if (Array.isArray(parsed)) {
+        if (parsed.length > 0) {
+          if (typeof parsed[0] === 'object' && parsed[0] !== null && 'name' in parsed[0]) {
+            const sdkCommands: SDKSlashCommand[] = parsed;
+            commands = sdkCommands.map(cmd => ({
+              id: cmd.name.replace(/^\//, ''),
+              label: cmd.name.startsWith('/') ? cmd.name : `/${cmd.name}`,
+              description: cmd.description || '',
+              category: getCategoryFromCommand(cmd.name),
+            }));
+          } else if (typeof parsed[0] === 'string') {
+            const commandNames: string[] = parsed;
+            commands = commandNames.map(name => ({
+              id: name.replace(/^\//, ''),
+              label: name.startsWith('/') ? name : `/${name}`,
+              description: '',
+              category: getCategoryFromCommand(name),
+            }));
+          }
         }
-      }
 
-      if (commands.length > 0) {
         cachedSdkCommands = commands;
         loadingState = 'success';
         retryCount = 0;
+        pendingWaiters.forEach(w => w.resolve());
+        pendingWaiters = [];
         console.log('[SlashCommand] Successfully loaded ' + commands.length + ' commands');
       } else {
         loadingState = 'failed';
-        console.warn('[SlashCommand] Received empty commands');
+        const error = new Error('Slash commands payload is not an array');
+        pendingWaiters.forEach(w => w.reject(error));
+        pendingWaiters = [];
+        console.warn('[SlashCommand] Invalid commands payload');
       }
     } catch (error) {
       loadingState = 'failed';
+      pendingWaiters.forEach(w => w.reject(error));
+      pendingWaiters = [];
       console.error('[SlashCommand] Failed to parse commands:', error);
     }
   };
 
-  window.updateSlashCommands = handler;
+  const originalHandler = window.updateSlashCommands;
+
+  window.updateSlashCommands = (json: string) => {
+    handler(json);
+    originalHandler?.(json);
+  };
   callbackRegistered = true;
   console.log('[SlashCommand] Callback registered');
 
@@ -107,29 +120,83 @@ export function setupSlashCommandsCallback() {
   }
 }
 
-function requestRefresh(): void {
+function waitForSlashCommands(signal: AbortSignal, timeoutMs: number): Promise<void> {
+  if (loadingState === 'success') return Promise.resolve();
+
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+
+    const waiter = { resolve: () => {}, reject: (_error: unknown) => {} } as {
+      resolve: () => void;
+      reject: (error: unknown) => void;
+    };
+
+    const cleanup = () => {
+      pendingWaiters = pendingWaiters.filter(w => w !== waiter);
+      clearTimeout(timeoutId);
+      signal.removeEventListener('abort', onAbort);
+    };
+
+    const onAbort = () => {
+      cleanup();
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Slash commands loading timeout'));
+    }, timeoutMs);
+
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    waiter.resolve = () => {
+      cleanup();
+      resolve();
+    };
+    waiter.reject = (error: unknown) => {
+      cleanup();
+      reject(error);
+    };
+
+    pendingWaiters.push(waiter);
+    if (loadingState === 'success') {
+      waiter.resolve();
+    } else if (loadingState === 'failed') {
+      waiter.reject(new Error('Slash commands loading failed'));
+    }
+  });
+}
+
+function requestRefresh(): boolean {
   const now = Date.now();
 
   if (now - lastRefreshTime < MIN_REFRESH_INTERVAL) {
     console.log('[SlashCommand] Skipping refresh (too soon)');
-    return;
+    return false;
   }
 
-  if (loadingState === 'failed' && retryCount >= MAX_RETRY_COUNT) {
+  if (retryCount >= MAX_RETRY_COUNT) {
     console.warn('[SlashCommand] Max retry count reached');
-    return;
+    loadingState = 'failed';
+    return false;
   }
 
-  if (loadingState === 'failed') {
-    retryCount++;
-    console.log('[SlashCommand] Retry #' + retryCount);
+  const attempt = retryCount + 1;
+  const sent = sendBridgeEvent('refresh_slash_commands');
+  if (!sent) {
+    console.log('[SlashCommand] Bridge not available yet, refresh not sent');
+    return false;
   }
 
   lastRefreshTime = now;
   loadingState = 'loading';
+  retryCount = attempt;
 
-  console.log('[SlashCommand] Requesting refresh from backend');
-  sendBridgeEvent('refresh_slash_commands');
+  console.log('[SlashCommand] Requesting refresh from backend (attempt ' + retryCount + '/' + MAX_RETRY_COUNT + ')');
+  return true;
 }
 
 function isHiddenCommand(name: string): boolean {
@@ -174,53 +241,37 @@ export async function slashCommandProvider(
 
   const now = Date.now();
 
-  switch (loadingState) {
-    case 'idle':
-      requestRefresh();
-      return [{
-        id: '__loading__',
-        label: '正在加载斜杠指令...',
-        description: '首次加载可能需要几秒钟',
-        category: 'system',
-      }];
-
-    case 'loading':
-      if (now - lastRefreshTime > LOADING_TIMEOUT) {
-        console.warn('[SlashCommand] Loading timeout, marking as failed');
-        loadingState = 'failed';
-        requestRefresh();
-      }
-      return [{
-        id: '__loading__',
-        label: '正在加载斜杠指令...',
-        description: retryCount > 0 ? `正在重试 (${retryCount}/${MAX_RETRY_COUNT})...` : '请稍候...',
-        category: 'system',
-      }];
-
-    case 'failed':
-      if (retryCount < MAX_RETRY_COUNT) {
-        requestRefresh();
-        return [{
-          id: '__loading__',
-          label: '正在重新加载...',
-          description: `正在重试 (${retryCount + 1}/${MAX_RETRY_COUNT})...`,
-          category: 'system',
-        }];
-      }
-      return [{
-        id: '__error__',
-        label: '加载失败',
-        description: '请关闭并重新打开窗口',
-        category: 'system',
-      }];
-
-    case 'success':
-      if (cachedSdkCommands.length > 0) {
-        return filterCommands(cachedSdkCommands, query);
-      }
-      loadingState = 'idle';
-      return slashCommandProvider(query, signal);
+  if (loadingState === 'idle' || loadingState === 'failed') {
+    requestRefresh();
+  } else if (loadingState === 'loading' && now - lastRefreshTime > LOADING_TIMEOUT) {
+    console.warn('[SlashCommand] Loading timeout');
+    loadingState = 'failed';
+    requestRefresh();
   }
+
+  if (loadingState !== 'success') {
+    await waitForSlashCommands(signal, LOADING_TIMEOUT).catch(() => {});
+  }
+
+  if (loadingState === 'success') {
+    return filterCommands(cachedSdkCommands, query);
+  }
+
+  if (retryCount >= MAX_RETRY_COUNT) {
+    return [{
+      id: '__error__',
+      label: '加载失败',
+      description: '请关闭并重新打开窗口',
+      category: 'system',
+    }];
+  }
+
+  return [{
+    id: '__loading__',
+    label: '正在加载斜杠指令...',
+    description: retryCount > 0 ? `正在重试 (${retryCount}/${MAX_RETRY_COUNT})...` : '请稍候...',
+    category: 'system',
+  }];
 }
 
 export function commandToDropdownItem(command: CommandItem): DropdownItemData {
@@ -236,9 +287,11 @@ export function commandToDropdownItem(command: CommandItem): DropdownItemData {
 
 export function forceRefreshSlashCommands(): void {
   console.log('[SlashCommand] Force refresh requested');
-  retryCount = 0;
   loadingState = 'idle';
   lastRefreshTime = 0;
+  retryCount = 0;
+  pendingWaiters.forEach(w => w.reject(new Error('Slash commands refresh requested')));
+  pendingWaiters = [];
   requestRefresh();
 }
 

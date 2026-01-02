@@ -1,5 +1,6 @@
 package com.github.claudecodegui;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.cache.SlashCommandCache;
 import com.github.claudecodegui.handler.*;
 import com.github.claudecodegui.permission.PermissionRequest;
@@ -244,6 +245,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     // 同时设置 Claude 和 Codex 的 Node.js 路径
                     claudeSDKBridge.setNodeExecutable(path);
                     codexSDKBridge.setNodeExecutable(path);
+                    // 关键修复：验证并缓存 Node.js 版本，避免首次发送消息时 getCachedNodeVersion() 返回 null
+                    claudeSDKBridge.verifyAndCacheNodePath(path);
                     LOG.info("Using manually configured Node.js path: " + path);
                 }
             } catch (Exception e) {
@@ -321,6 +324,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
             messageDispatcher.registerHandler(new DiffHandler(handlerContext));
             messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
+            messageDispatcher.registerHandler(new AgentHandler(handlerContext));
 
             // 权限处理器（需要特殊回调）
             this.permissionHandler = new PermissionHandler(handlerContext);
@@ -431,9 +435,43 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void createUIComponents() {
+            PropertiesComponent props = PropertiesComponent.getInstance();
+            String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
+            com.github.claudecodegui.model.NodeDetectionResult nodeResult = null;
+
+            if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
+                String trimmed = savedNodePath.trim();
+                claudeSDKBridge.setNodeExecutable(trimmed);
+                codexSDKBridge.setNodeExecutable(trimmed);
+                nodeResult = claudeSDKBridge.verifyAndCacheNodePath(trimmed);
+                if (nodeResult == null || !nodeResult.isFound()) {
+                    showInvalidNodePathPanel(trimmed, nodeResult != null ? nodeResult.getErrorMessage() : null);
+                    return;
+                }
+            } else {
+                nodeResult = claudeSDKBridge.detectNodeWithDetails();
+                if (nodeResult != null && nodeResult.isFound() && nodeResult.getNodePath() != null) {
+                    props.setValue(NODE_PATH_PROPERTY_KEY, nodeResult.getNodePath());
+                    claudeSDKBridge.setNodeExecutable(nodeResult.getNodePath());
+                    codexSDKBridge.setNodeExecutable(nodeResult.getNodePath());
+                    // 关键修复：缓存自动检测到的 Node.js 版本
+                    claudeSDKBridge.verifyAndCacheNodePath(nodeResult.getNodePath());
+                }
+            }
+
             if (!claudeSDKBridge.checkEnvironment()) {
                 showErrorPanel();
                 return;
+            }
+
+            if (nodeResult == null) {
+                nodeResult = claudeSDKBridge.detectNodeWithDetails();
+            }
+            if (nodeResult != null && nodeResult.isFound() && nodeResult.getNodeVersion() != null) {
+                if (!NodeDetector.isVersionSupported(nodeResult.getNodeVersion())) {
+                    showVersionErrorPanel(nodeResult.getNodeVersion());
+                    return;
+                }
             }
 
             try {
@@ -581,7 +619,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 mainPanel.add(browserComponent, BorderLayout.CENTER);
 
             } catch (Exception e) {
-                LOG.error("Error occurred", e);
+                LOG.error("Failed to create UI components: " + e.getMessage(), e);
                 showErrorPanel();
             }
         }
@@ -603,6 +641,37 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             mainPanel.add(errorPanel, BorderLayout.CENTER);
         }
 
+        private void showVersionErrorPanel(String currentVersion) {
+            int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
+            String message = "Node.js 版本过低\n\n" +
+                "当前版本: " + currentVersion + "\n" +
+                "最低要求: v" + minVersion + "\n\n" +
+                "请升级 Node.js 到 v" + minVersion + " 或更高版本后重试。\n\n" +
+                "当前检测到的 Node.js 路径: " + claudeSDKBridge.getNodeExecutable();
+
+            JPanel errorPanel = ErrorPanelBuilder.build(
+                "Node.js 版本不满足要求",
+                message,
+                claudeSDKBridge.getNodeExecutable(),
+                this::handleNodePathSave
+            );
+            mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
+        private void showInvalidNodePathPanel(String path, String errMsg) {
+            String message = "保存的 Node.js 路径不可用: " + path + "\n\n" +
+                (errMsg != null ? errMsg + "\n\n" : "") +
+                "请在下方重新保存正确的 Node.js 路径。";
+
+            JPanel errorPanel = ErrorPanelBuilder.build(
+                "Node.js 路径不可用",
+                message,
+                path,
+                this::handleNodePathSave
+            );
+            mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
         private void handleNodePathSave(String manualPath) {
             try {
                 PropertiesComponent props = PropertiesComponent.getInstance();
@@ -615,9 +684,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     LOG.info("Cleared manual Node.js path");
                 } else {
                     props.setValue(NODE_PATH_PROPERTY_KEY, manualPath);
-                    // 同时设置 Claude 和 Codex 的 Node.js 路径
+                    // 同时设置 Claude 和 Codex 的 Node.js 路径，并缓存版本信息
                     claudeSDKBridge.setNodeExecutable(manualPath);
                     codexSDKBridge.setNodeExecutable(manualPath);
+                    claudeSDKBridge.verifyAndCacheNodePath(manualPath);
                     LOG.info("Saved manual Node.js path: " + manualPath);
                 }
 
