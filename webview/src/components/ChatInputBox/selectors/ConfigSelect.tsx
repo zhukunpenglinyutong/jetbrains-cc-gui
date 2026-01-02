@@ -365,7 +365,7 @@ export const ConfigSelect = ({
           >
             <span className="codicon codicon-robot" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span>Agent</span>
+              <span>智能体</span>
               {selectedAgent?.name ? (
                 <span className="model-description" style={{ fontStyle: 'normal' }}>
                   {selectedAgent.name}

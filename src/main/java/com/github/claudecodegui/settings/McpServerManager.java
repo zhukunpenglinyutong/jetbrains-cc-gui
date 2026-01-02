@@ -1,0 +1,381 @@
+package com.github.claudecodegui.settings;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.intellij.openapi.diagnostic.Logger;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+
+/**
+ * MCP Server 管理器
+ * 负责管理 MCP 服务器配置
+ */
+public class McpServerManager {
+    private static final Logger LOG = Logger.getInstance(McpServerManager.class);
+
+    private final Gson gson;
+    private final Function<Void, JsonObject> configReader;
+    private final java.util.function.Consumer<JsonObject> configWriter;
+    private final ClaudeSettingsManager claudeSettingsManager;
+
+    public McpServerManager(
+            Gson gson,
+            Function<Void, JsonObject> configReader,
+            java.util.function.Consumer<JsonObject> configWriter,
+            ClaudeSettingsManager claudeSettingsManager) {
+        this.gson = gson;
+        this.configReader = configReader;
+        this.configWriter = configWriter;
+        this.claudeSettingsManager = claudeSettingsManager;
+    }
+
+    /**
+     * 获取所有 MCP 服务器
+     * 优先从 ~/.claude.json 读取(Claude CLI 标准位置)
+     * 回退到 ~/.codemoss/config.json
+     */
+    public List<JsonObject> getMcpServers() throws IOException {
+        List<JsonObject> result = new ArrayList<>();
+
+        // 1. 尝试从 ~/.claude.json 读取(Claude CLI 标准位置)
+        try {
+            String homeDir = System.getProperty("user.home");
+            Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
+            File claudeJsonFile = claudeJsonPath.toFile();
+
+            if (claudeJsonFile.exists()) {
+                try (FileReader reader = new FileReader(claudeJsonFile)) {
+                    JsonObject claudeJson = JsonParser.parseReader(reader).getAsJsonObject();
+
+                    if (claudeJson.has("mcpServers") && claudeJson.get("mcpServers").isJsonObject()) {
+                        JsonObject mcpServers = claudeJson.getAsJsonObject("mcpServers");
+
+                        // 读取禁用的服务器列表
+                        Set<String> disabledServers = new HashSet<>();
+                        if (claudeJson.has("disabledMcpServers") && claudeJson.get("disabledMcpServers").isJsonArray()) {
+                            JsonArray disabledArray = claudeJson.getAsJsonArray("disabledMcpServers");
+                            for (JsonElement elem : disabledArray) {
+                                if (elem.isJsonPrimitive()) {
+                                    disabledServers.add(elem.getAsString());
+                                }
+                            }
+                        }
+
+                        // 将对象格式转换为列表格式
+                        for (String serverId : mcpServers.keySet()) {
+                            JsonElement serverElem = mcpServers.get(serverId);
+                            if (serverElem.isJsonObject()) {
+                                JsonObject server = serverElem.getAsJsonObject();
+
+                                // 确保有 id 和 name 字段
+                                if (!server.has("id")) {
+                                    server.addProperty("id", serverId);
+                                }
+                                if (!server.has("name")) {
+                                    server.addProperty("name", serverId);
+                                }
+
+                                // 将 type, command, args, env 等包装到 server 字段中
+                                if (!server.has("server")) {
+                                    JsonObject serverSpec = new JsonObject();
+
+                                    // 复制相关字段到 server 规格
+                                    if (server.has("type")) {
+                                        serverSpec.add("type", server.get("type"));
+                                    }
+                                    if (server.has("command")) {
+                                        serverSpec.add("command", server.get("command"));
+                                    }
+                                    if (server.has("args")) {
+                                        serverSpec.add("args", server.get("args"));
+                                    }
+                                    if (server.has("env")) {
+                                        serverSpec.add("env", server.get("env"));
+                                    }
+                                    if (server.has("url")) {
+                                        serverSpec.add("url", server.get("url"));
+                                    }
+
+                                    server.add("server", serverSpec);
+                                }
+
+                                // 设置启用/禁用状态
+                                boolean isEnabled = !disabledServers.contains(serverId);
+                                server.addProperty("enabled", isEnabled);
+
+                                result.add(server);
+                            }
+                        }
+
+                        LOG.info("[McpServerManager] Loaded " + result.size() + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
+                        return result;
+                    }
+                } catch (Exception e) {
+                    LOG.warn("[McpServerManager] Failed to read ~/.claude.json: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[McpServerManager] Error accessing ~/.claude.json: " + e.getMessage());
+        }
+
+        // 2. 回退到 ~/.codemoss/config.json(数组格式)
+        JsonObject config = configReader.apply(null);
+        if (config.has("mcpServers")) {
+            JsonArray servers = config.getAsJsonArray("mcpServers");
+            for (JsonElement elem : servers) {
+                if (elem.isJsonObject()) {
+                    result.add(elem.getAsJsonObject());
+                }
+            }
+        }
+
+        LOG.info("[McpServerManager] Loaded " + result.size() + " MCP servers from ~/.codemoss/config.json");
+        return result;
+    }
+
+    /**
+     * 更新或插入 MCP 服务器
+     * 优先更新 ~/.claude.json(Claude CLI 标准位置)
+     * 回退到 ~/.codemoss/config.json
+     */
+    public void upsertMcpServer(JsonObject server) throws IOException {
+        if (!server.has("id")) {
+            throw new IllegalArgumentException("Server must have an id");
+        }
+
+        String serverId = server.get("id").getAsString();
+        boolean isEnabled = !server.has("enabled") || server.get("enabled").getAsBoolean();
+
+        // 1. 尝试更新 ~/.claude.json
+        try {
+            String homeDir = System.getProperty("user.home");
+            Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
+            File claudeJsonFile = claudeJsonPath.toFile();
+
+            if (claudeJsonFile.exists()) {
+                try (FileReader reader = new FileReader(claudeJsonFile)) {
+                    JsonObject claudeJson = JsonParser.parseReader(reader).getAsJsonObject();
+
+                    // 确保 mcpServers 对象存在
+                    if (!claudeJson.has("mcpServers") || !claudeJson.get("mcpServers").isJsonObject()) {
+                        claudeJson.add("mcpServers", new JsonObject());
+                    }
+                    JsonObject mcpServers = claudeJson.getAsJsonObject("mcpServers");
+
+                    // 提取 server 规格
+                    JsonObject serverSpec;
+                    if (server.has("server") && server.get("server").isJsonObject()) {
+                        serverSpec = server.getAsJsonObject("server").deepCopy();
+                    } else {
+                        serverSpec = new JsonObject();
+                    }
+
+                    // 更新或添加服务器
+                    mcpServers.add(serverId, serverSpec);
+
+                    // 更新 disabledMcpServers 列表
+                    if (!claudeJson.has("disabledMcpServers") || !claudeJson.get("disabledMcpServers").isJsonArray()) {
+                        claudeJson.add("disabledMcpServers", new JsonArray());
+                    }
+                    JsonArray disabledArray = claudeJson.getAsJsonArray("disabledMcpServers");
+
+                    // 移除旧的禁用状态
+                    JsonArray newDisabled = new JsonArray();
+                    for (JsonElement elem : disabledArray) {
+                        if (!elem.getAsString().equals(serverId)) {
+                            newDisabled.add(elem);
+                        }
+                    }
+
+                    // 如果禁用,添加到禁用列表
+                    if (!isEnabled) {
+                        newDisabled.add(serverId);
+                    }
+
+                    claudeJson.add("disabledMcpServers", newDisabled);
+
+                    // 写回文件
+                    try (FileWriter writer = new FileWriter(claudeJsonFile)) {
+                        gson.toJson(claudeJson, writer);
+                        LOG.info("[McpServerManager] Upserted MCP server in ~/.claude.json: " + serverId + " (enabled: " + isEnabled + ")");
+
+                        // 同步到 settings.json
+                        claudeSettingsManager.syncMcpToClaudeSettings();
+
+                        return;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[McpServerManager] Error updating ~/.claude.json: " + e.getMessage());
+        }
+
+        // 2. 回退到 ~/.codemoss/config.json
+        JsonObject config = configReader.apply(null);
+        JsonArray servers;
+
+        if (config.has("mcpServers")) {
+            servers = config.getAsJsonArray("mcpServers");
+        } else {
+            servers = new JsonArray();
+            config.add("mcpServers", servers);
+        }
+
+        boolean found = false;
+
+        // 查找并更新
+        for (int i = 0; i < servers.size(); i++) {
+            JsonObject s = servers.get(i).getAsJsonObject();
+            if (s.has("id") && s.get("id").getAsString().equals(serverId)) {
+                servers.set(i, server); // 替换
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            servers.add(server);
+        }
+
+        configWriter.accept(config);
+        LOG.info("[McpServerManager] Upserted MCP server in ~/.codemoss/config.json: " + serverId);
+    }
+
+    /**
+     * 删除 MCP 服务器
+     * 优先从 ~/.claude.json 删除(Claude CLI 标准位置)
+     * 回退到 ~/.codemoss/config.json
+     */
+    public boolean deleteMcpServer(String serverId) throws IOException {
+        boolean removed = false;
+
+        // 1. 尝试从 ~/.claude.json 删除
+        try {
+            String homeDir = System.getProperty("user.home");
+            Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
+            File claudeJsonFile = claudeJsonPath.toFile();
+
+            if (claudeJsonFile.exists()) {
+                try (FileReader reader = new FileReader(claudeJsonFile)) {
+                    JsonObject claudeJson = JsonParser.parseReader(reader).getAsJsonObject();
+
+                    if (claudeJson.has("mcpServers") && claudeJson.get("mcpServers").isJsonObject()) {
+                        JsonObject mcpServers = claudeJson.getAsJsonObject("mcpServers");
+
+                        if (mcpServers.has(serverId)) {
+                            // 删除服务器
+                            mcpServers.remove(serverId);
+
+                            // 同时从 disabledMcpServers 中移除(如果存在)
+                            if (claudeJson.has("disabledMcpServers") && claudeJson.get("disabledMcpServers").isJsonArray()) {
+                                JsonArray disabledServers = claudeJson.getAsJsonArray("disabledMcpServers");
+                                JsonArray newDisabled = new JsonArray();
+                                for (JsonElement elem : disabledServers) {
+                                    if (!elem.getAsString().equals(serverId)) {
+                                        newDisabled.add(elem);
+                                    }
+                                }
+                                claudeJson.add("disabledMcpServers", newDisabled);
+                            }
+
+                            // 写回文件
+                            try (FileWriter writer = new FileWriter(claudeJsonFile)) {
+                                gson.toJson(claudeJson, writer);
+                                LOG.info("[McpServerManager] Deleted MCP server from ~/.claude.json: " + serverId);
+
+                                // 同步到 settings.json
+                                claudeSettingsManager.syncMcpToClaudeSettings();
+
+                                removed = true;
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[McpServerManager] Error deleting from ~/.claude.json: " + e.getMessage());
+        }
+
+        // 2. 回退到 ~/.codemoss/config.json
+        JsonObject config = configReader.apply(null);
+        if (config.has("mcpServers")) {
+            JsonArray servers = config.getAsJsonArray("mcpServers");
+            JsonArray newServers = new JsonArray();
+
+            for (JsonElement elem : servers) {
+                JsonObject s = elem.getAsJsonObject();
+                if (s.has("id") && s.get("id").getAsString().equals(serverId)) {
+                    removed = true;
+                } else {
+                    newServers.add(s);
+                }
+            }
+
+            if (removed) {
+                config.add("mcpServers", newServers);
+                configWriter.accept(config);
+                LOG.info("[McpServerManager] Deleted MCP server from ~/.codemoss/config.json: " + serverId);
+            }
+        }
+
+        return removed;
+    }
+
+    /**
+     * 验证 MCP 服务器配置
+     */
+    public Map<String, Object> validateMcpServer(JsonObject server) {
+        List<String> errors = new ArrayList<>();
+
+        if (!server.has("name") || server.get("name").getAsString().isEmpty()) {
+            errors.add("服务器名称不能为空");
+        }
+
+        if (server.has("server")) {
+            JsonObject serverSpec = server.getAsJsonObject("server");
+            String type = serverSpec.has("type") ? serverSpec.get("type").getAsString() : "stdio";
+
+            if ("stdio".equals(type)) {
+                if (!serverSpec.has("command") || serverSpec.get("command").getAsString().isEmpty()) {
+                    errors.add("命令不能为空");
+                }
+            } else if ("http".equals(type) || "sse".equals(type)) {
+                if (!serverSpec.has("url") || serverSpec.get("url").getAsString().isEmpty()) {
+                    errors.add("URL 不能为空");
+                } else {
+                    String url = serverSpec.get("url").getAsString();
+                    try {
+                        new java.net.URI(url).toURL();
+                    } catch (Exception e) {
+                        errors.add("URL 格式无效");
+                    }
+                }
+            } else {
+                errors.add("不支持的连接类型: " + type);
+            }
+        } else {
+            errors.add("缺少服务器配置详情");
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("valid", errors.isEmpty());
+        result.put("errors", errors);
+        return result;
+    }
+}
