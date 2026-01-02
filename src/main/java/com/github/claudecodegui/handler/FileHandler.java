@@ -182,11 +182,11 @@ public class FileHandler extends BaseMessageHandler {
                                 LOG.info("[FileHandler] SDK returned no commands, using local fallback");
                                 addCommand(commands, "/help", "显示帮助信息", finalQuery);
                                 addCommand(commands, "/clear", "清空对话历史", finalQuery);
-                                addCommand(commands, "/new", "创建新会话", finalQuery);
                                 addCommand(commands, "/history", "查看历史记录", finalQuery);
                                 addCommand(commands, "/model", "切换模型", finalQuery);
-                                addCommand(commands, "/settings", "打开设置", finalQuery);
                                 addCommand(commands, "/compact", "压缩对话上下文", finalQuery);
+                                addCommand(commands, "/init", "初始化项目配置", finalQuery);
+                                addCommand(commands, "/review", "代码审查", finalQuery);
                             }
 
                             JsonObject result = new JsonObject();
@@ -209,11 +209,11 @@ public class FileHandler extends BaseMessageHandler {
                             List<JsonObject> commands = new ArrayList<>();
                             addCommand(commands, "/help", "显示帮助信息", finalQuery);
                             addCommand(commands, "/clear", "清空对话历史", finalQuery);
-                            addCommand(commands, "/new", "创建新会话", finalQuery);
                             addCommand(commands, "/history", "查看历史记录", finalQuery);
                             addCommand(commands, "/model", "切换模型", finalQuery);
-                            addCommand(commands, "/settings", "打开设置", finalQuery);
                             addCommand(commands, "/compact", "压缩对话上下文", finalQuery);
+                            addCommand(commands, "/init", "初始化项目配置", finalQuery);
+                            addCommand(commands, "/review", "代码审查", finalQuery);
 
                             JsonObject result = new JsonObject();
                             result.add("commands", gson.toJsonTree(commands));

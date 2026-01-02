@@ -32,7 +32,7 @@
     "emptyMessage": "空消息",
     "clickToPreview": "点击预览大图",
     "userUploadedImage": "用户上传的图片",
-    "inputPlaceholder": "@引用文件，shift + enter 换行",
+    "inputPlaceholder": "@引用文件，#唤起智能体，shift + enter 换行",
     "sendMessageEnter": "发送消息 (Enter)",
     "currentMode": "当前模式: {{mode}}",
     "currentModel": "当前模型: {{model}}",

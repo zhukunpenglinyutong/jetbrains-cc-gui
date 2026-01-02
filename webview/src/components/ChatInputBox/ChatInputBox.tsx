@@ -534,7 +534,7 @@ export const ChatInputBox = ({
    */
   const clearInput = useCallback(() => {
     if (editableRef.current) {
-      editableRef.current.innerText = '';
+      editableRef.current.innerHTML = '';
       editableRef.current.style.height = 'auto';
       setHasContent(false);
     }
@@ -665,6 +665,11 @@ export const ChatInputBox = ({
     const text = getTextContent();
     const isEmpty = !text.trim();
     setHasContent(!isEmpty);
+
+    // 如果内容为空，清空 innerHTML 以确保 :empty 伪类生效（显示 placeholder）
+    if (isEmpty && editableRef.current) {
+      editableRef.current.innerHTML = '';
+    }
 
     // 调整高度
     adjustHeight();
