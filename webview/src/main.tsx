@@ -27,17 +27,29 @@ if (enableVConsole) {
 /**
  * 应用 IDEA 编辑器字体配置到 CSS 变量
  */
-function applyFontConfig(config: { fontFamily: string; fontSize: number; lineSpacing: number }) {
+function applyFontConfig(config: { fontFamily: string; fontSize: number; lineSpacing: number; fallbackFonts?: string[] }) {
   const root = document.documentElement;
 
-  // 构建字体族字符串，添加回退字体
-  const fontFamily = `'${config.fontFamily}', 'Consolas', monospace`;
+  // 构建字体族字符串，包含主字体、回落字体和系统默认回落
+  const fontParts: string[] = [`'${config.fontFamily}'`];
+
+  // 添加 IDEA 配置的回落字体
+  if (config.fallbackFonts && config.fallbackFonts.length > 0) {
+    for (const fallback of config.fallbackFonts) {
+      fontParts.push(`'${fallback}'`);
+    }
+  }
+
+  // 添加系统默认回落字体
+  fontParts.push("'Consolas'", 'monospace');
+
+  const fontFamily = fontParts.join(', ');
 
   root.style.setProperty('--idea-editor-font-family', fontFamily);
   root.style.setProperty('--idea-editor-font-size', `${config.fontSize}px`);
   root.style.setProperty('--idea-editor-line-spacing', String(config.lineSpacing));
 
-  console.log('[Main] Applied IDEA font config:', config);
+  console.log('[Main] Applied IDEA font config:', config, 'fontFamily CSS:', fontFamily);
 }
 
 // 注册 applyIdeaFontConfig 函数
