@@ -97,8 +97,9 @@ async function handleClaudeCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
-        const { message, sessionId, cwd, permissionMode, model, openedFiles } = stdinData;
-        await claudeSendMessage(message, sessionId || '', cwd || '', permissionMode || '', model || '', openedFiles || null);
+        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt } = stdinData;
+        console.log('[Agent] channel-manager received agentPrompt:', agentPrompt ? `✓ (${agentPrompt.length} chars)` : '✗ null');
+        await claudeSendMessage(message, sessionId || '', cwd || '', permissionMode || '', model || '', openedFiles || null, agentPrompt || null);
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
       }
@@ -107,14 +108,15 @@ async function handleClaudeCommand(command, args, stdinData) {
 
     case 'sendWithAttachments': {
       if (stdinData && stdinData.message !== undefined) {
-        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles } = stdinData;
+        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt } = stdinData;
+        console.log('[Agent] channel-manager received agentPrompt (with attachments):', agentPrompt ? `✓ (${agentPrompt.length} chars)` : '✗ null');
         await claudeSendMessageWithAttachments(
           message,
           sessionId || '',
           cwd || '',
           permissionMode || '',
           model || '',
-          attachments ? { attachments, openedFiles } : { openedFiles }
+          attachments ? { attachments, openedFiles, agentPrompt } : { openedFiles, agentPrompt }
         );
       } else {
         await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);

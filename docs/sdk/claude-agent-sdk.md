@@ -1,24 +1,26 @@
-# Agent SDK 参考 - TypeScript
+# Agent SDK reference - TypeScript
 
-TypeScript Agent SDK 的完整 API 参考，包括所有函数、类型和接口。
+Complete API reference for the TypeScript Agent SDK, including all functions, types, and interfaces.
 
 ---
 
-@anthropic-ai/claude-agent-sdk
-
 <script src="/components/typescript-sdk-type-links.js" defer />
 
-## 安装
+<Note>
+**Try the new V2 interface (preview):** A simplified interface with `send()` and `receive()` patterns is now available, making multi-turn conversations easier. [Learn more](/docs/en/agent-sdk/typescript-v2-preview)
+</Note>
+
+## Installation
 
 ```bash
 npm install @anthropic-ai/claude-agent-sdk
 ```
 
-## 函数
+## Functions
 
 ### `query()`
 
-与 Claude Code 交互的主要函数。创建一个异步生成器，在消息到达时流式传输消息。
+The primary function for interacting with Claude Code. Creates an async generator that streams messages as they arrive.
 
 ```typescript
 function query({
@@ -30,20 +32,20 @@ function query({
 }): Query
 ```
 
-#### 参数
+#### Parameters
 
-| 参数 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `prompt` | `string \| AsyncIterable<`[`SDKUserMessage`](#sdkusermessage)`>` | 输入提示，可以是字符串或用于流式模式的异步可迭代对象 |
-| `options` | [`Options`](#options) | 可选配置对象（参见下面的 Options 类型） |
+| Parameter | Type | Description |
+| :-------- | :--- | :---------- |
+| `prompt` | `string \| AsyncIterable<`[`SDKUserMessage`](#sdkusermessage)`>` | The input prompt as a string or async iterable for streaming mode |
+| `options` | [`Options`](#options) | Optional configuration object (see Options type below) |
 
-#### 返回值
+#### Returns
 
-返回一个 [`Query`](#query-1) 对象，它扩展了 `AsyncGenerator<`[`SDKMessage`](#sdkmessage)`, void>` 并具有额外的方法。
+Returns a [`Query`](#query-1) object that extends `AsyncGenerator<`[`SDKMessage`](#sdkmessage)`, void>` with additional methods.
 
 ### `tool()`
 
-创建一个类型安全的 MCP 工具定义，用于 SDK MCP 服务器。
+Creates a type-safe MCP tool definition for use with SDK MCP servers.
 
 ```typescript
 function tool<Schema extends ZodRawShape>(
@@ -54,18 +56,18 @@ function tool<Schema extends ZodRawShape>(
 ): SdkMcpToolDefinition<Schema>
 ```
 
-#### 参数
+#### Parameters
 
-| 参数 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `name` | `string` | 工具的名称 |
-| `description` | `string` | 工具功能的描述 |
-| `inputSchema` | `Schema extends ZodRawShape` | 定义工具输入参数的 Zod 模式 |
-| `handler` | `(args, extra) => Promise<`[`CallToolResult`](#calltoolresult)`>` | 执行工具逻辑的异步函数 |
+| Parameter | Type | Description |
+| :-------- | :--- | :---------- |
+| `name` | `string` | The name of the tool |
+| `description` | `string` | A description of what the tool does |
+| `inputSchema` | `Schema extends ZodRawShape` | Zod schema defining the tool's input parameters |
+| `handler` | `(args, extra) => Promise<`[`CallToolResult`](#calltoolresult)`>` | Async function that executes the tool logic |
 
 ### `createSdkMcpServer()`
 
-创建一个在与应用程序相同进程中运行的 MCP 服务器实例。
+Creates an MCP server instance that runs in the same process as your application.
 
 ```typescript
 function createSdkMcpServer(options: {
@@ -75,74 +77,95 @@ function createSdkMcpServer(options: {
 }): McpSdkServerConfigWithInstance
 ```
 
-#### 参数
+#### Parameters
 
-| 参数 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `options.name` | `string` | MCP 服务器的名称 |
-| `options.version` | `string` | 可选版本字符串 |
-| `options.tools` | `Array<SdkMcpToolDefinition>` | 使用 [`tool()`](#tool) 创建的工具定义数组 |
+| Parameter | Type | Description |
+| :-------- | :--- | :---------- |
+| `options.name` | `string` | The name of the MCP server |
+| `options.version` | `string` | Optional version string |
+| `options.tools` | `Array<SdkMcpToolDefinition>` | Array of tool definitions created with [`tool()`](#tool) |
 
-## 类型
+## Types
 
 ### `Options`
 
-`query()` 函数的配置对象。
+Configuration object for the `query()` function.
 
-| 属性 | 类型 | 默认值 | 描述 |
-| :--- | :--- | :--- | :--- |
-| `abortController` | `AbortController` | `new AbortController()` | 用于取消操作的控制器 |
-| `additionalDirectories` | `string[]` | `[]` | Claude 可以访问的其他目录 |
-| `agents` | `Record<string, [`AgentDefinition`](#agentdefinition)>` | `undefined` | 以编程方式定义子代理 |
-| `allowedTools` | `string[]` | 所有工具 | 允许的工具名称列表 |
-| `canUseTool` | [`CanUseTool`](#canusetool) | `undefined` | 用于工具使用的自定义权限函数 |
-| `continue` | `boolean` | `false` | 继续最近的对话 |
-| `cwd` | `string` | `process.cwd()` | 当前工作目录 |
-| `disallowedTools` | `string[]` | `[]` | 不允许的工具名称列表 |
-| `env` | `Dict<string>` | `process.env` | 环境变量 |
-| `executable` | `'bun' \| 'deno' \| 'node'` | 自动检测 | 要使用的 JavaScript 运行时 |
-| `executableArgs` | `string[]` | `[]` | 传递给可执行文件的参数 |
-| `extraArgs` | `Record<string, string \| null>` | `{}` | 其他参数 |
-| `fallbackModel` | `string` | `undefined` | 主模型失败时使用的模型 |
-| `forkSession` | `boolean` | `false` | 使用 `resume` 恢复时，分叉到新的会话 ID 而不是继续原始会话 |
-| `hooks` | `Partial<Record<`[`HookEvent`](#hookevent)`, `[`HookCallbackMatcher`](#hookcallbackmatcher)`[]>>` | `{}` | 事件的钩子回调 |
-| `includePartialMessages` | `boolean` | `false` | 包含部分消息事件 |
-| `maxThinkingTokens` | `number` | `undefined` | 思考过程的最大令牌数 |
-| `maxTurns` | `number` | `undefined` | 最大对话轮数 |
-| `mcpServers` | `Record<string, [`McpServerConfig`](#mcpserverconfig)>` | `{}` | MCP 服务器配置 |
-| `model` | `string` | CLI 默认值 | 要使用的 Claude 模型 |
-| `outputFormat` | `{ type: 'json_schema', schema: JSONSchema }` | `undefined` | 定义代理结果的输出格式。详见 [结构化输出](/docs/zh-CN/agent-sdk/structured-outputs) |
-| `pathToClaudeCodeExecutable` | `string` | 自动检测 | Claude Code 可执行文件的路径 |
-| `permissionMode` | [`PermissionMode`](#permissionmode) | `'default'` | 会话的权限模式 |
-| `permissionPromptToolName` | `string` | `undefined` | 权限提示的 MCP 工具名称 |
-| `plugins` | [`SdkPluginConfig`](#sdkpluginconfig)`[]` | `[]` | 从本地路径加载自定义插件。详见 [插件](/docs/zh-CN/agent-sdk/plugins) |
-| `resume` | `string` | `undefined` | 要恢复的会话 ID |
-| `settingSources` | [`SettingSource`](#settingsource)`[]` | `[]`（无设置） | 控制要加载哪些文件系统设置。省略时，不加载任何设置。**注意：** 必须包含 `'project'` 以加载 CLAUDE.md 文件 |
-| `stderr` | `(data: string) => void` | `undefined` | stderr 输出的回调 |
-| `strictMcpConfig` | `boolean` | `false` | 强制执行严格的 MCP 验证 |
-| `systemPrompt` | `string \| { type: 'preset'; preset: 'claude_code'; append?: string }` | `undefined`（空提示） | 系统提示配置。传递字符串以获得自定义提示，或传递 `{ type: 'preset', preset: 'claude_code' }` 以使用 Claude Code 的系统提示。使用预设对象形式时，添加 `append` 以使用其他说明扩展系统提示 |
+| Property | Type | Default | Description |
+| :------- | :--- | :------ | :---------- |
+| `abortController` | `AbortController` | `new AbortController()` | Controller for cancelling operations |
+| `additionalDirectories` | `string[]` | `[]` | Additional directories Claude can access |
+| `agents` | `Record<string, [`AgentDefinition`](#agentdefinition)>` | `undefined` | Programmatically define subagents |
+| `allowDangerouslySkipPermissions` | `boolean` | `false` | Enable bypassing permissions. Required when using `permissionMode: 'bypassPermissions'` |
+| `allowedTools` | `string[]` | All tools | List of allowed tool names |
+| `betas` | [`SdkBeta`](#sdkbeta)`[]` | `[]` | Enable beta features (e.g., `['context-1m-2025-08-07']`) |
+| `canUseTool` | [`CanUseTool`](#canusetool) | `undefined` | Custom permission function for tool usage |
+| `continue` | `boolean` | `false` | Continue the most recent conversation |
+| `cwd` | `string` | `process.cwd()` | Current working directory |
+| `disallowedTools` | `string[]` | `[]` | List of disallowed tool names |
+| `enableFileCheckpointing` | `boolean` | `false` | Enable file change tracking for rewinding. See [File checkpointing](/docs/en/agent-sdk/file-checkpointing) |
+| `env` | `Dict<string>` | `process.env` | Environment variables |
+| `executable` | `'bun' \| 'deno' \| 'node'` | Auto-detected | JavaScript runtime to use |
+| `executableArgs` | `string[]` | `[]` | Arguments to pass to the executable |
+| `extraArgs` | `Record<string, string \| null>` | `{}` | Additional arguments |
+| `fallbackModel` | `string` | `undefined` | Model to use if primary fails |
+| `forkSession` | `boolean` | `false` | When resuming with `resume`, fork to a new session ID instead of continuing the original session |
+| `hooks` | `Partial<Record<`[`HookEvent`](#hookevent)`, `[`HookCallbackMatcher`](#hookcallbackmatcher)`[]>>` | `{}` | Hook callbacks for events |
+| `includePartialMessages` | `boolean` | `false` | Include partial message events |
+| `maxBudgetUsd` | `number` | `undefined` | Maximum budget in USD for the query |
+| `maxThinkingTokens` | `number` | `undefined` | Maximum tokens for thinking process |
+| `maxTurns` | `number` | `undefined` | Maximum conversation turns |
+| `mcpServers` | `Record<string, [`McpServerConfig`](#mcpserverconfig)>` | `{}` | MCP server configurations |
+| `model` | `string` | Default from CLI | Claude model to use |
+| `outputFormat` | `{ type: 'json_schema', schema: JSONSchema }` | `undefined` | Define output format for agent results. See [Structured outputs](/docs/en/agent-sdk/structured-outputs) for details |
+| `pathToClaudeCodeExecutable` | `string` | Uses built-in executable | Path to Claude Code executable |
+| `permissionMode` | [`PermissionMode`](#permissionmode) | `'default'` | Permission mode for the session |
+| `permissionPromptToolName` | `string` | `undefined` | MCP tool name for permission prompts |
+| `plugins` | [`SdkPluginConfig`](#sdkpluginconfig)`[]` | `[]` | Load custom plugins from local paths. See [Plugins](/docs/en/agent-sdk/plugins) for details |
+| `resume` | `string` | `undefined` | Session ID to resume |
+| `resumeSessionAt` | `string` | `undefined` | Resume session at a specific message UUID |
+| `sandbox` | [`SandboxSettings`](#sandboxsettings) | `undefined` | Configure sandbox behavior programmatically. See [Sandbox settings](#sandboxsettings) for details |
+| `settingSources` | [`SettingSource`](#settingsource)`[]` | `[]` (no settings) | Control which filesystem settings to load. When omitted, no settings are loaded. **Note:** Must include `'project'` to load CLAUDE.md files |
+| `stderr` | `(data: string) => void` | `undefined` | Callback for stderr output |
+| `strictMcpConfig` | `boolean` | `false` | Enforce strict MCP validation |
+| `systemPrompt` | `string \| { type: 'preset'; preset: 'claude_code'; append?: string }` | `undefined` (empty prompt) | System prompt configuration. Pass a string for custom prompt, or `{ type: 'preset', preset: 'claude_code' }` to use Claude Code's system prompt. When using the preset object form, add `append` to extend the system prompt with additional instructions |
+| `tools` | `string[] \| { type: 'preset'; preset: 'claude_code' }` | `undefined` | Tool configuration. Pass an array of tool names or use the preset to get Claude Code's default tools |
 
 ### `Query`
 
-`query()` 函数返回的接口。
+Interface returned by the `query()` function.
 
 ```typescript
 interface Query extends AsyncGenerator<SDKMessage, void> {
   interrupt(): Promise<void>;
+  rewindFiles(userMessageUuid: string): Promise<void>;
   setPermissionMode(mode: PermissionMode): Promise<void>;
+  setModel(model?: string): Promise<void>;
+  setMaxThinkingTokens(maxThinkingTokens: number | null): Promise<void>;
+  supportedCommands(): Promise<SlashCommand[]>;
+  supportedModels(): Promise<ModelInfo[]>;
+  mcpServerStatus(): Promise<McpServerStatus[]>;
+  accountInfo(): Promise<AccountInfo>;
 }
 ```
 
-#### 方法
+#### Methods
 
-| 方法 | 描述 |
-| :--- | :--- |
-| `interrupt()` | 中断查询（仅在流式输入模式下可用） |
-| `setPermissionMode()` | 更改权限模式（仅在流式输入模式下可用） |
+| Method | Description |
+| :----- | :---------- |
+| `interrupt()` | Interrupts the query (only available in streaming input mode) |
+| `rewindFiles(userMessageUuid)` | Restores files to their state at the specified user message. Requires `enableFileCheckpointing: true`. See [File checkpointing](/docs/en/agent-sdk/file-checkpointing) |
+| `setPermissionMode()` | Changes the permission mode (only available in streaming input mode) |
+| `setModel()` | Changes the model (only available in streaming input mode) |
+| `setMaxThinkingTokens()` | Changes the maximum thinking tokens (only available in streaming input mode) |
+| `supportedCommands()` | Returns available slash commands |
+| `supportedModels()` | Returns available models with display info |
+| `mcpServerStatus()` | Returns status of connected MCP servers |
+| `accountInfo()` | Returns account information |
 
 ### `AgentDefinition`
 
-以编程方式定义的子代理的配置。
+Configuration for a subagent defined programmatically.
 
 ```typescript
 type AgentDefinition = {
@@ -153,75 +176,75 @@ type AgentDefinition = {
 }
 ```
 
-| 字段 | 必需 | 描述 |
-|:---|:---|:---|
-| `description` | 是 | 何时使用此代理的自然语言描述 |
-| `tools` | 否 | 允许的工具名称数组。如果省略，继承所有工具 |
-| `prompt` | 是 | 代理的系统提示 |
-| `model` | 否 | 此代理的模型覆盖。如果省略，使用主模型 |
+| Field | Required | Description |
+|:------|:---------|:------------|
+| `description` | Yes | Natural language description of when to use this agent |
+| `tools` | No | Array of allowed tool names. If omitted, inherits all tools |
+| `prompt` | Yes | The agent's system prompt |
+| `model` | No | Model override for this agent. If omitted, uses the main model |
 
 ### `SettingSource`
 
-控制 SDK 从哪些基于文件系统的配置源加载设置。
+Controls which filesystem-based configuration sources the SDK loads settings from.
 
 ```typescript
 type SettingSource = 'user' | 'project' | 'local';
 ```
 
-| 值 | 描述 | 位置 |
-|:---|:---|:---|
-| `'user'` | 全局用户设置 | `~/.claude/settings.json` |
-| `'project'` | 共享项目设置（版本控制） | `.claude/settings.json` |
-| `'local'` | 本地项目设置（gitignored） | `.claude/settings.local.json` |
+| Value | Description | Location |
+|:------|:------------|:---------|
+| `'user'` | Global user settings | `~/.claude/settings.json` |
+| `'project'` | Shared project settings (version controlled) | `.claude/settings.json` |
+| `'local'` | Local project settings (gitignored) | `.claude/settings.local.json` |
 
-#### 默认行为
+#### Default behavior
 
-当 `settingSources` **被省略**或**未定义**时，SDK **不会**加载任何文件系统设置。这为 SDK 应用程序提供了隔离。
+When `settingSources` is **omitted** or **undefined**, the SDK does **not** load any filesystem settings. This provides isolation for SDK applications.
 
-#### 为什么使用 settingSources？
+#### Why use settingSources?
 
-**加载所有文件系统设置（旧版行为）：**
+**Load all filesystem settings (legacy behavior):**
 ```typescript
-// 像 SDK v0.0.x 一样加载所有设置
+// Load all settings like SDK v0.0.x did
 const result = query({
-  prompt: "分析这段代码",
+  prompt: "Analyze this code",
   options: {
-    settingSources: ['user', 'project', 'local']  // 加载所有设置
+    settingSources: ['user', 'project', 'local']  // Load all settings
   }
 });
 ```
 
-**仅加载特定设置源：**
+**Load only specific setting sources:**
 ```typescript
-// 仅加载项目设置，忽略用户和本地设置
+// Load only project settings, ignore user and local
 const result = query({
-  prompt: "运行 CI 检查",
+  prompt: "Run CI checks",
   options: {
-    settingSources: ['project']  // 仅 .claude/settings.json
+    settingSources: ['project']  // Only .claude/settings.json
   }
 });
 ```
 
-**测试和 CI 环境：**
+**Testing and CI environments:**
 ```typescript
-// 通过排除本地设置确保 CI 中的一致行为
+// Ensure consistent behavior in CI by excluding local settings
 const result = query({
-  prompt: "运行测试",
+  prompt: "Run tests",
   options: {
-    settingSources: ['project'],  // 仅团队共享设置
+    settingSources: ['project'],  // Only team-shared settings
     permissionMode: 'bypassPermissions'
   }
 });
 ```
 
-**仅 SDK 应用程序：**
+**SDK-only applications:**
 ```typescript
-// 以编程方式定义所有内容（默认行为）
-// 无文件系统依赖 - settingSources 默认为 []
+// Define everything programmatically (default behavior)
+// No filesystem dependencies - settingSources defaults to []
 const result = query({
-  prompt: "审查此 PR",
+  prompt: "Review this PR",
   options: {
-    // settingSources: [] 是默认值，无需指定
+    // settingSources: [] is the default, no need to specify
     agents: { /* ... */ },
     mcpServers: { /* ... */ },
     allowedTools: ['Read', 'Grep', 'Glob']
@@ -229,44 +252,44 @@ const result = query({
 });
 ```
 
-**加载 CLAUDE.md 项目说明：**
+**Loading CLAUDE.md project instructions:**
 ```typescript
-// 加载项目设置以包含 CLAUDE.md 文件
+// Load project settings to include CLAUDE.md files
 const result = query({
-  prompt: "按照项目约定添加新功能",
+  prompt: "Add a new feature following project conventions",
   options: {
     systemPrompt: {
       type: 'preset',
-      preset: 'claude_code'  // 使用 CLAUDE.md 所需
+      preset: 'claude_code'  // Required to use CLAUDE.md
     },
-    settingSources: ['project'],  // 从项目目录加载 CLAUDE.md
+    settingSources: ['project'],  // Loads CLAUDE.md from project directory
     allowedTools: ['Read', 'Write', 'Edit']
   }
 });
 ```
 
-#### 设置优先级
+#### Settings precedence
 
-加载多个源时，设置按此优先级合并（从高到低）：
-1. 本地设置（`.claude/settings.local.json`）
-2. 项目设置（`.claude/settings.json`）
-3. 用户设置（`~/.claude/settings.json`）
+When multiple sources are loaded, settings are merged with this precedence (highest to lowest):
+1. Local settings (`.claude/settings.local.json`)
+2. Project settings (`.claude/settings.json`)
+3. User settings (`~/.claude/settings.json`)
 
-编程选项（如 `agents`、`allowedTools`）始终覆盖文件系统设置。
+Programmatic options (like `agents`, `allowedTools`) always override filesystem settings.
 
 ### `PermissionMode`
 
 ```typescript
 type PermissionMode =
-  | 'default'           // 标准权限行为
-  | 'acceptEdits'       // 自动接受文件编辑
-  | 'bypassPermissions' // 绕过所有权限检查
-  | 'plan'              // 规划模式 - 无执行
+  | 'default'           // Standard permission behavior
+  | 'acceptEdits'       // Auto-accept file edits
+  | 'bypassPermissions' // Bypass all permission checks
+  | 'plan'              // Planning mode - no execution
 ```
 
 ### `CanUseTool`
 
-用于控制工具使用的自定义权限函数类型。
+Custom permission function type for controlling tool usage.
 
 ```typescript
 type CanUseTool = (
@@ -281,7 +304,7 @@ type CanUseTool = (
 
 ### `PermissionResult`
 
-权限检查的结果。
+Result of a permission check.
 
 ```typescript
 type PermissionResult = 
@@ -299,7 +322,7 @@ type PermissionResult =
 
 ### `McpServerConfig`
 
-MCP 服务器的配置。
+Configuration for MCP servers.
 
 ```typescript
 type McpServerConfig = 
@@ -352,7 +375,7 @@ type McpSdkServerConfigWithInstance = {
 
 ### `SdkPluginConfig`
 
-SDK 中加载插件的配置。
+Configuration for loading plugins in the SDK.
 
 ```typescript
 type SdkPluginConfig = {
@@ -361,12 +384,12 @@ type SdkPluginConfig = {
 }
 ```
 
-| 字段 | 类型 | 描述 |
-|:---|:---|:---|
-| `type` | `'local'` | 必须是 `'local'`（目前仅支持本地插件） |
-| `path` | `string` | 插件目录的绝对或相对路径 |
+| Field | Type | Description |
+|:------|:-----|:------------|
+| `type` | `'local'` | Must be `'local'` (only local plugins currently supported) |
+| `path` | `string` | Absolute or relative path to the plugin directory |
 
-**示例：**
+**Example:**
 ```typescript
 plugins: [
   { type: 'local', path: './my-plugin' },
@@ -374,13 +397,13 @@ plugins: [
 ]
 ```
 
-有关创建和使用插件的完整信息，请参阅 [插件](/docs/zh-CN/agent-sdk/plugins)。
+For complete information on creating and using plugins, see [Plugins](/docs/en/agent-sdk/plugins).
 
-## 消息类型
+## Message Types
 
 ### `SDKMessage`
 
-查询返回的所有可能消息的联合类型。
+Union type of all possible messages returned by the query.
 
 ```typescript
 type SDKMessage = 
@@ -395,35 +418,35 @@ type SDKMessage =
 
 ### `SDKAssistantMessage`
 
-助手响应消息。
+Assistant response message.
 
 ```typescript
 type SDKAssistantMessage = {
   type: 'assistant';
   uuid: UUID;
   session_id: string;
-  message: APIAssistantMessage; // 来自 Anthropic SDK
+  message: APIAssistantMessage; // From Anthropic SDK
   parent_tool_use_id: string | null;
 }
 ```
 
 ### `SDKUserMessage`
 
-用户输入消息。
+User input message.
 
 ```typescript
 type SDKUserMessage = {
   type: 'user';
   uuid?: UUID;
   session_id: string;
-  message: APIUserMessage; // 来自 Anthropic SDK
+  message: APIUserMessage; // From Anthropic SDK
   parent_tool_use_id: string | null;
 }
 ```
 
 ### `SDKUserMessageReplay`
 
-带有必需 UUID 的重放用户消息。
+Replayed user message with required UUID.
 
 ```typescript
 type SDKUserMessageReplay = {
@@ -437,10 +460,10 @@ type SDKUserMessageReplay = {
 
 ### `SDKResultMessage`
 
-最终结果消息。
+Final result message.
 
 ```typescript
-type SDKResultMessage = 
+type SDKResultMessage =
   | {
       type: 'result';
       subtype: 'success';
@@ -453,11 +476,17 @@ type SDKResultMessage =
       result: string;
       total_cost_usd: number;
       usage: NonNullableUsage;
+      modelUsage: { [modelName: string]: ModelUsage };
       permission_denials: SDKPermissionDenial[];
+      structured_output?: unknown;
     }
   | {
       type: 'result';
-      subtype: 'error_max_turns' | 'error_during_execution';
+      subtype:
+        | 'error_max_turns'
+        | 'error_during_execution'
+        | 'error_max_budget_usd'
+        | 'error_max_structured_output_retries';
       uuid: UUID;
       session_id: string;
       duration_ms: number;
@@ -466,13 +495,15 @@ type SDKResultMessage =
       num_turns: number;
       total_cost_usd: number;
       usage: NonNullableUsage;
+      modelUsage: { [modelName: string]: ModelUsage };
       permission_denials: SDKPermissionDenial[];
+      errors: string[];
     }
 ```
 
 ### `SDKSystemMessage`
 
-系统初始化消息。
+System initialization message.
 
 ```typescript
 type SDKSystemMessage = {
@@ -496,12 +527,12 @@ type SDKSystemMessage = {
 
 ### `SDKPartialAssistantMessage`
 
-流式部分消息（仅当 `includePartialMessages` 为 true 时）。
+Streaming partial message (only when `includePartialMessages` is true).
 
 ```typescript
 type SDKPartialAssistantMessage = {
   type: 'stream_event';
-  event: RawMessageStreamEvent; // 来自 Anthropic SDK
+  event: RawMessageStreamEvent; // From Anthropic SDK
   parent_tool_use_id: string | null;
   uuid: UUID;
   session_id: string;
@@ -510,7 +541,7 @@ type SDKPartialAssistantMessage = {
 
 ### `SDKCompactBoundaryMessage`
 
-指示对话压缩边界的消息。
+Message indicating a conversation compaction boundary.
 
 ```typescript
 type SDKCompactBoundaryMessage = {
@@ -527,7 +558,7 @@ type SDKCompactBoundaryMessage = {
 
 ### `SDKPermissionDenial`
 
-有关被拒绝的工具使用的信息。
+Information about a denied tool use.
 
 ```typescript
 type SDKPermissionDenial = {
@@ -537,32 +568,37 @@ type SDKPermissionDenial = {
 }
 ```
 
-## 钩子类型
+## Hook Types
+
+For a comprehensive guide on using hooks with examples and common patterns, see the [Hooks guide](/docs/en/agent-sdk/hooks).
 
 ### `HookEvent`
 
-可用的钩子事件。
+Available hook events.
 
 ```typescript
-type HookEvent = 
+type HookEvent =
   | 'PreToolUse'
   | 'PostToolUse'
+  | 'PostToolUseFailure'
   | 'Notification'
   | 'UserPromptSubmit'
   | 'SessionStart'
   | 'SessionEnd'
   | 'Stop'
+  | 'SubagentStart'
   | 'SubagentStop'
-  | 'PreCompact';
+  | 'PreCompact'
+  | 'PermissionRequest';
 ```
 
 ### `HookCallback`
 
-钩子回调函数类型。
+Hook callback function type.
 
 ```typescript
 type HookCallback = (
-  input: HookInput, // 所有钩子输入类型的联合
+  input: HookInput, // Union of all hook input types
   toolUseID: string | undefined,
   options: { signal: AbortSignal }
 ) => Promise<HookJSONOutput>;
@@ -570,7 +606,7 @@ type HookCallback = (
 
 ### `HookCallbackMatcher`
 
-带有可选匹配器的钩子配置。
+Hook configuration with optional matcher.
 
 ```typescript
 interface HookCallbackMatcher {
@@ -581,24 +617,27 @@ interface HookCallbackMatcher {
 
 ### `HookInput`
 
-所有钩子输入类型的联合类型。
+Union type of all hook input types.
 
 ```typescript
-type HookInput = 
+type HookInput =
   | PreToolUseHookInput
   | PostToolUseHookInput
+  | PostToolUseFailureHookInput
   | NotificationHookInput
   | UserPromptSubmitHookInput
   | SessionStartHookInput
   | SessionEndHookInput
   | StopHookInput
+  | SubagentStartHookInput
   | SubagentStopHookInput
-  | PreCompactHookInput;
+  | PreCompactHookInput
+  | PermissionRequestHookInput;
 ```
 
 ### `BaseHookInput`
 
-所有钩子输入类型扩展的基础接口。
+Base interface that all hook input types extend.
 
 ```typescript
 type BaseHookInput = {
@@ -615,7 +654,7 @@ type BaseHookInput = {
 type PreToolUseHookInput = BaseHookInput & {
   hook_event_name: 'PreToolUse';
   tool_name: string;
-  tool_input: ToolInput;
+  tool_input: unknown;
 }
 ```
 
@@ -625,8 +664,20 @@ type PreToolUseHookInput = BaseHookInput & {
 type PostToolUseHookInput = BaseHookInput & {
   hook_event_name: 'PostToolUse';
   tool_name: string;
-  tool_input: ToolInput;
-  tool_response: ToolOutput;
+  tool_input: unknown;
+  tool_response: unknown;
+}
+```
+
+#### `PostToolUseFailureHookInput`
+
+```typescript
+type PostToolUseFailureHookInput = BaseHookInput & {
+  hook_event_name: 'PostToolUseFailure';
+  tool_name: string;
+  tool_input: unknown;
+  error: string;
+  is_interrupt?: boolean;
 }
 ```
 
@@ -663,7 +714,7 @@ type SessionStartHookInput = BaseHookInput & {
 ```typescript
 type SessionEndHookInput = BaseHookInput & {
   hook_event_name: 'SessionEnd';
-  reason: 'clear' | 'logout' | 'prompt_input_exit' | 'other';
+  reason: ExitReason;  // String from EXIT_REASONS array
 }
 ```
 
@@ -673,6 +724,16 @@ type SessionEndHookInput = BaseHookInput & {
 type StopHookInput = BaseHookInput & {
   hook_event_name: 'Stop';
   stop_hook_active: boolean;
+}
+```
+
+#### `SubagentStartHookInput`
+
+```typescript
+type SubagentStartHookInput = BaseHookInput & {
+  hook_event_name: 'SubagentStart';
+  agent_id: string;
+  agent_type: string;
 }
 ```
 
@@ -695,9 +756,20 @@ type PreCompactHookInput = BaseHookInput & {
 }
 ```
 
+#### `PermissionRequestHookInput`
+
+```typescript
+type PermissionRequestHookInput = BaseHookInput & {
+  hook_event_name: 'PermissionRequest';
+  tool_name: string;
+  tool_input: unknown;
+  permission_suggestions?: PermissionUpdate[];
+}
+```
+
 ### `HookJSONOutput`
 
-钩子返回值。
+Hook return value.
 
 ```typescript
 type HookJSONOutput = AsyncHookJSONOutput | SyncHookJSONOutput;
@@ -727,6 +799,7 @@ type SyncHookJSONOutput = {
         hookEventName: 'PreToolUse';
         permissionDecision?: 'allow' | 'deny' | 'ask';
         permissionDecisionReason?: string;
+        updatedInput?: Record<string, unknown>;
       }
     | {
         hookEventName: 'UserPromptSubmit';
@@ -743,17 +816,18 @@ type SyncHookJSONOutput = {
 }
 ```
 
-## 工具输入类型
+## Tool Input Types
 
-所有内置 Claude Code 工具的输入模式文档。这些类型从 `@anthropic-ai/claude-agent-sdk` 导出，可用于类型安全的工具交互。
+Documentation of input schemas for all built-in Claude Code tools. These types are exported from `@anthropic-ai/claude-agent-sdk` and can be used for type-safe tool interactions.
 
 ### `ToolInput`
 
-**注意：** 这是一个仅用于清晰起见的文档类型。它表示所有工具输入类型的联合。
+**Note:** This is a documentation-only type for clarity. It represents the union of all tool input types.
 
 ```typescript
-type ToolInput = 
+type ToolInput =
   | AgentInput
+  | AskUserQuestionInput
   | BashInput
   | BashOutputInput
   | FileEditInput
@@ -773,396 +847,447 @@ type ToolInput =
 
 ### Task
 
-**工具名称：** `Task`
+**Tool name:** `Task`
 
 ```typescript
 interface AgentInput {
   /**
-   * 任务的简短（3-5 个单词）描述
+   * A short (3-5 word) description of the task
    */
   description: string;
   /**
-   * 代理要执行的任务
+   * The task for the agent to perform
    */
   prompt: string;
   /**
-   * 用于此任务的专门代理类型
+   * The type of specialized agent to use for this task
    */
   subagent_type: string;
 }
 ```
 
-启动一个新代理来自主处理复杂的多步骤任务。
+Launches a new agent to handle complex, multi-step tasks autonomously.
+
+### AskUserQuestion
+
+**Tool name:** `AskUserQuestion`
+
+```typescript
+interface AskUserQuestionInput {
+  /**
+   * Questions to ask the user (1-4 questions)
+   */
+  questions: Array<{
+    /**
+     * The complete question to ask the user. Should be clear, specific,
+     * and end with a question mark.
+     */
+    question: string;
+    /**
+     * Very short label displayed as a chip/tag (max 12 chars).
+     * Examples: "Auth method", "Library", "Approach"
+     */
+    header: string;
+    /**
+     * The available choices (2-4 options). An "Other" option is
+     * automatically provided.
+     */
+    options: Array<{
+      /**
+       * Display text for this option (1-5 words)
+       */
+      label: string;
+      /**
+       * Explanation of what this option means
+       */
+      description: string;
+    }>;
+    /**
+     * Set to true to allow multiple selections
+     */
+    multiSelect: boolean;
+  }>;
+  /**
+   * User answers populated by the permission system.
+   * Maps question text to selected option label(s).
+   * Multi-select answers are comma-separated.
+   */
+  answers?: Record<string, string>;
+}
+```
+
+Asks the user clarifying questions during execution. See [Handling the AskUserQuestion Tool](/docs/en/agent-sdk/permissions#handling-the-askuserquestion-tool) for usage details.
 
 ### Bash
 
-**工具名称：** `Bash`
+**Tool name:** `Bash`
 
 ```typescript
 interface BashInput {
   /**
-   * 要执行的命令
+   * The command to execute
    */
   command: string;
   /**
-   * 可选超时时间（以毫秒为单位，最多 600000）
+   * Optional timeout in milliseconds (max 600000)
    */
   timeout?: number;
   /**
-   * 清晰简洁的描述，说明此命令在 5-10 个单词内的作用
+   * Clear, concise description of what this command does in 5-10 words
    */
   description?: string;
   /**
-   * 设置为 true 以在后台运行此命令
+   * Set to true to run this command in the background
    */
   run_in_background?: boolean;
 }
 ```
 
-在持久 shell 会话中执行 bash 命令，支持可选的超时和后台执行。
+Executes bash commands in a persistent shell session with optional timeout and background execution.
 
 ### BashOutput
 
-**工具名称：** `BashOutput`
+**Tool name:** `BashOutput`
 
 ```typescript
 interface BashOutputInput {
   /**
-   * 要从中检索输出的后台 shell 的 ID
+   * The ID of the background shell to retrieve output from
    */
   bash_id: string;
   /**
-   * 可选的正则表达式以过滤输出行
+   * Optional regex to filter output lines
    */
   filter?: string;
 }
 ```
 
-从运行中或已完成的后台 bash shell 检索输出。
+Retrieves output from a running or completed background bash shell.
 
 ### Edit
 
-**工具名称：** `Edit`
+**Tool name:** `Edit`
 
 ```typescript
 interface FileEditInput {
   /**
-   * 要修改的文件的绝对路径
+   * The absolute path to the file to modify
    */
   file_path: string;
   /**
-   * 要替换的文本
+   * The text to replace
    */
   old_string: string;
   /**
-   * 替换为的文本（必须与 old_string 不同）
+   * The text to replace it with (must be different from old_string)
    */
   new_string: string;
   /**
-   * 替换 old_string 的所有出现（默认为 false）
+   * Replace all occurrences of old_string (default false)
    */
   replace_all?: boolean;
 }
 ```
 
-在文件中执行精确字符串替换。
+Performs exact string replacements in files.
 
 ### Read
 
-**工具名称：** `Read`
+**Tool name:** `Read`
 
 ```typescript
 interface FileReadInput {
   /**
-   * 要读取的文件的绝对路径
+   * The absolute path to the file to read
    */
   file_path: string;
   /**
-   * 开始读取的行号
+   * The line number to start reading from
    */
   offset?: number;
   /**
-   * 要读取的行数
+   * The number of lines to read
    */
   limit?: number;
 }
 ```
 
-从本地文件系统读取文件，包括文本、图像、PDF 和 Jupyter 笔记本。
+Reads files from the local filesystem, including text, images, PDFs, and Jupyter notebooks.
 
 ### Write
 
-**工具名称：** `Write`
+**Tool name:** `Write`
 
 ```typescript
 interface FileWriteInput {
   /**
-   * 要写入的文件的绝对路径
+   * The absolute path to the file to write
    */
   file_path: string;
   /**
-   * 要写入文件的内容
+   * The content to write to the file
    */
   content: string;
 }
 ```
 
-将文件写入本地文件系统，如果存在则覆盖。
+Writes a file to the local filesystem, overwriting if it exists.
 
 ### Glob
 
-**工具名称：** `Glob`
+**Tool name:** `Glob`
 
 ```typescript
 interface GlobInput {
   /**
-   * 用于匹配文件的 glob 模式
+   * The glob pattern to match files against
    */
   pattern: string;
   /**
-   * 要搜索的目录（默认为 cwd）
+   * The directory to search in (defaults to cwd)
    */
   path?: string;
 }
 ```
 
-快速文件模式匹配，适用于任何代码库大小。
+Fast file pattern matching that works with any codebase size.
 
 ### Grep
 
-**工具名称：** `Grep`
+**Tool name:** `Grep`
 
 ```typescript
 interface GrepInput {
   /**
-   * 要搜索的正则表达式模式
+   * The regular expression pattern to search for
    */
   pattern: string;
   /**
-   * 要搜索的文件或目录（默认为 cwd）
+   * File or directory to search in (defaults to cwd)
    */
   path?: string;
   /**
-   * 用于过滤文件的 glob 模式（例如 "*.js"）
+   * Glob pattern to filter files (e.g. "*.js")
    */
   glob?: string;
   /**
-   * 要搜索的文件类型（例如 "js"、"py"、"rust"）
+   * File type to search (e.g. "js", "py", "rust")
    */
   type?: string;
   /**
-   * 输出模式："content"、"files_with_matches" 或 "count"
+   * Output mode: "content", "files_with_matches", or "count"
    */
   output_mode?: 'content' | 'files_with_matches' | 'count';
   /**
-   * 不区分大小写的搜索
+   * Case insensitive search
    */
   '-i'?: boolean;
   /**
-   * 显示行号（用于内容模式）
+   * Show line numbers (for content mode)
    */
   '-n'?: boolean;
   /**
-   * 每个匹配项前显示的行数
+   * Lines to show before each match
    */
   '-B'?: number;
   /**
-   * 每个匹配项后显示的行数
+   * Lines to show after each match
    */
   '-A'?: number;
   /**
-   * 每个匹配项前后显示的行数
+   * Lines to show before and after each match
    */
   '-C'?: number;
   /**
-   * 将输出限制为前 N 行/条目
+   * Limit output to first N lines/entries
    */
   head_limit?: number;
   /**
-   * 启用多行模式
+   * Enable multiline mode
    */
   multiline?: boolean;
 }
 ```
 
-基于 ripgrep 的强大搜索工具，支持正则表达式。
+Powerful search tool built on ripgrep with regex support.
 
 ### KillBash
 
-**工具名称：** `KillBash`
+**Tool name:** `KillBash`
 
 ```typescript
 interface KillShellInput {
   /**
-   * 要终止的后台 shell 的 ID
+   * The ID of the background shell to kill
    */
   shell_id: string;
 }
 ```
 
-按 ID 终止运行中的后台 bash shell。
+Kills a running background bash shell by its ID.
 
 ### NotebookEdit
 
-**工具名称：** `NotebookEdit`
+**Tool name:** `NotebookEdit`
 
 ```typescript
 interface NotebookEditInput {
   /**
-   * Jupyter 笔记本文件的绝对路径
+   * The absolute path to the Jupyter notebook file
    */
   notebook_path: string;
   /**
-   * 要编辑的单元格的 ID
+   * The ID of the cell to edit
    */
   cell_id?: string;
   /**
-   * 单元格的新源代码
+   * The new source for the cell
    */
   new_source: string;
   /**
-   * 单元格的类型（代码或降价）
+   * The type of the cell (code or markdown)
    */
   cell_type?: 'code' | 'markdown';
   /**
-   * 编辑类型（替换、插入、删除）
+   * The type of edit (replace, insert, delete)
    */
   edit_mode?: 'replace' | 'insert' | 'delete';
 }
 ```
 
-编辑 Jupyter 笔记本文件中的单元格。
+Edits cells in Jupyter notebook files.
 
 ### WebFetch
 
-**工具名称：** `WebFetch`
+**Tool name:** `WebFetch`
 
 ```typescript
 interface WebFetchInput {
   /**
-   * 要从中获取内容的 URL
+   * The URL to fetch content from
    */
   url: string;
   /**
-   * 在获取的内容上运行的提示
+   * The prompt to run on the fetched content
    */
   prompt: string;
 }
 ```
 
-从 URL 获取内容并使用 AI 模型处理它。
+Fetches content from a URL and processes it with an AI model.
 
 ### WebSearch
 
-**工具名称：** `WebSearch`
+**Tool name:** `WebSearch`
 
 ```typescript
 interface WebSearchInput {
   /**
-   * 要使用的搜索查询
+   * The search query to use
    */
   query: string;
   /**
-   * 仅包含来自这些域的结果
+   * Only include results from these domains
    */
   allowed_domains?: string[];
   /**
-   * 永远不包含来自这些域的结果
+   * Never include results from these domains
    */
   blocked_domains?: string[];
 }
 ```
 
-搜索网络并返回格式化的结果。
+Searches the web and returns formatted results.
 
 ### TodoWrite
 
-**工具名称：** `TodoWrite`
+**Tool name:** `TodoWrite`
 
 ```typescript
 interface TodoWriteInput {
   /**
-   * 更新的待办事项列表
+   * The updated todo list
    */
   todos: Array<{
     /**
-     * 任务描述
+     * The task description
      */
     content: string;
     /**
-     * 任务状态
+     * The task status
      */
     status: 'pending' | 'in_progress' | 'completed';
     /**
-     * 任务描述的主动形式
+     * Active form of the task description
      */
     activeForm: string;
   }>;
 }
 ```
 
-创建和管理结构化任务列表以跟踪进度。
+Creates and manages a structured task list for tracking progress.
 
 ### ExitPlanMode
 
-**工具名称：** `ExitPlanMode`
+**Tool name:** `ExitPlanMode`
 
 ```typescript
 interface ExitPlanModeInput {
   /**
-   * 用户批准运行的计划
+   * The plan to run by the user for approval
    */
   plan: string;
 }
 ```
 
-退出规划模式并提示用户批准计划。
+Exits planning mode and prompts the user to approve the plan.
 
 ### ListMcpResources
 
-**工具名称：** `ListMcpResources`
+**Tool name:** `ListMcpResources`
 
 ```typescript
 interface ListMcpResourcesInput {
   /**
-   * 可选的服务器名称以按其过滤资源
+   * Optional server name to filter resources by
    */
   server?: string;
 }
 ```
 
-列出来自连接服务器的可用 MCP 资源。
+Lists available MCP resources from connected servers.
 
 ### ReadMcpResource
 
-**工具名称：** `ReadMcpResource`
+**Tool name:** `ReadMcpResource`
 
 ```typescript
 interface ReadMcpResourceInput {
   /**
-   * MCP 服务器名称
+   * The MCP server name
    */
   server: string;
   /**
-   * 要读取的资源 URI
+   * The resource URI to read
    */
   uri: string;
 }
 ```
 
-从服务器读取特定的 MCP 资源。
+Reads a specific MCP resource from a server.
 
-## 工具输出类型
+## Tool Output Types
 
-所有内置 Claude Code 工具的输出模式文档。这些类型表示每个工具返回的实际响应数据。
+Documentation of output schemas for all built-in Claude Code tools. These types represent the actual response data returned by each tool.
 
 ### `ToolOutput`
 
-**注意：** 这是一个仅用于清晰起见的文档类型。它表示所有工具输出类型的联合。
+**Note:** This is a documentation-only type for clarity. It represents the union of all tool output types.
 
 ```typescript
-type ToolOutput = 
+type ToolOutput =
   | TaskOutput
+  | AskUserQuestionOutput
   | BashOutput
   | BashOutputToolOutput
   | EditOutput
@@ -1182,16 +1307,16 @@ type ToolOutput =
 
 ### Task
 
-**工具名称：** `Task`
+**Tool name:** `Task`
 
 ```typescript
 interface TaskOutput {
   /**
-   * 来自子代理的最终结果消息
+   * Final result message from the subagent
    */
   result: string;
   /**
-   * 令牌使用统计
+   * Token usage statistics
    */
   usage?: {
     input_tokens: number;
@@ -1200,94 +1325,123 @@ interface TaskOutput {
     cache_read_input_tokens?: number;
   };
   /**
-   * 总成本（美元）
+   * Total cost in USD
    */
   total_cost_usd?: number;
   /**
-   * 执行持续时间（毫秒）
+   * Execution duration in milliseconds
    */
   duration_ms?: number;
 }
 ```
 
-返回子代理完成委派任务后的最终结果。
+Returns the final result from the subagent after completing the delegated task.
+
+### AskUserQuestion
+
+**Tool name:** `AskUserQuestion`
+
+```typescript
+interface AskUserQuestionOutput {
+  /**
+   * The questions that were asked
+   */
+  questions: Array<{
+    question: string;
+    header: string;
+    options: Array<{
+      label: string;
+      description: string;
+    }>;
+    multiSelect: boolean;
+  }>;
+  /**
+   * The answers provided by the user.
+   * Maps question text to answer string.
+   * Multi-select answers are comma-separated.
+   */
+  answers: Record<string, string>;
+}
+```
+
+Returns the questions asked and the user's answers.
 
 ### Bash
 
-**工具名称：** `Bash`
+**Tool name:** `Bash`
 
 ```typescript
 interface BashOutput {
   /**
-   * 标准输出和标准错误的组合输出
+   * Combined stdout and stderr output
    */
   output: string;
   /**
-   * 命令的退出代码
+   * Exit code of the command
    */
   exitCode: number;
   /**
-   * 命令是否因超时而被终止
+   * Whether the command was killed due to timeout
    */
   killed?: boolean;
   /**
-   * 后台进程的 Shell ID
+   * Shell ID for background processes
    */
   shellId?: string;
 }
 ```
 
-返回命令输出和退出状态。后台命令立即返回 shellId。
+Returns command output with exit status. Background commands return immediately with a shellId.
 
 ### BashOutput
 
-**工具名称：** `BashOutput`
+**Tool name:** `BashOutput`
 
 ```typescript
 interface BashOutputToolOutput {
   /**
-   * 自上次检查以来的新输出
+   * New output since last check
    */
   output: string;
   /**
-   * 当前 shell 状态
+   * Current shell status
    */
   status: 'running' | 'completed' | 'failed';
   /**
-   * 退出代码（完成时）
+   * Exit code (when completed)
    */
   exitCode?: number;
 }
 ```
 
-返回来自后台 shell 的增量输出。
+Returns incremental output from background shells.
 
 ### Edit
 
-**工具名称：** `Edit`
+**Tool name:** `Edit`
 
 ```typescript
 interface EditOutput {
   /**
-   * 确认消息
+   * Confirmation message
    */
   message: string;
   /**
-   * 进行的替换次数
+   * Number of replacements made
    */
   replacements: number;
   /**
-   * 被编辑的文件路径
+   * File path that was edited
    */
   file_path: string;
 }
 ```
 
-返回成功编辑的确认和替换计数。
+Returns confirmation of successful edits with replacement count.
 
 ### Read
 
-**工具名称：** `Read`
+**Tool name:** `Read`
 
 ```typescript
 type ReadOutput = 
@@ -1298,37 +1452,37 @@ type ReadOutput =
 
 interface TextFileOutput {
   /**
-   * 带行号的文件内容
+   * File contents with line numbers
    */
   content: string;
   /**
-   * 文件中的总行数
+   * Total number of lines in file
    */
   total_lines: number;
   /**
-   * 实际返回的行数
+   * Lines actually returned
    */
   lines_returned: number;
 }
 
 interface ImageFileOutput {
   /**
-   * Base64 编码的图像数据
+   * Base64 encoded image data
    */
   image: string;
   /**
-   * 图像 MIME 类型
+   * Image MIME type
    */
   mime_type: string;
   /**
-   * 文件大小（字节）
+   * File size in bytes
    */
   file_size: number;
 }
 
 interface PDFFileOutput {
   /**
-   * 页面内容数组
+   * Array of page contents
    */
   pages: Array<{
     page_number: number;
@@ -1339,14 +1493,14 @@ interface PDFFileOutput {
     }>;
   }>;
   /**
-   * 总页数
+   * Total number of pages
    */
   total_pages: number;
 }
 
 interface NotebookFileOutput {
   /**
-   * Jupyter 笔记本单元格
+   * Jupyter notebook cells
    */
   cells: Array<{
     cell_type: 'code' | 'markdown';
@@ -1355,63 +1509,63 @@ interface NotebookFileOutput {
     execution_count?: number;
   }>;
   /**
-   * 笔记本元数据
+   * Notebook metadata
    */
   metadata?: Record<string, any>;
 }
 ```
 
-以适合文件类型的格式返回文件内容。
+Returns file contents in format appropriate to file type.
 
 ### Write
 
-**工具名称：** `Write`
+**Tool name:** `Write`
 
 ```typescript
 interface WriteOutput {
   /**
-   * 成功消息
+   * Success message
    */
   message: string;
   /**
-   * 写入的字节数
+   * Number of bytes written
    */
   bytes_written: number;
   /**
-   * 被写入的文件路径
+   * File path that was written
    */
   file_path: string;
 }
 ```
 
-成功写入文件后返回确认。
+Returns confirmation after successfully writing the file.
 
 ### Glob
 
-**工具名称：** `Glob`
+**Tool name:** `Glob`
 
 ```typescript
 interface GlobOutput {
   /**
-   * 匹配的文件路径数组
+   * Array of matching file paths
    */
   matches: string[];
   /**
-   * 找到的匹配数
+   * Number of matches found
    */
   count: number;
   /**
-   * 使用的搜索目录
+   * Search directory used
    */
   search_path: string;
 }
 ```
 
-返回与 glob 模式匹配的文件路径，按修改时间排序。
+Returns file paths matching the glob pattern, sorted by modification time.
 
 ### Grep
 
-**工具名称：** `Grep`
+**Tool name:** `Grep`
 
 ```typescript
 type GrepOutput = 
@@ -1421,7 +1575,7 @@ type GrepOutput =
 
 interface GrepContentOutput {
   /**
-   * 带上下文的匹配行
+   * Matching lines with context
    */
   matches: Array<{
     file: string;
@@ -1431,155 +1585,155 @@ interface GrepContentOutput {
     after_context?: string[];
   }>;
   /**
-   * 匹配总数
+   * Total number of matches
    */
   total_matches: number;
 }
 
 interface GrepFilesOutput {
   /**
-   * 包含匹配的文件
+   * Files containing matches
    */
   files: string[];
   /**
-   * 包含匹配的文件数
+   * Number of files with matches
    */
   count: number;
 }
 
 interface GrepCountOutput {
   /**
-   * 每个文件的匹配计数
+   * Match counts per file
    */
   counts: Array<{
     file: string;
     count: number;
   }>;
   /**
-   * 所有文件中的总匹配数
+   * Total matches across all files
    */
   total: number;
 }
 ```
 
-以 output_mode 指定的格式返回搜索结果。
+Returns search results in the format specified by output_mode.
 
 ### KillBash
 
-**工具名称：** `KillBash`
+**Tool name:** `KillBash`
 
 ```typescript
 interface KillBashOutput {
   /**
-   * 成功消息
+   * Success message
    */
   message: string;
   /**
-   * 被终止的 shell 的 ID
+   * ID of the killed shell
    */
   shell_id: string;
 }
 ```
 
-终止后台 shell 后返回确认。
+Returns confirmation after terminating the background shell.
 
 ### NotebookEdit
 
-**工具名称：** `NotebookEdit`
+**Tool name:** `NotebookEdit`
 
 ```typescript
 interface NotebookEditOutput {
   /**
-   * 成功消息
+   * Success message
    */
   message: string;
   /**
-   * 执行的编辑类型
+   * Type of edit performed
    */
   edit_type: 'replaced' | 'inserted' | 'deleted';
   /**
-   * 受影响的单元格 ID
+   * Cell ID that was affected
    */
   cell_id?: string;
   /**
-   * 编辑后笔记本中的总单元格数
+   * Total cells in notebook after edit
    */
   total_cells: number;
 }
 ```
 
-修改 Jupyter 笔记本后返回确认。
+Returns confirmation after modifying the Jupyter notebook.
 
 ### WebFetch
 
-**工具名称：** `WebFetch`
+**Tool name:** `WebFetch`
 
 ```typescript
 interface WebFetchOutput {
   /**
-   * AI 模型对提示的响应
+   * AI model's response to the prompt
    */
   response: string;
   /**
-   * 被获取的 URL
+   * URL that was fetched
    */
   url: string;
   /**
-   * 重定向后的最终 URL
+   * Final URL after redirects
    */
   final_url?: string;
   /**
-   * HTTP 状态代码
+   * HTTP status code
    */
   status_code?: number;
 }
 ```
 
-返回 AI 对获取的网络内容的分析。
+Returns the AI's analysis of the fetched web content.
 
 ### WebSearch
 
-**工具名称：** `WebSearch`
+**Tool name:** `WebSearch`
 
 ```typescript
 interface WebSearchOutput {
   /**
-   * 搜索结果
+   * Search results
    */
   results: Array<{
     title: string;
     url: string;
     snippet: string;
     /**
-     * 如果可用的其他元数据
+     * Additional metadata if available
      */
     metadata?: Record<string, any>;
   }>;
   /**
-   * 结果总数
+   * Total number of results
    */
   total_results: number;
   /**
-   * 被搜索的查询
+   * The query that was searched
    */
   query: string;
 }
 ```
 
-返回来自网络的格式化搜索结果。
+Returns formatted search results from the web.
 
 ### TodoWrite
 
-**工具名称：** `TodoWrite`
+**Tool name:** `TodoWrite`
 
 ```typescript
 interface TodoWriteOutput {
   /**
-   * 成功消息
+   * Success message
    */
   message: string;
   /**
-   * 当前待办事项统计
+   * Current todo statistics
    */
   stats: {
     total: number;
@@ -1590,35 +1744,35 @@ interface TodoWriteOutput {
 }
 ```
 
-返回确认和当前任务统计。
+Returns confirmation with current task statistics.
 
 ### ExitPlanMode
 
-**工具名称：** `ExitPlanMode`
+**Tool name:** `ExitPlanMode`
 
 ```typescript
 interface ExitPlanModeOutput {
   /**
-   * 确认消息
+   * Confirmation message
    */
   message: string;
   /**
-   * 用户是否批准了计划
+   * Whether user approved the plan
    */
   approved?: boolean;
 }
 ```
 
-退出规划模式后返回确认。
+Returns confirmation after exiting plan mode.
 
 ### ListMcpResources
 
-**工具名称：** `ListMcpResources`
+**Tool name:** `ListMcpResources`
 
 ```typescript
 interface ListMcpResourcesOutput {
   /**
-   * 可用资源
+   * Available resources
    */
   resources: Array<{
     uri: string;
@@ -1628,22 +1782,22 @@ interface ListMcpResourcesOutput {
     server: string;
   }>;
   /**
-   * 资源总数
+   * Total number of resources
    */
   total: number;
 }
 ```
 
-返回可用 MCP 资源的列表。
+Returns list of available MCP resources.
 
 ### ReadMcpResource
 
-**工具名称：** `ReadMcpResource`
+**Tool name:** `ReadMcpResource`
 
 ```typescript
 interface ReadMcpResourceOutput {
   /**
-   * 资源内容
+   * Resource contents
    */
   contents: Array<{
     uri: string;
@@ -1652,19 +1806,19 @@ interface ReadMcpResourceOutput {
     blob?: string;
   }>;
   /**
-   * 提供资源的服务器
+   * Server that provided the resource
    */
   server: string;
 }
 ```
 
-返回请求的 MCP 资源的内容。
+Returns the contents of the requested MCP resource.
 
-## 权限类型
+## Permission Types
 
 ### `PermissionUpdate`
 
-用于更新权限的操作。
+Operations for updating permissions.
 
 ```typescript
 type PermissionUpdate = 
@@ -1713,10 +1867,10 @@ type PermissionBehavior = 'allow' | 'deny' | 'ask';
 
 ```typescript
 type PermissionUpdateDestination = 
-  | 'userSettings'     // 全局用户设置
-  | 'projectSettings'  // 按目录项目设置
-  | 'localSettings'    // Gitignored 本地设置
-  | 'session'          // 仅当前会话
+  | 'userSettings'     // Global user settings
+  | 'projectSettings'  // Per-directory project settings
+  | 'localSettings'    // Gitignored local settings
+  | 'session'          // Current session only
 ```
 
 ### `PermissionRuleValue`
@@ -1728,12 +1882,93 @@ type PermissionRuleValue = {
 }
 ```
 
-## 其他类型
+## Other Types
 
 ### `ApiKeySource`
 
 ```typescript
 type ApiKeySource = 'user' | 'project' | 'org' | 'temporary';
+```
+
+### `SdkBeta`
+
+Available beta features that can be enabled via the `betas` option. See [Beta headers](/docs/en/api/beta-headers) for more information.
+
+```typescript
+type SdkBeta = 'context-1m-2025-08-07';
+```
+
+| Value | Description | Compatible Models |
+|:------|:------------|:------------------|
+| `'context-1m-2025-08-07'` | Enables 1 million token [context window](/docs/en/build-with-claude/context-windows) | Claude Sonnet 4, Claude Sonnet 4.5 |
+
+### `SlashCommand`
+
+Information about an available slash command.
+
+```typescript
+type SlashCommand = {
+  name: string;
+  description: string;
+  argumentHint: string;
+}
+```
+
+### `ModelInfo`
+
+Information about an available model.
+
+```typescript
+type ModelInfo = {
+  value: string;
+  displayName: string;
+  description: string;
+}
+```
+
+### `McpServerStatus`
+
+Status of a connected MCP server.
+
+```typescript
+type McpServerStatus = {
+  name: string;
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending';
+  serverInfo?: {
+    name: string;
+    version: string;
+  };
+}
+```
+
+### `AccountInfo`
+
+Account information for the authenticated user.
+
+```typescript
+type AccountInfo = {
+  email?: string;
+  organization?: string;
+  subscriptionType?: string;
+  tokenSource?: string;
+  apiKeySource?: string;
+}
+```
+
+### `ModelUsage`
+
+Per-model usage statistics returned in result messages.
+
+```typescript
+type ModelUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  webSearchRequests: number;
+  costUSD: number;
+  contextWindow: number;
+}
 ```
 
 ### `ConfigScope`
@@ -1744,7 +1979,7 @@ type ConfigScope = 'local' | 'user' | 'project';
 
 ### `NonNullableUsage`
 
-[`Usage`](#usage) 的一个版本，所有可空字段都变为不可空。
+A version of [`Usage`](#usage) with all nullable fields made non-nullable.
 
 ```typescript
 type NonNullableUsage = {
@@ -1754,7 +1989,7 @@ type NonNullableUsage = {
 
 ### `Usage`
 
-令牌使用统计（来自 `@anthropic-ai/sdk`）。
+Token usage statistics (from `@anthropic-ai/sdk`).
 
 ```typescript
 type Usage = {
@@ -1767,13 +2002,13 @@ type Usage = {
 
 ### `CallToolResult`
 
-MCP 工具结果类型（来自 `@modelcontextprotocol/sdk/types.js`）。
+MCP tool result type (from `@modelcontextprotocol/sdk/types.js`).
 
 ```typescript
 type CallToolResult = {
   content: Array<{
     type: 'text' | 'image' | 'resource';
-    // 其他字段因类型而异
+    // Additional fields vary by type
   }>;
   isError?: boolean;
 }
@@ -1781,15 +2016,158 @@ type CallToolResult = {
 
 ### `AbortError`
 
-用于中止操作的自定义错误类。
+Custom error class for abort operations.
 
 ```typescript
 class AbortError extends Error {}
 ```
 
-## 另请参阅
+## Sandbox Configuration
 
-- [SDK 概述](/docs/zh-CN/agent-sdk/overview) - 常规 SDK 概念
-- [Python SDK 参考](/docs/zh-CN/agent-sdk/python) - Python SDK 文档
-- [CLI 参考](https://code.claude.com/docs/en/cli-reference) - 命令行界面
-- [常见工作流](https://code.claude.com/docs/en/common-workflows) - 分步指南
+### `SandboxSettings`
+
+Configuration for sandbox behavior. Use this to enable command sandboxing and configure network restrictions programmatically.
+
+```typescript
+type SandboxSettings = {
+  enabled?: boolean;
+  autoAllowBashIfSandboxed?: boolean;
+  excludedCommands?: string[];
+  allowUnsandboxedCommands?: boolean;
+  network?: NetworkSandboxSettings;
+  ignoreViolations?: SandboxIgnoreViolations;
+  enableWeakerNestedSandbox?: boolean;
+}
+```
+
+| Property | Type | Default | Description |
+| :------- | :--- | :------ | :---------- |
+| `enabled` | `boolean` | `false` | Enable sandbox mode for command execution |
+| `autoAllowBashIfSandboxed` | `boolean` | `false` | Auto-approve bash commands when sandbox is enabled |
+| `excludedCommands` | `string[]` | `[]` | Commands that always bypass sandbox restrictions (e.g., `['docker']`). These run unsandboxed automatically without model involvement |
+| `allowUnsandboxedCommands` | `boolean` | `false` | Allow the model to request running commands outside the sandbox. When `true`, the model can set `dangerouslyDisableSandbox` in tool input, which falls back to the [permissions system](#permissions-fallback-for-unsandboxed-commands) |
+| `network` | [`NetworkSandboxSettings`](#networksandboxsettings) | `undefined` | Network-specific sandbox configuration |
+| `ignoreViolations` | [`SandboxIgnoreViolations`](#sandboxignoreviolations) | `undefined` | Configure which sandbox violations to ignore |
+| `enableWeakerNestedSandbox` | `boolean` | `false` | Enable a weaker nested sandbox for compatibility |
+
+<Note>
+**Filesystem and network access restrictions** are NOT configured via sandbox settings. Instead, they are derived from [permission rules](https://code.claude.com/docs/en/settings#permission-settings):
+
+- **Filesystem read restrictions**: Read deny rules
+- **Filesystem write restrictions**: Edit allow/deny rules
+- **Network restrictions**: WebFetch allow/deny rules
+
+Use sandbox settings for command execution sandboxing, and permission rules for filesystem and network access control.
+</Note>
+
+#### Example usage
+
+```typescript
+import { query } from "@anthropic-ai/claude-agent-sdk";
+
+const result = await query({
+  prompt: "Build and test my project",
+  options: {
+    sandbox: {
+      enabled: true,
+      autoAllowBashIfSandboxed: true,
+      excludedCommands: ["docker"],
+      network: {
+        allowLocalBinding: true,
+        allowUnixSockets: ["/var/run/docker.sock"]
+      }
+    }
+  }
+});
+```
+
+### `NetworkSandboxSettings`
+
+Network-specific configuration for sandbox mode.
+
+```typescript
+type NetworkSandboxSettings = {
+  allowLocalBinding?: boolean;
+  allowUnixSockets?: string[];
+  allowAllUnixSockets?: boolean;
+  httpProxyPort?: number;
+  socksProxyPort?: number;
+}
+```
+
+| Property | Type | Default | Description |
+| :------- | :--- | :------ | :---------- |
+| `allowLocalBinding` | `boolean` | `false` | Allow processes to bind to local ports (e.g., for dev servers) |
+| `allowUnixSockets` | `string[]` | `[]` | Unix socket paths that processes can access (e.g., Docker socket) |
+| `allowAllUnixSockets` | `boolean` | `false` | Allow access to all Unix sockets |
+| `httpProxyPort` | `number` | `undefined` | HTTP proxy port for network requests |
+| `socksProxyPort` | `number` | `undefined` | SOCKS proxy port for network requests |
+
+### `SandboxIgnoreViolations`
+
+Configuration for ignoring specific sandbox violations.
+
+```typescript
+type SandboxIgnoreViolations = {
+  file?: string[];
+  network?: string[];
+}
+```
+
+| Property | Type | Default | Description |
+| :------- | :--- | :------ | :---------- |
+| `file` | `string[]` | `[]` | File path patterns to ignore violations for |
+| `network` | `string[]` | `[]` | Network patterns to ignore violations for |
+
+### Permissions Fallback for Unsandboxed Commands
+
+When `allowUnsandboxedCommands` is enabled, the model can request to run commands outside the sandbox by setting `dangerouslyDisableSandbox: true` in the tool input. These requests fall back to the existing permissions system, meaning your `canUseTool` handler will be invoked, allowing you to implement custom authorization logic.
+
+<Note>
+**`excludedCommands` vs `allowUnsandboxedCommands`:**
+- `excludedCommands`: A static list of commands that always bypass the sandbox automatically (e.g., `['docker']`). The model has no control over this.
+- `allowUnsandboxedCommands`: Lets the model decide at runtime whether to request unsandboxed execution by setting `dangerouslyDisableSandbox: true` in the tool input.
+</Note>
+
+```typescript
+import { query } from "@anthropic-ai/claude-agent-sdk";
+
+const result = await query({
+  prompt: "Deploy my application",
+  options: {
+    sandbox: {
+      enabled: true,
+      allowUnsandboxedCommands: true  // Model can request unsandboxed execution
+    },
+    permissionMode: "default",
+    canUseTool: async (tool, input) => {
+      // Check if the model is requesting to bypass the sandbox
+      if (tool === "Bash" && input.dangerouslyDisableSandbox) {
+        // The model wants to run this command outside the sandbox
+        console.log(`Unsandboxed command requested: ${input.command}`);
+
+        // Return true to allow, false to deny
+        return isCommandAuthorized(input.command);
+      }
+      return true;
+    }
+  }
+});
+```
+
+This pattern enables you to:
+
+- **Audit model requests**: Log when the model requests unsandboxed execution
+- **Implement allowlists**: Only permit specific commands to run unsandboxed
+- **Add approval workflows**: Require explicit authorization for privileged operations
+
+<Warning>
+Commands running with `dangerouslyDisableSandbox: true` have full system access. Ensure your `canUseTool` handler validates these requests carefully.
+</Warning>
+
+## See also
+
+- [SDK overview](/docs/en/agent-sdk/overview) - General SDK concepts
+- [Python SDK reference](/docs/en/agent-sdk/python) - Python SDK documentation
+- [CLI reference](https://code.claude.com/docs/en/cli-reference) - Command-line interface
+- [Common workflows](https://code.claude.com/docs/en/common-workflows) - Step-by-step guides

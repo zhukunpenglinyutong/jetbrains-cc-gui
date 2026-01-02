@@ -294,8 +294,45 @@ function detectSlashTrigger(text: string, cursorPosition: number): TriggerQuery 
 }
 
 /**
+ * 检测 # 智能体触发（仅行首）
+ */
+function detectHashTrigger(text: string, cursorPosition: number): TriggerQuery | null {
+  // 从光标位置向前查找 #
+  let start = cursorPosition - 1;
+  while (start >= 0) {
+    const char = text[start];
+
+    // 遇到空格或换行，停止搜索
+    if (char === ' ' || char === '\t') {
+      return null;
+    }
+    if (char === '\n') {
+      return null;
+    }
+
+    // 找到 #
+    if (char === '#') {
+      // 检查 # 前是否为行首
+      const isLineStart = start === 0 || text[start - 1] === '\n';
+      if (isLineStart) {
+        const query = text.slice(start + 1, cursorPosition);
+        return {
+          trigger: '#',
+          query,
+          start,
+          end: cursorPosition,
+        };
+      }
+      return null;
+    }
+    start--;
+  }
+  return null;
+}
+
+/**
  * useTriggerDetection - 触发检测 Hook
- * 检测输入框中的 @ 或 / 触发符号
+ * 检测输入框中的 @、/ 或 # 触发符号
  */
 export function useTriggerDetection() {
   /**
@@ -313,6 +350,10 @@ export function useTriggerDetection() {
     // 检测 /
     const slashTrigger = detectSlashTrigger(text, cursorPosition);
     if (slashTrigger) return slashTrigger;
+
+    // 检测 # (智能体触发)
+    const hashTrigger = detectHashTrigger(text, cursorPosition);
+    if (hashTrigger) return hashTrigger;
 
     return null;
   }, []);

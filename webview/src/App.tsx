@@ -4,11 +4,12 @@ import MarkdownBlock from './components/MarkdownBlock';
 import CollapsibleTextBlock from './components/CollapsibleTextBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
+import type { SettingsTab } from './components/settings/SettingsSidebar';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode } from './components/ChatInputBox/types';
+import type { Attachment, PermissionMode, SelectedAgent } from './components/ChatInputBox/types';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from './components/ChatInputBox/providers';
 import {
   BashToolBlock,
@@ -72,6 +73,7 @@ const App = () => {
   const [isThinking, setIsThinking] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
@@ -95,6 +97,7 @@ const App = () => {
   const [, setProviderConfigVersion] = useState(0);
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
   const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
+  const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -236,6 +239,36 @@ const App = () => {
       console.error('Failed to save model selection state:', error);
     }
   }, [currentProvider, selectedClaudeModel, selectedCodexModel]);
+
+  // 加载选中的智能体
+  useEffect(() => {
+    let retryCount = 0;
+    const MAX_RETRIES = 10; // 减少到10次，总共1秒
+    let timeoutId: number | undefined;
+
+    const loadSelectedAgent = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_selected_agent');
+        console.log('[Frontend] Requested selected agent');
+      } else {
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          timeoutId = window.setTimeout(loadSelectedAgent, 100);
+        } else {
+          console.warn('[Frontend] Failed to load selected agent: bridge not available after', MAX_RETRIES, 'retries');
+          // 即使加载失败，也不影响其他功能的使用
+        }
+      }
+    };
+
+    timeoutId = window.setTimeout(loadSelectedAgent, 200); // 减少初始延迟到200ms
+
+    return () => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
 
   // 检查当前会话是否还存在（防止显示已删除的会话）
   useEffect(() => {
@@ -558,6 +591,65 @@ const App = () => {
       console.log('[Frontend] clearSelectionInfo called');
       setContextInfo(null);
     };
+
+    // 接收选中的智能体回调
+    window.onSelectedAgentReceived = (json) => {
+      console.log('[Frontend] onSelectedAgentReceived:', json);
+      try {
+        if (!json || json === 'null' || json === '{}') {
+          setSelectedAgent(null);
+          return;
+        }
+        const data = JSON.parse(json);
+        const agentFromNewShape = data?.agent;
+        const agentFromLegacyShape = data;
+
+        const agentData = agentFromNewShape?.id ? agentFromNewShape : (agentFromLegacyShape?.id ? agentFromLegacyShape : null);
+        if (!agentData) {
+          setSelectedAgent(null);
+          return;
+        }
+
+        setSelectedAgent({
+          id: agentData.id,
+          name: agentData.name || '',
+          prompt: agentData.prompt,
+        });
+      } catch (error) {
+        console.error('[Frontend] Failed to parse selected agent:', error);
+        setSelectedAgent(null);
+      }
+    };
+
+    // 智能体选择变更确认回调
+    window.onSelectedAgentChanged = (json) => {
+      console.log('[Frontend] onSelectedAgentChanged:', json);
+      try {
+        if (!json || json === 'null' || json === '{}') {
+          setSelectedAgent(null);
+          return;
+        }
+
+        const data = JSON.parse(json);
+        if (data?.success === false) {
+          return;
+        }
+
+        const agentData = data?.agent;
+        if (!agentData || !agentData.id) {
+          setSelectedAgent(null);
+          return;
+        }
+
+        setSelectedAgent({
+          id: agentData.id,
+          name: agentData.name || '',
+          prompt: agentData.prompt,
+        });
+      } catch (error) {
+        console.error('[Frontend] Failed to parse selected agent changed:', error);
+      }
+    };
   }, []); // 移除 currentProvider 依赖，因为现在使用 ref 获取最新值
 
   useEffect(() => {
@@ -721,6 +813,7 @@ const App = () => {
       }
     });
 
+    // 发送消息（智能体提示词由后端自动注入）
     if (hasAttachments) {
       try {
         const payload = JSON.stringify({
@@ -771,6 +864,22 @@ const App = () => {
     // 切换 provider 时,同时发送对应的模型
     const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
     sendBridgeMessage('set_model', newModel);
+  };
+
+  /**
+   * 处理智能体选择
+   */
+  const handleAgentSelect = (agent: SelectedAgent | null) => {
+    setSelectedAgent(agent);
+    if (agent) {
+      sendBridgeMessage('set_selected_agent', JSON.stringify({
+        id: agent.id,
+        name: agent.name,
+        prompt: agent.prompt,
+      }));
+    } else {
+      sendBridgeMessage('set_selected_agent', '');
+    }
   };
 
   /**
@@ -1439,7 +1548,10 @@ const App = () => {
                 </button>
                 <button
                   className="icon-button"
-                  onClick={() => setCurrentView('settings')}
+                  onClick={() => {
+                    setSettingsInitialTab(undefined);
+                    setCurrentView('settings');
+                  }}
                   data-tooltip={t('common.settings')}
                 >
                   <span className="codicon codicon-settings-gear" />
@@ -1451,7 +1563,7 @@ const App = () => {
       )}
 
       {currentView === 'settings' ? (
-        <SettingsView onClose={() => setCurrentView('chat')} />
+        <SettingsView onClose={() => setCurrentView('chat')} initialTab={settingsInitialTab} />
       ) : currentView === 'chat' ? (
         <>
           <div className="messages-container" ref={messagesContainerRef}>
@@ -1649,6 +1761,8 @@ const App = () => {
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
             onToggleThinking={handleToggleThinking}
+            selectedAgent={selectedAgent}
+            onAgentSelect={handleAgentSelect}
             activeFile={contextInfo?.file}
             selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
               ? (contextInfo.startLine === contextInfo.endLine
@@ -1656,6 +1770,10 @@ const App = () => {
                   : `L${contextInfo.startLine}-${contextInfo.endLine}`)
               : undefined}
             onClearContext={() => setContextInfo(null)}
+            onOpenAgentSettings={() => {
+              setSettingsInitialTab('agents');
+              setCurrentView('settings');
+            }}
           />
         </div>
       )}

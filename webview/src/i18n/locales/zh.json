@@ -212,7 +212,39 @@
     "comingSoon": "功能即将推出...",
     "permissionsComingSoon": "权限配置功能即将推出...",
     "agentsComingSoon": "Agents配置功能即将推出...",
-    "skillsComingSoon": "Skills配置功能即将推出..."
+    "skillsComingSoon": "Skills配置功能即将推出...",
+    "agent": {
+      "title": "智能体",
+      "create": "创建",
+      "createAgent": "创建智能体",
+      "createAgentHint": "点击跳转到智能体设置页面进行创建",
+      "customAgents": "自定义智能体",
+      "noAgents": "暂无自定义智能体",
+      "noAgentsDropdown": "暂无智能体",
+      "loadFailed": "加载失败",
+      "loading": "加载中...",
+      "menu": "菜单",
+      "addSuccess": "智能体创建成功",
+      "updateSuccess": "智能体更新成功",
+      "deleteSuccess": "智能体删除成功",
+      "operationSuccess": "操作成功",
+      "operationFailed": "操作失败",
+      "deleteConfirmTitle": "确认删除",
+      "deleteConfirmMessage": "确定要删除智能体 \"{{name}}\" 吗？此操作无法撤销。",
+      "clearAgent": "取消选择智能体",
+      "dialog": {
+        "addTitle": "创建智能体",
+        "editTitle": "编辑智能体",
+        "name": "名称",
+        "namePlaceholder": "请输入智能体名称",
+        "nameRequired": "请输入智能体名称",
+        "prompt": "提示词",
+        "promptPlaceholder": "请输入智能体的角色、语气、工作流程、工具偏好及规则规范等。（选填）",
+        "promptHint": "提示词会在对话开始时作为系统指令发送给AI",
+        "confirmAdd": "创建",
+        "saveChanges": "保存"
+      }
+    }
   },
   "history": {
     "title": "历史会话",

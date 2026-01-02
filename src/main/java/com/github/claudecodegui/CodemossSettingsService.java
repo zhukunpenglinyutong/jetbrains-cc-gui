@@ -35,6 +35,7 @@ public class CodemossSettingsService {
     private static final String CONFIG_DIR_NAME = ".codemoss";
     private static final String CONFIG_FILE_NAME = "config.json";
     private static final String BACKUP_FILE_NAME = "config.json.bak";
+    private static final String AGENT_FILE_NAME = "agent.json";
     private static final int CONFIG_VERSION = 2;
 
     private static final String CLAUDE_DIR_NAME = ".claude";
@@ -1478,5 +1479,213 @@ public class CodemossSettingsService {
         writeClaudeSettings(claudeSettings);
 
         LOG.info("[CodemossSettings] Synced " + plugins.size() + " enabled skills to Claude settings");
+    }
+
+    // ==================== Agents 管理 ====================
+    // Agents 存储在独立的 agent.json 文件中
+
+    /**
+     * 获取 agent.json 文件路径
+     */
+    private Path getAgentFilePath() {
+        return getConfigDir().resolve(AGENT_FILE_NAME);
+    }
+
+    /**
+     * 读取 agent.json 文件
+     */
+    private JsonObject readAgentConfig() throws IOException {
+        Path agentPath = getAgentFilePath();
+        File agentFile = agentPath.toFile();
+
+        if (!agentFile.exists()) {
+            // 返回空的配置
+            JsonObject config = new JsonObject();
+            config.add("agents", new JsonObject());
+            return config;
+        }
+
+        try (FileReader reader = new FileReader(agentFile)) {
+            JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();
+            // 确保 agents 节点存在
+            if (!config.has("agents")) {
+                config.add("agents", new JsonObject());
+            }
+            return config;
+        } catch (Exception e) {
+            LOG.warn("[CodemossSettings] Failed to read agent.json: " + e.getMessage());
+            JsonObject config = new JsonObject();
+            config.add("agents", new JsonObject());
+            return config;
+        }
+    }
+
+    /**
+     * 写入 agent.json 文件
+     */
+    private void writeAgentConfig(JsonObject config) throws IOException {
+        ensureConfigDirectory();
+
+        Path agentPath = getAgentFilePath();
+        try (FileWriter writer = new FileWriter(agentPath.toFile())) {
+            gson.toJson(config, writer);
+            LOG.info("[CodemossSettings] Successfully wrote agent.json");
+        } catch (Exception e) {
+            LOG.warn("[CodemossSettings] Failed to write agent.json: " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * 获取所有智能体
+     * 按创建时间倒序排列（最新的在前）
+     */
+    public List<JsonObject> getAgents() throws IOException {
+        List<JsonObject> result = new ArrayList<>();
+        JsonObject config = readAgentConfig();
+
+        JsonObject agents = config.getAsJsonObject("agents");
+        for (String key : agents.keySet()) {
+            JsonObject agent = agents.getAsJsonObject(key);
+            // 确保 ID 存在
+            if (!agent.has("id")) {
+                agent.addProperty("id", key);
+            }
+            result.add(agent);
+        }
+
+        // 按创建时间倒序排序（最新的在前）
+        result.sort((a, b) -> {
+            long timeA = a.has("createdAt") ? a.get("createdAt").getAsLong() : 0;
+            long timeB = b.has("createdAt") ? b.get("createdAt").getAsLong() : 0;
+            return Long.compare(timeB, timeA);
+        });
+
+        LOG.info("[CodemossSettings] Loaded " + result.size() + " agents from agent.json");
+        return result;
+    }
+
+    /**
+     * 添加智能体
+     */
+    public void addAgent(JsonObject agent) throws IOException {
+        if (!agent.has("id")) {
+            throw new IllegalArgumentException("Agent must have an id");
+        }
+
+        JsonObject config = readAgentConfig();
+        JsonObject agents = config.getAsJsonObject("agents");
+        String id = agent.get("id").getAsString();
+
+        // 检查 ID 是否已存在
+        if (agents.has(id)) {
+            throw new IllegalArgumentException("Agent with id '" + id + "' already exists");
+        }
+
+        // 添加创建时间
+        if (!agent.has("createdAt")) {
+            agent.addProperty("createdAt", System.currentTimeMillis());
+        }
+
+        // 添加智能体
+        agents.add(id, agent);
+
+        writeAgentConfig(config);
+        LOG.info("[CodemossSettings] Added agent: " + id);
+    }
+
+    /**
+     * 更新智能体
+     */
+    public void updateAgent(String id, JsonObject updates) throws IOException {
+        JsonObject config = readAgentConfig();
+        JsonObject agents = config.getAsJsonObject("agents");
+
+        if (!agents.has(id)) {
+            throw new IllegalArgumentException("Agent with id '" + id + "' not found");
+        }
+
+        JsonObject agent = agents.getAsJsonObject(id);
+
+        // 合并更新
+        for (String key : updates.keySet()) {
+            // 不允许修改 id 和 createdAt
+            if (key.equals("id") || key.equals("createdAt")) {
+                continue;
+            }
+
+            if (updates.get(key).isJsonNull()) {
+                agent.remove(key);
+            } else {
+                agent.add(key, updates.get(key));
+            }
+        }
+
+        writeAgentConfig(config);
+        LOG.info("[CodemossSettings] Updated agent: " + id);
+    }
+
+    /**
+     * 删除智能体
+     */
+    public boolean deleteAgent(String id) throws IOException {
+        JsonObject config = readAgentConfig();
+        JsonObject agents = config.getAsJsonObject("agents");
+
+        if (!agents.has(id)) {
+            LOG.info("[CodemossSettings] Agent not found: " + id);
+            return false;
+        }
+
+        // 删除智能体
+        agents.remove(id);
+
+        writeAgentConfig(config);
+        LOG.info("[CodemossSettings] Deleted agent: " + id);
+        return true;
+    }
+
+    /**
+     * 获取单个智能体
+     */
+    public JsonObject getAgent(String id) throws IOException {
+        JsonObject config = readAgentConfig();
+        JsonObject agents = config.getAsJsonObject("agents");
+
+        if (!agents.has(id)) {
+            return null;
+        }
+
+        JsonObject agent = agents.getAsJsonObject(id);
+        if (!agent.has("id")) {
+            agent.addProperty("id", id);
+        }
+
+        return agent;
+    }
+
+    /**
+     * 获取当前选择的智能体 ID
+     */
+    public String getSelectedAgentId() throws IOException {
+        JsonObject config = readAgentConfig();
+        if (config.has("selectedAgentId") && !config.get("selectedAgentId").isJsonNull()) {
+            return config.get("selectedAgentId").getAsString();
+        }
+        return null;
+    }
+
+    /**
+     * 设置当前选择的智能体 ID
+     */
+    public void setSelectedAgentId(String agentId) throws IOException {
+        JsonObject config = readAgentConfig();
+        if (agentId == null || agentId.isEmpty()) {
+            config.remove("selectedAgentId");
+        } else {
+            config.addProperty("selectedAgentId", agentId);
+        }
+        writeAgentConfig(config);
+        LOG.info("[CodemossSettings] Set selected agent: " + agentId);
     }
 }

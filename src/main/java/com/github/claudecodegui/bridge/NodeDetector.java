@@ -482,10 +482,14 @@ public class NodeDetector {
     }
 
     /**
-     * 手动设置 Node.js 可执行文件路径
+     * 手动设置 Node.js 可执行文件路径.
+     * 同时清除缓存的检测结果，以便下次使用时重新验证
      */
     public void setNodeExecutable(String path) {
         this.cachedNodeExecutable = path;
+        // 清除检测结果缓存，确保缓存状态一致
+        // 新路径会在下次调用 verifyAndCacheNodePath 时重新验证并缓存
+        this.cachedDetectionResult = null;
     }
 
     /**
@@ -499,10 +503,11 @@ public class NodeDetector {
     }
 
     /**
-     * 清除缓存的 Node.js 路径
+     * 清除缓存的 Node.js 路径和检测结果
      */
     public void clearCache() {
         this.cachedNodeExecutable = null;
+        this.cachedDetectionResult = null;
     }
 
     /**

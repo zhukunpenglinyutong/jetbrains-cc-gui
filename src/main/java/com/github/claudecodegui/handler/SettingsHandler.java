@@ -372,7 +372,8 @@ public class SettingsHandler extends BaseMessageHandler {
                     pathToSend = detected.getNodePath();
                     versionToSend = detected.getNodeVersion();
                     props.setValue(NODE_PATH_PROPERTY_KEY, pathToSend);
-                    context.getClaudeSDKBridge().setNodeExecutable(pathToSend);
+                    // 使用 verifyAndCacheNodePath 而不是 setNodeExecutable，确保版本信息被缓存
+                    context.getClaudeSDKBridge().verifyAndCacheNodePath(pathToSend);
                     context.getCodexSDKBridge().setNodeExecutable(pathToSend);
                 }
             }
@@ -427,7 +428,8 @@ public class SettingsHandler extends BaseMessageHandler {
                     finalPath = detected.getNodePath();
                     versionToSend = detected.getNodeVersion();
                     props.setValue(NODE_PATH_PROPERTY_KEY, finalPath);
-                    context.getClaudeSDKBridge().setNodeExecutable(finalPath);
+                    // 使用 verifyAndCacheNodePath 确保版本信息被缓存
+                    context.getClaudeSDKBridge().verifyAndCacheNodePath(finalPath);
                     context.getCodexSDKBridge().setNodeExecutable(finalPath);
                     verifySuccess = true;
                 }

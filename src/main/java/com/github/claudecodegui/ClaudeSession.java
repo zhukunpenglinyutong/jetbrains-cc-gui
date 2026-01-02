@@ -468,6 +468,30 @@ public class ClaudeSession {
             // long beforeSdkCallTime = System.currentTimeMillis();
             // LOG.info("[PERF][" + beforeSdkCallTime + "] 准备调用 SDK sendMessage()");
 
+            // 获取当前选中的智能体提示词
+            String agentPrompt = null;
+            try {
+                CodemossSettingsService settingsService = new CodemossSettingsService();
+                String selectedAgentId = settingsService.getSelectedAgentId();
+                LOG.info("[Agent] Checking selected agent ID: " + (selectedAgentId != null ? selectedAgentId : "null"));
+                if (selectedAgentId != null && !selectedAgentId.isEmpty()) {
+                    JsonObject agent = settingsService.getAgent(selectedAgentId);
+                    if (agent != null && agent.has("prompt") && !agent.get("prompt").isJsonNull()) {
+                        agentPrompt = agent.get("prompt").getAsString();
+                        String agentName = agent.has("name") ? agent.get("name").getAsString() : "Unknown";
+                        LOG.info("[Agent] ✓ Found agent: " + agentName);
+                        LOG.info("[Agent] ✓ Prompt length: " + agentPrompt.length() + " chars");
+                        LOG.info("[Agent] ✓ Prompt preview: " + (agentPrompt.length() > 100 ? agentPrompt.substring(0, 100) + "..." : agentPrompt));
+                    } else {
+                        LOG.info("[Agent] ✗ Agent found but no prompt configured");
+                    }
+                } else {
+                    LOG.info("[Agent] ✗ No agent selected");
+                }
+            } catch (Exception e) {
+                LOG.warn("[Agent] ✗ Failed to get agent prompt: " + e.getMessage());
+            }
+
             // 根据 provider 选择 SDK
             CompletableFuture<Void> sendFuture;
             if ("codex".equals(provider)) {
@@ -534,6 +558,7 @@ public class ClaudeSession {
                     permissionMode, // 传递权限模式
                     model,      // 传递模型
                     openedFilesJson, // 传递打开的文件信息（包含激活文件和其他文件）
+                    agentPrompt,     // 传递智能体提示词（系统指令）
                     new ClaudeSDKBridge.MessageCallback() {
                 private final StringBuilder assistantContent = new StringBuilder();
                 private Message currentAssistantMessage = null;

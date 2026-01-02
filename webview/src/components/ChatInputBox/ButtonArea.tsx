@@ -24,6 +24,9 @@ export const ButtonArea = ({
   onEnhancePrompt,
   alwaysThinkingEnabled = false,
   onToggleThinking,
+  selectedAgent,
+  onAgentSelect,
+  onOpenAgentSettings,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,6 +133,9 @@ export const ButtonArea = ({
           onProviderChange={handleProviderSelect}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}
+          selectedAgent={selectedAgent}
+          onAgentSelect={onAgentSelect}
+          onOpenAgentSettings={onOpenAgentSettings}
         />
         <ModeSelect value={permissionMode} onChange={handleModeSelect} />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />

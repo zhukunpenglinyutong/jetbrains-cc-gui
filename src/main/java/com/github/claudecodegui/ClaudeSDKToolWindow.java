@@ -245,6 +245,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     // 同时设置 Claude 和 Codex 的 Node.js 路径
                     claudeSDKBridge.setNodeExecutable(path);
                     codexSDKBridge.setNodeExecutable(path);
+                    // 关键修复：验证并缓存 Node.js 版本，避免首次发送消息时 getCachedNodeVersion() 返回 null
+                    claudeSDKBridge.verifyAndCacheNodePath(path);
                     LOG.info("Using manually configured Node.js path: " + path);
                 }
             } catch (Exception e) {
@@ -322,6 +324,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
             messageDispatcher.registerHandler(new DiffHandler(handlerContext));
             messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
+            messageDispatcher.registerHandler(new AgentHandler(handlerContext));
 
             // 权限处理器（需要特殊回调）
             this.permissionHandler = new PermissionHandler(handlerContext);
@@ -451,6 +454,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     props.setValue(NODE_PATH_PROPERTY_KEY, nodeResult.getNodePath());
                     claudeSDKBridge.setNodeExecutable(nodeResult.getNodePath());
                     codexSDKBridge.setNodeExecutable(nodeResult.getNodePath());
+                    // 关键修复：缓存自动检测到的 Node.js 版本
+                    claudeSDKBridge.verifyAndCacheNodePath(nodeResult.getNodePath());
                 }
             }
 
@@ -679,9 +684,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     LOG.info("Cleared manual Node.js path");
                 } else {
                     props.setValue(NODE_PATH_PROPERTY_KEY, manualPath);
-                    // 同时设置 Claude 和 Codex 的 Node.js 路径
+                    // 同时设置 Claude 和 Codex 的 Node.js 路径，并缓存版本信息
                     claudeSDKBridge.setNodeExecutable(manualPath);
                     codexSDKBridge.setNodeExecutable(manualPath);
+                    claudeSDKBridge.verifyAndCacheNodePath(manualPath);
                     LOG.info("Saved manual Node.js path: " + manualPath);
                 }
 

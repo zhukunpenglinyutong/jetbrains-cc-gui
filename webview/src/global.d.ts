@@ -239,4 +239,24 @@ interface Window {
    * Editor font config received callback - 接收 IDEA 编辑器字体配置
    */
   onEditorFontConfigReceived?: (json: string) => void;
+
+  /**
+   * Update agents list
+   */
+  updateAgents?: (json: string) => void;
+
+  /**
+   * Agent operation result callback
+   */
+  agentOperationResult?: (json: string) => void;
+
+  /**
+   * Selected agent received callback - 初始化时接收当前选中的智能体
+   */
+  onSelectedAgentReceived?: (json: string) => void;
+
+  /**
+   * Selected agent changed callback - 选择智能体后的回调
+   */
+  onSelectedAgentChanged?: (json: string) => void;
 }

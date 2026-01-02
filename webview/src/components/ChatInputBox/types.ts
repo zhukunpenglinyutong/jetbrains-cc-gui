@@ -66,6 +66,8 @@ export type CompletionType =
   | 'file'
   | 'directory'
   | 'command'
+  | 'agent'
+  | 'info'
   | 'separator'
   | 'section-header';
 
@@ -137,7 +139,7 @@ export interface DropdownPosition {
  * 触发查询信息
  */
 export interface TriggerQuery {
-  /** 触发符号 ('@' 或 '/') */
+  /** 触发符号 ('@' 或 '/' 或 '#') */
   trigger: string;
   /** 搜索关键词 */
   query: string;
@@ -145,6 +147,15 @@ export interface TriggerQuery {
   start: number;
   /** 查询结束的字符偏移位置 */
   end: number;
+}
+
+/**
+ * 选中的智能体信息
+ */
+export interface SelectedAgent {
+  id: string;
+  name: string;
+  prompt?: string;
 }
 
 // ============================================================
@@ -358,6 +369,15 @@ export interface ChatInputBoxProps {
   onProviderSelect?: (providerId: string) => void;
   /** 切换思考模式 */
   onToggleThinking?: (enabled: boolean) => void;
+
+  /** 当前选中的智能体 */
+  selectedAgent?: SelectedAgent | null;
+  /** 选择智能体回调 */
+  onAgentSelect?: (agent: SelectedAgent | null) => void;
+  /** 清除智能体回调 */
+  onClearAgent?: () => void;
+  /** 打开智能体设置回调 */
+  onOpenAgentSettings?: () => void;
 }
 
 /**
@@ -391,6 +411,14 @@ export interface ButtonAreaProps {
   alwaysThinkingEnabled?: boolean;
   /** 切换思考模式 */
   onToggleThinking?: (enabled: boolean) => void;
+  /** 当前选中的智能体 */
+  selectedAgent?: SelectedAgent | null;
+  /** 智能体选择回调 */
+  onAgentSelect?: (agent: SelectedAgent) => void;
+  /** 清除智能体回调 */
+  onClearAgent?: () => void;
+  /** 打开智能体设置回调 */
+  onOpenAgentSettings?: () => void;
 }
 
 /**

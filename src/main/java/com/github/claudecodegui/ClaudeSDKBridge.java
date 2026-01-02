@@ -447,7 +447,7 @@ public class ClaudeSDKBridge {
             try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String version = reader.readLine();
-                LOG.info("Node.js 版本: " + version);
+                LOG.debug("Node.js 版本: " + version);
             }
 
             int exitCode = process.waitFor();
@@ -488,7 +488,7 @@ public class ClaudeSDKBridge {
         List<ClaudeSession.Attachment> attachments,
         MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, null, null, callback);
     }
 
     /**
@@ -503,6 +503,7 @@ public class ClaudeSDKBridge {
         String permissionMode,
         String model,
         JsonObject openedFiles,
+        String agentPrompt,
         MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -583,6 +584,13 @@ public class ClaudeSDKBridge {
                 if (openedFiles != null && openedFiles.size() > 0) {
                     stdinInput.add("openedFiles", openedFiles);
                     // System.out.println("[ClaudeSDKBridge] Adding opened files info to context");
+                }
+                // 添加智能体提示词（系统指令）
+                if (agentPrompt != null && !agentPrompt.isEmpty()) {
+                    stdinInput.addProperty("agentPrompt", agentPrompt);
+                    LOG.info("[Agent] ✓ Adding agentPrompt to stdinInput (length: " + agentPrompt.length() + " chars)");
+                } else {
+                    LOG.info("[Agent] ✗ No agentPrompt to add to stdinInput");
                 }
                 String stdinJson = gson.toJson(stdinInput);
 

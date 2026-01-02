@@ -21,11 +21,28 @@
  * @param {number} openedFiles.selection.endLine - 选中代码的结束行号
  * @param {string} openedFiles.selection.selectedText - 选中的代码内容
  * @param {string[]} openedFiles.others - 其他打开的文件路径列表
+ * @param {string} agentPrompt - 智能体提示词（可选）
  * @returns {string} 构建好的系统提示词，如果没有有效信息则返回空字符串
  */
-function buildIDEContextPrompt(openedFiles) {
+function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
+  // 构建智能体提示词部分（如果存在）
+  let prompt = '';
+
+  if (agentPrompt && typeof agentPrompt === 'string' && agentPrompt.trim() !== '') {
+    console.log('[Agent] ✓ buildIDEContextPrompt: Adding agent prompt to system context');
+    console.log('[Agent] ✓ Agent prompt preview:', agentPrompt.length > 100 ? agentPrompt.substring(0, 100) + '...' : agentPrompt);
+    prompt += '\n\n## Agent Role and Instructions\n\n';
+    prompt += 'You are acting as a specialized agent with the following role and instructions:\n\n';
+    prompt += agentPrompt.trim();
+    prompt += '\n\n**IMPORTANT**: Follow the above role and instructions throughout this conversation.\n';
+    prompt += '\n---\n';
+  } else {
+    console.log('[Agent] ✗ buildIDEContextPrompt: No agent prompt provided');
+  }
+
   if (!openedFiles || typeof openedFiles !== 'object') {
-    return '';
+    // 如果只有智能体提示词，没有 IDE 上下文，仍然返回智能体提示词
+    return prompt;
   }
 
   const { active, selection, others } = openedFiles;
@@ -33,16 +50,16 @@ function buildIDEContextPrompt(openedFiles) {
   const hasSelection = selection && selection.selectedText;
   const hasOthers = Array.isArray(others) && others.length > 0;
 
-  // 如果没有任何有效信息，返回空字符串
+  // 如果没有任何有效信息，只返回智能体提示词（如果有）
   if (!hasActive && !hasOthers) {
-    return '';
+    return prompt;
   }
 
   console.log('[SystemPrompts] Building IDE context prompt with active file:', active,
               'selection:', hasSelection ? 'yes' : 'no',
               'other files:', others?.length || 0);
 
-  let prompt = '\n\n## User\'s Current IDE Context\n\n';
+  prompt += '\n\n## User\'s Current IDE Context\n\n';
   prompt += 'The user is working in an IDE. Below is their current workspace context, which provides critical information about what they are looking at and asking about:\n\n';
 
   // 优先级规则
