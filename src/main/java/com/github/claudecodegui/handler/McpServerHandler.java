@@ -22,6 +22,7 @@ public class McpServerHandler extends BaseMessageHandler {
         "add_mcp_server",
         "update_mcp_server",
         "delete_mcp_server",
+        "toggle_mcp_server",
         "validate_mcp_server"
     };
 
@@ -52,6 +53,9 @@ public class McpServerHandler extends BaseMessageHandler {
             case "delete_mcp_server":
                 handleDeleteMcpServer(content);
                 return true;
+            case "toggle_mcp_server":
+                handleToggleMcpServer(content);
+                return true;
             case "validate_mcp_server":
                 handleValidateMcpServer(content);
                 return true;
@@ -65,9 +69,17 @@ public class McpServerHandler extends BaseMessageHandler {
      */
     private void handleGetMcpServers() {
         try {
-            List<JsonObject> servers = context.getSettingsService().getMcpServers();
+            // 获取项目路径，用于读取项目级别的MCP配置
+            String projectPath = context.getProject() != null
+                ? context.getProject().getBasePath()
+                : null;
+
+            List<JsonObject> servers = context.getSettingsService().getMcpServersWithProjectPath(projectPath);
             Gson gson = new Gson();
             String serversJson = gson.toJson(servers);
+
+            LOG.info("[McpServerHandler] Loaded " + servers.size() + " MCP servers for project: "
+                + (projectPath != null ? projectPath : "(no project)"));
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateMcpServers", escapeJs(serversJson));
@@ -91,6 +103,16 @@ public class McpServerHandler extends BaseMessageHandler {
                 .thenAccept(statusList -> {
                     Gson gson = new Gson();
                     String statusJson = gson.toJson(statusList);
+
+                    // 添加调试日志，帮助排查名称匹配问题
+                    LOG.info("[McpServerHandler] MCP server status received: " + statusList.size() + " servers");
+                    for (JsonObject status : statusList) {
+                        if (status.has("name")) {
+                            String serverName = status.get("name").getAsString();
+                            String serverStatus = status.has("status") ? status.get("status").getAsString() : "unknown";
+                            LOG.info("[McpServerHandler] Server: " + serverName + ", Status: " + serverStatus);
+                        }
+                    }
 
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("window.updateMcpServerStatus", escapeJs(statusJson));
@@ -178,6 +200,40 @@ public class McpServerHandler extends BaseMessageHandler {
             LOG.error("[McpServerHandler] Failed to delete MCP server: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("删除 MCP 服务器失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 切换 MCP 服务器启用/禁用状态
+     */
+    private void handleToggleMcpServer(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject server = gson.fromJson(content, JsonObject.class);
+
+            // 更新服务器配置
+            String projectPath = context.getProject() != null
+                ? context.getProject().getBasePath()
+                : null;
+            context.getSettingsService().upsertMcpServer(server, projectPath);
+
+            boolean isEnabled = !server.has("enabled") || server.get("enabled").getAsBoolean();
+            String serverId = server.get("id").getAsString();
+            String serverName = server.has("name") ? server.get("name").getAsString() : serverId;
+
+            LOG.info("[McpServerHandler] Toggled MCP server: " + serverName + " (enabled: " + isEnabled + ")");
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.mcpServerToggled", escapeJs(content));
+                handleGetMcpServers();
+                // 同时刷新状态,以便UI显示最新的连接状态
+                handleGetMcpServerStatus();
+            });
+        } catch (Exception e) {
+            LOG.error("[McpServerHandler] Failed to toggle MCP server: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("切换 MCP 服务器状态失败: " + e.getMessage()));
             });
         }
     }

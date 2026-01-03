@@ -134,6 +134,8 @@ interface Window {
    */
   updateMcpServerStatus?: (json: string) => void;
 
+  mcpServerToggled?: (json: string) => void;
+
   /**
    * Update providers list
    */

@@ -94,10 +94,24 @@ public class ClaudeSettingsManager {
             File claudeJsonFile = claudeJsonPath.toFile();
 
             if (!claudeJsonFile.exists()) {
+                LOG.info("[ClaudeSettingsManager] ~/.claude.json not found, skipping MCP sync");
                 return;
             }
 
-            JsonObject claudeJson = JsonParser.parseReader(new FileReader(claudeJsonFile)).getAsJsonObject();
+            JsonObject claudeJson;
+            try (FileReader reader = new FileReader(claudeJsonFile)) {
+                claudeJson = JsonParser.parseReader(reader).getAsJsonObject();
+            } catch (Exception e) {
+                LOG.error("[ClaudeSettingsManager] Failed to parse ~/.claude.json: " + e.getMessage(), e);
+                LOG.error("[ClaudeSettingsManager] This may indicate a corrupted JSON file. Please check ~/.claude.json");
+
+                // 尝试读取最近的备份
+                File backup = new File(claudeJsonFile.getParent(), ".claude.json.backup");
+                if (backup.exists()) {
+                    LOG.info("[ClaudeSettingsManager] Found backup file, you may need to restore it manually");
+                }
+                return;
+            }
 
             // 读取 ~/.claude/settings.json
             JsonObject settings = readClaudeSettings();
@@ -105,19 +119,24 @@ public class ClaudeSettingsManager {
             // 同步 mcpServers
             if (claudeJson.has("mcpServers")) {
                 settings.add("mcpServers", claudeJson.get("mcpServers"));
+                LOG.info("[ClaudeSettingsManager] Synced mcpServers to settings.json");
             }
 
             // 同步 disabledMcpServers
             if (claudeJson.has("disabledMcpServers")) {
                 settings.add("disabledMcpServers", claudeJson.get("disabledMcpServers"));
+                JsonArray disabledServers = claudeJson.getAsJsonArray("disabledMcpServers");
+                LOG.info("[ClaudeSettingsManager] Synced " + disabledServers.size()
+                    + " disabled MCP servers to settings.json");
             }
 
             // 写回 settings.json
             writeClaudeSettings(settings);
 
-            LOG.info("[ClaudeSettingsManager] Synced MCP configuration to ~/.claude/settings.json");
+            LOG.info("[ClaudeSettingsManager] Successfully synced MCP configuration to ~/.claude/settings.json");
         } catch (Exception e) {
-            LOG.warn("[ClaudeSettingsManager] Failed to sync MCP to Claude settings: " + e.getMessage());
+            LOG.error("[ClaudeSettingsManager] Failed to sync MCP to Claude settings: " + e.getMessage(), e);
+            throw new IOException("Failed to sync MCP settings", e);
         }
     }
 

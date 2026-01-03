@@ -21,6 +21,7 @@ export function McpSettingsSection() {
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const refreshTimersRef = useRef<number[]>([]);
 
   // 弹窗状态
   const [showServerDialog, setShowServerDialog] = useState(false);
@@ -57,6 +58,25 @@ export function McpSettingsSection() {
 
   // 初始化
   useEffect(() => {
+    const clearRefreshTimers = () => {
+      refreshTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      refreshTimersRef.current = [];
+    };
+
+    const scheduleRefresh = (enabled: boolean) => {
+      clearRefreshTimers();
+
+      const serverRefreshDelays = enabled ? [200, 1000] : [200];
+      const statusRefreshDelays = enabled ? [400, 1500, 3500, 7000, 12000] : [400];
+
+      serverRefreshDelays.forEach((delay) => {
+        refreshTimersRef.current.push(window.setTimeout(() => loadServers(), delay));
+      });
+      statusRefreshDelays.forEach((delay) => {
+        refreshTimersRef.current.push(window.setTimeout(() => loadServerStatus(), delay));
+      });
+    };
+
     // 注册回调
     window.updateMcpServers = (jsonStr: string) => {
       try {
@@ -81,9 +101,19 @@ export function McpSettingsSection() {
         setServerStatus(statusMap);
         setStatusLoading(false);
         console.log('[McpSettings] Loaded server status:', statusList);
+        console.log('[McpSettings] Status map keys:', Array.from(statusMap.keys()));
       } catch (error) {
         console.error('[McpSettings] Failed to parse server status:', error);
         setStatusLoading(false);
+      }
+    };
+
+    window.mcpServerToggled = (jsonStr: string) => {
+      try {
+        const toggledServer: McpServer = JSON.parse(jsonStr);
+        scheduleRefresh(isServerEnabled(toggledServer));
+      } catch (error) {
+        console.error('[McpSettings] Failed to parse toggled server:', error);
       }
     };
 
@@ -100,8 +130,10 @@ export function McpSettingsSection() {
     document.addEventListener('click', handleClickOutside);
 
     return () => {
+      clearRefreshTimers();
       window.updateMcpServers = undefined;
       window.updateMcpServerStatus = undefined;
+      window.mcpServerToggled = undefined;
       document.removeEventListener('click', handleClickOutside);
     };
   }, []);
@@ -117,10 +149,35 @@ export function McpSettingsSection() {
   };
 
   const getServerStatusInfo = (server: McpServer): McpServerStatusInfo | undefined => {
-    return serverStatus.get(server.id) || serverStatus.get(server.name || '');
+    // 尝试多种方式匹配服务器状态
+    // 1. 尝试用 id 匹配
+    let statusInfo = serverStatus.get(server.id);
+    if (statusInfo) return statusInfo;
+
+    // 2. 尝试用 name 匹配
+    if (server.name) {
+      statusInfo = serverStatus.get(server.name);
+      if (statusInfo) return statusInfo;
+    }
+
+    // 3. 遍历所有状态，尝试模糊匹配
+    for (const [key, value] of serverStatus.entries()) {
+      // 不区分大小写比较
+      if (key.toLowerCase() === server.id.toLowerCase() ||
+          (server.name && key.toLowerCase() === server.name.toLowerCase())) {
+        return value;
+      }
+    }
+
+    return undefined;
   };
 
-  const getStatusIcon = (status: McpServerStatusInfo['status'] | undefined): string => {
+  const getStatusIcon = (server: McpServer, status: McpServerStatusInfo['status'] | undefined): string => {
+    // 如果服务器被禁用，显示禁用图标
+    if (!isServerEnabled(server)) {
+      return 'codicon-circle-slash';
+    }
+
     switch (status) {
       case 'connected':
         return 'codicon-check';
@@ -135,7 +192,12 @@ export function McpSettingsSection() {
     }
   };
 
-  const getStatusColor = (status: McpServerStatusInfo['status'] | undefined): string => {
+  const getStatusColor = (server: McpServer, status: McpServerStatusInfo['status'] | undefined): string => {
+    // 如果服务器被禁用，显示灰色
+    if (!isServerEnabled(server)) {
+      return '#9CA3AF';
+    }
+
     switch (status) {
       case 'connected':
         return '#10B981';
@@ -150,7 +212,12 @@ export function McpSettingsSection() {
     }
   };
 
-  const getStatusText = (status: McpServerStatusInfo['status'] | undefined): string => {
+  const getStatusText = (server: McpServer, status: McpServerStatusInfo['status'] | undefined): string => {
+    // 如果服务器被禁用，显示"已禁用"
+    if (!isServerEnabled(server)) {
+      return t('mcp.disabled');
+    }
+
     switch (status) {
       case 'connected':
         return t('mcp.statusConnected');
@@ -200,28 +267,38 @@ export function McpSettingsSection() {
     loadServerStatus();
   };
 
-  // TODO: 启用/禁用开关功能 - 暂时注释掉，后续再加回
-  // const handleToggleServer = (server: McpServer, enabled: boolean) => {
-  //   const updatedServer: McpServer = {
-  //     ...server,
-  //     enabled,
-  //     apps: {
-  //       claude: enabled,
-  //       codex: server.apps?.codex ?? false,
-  //       gemini: server.apps?.gemini ?? false,
-  //     }
-  //   };
-  //
-  //   sendToJava('update_mcp_server', updatedServer);
-  //
-  //   // 显示Toast提示
-  //   addToast(enabled ? `已启用 ${server.name || server.id}` : `已禁用 ${server.name || server.id}`, 'success');
-  //
-  //   // 刷新服务器列表以显示最新状态
-  //   setTimeout(() => {
-  //     loadServers();
-  //   }, 100);
-  // };
+  const handleToggleServer = (server: McpServer, enabled: boolean) => {
+    const updatedServer: McpServer = {
+      ...server,
+      enabled,
+      apps: {
+        claude: enabled,
+        codex: server.apps?.codex ?? false,
+        gemini: server.apps?.gemini ?? false,
+      }
+    };
+
+    console.log('[McpSettings] Toggling server:', server.id, 'enabled:', enabled);
+    sendToJava('toggle_mcp_server', updatedServer);
+
+    // 显示Toast提示
+    addToast(enabled ? `${t('mcp.enabled')} ${server.name || server.id}` : `${t('mcp.disabled')} ${server.name || server.id}`, 'success');
+
+    if (enabled) {
+      setServerStatus((prev) => {
+        const next = new Map(prev);
+        const pendingById: McpServerStatusInfo = { name: server.id, status: 'pending' };
+        next.set(server.id, pendingById);
+        if (server.name) {
+          next.set(server.name, { name: server.name, status: 'pending' });
+        }
+        return next;
+      });
+    }
+
+    loadServers();
+    loadServerStatus();
+  };
 
   const handleEdit = (server: McpServer) => {
     setEditingServer(server);
@@ -396,24 +473,23 @@ export function McpSettingsSection() {
                     return (
                       <span
                         className="status-indicator"
-                        style={{ color: getStatusColor(status) }}
-                        title={getStatusText(status)}
+                        style={{ color: getStatusColor(server, status) }}
+                        title={getStatusText(server, status)}
                       >
-                        <span className={`codicon ${getStatusIcon(status)}`}></span>
+                        <span className={`codicon ${getStatusIcon(server, status)}`}></span>
                       </span>
                     );
                   })()}
                 </div>
                 <div className="header-right-section" onClick={(e) => e.stopPropagation()}>
-                  {/* TODO: 启用/禁用开关 - 暂时隐藏，后续再加回 */}
-                  {/* <label className="toggle-switch">
+                  <label className="toggle-switch">
                     <input
                       type="checkbox"
                       checked={isServerEnabled(server)}
                       onChange={(e) => handleToggleServer(server, e.target.checked)}
                     />
                     <span className="toggle-slider"></span>
-                  </label> */}
+                  </label>
                 </div>
               </div>
 
@@ -423,31 +499,30 @@ export function McpSettingsSection() {
                   {/* 连接状态信息 */}
                   {(() => {
                     const statusInfo = getServerStatusInfo(server);
-                    if (statusInfo) {
-                      return (
-                        <div className="status-section">
+                    // 对于已启用的服务器，始终显示状态信息（即使是未知状态）
+                    // 对于已禁用的服务器，也显示禁用状态
+                    return (
+                      <div className="status-section">
+                        <div className="info-row">
+                          <span className="info-label">{t('mcp.connectionStatus')}:</span>
+                          <span
+                            className="info-value status-value"
+                            style={{ color: getStatusColor(server, statusInfo?.status) }}
+                          >
+                            <span className={`codicon ${getStatusIcon(server, statusInfo?.status)}`}></span>
+                            {' '}{getStatusText(server, statusInfo?.status)}
+                          </span>
+                        </div>
+                        {statusInfo?.serverInfo && (
                           <div className="info-row">
-                            <span className="info-label">{t('mcp.connectionStatus')}:</span>
-                            <span
-                              className="info-value status-value"
-                              style={{ color: getStatusColor(statusInfo.status) }}
-                            >
-                              <span className={`codicon ${getStatusIcon(statusInfo.status)}`}></span>
-                              {' '}{getStatusText(statusInfo.status)}
+                            <span className="info-label">{t('mcp.serverVersion')}:</span>
+                            <span className="info-value">
+                              {statusInfo.serverInfo.name} v{statusInfo.serverInfo.version}
                             </span>
                           </div>
-                          {statusInfo.serverInfo && (
-                            <div className="info-row">
-                              <span className="info-label">{t('mcp.serverVersion')}:</span>
-                              <span className="info-value">
-                                {statusInfo.serverInfo.name} v{statusInfo.serverInfo.version}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-                    return null;
+                        )}
+                      </div>
+                    );
                   })()}
 
                    {/* 服务器信息 */}
