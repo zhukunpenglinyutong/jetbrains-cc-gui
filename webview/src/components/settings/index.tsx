@@ -88,6 +88,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     return level >= 1 && level <= 6 ? level : 3;
   });
 
+  const [streamingEnabled, setStreamingEnabled] = useState(false);
+
   // Node.js 路径（手动指定时使用）
   const [nodePath, setNodePath] = useState('');
   const [savingNodePath, setSavingNodePath] = useState(false);
@@ -234,6 +236,15 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       }
     };
 
+    window.updateStreamingEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setStreamingEnabled(Boolean(data.enabled));
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse streaming enabled:', error);
+      }
+    };
+
     window.showSuccess = (message: string) => {
       console.log('[SettingsView] window.showSuccess called:', message);
       showAlert('success', '操作成功', message);
@@ -259,6 +270,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     // 加载工作目录配置
     sendToJava('get_working_directory:');
     // 加载 IDEA 编辑器字体配置
+    sendToJava('get_streaming_enabled:');
     sendToJava('get_editor_font_config:');
 
     return () => {
@@ -269,6 +281,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
       window.showSwitchSuccess = undefined;
       window.updateNodePath = undefined;
       window.updateWorkingDirectory = undefined;
+      window.updateStreamingEnabled = undefined;
       window.showSuccess = undefined;
       window.onEditorFontConfigReceived = undefined;
     };
@@ -352,6 +365,11 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     setSavingWorkingDirectory(true);
     const payload = { customWorkingDir: (workingDirectory || '').trim() };
     sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
+  };
+
+  const handleStreamingEnabledChange = (enabled: boolean) => {
+    setStreamingEnabled(enabled);
+    sendToJava(`set_streaming_enabled:${JSON.stringify({ enabled })}`);
   };
 
   const handleEditProvider = (provider: ProviderConfig) => {
@@ -497,6 +515,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
               onThemeChange={setTheme}
               fontSizeLevel={fontSizeLevel}
               onFontSizeLevelChange={setFontSizeLevel}
+              streamingEnabled={streamingEnabled}
+              onStreamingEnabledChange={handleStreamingEnabledChange}
               nodePath={nodePath}
               onNodePathChange={setNodePath}
               onSaveNodePath={handleSaveNodePath}

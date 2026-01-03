@@ -91,6 +91,11 @@
         "level5": "Large (120%)",
         "level6": "Largest (140%)"
       },
+      "streaming": {
+        "label": "Streaming",
+        "enable": "Enable streaming output (live render)",
+        "hint": "When enabled, replies and thinking (if enabled) stream live, including around tool calls."
+      },
       "editorFont": {
         "label": "Font (follows editor font)",
         "hint": "Not editable here. To modify, go to IDEA Settings → Editor → Font (restart IDEA for plugin font to take effect)"

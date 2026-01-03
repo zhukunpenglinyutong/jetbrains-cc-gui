@@ -70,6 +70,7 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [loadingStartTime, setLoadingStartTime] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
+  const [streamingEnabled, setStreamingEnabled] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
@@ -110,6 +111,7 @@ const App = () => {
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
   // 追踪用户是否在底部（用于判断是否需要自动滚动）
   const isUserAtBottomRef = useRef(true);
+  const pendingAutoScrollTimerRef = useRef<number | null>(null);
 
   const syncActiveProviderModelMapping = (provider?: ProviderConfig | null) => {
     if (typeof window === 'undefined' || !window.localStorage) return;
@@ -613,10 +615,10 @@ const App = () => {
     if (!container) return;
 
     const handleScroll = () => {
-      // 计算距离底部的距离（容差 50 像素）
+      // 计算距离底部的距离（容差 120 像素）
       const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      // 如果距离底部小于 50 像素，认为用户在底部
-      isUserAtBottomRef.current = distanceFromBottom < 50;
+      // 如果距离底部小于 120 像素，认为用户在底部
+      isUserAtBottomRef.current = distanceFromBottom < 120;
     };
 
     container.addEventListener('scroll', handleScroll);
@@ -625,12 +627,38 @@ const App = () => {
 
   useEffect(() => {
     // 只有当用户在底部时，才自动滚动到底部
+    if (pendingAutoScrollTimerRef.current !== null) {
+      window.clearTimeout(pendingAutoScrollTimerRef.current);
+      pendingAutoScrollTimerRef.current = null;
+    }
     if (messagesContainerRef.current && isUserAtBottomRef.current) {
       // 使用 requestAnimationFrame 确保 DOM 已完全渲染
       requestAnimationFrame(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        const container = messagesContainerRef.current;
+        if (!container) {
+          return;
         }
+        container.scrollTop = container.scrollHeight;
+        isUserAtBottomRef.current = true;
+
+        requestAnimationFrame(() => {
+          const nextContainer = messagesContainerRef.current;
+          if (!nextContainer) {
+            return;
+          }
+          nextContainer.scrollTop = nextContainer.scrollHeight;
+          isUserAtBottomRef.current = true;
+        });
+
+        pendingAutoScrollTimerRef.current = window.setTimeout(() => {
+          const laterContainer = messagesContainerRef.current;
+          if (!laterContainer) {
+            return;
+          }
+          laterContainer.scrollTop = laterContainer.scrollHeight;
+          isUserAtBottomRef.current = true;
+          pendingAutoScrollTimerRef.current = null;
+        }, 60);
       });
     }
   }, [messages]);
@@ -646,6 +674,29 @@ const App = () => {
       }, 0);
       return () => clearTimeout(timer);
     }
+  }, [currentView]);
+
+  useEffect(() => {
+    if (currentView !== 'chat') {
+      return;
+    }
+
+    window.updateStreamingEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setStreamingEnabled(Boolean(data.enabled));
+      } catch {
+        // ignore
+      }
+    };
+
+    sendBridgeMessage('get_streaming_enabled');
+
+    return () => {
+      if (window.updateStreamingEnabled) {
+        window.updateStreamingEnabled = undefined;
+      }
+    };
   }, [currentView]);
 
   /**
@@ -919,6 +970,17 @@ const App = () => {
   const isThinkingExpanded = (messageIndex: number, blockIndex: number) =>
     Boolean(expandedThinking[`${messageIndex}_${blockIndex}`]);
 
+  const isThinkingBlockExpanded = (
+    messageIndex: number,
+    blockIndex: number,
+    isLastAssistantMessage: boolean
+  ) => {
+    if (streamingEnabled && isLastAssistantMessage && isThinking) {
+      return true;
+    }
+    return isThinkingExpanded(messageIndex, blockIndex);
+  };
+
   const loadHistorySession = (sessionId: string) => {
     sendBridgeMessage('load_session', sessionId);
     setCurrentSessionId(sessionId);
@@ -1164,6 +1226,9 @@ const App = () => {
               : typeof candidate.text === 'string'
                 ? (candidate.text as string)
                 : '';
+          if (!thinking.trim()) {
+            return;
+          }
           blocks.push({
             type: 'thinking',
             thinking,
@@ -1524,18 +1589,26 @@ const App = () => {
                           <div className="thinking-block">
                             <div
                               className="thinking-header"
-                              onClick={() => toggleThinking(messageIndex, blockIndex)}
+                              onClick={() => {
+                                if (message.type === 'assistant' &&
+                                  messageIndex === mergedMessages.length - 1 &&
+                                  streamingEnabled &&
+                                  isThinking) {
+                                  return;
+                                }
+                                toggleThinking(messageIndex, blockIndex);
+                              }}
                             >
                               <span className="thinking-title">
-                                {isThinking && messageIndex === messages.length - 1
+                                {streamingEnabled && isThinking && message.type === 'assistant' && messageIndex === mergedMessages.length - 1
                                   ? t('common.thinking')
                                   : t('common.thinkingProcess')}
                               </span>
                               <span className="thinking-icon">
-                                {isThinkingExpanded(messageIndex, blockIndex) ? '▼' : '▶'}
+                                {isThinkingBlockExpanded(messageIndex, blockIndex, message.type === 'assistant' && messageIndex === mergedMessages.length - 1) ? '▼' : '▶'}
                               </span>
                             </div>
-                            {isThinkingExpanded(messageIndex, blockIndex) && (
+                            {isThinkingBlockExpanded(messageIndex, blockIndex, message.type === 'assistant' && messageIndex === mergedMessages.length - 1) && (
                               <div className="thinking-content">
                                 {block.thinking ?? block.text ?? '(无思考内容)'}
                               </div>

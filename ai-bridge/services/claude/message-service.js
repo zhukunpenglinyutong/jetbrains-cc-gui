@@ -120,7 +120,201 @@ import { buildIDEContextPrompt } from '../system-prompts.js';
   }
 }
 
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null) {
+function redactAssistantMessageForBridge(msg, options = {}) {
+  if (!msg || msg.type !== 'assistant') {
+    return msg;
+  }
+
+  const { stripThinking = false } = options;
+
+  const cloned = {
+    ...msg,
+    message: msg.message ? { ...msg.message } : msg.message
+  };
+
+  const content = cloned.message?.content;
+  if (!Array.isArray(content)) {
+    return cloned;
+  }
+
+  cloned.message.content = content.flatMap((block) => {
+    if (!block || typeof block !== 'object') {
+      return [block];
+    }
+
+    if (block.type === 'text') {
+      return [];
+    }
+    if (stripThinking && block.type === 'thinking') {
+      return [];
+    }
+
+    return [block];
+  });
+
+  return cloned;
+}
+
+function computeStreamDelta(previous, next) {
+  const prev = previous || '';
+  const curr = next || '';
+
+  if (!curr) {
+    return { delta: '', reset: false };
+  }
+
+  if (!prev) {
+    return { delta: curr, reset: false };
+  }
+
+  if (curr.startsWith(prev)) {
+    return { delta: curr.slice(prev.length), reset: false };
+  }
+
+  return { delta: curr, reset: true };
+}
+
+function extractDeltasFromStreamEvent(streamEvent, streamState) {
+  const state = streamState && typeof streamState === 'object'
+    ? streamState
+    : { messageId: null, blockTypesByIndex: Object.create(null) };
+
+  if (!state.blockTypesByIndex || typeof state.blockTypesByIndex !== 'object') {
+    state.blockTypesByIndex = Object.create(null);
+  }
+
+  if (!streamEvent || typeof streamEvent !== 'object') {
+    return { messageId: state.messageId || null, textDelta: '', thinkingDelta: '', textBlockIndex: null, thinkingBlockIndex: null };
+  }
+
+  const eventType = streamEvent.type;
+
+  if (eventType === 'message_start') {
+    const messageId = streamEvent.message?.id;
+    if (typeof messageId === 'string' && messageId) {
+      state.messageId = messageId;
+    }
+    state.blockTypesByIndex = Object.create(null);
+    return { messageId: state.messageId || null, textDelta: '', thinkingDelta: '', textBlockIndex: null, thinkingBlockIndex: null };
+  }
+
+  if (eventType === 'content_block_start') {
+    const index = streamEvent.index;
+    const contentBlockType = streamEvent.content_block?.type;
+    if (typeof index === 'number' && typeof contentBlockType === 'string' && contentBlockType) {
+      state.blockTypesByIndex[index] = contentBlockType;
+    }
+    return { messageId: state.messageId || null, textDelta: '', thinkingDelta: '', textBlockIndex: null, thinkingBlockIndex: null };
+  }
+
+  if (eventType === 'content_block_stop') {
+    const index = streamEvent.index;
+    if (typeof index === 'number') {
+      delete state.blockTypesByIndex[index];
+    }
+    return { messageId: state.messageId || null, textDelta: '', thinkingDelta: '', textBlockIndex: null, thinkingBlockIndex: null };
+  }
+
+  let textDelta = '';
+  let thinkingDelta = '';
+  let textBlockIndex = null;
+  let thinkingBlockIndex = null;
+
+  if (eventType === 'content_block_delta' && streamEvent.delta && typeof streamEvent.delta === 'object') {
+    const delta = streamEvent.delta;
+    const index = streamEvent.index;
+    const blockType = typeof index === 'number' ? state.blockTypesByIndex[index] : null;
+
+    if (blockType === 'thinking') {
+      if (typeof delta.thinking === 'string') {
+        thinkingDelta = delta.thinking;
+      } else if (typeof delta.text === 'string') {
+        thinkingDelta = delta.text;
+      }
+      if (thinkingDelta && typeof index === 'number') {
+        thinkingBlockIndex = index;
+      }
+    } else if (blockType === 'text') {
+      if (typeof delta.text === 'string') {
+        textDelta = delta.text;
+      }
+      if (textDelta && typeof index === 'number') {
+        textBlockIndex = index;
+      }
+    }
+
+    if (!thinkingDelta) {
+      if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+        thinkingDelta = delta.thinking;
+      } else if (delta.type === 'thinking_delta' && typeof delta.text === 'string') {
+        thinkingDelta = delta.text;
+      } else if (typeof delta.thinking === 'string' && String(delta.type || '').includes('thinking')) {
+        thinkingDelta = delta.thinking;
+      }
+      if (thinkingDelta && typeof index === 'number') {
+        thinkingBlockIndex = index;
+      }
+    }
+
+    if (!textDelta) {
+      if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+        textDelta = delta.text;
+      } else if (typeof delta.text === 'string' && String(delta.type || '').includes('text')) {
+        textDelta = delta.text;
+      }
+      if (textDelta && typeof index === 'number') {
+        textBlockIndex = index;
+      }
+    }
+  }
+
+  return { messageId: state.messageId || null, textDelta, thinkingDelta, textBlockIndex, thinkingBlockIndex };
+}
+
+function emitStreamEvent(tag, event, delta, reset, meta) {
+  if (!delta) {
+    return;
+  }
+  const payload = {
+    __stream_event: event,
+    delta,
+    reset: Boolean(reset)
+  };
+  if (meta && typeof meta === 'object') {
+    if (typeof meta.messageId === 'string' && meta.messageId) {
+      payload.messageId = meta.messageId;
+    }
+    if (typeof meta.blockIndex === 'number') {
+      payload.blockIndex = meta.blockIndex;
+    }
+  }
+  console.log(tag, JSON.stringify(payload));
+}
+
+function extractAssistantTextContent(content) {
+  if (Array.isArray(content)) {
+    return content
+      .filter((block) => block && typeof block === 'object' && block.type === 'text')
+      .map((block) => block.text || '')
+      .join('');
+  }
+  if (typeof content === 'string') {
+    return content;
+  }
+  return '';
+}
+
+function extractAssistantThinkingContent(content) {
+  if (!Array.isArray(content)) {
+    return '';
+  }
+  return content
+    .filter((block) => block && typeof block === 'object' && block.type === 'thinking')
+    .map((block) => block.thinking || block.text || '')
+    .join('');
+}
+
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, streamingEnabled = null) {
 	  let timeoutId;
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
@@ -200,6 +394,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      cwd: workingDirectory,
 	      permissionMode: effectivePermissionMode,
 	      model: sdkModelName,
+	      includePartialMessages: streamingEnabled === true,
 	      maxTurns: 100,
 	      // Extended Thinking 配置（根据 settings.json 的 alwaysThinkingEnabled 决定）
 	      // 思考内容会通过 [THINKING] 标签输出给前端展示
@@ -254,6 +449,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    console.log('[DEBUG] Starting message loop...');
 
     let currentSessionId = resumeSessionId;
+    const streamEnabled = streamingEnabled === true;
+    let lastAssistantMessageId = null;
+    let lastAssistantText = '';
+    let lastAssistantThinking = '';
+    let hasStreamEvents = false;
+    const streamState = { messageId: null, blockTypesByIndex: Object.create(null) };
 
     // 流式输出
     let messageCount = 0;
@@ -263,12 +464,57 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       console.log(`[DEBUG] Received message #${messageCount}, type: ${msg.type}`);
 
       // 输出原始消息（方便 Java 解析）
-      console.log('[MESSAGE]', JSON.stringify(msg));
+      if (!streamEnabled || msg.type !== 'stream_event') {
+        console.log('[MESSAGE]', JSON.stringify(streamEnabled ? redactAssistantMessageForBridge(msg, { stripThinking: hasStreamEvents }) : msg));
+      }
+
+      if (streamEnabled && msg.type === 'stream_event') {
+        const { messageId, textDelta, thinkingDelta, textBlockIndex, thinkingBlockIndex } = extractDeltasFromStreamEvent(msg.event, streamState);
+        hasStreamEvents = true;
+
+        if (messageId) {
+          lastAssistantMessageId = messageId;
+        }
+
+        if (textDelta) {
+          emitStreamEvent('[CONTENT_DELTA]', 'content_delta', textDelta, false, { messageId, blockIndex: textBlockIndex });
+          lastAssistantText += textDelta;
+        }
+
+        if (thinkingDelta) {
+          emitStreamEvent('[THINKING_DELTA]', 'thinking_delta', thinkingDelta, false, { messageId, blockIndex: thinkingBlockIndex });
+          lastAssistantThinking += thinkingDelta;
+        }
+
+        continue;
+      }
 
       // 实时输出助手内容
       if (msg.type === 'assistant') {
         const content = msg.message?.content;
-        if (Array.isArray(content)) {
+        if (streamEnabled) {
+          if (hasStreamEvents) {
+            continue;
+          }
+
+          const assistantMessageId = msg.message?.id || null;
+          if (assistantMessageId && assistantMessageId !== lastAssistantMessageId) {
+            lastAssistantMessageId = assistantMessageId;
+            lastAssistantText = '';
+            lastAssistantThinking = '';
+          }
+
+          const fullText = extractAssistantTextContent(content);
+          const fullThinking = extractAssistantThinkingContent(content);
+
+          const textDelta = computeStreamDelta(lastAssistantText, fullText);
+          emitStreamEvent('[CONTENT_DELTA]', 'content_delta', textDelta.delta, textDelta.reset);
+          lastAssistantText = fullText;
+
+          const thinkingDelta = computeStreamDelta(lastAssistantThinking, fullThinking);
+          emitStreamEvent('[THINKING_DELTA]', 'thinking_delta', thinkingDelta.delta, thinkingDelta.reset);
+          lastAssistantThinking = fullThinking;
+        } else if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'text') {
               console.log('[CONTENT]', block.text);
@@ -666,6 +912,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       cwd: workingDirectory,
       permissionMode: normalizedPermissionMode,
       model: sdkModelName,
+      includePartialMessages: stdinData?.streamingEnabled === true,
       maxTurns: 100,
       // Extended Thinking 配置（根据 settings.json 的 alwaysThinkingEnabled 决定）
       // 思考内容会通过 [THINKING] 标签输出给前端展示
@@ -721,14 +968,64 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 	    // }, 30000);
 	
 		    let currentSessionId = resumeSessionId;
+        const streamEnabled = stdinData?.streamingEnabled === true;
+        let lastAssistantMessageId = null;
+        let lastAssistantText = '';
+        let lastAssistantThinking = '';
+        let hasStreamEvents = false;
+        const streamState = { messageId: null, blockTypesByIndex: Object.create(null) };
 
 		    try {
 		    for await (const msg of result) {
-	    	      console.log('[MESSAGE]', JSON.stringify(msg));
+	    	    if (!streamEnabled || msg.type !== 'stream_event') {
+	    	        console.log('[MESSAGE]', JSON.stringify(streamEnabled ? redactAssistantMessageForBridge(msg, { stripThinking: hasStreamEvents }) : msg));
+	    	    }
+
+	    	      if (streamEnabled && msg.type === 'stream_event') {
+	    	        const { messageId, textDelta, thinkingDelta, textBlockIndex, thinkingBlockIndex } = extractDeltasFromStreamEvent(msg.event, streamState);
+	    	        hasStreamEvents = true;
+
+	    	        if (messageId) {
+	    	          lastAssistantMessageId = messageId;
+	    	        }
+
+	    	        if (textDelta) {
+	    	          emitStreamEvent('[CONTENT_DELTA]', 'content_delta', textDelta, false, { messageId, blockIndex: textBlockIndex });
+	    	          lastAssistantText += textDelta;
+	    	        }
+
+	    	        if (thinkingDelta) {
+	    	          emitStreamEvent('[THINKING_DELTA]', 'thinking_delta', thinkingDelta, false, { messageId, blockIndex: thinkingBlockIndex });
+	    	          lastAssistantThinking += thinkingDelta;
+	    	        }
+
+            continue;
+	    	      }
 
 	    	      if (msg.type === 'assistant') {
 	    	        const content = msg.message?.content;
-	    	        if (Array.isArray(content)) {
+	    	        if (streamEnabled) {
+              if (hasStreamEvents) {
+                continue;
+              }
+                  const assistantMessageId = msg.message?.id || null;
+                  if (assistantMessageId && assistantMessageId !== lastAssistantMessageId) {
+                    lastAssistantMessageId = assistantMessageId;
+                    lastAssistantText = '';
+                    lastAssistantThinking = '';
+                  }
+
+                  const fullText = extractAssistantTextContent(content);
+                  const fullThinking = extractAssistantThinkingContent(content);
+
+                  const textDelta = computeStreamDelta(lastAssistantText, fullText);
+                  emitStreamEvent('[CONTENT_DELTA]', 'content_delta', textDelta.delta, textDelta.reset);
+                  lastAssistantText = fullText;
+
+                  const thinkingDelta = computeStreamDelta(lastAssistantThinking, fullThinking);
+                  emitStreamEvent('[THINKING_DELTA]', 'thinking_delta', thinkingDelta.delta, thinkingDelta.reset);
+                  lastAssistantThinking = fullThinking;
+	    	        } else if (Array.isArray(content)) {
 	    	          for (const block of content) {
 	    	            if (block.type === 'text') {
 	    	              console.log('[CONTENT]', block.text);

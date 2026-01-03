@@ -31,6 +31,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_provider",
         "get_node_path",
         "set_node_path",
+        "get_streaming_enabled",
+        "set_streaming_enabled",
         "get_usage_statistics",
         "get_working_directory",
         "set_working_directory",
@@ -73,6 +75,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_node_path":
                 handleSetNodePath(content);
+                return true;
+            case "get_streaming_enabled":
+                handleGetStreamingEnabled();
+                return true;
+            case "set_streaming_enabled":
+                handleSetStreamingEnabled(content);
                 return true;
             case "get_usage_statistics":
                 handleGetUsageStatistics(content);
@@ -425,6 +433,57 @@ public class SettingsHandler extends BaseMessageHandler {
     /**
      * 获取使用统计数据
      */
+    private void handleGetStreamingEnabled() {
+        try {
+            boolean enabled = context.getSettingsService().getStreamingEnabled();
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("enabled", enabled);
+
+            Gson gson = new Gson();
+            String json = gson.toJson(payload);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateStreamingEnabled", escapeJs(json));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get streaming enabled: " + e.getMessage(), e);
+        }
+    }
+
+    private void handleSetStreamingEnabled(String content) {
+        try {
+            Gson gson = new Gson();
+            Boolean enabled = null;
+
+            if (content != null && !content.trim().isEmpty()) {
+                try {
+                    JsonObject json = gson.fromJson(content, JsonObject.class);
+                    if (json != null && json.has("enabled") && !json.get("enabled").isJsonNull()) {
+                        enabled = json.get("enabled").getAsBoolean();
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (enabled == null) {
+                enabled = Boolean.parseBoolean(content != null ? content.trim() : "false");
+            }
+
+            context.getSettingsService().setStreamingEnabled(enabled);
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("enabled", enabled);
+            String json = gson.toJson(payload);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateStreamingEnabled", escapeJs(json));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set streaming enabled: " + e.getMessage(), e);
+        }
+    }
+
     private void handleGetUsageStatistics(String content) {
         CompletableFuture.runAsync(() -> {
             try {

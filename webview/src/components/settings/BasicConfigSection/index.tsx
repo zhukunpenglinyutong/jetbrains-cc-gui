@@ -26,6 +26,8 @@ interface BasicConfigSectionProps {
   onThemeChange: (theme: 'light' | 'dark') => void;
   fontSizeLevel: number;
   onFontSizeLevelChange: (level: number) => void;
+  streamingEnabled: boolean;
+  onStreamingEnabledChange: (enabled: boolean) => void;
   nodePath: string;
   onNodePathChange: (path: string) => void;
   onSaveNodePath: () => void;
@@ -46,6 +48,8 @@ const BasicConfigSection = ({
   onThemeChange,
   fontSizeLevel,
   onFontSizeLevelChange,
+  streamingEnabled,
+  onStreamingEnabledChange,
   nodePath,
   onNodePathChange,
   onSaveNodePath,
@@ -171,6 +175,36 @@ const BasicConfigSection = ({
       </div>
 
       {/* IDEA 编辑器字体展示 - 只读 */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-sync" />
+          <span className={styles.fieldLabel}>{t('settings.basic.streaming.label')}</span>
+        </div>
+        <div className={styles.streamingCard} data-enabled={streamingEnabled}>
+          <div className={styles.streamingText}>
+            <div className={styles.streamingTitle}>
+              {t('settings.basic.streaming.enable')}
+            </div>
+            <div className={styles.streamingHint}>
+              <span className="codicon codicon-info" />
+              <span>{t('settings.basic.streaming.hint')}</span>
+            </div>
+          </div>
+
+          <label
+            className={styles.streamingSwitch}
+            aria-label={t('settings.basic.streaming.enable')}
+          >
+            <input
+              type="checkbox"
+              checked={streamingEnabled}
+              onChange={(e) => onStreamingEnabledChange(e.target.checked)}
+            />
+            <span className={styles.streamingSlider} />
+          </label>
+        </div>
+      </div>
+
       <div className={styles.editorFontSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-symbol-text" />

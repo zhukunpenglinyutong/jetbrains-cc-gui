@@ -86,6 +86,11 @@
         "level5": "Grande (120%)",
         "level6": "Maximale (140%)"
       },
+      "streaming": {
+        "label": "Streaming",
+        "enable": "Activer le streaming (rendu en direct)",
+        "hint": "Une fois activé, les réponses et la réflexion (si activée) sont diffusées en direct, y compris autour des appels d’outils."
+      },
       "editorFont": {
         "label": "Police (suit la police de l'éditeur)",
         "hint": "Non modifiable ici. Pour modifier, allez dans Paramètres IDEA → Éditeur → Police (redémarrez IDEA pour que la police du plugin prenne effet)"

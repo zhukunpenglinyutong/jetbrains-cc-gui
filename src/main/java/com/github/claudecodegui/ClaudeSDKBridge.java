@@ -539,6 +539,13 @@ public class ClaudeSDKBridge {
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
                 stdinInput.addProperty("model", model != null ? model : "");
+                // 流式响应开关（从 ~/.codemoss/config.json 读取，默认启用）
+                boolean streamingEnabled = true;
+                try {
+                    streamingEnabled = new CodemossSettingsService().getStreamingEnabled();
+                } catch (Exception ignored) {
+                }
+                stdinInput.addProperty("streamingEnabled", streamingEnabled);
                 if (hasAttachments && attachmentsJson != null) {
                     stdinInput.add("attachments", gson.fromJson(attachmentsJson, JsonArray.class));
                 }
@@ -747,8 +754,16 @@ public class ClaudeSDKBridge {
                                     assistantContent.append(content);
                                     callback.onMessage("content", content);
                                 } else if (line.startsWith("[CONTENT_DELTA]")) {
-                                    String delta = line.substring("[CONTENT_DELTA]".length()).trim();
-                                    assistantContent.append(delta);
+                                    String payload = line.substring("[CONTENT_DELTA]".length()).trim();
+                                    String deltaToAppend = payload;
+                                    try {
+                                        JsonObject obj = gson.fromJson(payload, JsonObject.class);
+                                        if (obj != null && obj.has("delta") && !obj.get("delta").isJsonNull()) {
+                                            deltaToAppend = obj.get("delta").getAsString();
+                                        }
+                                    } catch (Exception ignored) {
+                                    }
+                                    assistantContent.append(deltaToAppend);
 
                                     // // [PERF] 记录第一个 content_delta
                                     // if (!firstContentReceived[0]) {
@@ -757,7 +772,10 @@ public class ClaudeSDKBridge {
                                     //     LOG.info("[PERF][" + now + "] >>> 收到第一个 content_delta <<<，距开始: " + (now - sendStartTime) + "ms");
                                     // }
 
-                                    callback.onMessage("content_delta", delta);
+                                    callback.onMessage("content_delta", payload);
+                                } else if (line.startsWith("[THINKING_DELTA]")) {
+                                    String payload = line.substring("[THINKING_DELTA]".length()).trim();
+                                    callback.onMessage("thinking_delta", payload);
                                 } else if (line.startsWith("[THINKING]")) {
                                     String thinkingContent = line.substring("[THINKING]".length()).trim();
                                     callback.onMessage("thinking", thinkingContent);

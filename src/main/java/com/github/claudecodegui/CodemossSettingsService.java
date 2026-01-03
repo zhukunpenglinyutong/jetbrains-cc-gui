@@ -369,6 +369,42 @@ public class CodemossSettingsService {
     }
 
     /**
+     * 获取是否启用流式响应（基础设置）
+     * 默认关闭（false），避免影响原有非流式行为；仅当用户显式开启时返回 true。
+     */
+    public boolean getStreamingEnabled() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has("ui") || config.get("ui").isJsonNull()) {
+            return false;
+        }
+        JsonObject ui = config.getAsJsonObject("ui");
+        if (!ui.has("streamingEnabled") || ui.get("streamingEnabled").isJsonNull()) {
+            return false;
+        }
+        try {
+            return ui.get("streamingEnabled").getAsBoolean();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 设置是否启用流式响应（基础设置）
+     */
+    public void setStreamingEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("ui") || config.get("ui").isJsonNull()) {
+            config.add("ui", new JsonObject());
+        }
+        JsonObject ui = config.getAsJsonObject("ui");
+        ui.addProperty("streamingEnabled", enabled);
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set streamingEnabled: " + enabled);
+    }
+
+    /**
      * 获取自定义工作目录配置
      * @param projectPath 项目根路径
      * @return 自定义工作目录，如果未配置则返回 null

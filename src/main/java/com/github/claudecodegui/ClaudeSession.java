@@ -264,6 +264,13 @@ public class ClaudeSession {
 
         // 规范化用户文本
         String normalizedInput = (input != null) ? input.trim() : "";
+
+        boolean streamingEnabled = false;
+        try {
+            streamingEnabled = new CodemossSettingsService().getStreamingEnabled();
+        } catch (Exception ignored) {
+        }
+        final boolean streamEnabledForThisSend = streamingEnabled;
         // 添加用户消息到历史
         Message userMessage = new Message(Message.Type.USER, normalizedInput);
         try {
@@ -538,6 +545,193 @@ public class ClaudeSession {
                 private final StringBuilder assistantContent = new StringBuilder();
                 private Message currentAssistantMessage = null;
                 private boolean isThinking = false;
+                private boolean thinkingSegmentActive = false;
+
+                private class StreamPayload {
+                    private final String delta;
+                    private final boolean reset;
+                    private final String messageId;
+                    private final Integer blockIndex;
+
+                    private StreamPayload(String delta, boolean reset, String messageId, Integer blockIndex) {
+                        this.delta = delta != null ? delta : "";
+                        this.reset = reset;
+                        this.messageId = messageId;
+                        this.blockIndex = blockIndex;
+                    }
+                }
+
+                private StreamPayload parseStreamPayload(String raw, String expectedEvent) {
+                    if (raw == null) {
+                        return null;
+                    }
+                    String trimmed = raw.trim();
+                    if (!trimmed.startsWith("{")) {
+                        return null;
+                    }
+                    try {
+                        JsonObject obj = gson.fromJson(trimmed, JsonObject.class);
+                        if (obj == null ||
+                            !obj.has("__stream_event") ||
+                            obj.get("__stream_event").isJsonNull() ||
+                            !expectedEvent.equals(obj.get("__stream_event").getAsString())) {
+                            return null;
+                        }
+                        String delta = obj.has("delta") && !obj.get("delta").isJsonNull()
+                            ? obj.get("delta").getAsString()
+                            : "";
+                        boolean reset = obj.has("reset") && !obj.get("reset").isJsonNull() && obj.get("reset").getAsBoolean();
+                        String messageId = obj.has("messageId") && !obj.get("messageId").isJsonNull()
+                            ? obj.get("messageId").getAsString()
+                            : null;
+                        Integer blockIndex = null;
+                        if (obj.has("blockIndex") && !obj.get("blockIndex").isJsonNull()) {
+                            try {
+                                blockIndex = obj.get("blockIndex").getAsInt();
+                            } catch (Exception ignored) {
+                                blockIndex = null;
+                            }
+                        }
+                        return new StreamPayload(delta, reset, messageId, blockIndex);
+                    } catch (Exception ignored) {
+                        return null;
+                    }
+                }
+
+                private JsonObject ensureAssistantRaw() {
+                    if (currentAssistantMessage == null) {
+                        currentAssistantMessage = new Message(Message.Type.ASSISTANT, "");
+                        messages.add(currentAssistantMessage);
+                    }
+                    if (currentAssistantMessage.raw == null) {
+                        JsonObject raw = new JsonObject();
+                        raw.addProperty("type", "assistant");
+                        JsonObject message = new JsonObject();
+                        message.add("content", new JsonArray());
+                        raw.add("message", message);
+                        currentAssistantMessage.raw = raw;
+                    }
+                    return currentAssistantMessage.raw;
+                }
+
+                private JsonObject ensureAssistantMessageObject() {
+                    JsonObject raw = ensureAssistantRaw();
+                    if (!raw.has("message") || !raw.get("message").isJsonObject()) {
+                        raw.add("message", new JsonObject());
+                    }
+                    return raw.getAsJsonObject("message");
+                }
+
+                private JsonArray ensureAssistantContentArray() {
+                    JsonObject messageObj = ensureAssistantMessageObject();
+                    if (!messageObj.has("content") || !messageObj.get("content").isJsonArray()) {
+                        messageObj.add("content", new JsonArray());
+                    }
+                    return messageObj.getAsJsonArray("content");
+                }
+
+                private void applyTextDeltaToRaw(String delta, boolean reset) {
+                    if (delta == null || delta.isEmpty()) {
+                        return;
+                    }
+
+                    JsonArray contentArray = ensureAssistantContentArray();
+                    JsonObject targetTextBlock = null;
+
+                    if (contentArray.size() > 0) {
+                        JsonElement last = contentArray.get(contentArray.size() - 1);
+                        if (last.isJsonObject()) {
+                            JsonObject block = last.getAsJsonObject();
+                            if (block.has("type") && "text".equals(block.get("type").getAsString())) {
+                                targetTextBlock = block;
+                            }
+                        }
+                    }
+
+                    if (targetTextBlock == null) {
+                        targetTextBlock = new JsonObject();
+                        targetTextBlock.addProperty("type", "text");
+                        targetTextBlock.addProperty("text", "");
+                        contentArray.add(targetTextBlock);
+                    }
+
+                    String existing = (reset || !targetTextBlock.has("text") || targetTextBlock.get("text").isJsonNull())
+                        ? ""
+                        : targetTextBlock.get("text").getAsString();
+                    targetTextBlock.addProperty("text", existing + delta);
+                }
+
+                private void applyThinkingDeltaToRaw(String delta, boolean reset, boolean newSegment, String streamKey) {
+                    if (delta == null || delta.isEmpty()) {
+                        return;
+                    }
+
+                    JsonObject messageObj = ensureAssistantMessageObject();
+                    JsonArray contentArray = ensureAssistantContentArray();
+                    JsonObject targetThinkingBlock = null;
+
+                    if (streamKey != null && !streamKey.isEmpty()) {
+                        for (int i = contentArray.size() - 1; i >= 0; i--) {
+                            JsonElement el = contentArray.get(i);
+                            if (!el.isJsonObject()) {
+                                continue;
+                            }
+                            JsonObject block = el.getAsJsonObject();
+                            if (block.has("type") &&
+                                "thinking".equals(block.get("type").getAsString()) &&
+                                block.has("id") &&
+                                !block.get("id").isJsonNull() &&
+                                streamKey.equals(block.get("id").getAsString())) {
+                                targetThinkingBlock = block;
+                                break;
+                            }
+                        }
+                    } else if (!newSegment) {
+                        for (int i = contentArray.size() - 1; i >= 0; i--) {
+                            JsonElement el = contentArray.get(i);
+                            if (!el.isJsonObject()) {
+                                continue;
+                            }
+                            JsonObject block = el.getAsJsonObject();
+                            if (block.has("type") && "thinking".equals(block.get("type").getAsString())) {
+                                targetThinkingBlock = block;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (targetThinkingBlock == null) {
+                        targetThinkingBlock = new JsonObject();
+                        targetThinkingBlock.addProperty("type", "thinking");
+                        targetThinkingBlock.addProperty("thinking", "");
+                        targetThinkingBlock.addProperty("text", "");
+                        if (streamKey != null && !streamKey.isEmpty()) {
+                            targetThinkingBlock.addProperty("id", streamKey);
+                        }
+
+                        if (streamKey != null && !streamKey.isEmpty()) {
+                            contentArray.add(targetThinkingBlock);
+                        } else if (newSegment) {
+                            contentArray.add(targetThinkingBlock);
+                        } else {
+                            JsonArray newArray = new JsonArray();
+                            newArray.add(targetThinkingBlock);
+                            for (JsonElement el : contentArray) {
+                                newArray.add(el);
+                            }
+                            messageObj.add("content", newArray);
+                            contentArray = newArray;
+                        }
+                    }
+
+                    String existing = (reset ||
+                        (!targetThinkingBlock.has("thinking") || targetThinkingBlock.get("thinking").isJsonNull()))
+                        ? ""
+                        : targetThinkingBlock.get("thinking").getAsString();
+                    String combined = existing + delta;
+                    targetThinkingBlock.addProperty("thinking", combined);
+                    targetThinkingBlock.addProperty("text", combined);
+                }
 
                 @Override
                 public void onMessage(String type, String content) {
@@ -556,16 +750,63 @@ public class ClaudeSession {
                                 currentAssistantMessage.raw = mergedRaw;
                             }
 
-                            String aggregatedText = extractMessageContent(mergedRaw);
-                            assistantContent.setLength(0);
-                            if (aggregatedText != null) {
-                                assistantContent.append(aggregatedText);
+                            if (streamEnabledForThisSend && messageJson != null) {
+                                JsonObject messageObj = messageJson.has("message") && messageJson.get("message").isJsonObject()
+                                    ? messageJson.getAsJsonObject("message")
+                                    : null;
+                                if (messageObj != null && messageObj.has("content") && messageObj.get("content").isJsonArray()) {
+                                    JsonArray contentArray = messageObj.getAsJsonArray("content");
+                                    for (int i = 0; i < contentArray.size(); i++) {
+                                        JsonElement el = contentArray.get(i);
+                                        if (!el.isJsonObject()) {
+                                            continue;
+                                        }
+                                        JsonObject block = el.getAsJsonObject();
+                                        if (block.has("type") &&
+                                            !block.get("type").isJsonNull() &&
+                                            "tool_use".equals(block.get("type").getAsString())) {
+                                            thinkingSegmentActive = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (!streamEnabledForThisSend) {
+                                String aggregatedText = extractMessageContent(mergedRaw);
+                                assistantContent.setLength(0);
+                                if (aggregatedText != null) {
+                                    assistantContent.append(aggregatedText);
+                                }
                             }
                             currentAssistantMessage.content = assistantContent.toString();
                             currentAssistantMessage.raw = mergedRaw;
                             notifyMessageUpdate();
                         } catch (Exception e) {
                             LOG.warn("Failed to parse assistant message JSON: " + e.getMessage());
+                        }
+                    } else if ("thinking_delta".equals(type) && streamEnabledForThisSend) {
+                        StreamPayload payload = parseStreamPayload(content, "thinking_delta");
+                        String delta = payload != null ? payload.delta : (content != null ? content : "");
+                        boolean reset = payload != null && payload.reset;
+
+                        if (!delta.isEmpty()) {
+                            boolean newSegment = !thinkingSegmentActive;
+                            String streamKey = null;
+                            if (payload != null && payload.messageId != null && payload.blockIndex != null) {
+                                streamKey = "thinking:" + payload.messageId + ":" + payload.blockIndex;
+                            }
+                            thinkingSegmentActive = true;
+                            if (!isThinking) {
+                                isThinking = true;
+                                if (callback != null) {
+                                    callback.onThinkingStatusChanged(true);
+                                }
+                                LOG.debug("Thinking started");
+                            }
+                            applyThinkingDeltaToRaw(delta, reset, newSegment, streamKey);
+                            currentAssistantMessage.content = assistantContent.toString();
+                            notifyMessageUpdate();
                         }
                     } else if ("thinking".equals(type)) {
                         // 处理思考过程
@@ -582,10 +823,26 @@ public class ClaudeSession {
                         // 如果之前在思考，现在开始输出内容，说明思考完成
                         if (isThinking) {
                             isThinking = false;
+                            thinkingSegmentActive = false;
                             if (callback != null) {
                                 callback.onThinkingStatusChanged(false);
                             }
                             LOG.debug("Thinking completed");
+                        }
+
+                        if (streamEnabledForThisSend) {
+                            StreamPayload payload = parseStreamPayload(content, "content_delta");
+                            String delta = payload != null ? payload.delta : (content != null ? content : "");
+                            boolean reset = payload != null && payload.reset;
+
+                            if (reset) {
+                                assistantContent.setLength(0);
+                            }
+                            assistantContent.append(delta);
+                            applyTextDeltaToRaw(delta, reset);
+                            currentAssistantMessage.content = assistantContent.toString();
+                            notifyMessageUpdate();
+                            return;
                         }
 
                         assistantContent.append(content);
@@ -629,6 +886,7 @@ public class ClaudeSession {
                                 // 创建 user 消息并添加到消息列表
                                 Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", rawUser);
                                 messages.add(toolResultMessage);
+                                thinkingSegmentActive = false;
 
                                 LOG.debug("Tool result received for tool_use_id: " + toolUseId);
                                 notifyMessageUpdate();
@@ -643,6 +901,7 @@ public class ClaudeSession {
 
                         if (isThinking) {
                             isThinking = false;
+                            thinkingSegmentActive = false;
                             if (callback != null) {
                                 callback.onThinkingStatusChanged(false);
                             }
@@ -1198,13 +1457,17 @@ public class ClaudeSession {
             return;
         }
 
+        int incomingThinkingIndex = 0;
         for (int i = 0; i < incomingContent.size(); i++) {
             JsonElement element = incomingContent.get(i);
             JsonElement elementCopy = element.deepCopy();
 
             if (element.isJsonObject()) {
                 JsonObject block = element.getAsJsonObject();
-                String key = getContentBlockKey(block);
+                String key = getContentBlockKey(block, incomingThinkingIndex);
+                if (isThinkingBlock(block)) {
+                    incomingThinkingIndex += 1;
+                }
                 if (key != null && indexByKey.containsKey(key)) {
                     int idx = indexByKey.get(key);
                     baseContent.set(idx, elementCopy);
@@ -1224,13 +1487,17 @@ public class ClaudeSession {
 
     private Map<String, Integer> buildContentIndex(JsonArray contentArray) {
         Map<String, Integer> index = new HashMap<>();
+        int thinkingIndex = 0;
         for (int i = 0; i < contentArray.size(); i++) {
             JsonElement element = contentArray.get(i);
             if (!element.isJsonObject()) {
                 continue;
             }
             JsonObject block = element.getAsJsonObject();
-            String key = getContentBlockKey(block);
+            String key = getContentBlockKey(block, thinkingIndex);
+            if (isThinkingBlock(block)) {
+                thinkingIndex += 1;
+            }
             if (key != null && !index.containsKey(key)) {
                 index.put(key, i);
             }
@@ -1238,7 +1505,36 @@ public class ClaudeSession {
         return index;
     }
 
-    private String getContentBlockKey(JsonObject block) {
+    private boolean isThinkingBlock(JsonObject block) {
+        if (block == null) {
+            return false;
+        }
+        if (block.has("type") && !block.get("type").isJsonNull()) {
+            try {
+                return "thinking".equals(block.get("type").getAsString());
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private String getContentBlockKey(JsonObject block, int thinkingIndex) {
+        if (block.has("type") && !block.get("type").isJsonNull()) {
+            try {
+                String type = block.get("type").getAsString();
+                if ("thinking".equals(type)) {
+                    if (block.has("id") && !block.get("id").isJsonNull()) {
+                        return block.get("id").getAsString();
+                    }
+                    // Thinking blocks without stable ids should not be merged across messages,
+                    // otherwise later thinking blocks overwrite earlier ones in non-streaming mode.
+                    return null;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
         if (block.has("id") && !block.get("id").isJsonNull()) {
             return block.get("id").getAsString();
         }
