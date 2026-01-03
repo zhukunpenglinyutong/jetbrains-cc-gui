@@ -96,6 +96,100 @@ function rewriteToolInputPaths(toolName, input) {
 }
 
 /**
+ * 通过文件系统与 Java 进程通信请求 AskUserQuestion 的答案
+ * @param {Object} input - AskUserQuestion 工具参数（包含 questions 数组）
+ * @returns {Promise<Object|null>} - 用户答案对象（格式：{ "问题文本": "答案" }），失败返回 null
+ */
+async function requestAskUserQuestionAnswers(input) {
+  const requestStartTime = Date.now();
+  debugLog('ASK_USER_QUESTION_START', 'Requesting answers for questions', { input });
+
+  try {
+    const requestId = `ask-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    debugLog('ASK_USER_QUESTION_ID', `Generated request ID: ${requestId}`);
+
+    const requestFile = join(PERMISSION_DIR, `ask-user-question-${requestId}.json`);
+    const responseFile = join(PERMISSION_DIR, `ask-user-question-response-${requestId}.json`);
+
+    const requestData = {
+      requestId,
+      toolName: 'AskUserQuestion',
+      questions: input.questions || [],
+      timestamp: new Date().toISOString()
+    };
+
+    debugLog('ASK_USER_QUESTION_FILE_WRITE', `Writing question request file`, { requestFile, responseFile });
+
+    try {
+      writeFileSync(requestFile, JSON.stringify(requestData, null, 2));
+      debugLog('ASK_USER_QUESTION_FILE_WRITE_OK', `Question request file written successfully`);
+
+      if (existsSync(requestFile)) {
+        debugLog('ASK_USER_QUESTION_FILE_VERIFY', `Question request file exists after write`);
+      } else {
+        debugLog('ASK_USER_QUESTION_FILE_VERIFY_ERROR', `Question request file does NOT exist after write!`);
+      }
+    } catch (writeError) {
+      debugLog('ASK_USER_QUESTION_FILE_WRITE_ERROR', `Failed to write question request file: ${writeError.message}`);
+      return null;
+    }
+
+    // 等待响应文件（最多60秒）
+    const timeout = 60000;
+    let pollCount = 0;
+    const pollInterval = 100;
+
+    debugLog('ASK_USER_QUESTION_WAIT_START', `Starting to wait for answers (timeout: ${timeout}ms)`);
+
+    while (Date.now() - requestStartTime < timeout) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      pollCount++;
+
+      // 每5秒输出一次等待状态
+      if (pollCount % 50 === 0) {
+        const elapsed = Date.now() - requestStartTime;
+        debugLog('ASK_USER_QUESTION_WAITING', `Still waiting for answers`, { elapsed: `${elapsed}ms`, pollCount });
+      }
+
+      if (existsSync(responseFile)) {
+        debugLog('ASK_USER_QUESTION_RESPONSE_FOUND', `Response file found!`);
+        try {
+          const responseContent = readFileSync(responseFile, 'utf-8');
+          debugLog('ASK_USER_QUESTION_RESPONSE_CONTENT', `Raw response content: ${responseContent}`);
+
+          const responseData = JSON.parse(responseContent);
+          const answers = responseData.answers;
+          debugLog('ASK_USER_QUESTION_RESPONSE_PARSED', `Parsed answers`, { answers, elapsed: `${Date.now() - requestStartTime}ms` });
+
+          // 清理响应文件
+          try {
+            unlinkSync(responseFile);
+            debugLog('ASK_USER_QUESTION_FILE_CLEANUP', `Response file deleted`);
+          } catch (cleanupError) {
+            debugLog('ASK_USER_QUESTION_FILE_CLEANUP_ERROR', `Failed to delete response file: ${cleanupError.message}`);
+          }
+
+          return answers;
+        } catch (e) {
+          debugLog('ASK_USER_QUESTION_RESPONSE_ERROR', `Error reading/parsing response: ${e.message}`);
+          return null;
+        }
+      }
+    }
+
+    // 超时，返回 null
+    const elapsed = Date.now() - requestStartTime;
+    debugLog('ASK_USER_QUESTION_TIMEOUT', `Timeout waiting for answers`, { elapsed: `${elapsed}ms`, timeout: `${timeout}ms` });
+
+    return null;
+
+  } catch (error) {
+    debugLog('ASK_USER_QUESTION_FATAL_ERROR', `Unexpected error: ${error.message}`, { stack: error.stack });
+    return null;
+  }
+}
+
+/**
  * 通过文件系统与 Java 进程通信请求权限
  * @param {string} toolName - 工具名称
  * @param {Object} input - 工具参数
@@ -253,6 +347,39 @@ export async function canUseTool(toolName, input, options = {}) {
   console.log('[PERM_DEBUG][CAN_USE_TOOL] input:', JSON.stringify(input));
   console.log('[PERM_DEBUG][CAN_USE_TOOL] options:', options ? 'present' : 'undefined');
   debugLog('CAN_USE_TOOL', `Called with tool: ${toolName}`, { input });
+
+  // 特殊处理：AskUserQuestion 工具
+  // 这个工具需要向用户显示问题并收集答案，而不是简单的批准/拒绝
+  if (toolName === 'AskUserQuestion') {
+    debugLog('ASK_USER_QUESTION', 'Handling AskUserQuestion tool', { input });
+
+    // 请求用户回答问题
+    const answers = await requestAskUserQuestionAnswers(input);
+    const elapsed = Date.now() - callStartTime;
+
+    if (answers !== null) {
+      debugLog('ASK_USER_QUESTION_SUCCESS', 'User provided answers', { answers, elapsed: `${elapsed}ms` });
+
+      // 按照 SDK 要求返回答案：
+      // behavior: 'allow'
+      // updatedInput: { questions: 原始问题, answers: 用户答案 }
+      return {
+        behavior: 'allow',
+        updatedInput: {
+          questions: input.questions || [],
+          answers: answers
+        }
+      };
+    } else {
+      debugLog('ASK_USER_QUESTION_FAILED', 'Failed to get answers from user', { elapsed: `${elapsed}ms` });
+
+      // 如果用户取消或超时，拒绝工具调用
+      return {
+        behavior: 'deny',
+        message: '用户未提供问题答案'
+      };
+    }
+  }
 
   // 将 /tmp 等路径重写到项目根目录
   const rewriteResult = rewriteToolInputPaths(toolName, input);

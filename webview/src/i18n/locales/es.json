@@ -277,6 +277,15 @@
     "allowAlways": "Permitir siempre",
     "deny": "Denegar"
   },
+  "askUserQuestion": {
+    "title": "Claude tiene algunas preguntas para ti",
+    "progress": "Pregunta {{current}} / {{total}}",
+    "multiSelectHint": "Puedes seleccionar múltiples opciones",
+    "cancel": "Selección automática de IA",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "submit": "Enviar"
+  },
   "toast": {
     "switchSuccess": "Cambio exitoso",
     "thinkingEnabled": "Thinking enabled",

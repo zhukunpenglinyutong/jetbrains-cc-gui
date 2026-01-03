@@ -36,6 +36,9 @@ public class PermissionService {
     // 多项目支持：按项目注册的权限对话框显示器
     private final Map<Project, PermissionDialogShower> dialogShowers = new ConcurrentHashMap<>();
 
+    // 多项目支持：按项目注册的 AskUserQuestion 对话框显示器
+    private final Map<Project, AskUserQuestionDialogShower> askUserQuestionDialogShowers = new ConcurrentHashMap<>();
+
     // 调试日志辅助方法
     private void debugLog(String tag, String message) {
         LOG.debug(String.format("[%s] %s", tag, message));
@@ -125,6 +128,19 @@ public class PermissionService {
         CompletableFuture<Integer> showPermissionDialog(String toolName, JsonObject inputs);
     }
 
+    /**
+     * AskUserQuestion 对话框显示器接口 - 用于显示问题对话框
+     */
+    public interface AskUserQuestionDialogShower {
+        /**
+         * 显示 AskUserQuestion 对话框并返回用户答案
+         * @param requestId 请求ID
+         * @param questions 问题列表（JSON 数组）
+         * @return CompletableFuture<JsonObject> 返回用户答案（格式：{ "问题文本": "答案" }）
+         */
+        CompletableFuture<JsonObject> showAskUserQuestionDialog(String requestId, JsonObject questions);
+    }
+
     private PermissionService(Project project) {
         this.project = project;
         // 使用临时目录进行通信
@@ -178,6 +194,35 @@ public class PermissionService {
             PermissionDialogShower removed = dialogShowers.remove(project);
             debugLog("CONFIG", "Dialog shower unregistered for project: " + project.getName() +
                 ", was registered: " + (removed != null) + ", remaining: " + dialogShowers.size());
+        }
+    }
+
+    /**
+     * 注册 AskUserQuestion 对话框显示器
+     * 支持多项目：每个项目注册自己的显示器
+     *
+     * @param project 项目
+     * @param shower AskUserQuestion 对话框显示器
+     */
+    public void registerAskUserQuestionDialogShower(Project project, AskUserQuestionDialogShower shower) {
+        if (project != null && shower != null) {
+            askUserQuestionDialogShowers.put(project, shower);
+            debugLog("CONFIG", "AskUserQuestion dialog shower registered for project: " + project.getName() +
+                ", total registered: " + askUserQuestionDialogShowers.size());
+        }
+    }
+
+    /**
+     * 注销 AskUserQuestion 对话框显示器
+     * 在项目关闭时调用，防止内存泄漏
+     *
+     * @param project 项目
+     */
+    public void unregisterAskUserQuestionDialogShower(Project project) {
+        if (project != null) {
+            AskUserQuestionDialogShower removed = askUserQuestionDialogShowers.remove(project);
+            debugLog("CONFIG", "AskUserQuestion dialog shower unregistered for project: " + project.getName() +
+                ", was registered: " + (removed != null) + ", remaining: " + askUserQuestionDialogShowers.size());
         }
     }
 
@@ -384,21 +429,38 @@ public class PermissionService {
                     dir.mkdirs();
                 }
 
-                File[] files = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
+                // 监控普通权限请求文件
+                File[] requestFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
+
+                // 监控 AskUserQuestion 请求文件
+                File[] askUserQuestionFiles = dir.listFiles((d, name) -> name.startsWith("ask-user-question-") && name.endsWith(".json"));
 
                 // 每20次轮询（约10秒）输出一次状态
                 // 降低日志频率：每100次轮询（约50秒）记录一次状态
                 if (pollCount % 100 == 0) {
-                    int fileCount = files != null ? files.length : 0;
-                    debugLog("POLL_STATUS", String.format("Poll #%d, found %d request files", pollCount, fileCount));
+                    int requestCount = requestFiles != null ? requestFiles.length : 0;
+                    int askQuestionCount = askUserQuestionFiles != null ? askUserQuestionFiles.length : 0;
+                    debugLog("POLL_STATUS", String.format("Poll #%d, found %d request files, %d ask-user-question files",
+                        pollCount, requestCount, askQuestionCount));
                 }
 
-                if (files != null && files.length > 0) {
-                    for (File file : files) {
+                // 处理普通权限请求
+                if (requestFiles != null && requestFiles.length > 0) {
+                    for (File file : requestFiles) {
                         // 简单防重：检查文件是否还存在（可能被其他线程处理了）
                         if (file.exists()) {
                             debugLog("REQUEST_FOUND", "Found request file: " + file.getName());
                             handlePermissionRequest(file.toPath());
+                        }
+                    }
+                }
+
+                // 处理 AskUserQuestion 请求
+                if (askUserQuestionFiles != null && askUserQuestionFiles.length > 0) {
+                    for (File file : askUserQuestionFiles) {
+                        if (file.exists()) {
+                            debugLog("ASK_USER_QUESTION_FOUND", "Found AskUserQuestion file: " + file.getName());
+                            handleAskUserQuestionRequest(file.toPath());
                         }
                     }
                 }
@@ -680,6 +742,136 @@ public class PermissionService {
             }
         } catch (IOException e) {
             debugLog("WRITE_ERROR", "Failed to write response file: " + e.getMessage());
+            LOG.error("Error occurred", e);
+        }
+    }
+
+    /**
+     * 处理 AskUserQuestion 请求
+     */
+    private void handleAskUserQuestionRequest(Path requestFile) {
+        String fileName = requestFile.getFileName().toString();
+        long startTime = System.currentTimeMillis();
+        debugLog("HANDLE_ASK_USER_QUESTION", "Processing AskUserQuestion file: " + fileName);
+
+        // 检查是否正在处理该请求
+        if (!processingRequests.add(fileName)) {
+            debugLog("SKIP_DUPLICATE_ASK", "AskUserQuestion already being processed, skipping: " + fileName);
+            return;
+        }
+
+        try {
+            Thread.sleep(100); // 等待文件写入完成
+
+            String content = Files.readString(requestFile);
+            debugLog("ASK_FILE_READ", "Read AskUserQuestion content: " + content.substring(0, Math.min(200, content.length())) + "...");
+
+            JsonObject request = gson.fromJson(content, JsonObject.class);
+
+            String requestId = request.get("requestId").getAsString();
+            String toolName = request.get("toolName").getAsString();
+            // questions 是一个 JSON 对象，包含问题数据
+            JsonObject questionsData = request;
+
+            debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
+
+            // 获取 AskUserQuestion 对话框显示器
+            // 由于 AskUserQuestion 不涉及文件路径，使用第一个注册的项目
+            AskUserQuestionDialogShower dialogShower = null;
+            if (!askUserQuestionDialogShowers.isEmpty()) {
+                dialogShower = askUserQuestionDialogShowers.values().iterator().next();
+            }
+
+            if (dialogShower != null) {
+                debugLog("ASK_DIALOG_SHOWER", "Using AskUserQuestion dialog shower");
+
+                // 立即删除请求文件，避免重复处理
+                try {
+                    Files.deleteIfExists(requestFile);
+                    debugLog("ASK_FILE_DELETE", "Deleted AskUserQuestion request file: " + fileName);
+                } catch (Exception e) {
+                    debugLog("ASK_FILE_DELETE_ERROR", "Failed to delete AskUserQuestion request file: " + e.getMessage());
+                }
+
+                final long dialogStartTime = System.currentTimeMillis();
+
+                // 异步调用前端弹窗
+                debugLog("ASK_DIALOG_SHOW", "Calling dialogShower.showAskUserQuestionDialog");
+                CompletableFuture<JsonObject> future = dialogShower.showAskUserQuestionDialog(requestId, questionsData);
+
+                // 异步处理结果
+                future.thenAccept(answers -> {
+                    long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
+                    debugLog("ASK_DIALOG_RESPONSE", String.format("Got answers after %dms", dialogElapsed));
+                    try {
+                        debugLog("ASK_WRITE_RESPONSE", String.format("Writing AskUserQuestion response for %s", requestId));
+                        writeAskUserQuestionResponse(requestId, answers);
+
+                        debugLog("ASK_DIALOG_COMPLETE", "AskUserQuestion dialog processing complete");
+                    } catch (Exception e) {
+                        debugLog("ASK_DIALOG_ERROR", "Error processing AskUserQuestion dialog result: " + e.getMessage());
+                        LOG.error("Error occurred", e);
+                    } finally {
+                        processingRequests.remove(fileName);
+                    }
+                }).exceptionally(ex -> {
+                    debugLog("ASK_DIALOG_EXCEPTION", "AskUserQuestion dialog exception: " + ex.getMessage());
+                    try {
+                        // 用户取消或出错，写入空答案
+                        writeAskUserQuestionResponse(requestId, new JsonObject());
+                    } catch (Exception e) {
+                        LOG.error("Error occurred", e);
+                    }
+                    processingRequests.remove(fileName);
+                    return null;
+                });
+
+                // 异步处理，直接返回，不阻塞
+                return;
+            }
+
+            // 没有对话框显示器，写入空答案（拒绝）
+            debugLog("ASK_NO_DIALOG_SHOWER", "No AskUserQuestion dialog shower available, denying");
+            writeAskUserQuestionResponse(requestId, new JsonObject());
+            Files.deleteIfExists(requestFile);
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            debugLog("ASK_REQUEST_COMPLETE", String.format("AskUserQuestion request %s completed in %dms", requestId, elapsed));
+
+        } catch (Exception e) {
+            debugLog("ASK_HANDLE_ERROR", "Error handling AskUserQuestion request: " + e.getMessage());
+            LOG.error("Error occurred", e);
+        } finally {
+            processingRequests.remove(fileName);
+        }
+    }
+
+    /**
+     * 写入 AskUserQuestion 响应文件
+     * 响应格式：{ "answers": { "问题文本": "答案" } }
+     */
+    private void writeAskUserQuestionResponse(String requestId, JsonObject answers) {
+        debugLog("WRITE_ASK_RESPONSE_START", String.format("Writing AskUserQuestion response for requestId=%s", requestId));
+        try {
+            JsonObject response = new JsonObject();
+            response.add("answers", answers);
+
+            Path responseFile = permissionDir.resolve("ask-user-question-response-" + requestId + ".json");
+            String responseContent = gson.toJson(response);
+            debugLog("ASK_RESPONSE_CONTENT", "Response JSON: " + responseContent);
+            debugLog("ASK_RESPONSE_FILE", "Target file: " + responseFile);
+
+            Files.writeString(responseFile, responseContent);
+
+            // 验证文件是否写入成功
+            if (Files.exists(responseFile)) {
+                long fileSize = Files.size(responseFile);
+                debugLog("ASK_WRITE_SUCCESS", String.format("AskUserQuestion response file written successfully, size=%d bytes", fileSize));
+            } else {
+                debugLog("ASK_WRITE_VERIFY_FAIL", "AskUserQuestion response file does NOT exist after write!");
+            }
+        } catch (IOException e) {
+            debugLog("ASK_WRITE_ERROR", "Failed to write AskUserQuestion response file: " + e.getMessage());
             LOG.error("Error occurred", e);
         }
     }

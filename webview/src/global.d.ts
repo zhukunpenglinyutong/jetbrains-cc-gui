@@ -95,6 +95,11 @@ interface Window {
   showPermissionDialog?: (json: string) => void;
 
   /**
+   * Show AskUserQuestion dialog
+   */
+  showAskUserQuestionDialog?: (json: string) => void;
+
+  /**
    * Add selection info (file and line numbers) - 自动监听，只更新 ContextBar
    */
   addSelectionInfo?: (selectionInfo: string) => void;

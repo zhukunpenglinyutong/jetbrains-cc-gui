@@ -24,11 +24,15 @@ public class PermissionHandler extends BaseMessageHandler {
     private static final Logger LOG = Logger.getInstance(PermissionHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
-        "permission_decision"
+        "permission_decision",
+        "ask_user_question_response"
     };
 
     // 权限请求映射
     private final Map<String, CompletableFuture<Integer>> pendingPermissionRequests = new ConcurrentHashMap<>();
+
+    // AskUserQuestion 请求映射 (requestId -> CompletableFuture<JsonObject>)
+    private final Map<String, CompletableFuture<JsonObject>> pendingAskUserQuestionRequests = new ConcurrentHashMap<>();
 
     // 权限拒绝回调
     public interface PermissionDeniedCallback {
@@ -56,6 +60,11 @@ public class PermissionHandler extends BaseMessageHandler {
             LOG.debug("[PERM_DEBUG][BRIDGE_RECV] Received permission_decision from JS");
             LOG.debug("[PERM_DEBUG][BRIDGE_RECV] Content: " + content);
             handlePermissionDecision(content);
+            return true;
+        } else if ("ask_user_question_response".equals(type)) {
+            LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] Received ask_user_question_response from JS");
+            LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] Content: " + content);
+            handleAskUserQuestionResponse(content);
             return true;
         }
         return false;
@@ -234,6 +243,82 @@ public class PermissionHandler extends BaseMessageHandler {
     private void notifyPermissionDenied() {
         if (deniedCallback != null) {
             deniedCallback.onPermissionDenied();
+        }
+    }
+
+    /**
+     * 显示 AskUserQuestion 对话框（实现 PermissionService.AskUserQuestionDialogShower 接口）
+     */
+    public CompletableFuture<JsonObject> showAskUserQuestionDialog(String requestId, JsonObject questionsData) {
+        CompletableFuture<JsonObject> future = new CompletableFuture<>();
+
+        LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] Starting showAskUserQuestionDialog");
+        LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] requestId=" + requestId);
+        LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] questionsData=" + questionsData.toString());
+
+        pendingAskUserQuestionRequests.put(requestId, future);
+
+        try {
+            Gson gson = new Gson();
+            String requestJson = gson.toJson(questionsData);
+            String escapedJson = escapeJs(requestJson);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                String jsCode = "(function retryShowAskUserQuestion(retries) { " +
+                    "  if (window.showAskUserQuestionDialog) { " +
+                    "    window.showAskUserQuestionDialog('" + escapedJson + "'); " +
+                    "  } else if (retries > 0) { " +
+                    "    setTimeout(function() { retryShowAskUserQuestion(retries - 1); }, 200); " +
+                    "  } else { " +
+                    "    console.error('[ASK_USER_QUESTION][JS] FAILED: showAskUserQuestionDialog not available!'); " +
+                    "  } " +
+                    "})(30);";
+
+                context.executeJavaScriptOnEDT(jsCode);
+            });
+
+            // 超时处理（60秒）
+            CompletableFuture.delayedExecutor(60, TimeUnit.SECONDS).execute(() -> {
+                if (!future.isDone()) {
+                    pendingAskUserQuestionRequests.remove(requestId);
+                    // 超时返回空答案
+                    future.complete(new JsonObject());
+                }
+            });
+
+        } catch (Exception e) {
+            LOG.error("[ASK_USER_QUESTION][SHOW_DIALOG] ERROR: " + e.getMessage(), e);
+            pendingAskUserQuestionRequests.remove(requestId);
+            future.complete(new JsonObject());
+        }
+
+        return future;
+    }
+
+    /**
+     * 处理来自 JavaScript 的 AskUserQuestion 响应消息
+     */
+    private void handleAskUserQuestionResponse(String jsonContent) {
+        LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] Received response from JS: " + jsonContent);
+        try {
+            Gson gson = new Gson();
+            JsonObject response = gson.fromJson(jsonContent, JsonObject.class);
+
+            String requestId = response.get("requestId").getAsString();
+            JsonObject answers = response.has("answers") && !response.get("answers").isJsonNull()
+                ? response.get("answers").getAsJsonObject()
+                : new JsonObject();
+
+            CompletableFuture<JsonObject> pendingFuture = pendingAskUserQuestionRequests.remove(requestId);
+
+            if (pendingFuture != null) {
+                LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] Completing future with answers: " + answers.toString());
+                pendingFuture.complete(answers);
+            } else {
+                LOG.warn("[ASK_USER_QUESTION][HANDLE_RESPONSE] No pending request found for requestId: " + requestId);
+            }
+        } catch (Exception e) {
+            LOG.error("[ASK_USER_QUESTION][HANDLE_RESPONSE] ERROR: " + e.getMessage(), e);
         }
     }
 }
