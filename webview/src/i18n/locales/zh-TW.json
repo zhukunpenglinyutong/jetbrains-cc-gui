@@ -402,6 +402,62 @@
       "memory": "Knowledge graph and memory storage tool",
       "sequentialThinking": "Sequential thinking and reasoning tool",
       "context7": "Document search and context retrieval tool"
+    },
+    "help": {
+      "title": "什麼是 MCP?",
+      "protocol": {
+        "title": "Model Context Protocol",
+        "description": "MCP (Model Context Protocol) 是 Anthropic 開發的開放協議，讓 AI 模型能夠安全地存取外部工具和資料來源。"
+      },
+      "features": {
+        "title": "主要特性",
+        "toolExtension": {
+          "label": "工具擴充",
+          "description": "為 Claude 新增檔案系統、網路存取等能力"
+        },
+        "dataConnection": {
+          "label": "資料連接",
+          "description": "連接資料庫、API 等外部資料來源"
+        },
+        "security": {
+          "label": "安全可控",
+          "description": "嚴格的權限控制和資料隔離"
+        },
+        "integration": {
+          "label": "易於整合",
+          "description": "支援多種程式語言和執行環境"
+        }
+      },
+      "configuration": {
+        "title": "配置方式",
+        "description": "支援兩種配置類型：",
+        "stdio": {
+          "description": "透過標準輸入輸出與本地行程通訊",
+          "example": "npx/uvx 命令啟動"
+        },
+        "httpSse": {
+          "description": "透過網路與遠端伺服器通訊",
+          "example": "URL 位址"
+        }
+      },
+      "learnMore": {
+        "title": "了解更多",
+        "description": "造訪官方文件："
+      },
+      "gotIt": "知道了"
+    },
+    "serverDialog": {
+      "addTitle": "手動配置",
+      "editTitle": "編輯伺服器",
+      "rawConfig": "原始配置（JSON）",
+      "description": "請輸入 MCP Servers 配置 JSON（優先使用 NPX 或 UVX 配置）",
+      "securityWarning": "配置前請自行確認來源，甄別風險",
+      "saving": "保存中...",
+      "errors": {
+        "idExists": "伺服器 ID \"{{id}}\" 已存在",
+        "unrecognizedFormat": "無法識別的配置格式",
+        "jsonParseError": "JSON 解析錯誤: {{message}}"
+      }
     }
   },
   "tools": {
@@ -464,7 +520,56 @@
     "importFailed": "Failed to import Skill",
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
-    "toggleFailed": "Failed to update Skill status"
+    "toggleFailed": "Failed to update Skill status",
+    "help": {
+      "title": "什麼是 Skills?",
+      "overview": {
+        "title": "概述",
+        "description": "Skills 是 Claude 動態載入的指令、腳本和資源資料夾，用於提升特定任務的表現。Skills 可以教會 Claude 以可重複的方式完成特定任務，例如使用公司品牌指南建立文件、按照組織特定的工作流程分析資料，或自動化個人任務。"
+      },
+      "structure": {
+        "title": "Skill 結構",
+        "description": "一個 Skill 是包含 SKILL.md 檔案的資料夾：",
+        "example": "my-skill/\n├── SKILL.md          # 必須：技能定義檔案\n├── templates/        # 可選：範本檔案\n└── references/       # 可選：參考資料"
+      },
+      "format": {
+        "title": "SKILL.md 格式",
+        "description": "SKILL.md 檔案使用 YAML frontmatter + Markdown 格式：",
+        "example": "---\nname: my-skill-name\ndescription: 技能描述和使用時機\n---\n\n# 技能指令\n\n詳細的指令內容...",
+        "hint": "name 和 description 是必填欄位，可選欄位包括 license、allowed-tools、metadata"
+      },
+      "configuration": {
+        "title": "配置方式",
+        "description": "新增 Skill 的方式：",
+        "localPath": {
+          "label": "本地路徑",
+          "description": "指定包含 SKILL.md 的資料夾路徑"
+        },
+        "relativePath": {
+          "label": "相對路徑",
+          "description": "相對於專案根目錄，如 ./skills/my-skill"
+        },
+        "absolutePath": {
+          "label": "絕對路徑",
+          "description": "完整的檔案系統路徑"
+        }
+      },
+      "tips": {
+        "title": "使用提示",
+        "item1": "確保 Skill 目錄包含有效的 SKILL.md 檔案",
+        "item2": "Skill 名稱必須使用小寫字母、數字和連字符（hyphen-case）",
+        "item3": "Skill 載入後會在 Claude 會話中自動生效",
+        "item4": "可以透過啟用/停用開關控制單個 Skill 的狀態",
+        "item5": "在聊天中提及 Skill 名稱即可使用，如：「使用 pdf skill 提取表單欄位」"
+      },
+      "learnMore": {
+        "title": "了解更多",
+        "description": "更多關於 Skills 的資訊：",
+        "link1": "什麼是 Skills?",
+        "link2": "如何建立自訂 Skills",
+        "link3": "Anthropic Skills 示例倉庫"
+      }
+    }
   },
   "models": {
     "claude": {

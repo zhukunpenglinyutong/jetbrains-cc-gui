@@ -421,6 +421,62 @@
       "memory": "知识图谱和记忆存储工具",
       "sequentialThinking": "顺序思考和推理工具",
       "context7": "文档搜索和上下文检索工具"
+    },
+    "help": {
+      "title": "什么是 MCP?",
+      "protocol": {
+        "title": "Model Context Protocol",
+        "description": "MCP (Model Context Protocol) 是 Anthropic 开发的开放协议，让 AI 模型能够安全地访问外部工具和数据源。"
+      },
+      "features": {
+        "title": "主要特性",
+        "toolExtension": {
+          "label": "工具扩展",
+          "description": "为 Claude 添加文件系统、网络访问等能力"
+        },
+        "dataConnection": {
+          "label": "数据连接",
+          "description": "连接数据库、API 等外部数据源"
+        },
+        "security": {
+          "label": "安全可控",
+          "description": "严格的权限控制和数据隔离"
+        },
+        "integration": {
+          "label": "易于集成",
+          "description": "支持多种编程语言和运行环境"
+        }
+      },
+      "configuration": {
+        "title": "配置方式",
+        "description": "支持两种配置类型：",
+        "stdio": {
+          "description": "通过标准输入输出与本地进程通信",
+          "example": "npx/uvx 命令启动"
+        },
+        "httpSse": {
+          "description": "通过网络与远程服务器通信",
+          "example": "URL 地址"
+        }
+      },
+      "learnMore": {
+        "title": "了解更多",
+        "description": "访问官方文档："
+      },
+      "gotIt": "知道了"
+    },
+    "serverDialog": {
+      "addTitle": "手动配置",
+      "editTitle": "编辑服务器",
+      "rawConfig": "原始配置（JSON）",
+      "description": "请输入 MCP Servers 配置 JSON（优先使用 NPX 或 UVX 配置）",
+      "securityWarning": "配置前请自行确认来源，甄别风险",
+      "saving": "保存中...",
+      "errors": {
+        "idExists": "服务器 ID \"{{id}}\" 已存在",
+        "unrecognizedFormat": "无法识别的配置格式",
+        "jsonParseError": "JSON 解析错误: {{message}}"
+      }
     }
   },
   "tools": {
@@ -483,7 +539,56 @@
     "importFailed": "导入 Skill 失败",
     "deleteSuccess": "已成功删除 Skill",
     "toggleSuccess": "已更新 Skill 状态",
-    "toggleFailed": "更新 Skill 状态失败"
+    "toggleFailed": "更新 Skill 状态失败",
+    "help": {
+      "title": "什么是 Skills?",
+      "overview": {
+        "title": "概述",
+        "description": "Skills 是 Claude 动态加载的指令、脚本和资源文件夹，用于提升特定任务的表现。Skills 可以教会 Claude 以可重复的方式完成特定任务，比如使用公司品牌指南创建文档、按照组织特定的工作流分析数据，或自动化个人任务。"
+      },
+      "structure": {
+        "title": "Skill 结构",
+        "description": "一个 Skill 是包含 SKILL.md 文件的文件夹：",
+        "example": "my-skill/\n├── SKILL.md          # 必须：技能定义文件\n├── templates/        # 可选：模板文件\n└── references/       # 可选：参考资料"
+      },
+      "format": {
+        "title": "SKILL.md 格式",
+        "description": "SKILL.md 文件使用 YAML frontmatter + Markdown 格式：",
+        "example": "---\nname: my-skill-name\ndescription: 技能描述和使用时机\n---\n\n# 技能指令\n\n详细的指令内容...",
+        "hint": "name 和 description 是必填字段，可选字段包括 license、allowed-tools、metadata"
+      },
+      "configuration": {
+        "title": "配置方式",
+        "description": "添加 Skill 的方式：",
+        "localPath": {
+          "label": "本地路径",
+          "description": "指定包含 SKILL.md 的文件夹路径"
+        },
+        "relativePath": {
+          "label": "相对路径",
+          "description": "相对于项目根目录，如 ./skills/my-skill"
+        },
+        "absolutePath": {
+          "label": "绝对路径",
+          "description": "完整的文件系统路径"
+        }
+      },
+      "tips": {
+        "title": "使用提示",
+        "item1": "确保 Skill 目录包含有效的 SKILL.md 文件",
+        "item2": "Skill 名称必须使用小写字母、数字和连字符（hyphen-case）",
+        "item3": "Skill 加载后会在 Claude 会话中自动生效",
+        "item4": "可以通过启用/禁用开关控制单个 Skill 的状态",
+        "item5": "在聊天中提及 Skill 名称即可使用，如：\"使用 pdf skill 提取表单字段\""
+      },
+      "learnMore": {
+        "title": "了解更多",
+        "description": "更多关于 Skills 的信息：",
+        "link1": "什么是 Skills?",
+        "link2": "如何创建自定义 Skills",
+        "link3": "Anthropic Skills 示例仓库"
+      }
+    }
   },
   "models": {
     "claude": {

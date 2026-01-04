@@ -510,9 +510,9 @@ public class SettingsHandler extends BaseMessageHandler {
                 Gson gson = new Gson();
                 String json = gson.toJson(stats);
 
-                int totalTokens = 0;
+                long totalTokens = 0;
                 if (stats != null && stats.totalUsage != null) {
-                    totalTokens = stats.totalUsage.inputTokens + stats.totalUsage.outputTokens;
+                    totalTokens = stats.totalUsage.totalTokens;
                 }
                 final int MONTHLY_TOKEN_LIMIT = 5_000_000;
                 int percentage = Math.min(100, (int) ((totalTokens * 100.0) / MONTHLY_TOKEN_LIMIT));

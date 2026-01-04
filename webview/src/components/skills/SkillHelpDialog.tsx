@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { copyToClipboard } from '../../utils/helpers';
 
 interface SkillHelpDialogProps {
@@ -5,10 +6,11 @@ interface SkillHelpDialogProps {
 }
 
 /**
- * Skills 帮助弹窗
- * 解释什么是 Skills 以及如何使用
+ * Skills Help Dialog
+ * Explains what Skills are and how to use them
  */
 export function SkillHelpDialog({ onClose }: SkillHelpDialogProps) {
+  const { t } = useTranslation();
   // 阻止事件冒泡
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -16,91 +18,78 @@ export function SkillHelpDialog({ onClose }: SkillHelpDialogProps) {
     }
   };
 
-  // 复制链接并提示
+  // Copy link and show alert
   const handleLinkClick = async (e: React.MouseEvent, url: string) => {
     e.preventDefault();
     const success = await copyToClipboard(url);
     if (success) {
-      alert('链接已复制，请在浏览器中打开');
+      alert(t('mcp.linkCopied'));
     }
   };
 
   return (
     <div className="skill-dialog-backdrop" onClick={handleBackdropClick}>
       <div className="skill-dialog help-dialog">
-        {/* 标题栏 */}
+        {/* Header */}
         <div className="dialog-header">
-          <h3>什么是 Skills?</h3>
+          <h3>{t('skills.help.title')}</h3>
           <button className="close-btn" onClick={onClose}>
             <span className="codicon codicon-close"></span>
           </button>
         </div>
 
-        {/* 内容 */}
+        {/* Content */}
         <div className="dialog-content help-content">
           <section className="help-section">
             <h4>
               <span className="codicon codicon-extensions"></span>
-              概述
+              {t('skills.help.overview.title')}
             </h4>
             <p>
-              Skills 是 Claude 动态加载的指令、脚本和资源文件夹，用于提升特定任务的表现。
-              Skills 可以教会 Claude 以可重复的方式完成特定任务，比如使用公司品牌指南创建文档、
-              按照组织特定的工作流分析数据，或自动化个人任务。
+              {t('skills.help.overview.description')}
             </p>
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-folder"></span>
-              Skill 结构
+              {t('skills.help.structure.title')}
             </h4>
-            <p>一个 Skill 是包含 <code>SKILL.md</code> 文件的文件夹：</p>
+            <p>{t('skills.help.structure.description')}</p>
             <pre className="code-block">
-{`my-skill/
-├── SKILL.md          # 必须：技能定义文件
-├── templates/        # 可选：模板文件
-└── references/       # 可选：参考资料`}
+{t('skills.help.structure.example')}
             </pre>
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-file-code"></span>
-              SKILL.md 格式
+              {t('skills.help.format.title')}
             </h4>
-            <p>SKILL.md 文件使用 YAML frontmatter + Markdown 格式：</p>
+            <p>{t('skills.help.format.description')}</p>
             <pre className="code-block">
-{`---
-name: my-skill-name
-description: 技能描述和使用时机
----
-
-# 技能指令
-
-详细的指令内容...`}
+{t('skills.help.format.example')}
             </pre>
             <p className="hint-text">
-              <code>name</code> 和 <code>description</code> 是必填字段，
-              可选字段包括 <code>license</code>、<code>allowed-tools</code>、<code>metadata</code>
+              {t('skills.help.format.hint')}
             </p>
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-gear"></span>
-              配置方式
+              {t('skills.help.configuration.title')}
             </h4>
-            <p>添加 Skill 的方式：</p>
+            <p>{t('skills.help.configuration.description')}</p>
             <ul>
               <li>
-                <strong>本地路径</strong>：指定包含 <code>SKILL.md</code> 的文件夹路径
+                <strong>{t('skills.help.configuration.localPath.label')}</strong>：{t('skills.help.configuration.localPath.description')}
               </li>
               <li>
-                <strong>相对路径</strong>：相对于项目根目录，如 <code>./skills/my-skill</code>
+                <strong>{t('skills.help.configuration.relativePath.label')}</strong>：{t('skills.help.configuration.relativePath.description')}
               </li>
               <li>
-                <strong>绝对路径</strong>：完整的文件系统路径
+                <strong>{t('skills.help.configuration.absolutePath.label')}</strong>：{t('skills.help.configuration.absolutePath.description')}
               </li>
             </ul>
           </section>
@@ -108,30 +97,30 @@ description: 技能描述和使用时机
           <section className="help-section">
             <h4>
               <span className="codicon codicon-lightbulb"></span>
-              使用提示
+              {t('skills.help.tips.title')}
             </h4>
             <ul>
-              <li>确保 Skill 目录包含有效的 <code>SKILL.md</code> 文件</li>
-              <li>Skill 名称必须使用小写字母、数字和连字符（hyphen-case）</li>
-              <li>Skill 加载后会在 Claude 会话中自动生效</li>
-              <li>可以通过启用/禁用开关控制单个 Skill 的状态</li>
-              <li>在聊天中提及 Skill 名称即可使用，如："使用 pdf skill 提取表单字段"</li>
+              <li>{t('skills.help.tips.item1')}</li>
+              <li>{t('skills.help.tips.item2')}</li>
+              <li>{t('skills.help.tips.item3')}</li>
+              <li>{t('skills.help.tips.item4')}</li>
+              <li>{t('skills.help.tips.item5')}</li>
             </ul>
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-link-external"></span>
-              了解更多
+              {t('skills.help.learnMore.title')}
             </h4>
-            <p>更多关于 Skills 的信息：</p>
+            <p>{t('skills.help.learnMore.description')}</p>
             <ul>
               <li>
                 <a
                   href="https://support.claude.com/en/articles/12512176-what-are-skills"
                   onClick={(e) => handleLinkClick(e, 'https://support.claude.com/en/articles/12512176-what-are-skills')}
                 >
-                  什么是 Skills?
+                  {t('skills.help.learnMore.link1')}
                 </a>
               </li>
               <li>
@@ -139,7 +128,7 @@ description: 技能描述和使用时机
                   href="https://support.claude.com/en/articles/12512198-creating-custom-skills"
                   onClick={(e) => handleLinkClick(e, 'https://support.claude.com/en/articles/12512198-creating-custom-skills')}
                 >
-                  如何创建自定义 Skills
+                  {t('skills.help.learnMore.link2')}
                 </a>
               </li>
               <li>
@@ -147,17 +136,17 @@ description: 技能描述和使用时机
                   href="https://github.com/anthropics/skills"
                   onClick={(e) => handleLinkClick(e, 'https://github.com/anthropics/skills')}
                 >
-                  Anthropic Skills 示例仓库
+                  {t('skills.help.learnMore.link3')}
                 </a>
               </li>
             </ul>
           </section>
         </div>
 
-        {/* 底部按钮 */}
+        {/* Footer */}
         <div className="dialog-footer">
           <button className="btn-primary" onClick={onClose}>
-            知道了
+            {t('mcp.help.gotIt')}
           </button>
         </div>
       </div>

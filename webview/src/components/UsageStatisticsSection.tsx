@@ -582,32 +582,34 @@ const UsageStatisticsSection = () => {
                           ))}
                         </div>
 
-                        {/* 柱状图 */}
-                        <div className="chart-bars">
-                          {filteredDailyUsage.map((day) => {
-                            const height = maxCost > 0 ? (day.cost / maxCost) * 100 : 0;
-                            return (
-                              <div key={day.date} className="chart-bar-wrapper">
-                                <div className="chart-bar-container">
-                                  <div
-                                    className="chart-bar"
-                                    style={{ height: `${height}%` }}
-                                    onMouseEnter={(e) => {
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      setTooltip({
-                                        visible: true,
-                                        x: rect.left + rect.width / 2,
-                                        y: rect.top,
-                                        content: { date: day.date, cost: day.cost, sessions: day.sessions }
-                                      });
-                                    }}
-                                    onMouseLeave={() => setTooltip(prev => ({ ...prev, visible: false }))}
-                                  />
+                        {/* 柱状图滚动区域 */}
+                        <div className="chart-scroll-view">
+                          <div className="chart-bars">
+                            {filteredDailyUsage.map((day) => {
+                              const height = maxCost > 0 ? (day.cost / maxCost) * 100 : 0;
+                              return (
+                                <div key={day.date} className="chart-bar-wrapper">
+                                  <div className="chart-bar-container">
+                                    <div
+                                      className="chart-bar"
+                                      style={{ height: `${height}%` }}
+                                      onMouseEnter={(e) => {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        setTooltip({
+                                          visible: true,
+                                          x: rect.left + rect.width / 2,
+                                          y: rect.top,
+                                          content: { date: day.date, cost: day.cost, sessions: day.sessions }
+                                        });
+                                      }}
+                                      onMouseLeave={() => setTooltip(prev => ({ ...prev, visible: false }))}
+                                    />
+                                  </div>
+                                  <div className="chart-label">{formatChineseDate(day.date)}</div>
                                 </div>
-                                <div className="chart-label">{formatChineseDate(day.date)}</div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     </div>
