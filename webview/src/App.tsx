@@ -1695,11 +1695,11 @@ const App = () => {
                               }
                             }}
                             style={{ cursor: 'pointer' }}
-                            title="点击预览大图"
+                            title={t('chat.clickToPreview')}
                           >
                             <img
                               src={block.src}
-                              alt="用户上传的图片"
+                              alt={t('chat.userUploadedImage')}
                               style={{
                                 maxWidth: message.type === 'user' ? '200px' : '100%',
                                 maxHeight: message.type === 'user' ? '150px' : 'auto',
@@ -1727,7 +1727,7 @@ const App = () => {
                             </div>
                             {isThinkingExpanded(messageIndex, blockIndex) && (
                               <div className="thinking-content">
-                                {block.thinking ?? block.text ?? '(无思考内容)'}
+                                {block.thinking ?? block.text ?? t('chat.noThinkingContent')}
                               </div>
                             )}
                           </div>

@@ -194,7 +194,7 @@ const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
           <button
             className="image-preview-close"
             onClick={() => setPreviewSrc(null)}
-            title="关闭预览"
+            title={t('chat.closePreview')}
           >
             ×
           </button>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Attachment, ChatInputBoxProps, CommandItem, FileItem, PermissionMode } from './types';
 import { ButtonArea } from './ButtonArea';
 import { AttachmentList } from './AttachmentList';
@@ -45,7 +46,7 @@ export const ChatInputBox = ({
   usageMaxTokens,
   showUsage = true,
   attachments: externalAttachments,
-  placeholder = '@引用文件，/唤起指令，shift + enter 换行',
+  placeholder = '',  // Will be passed from parent via t('chat.inputPlaceholder')
   disabled = false,
   value,
   onSubmit,
@@ -65,6 +66,8 @@ export const ChatInputBox = ({
   onAgentSelect,
   onOpenAgentSettings,
 }: ChatInputBoxProps) => {
+  const { t } = useTranslation();
+
   // 内部附件状态（如果外部未提供）
   const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
   const attachments = externalAttachments ?? internalAttachments;
@@ -1805,7 +1808,7 @@ export const ChatInputBox = ({
         items={fileCompletion.items}
         selectedIndex={fileCompletion.activeIndex}
         loading={fileCompletion.loading}
-        emptyText="无匹配文件"
+        emptyText={t('chat.noMatchingFiles')}
         onClose={fileCompletion.close}
         onSelect={(_, index) => fileCompletion.selectIndex(index)}
         onMouseEnter={fileCompletion.handleMouseEnter}
@@ -1819,7 +1822,7 @@ export const ChatInputBox = ({
         items={commandCompletion.items}
         selectedIndex={commandCompletion.activeIndex}
         loading={commandCompletion.loading}
-        emptyText="无匹配命令"
+        emptyText={t('chat.noMatchingCommands')}
         onClose={commandCompletion.close}
         onSelect={(_, index) => commandCompletion.selectIndex(index)}
         onMouseEnter={commandCompletion.handleMouseEnter}
@@ -1833,7 +1836,7 @@ export const ChatInputBox = ({
         items={agentCompletion.items}
         selectedIndex={agentCompletion.activeIndex}
         loading={agentCompletion.loading}
-        emptyText="无可用智能体"
+        emptyText={t('chat.noAvailableAgents')}
         onClose={agentCompletion.close}
         onSelect={(_, index) => agentCompletion.selectIndex(index)}
         onMouseEnter={agentCompletion.handleMouseEnter}
