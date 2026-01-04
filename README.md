@@ -28,17 +28,6 @@ Currently in experimental stage, the product is not yet complete. Code is update
 
 ### Current Progress
 
-##### **December 21 (v0.1.1)**
-
-- [x] Add font scaling feature
-- [x] Add DIFF comparison feature
-- [x] Add favorites feature
-- [x] Add title editing feature
-- [x] Add search history by title feature
-- [x] Fix alwaysThinkingEnabled configuration issue
-
----
-
 For more iteration progress, please read [CHANGELOG.md](CHANGELOG.md)
 
 ---
@@ -140,12 +129,17 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
     </td>
     <td align="center">
       <a href="https://github.com/lie5860">
-        <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="lie5860" style="border-radius: 50%;" />
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/buddhist-coder">
-        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="buddhist-coder" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/LaCreArthur">
+        <img src="https://avatars.githubusercontent.com/u/14138307?size=100" width="100" height="100" alt="LaCreArthur" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>

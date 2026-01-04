@@ -1,3 +1,12 @@
+##### **2026年1月4日（v0.1.4-beta4）**
+
+- [x] P0（feat）支持从CLI登录状态下进行提问的功能（初版） #LaCreArthur
+- [x] P1（feat）读取IDEA语言信息，自动本地化 & 完善本地化细节
+- [x] P1（feat）提交MCP服务器支持开启关闭的功能
+- [x] P1（feat）增加/init 和 /review 斜杠内置命令 & 优化首次加载斜杠指令逻辑 & 优化部分UI细节
+- [x] P2（feat）适配Ask User Question功能
+- [x] P3（feat）UI字体获取编辑器的字体回落 #gadfly3173
+
 ##### **2026年1月2日（v0.1.4-beta3）**
 
 - [x] P0（feat）实现初版Agent智能体功能（提示词注入）

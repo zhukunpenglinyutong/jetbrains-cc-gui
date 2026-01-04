@@ -68,7 +68,8 @@
         "english": "English",
         "hindi": "हिन्दी",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "japanese": "日本語"
       },
       "nodePath": {
         "label": "Ruta de Node.js",

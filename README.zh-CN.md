@@ -28,17 +28,6 @@
 
 ### 目前进度
 
-##### **12月21日（v0.1.1）**
-
-- [x] 增加字体缩放功能
-- [x] 增加DIFF对比功能
-- [x] 增加收藏功能
-- [x] 增加修改标题功能
-- [x] 增加根据标题搜索历史记录功能
-- [x] 修复 alwaysThinkingEnabled 失效问题
-
----
-
 更多迭代进度请阅读 [CHANGELOG.md](CHANGELOG.md)
 
 ---
@@ -140,12 +129,17 @@ AGPL-3.0
     </td>
     <td align="center">
       <a href="https://github.com/lie5860">
-        <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="lie5860" style="border-radius: 50%;" />
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/buddhist-coder">
-        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="buddhist-coder" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/LaCreArthur">
+        <img src="https://avatars.githubusercontent.com/u/14138307?size=100" width="100" height="100" alt="LaCreArthur" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>
