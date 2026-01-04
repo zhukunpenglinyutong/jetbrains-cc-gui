@@ -1,6 +1,6 @@
-##### **2026年1月4日（v0.1.4-beta4）**
+##### **2026年1月4日（v0.1.4-beta5）**
 
-**English:**
+English:
 - [x] P0 (feat) Support asking questions from CLI login state (initial) #LaCreArthur
 - [x] P1 (feat) Auto-localization based on IDEA language settings
 - [x] P1 (improve) Refine localization text details
@@ -11,7 +11,7 @@
 - [x] P2 (feat) Support Ask User Question feature
 - [x] P3 (improve) Fallback UI font to editor font #gadfly3173
 
-**中文:**
+中文:
 - [x] P0（feat）支持从 CLI 登录状态下进行提问的功能（初版） #LaCreArthur
 - [x] P1（feat）读取 IDEA 语言信息，自动本地化
 - [x] P1（improve）完善本地化文案细节
