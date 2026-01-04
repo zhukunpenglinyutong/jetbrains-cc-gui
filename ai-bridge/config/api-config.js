@@ -3,7 +3,7 @@
  * 负责加载和管理 Claude API 配置
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -17,6 +17,42 @@ export function loadClaudeSettings() {
     return settings;
   } catch (error) {
     return null;
+  }
+}
+
+/**
+ * 检查是否存在有效的 Claude CLI 会话认证
+ * 通过检查 ~/.claude/.credentials.json 文件来判断用户是否已通过 'claude login' 登录
+ *
+ * @returns {boolean} 如果存在有效的CLI会话凭证返回true，否则返回false
+ */
+export function hasCliSessionAuth() {
+  try {
+    const credentialsPath = join(homedir(), '.claude', '.credentials.json');
+
+    // 检查凭证文件是否存在
+    if (!existsSync(credentialsPath)) {
+      console.log('[DEBUG] No CLI session found: .credentials.json does not exist');
+      return false;
+    }
+
+    // 读取并解析凭证文件
+    const credentials = JSON.parse(readFileSync(credentialsPath, 'utf8'));
+
+    // 验证是否存在有效的 OAuth access token
+    const hasValidToken = credentials?.claudeAiOauth?.accessToken &&
+                         credentials.claudeAiOauth.accessToken.length > 0;
+
+    if (hasValidToken) {
+      console.log('[DEBUG] Valid CLI session found with access token');
+      return true;
+    } else {
+      console.log('[DEBUG] CLI credentials file exists but no valid access token found');
+      return false;
+    }
+  } catch (error) {
+    console.log('[DEBUG] Failed to check CLI session:', error.message);
+    return false;
   }
 }
 
@@ -58,9 +94,35 @@ export function setupApiKey() {
     baseUrlSource = 'settings.json';
   }
 
+  // 如果没有配置 API Key，检查是否存在 CLI 会话认证
   if (!apiKey) {
-    console.error('[ERROR] API Key not configured. Please set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in ~/.claude/settings.json');
-    throw new Error('API Key not configured');
+    console.log('[DEBUG] No API Key found in settings.json, checking for CLI session...');
+
+    if (hasCliSessionAuth()) {
+      // 使用 CLI 会话认证
+      console.log('[INFO] Using CLI session authentication (claude login)');
+      authType = 'cli_session';
+      apiKeySource = 'CLI session (~/.claude/.credentials.json)';
+
+      // 清除所有 API Key 相关的环境变量，让 SDK 自动检测 CLI 会话
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.ANTHROPIC_AUTH_TOKEN;
+
+      // 设置 baseUrl (如果配置了)
+      if (baseUrl) {
+        process.env.ANTHROPIC_BASE_URL = baseUrl;
+      }
+
+      console.log('[DEBUG] Auth type:', authType);
+      return { apiKey: null, baseUrl, authType, apiKeySource, baseUrlSource };
+    } else {
+      // 既没有 API Key 也没有 CLI 会话
+      console.error('[ERROR] API Key not configured and no CLI session found.');
+      console.error('[ERROR] Please either:');
+      console.error('[ERROR]   1. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in ~/.claude/settings.json');
+      console.error('[ERROR]   2. Run "claude login" to authenticate via CLI');
+      throw new Error('API Key not configured and no CLI session found');
+    }
   }
 
   // 根据认证类型设置对应的环境变量
