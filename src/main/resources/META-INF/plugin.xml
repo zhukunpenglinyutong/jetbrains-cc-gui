@@ -3,6 +3,9 @@
     <name>Claude Code GUI</name>
     <vendor>CodeMossAI</vendor>
 
+    <!-- Resource bundle for i18n -->
+    <resource-bundle>messages.ClaudeCodeGuiBundle</resource-bundle>
+
     <description><![CDATA[
         <p><strong>Claude Code GUI</strong> - A powerful AI assistant and productivity tool that brings Claude Code capabilities with an intuitive graphical interface directly into IntelliJ IDEA.</p>
 
@@ -41,8 +44,6 @@
         <!-- 发送选中代码到终端的Action -->
         <action id="ClaudeCodeGUI.SendSelectionToTerminalAction"
                 class="com.github.claudecodegui.SendSelectionToTerminalAction"
-                text="发送选中代码到GUI插件"
-                description="将当前选中的代码信息和路径发送到终端窗口"
                 icon="/icons/send-to-terminal.svg">
             <!-- 添加到编辑器右键菜单（显示在最上面） -->
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>

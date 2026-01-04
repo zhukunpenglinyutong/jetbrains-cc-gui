@@ -88,6 +88,7 @@ const BasicConfigSection = ({
     { value: 'hi', label: 'settings.basic.language.hindi' },
     { value: 'es', label: 'settings.basic.language.spanish' },
     { value: 'fr', label: 'settings.basic.language.french' },
+    { value: 'ja', label: 'settings.basic.language.japanese' },
   ];
 
   // 切换语言

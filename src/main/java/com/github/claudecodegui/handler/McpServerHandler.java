@@ -148,7 +148,8 @@ public class McpServerHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to add MCP server: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("添加 MCP 服务器失败: " + e.getMessage()));
+                String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.addServerFailedWithReason", e.getMessage()));
+                callJavaScript("window.showError", errorMsg);
             });
         }
     }
@@ -170,7 +171,8 @@ public class McpServerHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to update MCP server: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("更新 MCP 服务器失败: " + e.getMessage()));
+                String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.updateServerFailedWithReason", e.getMessage()));
+                callJavaScript("window.showError", errorMsg);
             });
         }
     }
@@ -193,13 +195,15 @@ public class McpServerHandler extends BaseMessageHandler {
                 });
             } else {
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("window.showError", escapeJs("删除 MCP 服务器失败: 服务器不存在"));
+                    String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.deleteServerFailedWithReason", com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.serverNotFound")));
+                    callJavaScript("window.showError", errorMsg);
                 });
             }
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to delete MCP server: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("删除 MCP 服务器失败: " + e.getMessage()));
+                String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.deleteServerFailedWithReason", e.getMessage()));
+                callJavaScript("window.showError", errorMsg);
             });
         }
     }

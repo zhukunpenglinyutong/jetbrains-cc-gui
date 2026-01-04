@@ -3,6 +3,7 @@ import App from './App';
 import './codicon.css';
 import './styles/app.less';
 import './i18n/config';
+import i18n from './i18n/config';
 import { setupSlashCommandsCallback } from './components/ChatInputBox/providers/slashCommandProvider';
 import { sendBridgeEvent } from './utils/bridge';
 
@@ -60,6 +61,40 @@ if (window.__pendingFontConfig) {
   console.log('[Main] Found pending font config, applying...');
   applyFontConfig(window.__pendingFontConfig);
   delete window.__pendingFontConfig;
+}
+
+/**
+ * 应用 IDEA 语言配置到 i18n
+ */
+function applyLanguageConfig(config: { language: string; ideaLocale?: string }) {
+  const { language } = config;
+
+  // 验证语言代码是否支持
+  const supportedLanguages = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja'];
+  const targetLanguage = supportedLanguages.includes(language) ? language : 'en';
+
+  console.log('[Main] Applying IDEA language config:', config, 'target language:', targetLanguage);
+
+  // 切换 i18n 语言
+  i18n.changeLanguage(targetLanguage)
+    .then(() => {
+      // 保存到 localStorage，以便下次启动时使用
+      localStorage.setItem('language', targetLanguage);
+      console.log('[Main] Language changed successfully to:', targetLanguage);
+    })
+    .catch((error) => {
+      console.error('[Main] Failed to change language:', error);
+    });
+}
+
+// 注册 applyIdeaLanguageConfig 函数
+window.applyIdeaLanguageConfig = applyLanguageConfig;
+
+// 检查是否有待处理的语言配置（Java 端可能先于 JS 执行）
+if (window.__pendingLanguageConfig) {
+  console.log('[Main] Found pending language config, applying...');
+  applyLanguageConfig(window.__pendingLanguageConfig);
+  delete window.__pendingLanguageConfig;
 }
 
 // 预注册 updateSlashCommands，避免后端调用早于 React 初始化

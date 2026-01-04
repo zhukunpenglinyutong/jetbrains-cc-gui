@@ -304,7 +304,7 @@ public class ProviderHandler extends BaseMessageHandler {
             context.getSettingsService().applyActiveProviderToClaudeSettings();
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showSwitchSuccess", escapeJs("供应商切换成功！\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
+                callJavaScript("window.showSwitchSuccess", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + "\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
                 handleGetProviders(); // 刷新供应商列表
                 handleGetCurrentClaudeConfig(); // 刷新 Claude CLI 配置显示
                 handleGetActiveProvider(); // 刷新当前激活的供应商配置
@@ -312,7 +312,7 @@ public class ProviderHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to switch provider: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("切换供应商失败: " + e.getMessage()));
+                callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchFailed") + ": " + e.getMessage()));
             });
         }
     }
@@ -459,9 +459,9 @@ public class ProviderHandler extends BaseMessageHandler {
                 }
 
                 if (!dbFile.canRead()) {
-                    String errorMsg = "无法读取文件\n" +
+                    String errorMsg = com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.cannotReadFile") + "\n" +
                                      "路径: " + dbFile.getAbsolutePath() + "\n" +
-                                     "请检查文件权限";
+                                     com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.checkFilePermissions");
                     LOG.error("[ProviderHandler] " + errorMsg);
                     sendErrorToFrontend("权限错误", errorMsg);
                     return;
