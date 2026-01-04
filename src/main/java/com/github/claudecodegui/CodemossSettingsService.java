@@ -325,8 +325,16 @@ public class CodemossSettingsService {
         return mcpServerManager.getMcpServers();
     }
 
+    public List<JsonObject> getMcpServersWithProjectPath(String projectPath) throws IOException {
+        return mcpServerManager.getMcpServersWithProjectPath(projectPath);
+    }
+
     public void upsertMcpServer(JsonObject server) throws IOException {
         mcpServerManager.upsertMcpServer(server);
+    }
+
+    public void upsertMcpServer(JsonObject server, String projectPath) throws IOException {
+        mcpServerManager.upsertMcpServer(server, projectPath);
     }
 
     public boolean deleteMcpServer(String serverId) throws IOException {

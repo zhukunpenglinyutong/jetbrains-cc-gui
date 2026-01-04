@@ -277,6 +277,15 @@
     "allowAlways": "總是允許",
     "deny": "拒絕"
   },
+  "askUserQuestion": {
+    "title": "Claude 有一些問題想問你",
+    "progress": "問題 {{current}} / {{total}}",
+    "multiSelectHint": "可以選擇多個選項",
+    "cancel": "AI自動選擇",
+    "back": "上一步",
+    "next": "下一步",
+    "submit": "提交"
+  },
   "toast": {
     "switchSuccess": "切換成功",
     "thinkingEnabled": "思考已開啟",

@@ -7,6 +7,7 @@ import SettingsView from './components/settings';
 import type { SettingsTab } from './components/settings/SettingsSidebar';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
+import AskUserQuestionDialog, { type AskUserQuestionRequest } from './components/AskUserQuestionDialog';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
 import type { Attachment, PermissionMode, SelectedAgent } from './components/ChatInputBox/types';
@@ -85,6 +86,10 @@ const App = () => {
   // 权限弹窗状态
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
   const [currentPermissionRequest, setCurrentPermissionRequest] = useState<PermissionRequest | null>(null);
+
+  // AskUserQuestion 弹窗状态
+  const [askUserQuestionDialogOpen, setAskUserQuestionDialogOpen] = useState(false);
+  const [currentAskUserQuestionRequest, setCurrentAskUserQuestionRequest] = useState<AskUserQuestionRequest | null>(null);
 
   // ChatInputBox 相关状态
   const [currentProvider, setCurrentProvider] = useState('claude');
@@ -553,6 +558,23 @@ const App = () => {
       }
     };
 
+    // AskUserQuestion 弹窗回调
+    window.showAskUserQuestionDialog = (json) => {
+      console.log('[ASK_USER_QUESTION][FRONTEND] showAskUserQuestionDialog called');
+      console.log('[ASK_USER_QUESTION][FRONTEND] Raw JSON:', json);
+      try {
+        const request = JSON.parse(json) as AskUserQuestionRequest;
+        console.log('[ASK_USER_QUESTION][FRONTEND] Parsed request:', request);
+        console.log('[ASK_USER_QUESTION][FRONTEND] requestId:', request.requestId);
+        console.log('[ASK_USER_QUESTION][FRONTEND] questions count:', request.questions?.length);
+        setCurrentAskUserQuestionRequest(request);
+        setAskUserQuestionDialogOpen(true);
+        console.log('[ASK_USER_QUESTION][FRONTEND] Dialog state set to open');
+      } catch (error) {
+        console.error('[ASK_USER_QUESTION][FRONTEND] ERROR: Failed to parse request:', error);
+      }
+    };
+
     // 【自动监听】更新 ContextBar（上面灰色条）- 由自动监听器调用
     window.addSelectionInfo = (selectionInfo) => {
       console.log('[Frontend] addSelectionInfo (auto) called:', selectionInfo);
@@ -1014,6 +1036,42 @@ const App = () => {
     console.log('[PERM_DEBUG][FRONTEND] Decision sent, closing dialog');
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
+  };
+
+  /**
+   * 处理 AskUserQuestion 提交
+   */
+  const handleAskUserQuestionSubmit = (requestId: string, answers: Record<string, string>) => {
+    console.log('[ASK_USER_QUESTION][FRONTEND] handleAskUserQuestionSubmit called');
+    console.log('[ASK_USER_QUESTION][FRONTEND] requestId:', requestId);
+    console.log('[ASK_USER_QUESTION][FRONTEND] answers:', answers);
+    const payload = JSON.stringify({
+      requestId,
+      answers,
+    });
+    console.log('[ASK_USER_QUESTION][FRONTEND] Sending response payload:', payload);
+    sendBridgeMessage('ask_user_question_response', payload);
+    console.log('[ASK_USER_QUESTION][FRONTEND] Response sent, closing dialog');
+    setAskUserQuestionDialogOpen(false);
+    setCurrentAskUserQuestionRequest(null);
+  };
+
+  /**
+   * 处理 AskUserQuestion 取消
+   */
+  const handleAskUserQuestionCancel = (requestId: string) => {
+    console.log('[ASK_USER_QUESTION][FRONTEND] handleAskUserQuestionCancel called');
+    console.log('[ASK_USER_QUESTION][FRONTEND] requestId:', requestId);
+    // 发送空答案表示用户取消
+    const payload = JSON.stringify({
+      requestId,
+      answers: {},
+    });
+    console.log('[ASK_USER_QUESTION][FRONTEND] Sending cancel payload:', payload);
+    sendBridgeMessage('ask_user_question_response', payload);
+    console.log('[ASK_USER_QUESTION][FRONTEND] Cancel sent, closing dialog');
+    setAskUserQuestionDialogOpen(false);
+    setCurrentAskUserQuestionRequest(null);
   };
 
   /**
@@ -1806,6 +1864,13 @@ const App = () => {
         onApprove={handlePermissionApprove}
         onSkip={handlePermissionSkip}
         onApproveAlways={handlePermissionApproveAlways}
+      />
+
+      <AskUserQuestionDialog
+        isOpen={askUserQuestionDialogOpen}
+        request={currentAskUserQuestionRequest}
+        onSubmit={handleAskUserQuestionSubmit}
+        onCancel={handleAskUserQuestionCancel}
       />
     </>
   );

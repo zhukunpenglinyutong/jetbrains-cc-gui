@@ -277,6 +277,15 @@
     "allowAlways": "हमेशा अनुमति दें",
     "deny": "अस्वीकार करें"
   },
+  "askUserQuestion": {
+    "title": "Claude के पास आपके लिए कुछ प्रश्न हैं",
+    "progress": "प्रश्न {{current}} / {{total}}",
+    "multiSelectHint": "आप एकाधिक विकल्प चुन सकते हैं",
+    "cancel": "AI स्वचालित चयन",
+    "back": "पीछे",
+    "next": "आगे",
+    "submit": "सबमिट करें"
+  },
   "toast": {
     "switchSuccess": "स्विच सफल",
     "thinkingEnabled": "Thinking enabled",

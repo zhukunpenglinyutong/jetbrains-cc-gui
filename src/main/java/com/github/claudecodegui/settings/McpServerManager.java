@@ -48,8 +48,18 @@ public class McpServerManager {
      * 获取所有 MCP 服务器
      * 优先从 ~/.claude.json 读取(Claude CLI 标准位置)
      * 回退到 ~/.codemoss/config.json
+     *
+     * 注意: Claude CLI 会合并全局和项目级别的 disabledMcpServers
      */
     public List<JsonObject> getMcpServers() throws IOException {
+        return getMcpServersWithProjectPath(null);
+    }
+
+    /**
+     * 获取所有 MCP 服务器（支持项目路径）
+     * @param projectPath 项目路径，用于读取项目级别的禁用列表
+     */
+    public List<JsonObject> getMcpServersWithProjectPath(String projectPath) throws IOException {
         List<JsonObject> result = new ArrayList<>();
 
         // 1. 尝试从 ~/.claude.json 读取(Claude CLI 标准位置)
@@ -65,13 +75,31 @@ public class McpServerManager {
                     if (claudeJson.has("mcpServers") && claudeJson.get("mcpServers").isJsonObject()) {
                         JsonObject mcpServers = claudeJson.getAsJsonObject("mcpServers");
 
-                        // 读取禁用的服务器列表
+                        // 读取全局禁用的服务器列表
                         Set<String> disabledServers = new HashSet<>();
                         if (claudeJson.has("disabledMcpServers") && claudeJson.get("disabledMcpServers").isJsonArray()) {
                             JsonArray disabledArray = claudeJson.getAsJsonArray("disabledMcpServers");
                             for (JsonElement elem : disabledArray) {
                                 if (elem.isJsonPrimitive()) {
                                     disabledServers.add(elem.getAsString());
+                                }
+                            }
+                        }
+
+                        // 读取项目级别禁用的服务器列表（如果提供了项目路径）
+                        if (projectPath != null && claudeJson.has("projects")) {
+                            JsonObject projects = claudeJson.getAsJsonObject("projects");
+                            if (projects.has(projectPath)) {
+                                JsonObject projectConfig = projects.getAsJsonObject(projectPath);
+                                if (projectConfig.has("disabledMcpServers")
+                                        && projectConfig.get("disabledMcpServers").isJsonArray()) {
+                                    JsonArray projectDisabledArray = projectConfig.getAsJsonArray("disabledMcpServers");
+                                    for (JsonElement elem : projectDisabledArray) {
+                                        if (elem.isJsonPrimitive()) {
+                                            disabledServers.add(elem.getAsString());
+                                        }
+                                    }
+                                    LOG.info("[McpServerManager] Merged project-level disabled servers from: " + projectPath);
                                 }
                             }
                         }
@@ -114,7 +142,7 @@ public class McpServerManager {
                                     server.add("server", serverSpec);
                                 }
 
-                                // 设置启用/禁用状态
+                                // 设置启用/禁用状态（合并全局和项目级别）
                                 boolean isEnabled = !disabledServers.contains(serverId);
                                 server.addProperty("enabled", isEnabled);
 
@@ -122,7 +150,8 @@ public class McpServerManager {
                             }
                         }
 
-                        LOG.info("[McpServerManager] Loaded " + result.size() + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
+                        LOG.info("[McpServerManager] Loaded " + result.size()
+                            + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
                         return result;
                     }
                 } catch (Exception e) {
@@ -154,6 +183,14 @@ public class McpServerManager {
      * 回退到 ~/.codemoss/config.json
      */
     public void upsertMcpServer(JsonObject server) throws IOException {
+        upsertMcpServer(server, null);
+    }
+
+    /**
+     * 更新或插入 MCP 服务器（支持项目路径）
+     * @param projectPath 项目路径，用于更新项目级别 disabledMcpServers（Claude CLI 会合并全局和项目级别禁用列表）
+     */
+    public void upsertMcpServer(JsonObject server, String projectPath) throws IOException {
         if (!server.has("id")) {
             throw new IllegalArgumentException("Server must have an id");
         }
@@ -194,31 +231,71 @@ public class McpServerManager {
                     }
                     JsonArray disabledArray = claudeJson.getAsJsonArray("disabledMcpServers");
 
-                    // 移除旧的禁用状态
-                    JsonArray newDisabled = new JsonArray();
-                    for (JsonElement elem : disabledArray) {
-                        if (!elem.getAsString().equals(serverId)) {
-                            newDisabled.add(elem);
+                    if (projectPath == null) {
+                        JsonArray newDisabled = new JsonArray();
+                        for (JsonElement elem : disabledArray) {
+                            if (!elem.getAsString().equals(serverId)) {
+                                newDisabled.add(elem);
+                            }
                         }
+                        if (!isEnabled) {
+                            newDisabled.add(serverId);
+                        }
+                        claudeJson.add("disabledMcpServers", newDisabled);
+                    } else if (isEnabled) {
+                        JsonArray newDisabled = new JsonArray();
+                        for (JsonElement elem : disabledArray) {
+                            if (!elem.getAsString().equals(serverId)) {
+                                newDisabled.add(elem);
+                            }
+                        }
+                        claudeJson.add("disabledMcpServers", newDisabled);
                     }
 
-                    // 如果禁用,添加到禁用列表
-                    if (!isEnabled) {
-                        newDisabled.add(serverId);
-                    }
+                    if (projectPath != null) {
+                        if (!claudeJson.has("projects") || !claudeJson.get("projects").isJsonObject()) {
+                            claudeJson.add("projects", new JsonObject());
+                        }
+                        JsonObject projects = claudeJson.getAsJsonObject("projects");
+                        if (!projects.has(projectPath) || !projects.get(projectPath).isJsonObject()) {
+                            projects.add(projectPath, new JsonObject());
+                        }
+                        JsonObject projectConfig = projects.getAsJsonObject(projectPath);
+                        if (!projectConfig.has("disabledMcpServers") || !projectConfig.get("disabledMcpServers").isJsonArray()) {
+                            projectConfig.add("disabledMcpServers", new JsonArray());
+                        }
+                        JsonArray projectDisabledArray = projectConfig.getAsJsonArray("disabledMcpServers");
 
-                    claudeJson.add("disabledMcpServers", newDisabled);
+                        JsonArray newProjectDisabled = new JsonArray();
+                        for (JsonElement elem : projectDisabledArray) {
+                            if (!elem.getAsString().equals(serverId)) {
+                                newProjectDisabled.add(elem);
+                            }
+                        }
+                        if (!isEnabled) {
+                            newProjectDisabled.add(serverId);
+                        }
+                        projectConfig.add("disabledMcpServers", newProjectDisabled);
+                    }
 
                     // 写回文件
                     try (FileWriter writer = new FileWriter(claudeJsonFile)) {
                         gson.toJson(claudeJson, writer);
-                        LOG.info("[McpServerManager] Upserted MCP server in ~/.claude.json: " + serverId + " (enabled: " + isEnabled + ")");
-
-                        // 同步到 settings.json
-                        claudeSettingsManager.syncMcpToClaudeSettings();
-
-                        return;
+                        writer.flush();  // 确保数据完全写入磁盘
                     }
+
+                    LOG.info("[McpServerManager] Upserted MCP server in ~/.claude.json: " + serverId
+                        + " (enabled: " + isEnabled + ", projectPath: " + (projectPath != null ? projectPath : "(global)") + ")");
+
+                    // 同步到 settings.json（在文件写入完成后）
+                    try {
+                        claudeSettingsManager.syncMcpToClaudeSettings();
+                    } catch (Exception syncError) {
+                        LOG.warn("[McpServerManager] Failed to sync MCP to settings.json: " + syncError.getMessage());
+                        // 同步失败不应该影响主操作
+                    }
+
+                    return;
                 }
             }
         } catch (Exception e) {
@@ -296,14 +373,20 @@ public class McpServerManager {
                             // 写回文件
                             try (FileWriter writer = new FileWriter(claudeJsonFile)) {
                                 gson.toJson(claudeJson, writer);
-                                LOG.info("[McpServerManager] Deleted MCP server from ~/.claude.json: " + serverId);
-
-                                // 同步到 settings.json
-                                claudeSettingsManager.syncMcpToClaudeSettings();
-
-                                removed = true;
-                                return true;
+                                writer.flush();  // 确保数据完全写入磁盘
                             }
+
+                            LOG.info("[McpServerManager] Deleted MCP server from ~/.claude.json: " + serverId);
+
+                            // 同步到 settings.json（在文件写入完成后）
+                            try {
+                                claudeSettingsManager.syncMcpToClaudeSettings();
+                            } catch (Exception syncError) {
+                                LOG.warn("[McpServerManager] Failed to sync MCP to settings.json: " + syncError.getMessage());
+                            }
+
+                            removed = true;
+                            return true;
                         }
                     }
                 }
