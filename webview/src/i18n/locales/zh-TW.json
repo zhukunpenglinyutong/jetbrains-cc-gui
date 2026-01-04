@@ -68,7 +68,8 @@
         "english": "English",
         "hindi": "हिन्दी",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "japanese": "日本語"
       },
       "nodePath": {
         "label": "Node.js 路徑",
@@ -275,7 +276,20 @@
     "dialogTitle": "權限請求",
     "allow": "允許一次",
     "allowAlways": "總是允許",
-    "deny": "拒絕"
+    "deny": "拒絕",
+    "fromExternalProcess": "來自外部處理程序的請求",
+    "tools": {
+      "Write": "寫入檔案",
+      "Edit": "編輯檔案",
+      "Read": "讀取檔案",
+      "Bash": "執行命令",
+      "TodoWrite": "寫入待辦",
+      "TodoRead": "讀取待辦",
+      "WebSearch": "網頁搜尋",
+      "WebFetch": "獲取網頁",
+      "execute": "執行 {{toolName}}",
+      "readDirectory": "讀取目錄"
+    }
   },
   "askUserQuestion": {
     "title": "Claude 有一些問題想問你",
@@ -294,7 +308,11 @@
     "deleteSuccess": "刪除成功",
     "operationFailed": "操作失敗",
     "copySuccess": "{{label}}已複製到剪貼簿",
-    "copyFailed": "複製失敗"
+    "copyFailed": "複製失敗",
+    "newSessionCreated": "新會話已建立",
+    "newSessionCreatedReady": "新會話已建立，可以開始提問",
+    "providerSwitchSuccess": "供應商切換成功！",
+    "providerSwitchFailed": "切換供應商失敗"
   },
   "config": {
     "clickToCopy": "點選複製",
@@ -414,7 +432,9 @@
     "refreshFileInIdeaSuccess": "已手動重新整理本檔案在 IDEA 中的內容",
     "showDiffInIdea": "在 IDEA 中顯示變更",
     "diffButton": "Diff",
-    "editPrefix": "編輯: {{fileName}}"
+    "editPrefix": "編輯: {{fileName}}",
+    "lineRange": "第 {{start}}-{{end}} 行",
+    "filePath": "檔案路徑："
   },
   "skills": {
     "title": "Skills",

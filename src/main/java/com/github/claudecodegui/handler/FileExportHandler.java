@@ -40,11 +40,11 @@ public class FileExportHandler extends BaseMessageHandler {
     public boolean handle(String type, String content) {
         if ("save_markdown".equals(type)) {
             LOG.info("[FileExportHandler] 处理: save_markdown");
-            handleSaveFile(content, ".md", "保存 Markdown 文件");
+            handleSaveFile(content, ".md", com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saveMarkdownDialog"));
             return true;
         } else if ("save_json".equals(type)) {
             LOG.info("[FileExportHandler] 处理: save_json");
-            handleSaveFile(content, ".json", "保存 JSON 文件");
+            handleSaveFile(content, ".json", com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saveJsonDialog"));
             return true;
         }
         return false;
@@ -110,8 +110,9 @@ public class FileExportHandler extends BaseMessageHandler {
 
                                 // 通知前端成功
                                 ApplicationManager.getApplication().invokeLater(() -> {
+                                    String successMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saved"));
                                     String jsCode = "if (window.addToast) { " +
-                                        "  window.addToast('文件已保存', 'success'); " +
+                                        "  window.addToast('" + successMsg + "', 'success'); " +
                                         "}";
                                     context.executeJavaScriptOnEDT(jsCode);
                                 });
@@ -121,9 +122,10 @@ public class FileExportHandler extends BaseMessageHandler {
 
                                 // 通知前端失败
                                 ApplicationManager.getApplication().invokeLater(() -> {
-                                    String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "保存失败");
+                                    String errorDetail = e.getMessage() != null ? e.getMessage() : com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saveFailed");
+                                    String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saveFailedWithReason", errorDetail));
                                     String jsCode = "if (window.addToast) { " +
-                                        "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +
+                                        "  window.addToast('" + errorMsg + "', 'error'); " +
                                         "}";
                                     context.executeJavaScriptOnEDT(jsCode);
                                 });
@@ -135,9 +137,10 @@ public class FileExportHandler extends BaseMessageHandler {
                 } catch (Exception e) {
                     LOG.error("[FileExportHandler] ❌ 显示对话框失败: " + e.getMessage(), e);
 
-                    String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "显示对话框失败");
+                    String errorDetail = e.getMessage() != null ? e.getMessage() : com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.showDialogFailed");
+                    String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saveFailedWithReason", errorDetail));
                     String jsCode = "if (window.addToast) { " +
-                        "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +
+                        "  window.addToast('" + errorMsg + "', 'error'); " +
                         "}";
                     context.executeJavaScriptOnEDT(jsCode);
                 }
@@ -149,9 +152,10 @@ public class FileExportHandler extends BaseMessageHandler {
             LOG.error("[FileExportHandler] ❌ 处理保存请求失败: " + e.getMessage(), e);
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
+                String errorDetail = e.getMessage() != null ? e.getMessage() : com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.unknownError");
+                String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saveFailedWithReason", errorDetail));
                 String jsCode = "if (window.addToast) { " +
-                    "  window.addToast('保存失败: " + errorMsg + "', 'error'); " +
+                    "  window.addToast('" + errorMsg + "', 'error'); " +
                     "}";
                 context.executeJavaScriptOnEDT(jsCode);
             });

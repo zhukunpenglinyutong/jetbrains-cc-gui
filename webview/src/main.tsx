@@ -3,6 +3,7 @@ import App from './App';
 import './codicon.css';
 import './styles/app.less';
 import './i18n/config';
+import i18n from './i18n/config';
 import { setupSlashCommandsCallback } from './components/ChatInputBox/providers/slashCommandProvider';
 import { sendBridgeEvent } from './utils/bridge';
 
@@ -27,17 +28,29 @@ if (enableVConsole) {
 /**
  * 应用 IDEA 编辑器字体配置到 CSS 变量
  */
-function applyFontConfig(config: { fontFamily: string; fontSize: number; lineSpacing: number }) {
+function applyFontConfig(config: { fontFamily: string; fontSize: number; lineSpacing: number; fallbackFonts?: string[] }) {
   const root = document.documentElement;
 
-  // 构建字体族字符串，添加回退字体
-  const fontFamily = `'${config.fontFamily}', 'Consolas', monospace`;
+  // 构建字体族字符串，包含主字体、回落字体和系统默认回落
+  const fontParts: string[] = [`'${config.fontFamily}'`];
+
+  // 添加 IDEA 配置的回落字体
+  if (config.fallbackFonts && config.fallbackFonts.length > 0) {
+    for (const fallback of config.fallbackFonts) {
+      fontParts.push(`'${fallback}'`);
+    }
+  }
+
+  // 添加系统默认回落字体
+  fontParts.push("'Consolas'", 'monospace');
+
+  const fontFamily = fontParts.join(', ');
 
   root.style.setProperty('--idea-editor-font-family', fontFamily);
   root.style.setProperty('--idea-editor-font-size', `${config.fontSize}px`);
   root.style.setProperty('--idea-editor-line-spacing', String(config.lineSpacing));
 
-  console.log('[Main] Applied IDEA font config:', config);
+  console.log('[Main] Applied IDEA font config:', config, 'fontFamily CSS:', fontFamily);
 }
 
 // 注册 applyIdeaFontConfig 函数
@@ -48,6 +61,40 @@ if (window.__pendingFontConfig) {
   console.log('[Main] Found pending font config, applying...');
   applyFontConfig(window.__pendingFontConfig);
   delete window.__pendingFontConfig;
+}
+
+/**
+ * 应用 IDEA 语言配置到 i18n
+ */
+function applyLanguageConfig(config: { language: string; ideaLocale?: string }) {
+  const { language } = config;
+
+  // 验证语言代码是否支持
+  const supportedLanguages = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja'];
+  const targetLanguage = supportedLanguages.includes(language) ? language : 'en';
+
+  console.log('[Main] Applying IDEA language config:', config, 'target language:', targetLanguage);
+
+  // 切换 i18n 语言
+  i18n.changeLanguage(targetLanguage)
+    .then(() => {
+      // 保存到 localStorage，以便下次启动时使用
+      localStorage.setItem('language', targetLanguage);
+      console.log('[Main] Language changed successfully to:', targetLanguage);
+    })
+    .catch((error) => {
+      console.error('[Main] Failed to change language:', error);
+    });
+}
+
+// 注册 applyIdeaLanguageConfig 函数
+window.applyIdeaLanguageConfig = applyLanguageConfig;
+
+// 检查是否有待处理的语言配置（Java 端可能先于 JS 执行）
+if (window.__pendingLanguageConfig) {
+  console.log('[Main] Found pending language config, applying...');
+  applyLanguageConfig(window.__pendingLanguageConfig);
+  delete window.__pendingLanguageConfig;
 }
 
 // 预注册 updateSlashCommands，避免后端调用早于 React 初始化

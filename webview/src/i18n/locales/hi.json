@@ -68,7 +68,8 @@
         "english": "English",
         "hindi": "हिन्दी",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "japanese": "日本語"
       },
       "nodePath": {
         "label": "Node.js पथ",
@@ -275,7 +276,20 @@
     "dialogTitle": "अनुमति अनुरोध",
     "allow": "एक बार अनुमति दें",
     "allowAlways": "हमेशा अनुमति दें",
-    "deny": "अस्वीकार करें"
+    "deny": "अस्वीकार करें",
+    "fromExternalProcess": "बाहरी प्रक्रिया से अनुरोध",
+    "tools": {
+      "Write": "फ़ाइल लिखें",
+      "Edit": "फ़ाइल संपादित करें",
+      "Read": "फ़ाइल पढ़ें",
+      "Bash": "कमांड निष्पादित करें",
+      "TodoWrite": "कार्य लिखें",
+      "TodoRead": "कार्य पढ़ें",
+      "WebSearch": "वेब खोज",
+      "WebFetch": "वेब प्राप्त करें",
+      "execute": "{{toolName}} निष्पादित करें",
+      "readDirectory": "निर्देशिका पढ़ें"
+    }
   },
   "askUserQuestion": {
     "title": "Claude के पास आपके लिए कुछ प्रश्न हैं",
@@ -294,7 +308,11 @@
     "deleteSuccess": "हटाना सफल",
     "operationFailed": "ऑपरेशन विफल",
     "copySuccess": "{{label}} क्लिपबोर्ड पर कॉपी किया गया",
-    "copyFailed": "कॉपी विफल"
+    "copyFailed": "कॉपी विफल",
+    "newSessionCreated": "नया सत्र बनाया गया",
+    "newSessionCreatedReady": "नया सत्र बनाया गया, आप प्रश्न पूछना शुरू कर सकते हैं",
+    "providerSwitchSuccess": "प्रदाता सफलतापूर्वक स्विच किया गया!",
+    "providerSwitchFailed": "प्रदाता स्विच करने में विफल"
   },
   "config": {
     "clickToCopy": "कॉपी करने के लिए क्लिक करें",
@@ -414,7 +432,9 @@
     "refreshFileInIdeaSuccess": "इस फ़ाइल की सामग्री को IDEA में मैन्युअली रीफ्रेश किया गया",
     "showDiffInIdea": "IDEA में परिवर्तन दिखाएं",
     "diffButton": "Diff",
-    "editPrefix": "संपादित करें: {{fileName}}"
+    "editPrefix": "संपादित करें: {{fileName}}",
+    "lineRange": "पंक्तियाँ {{start}}-{{end}}",
+    "filePath": "फ़ाइल पथ:"
   },
   "skills": {
     "title": "Skills",

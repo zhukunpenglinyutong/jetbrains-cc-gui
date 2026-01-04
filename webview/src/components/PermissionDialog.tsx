@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface PermissionRequest {
   channelId: string;
@@ -117,19 +118,17 @@ const PermissionDialog = ({
     return '~';
   };
 
+  const { t } = useTranslation();
+
   // 工具名称映射到标题
   const getToolTitle = (toolName: string): string => {
-    const toolTitleMap: Record<string, string> = {
-      'Write': '写入文件',
-      'Edit': '编辑文件',
-      'Read': '读取文件',
-      'Bash': '执行命令',
-      'TodoWrite': '写入待办',
-      'TodoRead': '读取待办',
-      'WebSearch': '网页搜索',
-      'WebFetch': '获取网页',
-    };
-    return toolTitleMap[toolName] || `执行 ${toolName}`;
+    const key = `permission.tools.${toolName}`;
+    const translated = t(key);
+    // 如果翻译键不存在,返回默认模板
+    if (translated === key) {
+      return t('permission.tools.execute', { toolName });
+    }
+    return translated;
   };
 
   const commandContent = getCommandContent();
@@ -140,7 +139,7 @@ const PermissionDialog = ({
       <div className="permission-dialog-v3">
         {/* 标题区域 */}
         <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
-        <p className="permission-dialog-v3-subtitle">来自外部进程的请求</p>
+        <p className="permission-dialog-v3-subtitle">{t('permission.fromExternalProcess')}</p>
 
         {/* 命令/内容区域 */}
         <div className="permission-dialog-v3-command-box">

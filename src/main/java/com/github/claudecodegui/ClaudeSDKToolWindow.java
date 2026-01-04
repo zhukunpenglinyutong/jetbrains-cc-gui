@@ -10,6 +10,7 @@ import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.LanguageConfigService;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -573,6 +574,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         );
                         cefBrowser.executeJavaScript(fontConfigInjection, cefBrowser.getURL(), 0);
                         LOG.info("[FontSync] 字体配置已注入到前端");
+
+                        // 传递 IDEA 语言配置到前端
+                        String languageConfig = LanguageConfigService.getLanguageConfigJson();
+                        LOG.info("[LanguageSync] 获取到的语言配置: " + languageConfig);
+                        String languageConfigInjection = String.format(
+                            "if (window.applyIdeaLanguageConfig) { window.applyIdeaLanguageConfig(%s); } " +
+                            "else { window.__pendingLanguageConfig = %s; }",
+                            languageConfig, languageConfig
+                        );
+                        cefBrowser.executeJavaScript(languageConfigInjection, cefBrowser.getURL(), 0);
+                        LOG.info("[LanguageSync] 语言配置已注入到前端");
 
                         // 斜杠命令的加载现在由前端发起，通过 frontend_ready 事件触发
                         // 不再在 onLoadEnd 中主动调用，避免时序问题
@@ -1173,7 +1185,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 // 更新前端状态
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("updateStatus", JsUtils.escapeJs("新会话已创建，可以开始提问"));
+                    callJavaScript("updateStatus", JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
 
                     // 重置 Token 使用统计
                     int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());

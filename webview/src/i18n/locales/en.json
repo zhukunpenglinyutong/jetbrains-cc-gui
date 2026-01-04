@@ -68,7 +68,8 @@
         "english": "English",
         "hindi": "हिन्दी",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "japanese": "日本語"
       },
       "nodePath": {
         "label": "Node.js Path",
@@ -285,7 +286,20 @@
     "dialogTitle": "Permission Request",
     "allow": "Allow Once",
     "allowAlways": "Always Allow",
-    "deny": "Deny"
+    "deny": "Deny",
+    "fromExternalProcess": "Request from external process",
+    "tools": {
+      "Write": "Write File",
+      "Edit": "Edit File",
+      "Read": "Read File",
+      "Bash": "Execute Command",
+      "TodoWrite": "Write Todo",
+      "TodoRead": "Read Todo",
+      "WebSearch": "Web Search",
+      "WebFetch": "Fetch Web",
+      "execute": "Execute {{toolName}}",
+      "readDirectory": "Read Directory"
+    }
   },
   "askUserQuestion": {
     "title": "Claude has some questions for you",
@@ -306,7 +320,10 @@
     "operationFailed": "Operation failed",
     "copySuccess": "{{label}} copied to clipboard",
     "copyFailed": "Copy failed",
-    "newSessionCreated": "New session created"
+    "newSessionCreated": "New session created",
+    "newSessionCreatedReady": "New session created, you can start asking questions",
+    "providerSwitchSuccess": "Provider switched successfully!",
+    "providerSwitchFailed": "Failed to switch provider"
   },
   "config": {
     "clickToCopy": "Click to copy",
@@ -434,7 +451,9 @@
     "refreshFileInIdeaSuccess": "Manually refreshed this file in IDEA",
     "showDiffInIdea": "Show changes in IDEA",
     "diffButton": "Diff",
-    "editPrefix": "Edit: {{fileName}}"
+    "editPrefix": "Edit: {{fileName}}",
+    "lineRange": "Lines {{start}}-{{end}}",
+    "filePath": "File path:"
   },
   "skills": {
     "title": "Skills",

@@ -68,7 +68,8 @@
         "english": "English",
         "hindi": "हिन्दी",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "japanese": "日本語"
       },
       "nodePath": {
         "label": "Node.js 路径",
@@ -285,7 +286,20 @@
     "dialogTitle": "权限请求",
     "allow": "允许一次",
     "allowAlways": "总是允许",
-    "deny": "拒绝"
+    "deny": "拒绝",
+    "fromExternalProcess": "来自外部进程的请求",
+    "tools": {
+      "Write": "写入文件",
+      "Edit": "编辑文件",
+      "Read": "读取文件",
+      "Bash": "执行命令",
+      "TodoWrite": "写入待办",
+      "TodoRead": "读取待办",
+      "WebSearch": "网页搜索",
+      "WebFetch": "获取网页",
+      "execute": "执行 {{toolName}}",
+      "readDirectory": "读取目录"
+    }
   },
   "askUserQuestion": {
     "title": "Claude 有一些问题想问你",
@@ -306,7 +320,10 @@
     "operationFailed": "操作失败",
     "copySuccess": "{{label}}已复制到剪切板",
     "copyFailed": "复制失败",
-    "newSessionCreated": "新会话已创建"
+    "newSessionCreated": "新会话已创建",
+    "newSessionCreatedReady": "新会话已创建，可以开始提问",
+    "providerSwitchSuccess": "供应商切换成功！",
+    "providerSwitchFailed": "切换供应商失败"
   },
   "config": {
     "clickToCopy": "点击复制",
@@ -434,7 +451,9 @@
     "refreshFileInIdeaSuccess": "已手动刷新本文件在IDEA中的内容",
     "showDiffInIdea": "在 IDEA 中显示变更",
     "diffButton": "Diff",
-    "editPrefix": "编辑: {{fileName}}"
+    "editPrefix": "编辑: {{fileName}}",
+    "lineRange": "第 {{start}}-{{end}} 行",
+    "filePath": "文件路径："
   },
   "skills": {
     "title": "Skills",

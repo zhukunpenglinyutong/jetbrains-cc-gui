@@ -220,12 +220,13 @@ interface Window {
 
   /**
    * Apply IDEA editor font configuration (called from Java backend)
-   * @param config Font configuration object containing fontFamily, fontSize, lineSpacing
+   * @param config Font configuration object containing fontFamily, fontSize, lineSpacing, fallbackFonts
    */
   applyIdeaFontConfig?: (config: {
     fontFamily: string;
     fontSize: number;
     lineSpacing: number;
+    fallbackFonts?: string[];
   }) => void;
 
   /**
@@ -235,6 +236,24 @@ interface Window {
     fontFamily: string;
     fontSize: number;
     lineSpacing: number;
+    fallbackFonts?: string[];
+  };
+
+  /**
+   * Apply IDEA language configuration (called from Java backend)
+   * @param config Language configuration object containing language code and IDEA locale
+   */
+  applyIdeaLanguageConfig?: (config: {
+    language: string;
+    ideaLocale?: string;
+  }) => void;
+
+  /**
+   * Pending language config before applyIdeaLanguageConfig is registered
+   */
+  __pendingLanguageConfig?: {
+    language: string;
+    ideaLocale?: string;
   };
 
   /**

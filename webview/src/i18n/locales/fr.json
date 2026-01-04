@@ -68,7 +68,8 @@
         "english": "English",
         "hindi": "हिन्दी",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "japanese": "日本語"
       },
       "nodePath": {
         "label": "Chemin Node.js",
@@ -275,7 +276,20 @@
     "dialogTitle": "Demande de permission",
     "allow": "Autoriser une fois",
     "allowAlways": "Toujours autoriser",
-    "deny": "Refuser"
+    "deny": "Refuser",
+    "fromExternalProcess": "Demande du processus externe",
+    "tools": {
+      "Write": "Écrire le fichier",
+      "Edit": "Modifier le fichier",
+      "Read": "Lire le fichier",
+      "Bash": "Exécuter la commande",
+      "TodoWrite": "Écrire la tâche",
+      "TodoRead": "Lire la tâche",
+      "WebSearch": "Recherche web",
+      "WebFetch": "Récupérer web",
+      "execute": "Exécuter {{toolName}}",
+      "readDirectory": "Lire le répertoire"
+    }
   },
   "askUserQuestion": {
     "title": "Claude a quelques questions pour vous",
@@ -294,7 +308,11 @@
     "deleteSuccess": "Suppression réussie",
     "operationFailed": "Opération échouée",
     "copySuccess": "{{label}} copié dans le presse-papiers",
-    "copyFailed": "Échec de la copie"
+    "copyFailed": "Échec de la copie",
+    "newSessionCreated": "Nouvelle session créée",
+    "newSessionCreatedReady": "Nouvelle session créée, vous pouvez commencer à poser des questions",
+    "providerSwitchSuccess": "Fournisseur changé avec succès !",
+    "providerSwitchFailed": "Échec du changement de fournisseur"
   },
   "config": {
     "clickToCopy": "Cliquer pour copier",
@@ -414,7 +432,9 @@
     "refreshFileInIdeaSuccess": "Contenu de ce fichier actualisé manuellement dans IDEA",
     "showDiffInIdea": "Afficher les modifications dans IDEA",
     "diffButton": "Diff",
-    "editPrefix": "Modifier : {{fileName}}"
+    "editPrefix": "Modifier : {{fileName}}",
+    "lineRange": "Lignes {{start}}-{{end}}",
+    "filePath": "Chemin du fichier :"
   },
   "skills": {
     "title": "Skills",
