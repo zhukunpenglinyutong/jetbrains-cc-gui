@@ -97,11 +97,11 @@ public class ClaudeHistoryReader {
      * Token 使用统计数据结构
      */
     public static class UsageData {
-        public int inputTokens;
-        public int outputTokens;
-        public int cacheWriteTokens;
-        public int cacheReadTokens;
-        public int totalTokens;
+        public long inputTokens;
+        public long outputTokens;
+        public long cacheWriteTokens;
+        public long cacheReadTokens;
+        public long totalTokens;
     }
 
     public static class SessionSummary {
@@ -124,11 +124,11 @@ public class ClaudeHistoryReader {
     public static class ModelUsage {
         public String model;
         public double totalCost;
-        public int totalTokens;
-        public int inputTokens;
-        public int outputTokens;
-        public int cacheCreationTokens;
-        public int cacheReadTokens;
+        public long totalTokens;
+        public long inputTokens;
+        public long outputTokens;
+        public long cacheCreationTokens;
+        public long cacheReadTokens;
         public int sessionCount;
     }
 
@@ -140,7 +140,7 @@ public class ClaudeHistoryReader {
         public static class WeekData {
             public int sessions;
             public double cost;
-            public int tokens;
+            public long tokens;
         }
 
         public static class Trends {

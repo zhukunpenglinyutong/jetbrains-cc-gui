@@ -402,6 +402,62 @@
       "memory": "Knowledge graph and memory storage tool",
       "sequentialThinking": "Sequential thinking and reasoning tool",
       "context7": "Document search and context retrieval tool"
+    },
+    "help": {
+      "title": "MCP क्या है?",
+      "protocol": {
+        "title": "Model Context Protocol",
+        "description": "MCP (Model Context Protocol) Anthropic द्वारा विकसित एक खुला प्रोटोकॉल है जो AI मॉडल को बाहरी उपकरणों और डेटा स्रोतों तक सुरक्षित रूप से पहुंचने की अनुमति देता है।"
+      },
+      "features": {
+        "title": "मुख्य विशेषताएं",
+        "toolExtension": {
+          "label": "उपकरण विस्तार",
+          "description": "Claude में फ़ाइल सिस्टम, नेटवर्क एक्सेस जैसी क्षमताएं जोड़ें"
+        },
+        "dataConnection": {
+          "label": "डेटा कनेक्शन",
+          "description": "डेटाबेस, API जैसे बाहरी डेटा स्रोतों से कनेक्ट करें"
+        },
+        "security": {
+          "label": "सुरक्षा और नियंत्रण",
+          "description": "सख्त अनुमति नियंत्रण और डेटा पृथक्करण"
+        },
+        "integration": {
+          "label": "आसान एकीकरण",
+          "description": "कई प्रोग्रामिंग भाषाओं और रनटाइम वातावरणों के लिए समर्थन"
+        }
+      },
+      "configuration": {
+        "title": "कॉन्फ़िगरेशन विधियां",
+        "description": "दो कॉन्फ़िगरेशन प्रकार समर्थित:",
+        "stdio": {
+          "description": "मानक इनपुट/आउटपुट के माध्यम से स्थानीय प्रक्रियाओं के साथ संचार करें",
+          "example": "npx/uvx कमांड से प्रारंभ"
+        },
+        "httpSse": {
+          "description": "नेटवर्क पर दूरस्थ सर्वरों के साथ संचार करें",
+          "example": "URL पता"
+        }
+      },
+      "learnMore": {
+        "title": "अधिक जानें",
+        "description": "आधिकारिक दस्तावेज़ देखें:"
+      },
+      "gotIt": "समझ गया"
+    },
+    "serverDialog": {
+      "addTitle": "मैन्युअल कॉन्फ़िगरेशन",
+      "editTitle": "सर्वर संपादित करें",
+      "rawConfig": "कच्चा कॉन्फ़िगरेशन (JSON)",
+      "description": "MCP Servers कॉन्फ़िगरेशन JSON दर्ज करें (NPX या UVX कॉन्फ़िगरेशन को प्राथमिकता दें)",
+      "securityWarning": "कॉन्फ़िगरेशन से पहले कृपया स्रोत की पुष्टि करें और जोखिमों का आकलन करें",
+      "saving": "सहेजा जा रहा है...",
+      "errors": {
+        "idExists": "सर्वर ID \"{{id}}\" पहले से मौजूद है",
+        "unrecognizedFormat": "अपरिचित कॉन्फ़िगरेशन प्रारूप",
+        "jsonParseError": "JSON पार्स त्रुटि: {{message}}"
+      }
     }
   },
   "tools": {
@@ -464,7 +520,56 @@
     "importFailed": "Failed to import Skill",
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
-    "toggleFailed": "Failed to update Skill status"
+    "toggleFailed": "Failed to update Skill status",
+    "help": {
+      "title": "Skills क्या हैं?",
+      "overview": {
+        "title": "अवलोकन",
+        "description": "Skills गतिशील रूप से लोड किए गए निर्देश सेट, स्क्रिप्ट और संसाधन फ़ोल्डर हैं जो विशिष्ट कार्यों के लिए Claude के प्रदर्शन को बढ़ाते हैं। Skills Claude को विशेष कार्यों को दोहराने योग्य तरीके से पूरा करना सिखाते हैं, जैसे कंपनी ब्रांड दिशानिर्देशों का उपयोग करके दस्तावेज़ बनाना, संगठन-विशिष्ट वर्कफ़्लो के अनुसार डेटा का विश्लेषण करना, या व्यक्तिगत कार्यों को स्वचालित करना।"
+      },
+      "structure": {
+        "title": "Skill संरचना",
+        "description": "एक Skill SKILL.md फ़ाइल वाला फ़ोल्डर है:",
+        "example": "my-skill/\n├── SKILL.md          # आवश्यक: कौशल परिभाषा फ़ाइल\n├── templates/        # वैकल्पिक: टेम्पलेट फ़ाइलें\n└── references/       # वैकल्पिक: संदर्भ सामग्री"
+      },
+      "format": {
+        "title": "SKILL.md प्रारूप",
+        "description": "SKILL.md फ़ाइलें YAML frontmatter + Markdown प्रारूप का उपयोग करती हैं:",
+        "example": "---\nname: my-skill-name\ndescription: कौशल विवरण और उपयोग का समय\n---\n\n# कौशल निर्देश\n\nविस्तृत निर्देश सामग्री...",
+        "hint": "name और description आवश्यक फ़ील्ड हैं। वैकल्पिक फ़ील्ड में license, allowed-tools, metadata शामिल हैं"
+      },
+      "configuration": {
+        "title": "कॉन्फ़िगरेशन विधियां",
+        "description": "Skill जोड़ने के तरीके:",
+        "localPath": {
+          "label": "स्थानीय पथ",
+          "description": "SKILL.md वाले फ़ोल्डर पथ निर्दिष्ट करें"
+        },
+        "relativePath": {
+          "label": "सापेक्ष पथ",
+          "description": "प्रोजेक्ट रूट के सापेक्ष, जैसे ./skills/my-skill"
+        },
+        "absolutePath": {
+          "label": "पूर्ण पथ",
+          "description": "पूर्ण फ़ाइल सिस्टम पथ"
+        }
+      },
+      "tips": {
+        "title": "उपयोग युक्तियाँ",
+        "item1": "सुनिश्चित करें कि Skill निर्देशिका में एक वैध SKILL.md फ़ाइल है",
+        "item2": "Skill नामों में लोअरकेस अक्षर, संख्याएं और हाइफ़न (hyphen-case) का उपयोग करना चाहिए",
+        "item3": "लोड होने के बाद Skills स्वचालित रूप से Claude सत्रों में प्रभावी हो जाते हैं",
+        "item4": "सक्षम/अक्षम टॉगल के साथ व्यक्तिगत Skill स्थिति को नियंत्रित करें",
+        "item5": "इसका उपयोग करने के लिए चैट में Skill नाम का उल्लेख करें, जैसे, \"pdf skill का उपयोग करके फॉर्म फ़ील्ड निकालें\""
+      },
+      "learnMore": {
+        "title": "अधिक जानें",
+        "description": "Skills के बारे में अधिक जानकारी:",
+        "link1": "Skills क्या हैं?",
+        "link2": "कस्टम Skills बनाना",
+        "link3": "Anthropic Skills उदाहरण रिपॉजिटरी"
+      }
+    }
   },
   "models": {
     "claude": {

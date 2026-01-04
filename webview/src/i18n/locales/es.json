@@ -402,6 +402,62 @@
       "memory": "Knowledge graph and memory storage tool",
       "sequentialThinking": "Sequential thinking and reasoning tool",
       "context7": "Document search and context retrieval tool"
+    },
+    "help": {
+      "title": "¿Qué es MCP?",
+      "protocol": {
+        "title": "Model Context Protocol",
+        "description": "MCP (Model Context Protocol) es un protocolo abierto desarrollado por Anthropic que permite a los modelos de IA acceder de forma segura a herramientas y fuentes de datos externas."
+      },
+      "features": {
+        "title": "Características principales",
+        "toolExtension": {
+          "label": "Extensión de herramientas",
+          "description": "Agrega capacidades como acceso al sistema de archivos y red a Claude"
+        },
+        "dataConnection": {
+          "label": "Conexión de datos",
+          "description": "Conéctate a fuentes de datos externas como bases de datos y APIs"
+        },
+        "security": {
+          "label": "Seguridad y control",
+          "description": "Control estricto de permisos y aislamiento de datos"
+        },
+        "integration": {
+          "label": "Fácil integración",
+          "description": "Soporte para múltiples lenguajes de programación y entornos de ejecución"
+        }
+      },
+      "configuration": {
+        "title": "Métodos de configuración",
+        "description": "Dos tipos de configuración admitidos:",
+        "stdio": {
+          "description": "Comunicarse con procesos locales a través de entrada/salida estándar",
+          "example": "Iniciado con comandos npx/uvx"
+        },
+        "httpSse": {
+          "description": "Comunicarse con servidores remotos a través de la red",
+          "example": "Dirección URL"
+        }
+      },
+      "learnMore": {
+        "title": "Más información",
+        "description": "Visita la documentación oficial:"
+      },
+      "gotIt": "Entendido"
+    },
+    "serverDialog": {
+      "addTitle": "Configuración Manual",
+      "editTitle": "Editar Servidor",
+      "rawConfig": "Configuración Raw (JSON)",
+      "description": "Ingrese la configuración JSON de MCP Servers (preferir configuración NPX o UVX)",
+      "securityWarning": "Por favor verifique la fuente y evalúe los riesgos antes de configurar",
+      "saving": "Guardando...",
+      "errors": {
+        "idExists": "El ID del servidor \"{{id}}\" ya existe",
+        "unrecognizedFormat": "Formato de configuración no reconocido",
+        "jsonParseError": "Error de análisis JSON: {{message}}"
+      }
     }
   },
   "tools": {
@@ -464,7 +520,56 @@
     "importFailed": "Failed to import Skill",
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
-    "toggleFailed": "Failed to update Skill status"
+    "toggleFailed": "Failed to update Skill status",
+    "help": {
+      "title": "¿Qué son las Skills?",
+      "overview": {
+        "title": "Descripción general",
+        "description": "Las Skills son conjuntos de instrucciones, scripts y carpetas de recursos cargados dinámicamente que mejoran el rendimiento de Claude para tareas específicas. Las Skills enseñan a Claude cómo completar tareas particulares de manera repetible, como crear documentos usando pautas de marca de la empresa, analizar datos siguiendo flujos de trabajo específicos de la organización o automatizar tareas personales."
+      },
+      "structure": {
+        "title": "Estructura de Skill",
+        "description": "Una Skill es una carpeta que contiene un archivo SKILL.md:",
+        "example": "my-skill/\n├── SKILL.md          # Requerido: archivo de definición de habilidad\n├── templates/        # Opcional: archivos de plantilla\n└── references/       # Opcional: materiales de referencia"
+      },
+      "format": {
+        "title": "Formato SKILL.md",
+        "description": "Los archivos SKILL.md usan formato YAML frontmatter + Markdown:",
+        "example": "---\nname: my-skill-name\ndescription: Descripción de la habilidad y cuándo usarla\n---\n\n# Instrucciones de Skill\n\nContenido de instrucción detallado...",
+        "hint": "name y description son campos obligatorios. Los campos opcionales incluyen license, allowed-tools, metadata"
+      },
+      "configuration": {
+        "title": "Métodos de Configuración",
+        "description": "Formas de agregar una Skill:",
+        "localPath": {
+          "label": "Ruta Local",
+          "description": "Especifique la ruta de la carpeta que contiene SKILL.md"
+        },
+        "relativePath": {
+          "label": "Ruta Relativa",
+          "description": "Relativa a la raíz del proyecto, p. ej., ./skills/my-skill"
+        },
+        "absolutePath": {
+          "label": "Ruta Absoluta",
+          "description": "Ruta completa del sistema de archivos"
+        }
+      },
+      "tips": {
+        "title": "Consejos de Uso",
+        "item1": "Asegúrese de que el directorio de Skill contenga un archivo SKILL.md válido",
+        "item2": "Los nombres de Skill deben usar letras minúsculas, números y guiones (hyphen-case)",
+        "item3": "Las Skills se activan automáticamente en las sesiones de Claude después de cargarse",
+        "item4": "Controle el estado de Skills individuales con interruptores de habilitar/deshabilitar",
+        "item5": "Mencione el nombre de la Skill en el chat para usarla, p. ej., \"Usa la skill pdf para extraer campos del formulario\""
+      },
+      "learnMore": {
+        "title": "Más información",
+        "description": "Más información sobre Skills:",
+        "link1": "¿Qué son las Skills?",
+        "link2": "Creación de Skills Personalizadas",
+        "link3": "Repositorio de Ejemplos de Skills de Anthropic"
+      }
+    }
   },
   "models": {
     "claude": {

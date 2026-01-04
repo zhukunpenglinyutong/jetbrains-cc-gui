@@ -421,6 +421,62 @@
       "memory": "Knowledge graph and memory storage tool",
       "sequentialThinking": "Sequential thinking and reasoning tool",
       "context7": "Document search and context retrieval tool"
+    },
+    "help": {
+      "title": "What is MCP?",
+      "protocol": {
+        "title": "Model Context Protocol",
+        "description": "MCP (Model Context Protocol) is an open protocol developed by Anthropic that allows AI models to safely access external tools and data sources."
+      },
+      "features": {
+        "title": "Key Features",
+        "toolExtension": {
+          "label": "Tool Extension",
+          "description": "Add capabilities like file system and network access to Claude"
+        },
+        "dataConnection": {
+          "label": "Data Connection",
+          "description": "Connect to external data sources such as databases and APIs"
+        },
+        "security": {
+          "label": "Security & Control",
+          "description": "Strict permission control and data isolation"
+        },
+        "integration": {
+          "label": "Easy Integration",
+          "description": "Support for multiple programming languages and runtime environments"
+        }
+      },
+      "configuration": {
+        "title": "Configuration Methods",
+        "description": "Two configuration types supported:",
+        "stdio": {
+          "description": "Communicate with local processes via standard input/output",
+          "example": "Started with npx/uvx commands"
+        },
+        "httpSse": {
+          "description": "Communicate with remote servers over network",
+          "example": "URL address"
+        }
+      },
+      "learnMore": {
+        "title": "Learn More",
+        "description": "Visit official documentation:"
+      },
+      "gotIt": "Got it"
+    },
+    "serverDialog": {
+      "addTitle": "Manual Configuration",
+      "editTitle": "Edit Server",
+      "rawConfig": "Raw Configuration (JSON)",
+      "description": "Enter MCP Servers configuration JSON (prefer NPX or UVX configuration)",
+      "securityWarning": "Please verify the source and assess risks before configuration",
+      "saving": "Saving...",
+      "errors": {
+        "idExists": "Server ID \"{{id}}\" already exists",
+        "unrecognizedFormat": "Unrecognized configuration format",
+        "jsonParseError": "JSON parse error: {{message}}"
+      }
     }
   },
   "tools": {
@@ -483,7 +539,56 @@
     "importFailed": "Failed to import Skill",
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
-    "toggleFailed": "Failed to update Skill status"
+    "toggleFailed": "Failed to update Skill status",
+    "help": {
+      "title": "What are Skills?",
+      "overview": {
+        "title": "Overview",
+        "description": "Skills are dynamically loaded instruction sets, scripts, and resource folders that enhance Claude's performance for specific tasks. Skills teach Claude how to complete particular tasks in a repeatable way, such as creating documents using company brand guidelines, analyzing data following organization-specific workflows, or automating personal tasks."
+      },
+      "structure": {
+        "title": "Skill Structure",
+        "description": "A Skill is a folder containing a SKILL.md file:",
+        "example": "my-skill/\n├── SKILL.md          # Required: skill definition file\n├── templates/        # Optional: template files\n└── references/       # Optional: reference materials"
+      },
+      "format": {
+        "title": "SKILL.md Format",
+        "description": "SKILL.md files use YAML frontmatter + Markdown format:",
+        "example": "---\nname: my-skill-name\ndescription: Skill description and when to use\n---\n\n# Skill Instructions\n\nDetailed instruction content...",
+        "hint": "name and description are required fields. Optional fields include license, allowed-tools, metadata"
+      },
+      "configuration": {
+        "title": "Configuration Methods",
+        "description": "Ways to add a Skill:",
+        "localPath": {
+          "label": "Local Path",
+          "description": "Specify folder path containing SKILL.md"
+        },
+        "relativePath": {
+          "label": "Relative Path",
+          "description": "Relative to project root, e.g., ./skills/my-skill"
+        },
+        "absolutePath": {
+          "label": "Absolute Path",
+          "description": "Complete filesystem path"
+        }
+      },
+      "tips": {
+        "title": "Usage Tips",
+        "item1": "Ensure Skill directory contains a valid SKILL.md file",
+        "item2": "Skill names must use lowercase letters, numbers, and hyphens (hyphen-case)",
+        "item3": "Skills automatically take effect in Claude sessions after loading",
+        "item4": "Control individual Skill status with enable/disable toggles",
+        "item5": "Mention Skill name in chat to use it, e.g., \"Use the pdf skill to extract form fields\""
+      },
+      "learnMore": {
+        "title": "Learn More",
+        "description": "More information about Skills:",
+        "link1": "What are Skills?",
+        "link2": "Creating Custom Skills",
+        "link3": "Anthropic Skills Example Repository"
+      }
+    }
   },
   "models": {
     "claude": {

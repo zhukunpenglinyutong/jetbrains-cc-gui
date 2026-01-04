@@ -241,17 +241,43 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             try {
                 PropertiesComponent props = PropertiesComponent.getInstance();
                 String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
+
                 if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
+                    // 使用已保存的路径
                     String path = savedNodePath.trim();
-                    // 同时设置 Claude 和 Codex 的 Node.js 路径
                     claudeSDKBridge.setNodeExecutable(path);
                     codexSDKBridge.setNodeExecutable(path);
-                    // 关键修复：验证并缓存 Node.js 版本，避免首次发送消息时 getCachedNodeVersion() 返回 null
+                    // 验证并缓存 Node.js 版本
                     claudeSDKBridge.verifyAndCacheNodePath(path);
                     LOG.info("Using manually configured Node.js path: " + path);
+                } else {
+                    // 首次安装或未配置路径时，自动检测并缓存
+                    LOG.info("No saved Node.js path found, attempting auto-detection...");
+                    com.github.claudecodegui.model.NodeDetectionResult detected =
+                        claudeSDKBridge.detectNodeWithDetails();
+
+                    if (detected != null && detected.isFound() && detected.getNodePath() != null) {
+                        String detectedPath = detected.getNodePath();
+                        String detectedVersion = detected.getNodeVersion();
+
+                        // 保存检测到的路径
+                        props.setValue(NODE_PATH_PROPERTY_KEY, detectedPath);
+
+                        // 设置到两个 bridge
+                        claudeSDKBridge.setNodeExecutable(detectedPath);
+                        codexSDKBridge.setNodeExecutable(detectedPath);
+
+                        // 验证并缓存版本信息
+                        claudeSDKBridge.verifyAndCacheNodePath(detectedPath);
+
+                        LOG.info("Auto-detected Node.js: " + detectedPath + " (" + detectedVersion + ")");
+                    } else {
+                        LOG.warn("Failed to auto-detect Node.js path. Error: " +
+                            (detected != null ? detected.getErrorMessage() : "Unknown error"));
+                    }
                 }
             } catch (Exception e) {
-                LOG.warn("Failed to load manual Node.js path: " + e.getMessage());
+                LOG.error("Failed to load Node.js path: " + e.getMessage(), e);
             }
         }
 

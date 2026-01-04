@@ -421,6 +421,62 @@
       "memory": "ナレッジグラフとメモリストレージツール",
       "sequentialThinking": "連続思考と推論ツール",
       "context7": "ドキュメント検索とコンテキスト取得ツール"
+    },
+    "help": {
+      "title": "MCPとは？",
+      "protocol": {
+        "title": "Model Context Protocol",
+        "description": "MCP（Model Context Protocol）は、Anthropicが開発したオープンプロトコルで、AIモデルが外部ツールやデータソースに安全にアクセスできるようにします。"
+      },
+      "features": {
+        "title": "主な機能",
+        "toolExtension": {
+          "label": "ツール拡張",
+          "description": "ファイルシステムやネットワークアクセスなどの機能をClaudeに追加"
+        },
+        "dataConnection": {
+          "label": "データ接続",
+          "description": "データベースやAPIなどの外部データソースに接続"
+        },
+        "security": {
+          "label": "セキュリティと制御",
+          "description": "厳格な権限制御とデータ分離"
+        },
+        "integration": {
+          "label": "簡単な統合",
+          "description": "複数のプログラミング言語とランタイム環境をサポート"
+        }
+      },
+      "configuration": {
+        "title": "設定方法",
+        "description": "2つの設定タイプをサポート：",
+        "stdio": {
+          "description": "標準入出力を介してローカルプロセスと通信",
+          "example": "npx/uvxコマンドで起動"
+        },
+        "httpSse": {
+          "description": "ネットワーク経由でリモートサーバーと通信",
+          "example": "URLアドレス"
+        }
+      },
+      "learnMore": {
+        "title": "詳細を見る",
+        "description": "公式ドキュメントを参照："
+      },
+      "gotIt": "了解"
+    },
+    "serverDialog": {
+      "addTitle": "手動設定",
+      "editTitle": "サーバーを編集",
+      "rawConfig": "生の設定（JSON）",
+      "description": "MCP Servers 設定 JSON を入力してください（NPX または UVX 設定を優先）",
+      "securityWarning": "設定前にソースを確認し、リスクを評価してください",
+      "saving": "保存中...",
+      "errors": {
+        "idExists": "サーバー ID \"{{id}}\" は既に存在します",
+        "unrecognizedFormat": "認識できない設定形式",
+        "jsonParseError": "JSON 解析エラー: {{message}}"
+      }
     }
   },
   "tools": {
@@ -483,7 +539,56 @@
     "importFailed": "スキルのインポートに失敗しました",
     "deleteSuccess": "スキルが正常に削除されました",
     "toggleSuccess": "スキルステータスが更新されました",
-    "toggleFailed": "スキルステータスの更新に失敗しました"
+    "toggleFailed": "スキルステータスの更新に失敗しました",
+    "help": {
+      "title": "Skills とは？",
+      "overview": {
+        "title": "概要",
+        "description": "Skills は、特定のタスクに対する Claude のパフォーマンスを向上させる、動的にロードされる命令セット、スクリプト、リソースフォルダです。Skills は、企業のブランドガイドラインを使用してドキュメントを作成したり、組織固有のワークフローに従ってデータを分析したり、個人的なタスクを自動化したりするなど、特定のタスクを繰り返し可能な方法で完了する方法を Claude に教えます。"
+      },
+      "structure": {
+        "title": "Skill 構造",
+        "description": "Skill は SKILL.md ファイルを含むフォルダです：",
+        "example": "my-skill/\n├── SKILL.md          # 必須：スキル定義ファイル\n├── templates/        # オプション：テンプレートファイル\n└── references/       # オプション：参考資料"
+      },
+      "format": {
+        "title": "SKILL.md 形式",
+        "description": "SKILL.md ファイルは YAML frontmatter + Markdown 形式を使用します：",
+        "example": "---\nname: my-skill-name\ndescription: スキルの説明と使用時期\n---\n\n# Skill 指示\n\n詳細な指示内容...",
+        "hint": "name と description は必須フィールドです。オプションフィールドには license、allowed-tools、metadata が含まれます"
+      },
+      "configuration": {
+        "title": "設定方法",
+        "description": "Skill を追加する方法：",
+        "localPath": {
+          "label": "ローカルパス",
+          "description": "SKILL.md を含むフォルダパスを指定"
+        },
+        "relativePath": {
+          "label": "相対パス",
+          "description": "プロジェクトルートからの相対、例：./skills/my-skill"
+        },
+        "absolutePath": {
+          "label": "絶対パス",
+          "description": "完全なファイルシステムパス"
+        }
+      },
+      "tips": {
+        "title": "使用のヒント",
+        "item1": "Skill ディレクトリに有効な SKILL.md ファイルが含まれていることを確認してください",
+        "item2": "Skill 名は小文字、数字、ハイフン（hyphen-case）を使用する必要があります",
+        "item3": "Skills はロード後、Claude セッションで自動的に有効になります",
+        "item4": "有効/無効トグルで個々の Skill のステータスを制御します",
+        "item5": "チャットで Skill 名を言及して使用します。例：\"pdf skill を使用してフォームフィールドを抽出\""
+      },
+      "learnMore": {
+        "title": "詳細を見る",
+        "description": "Skills についての詳細情報：",
+        "link1": "Skills とは？",
+        "link2": "カスタム Skills の作成",
+        "link3": "Anthropic Skills サンプルリポジトリ"
+      }
+    }
   },
   "models": {
     "claude": {
