@@ -1,11 +1,26 @@
 ##### **2026年1月4日（v0.1.4-beta4）**
 
-- [x] P0（feat）支持从CLI登录状态下进行提问的功能（初版） #LaCreArthur
-- [x] P1（feat）读取IDEA语言信息，自动本地化 & 完善本地化细节
-- [x] P1（feat）提交MCP服务器支持开启关闭的功能
-- [x] P1（feat）增加/init 和 /review 斜杠内置命令 & 优化首次加载斜杠指令逻辑 & 优化部分UI细节
-- [x] P2（feat）适配Ask User Question功能
-- [x] P3（feat）UI字体获取编辑器的字体回落 #gadfly3173
+**English:**
+- [x] P0 (feat) Support asking questions from CLI login state (initial) #LaCreArthur
+- [x] P1 (feat) Auto-localization based on IDEA language settings
+- [x] P1 (improve) Refine localization text details
+- [x] P1 (feat) Add enable/disable toggle for MCP servers
+- [x] P1 (feat) Add /init and /review built-in slash commands
+- [x] P1 (perf) Optimize initial slash command loading logic
+- [x] P1 (style) Polish UI details
+- [x] P2 (feat) Support Ask User Question feature
+- [x] P3 (improve) Fallback UI font to editor font #gadfly3173
+
+**中文:**
+- [x] P0（feat）支持从 CLI 登录状态下进行提问的功能（初版） #LaCreArthur
+- [x] P1（feat）读取 IDEA 语言信息，自动本地化
+- [x] P1（improve）完善本地化文案细节
+- [x] P1（feat）MCP 服务器支持开启/关闭功能
+- [x] P1（feat）新增 /init 和 /review 斜杠内置命令
+- [x] P1（perf）优化首次加载斜杠指令逻辑
+- [x] P1（style）优化部分 UI 细节
+- [x] P2（feat）适配 Ask User Question 功能
+- [x] P3（improve）UI 字体回落至编辑器字体 #gadfly3173
 
 ##### **2026年1月2日（v0.1.4-beta3）**
 

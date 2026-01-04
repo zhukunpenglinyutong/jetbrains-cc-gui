@@ -1442,6 +1442,14 @@ export const ChatInputBox = ({
 
     // 没有图片文件，处理文本（文件路径或其他文本）
     if (text && text.trim()) {
+      // 提取文件路径并添加到路径映射中
+      const filePath = text.trim();
+      const fileName = filePath.split(/[/\\]/).pop() || filePath;
+
+      // 将路径添加到 pathMappingRef，使其成为"有效引用"
+      pathMappingRef.current.set(fileName, filePath);
+      pathMappingRef.current.set(filePath, filePath);
+
       // 自动添加 @ 前缀（如果还没有），并添加空格以触发渲染
       const textToInsert = (text.startsWith('@') ? text : `@${text}`) + ' ';
 
@@ -1561,6 +1569,14 @@ export const ChatInputBox = ({
     // 注册全局函数以接收 Java 传递的文件路径
     (window as any).handleFilePathFromJava = (filePath: string) => {
       if (!editableRef.current) return;
+
+      // 提取文件路径并添加到路径映射中
+      const absolutePath = filePath.trim();
+      const fileName = absolutePath.split(/[/\\]/).pop() || absolutePath;
+
+      // 将路径添加到 pathMappingRef，使其成为"有效引用"
+      pathMappingRef.current.set(fileName, absolutePath);
+      pathMappingRef.current.set(absolutePath, absolutePath);
 
       // 插入文件路径到输入框（自动添加 @ 前缀），并添加空格以触发渲染
       const pathToInsert = (filePath.startsWith('@') ? filePath : `@${filePath}`) + ' ';
