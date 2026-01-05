@@ -25,9 +25,25 @@ const PermissionDialog = ({
 }: PermissionDialogProps) => {
   const [showCommand, setShowCommand] = useState(true); // 默认展开命令
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const { t } = useTranslation();
+
+  const handleApprove = () => {
+    if (!request) return;
+    onApprove(request.channelId);
+  };
+
+  const handleApproveAlways = () => {
+    if (!request) return;
+    onApproveAlways(request.channelId);
+  };
+
+  const handleSkip = () => {
+    if (!request) return;
+    onSkip(request.channelId);
+  };
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && request) {
       setShowCommand(true); // 每次打开时默认展开
       setSelectedIndex(0);
 
@@ -46,31 +62,23 @@ const PermissionDialog = ({
           setSelectedIndex(prev => Math.min(2, prev + 1));
         } else if (e.key === 'Enter') {
           e.preventDefault();
-          if (selectedIndex === 0) handleApprove();
-          else if (selectedIndex === 1) handleApproveAlways();
-          else if (selectedIndex === 2) handleSkip();
+          // Use current selectedIndex from closure instead of state
+          setSelectedIndex(current => {
+            if (current === 0) handleApprove();
+            else if (current === 1) handleApproveAlways();
+            else if (current === 2) handleSkip();
+            return current;
+          });
         }
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, selectedIndex]);
+  }, [isOpen, request, onApprove, onApproveAlways, onSkip]);
 
   if (!isOpen || !request) {
     return null;
   }
-
-  const handleApprove = () => {
-    onApprove(request.channelId);
-  };
-
-  const handleApproveAlways = () => {
-    onApproveAlways(request.channelId);
-  };
-
-  const handleSkip = () => {
-    onSkip(request.channelId);
-  };
 
   // 格式化输入参数显示
   const formatInputValue = (value: any): string => {
@@ -117,8 +125,6 @@ const PermissionDialog = ({
     }
     return '~';
   };
-
-  const { t } = useTranslation();
 
   // 工具名称映射到标题
   const getToolTitle = (toolName: string): string => {
@@ -196,4 +202,3 @@ const PermissionDialog = ({
 };
 
 export default PermissionDialog;
-

@@ -1,3 +1,11 @@
+##### **2026年1月5日（v0.1.4-beta5）**
+
+English:
+- [x] P0 (bug) Fix permission dialog exception causing plugin black screen issue on Windows
+
+中文:
+- [x] P0（BUG）修复权限弹窗异常导致 Windows 下插件黑屏的问题
+
 ##### **2026年1月4日（v0.1.4-beta5）**
 
 English:

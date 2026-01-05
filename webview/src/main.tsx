@@ -1,5 +1,6 @@
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 import './codicon.css';
 import './styles/app.less';
 import './i18n/config';
@@ -108,7 +109,9 @@ if (typeof window !== 'undefined' && !window.updateSlashCommands) {
 
 // 渲染 React 应用
 ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
-  <App />,
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>,
 );
 
 /**
