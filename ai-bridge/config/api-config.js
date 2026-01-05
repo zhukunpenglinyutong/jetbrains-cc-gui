@@ -5,7 +5,8 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, platform } from 'os';
+import { execSync } from 'child_process';
 
 /**
  * 读取 Claude Code 配置
@@ -21,25 +22,90 @@ export function loadClaudeSettings() {
 }
 
 /**
+ * Read credentials from macOS Keychain
+ * @returns {Object|null} Credentials object or null if not found
+ */
+function readMacKeychainCredentials() {
+  try {
+    // Try different possible keychain service names
+    const serviceNames = ['Claude Code-credentials', 'Claude Code'];
+
+    for (const serviceName of serviceNames) {
+      try {
+        const result = execSync(
+          `security find-generic-password -s "${serviceName}" -w 2>/dev/null`,
+          { encoding: 'utf8', timeout: 5000 }
+        );
+
+        if (result && result.trim()) {
+          const credentials = JSON.parse(result.trim());
+          console.log(`[DEBUG] Successfully read credentials from macOS Keychain (service: ${serviceName})`);
+          return credentials;
+        }
+      } catch (e) {
+        // Continue to next service name
+        continue;
+      }
+    }
+
+    console.log('[DEBUG] No credentials found in macOS Keychain');
+    return null;
+  } catch (error) {
+    console.log('[DEBUG] Failed to read from macOS Keychain:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Read credentials from file (Linux/Windows)
+ * @returns {Object|null} Credentials object or null if not found
+ */
+function readFileCredentials() {
+  try {
+    const credentialsPath = join(homedir(), '.claude', '.credentials.json');
+
+    if (!existsSync(credentialsPath)) {
+      console.log('[DEBUG] No CLI session found: .credentials.json does not exist');
+      return null;
+    }
+
+    const credentials = JSON.parse(readFileSync(credentialsPath, 'utf8'));
+    console.log('[DEBUG] Successfully read credentials from file');
+    return credentials;
+  } catch (error) {
+    console.log('[DEBUG] Failed to read credentials file:', error.message);
+    return null;
+  }
+}
+
+/**
  * 检查是否存在有效的 Claude CLI 会话认证
- * 通过检查 ~/.claude/.credentials.json 文件来判断用户是否已通过 'claude login' 登录
+ * - macOS: 从系统钥匙串(Keychain)读取凭证
+ * - Linux/Windows: 从 ~/.claude/.credentials.json 文件读取凭证
  *
  * @returns {boolean} 如果存在有效的CLI会话凭证返回true，否则返回false
  */
 export function hasCliSessionAuth() {
   try {
-    const credentialsPath = join(homedir(), '.claude', '.credentials.json');
+    let credentials = null;
+    const currentPlatform = platform();
 
-    // 检查凭证文件是否存在
-    if (!existsSync(credentialsPath)) {
-      console.log('[DEBUG] No CLI session found: .credentials.json does not exist');
-      return false;
+    // macOS uses Keychain, other platforms use file
+    if (currentPlatform === 'darwin') {
+      console.log('[DEBUG] Detected macOS, attempting to read from Keychain...');
+      credentials = readMacKeychainCredentials();
+
+      // Fallback to file if keychain fails (in case user manually created the file)
+      if (!credentials) {
+        console.log('[DEBUG] Keychain read failed, trying file fallback...');
+        credentials = readFileCredentials();
+      }
+    } else {
+      console.log(`[DEBUG] Detected ${currentPlatform}, reading from credentials file...`);
+      credentials = readFileCredentials();
     }
 
-    // 读取并解析凭证文件
-    const credentials = JSON.parse(readFileSync(credentialsPath, 'utf8'));
-
-    // 验证是否存在有效的 OAuth access token
+    // Validate OAuth access token
     const hasValidToken = credentials?.claudeAiOauth?.accessToken &&
                          credentials.claudeAiOauth.accessToken.length > 0;
 
@@ -47,7 +113,7 @@ export function hasCliSessionAuth() {
       console.log('[DEBUG] Valid CLI session found with access token');
       return true;
     } else {
-      console.log('[DEBUG] CLI credentials file exists but no valid access token found');
+      console.log('[DEBUG] No valid access token found in credentials');
       return false;
     }
   } catch (error) {
@@ -102,7 +168,11 @@ export function setupApiKey() {
       // 使用 CLI 会话认证
       console.log('[INFO] Using CLI session authentication (claude login)');
       authType = 'cli_session';
-      apiKeySource = 'CLI session (~/.claude/.credentials.json)';
+      // Set source based on platform
+      const currentPlatform = platform();
+      apiKeySource = currentPlatform === 'darwin'
+        ? 'CLI session (macOS Keychain)'
+        : 'CLI session (~/.claude/.credentials.json)';
 
       // 清除所有 API Key 相关的环境变量，让 SDK 自动检测 CLI 会话
       delete process.env.ANTHROPIC_API_KEY;
