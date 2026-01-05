@@ -1,4 +1,16 @@
-##### **2026年1月5日（v0.1.4-beta5）**
+##### **2026年1月5日（v0.1.4-beta7）**
+
+English:
+- [x] P1 (fix) Fix permission dialog rejection issue in proxy mode
+- [x] P1 (feat) Support official subscription-based login on macOS
+- [x] P2 (fix) Resolve some error messages
+
+中文:
+- [x] P1 (fix) 修复代理模式下权限弹窗被拒绝的问题
+- [x] P1 (feat) 适配Mac下官方订阅制登录的功能
+- [x] P2 (fix) 解决某些报错提示
+
+##### **2026年1月5日（v0.1.4-beta6）**
 
 English:
 - [x] P0 (bug) Fix permission dialog exception causing plugin black screen issue on Windows
