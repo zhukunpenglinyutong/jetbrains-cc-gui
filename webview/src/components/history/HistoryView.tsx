@@ -5,6 +5,7 @@ import VirtualList from './VirtualList';
 
 interface HistoryViewProps {
   historyData: HistoryData | null;
+  currentProvider?: string; // 当前提供商 (claude 或 codex)
   onLoadSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void; // 添加删除回调
   onExportSession: (sessionId: string, title: string) => void; // 添加导出回调
@@ -34,7 +35,7 @@ const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string
   return `${Math.max(seconds, 1)} ${t('history.timeAgo.secondsAgo')}`;
 };
 
-const HistoryView = ({ historyData, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider: _currentProvider, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // 记录待删除的会话ID

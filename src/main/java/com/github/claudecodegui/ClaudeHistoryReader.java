@@ -195,7 +195,7 @@ public class ClaudeHistoryReader {
                 }
             })
             .forEach(path -> {
-                try (BufferedReader reader = Files.newBufferedReader(path)) {
+                try (BufferedReader reader = Files.newBufferedReader(path, java.nio.charset.StandardCharsets.UTF_8)) {
                     // 从文件名提取 sessionId
                     String fileName = path.getFileName().toString();
                     String sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
@@ -480,7 +480,7 @@ public class ClaudeHistoryReader {
             return history;
         }
 
-        try (BufferedReader reader = Files.newBufferedReader(HISTORY_FILE)) {
+        try (BufferedReader reader = Files.newBufferedReader(HISTORY_FILE, java.nio.charset.StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (!line.trim().isEmpty()) {
@@ -685,7 +685,7 @@ public class ClaudeHistoryReader {
 
             List<ConversationMessage> messages = new ArrayList<>();
 
-            try (BufferedReader reader = Files.newBufferedReader(sessionFile)) {
+            try (BufferedReader reader = Files.newBufferedReader(sessionFile, java.nio.charset.StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (line.trim().isEmpty()) continue;
@@ -861,7 +861,7 @@ public class ClaudeHistoryReader {
     }
 
     private SessionSummary parseSessionFile(Path filePath, Set<String> processedHashes) {
-        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+        try (BufferedReader reader = Files.newBufferedReader(filePath, java.nio.charset.StandardCharsets.UTF_8)) {
             UsageData usage = new UsageData();
             double totalCost = 0;
             String model = "unknown";

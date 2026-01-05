@@ -1,26 +1,46 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_MODES, type PermissionMode } from '../types';
 
 interface ModeSelectProps {
   value: PermissionMode;
   onChange: (mode: PermissionMode) => void;
+  provider?: string;
 }
 
 /**
  * ModeSelect - 模式选择器组件
  * 支持默认模式、代理模式、规划模式、自动模式切换
  */
-export const ModeSelect = ({ value, onChange }: ModeSelectProps) => {
+export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentMode = AVAILABLE_MODES.find(m => m.id === value) || AVAILABLE_MODES[0];
+  const modeOptions = useMemo(() => {
+    if (provider === 'codex') {
+      // Codex 只有三个模式：默认模式、代理模式、自动模式（过滤掉规划模式）
+      return AVAILABLE_MODES.filter((mode) => mode.id !== 'plan').map((mode) => {
+        if (mode.id === 'default' || mode.id === 'acceptEdits') {
+          return { ...mode, disabled: true };
+        }
+        return mode;
+      });
+    }
+    return AVAILABLE_MODES;
+  }, [provider]);
+
+  const currentMode = modeOptions.find(m => m.id === value) || modeOptions[0];
 
   // Helper function to get translated mode text
   const getModeText = (modeId: PermissionMode, field: 'label' | 'tooltip' | 'description') => {
+    if (provider === 'codex') {
+      const codexKey = `codexModes.${modeId}.${field}`;
+      const fallbackKey = `modes.${modeId}.${field}`;
+      return t(codexKey, { defaultValue: t(fallbackKey) });
+    }
+
     return t(`modes.${modeId}.${field}`);
   };
 
@@ -94,7 +114,7 @@ export const ModeSelect = ({ value, onChange }: ModeSelectProps) => {
             zIndex: 10000,
           }}
         >
-          {AVAILABLE_MODES.map((mode) => (
+          {modeOptions.map((mode) => (
             <div
               key={mode.id}
               className={`selector-option ${mode.id === value ? 'selected' : ''} ${mode.disabled ? 'disabled' : ''}`}
