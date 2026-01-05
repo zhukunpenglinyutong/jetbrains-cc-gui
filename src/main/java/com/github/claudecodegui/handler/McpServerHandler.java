@@ -104,6 +104,16 @@ public class McpServerHandler extends BaseMessageHandler {
                     Gson gson = new Gson();
                     String statusJson = gson.toJson(statusList);
 
+                    // 添加调试日志，帮助排查名称匹配问题
+                    LOG.info("[McpServerHandler] MCP server status received: " + statusList.size() + " servers");
+                    for (JsonObject status : statusList) {
+                        if (status.has("name")) {
+                            String serverName = status.get("name").getAsString();
+                            String serverStatus = status.has("status") ? status.get("status").getAsString() : "unknown";
+                            LOG.info("[McpServerHandler] Server: " + serverName + ", Status: " + serverStatus);
+                        }
+                    }
+
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("window.updateMcpServerStatus", escapeJs(statusJson));
                     });
@@ -138,13 +148,14 @@ public class McpServerHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to add MCP server: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("Failed to add MCP server: " + e.getMessage()));
+                String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.addServerFailedWithReason", e.getMessage()));
+                callJavaScript("window.showError", errorMsg);
             });
         }
     }
 
     /**
-     * 更新 MCP 服务器
+     * Update MCP server
      */
     private void handleUpdateMcpServer(String content) {
         try {
@@ -160,7 +171,8 @@ public class McpServerHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to update MCP server: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("Failed to update MCP server: " + e.getMessage()));
+                String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.updateServerFailedWithReason", e.getMessage()));
+                callJavaScript("window.showError", errorMsg);
             });
         }
     }
@@ -183,13 +195,15 @@ public class McpServerHandler extends BaseMessageHandler {
                 });
             } else {
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("window.showError", escapeJs("Failed to delete MCP server: server does not exist"));
+                    String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.deleteServerFailedWithReason", com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.serverNotFound")));
+                    callJavaScript("window.showError", errorMsg);
                 });
             }
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to delete MCP server: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("Failed to delete MCP server: " + e.getMessage()));
+                String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("mcp.deleteServerFailedWithReason", e.getMessage()));
+                callJavaScript("window.showError", errorMsg);
             });
         }
     }

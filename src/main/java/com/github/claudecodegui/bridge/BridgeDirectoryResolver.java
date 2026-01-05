@@ -45,13 +45,10 @@ public class BridgeDirectoryResolver {
 
     /**
      * Find the claude-bridge directory.
+     * Priority: Configured path > Embedded path > Cached path > Fallback
      */
     public File findSdkDir() {
-        if (cachedSdkDir != null && cachedSdkDir.exists()) {
-            LOG.info("[BridgeResolver] Using cached path: " + cachedSdkDir.getAbsolutePath());
-            return cachedSdkDir;
-        }
-
+        // Priority 1: Configured path (highest priority)
         File configuredDir = resolveConfiguredBridgeDir();
         if (configuredDir != null) {
             LOG.info("[BridgeResolver] Using configured path: " + configuredDir.getAbsolutePath());
@@ -59,6 +56,7 @@ public class BridgeDirectoryResolver {
             return cachedSdkDir;
         }
 
+        // ✓ 优先级 2: 嵌入式 ai-bridge.zip（生产环境优先）
         File embeddedDir = ensureEmbeddedBridgeExtracted();
         if (embeddedDir != null) {
             LOG.info("[BridgeResolver] Using embedded path: " + embeddedDir.getAbsolutePath());
@@ -69,8 +67,15 @@ public class BridgeDirectoryResolver {
             return cachedSdkDir;
         }
 
-        LOG.info("Searching for ai-bridge directory...");
+        // Priority 3: Use cached path (if exists and valid)
+        if (cachedSdkDir != null && isValidBridgeDir(cachedSdkDir)) {
+            LOG.info("[BridgeResolver] Using cached path: " + cachedSdkDir.getAbsolutePath());
+            return cachedSdkDir;
+        }
 
+        LOG.info("[BridgeResolver] Embedded path not found, trying fallback...");
+
+        // Priority 4: Fallback (development environment)
         // List of possible locations
         List<File> possibleDirs = new ArrayList<>();
 
@@ -212,6 +217,7 @@ public class BridgeDirectoryResolver {
 
     /**
      * Validate whether the directory is a valid bridge directory.
+     * Enhanced validation: checks core script and key dependencies
      */
     public boolean isValidBridgeDir(File dir) {
         if (dir == null) {
@@ -220,8 +226,28 @@ public class BridgeDirectoryResolver {
         if (!dir.exists() || !dir.isDirectory()) {
             return false;
         }
+
+        // 检查核心脚本
         File scriptFile = new File(dir, NODE_SCRIPT);
-        return scriptFile.exists();
+        if (!scriptFile.exists()) {
+            return false;
+        }
+
+        // 检查 node_modules 关键依赖
+        File nodeModules = new File(dir, "node_modules");
+        if (!nodeModules.exists() || !nodeModules.isDirectory()) {
+            LOG.warn("[BridgeResolver] node_modules 不存在: " + dir.getAbsolutePath());
+            return false;
+        }
+
+        // 检查 @anthropic-ai/claude-agent-sdk
+        File claudeSdk = new File(nodeModules, "@anthropic-ai/claude-agent-sdk");
+        if (!claudeSdk.exists()) {
+            LOG.warn("[BridgeResolver] 缺少 @anthropic-ai/claude-agent-sdk: " + dir.getAbsolutePath());
+            return false;
+        }
+
+        return true;
     }
 
     private void addCandidate(List<File> possibleDirs, File dir) {

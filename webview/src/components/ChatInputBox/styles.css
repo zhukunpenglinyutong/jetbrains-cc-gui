@@ -253,8 +253,8 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 8px;
-  
+  margin-bottom: 4px;
+
   background: var(--dropdown-bg);
   color: var(--text-primary);
   border: 1px solid var(--dropdown-border);
@@ -266,7 +266,7 @@
   word-break: break-all;
   max-width: 300px;
   width: max-content;
-  
+
   z-index: 1000;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   pointer-events: none;
@@ -280,7 +280,7 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 2px;
+  margin-bottom: -2px;
   border: 6px solid transparent;
   border-top-color: var(--dropdown-border);
   z-index: 1000;

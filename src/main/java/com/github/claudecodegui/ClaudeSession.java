@@ -683,7 +683,8 @@ public class ClaudeSession {
     }
 
     /**
-     * 设置权限模式
+     * Set permission mode
+     * Maps frontend permission mode string to PermissionManager enum value
      */
     public void setPermissionMode(String mode) {
         state.setPermissionMode(mode);

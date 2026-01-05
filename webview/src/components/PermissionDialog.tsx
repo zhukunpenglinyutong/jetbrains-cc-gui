@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface PermissionRequest {
   channelId: string;
@@ -127,7 +128,13 @@ const PermissionDialog = ({
 
   // Get tool display title
   const getToolTitle = (toolName: string): string => {
-    return toolName;
+    const key = `permission.tools.${toolName}`;
+    const translated = t(key);
+    // If translation key doesn't exist, return default template
+    if (translated === key) {
+      return t('permission.tools.execute', { toolName });
+    }
+    return translated;
   };
 
   const commandContent = getCommandContent();
@@ -136,9 +143,9 @@ const PermissionDialog = ({
   return (
     <div className="permission-dialog-overlay">
       <div className="permission-dialog-v3">
-        {/* 标题区域 */}
+        {/* Title area */}
         <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
-        <p className="permission-dialog-v3-subtitle">Request from external process</p>
+        <p className="permission-dialog-v3-subtitle">{t('permission.fromExternalProcess')}</p>
 
         {/* 命令/内容区域 */}
         <div className="permission-dialog-v3-command-box">

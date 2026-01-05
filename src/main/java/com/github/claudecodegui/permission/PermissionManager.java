@@ -11,12 +11,12 @@ import java.util.function.Consumer;
  */
 public class PermissionManager {
 
-    // 权限模式枚举
+    // Permission modes enum
     public enum PermissionMode {
-        DEFAULT,      // 默认模式，每次询问
+        DEFAULT,      // Default mode, ask every time
         ACCEPT_EDITS, // Accept Edits mode: Auto-approve file editing operations (Write, Edit, CreateDirectory, etc.)
-        ALLOW_ALL,    // 允许所有工具调用
-        DENY_ALL      // 拒绝所有工具调用
+        ALLOW_ALL,    // Allow all tool calls
+        DENY_ALL      // Deny all tool calls
     }
 
     private PermissionMode mode = PermissionMode.DEFAULT;
@@ -60,7 +60,7 @@ public class PermissionManager {
             return request;
         }
 
-        // 检查全局权限模式
+        // Check global permission mode
         if (mode == PermissionMode.ACCEPT_EDITS) {
             // ACCEPT_EDITS mode: Auto-approve file editing operations only
             if (isAutoApprovedInAcceptEditsMode(toolName)) {

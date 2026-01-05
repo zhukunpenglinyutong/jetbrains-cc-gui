@@ -49,9 +49,16 @@ If you've used the Claude Code CLI before (`claude login`), the plugin **detects
 
 ---
 
-### Current Version: v0.2.1
+### Current Version: v0.2.2
 
-**Latest Features:**
+**Latest: Upstream Sync (v0.2.2)**
+- Full merge of 23 upstream commits (v0.1.4-beta7)
+- Permission dialog fixes for proxy mode
+- macOS subscription login support
+- Ask User Question feature
+- MCP server enable/disable toggle
+
+**v0.2.1 Features:**
 - **MCP Server Management** - Enable/disable MCP servers with project-level tracking
 - **AskUserQuestion Tool** - Interactive dialogs for Claude to ask structured questions
 - **Test Infrastructure** - Comprehensive test coverage with Vitest
@@ -173,12 +180,22 @@ Thanks to all contributors who help make IDEA-Claude-GUI better!
     </td>
     <td align="center">
       <a href="https://github.com/lie5860">
-        <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="lie5860" style="border-radius: 50%;" />
       </a>
     </td>
     <td align="center">
       <a href="https://github.com/buddhist-coder">
-        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
+        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="buddhist-coder" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/LaCreArthur">
+        <img src="https://avatars.githubusercontent.com/u/14138307?size=100" width="100" height="100" alt="LaCreArthur" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/dungnguyent8">
+        <img src="https://avatars.githubusercontent.com/u/39462756?size=100" width="100" height="100" alt="dungnguyent8" style="border-radius: 50%;" />
       </a>
     </td>
     <td align="center">

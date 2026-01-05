@@ -30,7 +30,7 @@ public class PermissionHandler extends BaseMessageHandler {
     // Permission request mapping
     private final Map<String, CompletableFuture<Integer>> pendingPermissionRequests = new ConcurrentHashMap<>();
 
-    // AskUserQuestion request mapping
+    // AskUserQuestion request mapping (requestId -> CompletableFuture<JsonObject>)
     private final Map<String, CompletableFuture<JsonObject>> pendingAskUserQuestionRequests = new ConcurrentHashMap<>();
 
     // Permission denied callback
@@ -60,9 +60,9 @@ public class PermissionHandler extends BaseMessageHandler {
             LOG.debug("[PERM_DEBUG][BRIDGE_RECV] Content: " + content);
             handlePermissionDecision(content);
             return true;
-        }
-        if ("ask_user_question_response".equals(type)) {
-            LOG.debug("[ASK_USER_QUESTION] Received ask_user_question_response from JS");
+        } else if ("ask_user_question_response".equals(type)) {
+            LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] Received ask_user_question_response from JS");
+            LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] Content: " + content);
             handleAskUserQuestionResponse(content);
             return true;
         }

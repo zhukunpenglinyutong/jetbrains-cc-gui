@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * Permission service - Handles Node.js permission requests
+ * 权限服务 - 处理Node.js的权限请求
  */
 public class PermissionService {
 
@@ -27,19 +27,19 @@ public class PermissionService {
     private Thread watchThread;
     private boolean running = false;
 
-    // Remember user choices (tool + parameters level)
+    // 记忆用户选择（工具+参数级别）
     private final Map<String, Integer> permissionMemory = new ConcurrentHashMap<>();
-    // Tool-level permission memory (tool name only -> whether always allow)
+    // 工具级别权限记忆（仅工具名 -> 是否总是允许）
     private final Map<String, Boolean> toolOnlyPermissionMemory = new ConcurrentHashMap<>();
     private volatile PermissionDecisionListener decisionListener;
 
-    // Multi-project support: dialog showers registered per project
+    // 多项目支持：按项目注册的权限对话框显示器
     private final Map<Project, PermissionDialogShower> dialogShowers = new ConcurrentHashMap<>();
 
-    // AskUserQuestion dialog showers per project
+    // 多项目支持：按项目注册的 AskUserQuestion 对话框显示器
     private final Map<Project, AskUserQuestionDialogShower> askUserQuestionDialogShowers = new ConcurrentHashMap<>();
 
-    // Debug logging helper method
+    // 调试日志辅助方法
     private void debugLog(String tag, String message) {
         LOG.debug(String.format("[%s] %s", tag, message));
     }
@@ -49,9 +49,9 @@ public class PermissionService {
     }
 
     public enum PermissionResponse {
-        ALLOW(1, "Allow"),
-        ALLOW_ALWAYS(2, "Allow and don't ask again"),
-        DENY(3, "Deny");
+        ALLOW(1, "允许"),
+        ALLOW_ALWAYS(2, "允许且不再询问"),
+        DENY(3, "拒绝");
 
         private final int value;
         private final String description;
@@ -116,29 +116,29 @@ public class PermissionService {
     }
 
     /**
-     * Permission dialog shower interface - for showing frontend dialogs
+     * 权限对话框显示器接口 - 用于显示前端弹窗
      */
     public interface PermissionDialogShower {
         /**
-         * Show permission dialog and return user decision
-         * @param toolName Tool name
-         * @param inputs Input parameters
-         * @return CompletableFuture<Integer> returning PermissionResponse value
+         * 显示权限对话框并返回用户决策
+         * @param toolName 工具名称
+         * @param inputs 输入参数
+         * @return CompletableFuture<Integer> 返回 PermissionResponse 的值
          */
         CompletableFuture<Integer> showPermissionDialog(String toolName, JsonObject inputs);
     }
 
     /**
-     * AskUserQuestion dialog shower interface - for showing question dialogs
+     * AskUserQuestion 对话框显示器接口 - 用于显示问题对话框
      */
     public interface AskUserQuestionDialogShower {
         /**
-         * Show ask-user-question dialog and return user answers
-         * @param requestId Request ID for correlation
-         * @param questionsData Questions data from the tool
-         * @return CompletableFuture<JsonObject> returning answers object or null if cancelled
+         * 显示 AskUserQuestion 对话框并返回用户答案
+         * @param requestId 请求ID
+         * @param questions 问题列表（JSON 数组）
+         * @return CompletableFuture<JsonObject> 返回用户答案（格式：{ "问题文本": "答案" }）
          */
-        CompletableFuture<JsonObject> showAskUserQuestionDialog(String requestId, JsonObject questionsData);
+        CompletableFuture<JsonObject> showAskUserQuestionDialog(String requestId, JsonObject questions);
     }
 
     private PermissionService(Project project) {
@@ -169,11 +169,11 @@ public class PermissionService {
     }
 
     /**
-     * Register permission dialog shower (for showing frontend dialogs)
-     * Supports multi-project: each project registers its own shower
+     * 注册权限对话框显示器（用于显示前端弹窗）
+     * 支持多项目：每个项目注册自己的显示器
      *
-     * @param project Project
-     * @param shower Permission dialog shower
+     * @param project 项目
+     * @param shower 权限对话框显示器
      */
     public void registerDialogShower(Project project, PermissionDialogShower shower) {
         if (project != null && shower != null) {
@@ -184,10 +184,10 @@ public class PermissionService {
     }
 
     /**
-     * Unregister permission dialog shower
-     * Called when project closes to prevent memory leaks
+     * 注销权限对话框显示器
+     * 在项目关闭时调用，防止内存泄漏
      *
-     * @param project Project
+     * @param project 项目
      */
     public void unregisterDialogShower(Project project) {
         if (project != null) {
@@ -198,12 +198,41 @@ public class PermissionService {
     }
 
     /**
-     * Set permission dialog shower (for showing frontend dialogs)
-     * @deprecated Use {@link #registerDialogShower(Project, PermissionDialogShower)} instead
+     * 注册 AskUserQuestion 对话框显示器
+     * 支持多项目：每个项目注册自己的显示器
+     *
+     * @param project 项目
+     * @param shower AskUserQuestion 对话框显示器
+     */
+    public void registerAskUserQuestionDialogShower(Project project, AskUserQuestionDialogShower shower) {
+        if (project != null && shower != null) {
+            askUserQuestionDialogShowers.put(project, shower);
+            debugLog("CONFIG", "AskUserQuestion dialog shower registered for project: " + project.getName() +
+                ", total registered: " + askUserQuestionDialogShowers.size());
+        }
+    }
+
+    /**
+     * 注销 AskUserQuestion 对话框显示器
+     * 在项目关闭时调用，防止内存泄漏
+     *
+     * @param project 项目
+     */
+    public void unregisterAskUserQuestionDialogShower(Project project) {
+        if (project != null) {
+            AskUserQuestionDialogShower removed = askUserQuestionDialogShowers.remove(project);
+            debugLog("CONFIG", "AskUserQuestion dialog shower unregistered for project: " + project.getName() +
+                ", was registered: " + (removed != null) + ", remaining: " + askUserQuestionDialogShowers.size());
+        }
+    }
+
+    /**
+     * 设置权限对话框显示器（用于显示前端弹窗）
+     * @deprecated 使用 {@link #registerDialogShower(Project, PermissionDialogShower)} 代替
      */
     @Deprecated
     public void setDialogShower(PermissionDialogShower shower) {
-        // Legacy compatibility: register with default project
+        // 兼容旧代码：使用默认项目注册
         if (shower != null && this.project != null) {
             dialogShowers.put(this.project, shower);
         }
@@ -211,44 +240,11 @@ public class PermissionService {
     }
 
     /**
-     * Register AskUserQuestion dialog shower for a project
-     * @param project Project
-     * @param shower AskUserQuestion dialog shower
-     */
-    public void registerAskUserQuestionDialogShower(Project project, AskUserQuestionDialogShower shower) {
-        if (project != null && shower != null) {
-            askUserQuestionDialogShowers.put(project, shower);
-            debugLog("CONFIG", "AskUserQuestion dialog shower registered for project: " + project.getName());
-        }
-    }
-
-    /**
-     * Unregister AskUserQuestion dialog shower for a project
-     * @param project Project
-     */
-    public void unregisterAskUserQuestionDialogShower(Project project) {
-        if (project != null) {
-            askUserQuestionDialogShowers.remove(project);
-            debugLog("CONFIG", "AskUserQuestion dialog shower unregistered for project: " + project.getName());
-        }
-    }
-
-    /**
-     * Get an AskUserQuestion dialog shower (uses first available if multiple)
-     */
-    private AskUserQuestionDialogShower getAskUserQuestionDialogShower() {
-        if (askUserQuestionDialogShowers.isEmpty()) {
-            return null;
-        }
-        return askUserQuestionDialogShowers.values().iterator().next();
-    }
-
-    /**
-     * Match project based on file path
-     * Extract file path from inputs, then find corresponding project
+     * 根据文件路径匹配项目
+     * 从 inputs 中提取文件路径，然后找到对应的项目
      *
-     * @param inputs Input parameters from permission request
-     * @return DialogShower for matched project, or first registered if no match
+     * @param inputs 权限请求的输入参数
+     * @return 匹配的项目对应的 DialogShower，如果匹配不到则返回第一个注册的
      */
     private PermissionDialogShower findDialogShowerByInputs(JsonObject inputs) {
         if (dialogShowers.isEmpty()) {
@@ -311,33 +307,33 @@ public class PermissionService {
     }
 
     /**
-     * Extract file path from inputs
-     * Supports multiple fields: file_path, path, paths in command, etc.
+     * 从 inputs 中提取文件路径
+     * 支持多种字段：file_path、path、command 中的路径等
      */
     private String extractFilePathFromInputs(JsonObject inputs) {
         if (inputs == null) {
             return null;
         }
 
-        // Check file_path field first (most common)
+        // 优先检查 file_path 字段（最常见）
         if (inputs.has("file_path") && !inputs.get("file_path").isJsonNull()) {
             return inputs.get("file_path").getAsString();
         }
 
-        // Check path field
+        // 检查 path 字段
         if (inputs.has("path") && !inputs.get("path").isJsonNull()) {
             return inputs.get("path").getAsString();
         }
 
-        // Check notebook_path field (Jupyter notebooks)
+        // 检查 notebook_path 字段（Jupyter notebooks）
         if (inputs.has("notebook_path") && !inputs.get("notebook_path").isJsonNull()) {
             return inputs.get("notebook_path").getAsString();
         }
 
-        // Extract path from command field (try to find absolute path)
+        // 从 command 字段中提取路径（尝试找到绝对路径）
         if (inputs.has("command") && !inputs.get("command").isJsonNull()) {
             String command = inputs.get("command").getAsString();
-            // Simple path extraction: look for paths starting with / (Unix) or containing :\ (Windows)
+            // 简单的路径提取：查找以 / 开头的路径（Unix）或包含 :\ 的路径（Windows）
             String[] parts = command.split("\\s+");
             for (String part : parts) {
                 if (part.startsWith("/") || (part.length() > 2 && part.charAt(1) == ':')) {
@@ -401,7 +397,7 @@ public class PermissionService {
     }
 
     /**
-     * Start permission service
+     * 启动权限服务
      */
     public void start() {
         if (running) {
@@ -433,24 +429,25 @@ public class PermissionService {
                     dir.mkdirs();
                 }
 
-                // Scan for permission request files
-                File[] permissionFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
+                // 监控普通权限请求文件
+                File[] requestFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
 
-                // Scan for ask-user-question request files
-                File[] askUserQuestionFiles = dir.listFiles((d, name) ->
-                    name.startsWith("ask-user-question-") && name.endsWith(".json") && !name.contains("-response"));
+                // 监控 AskUserQuestion 请求文件
+                File[] askUserQuestionFiles = dir.listFiles((d, name) -> name.startsWith("ask-user-question-") && name.endsWith(".json"));
 
-                // Log status periodically (every ~50 seconds)
+                // 每20次轮询（约10秒）输出一次状态
+                // 降低日志频率：每100次轮询（约50秒）记录一次状态
                 if (pollCount % 100 == 0) {
-                    int permFileCount = permissionFiles != null ? permissionFiles.length : 0;
-                    int askFileCount = askUserQuestionFiles != null ? askUserQuestionFiles.length : 0;
-                    debugLog("POLL_STATUS", String.format("Poll #%d, found %d permission + %d ask-user-question files",
-                        pollCount, permFileCount, askFileCount));
+                    int requestCount = requestFiles != null ? requestFiles.length : 0;
+                    int askQuestionCount = askUserQuestionFiles != null ? askUserQuestionFiles.length : 0;
+                    debugLog("POLL_STATUS", String.format("Poll #%d, found %d request files, %d ask-user-question files",
+                        pollCount, requestCount, askQuestionCount));
                 }
 
-                // Handle permission requests
-                if (permissionFiles != null && permissionFiles.length > 0) {
-                    for (File file : permissionFiles) {
+                // 处理普通权限请求
+                if (requestFiles != null && requestFiles.length > 0) {
+                    for (File file : requestFiles) {
+                        // 简单防重：检查文件是否还存在（可能被其他线程处理了）
                         if (file.exists()) {
                             debugLog("REQUEST_FOUND", "Found request file: " + file.getName());
                             handlePermissionRequest(file.toPath());
@@ -458,11 +455,11 @@ public class PermissionService {
                     }
                 }
 
-                // Handle ask-user-question requests
+                // 处理 AskUserQuestion 请求
                 if (askUserQuestionFiles != null && askUserQuestionFiles.length > 0) {
                     for (File file : askUserQuestionFiles) {
                         if (file.exists()) {
-                            debugLog("ASK_USER_QUESTION_FOUND", "Found ask-user-question file: " + file.getName());
+                            debugLog("ASK_USER_QUESTION_FOUND", "Found AskUserQuestion file: " + file.getName());
                             handleAskUserQuestionRequest(file.toPath());
                         }
                     }
@@ -487,7 +484,7 @@ public class PermissionService {
     private final Set<String> processingRequests = ConcurrentHashMap.newKeySet();
 
     /**
-     * Handle permission request
+     * 处理权限请求
      */
     private void handlePermissionRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
@@ -641,8 +638,8 @@ public class PermissionService {
                 future.complete(response);
             });
 
-            debugLog("DIALOG_WAIT", "Waiting for system dialog response (no timeout)");
-            int response = future.get(); // No timeout - user can take as long as needed
+            debugLog("DIALOG_WAIT", "Waiting for system dialog response (timeout: 30s)");
+            int response = future.get(30, TimeUnit.SECONDS);
             debugLog("DIALOG_RESPONSE", "Got system dialog response: " + response);
 
             PermissionResponse decision = PermissionResponse.fromValue(response);
@@ -694,30 +691,30 @@ public class PermissionService {
     private int showSystemPermissionDialog(String toolName, JsonObject inputs) {
         // 构建消息内容
         StringBuilder message = new StringBuilder();
-        message.append("Claude requests to perform the following action:\n\n");
-        message.append("Tool: ").append(toolName).append("\n");
+        message.append("Claude 请求执行以下操作：\n\n");
+        message.append("工具：").append(toolName).append("\n");
 
-        // Show important parameters
+        // 显示重要参数
         if (inputs.has("file_path")) {
-            message.append("File: ").append(inputs.get("file_path").getAsString()).append("\n");
+            message.append("文件：").append(inputs.get("file_path").getAsString()).append("\n");
         }
         if (inputs.has("command")) {
-            message.append("Command: ").append(inputs.get("command").getAsString()).append("\n");
+            message.append("命令：").append(inputs.get("command").getAsString()).append("\n");
         }
 
-        message.append("\nAllow execution?");
+        message.append("\n是否允许执行？");
 
-        // Create options
+        // 创建选项
         Object[] options = {
-            "Allow",
-            "Deny"
+            "允许",
+            "拒绝"
         };
 
-        // Show dialog
+        // 显示对话框
         int result = JOptionPane.showOptionDialog(
             null,
             message.toString(),
-            "Permission Request - " + toolName,
+            "权限请求 - " + toolName,
             JOptionPane.DEFAULT_OPTION,
             JOptionPane.QUESTION_MESSAGE,
             null,
@@ -731,129 +728,8 @@ public class PermissionService {
         return PermissionResponse.DENY.getValue();
     }
 
-    // Set to track ask-user-question requests being processed
-    private final Set<String> processingAskUserQuestionRequests = ConcurrentHashMap.newKeySet();
-
     /**
-     * Handle ask-user-question request
-     */
-    private void handleAskUserQuestionRequest(Path requestFile) {
-        String fileName = requestFile.getFileName().toString();
-        debugLog("HANDLE_ASK_USER_QUESTION", "Processing request file: " + fileName);
-
-        // Prevent duplicate processing
-        if (!processingAskUserQuestionRequests.add(fileName)) {
-            debugLog("SKIP_DUPLICATE", "Ask-user-question request already being processed: " + fileName);
-            return;
-        }
-
-        try {
-            Thread.sleep(100); // Wait for file write to complete
-
-            if (!Files.exists(requestFile)) {
-                debugLog("FILE_MISSING", "Ask-user-question file missing before read, likely already handled: " + fileName);
-                return;
-            }
-
-            String content;
-            try {
-                content = Files.readString(requestFile);
-            } catch (NoSuchFileException e) {
-                debugLog("FILE_MISSING", "Ask-user-question file missing while reading, likely already handled: " + fileName);
-                return;
-            }
-            debugLog("FILE_READ", "Read ask-user-question content: " + content.substring(0, Math.min(200, content.length())) + "...");
-
-            JsonObject request = gson.fromJson(content, JsonObject.class);
-            String requestId = request.get("requestId").getAsString();
-            JsonObject questions = request.getAsJsonArray("questions") != null
-                ? request : new JsonObject();
-
-            // Get dialog shower
-            AskUserQuestionDialogShower dialogShower = getAskUserQuestionDialogShower();
-            if (dialogShower == null) {
-                debugLog("NO_DIALOG_SHOWER", "No AskUserQuestion dialog shower registered, cancelling");
-                writeAskUserQuestionResponse(requestId, null, true);
-                Files.deleteIfExists(requestFile);
-                processingAskUserQuestionRequests.remove(fileName);
-                return;
-            }
-
-            // Delete request file immediately to prevent duplicate processing
-            try {
-                Files.deleteIfExists(requestFile);
-                debugLog("FILE_DELETE", "Deleted ask-user-question request file: " + fileName);
-            } catch (Exception e) {
-                debugLog("FILE_DELETE_ERROR", "Failed to delete request file: " + e.getMessage());
-            }
-
-            // Show dialog asynchronously
-            debugLog("DIALOG_SHOW", "Calling showAskUserQuestionDialog for requestId: " + requestId);
-            CompletableFuture<JsonObject> future = dialogShower.showAskUserQuestionDialog(requestId, request);
-
-            future.thenAccept(answers -> {
-                try {
-                    if (answers != null) {
-                        debugLog("DIALOG_RESPONSE", "Got answers for requestId: " + requestId);
-                        writeAskUserQuestionResponse(requestId, answers, false);
-                    } else {
-                        debugLog("DIALOG_CANCELLED", "User cancelled for requestId: " + requestId);
-                        writeAskUserQuestionResponse(requestId, null, true);
-                    }
-                } catch (Exception e) {
-                    debugLog("DIALOG_ERROR", "Error writing response: " + e.getMessage());
-                    LOG.error("Error occurred", e);
-                } finally {
-                    processingAskUserQuestionRequests.remove(fileName);
-                }
-            }).exceptionally(ex -> {
-                debugLog("DIALOG_EXCEPTION", "Dialog exception: " + ex.getMessage());
-                try {
-                    writeAskUserQuestionResponse(requestId, null, true);
-                } catch (Exception e) {
-                    LOG.error("Error occurred", e);
-                }
-                processingAskUserQuestionRequests.remove(fileName);
-                return null;
-            });
-
-        } catch (Exception e) {
-            debugLog("HANDLE_ERROR", "Error handling ask-user-question request: " + e.getMessage());
-            LOG.error("Error occurred", e);
-            processingAskUserQuestionRequests.remove(fileName);
-        }
-    }
-
-    /**
-     * Write ask-user-question response file
-     */
-    private void writeAskUserQuestionResponse(String requestId, JsonObject answers, boolean cancelled) {
-        debugLog("WRITE_ASK_USER_QUESTION_RESPONSE", String.format(
-            "Writing response for requestId=%s, cancelled=%s", requestId, cancelled));
-        try {
-            JsonObject response = new JsonObject();
-            response.addProperty("cancelled", cancelled);
-            if (answers != null && !cancelled) {
-                response.add("answers", answers);
-            }
-
-            Path responseFile = permissionDir.resolve("ask-user-question-response-" + requestId + ".json");
-            String responseContent = gson.toJson(response);
-            debugLog("RESPONSE_CONTENT", "Response JSON: " + responseContent);
-
-            Files.writeString(responseFile, responseContent);
-
-            if (Files.exists(responseFile)) {
-                debugLog("WRITE_SUCCESS", "Ask-user-question response file written successfully");
-            }
-        } catch (IOException e) {
-            debugLog("WRITE_ERROR", "Failed to write ask-user-question response file: " + e.getMessage());
-            LOG.error("Error occurred", e);
-        }
-    }
-
-    /**
-     * Write permission response file
+     * 写入响应文件
      */
     private void writeResponse(String requestId, boolean allow) {
         debugLog("WRITE_RESPONSE_START", String.format("Writing response for requestId=%s, allow=%s", requestId, allow));
@@ -882,7 +758,148 @@ public class PermissionService {
     }
 
     /**
-     * Stop permission service
+     * 处理 AskUserQuestion 请求
+     */
+    private void handleAskUserQuestionRequest(Path requestFile) {
+        String fileName = requestFile.getFileName().toString();
+        long startTime = System.currentTimeMillis();
+        debugLog("HANDLE_ASK_USER_QUESTION", "Processing AskUserQuestion file: " + fileName);
+
+        // 检查是否正在处理该请求
+        if (!processingRequests.add(fileName)) {
+            debugLog("SKIP_DUPLICATE_ASK", "AskUserQuestion already being processed, skipping: " + fileName);
+            return;
+        }
+
+        try {
+            Thread.sleep(100); // 等待文件写入完成
+
+            if (!Files.exists(requestFile)) {
+                debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing before read, likely already handled: " + fileName);
+                return;
+            }
+
+            String content;
+            try {
+                content = Files.readString(requestFile);
+            } catch (NoSuchFileException e) {
+                debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing while reading, likely already handled: " + fileName);
+                return;
+            }
+            debugLog("ASK_FILE_READ", "Read AskUserQuestion content: " + content.substring(0, Math.min(200, content.length())) + "...");
+
+            JsonObject request = gson.fromJson(content, JsonObject.class);
+
+            String requestId = request.get("requestId").getAsString();
+            String toolName = request.get("toolName").getAsString();
+            // questions 是一个 JSON 对象，包含问题数据
+            JsonObject questionsData = request;
+
+            debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
+
+            // 获取 AskUserQuestion 对话框显示器
+            // 由于 AskUserQuestion 不涉及文件路径，使用第一个注册的项目
+            AskUserQuestionDialogShower dialogShower = null;
+            if (!askUserQuestionDialogShowers.isEmpty()) {
+                dialogShower = askUserQuestionDialogShowers.values().iterator().next();
+            }
+
+            if (dialogShower != null) {
+                debugLog("ASK_DIALOG_SHOWER", "Using AskUserQuestion dialog shower");
+
+                // 立即删除请求文件，避免重复处理
+                try {
+                    Files.deleteIfExists(requestFile);
+                    debugLog("ASK_FILE_DELETE", "Deleted AskUserQuestion request file: " + fileName);
+                } catch (Exception e) {
+                    debugLog("ASK_FILE_DELETE_ERROR", "Failed to delete AskUserQuestion request file: " + e.getMessage());
+                }
+
+                final long dialogStartTime = System.currentTimeMillis();
+
+                // 异步调用前端弹窗
+                debugLog("ASK_DIALOG_SHOW", "Calling dialogShower.showAskUserQuestionDialog");
+                CompletableFuture<JsonObject> future = dialogShower.showAskUserQuestionDialog(requestId, questionsData);
+
+                // 异步处理结果
+                future.thenAccept(answers -> {
+                    long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
+                    debugLog("ASK_DIALOG_RESPONSE", String.format("Got answers after %dms", dialogElapsed));
+                    try {
+                        debugLog("ASK_WRITE_RESPONSE", String.format("Writing AskUserQuestion response for %s", requestId));
+                        writeAskUserQuestionResponse(requestId, answers);
+
+                        debugLog("ASK_DIALOG_COMPLETE", "AskUserQuestion dialog processing complete");
+                    } catch (Exception e) {
+                        debugLog("ASK_DIALOG_ERROR", "Error processing AskUserQuestion dialog result: " + e.getMessage());
+                        LOG.error("Error occurred", e);
+                    } finally {
+                        processingRequests.remove(fileName);
+                    }
+                }).exceptionally(ex -> {
+                    debugLog("ASK_DIALOG_EXCEPTION", "AskUserQuestion dialog exception: " + ex.getMessage());
+                    try {
+                        // 用户取消或出错，写入空答案
+                        writeAskUserQuestionResponse(requestId, new JsonObject());
+                    } catch (Exception e) {
+                        LOG.error("Error occurred", e);
+                    }
+                    processingRequests.remove(fileName);
+                    return null;
+                });
+
+                // 异步处理，直接返回，不阻塞
+                return;
+            }
+
+            // 没有对话框显示器，写入空答案（拒绝）
+            debugLog("ASK_NO_DIALOG_SHOWER", "No AskUserQuestion dialog shower available, denying");
+            writeAskUserQuestionResponse(requestId, new JsonObject());
+            Files.deleteIfExists(requestFile);
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            debugLog("ASK_REQUEST_COMPLETE", String.format("AskUserQuestion request %s completed in %dms", requestId, elapsed));
+
+        } catch (Exception e) {
+            debugLog("ASK_HANDLE_ERROR", "Error handling AskUserQuestion request: " + e.getMessage());
+            LOG.error("Error occurred", e);
+        } finally {
+            processingRequests.remove(fileName);
+        }
+    }
+
+    /**
+     * 写入 AskUserQuestion 响应文件
+     * 响应格式：{ "answers": { "问题文本": "答案" } }
+     */
+    private void writeAskUserQuestionResponse(String requestId, JsonObject answers) {
+        debugLog("WRITE_ASK_RESPONSE_START", String.format("Writing AskUserQuestion response for requestId=%s", requestId));
+        try {
+            JsonObject response = new JsonObject();
+            response.add("answers", answers);
+
+            Path responseFile = permissionDir.resolve("ask-user-question-response-" + requestId + ".json");
+            String responseContent = gson.toJson(response);
+            debugLog("ASK_RESPONSE_CONTENT", "Response JSON: " + responseContent);
+            debugLog("ASK_RESPONSE_FILE", "Target file: " + responseFile);
+
+            Files.writeString(responseFile, responseContent);
+
+            // 验证文件是否写入成功
+            if (Files.exists(responseFile)) {
+                long fileSize = Files.size(responseFile);
+                debugLog("ASK_WRITE_SUCCESS", String.format("AskUserQuestion response file written successfully, size=%d bytes", fileSize));
+            } else {
+                debugLog("ASK_WRITE_VERIFY_FAIL", "AskUserQuestion response file does NOT exist after write!");
+            }
+        } catch (IOException e) {
+            debugLog("ASK_WRITE_ERROR", "Failed to write AskUserQuestion response file: " + e.getMessage());
+            LOG.error("Error occurred", e);
+        }
+    }
+
+    /**
+     * 停止权限服务
      */
     public void stop() {
         running = false;

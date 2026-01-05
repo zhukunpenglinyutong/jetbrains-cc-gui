@@ -91,7 +91,8 @@
         "english": "English",
         "hindi": "हिन्दी",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "japanese": "日本語"
       },
       "nodePath": {
         "label": "Ruta de Node.js",
@@ -302,7 +303,29 @@
     "dialogTitle": "Solicitud de permiso",
     "allow": "Permitir una vez",
     "allowAlways": "Permitir siempre",
-    "deny": "Denegar"
+    "deny": "Denegar",
+    "fromExternalProcess": "Solicitud del proceso externo",
+    "tools": {
+      "Write": "Escribir archivo",
+      "Edit": "Editar archivo",
+      "Read": "Leer archivo",
+      "Bash": "Ejecutar comando",
+      "TodoWrite": "Escribir tarea",
+      "TodoRead": "Leer tarea",
+      "WebSearch": "Búsqueda web",
+      "WebFetch": "Obtener web",
+      "execute": "Ejecutar {{toolName}}",
+      "readDirectory": "Leer directorio"
+    }
+  },
+  "askUserQuestion": {
+    "title": "Claude tiene algunas preguntas para ti",
+    "progress": "Pregunta {{current}} / {{total}}",
+    "multiSelectHint": "Puedes seleccionar múltiples opciones",
+    "cancel": "Selección automática de IA",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "submit": "Enviar"
   },
   "askUserQuestion": {
     "title": "Claude necesita tu respuesta",
@@ -504,7 +527,9 @@
     "refreshFileInIdeaSuccess": "Se ha actualizado manualmente el contenido de este archivo en IDEA",
     "showDiffInIdea": "Mostrar cambios en IDEA",
     "diffButton": "Diff",
-    "editPrefix": "Editar: {{fileName}}"
+    "editPrefix": "Editar: {{fileName}}",
+    "lineRange": "Líneas {{start}}-{{end}}",
+    "filePath": "Ruta del archivo:"
   },
   "skills": {
     "title": "Skills",

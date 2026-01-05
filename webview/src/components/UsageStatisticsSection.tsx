@@ -603,7 +603,7 @@ const UsageStatisticsSection = () => {
                                       onMouseLeave={() => setTooltip(prev => ({ ...prev, visible: false }))}
                                     />
                                   </div>
-                                  <div className="chart-label">{formatChineseDate(day.date)}</div>
+                                  <div className="chart-label">{formatDate(new Date(day.date).getTime())}</div>
                                 </div>
                               );
                             })}

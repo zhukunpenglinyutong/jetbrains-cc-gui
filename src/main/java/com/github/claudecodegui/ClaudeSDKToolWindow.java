@@ -326,7 +326,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             permissionService.registerAskUserQuestionDialogShower(project, (requestId, questionsData) ->
                 permissionHandler.showAskUserQuestionDialog(requestId, questionsData));
 
-            LOG.info("Started permission service with frontend dialogs for project: " + project.getName());
+            LOG.info("Started permission service with frontend dialog and AskUserQuestion dialog for project: " + project.getName());
         }
 
         private void initializeHandlers() {
@@ -601,9 +601,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             fontConfig, fontConfig
                         );
                         cefBrowser.executeJavaScript(fontConfigInjection, cefBrowser.getURL(), 0);
-                        LOG.info("[FontSync] 字体配置已注入到前端");
+                        LOG.info("[FontSync] Font config injected to frontend");
 
-                        // 传递 IDEA 语言设置到前端
+                        // Pass IDEA language settings to frontend
                         String languageConfig = LanguageConfigService.getLanguageConfigJson();
                         LOG.info("[LanguageSync] Detected language config: " + languageConfig);
                         String languageConfigInjection = String.format(
@@ -614,7 +614,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         cefBrowser.executeJavaScript(languageConfigInjection, cefBrowser.getURL(), 0);
                         LOG.info("[LanguageSync] Language config injected to frontend");
 
-                        // 斜杠命令的加载现在由前端发起，通过 frontend_ready 事件触发
+                        // Slash command loading is now initiated by frontend via frontend_ready event
                         // 不再在 onLoadEnd 中主动调用，避免时序问题
                         LOG.debug("onLoadEnd completed, waiting for frontend_ready signal");
                     }
@@ -1211,11 +1211,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 LOG.info("New session created successfully, working directory: " + workingDirectory);
 
-                // 更新前端状态
+                // Update frontend status
                 ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("updateStatus", JsUtils.escapeJs("New session created, you can start asking questions"));
 
-                    // 重置 Token 使用统计
+                    // Reset Token usage statistics
                     int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                     JsonObject usageUpdate = new JsonObject();
                     usageUpdate.addProperty("percentage", 0);
@@ -1407,7 +1407,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 LOG.warn("Failed to unregister dialog showers: " + e.getMessage());
             }
 
-            LOG.info("开始清理窗口资源，项目: " + project.getName());
+            LOG.info("Starting window resource cleanup for project: " + project.getName());
 
             disposed = true;
             handlerContext.setDisposed(true);

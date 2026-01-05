@@ -1,8 +1,10 @@
 package com.github.claudecodegui.util;
 
-import com.intellij.openapi.diagnostic.Logger;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.util.registry.Registry;
+import com.intellij.DynamicBundle;
+import com.intellij.openapi.diagnostic.Logger;
+
+import java.util.Locale;
 
 /**
  * Language Configuration Service
@@ -13,103 +15,76 @@ public class LanguageConfigService {
     private static final Logger LOG = Logger.getInstance(LanguageConfigService.class);
 
     /**
-     * Get IDEA's current language/locale setting
+     * Map IDEA locale to i18n-supported language codes
+     * IDEA locale format: zh_CN, en, ja, ko, etc.
+     * i18n supported languages: zh, en, zh-TW, hi, es, fr, ja
      *
-     * @return Language code (e.g., "en", "zh", "ja", "es", "fr", "hi")
+     * @param ideaLocale IDEA's Locale
+     * @return i18n language code
      */
-    public static String getIdeLanguage() {
-        try {
-            // Try to read IDE language from registry
-            String ideLocale = Registry.get("ide.i18n.locale").asString();
-            
-            if (ideLocale != null && !ideLocale.isEmpty()) {
-                // Convert IDE locale to our supported language codes
-                String languageCode = mapIdeLocaleToLanguageCode(ideLocale);
-                LOG.info("[LanguageConfig] Detected IDE locale: " + ideLocale + " -> " + languageCode);
-                return languageCode;
-            }
-        } catch (Exception e) {
-            LOG.warn("[LanguageConfig] Failed to read IDE locale from registry: " + e.getMessage());
+    private static String mapIdeaLocaleToI18n(Locale ideaLocale) {
+        if (ideaLocale == null) {
+            return "en";  // Default to English
         }
 
-        // Fallback: Try system locale
-        try {
-            String systemLocale = System.getProperty("user.language");
-            if (systemLocale != null && !systemLocale.isEmpty()) {
-                String languageCode = mapIdeLocaleToLanguageCode(systemLocale);
-                LOG.info("[LanguageConfig] Using system locale: " + systemLocale + " -> " + languageCode);
-                return languageCode;
+        String language = ideaLocale.getLanguage();
+        String country = ideaLocale.getCountry();
+
+        // Chinese: distinguish simplified and traditional
+        if ("zh".equals(language)) {
+            if ("TW".equals(country) || "HK".equals(country)) {
+                return "zh-TW";  // Traditional Chinese
             }
-        } catch (Exception e) {
-            LOG.warn("[LanguageConfig] Failed to read system locale: " + e.getMessage());
+            return "zh";  // Simplified Chinese
         }
 
-        // Default to English
-        LOG.info("[LanguageConfig] Using default language: en");
-        return "en";
+        // Direct mapping for other languages
+        switch (language) {
+            case "en":
+                return "en";
+            case "hi":
+                return "hi";
+            case "es":
+                return "es";
+            case "fr":
+                return "fr";
+            case "ja":
+                return "ja";
+            default:
+                // Unsupported language, fallback to English
+                LOG.info("[LanguageConfig] Unsupported language '" + language + "', using English as fallback");
+                return "en";
+        }
     }
 
     /**
-     * Map IDE locale string to our supported language codes
-     * Supported locales: en, zh, zh-TW, es, fr, hi, ja
+     * Get IDEA's current language configuration
      *
-     * @param ideLocale IDE locale string (e.g., "en_US", "zh_CN", "zh_TW", "ja_JP")
-     * @return Mapped language code
-     */
-    private static String mapIdeLocaleToLanguageCode(String ideLocale) {
-        if (ideLocale == null || ideLocale.isEmpty()) {
-            return "en";
-        }
-
-        String locale = ideLocale.toLowerCase();
-
-        // Chinese (Simplified)
-        if (locale.startsWith("zh_cn") || locale.equals("zh")) {
-            return "zh";
-        }
-
-        // Chinese (Traditional)
-        if (locale.startsWith("zh_tw") || locale.startsWith("zh_hk")) {
-            return "zh-TW";
-        }
-
-        // Japanese
-        if (locale.startsWith("ja")) {
-            return "ja";
-        }
-
-        // Spanish
-        if (locale.startsWith("es")) {
-            return "es";
-        }
-
-        // French
-        if (locale.startsWith("fr")) {
-            return "fr";
-        }
-
-        // Hindi
-        if (locale.startsWith("hi")) {
-            return "hi";
-        }
-
-        // English (default)
-        if (locale.startsWith("en")) {
-            return "en";
-        }
-
-        // Fallback to English for unsupported locales
-        return "en";
-    }
-
-    /**
-     * Get language configuration as JSON object
-     *
-     * @return JsonObject containing language code
+     * @return JsonObject containing language configuration
      */
     public static JsonObject getLanguageConfig() {
         JsonObject config = new JsonObject();
-        config.addProperty("language", getIdeLanguage());
+
+        try {
+            // Get IDEA's current language setting
+            Locale currentLocale = DynamicBundle.getLocale();
+
+            // Map to i18n-supported language code
+            String i18nLanguage = mapIdeaLocaleToI18n(currentLocale);
+
+            config.addProperty("language", i18nLanguage);
+            config.addProperty("ideaLocale", currentLocale != null ? currentLocale.toString() : "en");
+
+            LOG.info("[LanguageConfig] Retrieved IDEA language config: ideaLocale=" + currentLocale
+                    + ", i18nLanguage=" + i18nLanguage);
+
+        } catch (Exception e) {
+            // Use default (English) on exception
+            config.addProperty("language", "en");
+            config.addProperty("ideaLocale", "en");
+            LOG.error("[LanguageConfig] Failed to get language config, using default (en): " + e.getMessage(), e);
+        }
+
         return config;
     }
 
@@ -120,5 +95,20 @@ public class LanguageConfigService {
      */
     public static String getLanguageConfigJson() {
         return getLanguageConfig().toString();
+    }
+
+    /**
+     * Get current i18n language code
+     *
+     * @return Language code (zh, en, zh-TW, hi, es, fr, ja)
+     */
+    public static String getCurrentLanguage() {
+        try {
+            Locale currentLocale = DynamicBundle.getLocale();
+            return mapIdeaLocaleToI18n(currentLocale);
+        } catch (Exception e) {
+            LOG.error("[LanguageConfig] Failed to get current language: " + e.getMessage());
+            return "en";
+        }
     }
 }

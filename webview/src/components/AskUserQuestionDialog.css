@@ -1,0 +1,193 @@
+/* AskUserQuestion Dialog Styles */
+
+.ask-user-question-dialog {
+  position: relative;
+  background: var(--vscode-editor-background, #1e1e1e);
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 600px;
+  width: 80%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ask-user-question-dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--vscode-foreground, #cccccc);
+  margin: 0;
+}
+
+.ask-user-question-dialog-progress {
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #999999);
+  margin: -8px 0 0 0;
+}
+
+.ask-user-question-dialog-question {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.question-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.question-tag {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vscode-textLink-foreground, #4daafc);
+  background: var(--vscode-textLink-foreground, #4daafc)15;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.question-text {
+  font-size: 15px;
+  color: var(--vscode-foreground, #cccccc);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.question-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 6px;
+  background: var(--vscode-input-background, #3c3c3c);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  width: 100%;
+}
+
+.question-option:hover {
+  background: var(--vscode-list-hoverBackground, #2a2d2e);
+  border-color: var(--vscode-focusBorder, #007acc);
+}
+
+.question-option.selected {
+  background: var(--vscode-list-activeSelectionBackground, #094771);
+  border-color: var(--vscode-focusBorder, #007acc);
+}
+
+.option-checkbox {
+  flex-shrink: 0;
+  font-size: 16px;
+  color: var(--vscode-textLink-foreground, #4daafc);
+  margin-top: 2px;
+}
+
+.option-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.option-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.option-description {
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #999999);
+  line-height: 1.4;
+}
+
+.question-hint {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #999999);
+  margin: -8px 0 0 0;
+}
+
+.ask-user-question-dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.action-buttons-right {
+  display: flex;
+  gap: 12px;
+}
+
+.action-button {
+  padding: 8px 20px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-button.primary {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+  border-color: var(--vscode-button-background, #0e639c);
+}
+
+.action-button.primary:hover:not(.disabled) {
+  background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.action-button.primary.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-button.secondary {
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #cccccc);
+  border-color: var(--vscode-button-border, #454545);
+}
+
+.action-button.secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .ask-user-question-dialog {
+    padding: 16px;
+    width: 95%;
+  }
+
+  .ask-user-question-dialog-title {
+    font-size: 16px;
+  }
+
+  .question-text {
+    font-size: 14px;
+  }
+
+  .question-option {
+    padding: 10px;
+  }
+}

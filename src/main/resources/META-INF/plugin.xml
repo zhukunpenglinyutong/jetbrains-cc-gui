@@ -3,6 +3,9 @@
     <name>Claude GUI</name>
     <vendor>Arthur Scheidel</vendor>
 
+    <!-- Resource bundle for i18n -->
+    <resource-bundle>messages.ClaudeCodeGuiBundle</resource-bundle>
+
     <description><![CDATA[
         <p><strong>Claude Code GUI</strong> - A powerful AI assistant and productivity tool that brings Claude Code capabilities with an intuitive graphical interface directly into IntelliJ IDEA.</p>
 

@@ -2,8 +2,12 @@ package com.github.claudecodegui.util;
 
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorColorsScheme;
+import com.intellij.openapi.editor.colors.FontPreferences;
 import com.intellij.openapi.diagnostic.Logger;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+
+import java.util.List;
 
 /**
  * 字体配置服务
@@ -25,7 +29,10 @@ public class FontConfigService {
             EditorColorsScheme scheme = EditorColorsManager.getInstance().getGlobalScheme();
 
             if (scheme != null) {
-                // 编辑器字体配置
+                // 获取字体偏好设置，包含主字体和回落字体
+                FontPreferences fontPreferences = scheme.getFontPreferences();
+
+                // 主字体名称
                 String fontName = scheme.getEditorFontName();
                 int fontSize = scheme.getEditorFontSize();
                 float lineSpacing = scheme.getLineSpacing();
@@ -34,14 +41,26 @@ public class FontConfigService {
                 config.addProperty("fontSize", fontSize);
                 config.addProperty("lineSpacing", lineSpacing);
 
+                // 获取回落字体列表
+                List<String> effectiveFontFamilies = fontPreferences.getEffectiveFontFamilies();
+                JsonArray fallbackFonts = new JsonArray();
+
+                // 跳过第一个（主字体），添加其余的回落字体
+                for (int i = 1; i < effectiveFontFamilies.size(); i++) {
+                    fallbackFonts.add(effectiveFontFamilies.get(i));
+                }
+                config.add("fallbackFonts", fallbackFonts);
+
                 LOG.info("[FontConfig] 获取 IDEA 字体配置: fontFamily=" + fontName
                         + ", fontSize=" + fontSize
-                        + ", lineSpacing=" + lineSpacing);
+                        + ", lineSpacing=" + lineSpacing
+                        + ", fallbackFonts=" + fallbackFonts);
             } else {
                 // 使用默认值
                 config.addProperty("fontFamily", "JetBrains Mono");
                 config.addProperty("fontSize", 14);
                 config.addProperty("lineSpacing", 1.2f);
+                config.add("fallbackFonts", new JsonArray());
                 LOG.warn("[FontConfig] 无法获取 EditorColorsScheme，使用默认值");
             }
         } catch (Exception e) {
@@ -49,6 +68,7 @@ public class FontConfigService {
             config.addProperty("fontFamily", "JetBrains Mono");
             config.addProperty("fontSize", 14);
             config.addProperty("lineSpacing", 1.2f);
+            config.add("fallbackFonts", new JsonArray());
             LOG.error("[FontConfig] 获取字体配置失败: " + e.getMessage(), e);
         }
 

@@ -1,3 +1,15 @@
+##### **January 5, 2026 (v0.2.2) — Upstream Sync**
+
+**Full Upstream Merge**
+- Synced 23 commits from upstream v0.1.4-beta7
+- Merged permission dialog fixes for proxy mode
+- Integrated macOS subscription login support
+- Added Ask User Question feature
+- MCP server toggle with enable/disable support
+- Auto-localization based on IDEA language settings
+
+---
+
 ##### **January 4, 2026 (v0.2.1) — Feature Update**
 
 **MCP Server Toggle Enhancements**

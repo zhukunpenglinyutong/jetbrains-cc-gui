@@ -45,6 +45,10 @@ const isTruthy = (value: unknown) => value === true || value === 'true';
 const sendBridgeMessage = (event: string, payload = '') => {
   if (window.sendToJava) {
     const message = `${event}:${payload}`;
+    // 对权限相关消息添加详细日志
+    if (event.includes('permission')) {
+      console.log('[PERM_DEBUG][BRIDGE] Sending to Java:', message);
+    }
     window.sendToJava(message);
   } else {
     console.warn('[Frontend] sendToJava is not ready yet');
@@ -82,10 +86,16 @@ const App = () => {
   // 权限弹窗状态
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
   const [currentPermissionRequest, setCurrentPermissionRequest] = useState<PermissionRequest | null>(null);
+  const permissionDialogOpenRef = useRef(false);
+  const currentPermissionRequestRef = useRef<PermissionRequest | null>(null);
+  const pendingPermissionRequestsRef = useRef<PermissionRequest[]>([]);
 
-  // AskUserQuestion dialog state
+  // AskUserQuestion 弹窗状态
   const [askUserQuestionDialogOpen, setAskUserQuestionDialogOpen] = useState(false);
   const [currentAskUserQuestionRequest, setCurrentAskUserQuestionRequest] = useState<AskUserQuestionRequest | null>(null);
+  const askUserQuestionDialogOpenRef = useRef(false);
+  const currentAskUserQuestionRequestRef = useRef<AskUserQuestionRequest | null>(null);
+  const pendingAskUserQuestionRequestsRef = useRef<AskUserQuestionRequest[]>([]);
 
   // ChatInputBox 相关状态
   const [currentProvider, setCurrentProvider] = useState('claude');
@@ -99,9 +109,6 @@ const App = () => {
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
   const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
-
-  // Image preview state (replaces innerHTML-based preview for XSS safety)
-  const [imagePreviewSrc, setImagePreviewSrc] = useState<string | null>(null);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -119,6 +126,48 @@ const App = () => {
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
   // 追踪用户是否在底部（用于判断是否需要自动滚动）
   const isUserAtBottomRef = useRef(true);
+
+  useEffect(() => {
+    permissionDialogOpenRef.current = permissionDialogOpen;
+    currentPermissionRequestRef.current = currentPermissionRequest;
+  }, [permissionDialogOpen, currentPermissionRequest]);
+
+  useEffect(() => {
+    askUserQuestionDialogOpenRef.current = askUserQuestionDialogOpen;
+    currentAskUserQuestionRequestRef.current = currentAskUserQuestionRequest;
+  }, [askUserQuestionDialogOpen, currentAskUserQuestionRequest]);
+
+  const openPermissionDialog = (request: PermissionRequest) => {
+    currentPermissionRequestRef.current = request;
+    permissionDialogOpenRef.current = true;
+    setCurrentPermissionRequest(request);
+    setPermissionDialogOpen(true);
+  };
+
+  const openAskUserQuestionDialog = (request: AskUserQuestionRequest) => {
+    currentAskUserQuestionRequestRef.current = request;
+    askUserQuestionDialogOpenRef.current = true;
+    setCurrentAskUserQuestionRequest(request);
+    setAskUserQuestionDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (permissionDialogOpen) return;
+    if (currentPermissionRequest) return;
+    const next = pendingPermissionRequestsRef.current.shift();
+    if (next) {
+      openPermissionDialog(next);
+    }
+  }, [permissionDialogOpen, currentPermissionRequest]);
+
+  useEffect(() => {
+    if (askUserQuestionDialogOpen) return;
+    if (currentAskUserQuestionRequest) return;
+    const next = pendingAskUserQuestionRequestsRef.current.shift();
+    if (next) {
+      openAskUserQuestionDialog(next);
+    }
+  }, [askUserQuestionDialogOpen, currentAskUserQuestionRequest]);
 
   const syncActiveProviderModelMapping = (provider?: ProviderConfig | null) => {
     if (typeof window === 'undefined' || !window.localStorage) return;
@@ -540,25 +589,45 @@ const App = () => {
     };
     setTimeout(requestThinkingEnabled, 200);
 
-    // Permission dialog callback
+    // 权限弹窗回调
     window.showPermissionDialog = (json) => {
+      console.log('[PERM_DEBUG][FRONTEND] showPermissionDialog called');
+      console.log('[PERM_DEBUG][FRONTEND] Raw JSON:', json);
       try {
         const request = JSON.parse(json) as PermissionRequest;
-        setCurrentPermissionRequest(request);
-        setPermissionDialogOpen(true);
+        console.log('[PERM_DEBUG][FRONTEND] Parsed request:', request);
+        console.log('[PERM_DEBUG][FRONTEND] channelId:', request.channelId);
+        console.log('[PERM_DEBUG][FRONTEND] toolName:', request.toolName);
+        if (permissionDialogOpenRef.current || currentPermissionRequestRef.current) {
+          pendingPermissionRequestsRef.current.push(request);
+          console.log('[PERM_DEBUG][FRONTEND] Dialog busy, queued request. queueSize=', pendingPermissionRequestsRef.current.length);
+        } else {
+          openPermissionDialog(request);
+          console.log('[PERM_DEBUG][FRONTEND] Dialog state set to open');
+        }
       } catch (error) {
-        console.error('[Frontend] Failed to parse permission request:', error);
+        console.error('[PERM_DEBUG][FRONTEND] ERROR: Failed to parse permission request:', error);
       }
     };
 
-    // AskUserQuestion dialog callback
+    // AskUserQuestion 弹窗回调
     window.showAskUserQuestionDialog = (json) => {
+      console.log('[ASK_USER_QUESTION][FRONTEND] showAskUserQuestionDialog called');
+      console.log('[ASK_USER_QUESTION][FRONTEND] Raw JSON:', json);
       try {
         const request = JSON.parse(json) as AskUserQuestionRequest;
-        setCurrentAskUserQuestionRequest(request);
-        setAskUserQuestionDialogOpen(true);
+        console.log('[ASK_USER_QUESTION][FRONTEND] Parsed request:', request);
+        console.log('[ASK_USER_QUESTION][FRONTEND] requestId:', request.requestId);
+        console.log('[ASK_USER_QUESTION][FRONTEND] questions count:', request.questions?.length);
+        if (askUserQuestionDialogOpenRef.current || currentAskUserQuestionRequestRef.current) {
+          pendingAskUserQuestionRequestsRef.current.push(request);
+          console.log('[ASK_USER_QUESTION][FRONTEND] Dialog busy, queued request. queueSize=', pendingAskUserQuestionRequestsRef.current.length);
+        } else {
+          openAskUserQuestionDialog(request);
+          console.log('[ASK_USER_QUESTION][FRONTEND] Dialog state set to open');
+        }
       } catch (error) {
-        console.error('[Frontend] Failed to parse ask-user-question request:', error);
+        console.error('[ASK_USER_QUESTION][FRONTEND] ERROR: Failed to parse request:', error);
       }
     };
 
@@ -787,7 +856,7 @@ const App = () => {
           // 非图片附件显示文件名
           userContentBlocks.push({
             type: 'text',
-            text: `[Attachment: ${att.fileName}]`,
+            text: `[附件: ${att.fileName}]`,
           });
         }
       }
@@ -804,7 +873,7 @@ const App = () => {
     // 立即在前端添加用户消息（包含图片预览）
     const userMessage: ClaudeMessage = {
       type: 'user',
-      content: text || (hasAttachments ? '[Attachment uploaded]' : ''),
+      content: text || (hasAttachments ? '[已上传附件]' : ''),
       timestamp: new Date().toISOString(),
       raw: {
         message: {
@@ -988,75 +1057,106 @@ const App = () => {
   };
 
   /**
-   * Handle permission approval (allow once)
+   * 处理权限批准（允许一次）
    */
   const handlePermissionApprove = (channelId: string) => {
+    console.log('[PERM_DEBUG][FRONTEND] handlePermissionApprove called');
+    console.log('[PERM_DEBUG][FRONTEND] channelId:', channelId);
     const payload = JSON.stringify({
       channelId,
       allow: true,
       remember: false,
       rejectMessage: null,
     });
+    console.log('[PERM_DEBUG][FRONTEND] Sending decision payload:', payload);
     sendBridgeMessage('permission_decision', payload);
+    console.log('[PERM_DEBUG][FRONTEND] Decision sent, closing dialog');
+    permissionDialogOpenRef.current = false;
+    currentPermissionRequestRef.current = null;
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
   };
 
   /**
-   * Handle permission approval (always allow)
+   * 处理权限批准（总是允许）
    */
   const handlePermissionApproveAlways = (channelId: string) => {
+    console.log('[PERM_DEBUG][FRONTEND] handlePermissionApproveAlways called');
+    console.log('[PERM_DEBUG][FRONTEND] channelId:', channelId);
     const payload = JSON.stringify({
       channelId,
       allow: true,
       remember: true,
       rejectMessage: null,
     });
+    console.log('[PERM_DEBUG][FRONTEND] Sending decision payload:', payload);
     sendBridgeMessage('permission_decision', payload);
+    console.log('[PERM_DEBUG][FRONTEND] Decision sent, closing dialog');
+    permissionDialogOpenRef.current = false;
+    currentPermissionRequestRef.current = null;
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
   };
 
   /**
-   * Handle permission denial
+   * 处理 AskUserQuestion 提交
+   */
+  const handleAskUserQuestionSubmit = (requestId: string, answers: Record<string, string>) => {
+    console.log('[ASK_USER_QUESTION][FRONTEND] handleAskUserQuestionSubmit called');
+    console.log('[ASK_USER_QUESTION][FRONTEND] requestId:', requestId);
+    console.log('[ASK_USER_QUESTION][FRONTEND] answers:', answers);
+    const payload = JSON.stringify({
+      requestId,
+      answers,
+    });
+    console.log('[ASK_USER_QUESTION][FRONTEND] Sending response payload:', payload);
+    sendBridgeMessage('ask_user_question_response', payload);
+    console.log('[ASK_USER_QUESTION][FRONTEND] Response sent, closing dialog');
+    askUserQuestionDialogOpenRef.current = false;
+    currentAskUserQuestionRequestRef.current = null;
+    setAskUserQuestionDialogOpen(false);
+    setCurrentAskUserQuestionRequest(null);
+  };
+
+  /**
+   * 处理 AskUserQuestion 取消
+   */
+  const handleAskUserQuestionCancel = (requestId: string) => {
+    console.log('[ASK_USER_QUESTION][FRONTEND] handleAskUserQuestionCancel called');
+    console.log('[ASK_USER_QUESTION][FRONTEND] requestId:', requestId);
+    // 发送空答案表示用户取消
+    const payload = JSON.stringify({
+      requestId,
+      answers: {},
+    });
+    console.log('[ASK_USER_QUESTION][FRONTEND] Sending cancel payload:', payload);
+    sendBridgeMessage('ask_user_question_response', payload);
+    console.log('[ASK_USER_QUESTION][FRONTEND] Cancel sent, closing dialog');
+    askUserQuestionDialogOpenRef.current = false;
+    currentAskUserQuestionRequestRef.current = null;
+    setAskUserQuestionDialogOpen(false);
+    setCurrentAskUserQuestionRequest(null);
+  };
+
+  /**
+   * 处理权限拒绝
    */
   const handlePermissionSkip = (channelId: string) => {
+    console.log('[PERM_DEBUG][FRONTEND] handlePermissionSkip called');
+    console.log('[PERM_DEBUG][FRONTEND] channelId:', channelId);
     const payload = JSON.stringify({
       channelId,
       allow: false,
       remember: false,
       rejectMessage: 'User denied the permission request',
     });
+    console.log('[PERM_DEBUG][FRONTEND] Sending decision payload:', payload);
     sendBridgeMessage('permission_decision', payload);
+    console.log('[PERM_DEBUG][FRONTEND] Decision sent, closing dialog');
+    permissionDialogOpenRef.current = false;
+    currentPermissionRequestRef.current = null;
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
-  };
-
-  /**
-   * Handle AskUserQuestion submit
-   */
-  const handleAskUserQuestionSubmit = (requestId: string, answers: Record<string, string>) => {
-    const payload = JSON.stringify({
-      requestId,
-      answers,
-      cancelled: false,
-    });
-    sendBridgeMessage('ask_user_question_response', payload);
-    setAskUserQuestionDialogOpen(false);
-    setCurrentAskUserQuestionRequest(null);
-  };
-
-  /**
-   * Handle AskUserQuestion cancel
-   */
-  const handleAskUserQuestionCancel = (requestId: string) => {
-    const payload = JSON.stringify({
-      requestId,
-      cancelled: true,
-    });
-    sendBridgeMessage('ask_user_question_response', payload);
-    setAskUserQuestionDialogOpen(false);
-    setCurrentAskUserQuestionRequest(null);
   };
 
   const toggleThinking = (messageIndex: number, blockIndex: number) => {
@@ -1105,7 +1205,7 @@ const App = () => {
       }
 
       // 显示成功提示
-      addToast('Session deleted', 'success');
+      addToast('会话已删除', 'success');
     }
   };
 
@@ -1181,7 +1281,7 @@ const App = () => {
   // 文案本地化映射
   const localizeMessage = (text: string): string => {
     const messageMap: Record<string, string> = {
-      'Request interrupted by user': 'Request interrupted by user',
+      'Request interrupted by user': '请求已被用户中断',
     };
 
     // 检查是否有完全匹配的映射
@@ -1207,7 +1307,7 @@ const App = () => {
     } else {
       const raw = message.raw;
       if (!raw) {
-        return '(empty message)';
+        return '(空消息)';
       }
       if (typeof raw === 'string') {
         text = raw;
@@ -1224,7 +1324,7 @@ const App = () => {
           .map((block) => block.text ?? '')
           .join('\n');
       } else {
-        return '(empty message)';
+        return '(空消息)';
       }
     }
 
@@ -1260,7 +1360,7 @@ const App = () => {
     }
     if (message.type === 'user' || message.type === 'error') {
       // 检查是否有有效的文本内容
-      if (text && text.trim() && text !== '(empty message)' && text !== '(unable to parse content)') {
+      if (text && text.trim() && text !== '(空消息)' && text !== '(无法解析内容)') {
         return true;
       }
       // 检查是否有有效的内容块（如图片等）
@@ -1326,7 +1426,7 @@ const App = () => {
           blocks.push({
             type: 'tool_use',
             id: typeof candidate.id === 'string' ? (candidate.id as string) : undefined,
-            name: typeof candidate.name === 'string' ? (candidate.name as string) : 'Unknown tool',
+            name: typeof candidate.name === 'string' ? (candidate.name as string) : '未知工具',
             input: (candidate.input as Record<string, unknown>) ?? {},
           });
         } else if (type === 'image') {
@@ -1649,9 +1749,15 @@ const App = () => {
                           <div
                             className={`message-image-block ${message.type === 'user' ? 'user-image' : ''}`}
                             onClick={() => {
-                              // Open image preview using React state (XSS-safe)
-                              if (block.src) {
-                                setImagePreviewSrc(block.src);
+                              // 打开图片预览
+                              const previewRoot = document.getElementById('image-preview-root');
+                              if (previewRoot && block.src) {
+                                previewRoot.innerHTML = `
+                                  <div class="image-preview-overlay" onclick="this.remove()">
+                                    <img src="${block.src}" alt={t('chat.imagePreview')} class="image-preview-content" onclick="event.stopPropagation()" />
+                                    <div class="image-preview-close" onclick="this.parentElement.remove()">×</div>
+                                  </div>
+                                `;
                               }
                             }}
                             style={{ cursor: 'pointer' }}
@@ -1796,26 +1902,7 @@ const App = () => {
         </div>
       )}
 
-      {/* Image Preview Overlay - React-based for XSS safety */}
-      {imagePreviewSrc && (
-        <div
-          className="image-preview-overlay"
-          onClick={() => setImagePreviewSrc(null)}
-        >
-          <img
-            src={imagePreviewSrc}
-            alt={t('chat.imagePreview')}
-            className="image-preview-content"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <div
-            className="image-preview-close"
-            onClick={() => setImagePreviewSrc(null)}
-          >
-            ×
-          </div>
-        </div>
-      )}
+      <div id="image-preview-root" />
 
       <ConfirmDialog
         isOpen={showNewSessionConfirm}

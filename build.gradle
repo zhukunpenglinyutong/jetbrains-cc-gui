@@ -10,7 +10,7 @@ checkstyle {
 }
 
 group = 'com.lacrearthur.idea-claude-gui'
-version = '0.2.1'
+version = '0.2.2'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
