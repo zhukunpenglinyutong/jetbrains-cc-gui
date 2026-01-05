@@ -500,7 +500,18 @@ public class PermissionService {
         try {
             Thread.sleep(100); // 等待文件写入完成
 
-            String content = Files.readString(requestFile);
+            if (!Files.exists(requestFile)) {
+                debugLog("FILE_MISSING", "Request file missing before read, likely already handled: " + fileName);
+                return;
+            }
+
+            String content;
+            try {
+                content = Files.readString(requestFile);
+            } catch (NoSuchFileException e) {
+                debugLog("FILE_MISSING", "Request file missing while reading, likely already handled: " + fileName);
+                return;
+            }
             debugLog("FILE_READ", "Read request content: " + content.substring(0, Math.min(200, content.length())) + "...");
 
             JsonObject request = gson.fromJson(content, JsonObject.class);
@@ -763,7 +774,18 @@ public class PermissionService {
         try {
             Thread.sleep(100); // 等待文件写入完成
 
-            String content = Files.readString(requestFile);
+            if (!Files.exists(requestFile)) {
+                debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing before read, likely already handled: " + fileName);
+                return;
+            }
+
+            String content;
+            try {
+                content = Files.readString(requestFile);
+            } catch (NoSuchFileException e) {
+                debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing while reading, likely already handled: " + fileName);
+                return;
+            }
             debugLog("ASK_FILE_READ", "Read AskUserQuestion content: " + content.substring(0, Math.min(200, content.length())) + "...");
 
             JsonObject request = gson.fromJson(content, JsonObject.class);
