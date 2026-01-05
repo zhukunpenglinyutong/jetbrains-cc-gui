@@ -947,12 +947,15 @@ public class HistoryHandler extends BaseMessageHandler {
             com.google.gson.JsonObject history = new com.google.gson.Gson().fromJson(historyJson, com.google.gson.JsonObject.class);
             com.google.gson.JsonObject favorites = new com.google.gson.Gson().fromJson(favoritesJson, com.google.gson.JsonObject.class);
 
-            // 为每个会话添加收藏信息
+            // 为每个会话添加收藏信息和 provider 信息
             if (history.has("sessions") && history.get("sessions").isJsonArray()) {
                 com.google.gson.JsonArray sessions = history.getAsJsonArray("sessions");
                 for (int i = 0; i < sessions.size(); i++) {
                     com.google.gson.JsonObject session = sessions.get(i).getAsJsonObject();
                     String sessionId = session.get("sessionId").getAsString();
+
+                    // 添加 provider 信息
+                    session.addProperty("provider", currentProvider);
 
                     if (favorites.has(sessionId)) {
                         com.google.gson.JsonObject favoriteInfo = favorites.getAsJsonObject(sessionId);

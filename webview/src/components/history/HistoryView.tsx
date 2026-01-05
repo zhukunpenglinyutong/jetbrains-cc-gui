@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
 import VirtualList from './VirtualList';
+import { Claude, OpenAI } from '@lobehub/icons';
 
 interface HistoryViewProps {
   historyData: HistoryData | null;
@@ -253,6 +254,25 @@ const HistoryView = ({ historyData, currentProvider: _currentProvider, onLoadSes
       <div key={session.sessionId} className="history-item" onClick={() => !isEditing && onLoadSession(session.sessionId)}>
         <div className="history-item-header">
           <div className="history-item-title">
+            {/* Provider Logo */}
+            {session.provider && (
+              <span
+                className="history-provider-badge"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  marginRight: '8px',
+                  verticalAlign: 'middle'
+                }}
+                title={session.provider === 'claude' ? 'Claude' : 'Codex'}
+              >
+                {session.provider === 'codex' ? (
+                  <OpenAI.Avatar size={20} />
+                ) : (
+                  <Claude.Color size={20} />
+                )}
+              </span>
+            )}
             {isEditing ? (
               // 编辑模式：显示输入框和保存/取消按钮
               <div className="history-title-edit-mode" onClick={(e) => e.stopPropagation()}>
