@@ -49,7 +49,7 @@ export const Dropdown = ({
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isVisible, onClose]);
+  }, [isVisible]); // Remove onClose from dependencies - it's stable from props
 
   if (!isVisible || !position) {
     return null;

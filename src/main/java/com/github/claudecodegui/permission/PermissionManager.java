@@ -14,6 +14,7 @@ public class PermissionManager {
     // 权限模式枚举
     public enum PermissionMode {
         DEFAULT,    // 默认模式，每次询问
+        ACCEPT_EDITS, // 代理模式：自动接受文件编辑相关操作
         ALLOW_ALL,  // 允许所有工具调用
         DENY_ALL    // 拒绝所有工具调用
     }
@@ -60,6 +61,13 @@ public class PermissionManager {
         }
 
         // 检查全局权限模式
+        if (mode == PermissionMode.ACCEPT_EDITS) {
+            if (isAutoApprovedInAcceptEditsMode(toolName)) {
+                PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
+                request.accept();
+                return request;
+            }
+        }
         if (mode == PermissionMode.ALLOW_ALL) {
             PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
             request.accept();
@@ -177,6 +185,19 @@ public class PermissionManager {
         }
         // 简单的哈希实现，实际可以更复杂
         return String.valueOf(inputs.toString().hashCode());
+    }
+
+    private boolean isAutoApprovedInAcceptEditsMode(String toolName) {
+        if (toolName == null || toolName.isEmpty()) {
+            return false;
+        }
+        return "Write".equals(toolName)
+            || "Edit".equals(toolName)
+            || "MultiEdit".equals(toolName)
+            || "CreateDirectory".equals(toolName)
+            || "MoveFile".equals(toolName)
+            || "CopyFile".equals(toolName)
+            || "Rename".equals(toolName);
     }
 
     /**

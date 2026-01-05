@@ -109,6 +109,12 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
     (input?.newString as string | undefined) ??
     '';
 
+  const diff = useMemo(() => {
+    const oldLines = oldString ? oldString.split('\n') : [];
+    const newLines = newString ? newString.split('\n') : [];
+    return computeDiff(oldLines, newLines);
+  }, [oldString, newString]);
+
   // Auto-refresh file in IDEA when the tool call completes successfully
   const hasRefreshed = useRef(false);
   useEffect(() => {
@@ -125,12 +131,6 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
   if (!oldString && !newString) {
     return <GenericToolBlock name={name} input={input} result={result} />;
   }
-
-  const oldLines = oldString ? oldString.split('\n') : [];
-  const newLines = newString ? newString.split('\n') : [];
-
-  // 计算真正的差异
-  const diff = useMemo(() => computeDiff(oldLines, newLines), [oldLines, newLines]);
 
   const handleFileClick = (e: React.MouseEvent) => {
     e.stopPropagation();

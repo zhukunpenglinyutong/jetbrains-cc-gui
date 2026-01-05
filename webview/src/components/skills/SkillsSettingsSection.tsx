@@ -385,7 +385,7 @@ export function SkillsSettingsSection() {
             className="icon-btn"
             onClick={handleRefresh}
             disabled={loading}
-            title="刷新"
+            title={t('chat.refresh')}
           >
             <span className={`codicon codicon-refresh ${loading ? 'spinning' : ''}`}></span>
           </button>
@@ -406,7 +406,7 @@ export function SkillsSettingsSection() {
                 className={`toggle-switch ${skill.enabled ? 'enabled' : 'disabled'} ${togglingSkills.has(skill.id) ? 'loading' : ''}`}
                 onClick={(e) => handleToggle(skill, e)}
                 disabled={togglingSkills.has(skill.id)}
-                title={skill.enabled ? '点击停用' : '点击启用'}
+                title={skill.enabled ? t('chat.clickToDisable') : t('chat.clickToEnable')}
               >
                 {togglingSkills.has(skill.id) ? (
                   <span className="codicon codicon-loading codicon-modifier-spin"></span>
@@ -426,11 +426,11 @@ export function SkillsSettingsSection() {
                   <span className={`skill-name ${!skill.enabled ? 'muted' : ''}`}>{skill.name}</span>
                   <span className={`scope-badge ${skill.scope}`}>
                     <span className={`codicon ${skill.scope === 'global' ? 'codicon-globe' : 'codicon-desktop-download'}`}></span>
-                    {skill.scope === 'global' ? '全局' : '本项目'}
+                    {skill.scope === 'global' ? t('chat.global') : t('chat.localProject')}
                   </span>
                   {!skill.enabled && (
                     <span className="status-badge disabled">
-                      已停用
+                      {t('chat.disabled')}
                     </span>
                   )}
                 </div>

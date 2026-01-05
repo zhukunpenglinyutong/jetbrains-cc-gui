@@ -56,7 +56,7 @@ const AskUserQuestionDialog = ({
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, request]);
+  }, [isOpen]); // Remove 'request' from dependencies to prevent re-registering listeners
 
   if (!isOpen || !request) {
     return null;
