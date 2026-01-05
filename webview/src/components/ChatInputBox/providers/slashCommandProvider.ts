@@ -1,5 +1,6 @@
 import type { CommandItem, DropdownItemData } from '../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
+import i18n from '../../../i18n/config';
 
 /**
  * 本地命令列表（需要被过滤掉的命令）
@@ -260,16 +261,16 @@ export async function slashCommandProvider(
   if (retryCount >= MAX_RETRY_COUNT) {
     return [{
       id: '__error__',
-      label: '加载失败',
-      description: '请关闭并重新打开窗口',
+      label: i18n.t('chat.loadingFailed'),
+      description: i18n.t('chat.pleaseCloseAndReopen'),
       category: 'system',
     }];
   }
 
   return [{
     id: '__loading__',
-    label: '正在加载斜杠指令...',
-    description: retryCount > 0 ? `正在重试 (${retryCount}/${MAX_RETRY_COUNT})...` : '请稍候...',
+    label: i18n.t('chat.loadingSlashCommands'),
+    description: retryCount > 0 ? i18n.t('chat.retrying', { count: retryCount, max: MAX_RETRY_COUNT }) : i18n.t('chat.pleaseWait'),
     category: 'system',
   }];
 }
