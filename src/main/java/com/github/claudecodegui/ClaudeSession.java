@@ -681,9 +681,34 @@ public class ClaudeSession {
 
     /**
      * 设置权限模式
+     * 将前端权限模式字符串映射到 PermissionManager 枚举值
      */
     public void setPermissionMode(String mode) {
         state.setPermissionMode(mode);
+
+        // 同步更新 PermissionManager 的权限模式
+        // 前端模式映射:
+        // - "default" -> DEFAULT (每次询问)
+        // - "acceptEdits" -> ACCEPT_EDITS (代理模式,自动接受文件编辑等操作)
+        // - "bypassPermissions" -> ALLOW_ALL (自动模式,绕过所有权限检查)
+        // - "plan" -> DENY_ALL (规划模式,暂不支持)
+        PermissionManager.PermissionMode pmMode;
+        if ("bypassPermissions".equals(mode)) {
+            pmMode = PermissionManager.PermissionMode.ALLOW_ALL;
+            LOG.info("Permission mode set to ALLOW_ALL for mode: " + mode);
+        } else if ("acceptEdits".equals(mode)) {
+            pmMode = PermissionManager.PermissionMode.ACCEPT_EDITS;
+            LOG.info("Permission mode set to ACCEPT_EDITS for mode: " + mode);
+        } else if ("plan".equals(mode)) {
+            pmMode = PermissionManager.PermissionMode.DENY_ALL;
+            LOG.info("Permission mode set to DENY_ALL for mode: " + mode);
+        } else {
+            // "default" 或其他未知模式
+            pmMode = PermissionManager.PermissionMode.DEFAULT;
+            LOG.info("Permission mode set to DEFAULT for mode: " + mode);
+        }
+
+        permissionManager.setPermissionMode(pmMode);
     }
 
     /**

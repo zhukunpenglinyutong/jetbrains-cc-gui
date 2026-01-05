@@ -17,6 +17,66 @@ import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
 
+const ACCEPT_EDITS_AUTO_APPROVE_TOOLS = new Set([
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'CreateDirectory',
+  'MoveFile',
+  'CopyFile',
+  'Rename'
+]);
+
+function shouldAutoApproveTool(permissionMode, toolName) {
+  if (!toolName) return false;
+  if (permissionMode === 'bypassPermissions') return true;
+  if (permissionMode === 'acceptEdits') return ACCEPT_EDITS_AUTO_APPROVE_TOOLS.has(toolName);
+  return false;
+}
+
+function createPreToolUseHook(permissionMode) {
+  const normalizedPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
+
+  return async (input) => {
+    console.log('[PERM_DEBUG] PreToolUse hook called:', input?.tool_name);
+
+    if (normalizedPermissionMode === 'plan') {
+      return {
+        decision: 'block',
+        reason: 'Permission mode is plan (no execution)'
+      };
+    }
+
+    if (shouldAutoApproveTool(normalizedPermissionMode, input?.tool_name)) {
+      console.log('[PERM_DEBUG] Auto-approve tool:', input?.tool_name, 'mode:', normalizedPermissionMode);
+      return { decision: 'approve' };
+    }
+
+    console.log('[PERM_DEBUG] Calling canUseTool...');
+    try {
+      const result = await canUseTool(input?.tool_name, input?.tool_input);
+      console.log('[PERM_DEBUG] canUseTool returned:', result?.behavior);
+
+      if (result?.behavior === 'allow') {
+        return { decision: 'approve' };
+      }
+      if (result?.behavior === 'deny') {
+        return {
+          decision: 'block',
+          reason: result?.message || 'Permission denied'
+        };
+      }
+      return {};
+    } catch (error) {
+      console.error('[PERM_DEBUG] canUseTool error:', error?.message);
+      return {
+        decision: 'block',
+        reason: 'Permission check failed: ' + (error?.message || String(error))
+      };
+    }
+  };
+}
+
 /**
  * 发送消息（支持会话恢复）
  * @param {string} message - 要发送的消息
@@ -177,7 +237,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    // 准备选项
 	    // 注意：不再传递 pathToClaudeCodeExecutable，让 SDK 自动使用内置 cli.js
 	    // 这样可以避免 Windows 下系统 CLI 路径问题（ENOENT 错误）
-	    const effectivePermissionMode = permissionMode || 'default';
+	    const effectivePermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
 	    const shouldUseCanUseTool = effectivePermissionMode === 'default';
 	    console.log('[PERM_DEBUG] permissionMode:', permissionMode);
 	    console.log('[PERM_DEBUG] effectivePermissionMode:', effectivePermissionMode);
@@ -213,6 +273,11 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	        )
 	      ),
 	      canUseTool: shouldUseCanUseTool ? canUseTool : undefined,
+	      hooks: {
+	        PreToolUse: [{
+	          hooks: [createPreToolUseHook(effectivePermissionMode)]
+	        }]
+	      },
 	      // 不传递 pathToClaudeCodeExecutable，SDK 将自动使用内置 cli.js
 	      settingSources: ['user', 'project', 'local'],
 	      // 使用 Claude Code 预设系统提示，让 Claude 知道当前工作目录
@@ -225,6 +290,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      }
 	    };
 	    console.log('[PERM_DEBUG] options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
+	    console.log('[PERM_DEBUG] options.hooks:', options.hooks ? 'SET (PreToolUse)' : 'NOT SET');
 
 		// 使用 AbortController 实现 60 秒超时控制（已发现严重问题，暂时禁用自动超时，仅保留正常查询逻辑）
 		// const abortController = new AbortController();
@@ -559,7 +625,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 /**
  * 使用 Claude Agent SDK 发送带附件的消息（多模态）
  */
-	export async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, stdinData = null) {
+export async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, stdinData = null) {
 	  let timeoutId;
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
@@ -620,38 +686,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 
     // PreToolUse hook 用于权限控制（替代 canUseTool，因为在 AsyncIterable 模式下 canUseTool 不被调用）
     // 参见 docs/multimodal-permission-bug.md
-    const preToolUseHook = async (input) => {
-      console.log('[PERM_DEBUG] (withAttachments) PreToolUse hook called:', input.tool_name);
-
-      // 非 default 模式下自动允许所有工具
-      if (normalizedPermissionMode !== 'default') {
-        console.log('[PERM_DEBUG] (withAttachments) Auto-approve (non-default mode)');
-        return { decision: 'approve' };
-      }
-
-      // 调用 canUseTool 进行权限检查
-      console.log('[PERM_DEBUG] (withAttachments) Calling canUseTool...');
-      try {
-        const result = await canUseTool(input.tool_name, input.tool_input);
-        console.log('[PERM_DEBUG] (withAttachments) canUseTool returned:', result.behavior);
-
-        if (result.behavior === 'allow') {
-          return { decision: 'approve' };
-        } else if (result.behavior === 'deny') {
-          return {
-            decision: 'block',
-            reason: result.message || 'Permission denied'
-          };
-        }
-        return {};
-      } catch (error) {
-        console.error('[PERM_DEBUG] (withAttachments) canUseTool error:', error.message);
-        return {
-          decision: 'block',
-          reason: 'Permission check failed: ' + error.message
-        };
-      }
-    };
+    const preToolUseHook = createPreToolUseHook(normalizedPermissionMode);
 
     // 注意：根据 SDK 文档，如果不指定 matcher，则该 Hook 会匹配所有工具
     // 这里统一使用一个全局 PreToolUse Hook，由 Hook 内部决定哪些工具自动放行
@@ -687,11 +722,11 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       // 同时设置 canUseTool 和 hooks，确保至少一个生效
       // 在 AsyncIterable 模式下 canUseTool 可能不被调用，所以必须配置 PreToolUse hook
       canUseTool: normalizedPermissionMode === 'default' ? canUseTool : undefined,
-      hooks: normalizedPermissionMode === 'default' ? {
+      hooks: {
         PreToolUse: [{
           hooks: [preToolUseHook]
         }]
-      } : undefined,
+      },
       // 不传递 pathToClaudeCodeExecutable，SDK 将自动使用内置 cli.js
       settingSources: ['user', 'project', 'local'],
       // 使用 Claude Code 预设系统提示，让 Claude 知道当前工作目录

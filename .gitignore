@@ -67,3 +67,4 @@ webview/src/version/version.ts
 logs/*.log
 .intellijPlatform/
 /.idea/
+.ace-tool/
