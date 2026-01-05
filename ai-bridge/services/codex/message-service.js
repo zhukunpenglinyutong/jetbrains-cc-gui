@@ -409,13 +409,24 @@ export async function sendMessage(
 
         case 'item.completed': {
           if (!event.item) break;
+
+          // 【DEBUG】详细记录 item 信息，帮助诊断
+          console.log('[DEBUG] item.completed - type:', event.item.type);
+          console.log('[DEBUG] item.completed - has text:', !!event.item.text);
+          console.log('[DEBUG] item.completed - has agent_message:', !!event.item.agent_message);
+
           maybeEmitReasoning(event.item);
 
           if (event.item.type === 'agent_message') {
             const text = event.item.text || '';
+            console.log('[DEBUG] agent_message text length:', text.length);
+            console.log('[DEBUG] agent_message text (first 100 chars):', text.substring(0, 100));
+            console.log('[DEBUG] agent_message text.trim() length:', text.trim().length);
+
             finalResponse = text;
             assistantText += text;
             if (text && text.trim()) {
+              console.log('[DEBUG] About to emit agent message');
               emitMessage({
                 type: 'assistant',
                 message: {
@@ -423,6 +434,9 @@ export async function sendMessage(
                   content: [{ type: 'text', text }]
                 }
               });
+              console.log('[DEBUG] Agent message emitted');
+            } else {
+              console.log('[DEBUG] Skipping empty agent message');
             }
           } else if (event.item.type === 'command_execution') {
             const toolUseId = ensureToolUseId('completed', event.item);

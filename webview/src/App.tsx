@@ -909,6 +909,10 @@ const App = () => {
       }
     });
 
+    // 【FIX】在发送消息前，强制同步 provider 设置，确保后端使用正确的 SDK
+    console.log('[DEBUG] Current provider before send:', currentProvider);
+    sendBridgeMessage('set_provider', currentProvider);
+
     // 发送消息（智能体提示词由后端自动注入）
     if (hasAttachments) {
       try {
