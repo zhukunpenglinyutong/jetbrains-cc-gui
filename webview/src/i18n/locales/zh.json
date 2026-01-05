@@ -133,6 +133,7 @@
     "agentsDesc": "管理和配置AI代理",
     "skills": "Skills",
     "skillsDesc": "管理和配置技能模块",
+    "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",
     "community": "官方交流群",
     "communityDesc": "扫描下方二维码加入官方微信交流群，获取最新资讯和技术支持",
     "communityQrTip": "使用微信扫一扫加入交流群",

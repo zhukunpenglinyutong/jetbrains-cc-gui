@@ -1718,7 +1718,11 @@ const App = () => {
       )}
 
       {currentView === 'settings' ? (
-        <SettingsView onClose={() => setCurrentView('chat')} initialTab={settingsInitialTab} />
+        <SettingsView
+          onClose={() => setCurrentView('chat')}
+          initialTab={settingsInitialTab}
+          currentProvider={currentProvider}
+        />
       ) : currentView === 'chat' ? (
         <>
           <div className="messages-container" ref={messagesContainerRef}>

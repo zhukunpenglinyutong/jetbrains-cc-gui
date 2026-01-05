@@ -133,6 +133,7 @@
     "agentsDesc": "AIエージェントを管理および設定",
     "skills": "スキル",
     "skillsDesc": "スキルモジュールを管理および設定",
+    "codexFeatureUnavailable": "Codexではこの設定セクションは未対応です。Claude Codeに切り替えてください。",
     "community": "コミュニティ",
     "communityDesc": "下のQRコードをスキャンして、公式WeChatグループに参加し、最新ニュースと技術サポートを入手",
     "communityQrTip": "WeChatでスキャンしてコミュニティに参加",

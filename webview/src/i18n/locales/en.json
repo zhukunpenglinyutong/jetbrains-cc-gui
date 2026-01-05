@@ -133,6 +133,7 @@
     "agentsDesc": "Manage and configure AI agents",
     "skills": "Skills",
     "skillsDesc": "Manage and configure skill modules",
+    "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",
     "community": "Community",
     "communityDesc": "Scan the QR code below to join the official WeChat group for the latest news and technical support",
     "communityQrTip": "Scan with WeChat to join the community",

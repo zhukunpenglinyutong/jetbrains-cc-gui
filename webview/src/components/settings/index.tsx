@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../types/provider';
 import type { AgentConfig } from '../../types/agent';
@@ -26,6 +26,7 @@ import styles from './style.module.less';
 interface SettingsViewProps {
   onClose: () => void;
   initialTab?: SettingsTab;
+  currentProvider: 'claude' | 'codex' | string;
 }
 
 const sendToJava = (message: string) => {
@@ -39,9 +40,20 @@ const sendToJava = (message: string) => {
 // 自动折叠阈值（窗口宽度）
 const AUTO_COLLAPSE_THRESHOLD = 900;
 
-const SettingsView = ({ onClose, initialTab }: SettingsViewProps) => {
+const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProps) => {
   const { t } = useTranslation();
-  const [currentTab, setCurrentTab] = useState<SettingsTab>(initialTab || 'basic');
+  const isCodexMode = currentProvider === 'codex';
+  const disabledTabs = useMemo<SettingsTab[]>(
+    () => (isCodexMode ? ['providers', 'usage', 'mcp', 'permissions', 'agents', 'skills'] : []),
+    [isCodexMode]
+  );
+  const [currentTab, setCurrentTab] = useState<SettingsTab>(() => {
+    const initial = initialTab || 'basic';
+    if (isCodexMode && disabledTabs.includes(initial)) {
+      return 'basic';
+    }
+    return initial;
+  });
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -159,6 +171,14 @@ const SettingsView = ({ onClose, initialTab }: SettingsViewProps) => {
 
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
+
+  const handleTabChange = (tab: SettingsTab) => {
+    if (isCodexMode && disabledTabs.includes(tab)) {
+      addToast(t('settings.codexFeatureUnavailable'), 'warning');
+      return;
+    }
+    setCurrentTab(tab);
   };
 
   // 显示页面内弹窗的帮助函数
@@ -413,6 +433,12 @@ const SettingsView = ({ onClose, initialTab }: SettingsViewProps) => {
     localStorage.setItem('fontSizeLevel', fontSizeLevel.toString());
   }, [fontSizeLevel]);
 
+  useEffect(() => {
+    if (isCodexMode && disabledTabs.includes(currentTab)) {
+      setCurrentTab('basic');
+    }
+  }, [isCodexMode, disabledTabs, currentTab]);
+
   const loadProviders = () => {
     setLoading(true);
     sendToJava('get_providers:');
@@ -650,9 +676,11 @@ const SettingsView = ({ onClose, initialTab }: SettingsViewProps) => {
         {/* 侧边栏 */}
         <SettingsSidebar
           currentTab={currentTab}
-          onTabChange={setCurrentTab}
+          onTabChange={handleTabChange}
           isCollapsed={isCollapsed}
           onToggleCollapse={toggleManualCollapse}
+          disabledTabs={disabledTabs}
+          onDisabledTabClick={() => addToast(t('settings.codexFeatureUnavailable'), 'warning')}
         />
 
         {/* 内容区域 */}
