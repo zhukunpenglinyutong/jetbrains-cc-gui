@@ -207,10 +207,11 @@ These were manually implemented in v0.3.0:
 
 ## 🚨 Known Challenges
 
-### Challenge 1: Grafted History
-- **Issue**: Fork has grafted history, no common ancestor with upstream
-- **Impact**: Cannot use traditional merge, must cherry-pick
-- **Solution**: Documented in UPSTREAM_SYNC_STRATEGY.md
+### ~~Challenge 1: Grafted History~~ ✅ RESOLVED
+- **Previous Issue**: Assumed fork had grafted history with no common ancestor
+- **Resolution**: Merge-base discovered at `940bdc0` (upstream v0.1.3)
+- **Impact**: Full `git merge upstream/main` is now feasible!
+- **Updated Strategy**: See UPSTREAM_SYNC_STRATEGY.md for merge plan
 
 ### Challenge 2: Chinese Comments
 - **Issue**: Upstream uses Chinese comments

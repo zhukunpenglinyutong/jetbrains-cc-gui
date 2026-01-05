@@ -2,19 +2,217 @@
 
 **Purpose**: Track cherry-pick sessions and upstream synchronization progress
 
-> **🚀 Next Session**: See `NEXT_SESSION_HANDOFF.md` for quick start guide and complete context
+> **🚀 BREAKTHROUGH: Full merge is now possible!** See Session 5 below for merge plan.
 
 ---
 
 ## Current Status
 
-**Last Sync**: January 5, 2026 (Session 4)  
-**Branch**: copilot/cherry-pick-i18n-commit  
-**Commits Behind**: ~25 commits (reduced from ~26)  
-**Last Session**: 1 commit successfully integrated (32a7ae4 - MCP/Skills i18n completeness)  
-**Next Target**: Review other upstream commits for valuable features
+**Last Sync**: January 5, 2026 (Session 5 - Merge Discovery)  
+**Branch**: main  
+**Commits Behind**: 23 commits (verified via merge-base)  
+**Commits Ahead**: 46 commits  
+**Merge-Base**: `940bdc0` (upstream v0.1.3)  
+**Next Action**: **FULL UPSTREAM MERGE** (only 32 conflicts!)
 
-> **📋 For Next Agent**: 32a7ae4 completed successfully. i18n series complete. Consider reviewing other upstream features or bug fixes.
+> **📋 For Next Agent**: Full merge is ready! See SESSION 5 below for detailed plan. Cherry-picking is no longer needed.
+
+---
+
+## 🎉 Session 5 - January 5, 2026: Merge-Base Discovery
+
+**Duration**: 30 minutes  
+**Major Finding**: Fork HAS proper git ancestry with upstream!
+
+### Discovery Summary
+
+**Previous Incorrect Assumption**:
+- ~~Fork had "grafted history" with no common ancestor~~
+- ~~102 file conflicts with "both added" semantics~~
+- ~~Full merge was "not feasible"~~
+
+**Actual Reality**:
+| Property | Value |
+|----------|-------|
+| Merge-base | `940bdc0` (upstream v0.1.3 merge PR #124) |
+| Root commit | `b8119e4` (NOT grafted!) |
+| Commits ahead | 46 |
+| Commits behind | 23 |
+| **Actual conflicts** | **32 files** (standard 3-way merge) |
+
+### Test Merge Results
+
+```bash
+git merge upstream/main --no-commit --no-ff
+# Result: 32 conflicting files (NOT 102!)
+```
+
+**Conflict Breakdown**:
+
+| Category | Count | Files |
+|----------|-------|-------|
+| Config/Root | 6 | `.gitignore`, `CHANGELOG.md`, `README.md`, `README.zh-CN.md`, `build.gradle`, `plugin.xml` |
+| Java | 11 | `ClaudeSDKToolWindow.java`, `ClaudeSession.java`, `BridgeDirectoryResolver.java`, `FileExportHandler.java`, `McpServerHandler.java`, `PermissionHandler.java`, `ProviderHandler.java`, `PermissionManager.java`, `PermissionService.java`, `McpServerManager.java`, `LanguageConfigService.java` |
+| TypeScript/React | 11 | `App.tsx`, `AskUserQuestionDialog.tsx`, `ChatInputBox.tsx`, `PermissionDialog.tsx`, `McpServerDialog.tsx`, `McpSettingsSection.tsx`, `SkillHelpDialog.tsx`, `ReadToolBlock.tsx`, `global.d.ts`, `config.ts`, `main.tsx` |
+| AI-Bridge JS | 4 | `api-config.js`, `package-lock.json`, `permission-handler.js`, `message-service.js` |
+
+**Auto-Merged Successfully** (no conflicts!):
+- All i18n locale files: `en.json`, `zh.json`, `es.json`, `fr.json`, `hi.json`, `zh-TW.json`
+- Many Java files: `ClaudeHistoryReader.java`, `CodemossSettingsService.java`, `SendSelectionToTerminalAction.java`, `SettingsHandler.java`, `ClaudeSettingsManager.java`
+- Many React components: `AlertDialog.tsx`, `ConfirmDialog.tsx`, `UsageStatisticsSection.tsx`, `SkillsSettingsSection.tsx`, `GenericToolBlock.tsx`
+
+---
+
+## 📋 MERGE PLAN FOR NEXT AGENT
+
+### Prerequisites
+
+```bash
+# Verify you're on main and up to date
+git checkout main
+git pull origin main
+git fetch upstream
+```
+
+### Step 1: Create Merge Branch
+
+```bash
+git checkout -b merge-upstream-2026-01
+git merge upstream/main
+# This will show 32 conflicts
+```
+
+### Step 2: Resolve Conflicts by Category
+
+#### 2.1 Config/Root Files (6 files)
+
+| File | Strategy |
+|------|----------|
+| `.gitignore` | Merge both additions, keep fork's structure |
+| `CHANGELOG.md` | Keep fork's changelog, add upstream entries at bottom as "Upstream Changes" section |
+| `README.md` | Keep fork's English README |
+| `README.zh-CN.md` | DELETE (modify/delete conflict) - fork removed Chinese README |
+| `build.gradle` | Keep higher versions, merge features |
+| `plugin.xml` | Merge carefully - keep fork's plugin ID and descriptions |
+
+```bash
+# For README.zh-CN.md specifically:
+git rm README.zh-CN.md
+```
+
+#### 2.2 Java Files (11 files)
+
+**Strategy**: Keep upstream's logic/features, translate Chinese comments to English
+
+| File | Focus Areas |
+|------|-------------|
+| `ClaudeSDKToolWindow.java` | Main window logic |
+| `ClaudeSession.java` | Session handling |
+| `BridgeDirectoryResolver.java` | Path resolution |
+| `FileExportHandler.java` | Export functionality |
+| `McpServerHandler.java` | MCP server management |
+| `PermissionHandler.java` | Permission dialogs |
+| `ProviderHandler.java` | Provider selection |
+| `PermissionManager.java` | Permission state |
+| `PermissionService.java` | Permission logic |
+| `McpServerManager.java` | MCP settings |
+| `LanguageConfigService.java` | Language detection (add/add - both implemented) |
+
+**For each Java file**:
+1. Open conflict markers
+2. Keep upstream's new features/logic
+3. Keep fork's English translations of comments
+4. If both have same feature implemented differently, prefer fork's (already tested)
+
+#### 2.3 TypeScript/React Files (11 files)
+
+**Strategy**: Merge UI features, keep English strings, preserve fork's i18n keys
+
+| File | Focus Areas |
+|------|-------------|
+| `App.tsx` | Main app component |
+| `AskUserQuestionDialog.tsx` | Dialog component (add/add) |
+| `ChatInputBox.tsx` | Input component |
+| `PermissionDialog.tsx` | Permission UI |
+| `McpServerDialog.tsx` | MCP dialogs |
+| `McpSettingsSection.tsx` | MCP settings UI |
+| `SkillHelpDialog.tsx` | Skills help |
+| `ReadToolBlock.tsx` | Tool block display |
+| `global.d.ts` | Type definitions |
+| `config.ts` | i18n configuration |
+| `main.tsx` | App entry point |
+
+**For each TSX file**:
+1. Keep fork's `t('key')` i18n calls
+2. Accept upstream's new UI features
+3. Keep fork's English fallback strings
+
+#### 2.4 AI-Bridge Files (4 files)
+
+| File | Strategy |
+|------|----------|
+| `api-config.js` | Merge configurations |
+| `package-lock.json` | Regenerate after merge: `cd ai-bridge && npm install` |
+| `permission-handler.js` | Merge permission logic |
+| `message-service.js` | Merge message handling |
+
+### Step 3: Validate Build
+
+```bash
+# Java/Kotlin build
+./gradlew build
+
+# Webview build  
+cd webview && npm install && npm run build
+
+# AI-Bridge
+cd ai-bridge && npm install && npm test
+```
+
+### Step 4: Test Key Features
+
+- [ ] Plugin loads in IDE sandbox
+- [ ] Chat window opens
+- [ ] Messages send/receive
+- [ ] Permissions work
+- [ ] MCP servers configurable
+- [ ] i18n displays correctly (English)
+- [ ] Settings persist
+
+### Step 5: Commit and Push
+
+```bash
+git add .
+git commit -m "feat: merge upstream/main - sync to latest upstream
+
+Merged 23 upstream commits since v0.1.3.
+Resolved 32 file conflicts while preserving:
+- English localization
+- Fork-specific improvements
+- Test coverage
+
+Upstream features integrated:
+- [List key features from upstream CHANGELOG]
+"
+
+git push origin merge-upstream-2026-01
+```
+
+### Step 6: Create PR and Merge
+
+```bash
+gh pr create --title "feat: Full upstream merge - close 23 commit gap" --body "..."
+```
+
+---
+
+## Post-Merge Benefits
+
+After this merge:
+1. ✅ **"23 commits behind" becomes 0**
+2. ✅ **Future syncs are simple `git merge upstream/main`**
+3. ✅ **Fork maintains proper git relationship**
+4. ✅ **All upstream features integrated**
 
 ---
 
@@ -157,13 +355,13 @@ Track cherry-picks that failed and need investigation.
 
 #### Session 1 - January 5, 2026 (Documentation & Setup)
 
-**Status**: ✅ Setup Complete - Ready for Cherry-Pick Execution  
+**Status**: ✅ Setup Complete - Ready for Merge/Cherry-Pick  
 **Commits Attempted**: 0  
-**Commits Behind**: ~30 (estimated based on functional parity with upstream features)
+**Commits Behind**: 23 (verified via merge-base)
 
 **Activities**:
 - Created v0.3.0 with 3 upstream features (manual implementation)
-- Attempted full merge (102 conflicts - aborted)
+- ~~Attempted full merge (102 conflicts - aborted)~~ **UPDATE**: Merge-base discovered, full merge is viable!
 - Created UPSTREAM_SYNC_STRATEGY.md
 - Created CHERRY_PICK_SESSION_GUIDE.md (13KB)
 - Created this tracking log (SYNC_LOG.md)

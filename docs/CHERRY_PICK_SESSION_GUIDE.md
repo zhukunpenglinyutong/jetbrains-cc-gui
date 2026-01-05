@@ -572,9 +572,9 @@ git cherry-pick --continue
 
 ### What We Learned
 
-1. **Full merge**: 102 conflicts → Not feasible
-2. **Grafted history**: No common ancestor → All files "both added"
-3. **Cherry-pick**: 2-5 files per commit → Manageable
+1. ~~**Full merge**: 102 conflicts → Not feasible~~ **UPDATE**: Merge-base exists! Full merge now viable
+2. ~~**Grafted history**: No common ancestor~~ **UPDATE**: Common ancestor at `940bdc0` (v0.1.3)
+3. **Cherry-pick**: 2-5 files per commit → Manageable (fallback option)
 4. **i18n files**: Highest conflict rate → Handle separately
 5. **Code logic**: Usually identical → Focus on comments
 

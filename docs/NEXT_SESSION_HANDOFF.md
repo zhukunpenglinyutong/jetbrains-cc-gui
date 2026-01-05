@@ -1,103 +1,298 @@
-# Next Cherry-Pick Session - Quick Start Guide
+# Next Session - FULL UPSTREAM MERGE
 
 **Created**: January 5, 2026  
-**Updated**: January 5, 2026 (Session 3 Complete)  
-**For**: Next agent continuing upstream synchronization  
-**Context**: Sessions 2 & 3 completed - 4 high-priority commits integrated
+**Updated**: January 5, 2026 (Session 5 - Merge Discovery)  
+**For**: Next agent performing full upstream merge  
+**Context**: Merge-base discovered! Full merge is now feasible with only 32 conflicts.
 
 ---
 
-## 🎯 Quick Summary
+## 🎉 BREAKTHROUGH: Full Merge is Now Possible!
 
-**Current State**: Successfully cherry-picked 4 priority commits across Sessions 2 & 3:
-- ✅ Session 2: 3 bug fixes (concurrency, Windows crash, Node.js auto-detection)
-- ✅ Session 3: 1 i18n enhancement (d35df2d - UI text improvements)
+**Previous Assumption (WRONG)**:
+- ~~Fork had "grafted history" with no common ancestor~~
+- ~~102 file conflicts with "both added" semantics~~
+- ~~Full merge was "not feasible" - cherry-pick required~~
 
-**Your Mission**: Cherry-pick remaining priority commit 32a7ae4 (MCP/Skills i18n completeness) OR evaluate and cherry-pick other valuable upstream features.
-
----
-
-## 📊 What Was Accomplished
-
-### Session 2: Bug Fixes & Stability Improvements
-
-| Commit | Description | Conflicts | Status |
-|--------|-------------|-----------|--------|
-| `fac0bff` | Concurrency fixes | 1 file | ✅ Done (18ad2be) |
-| `e397cad` | Windows crash fix | 3 files | ✅ Done (d091c54) |
-| `d1a7903` | Node.js auto-detection | None | ✅ Done (cf4f551) |
-
-**Key Changes**: Thread-safe execution, ErrorBoundary, file race condition fixes, Node.js auto-detection
-
-### Session 3: i18n Enhancement (d35df2d)
-
-| Commit | Description | Conflicts | Status |
-|--------|-------------|-----------|--------|
-| `d35df2d` | i18n enhancements | 14 files | ✅ Done (dd7957b) |
-
-**Key Changes**: 
-- Replaced hardcoded English strings with i18n t() calls in 9 React components
-- Added 19 new i18n keys (UI elements, permissions, toast messages)
-- Updated all 7 locale files (en, es, fr, hi, ja, zh, zh-TW)
-- Restored ja.json locale file
-
-**Conflicts Resolution Pattern**:
-- TypeScript: Accepted upstream i18n structure (t() calls over hardcoded strings)
-- Locales: Merged fork's existing translations with upstream's new keys
-- Maintained English comments throughout (fork standard)
+**Actual Reality**:
+| Property | Value |
+|----------|-------|
+| **Merge-base** | `940bdc0` (upstream v0.1.3 merge) |
+| **Commits ahead** | 46 |
+| **Commits behind** | 23 |
+| **Actual conflicts** | **32 files** (standard 3-way merge!) |
 
 ---
 
-## 🔜 What's Next (Your Task)
+## 🎯 Your Mission: Complete the Full Upstream Merge
 
-### Priority Option 1: Complete i18n Series
+### Estimated Time: 1-2 hours
 
-**Commit 5: 32a7ae4 - MCP/Skills i18n completeness**
+### Prerequisites Checklist
 
-**Description**: Complete i18n support for MCP and Skills help dialogs + usage statistics improvements  
-**Estimated Conflicts**: 5-15 files (locale files + UI components)  
-**Priority**: Medium (translation completeness, UX improvement)  
-**Dependencies**: Follows d35df2d (completed in Session 3)
-
-**Files Expected to Conflict**:
-```
-Java files (2):
-- ClaudeHistoryReader.java (token overflow fix: int → long)
-- SettingsHandler.java
-
-React/TypeScript (5):
-- UsageStatisticsSection.tsx (scrollable chart view)
-- McpHelpDialog.tsx (i18n completion)
-- McpServerDialog.tsx (i18n completion)
-- SkillHelpDialog.tsx (i18n completion)
-
-Locale files (7):
-- webview/src/i18n/locales/*.json (en, es, fr, hi, ja, zh, zh-TW)
-- ~100+ new i18n keys for MCP and Skills dialogs
-
-Styles (2):
-- usage-chart.less
-- usage.less
-```
-
-**Resolution Strategy**:
-1. Java files: Accept upstream logic changes (token overflow fix)
-2. TypeScript: Accept upstream i18n structure (similar to d35df2d)
-3. Locale files: Merge fork's existing + upstream's new keys (same pattern as Session 3)
-4. Style files: Accept upstream improvements
-
-**Cherry-Pick Command**:
 ```bash
-git cherry-pick 32a7ae4
-```
+# 1. Verify clean working tree
+git status  # Should be clean
 
-**Expected Outcome**: Complete i18n coverage for MCP/Skills + better usage statistics display
+# 2. Ensure on main branch
+git checkout main
+git pull origin main
+
+# 3. Fetch latest upstream
+git fetch upstream
+
+# 4. Verify merge-base exists
+git merge-base HEAD upstream/main
+# Should output: 940bdc06c630d00bfe77d4c10f86a01c53bc0935
+```
 
 ---
 
-### Priority Option 2: Evaluate Other Upstream Features
+## 📋 Step-by-Step Merge Plan
 
-If 32a7ae4 is too complex or not needed, explore these valuable upstream commits:
+### Step 1: Create Merge Branch
+
+```bash
+git checkout -b merge-upstream-2026-01
+git merge upstream/main
+```
+
+This will show **32 conflicting files**. Don't panic!
+
+---
+
+### Step 2: Resolve Conflicts by Category
+
+#### 2.1 Config/Root Files (6 files)
+
+| File | Strategy |
+|------|----------|
+| `.gitignore` | Merge both additions |
+| `CHANGELOG.md` | Keep fork's, append upstream changes |
+| `README.md` | Keep fork's English version |
+| `README.zh-CN.md` | **DELETE** - run `git rm README.zh-CN.md` |
+| `build.gradle` | Keep higher versions, merge features |
+| `plugin.xml` | Keep fork's plugin ID, merge features |
+
+#### 2.2 Java Files (11 files)
+
+**Strategy**: Accept upstream logic, translate Chinese comments to English
+
+Files:
+- `ClaudeSDKToolWindow.java`
+- `ClaudeSession.java`
+- `BridgeDirectoryResolver.java`
+- `FileExportHandler.java`
+- `McpServerHandler.java`
+- `PermissionHandler.java`
+- `ProviderHandler.java`
+- `PermissionManager.java`
+- `PermissionService.java`
+- `McpServerManager.java`
+- `LanguageConfigService.java` (add/add - prefer fork's version)
+
+**For each Java conflict**:
+1. Accept upstream's new features/logic
+2. Keep fork's English comment translations
+3. If same feature exists in both, prefer fork's (already tested)
+
+#### 2.3 TypeScript/React Files (11 files)
+
+**Strategy**: Merge UI features, keep English strings
+
+Files:
+- `App.tsx`
+- `AskUserQuestionDialog.tsx` (add/add)
+- `ChatInputBox.tsx`
+- `PermissionDialog.tsx`
+- `McpServerDialog.tsx`
+- `McpSettingsSection.tsx`
+- `SkillHelpDialog.tsx`
+- `ReadToolBlock.tsx`
+- `global.d.ts`
+- `config.ts`
+- `main.tsx`
+
+**For each TSX conflict**:
+1. Keep fork's `t('key')` i18n calls
+2. Accept upstream's new UI features
+3. Keep English fallback strings
+
+#### 2.4 AI-Bridge Files (4 files)
+
+| File | Strategy |
+|------|----------|
+| `api-config.js` | Merge configurations |
+| `package-lock.json` | Delete and regenerate |
+| `permission-handler.js` | Merge logic |
+| `message-service.js` | Merge handling |
+
+```bash
+# After resolving other ai-bridge conflicts:
+cd ai-bridge
+rm package-lock.json
+npm install
+cd ..
+```
+
+---
+
+### Step 3: Mark Conflicts Resolved
+
+After resolving each file:
+```bash
+git add <resolved-file>
+```
+
+When all done:
+```bash
+git status  # Verify no unresolved conflicts
+```
+
+---
+
+### Step 4: Validate Build
+
+```bash
+# Java/Kotlin build
+./gradlew clean build
+
+# Webview build
+cd webview && npm install && npm run build && cd ..
+
+# AI-Bridge
+cd ai-bridge && npm install && npm test && cd ..
+```
+
+---
+
+### Step 5: Test Key Features
+
+Before committing, verify:
+- [ ] Plugin loads in IDE sandbox: `./gradlew runIde`
+- [ ] Chat window opens correctly
+- [ ] Messages send and receive
+- [ ] Permissions dialog works
+- [ ] MCP server settings accessible
+- [ ] i18n shows English correctly
+- [ ] Settings persist across restarts
+
+---
+
+### Step 6: Commit the Merge
+
+```bash
+git commit -m "feat: merge upstream/main - sync 23 commits from upstream
+
+Merged upstream/main into fork, resolving 32 file conflicts.
+
+Upstream features integrated:
+- All commits from v0.1.3 to current upstream/main
+- MCP server improvements
+- Permission handling updates
+- UI enhancements
+
+Fork features preserved:
+- Complete English localization (60+ files)
+- Test infrastructure (Vitest + JUnit)
+- Code quality improvements
+- Fork-specific bug fixes
+
+Conflict resolution strategy:
+- Config: Merged features, kept fork structure
+- Java: Accepted upstream logic, kept English comments
+- React: Merged UI features, kept i18n keys
+- AI-Bridge: Merged configurations
+
+This merge establishes proper git relationship for future syncs.
+"
+```
+
+---
+
+### Step 7: Push and Create PR
+
+```bash
+git push origin merge-upstream-2026-01
+
+gh pr create \
+  --title "feat: Full upstream merge - close 23 commit gap" \
+  --body "## Summary
+Merges all 23 upstream commits since v0.1.3 merge-base.
+
+## Changes
+- 32 file conflicts resolved
+- All upstream features integrated
+- Fork-specific features preserved
+
+## Testing
+- [ ] ./gradlew build passes
+- [ ] Webview builds successfully
+- [ ] AI-Bridge tests pass
+- [ ] Manual testing in IDE sandbox
+
+## Post-Merge Benefits
+- Future syncs become simple \`git merge upstream/main\`
+- Fork maintains proper git ancestry
+- 'Commits behind' count goes to 0"
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### If build fails after merge:
+```bash
+# Check for syntax errors in Java
+./gradlew compileJava 2>&1 | head -50
+
+# Check webview build
+cd webview && npm run build 2>&1 | head -50
+```
+
+### If tests fail:
+```bash
+# Run specific tests
+./gradlew test --tests "ClassName"
+cd webview && npm test -- --reporter=verbose
+```
+
+### If merge is too complex:
+```bash
+# Abort and return to main
+git merge --abort
+git checkout main
+```
+Then continue with cherry-pick strategy (see previous sessions in SYNC_LOG.md)
+
+---
+
+## 📊 Conflict Summary Reference
+
+| Category | Count | Difficulty |
+|----------|-------|------------|
+| Config/Root | 6 | Easy |
+| Java | 11 | Medium (translate comments) |
+| TypeScript | 11 | Medium (merge UI) |
+| AI-Bridge | 4 | Easy |
+| **TOTAL** | **32** | **~1-2 hours** |
+
+**Auto-merged successfully** (no conflicts):
+- All i18n locale files (en, zh, es, fr, hi, zh-TW)
+- Many Java utilities
+- Many React components
+
+---
+
+## 📚 Reference Documentation
+
+- [SYNC_LOG.md](SYNC_LOG.md) - Full session history and merge plan details
+- [UPSTREAM_SYNC_STRATEGY.md](UPSTREAM_SYNC_STRATEGY.md) - Updated strategy (merge now recommended)
+- [FORK_STRATEGY.md](FORK_STRATEGY.md) - Fork-specific features to preserve
+
+---
+
+**Good luck! This merge will eliminate the 'commits behind' gap permanently! 🚀**
 
 **Recent High-Value Commits** (from `git log copilot/update-sync-log-file..upstream/main`):
 
