@@ -249,7 +249,13 @@ public class AgentHandler extends BaseMessageHandler {
                 JsonObject agent = settingsService.getAgent(agentId);
                 if (agent != null) {
                     result.add("agent", agent);
+                    String agentName = agent.has("name") ? agent.get("name").getAsString() : "Unknown Agent";
+                    com.github.claudecodegui.notifications.ClaudeNotifier.setAgent(context.getProject(), agentName);
+                } else {
+                    com.github.claudecodegui.notifications.ClaudeNotifier.setAgent(context.getProject(), "");
                 }
+            } else {
+                com.github.claudecodegui.notifications.ClaudeNotifier.setAgent(context.getProject(), "");
             }
 
             String resultJson = gson.toJson(result);
