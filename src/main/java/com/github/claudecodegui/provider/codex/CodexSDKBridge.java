@@ -196,6 +196,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
      *
      * Note: Codex uses threadId instead of sessionId
      * Note: Codex does not support attachments
+     * Note: Codex does not support system prompts, so agentPrompt is appended to user message
      */
     public CompletableFuture<SDKResult> sendMessage(
             String channelId,
@@ -205,6 +206,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,  // Ignored for Codex
             String permissionMode,
             String model,
+            String agentPrompt,  // Agent prompt (appended to message for Codex)
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -220,10 +222,17 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Ensure Codex SDK binary has executable permission
                 setCodexExecutablePermission(bridgeDir);
 
+                // Append agentPrompt to message if provided (Codex doesn't support system prompts)
+                String finalMessage = message;
+                if (agentPrompt != null && !agentPrompt.isEmpty()) {
+                    finalMessage = message + "\n\n## Agent Role and Instructions\n\n" + agentPrompt;
+                    LOG.info("[Agent] ✓ Appending agentPrompt to user message for Codex (length: " + agentPrompt.length() + " chars)");
+                }
+
                 // Build stdin input JSON
                 // Note: Codex uses 'threadId' (not 'sessionId')
                 JsonObject stdinInput = new JsonObject();
-                stdinInput.addProperty("message", message);
+                stdinInput.addProperty("message", finalMessage);
                 stdinInput.addProperty("threadId", threadId != null ? threadId : "");
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");

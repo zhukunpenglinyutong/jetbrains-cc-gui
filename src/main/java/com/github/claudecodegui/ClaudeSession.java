@@ -461,7 +461,7 @@ public class ClaudeSession {
         String currentProvider = state.getProvider();
 
         if ("codex".equals(currentProvider)) {
-            return sendToCodex(channelId, input, attachments);
+            return sendToCodex(channelId, input, attachments, agentPrompt);
         } else {
             return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt);
         }
@@ -475,7 +475,8 @@ public class ClaudeSession {
     private CompletableFuture<Void> sendToCodex(
         String channelId,
         String input,
-        List<Attachment> attachments
+        List<Attachment> attachments,
+        String agentPrompt
     ) {
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
 
@@ -487,6 +488,7 @@ public class ClaudeSession {
             attachments,
             state.getPermissionMode(),
             state.getModel(),
+            agentPrompt,
             handler
         ).thenApply(result -> null);
     }
