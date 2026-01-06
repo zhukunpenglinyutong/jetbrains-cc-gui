@@ -1,7 +1,11 @@
 ##### **2026年1月6日（v0.1.4-codex）**
 
-- [x] P0（feat）适配codex对话功能 #codex
-- [x] P0（feat）适配Codex读取环境变量Key的功能 #codex_1
+- [x] 适配Codex对话功能 #codex
+- [x] 实现Codex读取环境变量Key的功能 #codex_1
+- [x] 实现Codex供应商编辑 #codex_2
+- [x] 实现Codex智能体 #codex_3
+- [x] 实现Codex使用统计 #codex_3
+- [x] 实现Codex增强提示词（其实走的是Claude） #codex_3
 
 ##### **2026年1月5日（v0.1.4-beta7）**
 
