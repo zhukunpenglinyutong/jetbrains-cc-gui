@@ -1,0 +1,72 @@
+/**
+ * Claude channel command handler – isolates all Claude specific command logic
+ * away from the shared channel-manager entry point.
+ */
+import {
+  sendMessage as claudeSendMessage,
+  sendMessageWithAttachments as claudeSendMessageWithAttachments,
+  getSlashCommands as claudeGetSlashCommands
+} from '../services/claude/message-service.js';
+import { getSessionMessages as claudeGetSessionMessages } from '../services/claude/session-service.js';
+
+/**
+ * Execute a Claude specific command.
+ * @param {string} command
+ * @param {string[]} args
+ * @param {object|null} stdinData
+ */
+export async function handleClaudeCommand(command, args, stdinData) {
+  switch (command) {
+    case 'send': {
+      if (stdinData && stdinData.message !== undefined) {
+        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt } = stdinData;
+        await claudeSendMessage(
+          message,
+          sessionId || '',
+          cwd || '',
+          permissionMode || '',
+          model || '',
+          openedFiles || null,
+          agentPrompt || null
+        );
+      } else {
+        await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
+      }
+      break;
+    }
+
+    case 'sendWithAttachments': {
+      if (stdinData && stdinData.message !== undefined) {
+        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt } = stdinData;
+        await claudeSendMessageWithAttachments(
+          message,
+          sessionId || '',
+          cwd || '',
+          permissionMode || '',
+          model || '',
+          attachments ? { attachments, openedFiles, agentPrompt } : { openedFiles, agentPrompt }
+        );
+      } else {
+        await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);
+      }
+      break;
+    }
+
+    case 'getSession':
+      await claudeGetSessionMessages(args[0], args[1]);
+      break;
+
+    case 'getSlashCommands': {
+      const cwd = stdinData?.cwd || args[0] || null;
+      await claudeGetSlashCommands(cwd);
+      break;
+    }
+
+    default:
+      throw new Error(`Unknown Claude command: ${command}`);
+  }
+}
+
+export function getClaudeCommandList() {
+  return ['send', 'sendWithAttachments', 'getSession', 'getSlashCommands'];
+}

@@ -14,7 +14,7 @@ export const ButtonArea = ({
   isLoading = false,
   isEnhancing = false,
   selectedModel = 'claude-sonnet-4-5',
-  permissionMode = 'default',
+  permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
   onSubmit,
   onStop,
@@ -137,7 +137,7 @@ export const ButtonArea = ({
           onAgentSelect={onAgentSelect}
           onOpenAgentSettings={onOpenAgentSettings}
         />
-        <ModeSelect value={permissionMode} onChange={handleModeSelect} />
+        <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />
       </div>
 

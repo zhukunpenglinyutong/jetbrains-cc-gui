@@ -7,6 +7,8 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeMessageHandler;
 import com.github.claudecodegui.session.CodexMessageHandler;
 import com.github.claudecodegui.util.EditorFileUtils;
@@ -459,7 +461,7 @@ public class ClaudeSession {
         String currentProvider = state.getProvider();
 
         if ("codex".equals(currentProvider)) {
-            return sendToCodex(channelId, input, attachments);
+            return sendToCodex(channelId, input, attachments, agentPrompt);
         } else {
             return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt);
         }
@@ -473,7 +475,8 @@ public class ClaudeSession {
     private CompletableFuture<Void> sendToCodex(
         String channelId,
         String input,
-        List<Attachment> attachments
+        List<Attachment> attachments,
+        String agentPrompt
     ) {
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
 
@@ -485,6 +488,7 @@ public class ClaudeSession {
             attachments,
             state.getPermissionMode(),
             state.getModel(),
+            agentPrompt,
             handler
         ).thenApply(result -> null);
     }

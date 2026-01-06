@@ -22,10 +22,250 @@
   // 供应商管理页面可能需要更多内容
 }
 
+/* Codex Provider Section Styles */
+.configSection {
+  min-width: 400px;
+  padding-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.sectionDesc {
+  color: var(--text-tertiary);
+  margin: 0 0 24px 0;
+  font-size: 13px;
+}
+
+.tempNotice {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+
+  :global(.codicon) {
+    font-size: 48px;
+    opacity: 0.5;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+.providerListContainer {
+  display: flex;
+  flex-direction: column;
+}
+
+.providerListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+
+  h4 {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+}
+
+.providerList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.providerCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  transition: all 0.2s ease;
+
+  &.active {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.1);
+  }
+}
+
+.providerInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.providerName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.providerRemark {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 400px;
+}
+
+.providerModel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+
+  :global(.codicon) {
+    font-size: 12px;
+  }
+}
+
+.providerActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.activeBadge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+  user-select: none;
+}
+
+.useButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: none;
+  background: var(--button-primary-background, #0078d4);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--button-primary-hover-background, #0063b1);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.iconBtn {
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-secondary);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 0;
+  color: var(--text-tertiary);
+  text-align: center;
+  background: var(--bg-secondary);
+  border: 2px dashed var(--border-secondary);
+  border-radius: 8px;
+  margin-top: 8px;
+
+  :global(.codicon) {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+  }
+}
+
 /* 响应式适配 - 480px 小屏幕 */
 @media (max-width: 480px) {
   .settingsContent {
     padding: 12px;
+  }
+
+  .configSection {
+    min-width: auto;
+  }
+
+  .sectionTitle {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .sectionDesc {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .providerListHeader {
+    button {
+      flex-shrink: 0;
+      width: auto;
+      min-width: fit-content;
+    }
+  }
+
+  .providerCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .providerActions {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 

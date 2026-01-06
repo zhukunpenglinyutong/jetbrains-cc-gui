@@ -50,3 +50,23 @@ export type ProviderCategory =
   | 'aggregator'    // 聚合服务
   | 'third_party'   // 第三方
   | 'custom';       // 自定义
+
+/**
+ * Codex 供应商配置
+ */
+export interface CodexProviderConfig {
+  /** 供应商唯一 ID */
+  id: string;
+  /** 供应商名称 */
+  name: string;
+  /** 备注 */
+  remark?: string;
+  /** 创建时间戳（毫秒） */
+  createdAt?: number;
+  /** 是否为当前使用的供应商 */
+  isActive?: boolean;
+  /** config.toml 配置内容（原始字符串） */
+  configToml?: string;
+  /** auth.json 配置内容（原始字符串） */
+  authJson?: string;
+}

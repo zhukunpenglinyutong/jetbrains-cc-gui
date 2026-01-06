@@ -2,6 +2,8 @@ package com.github.claudecodegui;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.cache.SlashCommandCache;
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.handler.*;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
@@ -13,6 +15,7 @@ import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.LanguageConfigService;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
@@ -873,25 +876,35 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void loadHistorySession(String sessionId, String projectPath) {
             LOG.info("Loading history session: " + sessionId + " from project: " + projectPath);
 
-            // 保存当前的 permission mode（如果存在旧 session）
+            // 保存当前的 permission mode、provider、model（如果存在旧 session）
             String previousPermissionMode;
+            String previousProvider;
+            String previousModel;
+
             if (session != null) {
                 previousPermissionMode = session.getPermissionMode();
+                previousProvider = session.getProvider();
+                previousModel = session.getModel();
             } else {
                 // 如果没有旧 session，从持久化存储加载
                 PropertiesComponent props = PropertiesComponent.getInstance();
                 String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
-                previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty()) ? savedMode.trim() : "default";
+                previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty()) ? savedMode.trim() : "bypassPermissions";
+                // provider 和 model 使用默认值，因为窗口刚打开时前端会主动同步
+                previousProvider = "claude";
+                previousModel = "claude-sonnet-4-5";
             }
-            // LOG.info("Preserving permission mode when loading history: " + previousPermissionMode);
+            LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
             callJavaScript("clearMessages");
 
             session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 
-            // 恢复之前保存的 permission mode
+            // 恢复之前保存的 permission mode、provider、model
             session.setPermissionMode(previousPermissionMode);
-            // LOG.info("Restored permission mode to loaded session: " + previousPermissionMode);
+            session.setProvider(previousProvider);
+            session.setModel(previousModel);
+            LOG.info("Restored session state to loaded session: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
             handlerContext.setSession(session);
             setupSessionCallbacks();
@@ -921,7 +934,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     }
                     ApplicationManager.getApplication().invokeLater(() -> {
                         String messagesJson = convertMessagesToJson(messages);
-                        LOG.info("[ClaudeSDKToolWindow] Calling updateMessages, json length: " + messagesJson.length());
+                        LOG.debug("Sending " + messages.size() + " messages to WebView, JSON length: " + messagesJson.length());
+                        if (!messages.isEmpty()) {
+                            ClaudeSession.Message lastMsg = messages.get(messages.size() - 1);
+                            LOG.debug("Last message: type=" + lastMsg.type + ", content length=" + (lastMsg.content != null ? lastMsg.content.length() : 0));
+                        }
                         callJavaScript("updateMessages", JsUtils.escapeJs(messagesJson));
                     });
                     pushUsageUpdateFromMessages(messages);
@@ -1034,7 +1051,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
          */
         private void sendCurrentPermissionMode() {
             try {
-                String currentMode = "default";  // 默认值
+                String currentMode = "bypassPermissions";  // 默认值
 
                 // 优先从 session 中获取
                 if (session != null) {
@@ -1093,11 +1110,89 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 msgObj.addProperty("timestamp", msg.timestamp);
                 msgObj.addProperty("content", msg.content != null ? msg.content : "");
                 if (msg.raw != null) {
-                    msgObj.add("raw", msg.raw);
+                    msgObj.add("raw", truncateRawForTransport(msg.raw));
                 }
                 messagesArray.add(msgObj);
             }
             return gson.toJson(messagesArray);
+        }
+
+        private static final int MAX_TOOL_RESULT_CHARS = 20000;
+
+        private JsonObject truncateRawForTransport(JsonObject raw) {
+            JsonElement contentEl = null;
+            if (raw.has("content")) {
+                contentEl = raw.get("content");
+            } else if (raw.has("message") && raw.get("message").isJsonObject()) {
+                JsonObject message = raw.getAsJsonObject("message");
+                if (message.has("content")) {
+                    contentEl = message.get("content");
+                }
+            }
+
+            if (contentEl == null || !contentEl.isJsonArray()) {
+                return raw;
+            }
+
+            JsonArray contentArr = contentEl.getAsJsonArray();
+            boolean needsCopy = false;
+            for (JsonElement el : contentArr) {
+                if (!el.isJsonObject()) continue;
+                JsonObject block = el.getAsJsonObject();
+                if (!block.has("type") || block.get("type").isJsonNull()) continue;
+                if (!"tool_result".equals(block.get("type").getAsString())) continue;
+                if (!block.has("content") || block.get("content").isJsonNull()) continue;
+                JsonElement c = block.get("content");
+                if (c.isJsonPrimitive() && c.getAsJsonPrimitive().isString()) {
+                    String s = c.getAsString();
+                    if (s.length() > MAX_TOOL_RESULT_CHARS) {
+                        needsCopy = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!needsCopy) {
+                return raw;
+            }
+
+            JsonObject copied = raw.deepCopy();
+            JsonElement copiedContentEl = null;
+            if (copied.has("content")) {
+                copiedContentEl = copied.get("content");
+            } else if (copied.has("message") && copied.get("message").isJsonObject()) {
+                JsonObject message = copied.getAsJsonObject("message");
+                if (message.has("content")) {
+                    copiedContentEl = message.get("content");
+                }
+            }
+
+            if (copiedContentEl == null || !copiedContentEl.isJsonArray()) {
+                return copied;
+            }
+
+            JsonArray copiedArr = copiedContentEl.getAsJsonArray();
+            for (JsonElement el : copiedArr) {
+                if (!el.isJsonObject()) continue;
+                JsonObject block = el.getAsJsonObject();
+                if (!block.has("type") || block.get("type").isJsonNull()) continue;
+                if (!"tool_result".equals(block.get("type").getAsString())) continue;
+                if (!block.has("content") || block.get("content").isJsonNull()) continue;
+                JsonElement c = block.get("content");
+                if (c.isJsonPrimitive() && c.getAsJsonPrimitive().isString()) {
+                    String s = c.getAsString();
+                    if (s.length() > MAX_TOOL_RESULT_CHARS) {
+                        int head = (int) Math.floor(MAX_TOOL_RESULT_CHARS * 0.65);
+                        int tail = MAX_TOOL_RESULT_CHARS - head;
+                        String prefix = s.substring(0, Math.min(head, s.length()));
+                        String suffix = tail > 0 ? s.substring(Math.max(0, s.length() - tail)) : "";
+                        String truncated = prefix + "\n...\n(truncated, original length: " + s.length() + " chars)\n...\n" + suffix;
+                        block.addProperty("content", truncated);
+                    }
+                }
+            }
+
+            return copied;
         }
 
         private void pushUsageUpdateFromMessages(List<ClaudeSession.Message> messages) {
@@ -1174,9 +1269,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void createNewSession() {
             LOG.info("Creating new session...");
 
-            // 保存当前的 permission mode（如果存在旧 session）
-            String previousPermissionMode = (session != null) ? session.getPermissionMode() : "default";
-            // LOG.info("Preserving permission mode from old session: " + previousPermissionMode);
+            // 保存当前的 permission mode、provider、model（如果存在旧 session）
+            String previousPermissionMode = (session != null) ? session.getPermissionMode() : "bypassPermissions";
+            String previousProvider = (session != null) ? session.getProvider() : "claude";
+            String previousModel = (session != null) ? session.getModel() : "claude-sonnet-4-5";
+            LOG.info("Preserving session state: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
             // 清空前端消息显示（修复新建会话时消息不清空的bug）
             callJavaScript("clearMessages");
@@ -1193,9 +1290,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 // 创建全新的 Session 对象
                 session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 
-                // 恢复之前保存的 permission mode
+                // 恢复之前保存的 permission mode、provider、model
                 session.setPermissionMode(previousPermissionMode);
-                // LOG.info("Restored permission mode to new session: " + previousPermissionMode);
+                session.setProvider(previousProvider);
+                session.setModel(previousModel);
+                LOG.info("Restored session state to new session: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
                 // 更新 HandlerContext 中的 Session 引用（重要：确保所有 Handler 使用新 Session）
                 handlerContext.setSession(session);

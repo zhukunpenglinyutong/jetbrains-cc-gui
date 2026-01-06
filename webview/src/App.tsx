@@ -4,6 +4,8 @@ import MarkdownBlock from './components/MarkdownBlock';
 import CollapsibleTextBlock from './components/CollapsibleTextBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
+import { BlinkingLogo } from './components/BlinkingLogo';
+import { AnimatedText } from './components/AnimatedText';
 import type { SettingsTab } from './components/settings/SettingsSidebar';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
@@ -21,7 +23,6 @@ import {
   TodoListBlock,
 } from './components/toolBlocks';
 import { BackIcon } from './components/Icons';
-import { Claude, OpenAI } from '@lobehub/icons';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
 import { ScrollControl } from './components/ScrollControl';
@@ -101,7 +102,8 @@ const App = () => {
   const [currentProvider, setCurrentProvider] = useState('claude');
   const [selectedClaudeModel, setSelectedClaudeModel] = useState(CLAUDE_MODELS[0].id);
   const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
-  const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
+  const [claudePermissionMode, setClaudePermissionMode] = useState<PermissionMode>('bypassPermissions');
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
@@ -228,6 +230,7 @@ const App = () => {
       let restoredProvider = 'claude';
       let restoredClaudeModel = CLAUDE_MODELS[0].id;
       let restoredCodexModel = CODEX_MODELS[0].id;
+      let initialPermissionMode: PermissionMode = 'bypassPermissions';
 
       if (saved) {
         const state = JSON.parse(saved);
@@ -236,6 +239,9 @@ const App = () => {
         if (['claude', 'codex'].includes(state.provider)) {
           restoredProvider = state.provider;
           setCurrentProvider(state.provider);
+          if (state.provider === 'codex') {
+            initialPermissionMode = 'bypassPermissions';
+          }
         }
 
         // 验证并恢复 Claude 模型
@@ -251,6 +257,8 @@ const App = () => {
         }
       }
 
+      setPermissionMode(initialPermissionMode);
+
       // 初始化时同步模型状态到后端，确保前后端一致
       let syncRetryCount = 0;
       const MAX_SYNC_RETRIES = 30; // 最多重试30次（3秒）
@@ -262,6 +270,7 @@ const App = () => {
           // 再同步对应的模型
           const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
           sendBridgeMessage('set_model', modelToSync);
+          sendBridgeMessage('set_mode', initialPermissionMode);
           console.log('[Frontend] Synced model state to backend:', { provider: restoredProvider, model: modelToSync });
         } else {
           // 如果 sendToJava 还没准备好，稍后重试
@@ -417,6 +426,11 @@ const App = () => {
     window.addErrorMessage = (message) =>
       setMessages((prev) => [...prev, { type: 'error', content: message }]);
 
+    // 添加单条历史消息（用于 Codex 会话加载）
+    window.addHistoryMessage = (message: ClaudeMessage) => {
+      setMessages((prev) => [...prev, message]);
+    };
+
     // 注册 toast 回调（后端调用）
     window.addToast = (message, type) => {
       addToast(message, type);
@@ -492,18 +506,22 @@ const App = () => {
       }
     };
 
-    window.onModeChanged = (mode) => {
+    const updateMode = (mode?: PermissionMode, providerOverride?: string) => {
+      const activeProvider = providerOverride || currentProviderRef.current;
+      if (activeProvider === 'codex') {
+        setPermissionMode('bypassPermissions');
+        return;
+      }
       if (mode === 'default' || mode === 'plan' || mode === 'acceptEdits' || mode === 'bypassPermissions') {
         setPermissionMode(mode);
+        setClaudePermissionMode(mode);
       }
     };
 
+    window.onModeChanged = (mode) => updateMode(mode as PermissionMode);
+
     // 后端主动推送权限模式（窗口初始化时调用）
-    window.onModeReceived = (mode) => {
-      if (mode === 'default' || mode === 'plan' || mode === 'acceptEdits' || mode === 'bypassPermissions') {
-        setPermissionMode(mode);
-      }
-    };
+    window.onModeReceived = (mode) => updateMode(mode as PermissionMode);
 
     // 后端主动通知模型变化时调用（使用 ref 避免闭包问题）
       window.onModelChanged = (modelId) => {
@@ -741,7 +759,8 @@ const App = () => {
 
     const requestHistoryData = () => {
       if (window.sendToJava) {
-        sendBridgeMessage('load_history_data');
+        // 传递 provider 参数给后端
+        sendBridgeMessage('load_history_data', currentProvider);
       } else {
         historyRetryCount++;
         if (historyRetryCount < MAX_HISTORY_RETRIES) {
@@ -759,7 +778,7 @@ const App = () => {
         clearTimeout(currentTimer);
       }
     };
-  }, [currentView]);
+  }, [currentView, currentProvider]); // 添加 currentProvider 依赖，provider 切换时自动刷新历史记录
 
   // 定期获取使用统计
   useEffect(() => {
@@ -891,6 +910,10 @@ const App = () => {
       }
     });
 
+    // 【FIX】在发送消息前，强制同步 provider 设置，确保后端使用正确的 SDK
+    console.log('[DEBUG] Current provider before send:', currentProvider);
+    sendBridgeMessage('set_provider', currentProvider);
+
     // 发送消息（智能体提示词由后端自动注入）
     if (hasAttachments) {
       try {
@@ -916,7 +939,13 @@ const App = () => {
    * 处理模式选择
    */
   const handleModeSelect = (mode: PermissionMode) => {
+    if (currentProvider === 'codex') {
+      setPermissionMode('bypassPermissions');
+      sendBridgeMessage('set_mode', 'bypassPermissions');
+      return;
+    }
     setPermissionMode(mode);
+    setClaudePermissionMode(mode);
     sendBridgeMessage('set_mode', mode);
   };
 
@@ -938,6 +967,9 @@ const App = () => {
   const handleProviderSelect = (providerId: string) => {
     setCurrentProvider(providerId);
     sendBridgeMessage('set_provider', providerId);
+    const modeToSet = providerId === 'codex' ? 'bypassPermissions' : claudePermissionMode;
+    setPermissionMode(modeToSet);
+    sendBridgeMessage('set_mode', modeToSet);
 
     // 切换 provider 时,同时发送对应的模型
     const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
@@ -1031,7 +1063,7 @@ const App = () => {
     setUsageUsedTokens(0);
     // 保留 maxTokens，等待后端推送；如果此前已知模型，可按默认 272K 预估
     setUsageMaxTokens((prev) => prev ?? 272000);
-    addToast(t('toast.newSessionCreated'), 'success');
+    // Toast is shown by backend when session is actually created
   };
 
   const handleCancelNewSession = () => {
@@ -1049,7 +1081,7 @@ const App = () => {
     setUsagePercentage(0);
     setUsageUsedTokens(0);
     setUsageMaxTokens((prev) => prev ?? 272000);
-    addToast(t('toast.newSessionCreated'), 'success');
+    // Toast is shown by backend when session is actually created
   };
 
   const handleCancelInterrupt = () => {
@@ -1687,7 +1719,11 @@ const App = () => {
       )}
 
       {currentView === 'settings' ? (
-        <SettingsView onClose={() => setCurrentView('chat')} initialTab={settingsInitialTab} />
+        <SettingsView
+          onClose={() => setCurrentView('chat')}
+          initialTab={settingsInitialTab}
+          currentProvider={currentProvider}
+        />
       ) : currentView === 'chat' ? (
         <>
           <div className="messages-container" ref={messagesContainerRef}>
@@ -1704,16 +1740,14 @@ const App = () => {
               }}
             >
               <div style={{ position: 'relative', display: 'inline-block' }}>
-                {currentProvider === 'codex' ? (
-                  <OpenAI.Avatar size={64} />
-                ) : (
-                  <Claude.Color size={58} />
-                )}
+                <BlinkingLogo provider={currentProvider} onProviderChange={handleProviderSelect} />
                 <span className="version-tag">
                   v{APP_VERSION}
                 </span>
               </div>
-              <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
+              <div>
+                <AnimatedText text={t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })} />
+              </div>
             </div>
           )}
 
@@ -1817,7 +1851,7 @@ const App = () => {
                               ) ? (
                               <EditToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
                             ) : block.name &&
-                              ['bash', 'run_terminal_cmd', 'execute_command'].includes(
+                              ['bash', 'run_terminal_cmd', 'execute_command', 'shell_command'].includes(
                                 block.name.toLowerCase(),
                               ) ? (
                               <BashToolBlock
@@ -1858,6 +1892,7 @@ const App = () => {
       ) : (
         <HistoryView
           historyData={historyData}
+          currentProvider={currentProvider}
           onLoadSession={loadHistorySession}
           onDeleteSession={deleteHistorySession}
           onExportSession={exportHistorySession}

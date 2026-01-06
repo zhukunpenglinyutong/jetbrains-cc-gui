@@ -128,6 +128,7 @@
     "agentsDesc": "AI एजेंट प्रबंधित और कॉन्फ़िगर करें",
     "skills": "Skills",
     "skillsDesc": "कौशल मॉड्यूल प्रबंधित और कॉन्फ़िगर करें",
+    "codexFeatureUnavailable": "यह सेटिंग अनुभाग अभी Codex में उपलब्ध नहीं है। कृपया Claude Code पर स्विच करें।",
     "community": "आधिकारिक समुदाय",
     "communityDesc": "नवीनतम जानकारी और तकनीकी सहायता के लिए आधिकारिक WeChat समूह में शामिल होने के लिए नीचे QR कोड स्कैन करें",
     "communityQrTip": "WeChat से स्कैन करके समुदाय में शामिल हों",
@@ -332,7 +333,6 @@
     "operationFailed": "ऑपरेशन विफल",
     "copySuccess": "{{label}} क्लिपबोर्ड पर कॉपी किया गया",
     "copyFailed": "कॉपी विफल",
-    "newSessionCreated": "नया सत्र बनाया गया",
     "newSessionCreatedReady": "नया सत्र बनाया गया, आप प्रश्न पूछना शुरू कर सकते हैं",
     "providerSwitchSuccess": "प्रदाता सफलतापूर्वक स्विच किया गया!",
     "providerSwitchFailed": "प्रदाता स्विच करने में विफल",
@@ -613,6 +613,24 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · सबसे तेज़, त्वरित उत्तरों के लिए उपयुक्त"
+      }
+    },
+    "codex": {
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "नवीनतम फ्रंटियर एजेंटिक कोडिंग मॉडल।"
+      },
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "Codex के लिए अनुकूलित फ्लैगशिप मॉडल, गहरी और तेज़ रीज़निंग।"
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "Codex के लिए अनुकूलित। सस्ता और तेज़, लेकिन कम सक्षम।"
+      },
+      "gpt52": {
+        "label": "gpt-5.2",
+        "description": "ज्ञान में सुधार के साथ नवीनतम फ्रंटियर मॉडल।"
       }
     }
   }

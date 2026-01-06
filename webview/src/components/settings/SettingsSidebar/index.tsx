@@ -25,6 +25,8 @@ interface SettingsSidebarProps {
   onTabChange: (tab: SettingsTab) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  disabledTabs?: SettingsTab[];
+  onDisabledTabClick?: (tab: SettingsTab) => void;
 }
 
 const SettingsSidebar = ({
@@ -32,6 +34,8 @@ const SettingsSidebar = ({
   onTabChange,
   isCollapsed,
   onToggleCollapse,
+  disabledTabs = [],
+  onDisabledTabClick,
 }: SettingsSidebarProps) => {
   const { t } = useTranslation();
 
@@ -40,12 +44,20 @@ const SettingsSidebar = ({
       <div className={styles.sidebarItems}>
         {sidebarItems.map((item) => {
           const label = t(item.labelKey);
+          const isDisabled = disabledTabs.includes(item.key);
           return (
             <div
               key={item.key}
-              className={`${styles.sidebarItem} ${currentTab === item.key ? styles.active : ''}`}
-              onClick={() => onTabChange(item.key)}
+              className={`${styles.sidebarItem} ${currentTab === item.key ? styles.active : ''} ${isDisabled ? styles.disabled : ''}`}
+              onClick={() => {
+                if (isDisabled) {
+                  onDisabledTabClick?.(item.key);
+                  return;
+                }
+                onTabChange(item.key);
+              }}
               title={isCollapsed ? label : ''}
+              aria-disabled={isDisabled}
             >
               <span className={`codicon ${item.icon}`} />
               <span className={styles.sidebarItemText}>{label}</span>

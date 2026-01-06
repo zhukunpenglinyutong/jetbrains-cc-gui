@@ -1,0 +1,23 @@
+.container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease-in-out;
+  transform-origin: center;
+  height: 64px; /* Fix height to avoid layout shift if possible, or let it flow */
+  
+  &.closing {
+    transform: scaleY(0.01);
+    opacity: 0.5;
+  }
+  
+  &.opening {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  
+  &.idle {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}

@@ -133,6 +133,7 @@
     "agentsDesc": "AIエージェントを管理および設定",
     "skills": "スキル",
     "skillsDesc": "スキルモジュールを管理および設定",
+    "codexFeatureUnavailable": "Codexではこの設定セクションは未対応です。Claude Codeに切り替えてください。",
     "community": "コミュニティ",
     "communityDesc": "下のQRコードをスキャンして、公式WeChatグループに参加し、最新ニュースと技術サポートを入手",
     "communityQrTip": "WeChatでスキャンしてコミュニティに参加",
@@ -343,7 +344,6 @@
     "operationFailed": "操作失敗",
     "copySuccess": "{{label}}がクリップボードにコピーされました",
     "copyFailed": "コピー失敗",
-    "newSessionCreated": "新しいセッションが作成されました",
     "newSessionCreatedReady": "新しいセッションが作成されました。質問を開始できます",
     "providerSwitchSuccess": "プロバイダーの切り替えに成功しました！",
     "providerSwitchFailed": "プロバイダーの切り替えに失敗しました",
@@ -635,17 +635,21 @@
       }
     },
     "codex": {
-      "gpt51codex": {
-        "label": "gpt-5.1-codex",
-        "description": "codex用に最適化"
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "最新の最先端エージェントコーディングモデル"
+      },
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "Codex最適化のフラッグシップ、深い推論と高速処理を両立"
       },
       "gpt51codexMini": {
         "label": "gpt-5.1-codex-mini",
-        "description": "codex用に最適化。より安価で高速ですが、パフォーマンスは低下"
+        "description": "Codex用に最適化。より安価で高速ですが、性能は低下"
       },
-      "gpt51": {
-        "label": "gpt-5.1",
-        "description": "広範な世界知識と強力な一般的推論能力"
+      "gpt52": {
+        "label": "gpt-5.2",
+        "description": "知識全般が向上した最新の最先端モデル"
       }
     }
   },

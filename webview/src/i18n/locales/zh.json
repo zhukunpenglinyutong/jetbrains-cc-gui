@@ -133,6 +133,7 @@
     "agentsDesc": "管理和配置AI代理",
     "skills": "Skills",
     "skillsDesc": "管理和配置技能模块",
+    "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",
     "community": "官方交流群",
     "communityDesc": "扫描下方二维码加入官方微信交流群，获取最新资讯和技术支持",
     "communityQrTip": "使用微信扫一扫加入交流群",
@@ -237,6 +238,31 @@
     "permissionsComingSoon": "权限配置功能即将推出...",
     "agentsComingSoon": "Agents配置功能即将推出...",
     "skillsComingSoon": "Skills配置功能即将推出...",
+    "codexProvider": {
+      "title": "Codex 供应商管理",
+      "description": "管理 Codex 供应商配置，配置将写入 ~/.codex/ 目录",
+      "emptyProvider": "暂无 Codex 供应商配置，点击添加按钮创建",
+      "deleteConfirmTitle": "确认删除",
+      "deleteConfirmMessage": "确定要删除供应商 \"{{name}}\" 吗？此操作无法撤销。",
+      "dialog": {
+        "addTitle": "添加 Codex 供应商",
+        "editTitle": "编辑供应商: {{name}}",
+        "addDescription": "配置新的 Codex 供应商信息，将写入 ~/.codex/ 目录",
+        "editDescription": "更新配置后将立即应用到 ~/.codex/ 目录",
+        "providerName": "供应商名称",
+        "providerNamePlaceholder": "例如：Codex 官方",
+        "configJson": "配置",
+        "authJsonLabel": "配置",
+        "formatJson": "格式化",
+        "formatSuccess": "格式化成功",
+        "formatError": "格式化失败，JSON 格式错误",
+        "nameRequired": "请输入供应商名称",
+        "configJsonError": "config.toml JSON 格式错误",
+        "authJsonError": "auth.json JSON 格式错误",
+        "configJsonHint": "包含 model_provider、model、model_providers 等配置项的 JSON 对象",
+        "authJsonHint": "包含 OPENAI_API_KEY 等认证信息的 JSON 对象"
+      }
+    },
     "agent": {
       "title": "智能体",
       "create": "创建",
@@ -343,7 +369,6 @@
     "operationFailed": "操作失败",
     "copySuccess": "{{label}}已复制到剪切板",
     "copyFailed": "复制失败",
-    "newSessionCreated": "新会话已创建",
     "newSessionCreatedReady": "新会话已创建，可以开始提问",
     "providerSwitchSuccess": "供应商切换成功！",
     "providerSwitchFailed": "切换供应商失败",
@@ -530,6 +555,7 @@
     "listFiles": "列出文件",
     "findFile": "查找文件",
     "todoList": "任务列表",
+    "updatePlan": "更新计划",
     "editFileTitle": "编辑文件",
     "clickToOpen": "点击打开 {{filePath}}",
     "refreshFileInIdea": "在 IDEA 中刷新文件",
@@ -635,17 +661,21 @@
       }
     },
     "codex": {
-      "gpt51codex": {
-        "label": "gpt-5.1-codex",
-        "description": "针对codex进行了优化"
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "最新前沿智能编程模型"
+      },
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "针对Codex优化的旗舰模型，深度与快速推理兼备"
       },
       "gpt51codexMini": {
         "label": "gpt-5.1-codex-mini",
-        "description": "针对codex进行了优化。更便宜、更快，但性能较差"
+        "description": "针对Codex优化。更便宜、更快，但性能较差"
       },
-      "gpt51": {
-        "label": "gpt-5.1",
-        "description": "具有广泛的世界知识和强大的一般推理能力"
+      "gpt52": {
+        "label": "gpt-5.2",
+        "description": "最新前沿模型，知识储备全面提升"
       }
     }
   },
@@ -669,6 +699,23 @@
       "label": "自动模式",
       "tooltip": "绕过所有权限检查",
       "description": "完全自动化，绕过所有权限检查【谨慎使用】"
+    }
+  },
+  "codexModes": {
+    "default": {
+      "label": "建议模式",
+      "tooltip": "Codex approval_policy=untrusted：执行命令或写文件前都会弹窗确认。",
+      "description": "最安全的选择，每一步都需要你亲自批准。"
+    },
+    "acceptEdits": {
+      "label": "自动编辑",
+      "tooltip": "Codex approval_policy=auto-edit：自动 apply_patch 写文件，命令仍需审批。",
+      "description": "自动处理文件创建/编辑，但运行命令前仍会询问。"
+    },
+    "bypassPermissions": {
+      "label": "全自动",
+      "tooltip": "Codex approval_policy=never：命令与写入直接执行（workspace 沙箱仍生效）。",
+      "description": "完全免审批，写文件和执行命令立即生效，仅受沙箱限制。"
     }
   },
   "providers": {

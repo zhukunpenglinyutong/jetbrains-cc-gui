@@ -128,6 +128,7 @@
     "agentsDesc": "Gérer et configurer les agents IA",
     "skills": "Compétences",
     "skillsDesc": "Gérer et configurer les modules de compétences",
+    "codexFeatureUnavailable": "Cette section des paramètres n'est pas encore disponible dans Codex. Passez à Claude Code.",
     "community": "Communauté officielle",
     "communityDesc": "Scannez le code QR ci-dessous pour rejoindre le groupe WeChat officiel pour obtenir les dernières nouvelles et le support technique",
     "communityQrTip": "Scannez avec WeChat pour rejoindre la communauté",
@@ -332,7 +333,6 @@
     "operationFailed": "Opération échouée",
     "copySuccess": "{{label}} copié dans le presse-papiers",
     "copyFailed": "Échec de la copie",
-    "newSessionCreated": "Nouvelle session créée",
     "newSessionCreatedReady": "Nouvelle session créée, vous pouvez commencer à poser des questions",
     "providerSwitchSuccess": "Fournisseur changé avec succès !",
     "providerSwitchFailed": "Échec du changement de fournisseur",
@@ -613,6 +613,24 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Le plus rapide pour des réponses rapides"
+      }
+    },
+    "codex": {
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "Dernier modèle de codage agentique de pointe."
+      },
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "Modèle phare optimisé pour Codex avec raisonnement profond et rapide."
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "Optimisé pour Codex. Moins cher et plus rapide, mais moins performant."
+      },
+      "gpt52": {
+        "label": "gpt-5.2",
+        "description": "Dernier modèle de pointe avec des améliorations en connaissances."
       }
     }
   }

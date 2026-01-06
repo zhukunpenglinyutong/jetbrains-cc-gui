@@ -11,16 +11,16 @@ interface ProviderSelectProps {
 /**
  * 提供商图标映射
  */
-const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: number }) => {
+const ProviderIcon = ({ providerId, size = 16, colored = false }: { providerId: string; size?: number; colored?: boolean }) => {
   switch (providerId) {
     case 'claude':
-      return <Claude.Avatar size={size} />;
+      return colored ? <Claude.Color size={size} /> : <Claude.Avatar size={size} />;
     case 'codex':
       return <OpenAI.Avatar size={size} />;
     case 'gemini':
-      return <Gemini.Avatar size={size} />;
+      return colored ? <Gemini.Color size={size} /> : <Gemini.Avatar size={size} />;
     default:
-      return <Claude.Avatar size={size} />;
+      return colored ? <Claude.Color size={size} /> : <Claude.Avatar size={size} />;
   }
 };
 
@@ -146,7 +146,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
                   cursor: provider.enabled ? 'pointer' : 'not-allowed',
                 }}
               >
-                <ProviderIcon providerId={provider.id} size={16} />
+                <ProviderIcon providerId={provider.id} size={16} colored={true} />
                 <span>{getProviderLabel(provider.id)}</span>
                 {provider.id === value && (
                   <span className="codicon codicon-check check-mark" />

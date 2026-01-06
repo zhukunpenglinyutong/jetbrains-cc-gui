@@ -20,16 +20,16 @@ interface ConfigSelectProps {
 /**
  * Provider Icon Component
  */
-const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: number }) => {
+const ProviderIcon = ({ providerId, size = 16, colored = false }: { providerId: string; size?: number; colored?: boolean }) => {
   switch (providerId) {
     case 'claude':
-      return <Claude size={size} />;
+      return colored ? <Claude.Color size={size} /> : <Claude size={size} />;
     case 'codex':
       return <OpenAI.Avatar size={size} />;
     case 'gemini':
-      return <Gemini.Avatar size={size} />;
+      return colored ? <Gemini.Color size={size} /> : <Gemini.Avatar size={size} />;
     default:
-      return <Claude size={size} />;
+      return colored ? <Claude.Color size={size} /> : <Claude size={size} />;
   }
 };
 
@@ -181,7 +181,7 @@ export const ConfigSelect = ({
           }}
         >
           <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ProviderIcon providerId={provider.id} size={14} />
+            <ProviderIcon providerId={provider.id} size={14} colored={true} />
           </div>
           <span>{provider.label}</span>
           {provider.id === providerId && <span className="codicon codicon-check check-mark" />}

@@ -70,6 +70,16 @@
   // 默认显示
 }
 
+.disabled {
+  color: var(--text-secondary);
+  opacity: 0.6;
+  cursor: not-allowed;
+
+  &:hover {
+    background: transparent;
+  }
+}
+
 .sidebarToggle {
   display: none; /* 隐藏侧边栏展开/收起按钮 */
   align-items: center;
