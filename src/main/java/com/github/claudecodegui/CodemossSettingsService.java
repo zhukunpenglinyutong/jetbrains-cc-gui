@@ -33,14 +33,16 @@ public class CodemossSettingsService {
     // Managers
     private final ConfigPathManager pathManager;
     private final ClaudeSettingsManager claudeSettingsManager;
+    private final CodexSettingsManager codexSettingsManager;
     private final WorkingDirectoryManager workingDirectoryManager;
     private final AgentManager agentManager;
     private final SkillManager skillManager;
     private final McpServerManager mcpServerManager;
     private final ProviderManager providerManager;
+    private final CodexProviderManager codexProviderManager;
 
     public CodemossSettingsService() {
-        this.gson = new GsonBuilder().setPrettyPrinting().create();
+        this.gson = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
 
         // 初始化 ConfigPathManager
         this.pathManager = new ConfigPathManager();
@@ -127,6 +129,30 @@ public class CodemossSettingsService {
             },
             pathManager,
             claudeSettingsManager
+        );
+
+        // 初始化 CodexSettingsManager
+        this.codexSettingsManager = new CodexSettingsManager(gson);
+
+        // 初始化 CodexProviderManager
+        this.codexProviderManager = new CodexProviderManager(
+            gson,
+            (ignored) -> {
+                try {
+                    return readConfig();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            },
+            (config) -> {
+                try {
+                    writeConfig(config);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            },
+            pathManager,
+            codexSettingsManager
         );
     }
 
@@ -395,5 +421,47 @@ public class CodemossSettingsService {
 
     public void setSelectedAgentId(String agentId) throws IOException {
         agentManager.setSelectedAgentId(agentId);
+    }
+
+    // ==================== Codex Provider 管理 ====================
+
+    public List<JsonObject> getCodexProviders() throws IOException {
+        return codexProviderManager.getCodexProviders();
+    }
+
+    public JsonObject getActiveCodexProvider() throws IOException {
+        return codexProviderManager.getActiveCodexProvider();
+    }
+
+    public void addCodexProvider(JsonObject provider) throws IOException {
+        codexProviderManager.addCodexProvider(provider);
+    }
+
+    public void saveCodexProvider(JsonObject provider) throws IOException {
+        codexProviderManager.saveCodexProvider(provider);
+    }
+
+    public void updateCodexProvider(String id, JsonObject updates) throws IOException {
+        codexProviderManager.updateCodexProvider(id, updates);
+    }
+
+    public DeleteResult deleteCodexProvider(String id) {
+        return codexProviderManager.deleteCodexProvider(id);
+    }
+
+    public void switchCodexProvider(String id) throws IOException {
+        codexProviderManager.switchCodexProvider(id);
+    }
+
+    public void applyActiveProviderToCodexSettings() throws IOException {
+        codexProviderManager.applyActiveProviderToCodexSettings();
+    }
+
+    public JsonObject getCurrentCodexConfig() throws IOException {
+        return codexProviderManager.getCurrentCodexConfig();
+    }
+
+    public int saveCodexProviders(List<JsonObject> providers) throws IOException {
+        return codexProviderManager.saveProviders(providers);
     }
 }

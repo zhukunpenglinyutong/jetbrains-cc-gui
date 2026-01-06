@@ -238,6 +238,31 @@
     "permissionsComingSoon": "Permissions configuration coming soon...",
     "agentsComingSoon": "Agents configuration coming soon...",
     "skillsComingSoon": "Skills configuration coming soon...",
+    "codexProvider": {
+      "title": "Codex Provider Management",
+      "description": "Manage Codex provider configurations, settings will be written to ~/.codex/ directory",
+      "emptyProvider": "No Codex providers configured, click Add to create one",
+      "deleteConfirmTitle": "Confirm Delete",
+      "deleteConfirmMessage": "Are you sure you want to delete provider \"{{name}}\"? This action cannot be undone.",
+      "dialog": {
+        "addTitle": "Add Codex Provider",
+        "editTitle": "Edit Provider: {{name}}",
+        "addDescription": "Configure new Codex provider, will be written to ~/.codex/ directory",
+        "editDescription": "Changes will be applied immediately to ~/.codex/ directory",
+        "providerName": "Provider Name",
+        "providerNamePlaceholder": "e.g., Codex Official",
+        "configJson": "Config",
+        "authJsonLabel": "Config",
+        "formatJson": "Format",
+        "formatSuccess": "Format successful",
+        "formatError": "Format failed, invalid JSON",
+        "nameRequired": "Please enter provider name",
+        "configJsonError": "config.toml JSON format error",
+        "authJsonError": "auth.json JSON format error",
+        "configJsonHint": "JSON object containing model_provider, model, model_providers, etc.",
+        "authJsonHint": "JSON object containing OPENAI_API_KEY and other auth info"
+      }
+    },
     "agent": {
       "title": "Agents",
       "create": "Create",

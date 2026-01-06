@@ -20,12 +20,14 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Provider（供应商）相关消息处理器
  * 处理供应商的增删改查和切换
+ * Supports both Claude and Codex providers
  */
 public class ProviderHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(ProviderHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
+        // Claude provider operations
         "get_providers",
         "get_current_claude_config",
         "get_thinking_enabled",
@@ -37,7 +39,15 @@ public class ProviderHandler extends BaseMessageHandler {
         "get_active_provider",
         "preview_cc_switch_import",
         "open_file_chooser_for_cc_switch",
-        "save_imported_providers"
+        "save_imported_providers",
+        // Codex provider operations
+        "get_codex_providers",
+        "get_current_codex_config",
+        "add_codex_provider",
+        "update_codex_provider",
+        "delete_codex_provider",
+        "switch_codex_provider",
+        "get_active_codex_provider"
     };
 
     public ProviderHandler(HandlerContext context) {
@@ -52,6 +62,7 @@ public class ProviderHandler extends BaseMessageHandler {
     @Override
     public boolean handle(String type, String content) {
         switch (type) {
+            // Claude provider operations
             case "get_providers":
                 handleGetProviders();
                 return true;
@@ -87,6 +98,28 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "save_imported_providers":
                 handleSaveImportedProviders(content);
+                return true;
+            // Codex provider operations
+            case "get_codex_providers":
+                handleGetCodexProviders();
+                return true;
+            case "get_current_codex_config":
+                handleGetCurrentCodexConfig();
+                return true;
+            case "add_codex_provider":
+                handleAddCodexProvider(content);
+                return true;
+            case "update_codex_provider":
+                handleUpdateCodexProvider(content);
+                return true;
+            case "delete_codex_provider":
+                handleDeleteCodexProvider(content);
+                return true;
+            case "switch_codex_provider":
+                handleSwitchCodexProvider(content);
+                return true;
+            case "get_active_codex_provider":
+                handleGetActiveCodexProvider();
                 return true;
             default:
                 return false;
@@ -556,5 +589,188 @@ public class ProviderHandler extends BaseMessageHandler {
     private void sendErrorToFrontend(String title, String message) {
         // 使用多参数传递，避免 JSON 嵌套解析问题
         callJavaScript("backend_notification", "error", escapeJs(title), escapeJs(message));
+    }
+
+    // ==================== Codex Provider Handlers ====================
+
+    /**
+     * Get all Codex providers
+     */
+    private void handleGetCodexProviders() {
+        try {
+            List<JsonObject> providers = context.getSettingsService().getCodexProviders();
+            Gson gson = new Gson();
+            String providersJson = gson.toJson(providers);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateCodexProviders", escapeJs(providersJson));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to get Codex providers: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Get current Codex CLI configuration (~/.codex/)
+     */
+    private void handleGetCurrentCodexConfig() {
+        try {
+            JsonObject config = context.getSettingsService().getCurrentCodexConfig();
+            Gson gson = new Gson();
+            String configJson = gson.toJson(config);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateCurrentCodexConfig", escapeJs(configJson));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to get current Codex config: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Add Codex provider
+     */
+    private void handleAddCodexProvider(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject provider = gson.fromJson(content, JsonObject.class);
+            context.getSettingsService().addCodexProvider(provider);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                handleGetCodexProviders(); // Refresh list
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to add Codex provider: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("添加 Codex 供应商失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * Update Codex provider
+     */
+    private void handleUpdateCodexProvider(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject data = gson.fromJson(content, JsonObject.class);
+            String id = data.get("id").getAsString();
+            JsonObject updates = data.getAsJsonObject("updates");
+
+            context.getSettingsService().updateCodexProvider(id, updates);
+
+            boolean syncedActiveProvider = false;
+            JsonObject activeProvider = context.getSettingsService().getActiveCodexProvider();
+            if (activeProvider != null &&
+                activeProvider.has("id") &&
+                id.equals(activeProvider.get("id").getAsString())) {
+                context.getSettingsService().applyActiveProviderToCodexSettings();
+                syncedActiveProvider = true;
+            }
+
+            final boolean finalSynced = syncedActiveProvider;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                handleGetCodexProviders(); // Refresh list
+                if (finalSynced) {
+                    handleGetActiveCodexProvider(); // Refresh active provider config
+                }
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to update Codex provider: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("更新 Codex 供应商失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * Delete Codex provider
+     */
+    private void handleDeleteCodexProvider(String content) {
+        LOG.debug("[ProviderHandler] ========== handleDeleteCodexProvider START ==========");
+        LOG.debug("[ProviderHandler] Received content: " + content);
+
+        try {
+            Gson gson = new Gson();
+            JsonObject data = gson.fromJson(content, JsonObject.class);
+            LOG.debug("[ProviderHandler] Parsed JSON data: " + data);
+
+            if (!data.has("id")) {
+                LOG.error("[ProviderHandler] ERROR: Missing 'id' field in request");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("删除失败: 请求中缺少供应商 ID"));
+                });
+                return;
+            }
+
+            String id = data.get("id").getAsString();
+            LOG.info("[ProviderHandler] Deleting Codex provider with ID: " + id);
+
+            DeleteResult result = context.getSettingsService().deleteCodexProvider(id);
+            LOG.debug("[ProviderHandler] Delete result - success: " + result.isSuccess());
+
+            if (result.isSuccess()) {
+                LOG.info("[ProviderHandler] Delete successful, refreshing provider list");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    handleGetCodexProviders(); // Refresh list
+                });
+            } else {
+                String errorMsg = result.getUserFriendlyMessage();
+                LOG.warn("[ProviderHandler] Delete Codex provider failed: " + errorMsg);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs(errorMsg));
+                });
+            }
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Exception in handleDeleteCodexProvider: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("删除 Codex 供应商失败: " + e.getMessage()));
+            });
+        }
+
+        LOG.debug("[ProviderHandler] ========== handleDeleteCodexProvider END ==========");
+    }
+
+    /**
+     * Switch Codex provider
+     */
+    private void handleSwitchCodexProvider(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject data = gson.fromJson(content, JsonObject.class);
+            String id = data.get("id").getAsString();
+
+            context.getSettingsService().switchCodexProvider(id);
+            context.getSettingsService().applyActiveProviderToCodexSettings();
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showSwitchSuccess", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + "\n\n已自动同步到 ~/.codex/，下一次提问将使用新的配置。"));
+                handleGetCodexProviders(); // Refresh provider list
+                handleGetCurrentCodexConfig(); // Refresh Codex CLI config display
+                handleGetActiveCodexProvider(); // Refresh active provider config
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to switch Codex provider: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchFailed") + ": " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * Get currently active Codex provider
+     */
+    private void handleGetActiveCodexProvider() {
+        try {
+            JsonObject provider = context.getSettingsService().getActiveCodexProvider();
+            Gson gson = new Gson();
+            String providerJson = gson.toJson(provider);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateActiveCodexProvider", escapeJs(providerJson));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to get active Codex provider: " + e.getMessage(), e);
+        }
     }
 }

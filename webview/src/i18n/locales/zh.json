@@ -238,6 +238,31 @@
     "permissionsComingSoon": "权限配置功能即将推出...",
     "agentsComingSoon": "Agents配置功能即将推出...",
     "skillsComingSoon": "Skills配置功能即将推出...",
+    "codexProvider": {
+      "title": "Codex 供应商管理",
+      "description": "管理 Codex 供应商配置，配置将写入 ~/.codex/ 目录",
+      "emptyProvider": "暂无 Codex 供应商配置，点击添加按钮创建",
+      "deleteConfirmTitle": "确认删除",
+      "deleteConfirmMessage": "确定要删除供应商 \"{{name}}\" 吗？此操作无法撤销。",
+      "dialog": {
+        "addTitle": "添加 Codex 供应商",
+        "editTitle": "编辑供应商: {{name}}",
+        "addDescription": "配置新的 Codex 供应商信息，将写入 ~/.codex/ 目录",
+        "editDescription": "更新配置后将立即应用到 ~/.codex/ 目录",
+        "providerName": "供应商名称",
+        "providerNamePlaceholder": "例如：Codex 官方",
+        "configJson": "配置",
+        "authJsonLabel": "配置",
+        "formatJson": "格式化",
+        "formatSuccess": "格式化成功",
+        "formatError": "格式化失败，JSON 格式错误",
+        "nameRequired": "请输入供应商名称",
+        "configJsonError": "config.toml JSON 格式错误",
+        "authJsonError": "auth.json JSON 格式错误",
+        "configJsonHint": "包含 model_provider、model、model_providers 等配置项的 JSON 对象",
+        "authJsonHint": "包含 OPENAI_API_KEY 等认证信息的 JSON 对象"
+      }
+    },
     "agent": {
       "title": "智能体",
       "create": "创建",
