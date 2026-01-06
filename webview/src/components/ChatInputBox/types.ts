@@ -249,19 +249,24 @@ export const CLAUDE_MODELS: ModelInfo[] = [
  */
 export const CODEX_MODELS: ModelInfo[] = [
   {
+    id: 'gpt-5.2-codex',
+    label: 'gpt-5.2-codex',
+    description: 'Latest frontier agentic coding model.'
+  },
+  {
     id: 'gpt-5.1-codex-max',
     label: 'gpt-5.1-codex-max',
-    description: '默认模型'
+    description: 'Codex-optimized flagship for deep and fast reasoning.'
   },
   {
     id: 'gpt-5.1-codex-mini',
     label: 'gpt-5.1-codex-mini',
-    description: '针对codex进行了优化。更便宜、更快，但性能较差'
+    description: 'Optimized for codex. Cheaper, faster, but less capable.'
   },
   {
     id: 'gpt-5.2',
     label: 'gpt-5.2',
-    description: '具有广泛的世界知识和强大的一般推理能力'
+    description: 'Latest frontier model with improvements across knowledge.'
   },
 ];
 

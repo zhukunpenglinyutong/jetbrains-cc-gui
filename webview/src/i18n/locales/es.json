@@ -615,6 +615,24 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · El más rápido para respuestas rápidas"
       }
+    },
+    "codex": {
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "Último modelo de codificación agéntico de frontera."
+      },
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "Modelo insignia optimizado para Codex con razonamiento profundo y rápido."
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "Optimizado para Codex. Más económico y rápido, pero menos capaz."
+      },
+      "gpt52": {
+        "label": "gpt-5.2",
+        "description": "Último modelo de frontera con mejoras en conocimiento."
+      }
     }
   }
 }

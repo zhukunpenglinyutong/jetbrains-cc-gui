@@ -615,6 +615,24 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · सबसे तेज़, त्वरित उत्तरों के लिए उपयुक्त"
       }
+    },
+    "codex": {
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "नवीनतम फ्रंटियर एजेंटिक कोडिंग मॉडल।"
+      },
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "Codex के लिए अनुकूलित फ्लैगशिप मॉडल, गहरी और तेज़ रीज़निंग।"
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "Codex के लिए अनुकूलित। सस्ता और तेज़, लेकिन कम सक्षम।"
+      },
+      "gpt52": {
+        "label": "gpt-5.2",
+        "description": "ज्ञान में सुधार के साथ नवीनतम फ्रंटियर मॉडल।"
+      }
     }
   }
 }

@@ -637,17 +637,21 @@
       }
     },
     "codex": {
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "最新前沿智能编程模型"
+      },
       "gpt51codexMax": {
         "label": "gpt-5.1-codex-max",
-        "description": "默认模型"
+        "description": "针对Codex优化的旗舰模型，深度与快速推理兼备"
       },
       "gpt51codexMini": {
         "label": "gpt-5.1-codex-mini",
-        "description": "针对codex进行了优化。更便宜、更快，但性能较差"
+        "description": "针对Codex优化。更便宜、更快，但性能较差"
       },
       "gpt52": {
         "label": "gpt-5.2",
-        "description": "具有广泛的世界知识和强大的一般推理能力"
+        "description": "最新前沿模型，知识储备全面提升"
       }
     }
   },

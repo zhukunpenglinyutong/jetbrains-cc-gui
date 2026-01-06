@@ -636,17 +636,21 @@
       }
     },
     "codex": {
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "Latest frontier agentic coding model."
+      },
       "gpt51codexMax": {
         "label": "gpt-5.1-codex-max",
-        "description": "Default model"
+        "description": "Codex-optimized flagship for deep and fast reasoning."
       },
       "gpt51codexMini": {
         "label": "gpt-5.1-codex-mini",
-        "description": "Optimized for codex. Cheaper and faster, but lower performance"
+        "description": "Optimized for codex. Cheaper, faster, but less capable."
       },
       "gpt52": {
         "label": "gpt-5.2",
-        "description": "Broad world knowledge and strong general reasoning capabilities"
+        "description": "Latest frontier model with improvements across knowledge."
       }
     }
   },
