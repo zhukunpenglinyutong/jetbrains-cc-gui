@@ -502,6 +502,30 @@ export async function sendMessage(
           console.log('[DEBUG] Turn completed');
           if (event.usage) {
             console.log('[DEBUG] Token usage:', event.usage);
+
+            // Convert Codex usage format to Claude-compatible format
+            // Codex format: { input_tokens, cached_input_tokens, output_tokens }
+            // Claude format: { input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens }
+            const claudeUsage = {
+              input_tokens: event.usage.input_tokens || 0,
+              output_tokens: event.usage.output_tokens || 0,
+              cache_creation_input_tokens: 0, // Codex doesn't provide this
+              cache_read_input_tokens: event.usage.cached_input_tokens || 0
+            };
+
+            // Emit usage statistics as a result-like message for compatibility with Java layer
+            // This allows the frontend to display usage statistics for Codex sessions
+            const usageMessage = {
+              type: 'result',
+              subtype: 'usage',
+              is_error: false,
+              usage: claudeUsage,
+              session_id: currentThreadId,
+              uuid: randomUUID()
+            };
+
+            emitMessage(usageMessage);
+            console.log('[DEBUG] Emitted usage statistics (Claude-compatible format):', claudeUsage);
           }
           break;
         }

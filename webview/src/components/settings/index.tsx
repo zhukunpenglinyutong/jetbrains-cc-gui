@@ -44,9 +44,10 @@ const AUTO_COLLAPSE_THRESHOLD = 900;
 const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
-  // Codex mode: allow providers tab, disable other features
+  // Codex mode: allow providers and usage tabs, disable other features
+  // Note: 'usage' is now enabled for Codex as it supports usage statistics
   const disabledTabs = useMemo<SettingsTab[]>(
-    () => (isCodexMode ? ['usage', 'mcp', 'permissions', 'agents', 'skills'] : []),
+    () => (isCodexMode ? ['mcp', 'permissions', 'agents', 'skills'] : []),
     [isCodexMode]
   );
   const [currentTab, setCurrentTab] = useState<SettingsTab>(() => {
@@ -936,7 +937,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
           )}
 
           {/* 使用统计 */}
-          {currentTab === 'usage' && <UsageSection />}
+          {currentTab === 'usage' && <UsageSection currentProvider={currentProvider} />}
 
           {/* MCP服务器 */}
           {currentTab === 'mcp' && <PlaceholderSection type="mcp" />}

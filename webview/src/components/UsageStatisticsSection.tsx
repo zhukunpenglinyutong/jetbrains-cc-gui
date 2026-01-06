@@ -13,7 +13,7 @@ const sendToJava = (message: string, payload: any = {}) => {
   }
 };
 
-const UsageStatisticsSection = () => {
+const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string }) => {
   const { t } = useTranslation();
   const [statistics, setStatistics] = useState<ProjectStatistics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -58,7 +58,10 @@ const UsageStatisticsSection = () => {
 
   const loadStatistics = () => {
     setLoading(true);
-    sendToJava('get_usage_statistics', { scope: projectScope });
+    sendToJava('get_usage_statistics', {
+      scope: projectScope,
+      provider: currentProvider || 'claude'
+    });
   };
 
   const handleRefresh = () => {

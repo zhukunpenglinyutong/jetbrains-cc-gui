@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
+import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
@@ -476,17 +477,21 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取使用统计数据
+     * Get usage statistics.
+     * Supports both Claude and Codex providers.
      */
     private void handleGetUsageStatistics(String content) {
         CompletableFuture.runAsync(() -> {
             try {
                 String projectPath = "all";
+                String provider = "claude"; // Default to Claude
 
                 if (content != null && !content.isEmpty() && !content.equals("{}")) {
                     try {
                         Gson gson = new Gson();
                         JsonObject json = gson.fromJson(content, JsonObject.class);
+
+                        // Parse scope
                         if (json.has("scope")) {
                             String scope = json.get("scope").getAsString();
                             if ("current".equals(scope)) {
@@ -494,6 +499,11 @@ public class SettingsHandler extends BaseMessageHandler {
                             } else {
                                 projectPath = "all";
                             }
+                        }
+
+                        // Parse provider (claude or codex)
+                        if (json.has("provider")) {
+                            provider = json.get("provider").getAsString();
                         }
                     } catch (Exception e) {
                         if ("current".equals(content)) {
@@ -504,27 +514,28 @@ public class SettingsHandler extends BaseMessageHandler {
                     }
                 }
 
-                ClaudeHistoryReader reader = new ClaudeHistoryReader();
-                ClaudeHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath);
+                // Use corresponding reader based on provider
+                String json;
+                if ("codex".equals(provider)) {
+                    CodexHistoryReader reader = new CodexHistoryReader();
+                    CodexHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath);
 
-                Gson gson = new Gson();
-                String json = gson.toJson(stats);
+                    // Debug logging for Codex statistics
+                    LOG.info("[SettingsHandler] Codex statistics - sessions: " + stats.totalSessions +
+                             ", cost: " + stats.estimatedCost +
+                             ", input tokens: " + stats.totalUsage.inputTokens +
+                             ", output tokens: " + stats.totalUsage.outputTokens +
+                             ", cache read tokens: " + stats.totalUsage.cacheReadTokens +
+                             ", total tokens: " + stats.totalUsage.totalTokens);
 
-                long totalTokens = 0;
-                if (stats != null && stats.totalUsage != null) {
-                    totalTokens = stats.totalUsage.totalTokens;
+                    Gson gson = new Gson();
+                    json = gson.toJson(stats);
+                } else {
+                    ClaudeHistoryReader reader = new ClaudeHistoryReader();
+                    ClaudeHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath);
+                    Gson gson = new Gson();
+                    json = gson.toJson(stats);
                 }
-                final int MONTHLY_TOKEN_LIMIT = 5_000_000;
-                int percentage = Math.min(100, (int) ((totalTokens * 100.0) / MONTHLY_TOKEN_LIMIT));
-
-                JsonObject usageUpdate = new JsonObject();
-                usageUpdate.addProperty("percentage", percentage);
-                usageUpdate.addProperty("totalTokens", totalTokens);
-                usageUpdate.addProperty("limit", MONTHLY_TOKEN_LIMIT);
-                if (stats != null) {
-                    usageUpdate.addProperty("estimatedCost", stats.estimatedCost);
-                }
-                String usageJson = gson.toJson(usageUpdate);
 
                 final String statsJsonFinal = json;
 
