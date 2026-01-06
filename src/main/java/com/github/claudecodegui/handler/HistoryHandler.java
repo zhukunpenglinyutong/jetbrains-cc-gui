@@ -1,7 +1,7 @@
 package com.github.claudecodegui.handler;
 
-import com.github.claudecodegui.ClaudeHistoryReader;
-import com.github.claudecodegui.CodexHistoryReader;
+import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
+import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.util.JsUtils;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;

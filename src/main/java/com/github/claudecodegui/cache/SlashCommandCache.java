@@ -9,7 +9,7 @@ import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.util.Alarm;
 import com.intellij.util.messages.MessageBusConnection;
-import com.github.claudecodegui.ClaudeSDKBridge;
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 
 import java.util.ArrayList;
 import java.util.List;

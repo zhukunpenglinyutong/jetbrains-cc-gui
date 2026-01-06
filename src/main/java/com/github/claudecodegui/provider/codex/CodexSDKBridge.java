@@ -1,15 +1,13 @@
-package com.github.claudecodegui;
+package com.github.claudecodegui.provider.codex;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.diagnostic.Logger;
 
-import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
-import com.github.claudecodegui.bridge.EnvironmentConfigurator;
-import com.github.claudecodegui.bridge.NodeDetector;
-import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.ClaudeSession;
+import com.github.claudecodegui.provider.common.BaseSDKBridge;
+import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.SDKResult;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -22,127 +20,149 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Codex SDK 桥接类
- * 负责 Java 与 Node.js Codex SDK 的交互，支持流式响应
- * 使用统一的 ai-bridge 目录（与 Claude 共享）
+ * Codex SDK bridge.
+ * Handles Java to Node.js Codex SDK communication, supports streaming responses.
+ * Uses unified ai-bridge directory (shared with Claude).
  */
-public class CodexSDKBridge {
+public class CodexSDKBridge extends BaseSDKBridge {
 
-    private static final Logger LOG = Logger.getInstance(CodexSDKBridge.class);
-    private static final String CHANNEL_SCRIPT = "channel-manager.js";
-
-    private final Gson gson = new Gson();
-    private final NodeDetector nodeDetector = new NodeDetector();
-    private final ProcessManager processManager = new ProcessManager();
-    private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
-    private final BridgeDirectoryResolver directoryResolver = new BridgeDirectoryResolver();
-
-    // Codex API 配置
+    // Codex API configuration
     private String baseUrl = null;
     private String apiKey = null;
 
-    /**
-     * SDK 消息回调接口（与ClaudeSDKBridge保持一致）
-     */
-    public interface MessageCallback {
-        void onMessage(String type, String content);
-        void onError(String error);
-        void onComplete(SDKResult result);
+    public CodexSDKBridge() {
+        super(CodexSDKBridge.class);
     }
 
-    /**
-     * SDK 响应结果（与ClaudeSDKBridge保持一致）
-     */
-    public static class SDKResult {
-        public boolean success;
-        public String error;
-        public int messageCount;
-        public List<Object> messages;
-        public String rawOutput;
-        public String finalResult;
+    // ============================================================================
+    // Abstract method implementations
+    // ============================================================================
 
-        public SDKResult() {
-            this.messages = new ArrayList<>();
+    @Override
+    protected String getProviderName() {
+        return "codex";
+    }
+
+    @Override
+    protected void configureProviderEnv(Map<String, String> env, String stdinJson) {
+        env.put("CODEX_USE_STDIN", "true");
+    }
+
+    @Override
+    protected void processOutputLine(
+            String line,
+            MessageCallback callback,
+            SDKResult result,
+            StringBuilder assistantContent,
+            boolean[] hadSendError,
+            String[] lastNodeError
+    ) {
+        if (line.contains("[DEBUG]")) {
+            LOG.debug("[Codex] " + line);
+        }
+
+        if (line.startsWith("[MESSAGE_START]")) {
+            callback.onMessage("message_start", "");
+        } else if (line.startsWith("[MESSAGE_END]")) {
+            callback.onMessage("message_end", "");
+        } else if (line.startsWith("[THREAD_ID]")) {
+            String receivedThreadId = line.substring("[THREAD_ID]".length()).trim();
+            callback.onMessage("session_id", receivedThreadId);
+        } else if (line.startsWith("[MESSAGE]")) {
+            String jsonStr = line.substring("[MESSAGE]".length()).trim();
+            try {
+                JsonObject msg = gson.fromJson(jsonStr, JsonObject.class);
+                if (msg != null) {
+                    result.messages.add(msg);
+                    String msgType = msg.has("type") && !msg.get("type").isJsonNull()
+                            ? msg.get("type").getAsString()
+                            : "unknown";
+
+                    if ("assistant".equals(msgType)) {
+                        try {
+                            String extracted = extractAssistantText(msg);
+                            if (extracted != null && !extracted.isEmpty()) {
+                                assistantContent.append(extracted);
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
+
+                    callback.onMessage(msgType, jsonStr);
+                }
+            } catch (Exception ignored) {
+            }
+        } else if (line.startsWith("[CONTENT_DELTA]")) {
+            String delta = line.substring("[CONTENT_DELTA]".length()).trim();
+            assistantContent.append(delta);
+            callback.onMessage("content_delta", delta);
+        } else if (line.startsWith("[CONTENT]")) {
+            String content = line.substring("[CONTENT]".length()).trim();
+            // Avoid duplicate
+            if (!assistantContent.toString().contains(content)) {
+                assistantContent.append(content);
+            }
+            callback.onMessage("content", content);
+        } else if (line.startsWith("[SEND_ERROR]")) {
+            String jsonStr = line.substring("[SEND_ERROR]".length()).trim();
+            String errorMessage = jsonStr;
+            try {
+                JsonObject obj = gson.fromJson(jsonStr, JsonObject.class);
+                if (obj.has("error")) {
+                    errorMessage = obj.get("error").getAsString();
+                }
+            } catch (Exception ignored) {
+            }
+            hadSendError[0] = true;
+            result.success = false;
+            result.error = errorMessage;
+            callback.onError(errorMessage);
         }
     }
 
-    /**
-     * 清理所有活动的子进程
-     */
-    public void cleanupAllProcesses() {
-        processManager.cleanupAllProcesses();
-    }
+    // ============================================================================
+    // Codex-specific configuration
+    // ============================================================================
 
     /**
-     * 获取当前活动进程数量
-     */
-    public int getActiveProcessCount() {
-        return processManager.getActiveProcessCount();
-    }
-
-    /**
-     * 中断 channel
-     */
-    public void interruptChannel(String channelId) {
-        processManager.interruptChannel(channelId);
-    }
-
-    /**
-     * 设置 Codex API 基础 URL
+     * Set Codex API base URL.
      */
     public void setBaseUrl(String baseUrl) {
         this.baseUrl = baseUrl;
     }
 
     /**
-     * 获取 Codex API 基础 URL
+     * Get Codex API base URL.
      */
     public String getBaseUrl() {
         return this.baseUrl;
     }
 
     /**
-     * 设置 Codex API 密钥
+     * Set Codex API key.
      */
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
     }
 
     /**
-     * 获取 Codex API 密钥
+     * Get Codex API key.
      */
     public String getApiKey() {
         return this.apiKey;
     }
 
     /**
-     * 手动设置 Node.js 可执行文件路径
-     * @param path Node.js 路径，传 null 则清除手动设置，恢复自动检测
-     */
-    public void setNodeExecutable(String path) {
-        nodeDetector.setNodeExecutable(path);
-    }
-
-    /**
-     * 获取当前使用的 Node.js 路径
-     */
-    public String getNodeExecutable() {
-        return nodeDetector.getNodeExecutable();
-    }
-
-    /**
-     * 设置 codex 二进制文件的执行权限
+     * Set executable permission for Codex binary.
      */
     private void setCodexExecutablePermission(File bridgeDir) {
         try {
-            // SDK 内置的 codex 二进制文件路径
             File vendorDir = new File(bridgeDir, "node_modules/@openai/codex-sdk/vendor");
             if (!vendorDir.exists()) {
-                LOG.info("vendor 目录不存在，跳过权限设置");
+                LOG.info("vendor directory not found, skipping permission setup");
                 return;
             }
 
-            // 遍历所有平台目录，设置 codex 可执行权限
             File[] platformDirs = vendorDir.listFiles();
             if (platformDirs == null) return;
 
@@ -155,48 +175,37 @@ public class CodexSDKBridge {
 
                 if (codexBinary.exists()) {
                     boolean success = codexBinary.setExecutable(true, false);
-                    LOG.info("设置执行权限: " + codexBinary.getAbsolutePath() + " -> " + success);
+                    LOG.info("Set executable permission: " + codexBinary.getAbsolutePath() + " -> " + success);
                 }
                 if (codexExe.exists()) {
                     boolean success = codexExe.setExecutable(true, false);
-                    LOG.info("设置执行权限: " + codexExe.getAbsolutePath() + " -> " + success);
+                    LOG.info("Set executable permission: " + codexExe.getAbsolutePath() + " -> " + success);
                 }
             }
         } catch (Exception e) {
-            LOG.warn("设置执行权限失败: " + e.getMessage());
+            LOG.warn("Failed to set executable permission: " + e.getMessage());
         }
     }
 
-    /**
-     * 启动一个新的 Codex channel（保持接口一致）
-     */
-    public JsonObject launchChannel(String channelId, String sessionId, String cwd) {
-        JsonObject result = new JsonObject();
-        result.addProperty("success", true);
-        if (sessionId != null) {
-            result.addProperty("sessionId", sessionId);
-        }
-        result.addProperty("channelId", channelId);
-        result.addProperty("message", "Codex channel ready (auto-launch on first send)");
-        LOG.info("Channel ready for: " + channelId);
-        return result;
-    }
+    // ============================================================================
+    // Message sending
+    // ============================================================================
 
     /**
-     * 发送消息到 Codex（流式响应）
+     * Send message to Codex (streaming response).
      *
      * Note: Codex uses threadId instead of sessionId
      * Note: Codex does not support attachments
      */
     public CompletableFuture<SDKResult> sendMessage(
-        String channelId,
-        String message,
-        String threadId,  // Codex uses threadId, not sessionId
-        String cwd,
-        List<ClaudeSession.Attachment> attachments,  // Ignored for Codex
-        String permissionMode,
-        String model,
-        MessageCallback callback
+            String channelId,
+            String message,
+            String threadId,  // Codex uses threadId, not sessionId
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,  // Ignored for Codex
+            String permissionMode,
+            String model,
+            MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
@@ -206,13 +215,12 @@ public class CodexSDKBridge {
 
             try {
                 String node = nodeDetector.findNodeExecutable();
-                // 使用统一的 ai-bridge 目录
                 File bridgeDir = directoryResolver.findSdkDir();
 
-                // 确保 Codex SDK 二进制文件有执行权限
+                // Ensure Codex SDK binary has executable permission
                 setCodexExecutablePermission(bridgeDir);
 
-                // 构建 stdin 输入 JSON
+                // Build stdin input JSON
                 // Note: Codex uses 'threadId' (not 'sessionId')
                 JsonObject stdinInput = new JsonObject();
                 stdinInput.addProperty("message", message);
@@ -220,7 +228,7 @@ public class CodexSDKBridge {
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
                 stdinInput.addProperty("model", model != null ? model : "");
-                // API 配置
+                // API configuration
                 stdinInput.addProperty("baseUrl", baseUrl != null ? baseUrl : "");
                 stdinInput.addProperty("apiKey", apiKey != null ? apiKey : "");
                 String stdinJson = gson.toJson(stdinInput);
@@ -228,7 +236,7 @@ public class CodexSDKBridge {
                 List<String> command = new ArrayList<>();
                 command.add(node);
                 command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
-                command.add("codex");  // provider
+                command.add("codex");
                 command.add("send");
 
                 File processTempDir = processManager.prepareClaudeTempDir();
@@ -236,7 +244,7 @@ public class CodexSDKBridge {
 
                 ProcessBuilder pb = new ProcessBuilder(command);
 
-                // 设置工作目录
+                // Set working directory
                 if (cwd != null && !cwd.isEmpty() && !"undefined".equals(cwd) && !"null".equals(cwd)) {
                     File userWorkDir = new File(cwd);
                     if (userWorkDir.exists() && userWorkDir.isDirectory()) {
@@ -248,12 +256,12 @@ public class CodexSDKBridge {
                     pb.directory(bridgeDir);
                 }
 
-                // 配置环境变量
+                // Configure environment variables
                 Map<String, String> env = pb.environment();
                 envConfigurator.configureTempDir(env, processTempDir);
                 env.put("CODEX_USE_STDIN", "true");
 
-                // 如果指定了模型，设置环境变量
+                // Set model via environment variable if specified
                 if (model != null && !model.isEmpty()) {
                     env.put("CODEX_MODEL", model);
                 }
@@ -261,7 +269,7 @@ public class CodexSDKBridge {
                 pb.redirectErrorStream(true);
                 envConfigurator.updateProcessEnvironment(pb, node);
 
-                // Configure Codex-specific env vars from ~/.codex/config.toml (env_key support)
+                // Configure Codex-specific env vars from ~/.codex/config.toml
                 envConfigurator.configureCodexEnv(env);
 
                 LOG.info("Command: " + String.join(" ", command));
@@ -271,7 +279,7 @@ public class CodexSDKBridge {
                     process = pb.start();
                     processManager.registerProcess(channelId, process);
 
-                    // 通过 stdin 写入参数
+                    // Write to stdin
                     try (java.io.OutputStream stdin = process.getOutputStream()) {
                         stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                         stdin.flush();
@@ -280,11 +288,11 @@ public class CodexSDKBridge {
                     }
 
                     try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 
                         String line;
                         while ((line = reader.readLine()) != null) {
-                            // 捕获 Node.js 错误日志
+                            // Capture Node.js error logs
                             if (line.startsWith("[UNCAUGHT_ERROR]")
                                     || line.startsWith("[UNHANDLED_REJECTION]")
                                     || line.startsWith("[COMMAND_ERROR]")) {
@@ -292,12 +300,12 @@ public class CodexSDKBridge {
                                 lastNodeError[0] = line;
                             }
 
-                            // 打印调试日志
+                            // Print debug logs
                             if (line.contains("[DEBUG]")) {
                                 LOG.debug("[Codex] " + line);
                             }
 
-                            // 解析消息
+                            // Parse messages
                             if (line.startsWith("[MESSAGE_START]")) {
                                 callback.onMessage("message_start", "");
                             } else if (line.startsWith("[MESSAGE_END]")) {
@@ -335,7 +343,7 @@ public class CodexSDKBridge {
                                 callback.onMessage("content_delta", delta);
                             } else if (line.startsWith("[CONTENT]")) {
                                 String content = line.substring("[CONTENT]".length()).trim();
-                                // 避免重复添加
+                                // Avoid duplicate
                                 if (!assistantContent.toString().contains(content)) {
                                     assistantContent.append(content);
                                 }
@@ -401,51 +409,16 @@ public class CodexSDKBridge {
     }
 
     /**
-     * 检查 Codex SDK 环境是否就绪
-     */
-    public boolean checkEnvironment() {
-        try {
-            // 检查 Node.js
-            String node = nodeDetector.findNodeExecutable();
-            ProcessBuilder pb = new ProcessBuilder(node, "--version");
-            envConfigurator.updateProcessEnvironment(pb, node);
-            Process process = pb.start();
-
-            try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String version = reader.readLine();
-                LOG.info("Node.js 版本: " + version);
-            }
-
-            int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                return false;
-            }
-
-            // 检查 ai-bridge 目录
-            File bridgeDir = directoryResolver.findSdkDir();
-            File scriptFile = new File(bridgeDir, CHANNEL_SCRIPT);
-            if (!scriptFile.exists()) {
-                LOG.error("channel-manager.js not found at: " + scriptFile.getAbsolutePath());
-                return false;
-            }
-
-            LOG.info("Environment check passed");
-            return true;
-        } catch (Exception e) {
-            LOG.error("环境检查失败: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * 获取会话历史消息（Codex不支持此功能，返回空列表）
+     * Get session history messages (Codex doesn't support this, returns empty list).
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
-        // Codex SDK 不支持获取历史消息
         LOG.info("getSessionMessages not supported by Codex SDK");
         return new ArrayList<>();
     }
+
+    // ============================================================================
+    // Utility methods
+    // ============================================================================
 
     private String extractAssistantText(JsonObject msg) {
         if (msg == null) return "";

@@ -2,6 +2,8 @@ package com.github.claudecodegui;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.cache.SlashCommandCache;
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.handler.*;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;

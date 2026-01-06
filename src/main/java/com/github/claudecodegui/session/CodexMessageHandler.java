@@ -1,6 +1,7 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.ClaudeSession.Message;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -12,7 +13,7 @@ import com.intellij.openapi.diagnostic.Logger;
  * - 和ClaudeMessageHandler类似，但Codex的消息格式更简单
  * - 主要处理流式文本输出
  */
-public class CodexMessageHandler implements CodexSDKBridge.MessageCallback {
+public class CodexMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(CodexMessageHandler.class);
 
     private final SessionState state;
@@ -95,7 +96,7 @@ public class CodexMessageHandler implements CodexSDKBridge.MessageCallback {
      * 解释：Codex说完了
      */
     @Override
-    public void onComplete(CodexSDKBridge.SDKResult result) {
+    public void onComplete(SDKResult result) {
         state.setBusy(false);
         state.setLoading(false);
         state.updateLastModifiedTime();

@@ -1,6 +1,6 @@
 package com.github.claudecodegui.handler;
 
-import com.github.claudecodegui.ClaudeHistoryReader;
+import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;

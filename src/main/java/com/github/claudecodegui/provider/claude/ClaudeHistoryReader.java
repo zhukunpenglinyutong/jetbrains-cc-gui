@@ -1,4 +1,4 @@
-package com.github.claudecodegui;
+package com.github.claudecodegui.provider.claude;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
@@ -14,8 +14,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Claude本地历史记录读取器
- * 直接从本地文件系统读取Claude的历史数据
+ * Claude local history reader.
+ * Reads Claude's history data directly from the local filesystem.
  */
 public class ClaudeHistoryReader {
 
@@ -29,7 +29,7 @@ public class ClaudeHistoryReader {
     private final Gson gson = new Gson();
 
     /**
-     * 历史记录条目
+     * History entry.
      */
     public static class HistoryEntry {
         public String display;
@@ -44,7 +44,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 项目信息
+     * Project info.
      */
     public static class ProjectInfo {
         public String path;
@@ -66,7 +66,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 会话消息（从 projects 目录读取）
+     * Conversation message (from projects directory).
      */
     public static class ConversationMessage {
         public String uuid;
@@ -81,7 +81,7 @@ public class ClaudeHistoryReader {
 
         public static class Message {
             public String role;
-            public Object content; // 可能是 String 或 Array
+            public Object content;
             public Usage usage;
         }
 
@@ -94,7 +94,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * Token 使用统计数据结构
+     * Token usage data structure.
      */
     public static class UsageData {
         public long inputTokens;
@@ -164,7 +164,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 从 projects 目录读取项目的所有会话
+     * Read all sessions from a project directory.
      */
     public List<SessionInfo> readProjectSessions(String projectPath) throws IOException {
         List<SessionInfo> sessions = new ArrayList<>();
@@ -173,8 +173,6 @@ public class ClaudeHistoryReader {
             return sessions;
         }
 
-        // 转换项目路径为安全的目录名（与 VSCode 扩展逻辑一致）
-        // 使用 PathUtils 处理跨平台路径规范化
         String sanitizedPath = PathUtils.sanitizePath(projectPath);
         Path projectDir = PROJECTS_DIR.resolve(sanitizedPath);
 
@@ -182,7 +180,6 @@ public class ClaudeHistoryReader {
             return sessions;
         }
 
-        // 读取项目目录下所有 .jsonl 文件
         Map<String, List<ConversationMessage>> sessionMessagesMap = new HashMap<>();
 
         Files.list(projectDir)
@@ -196,7 +193,6 @@ public class ClaudeHistoryReader {
             })
             .forEach(path -> {
                 try (BufferedReader reader = Files.newBufferedReader(path, java.nio.charset.StandardCharsets.UTF_8)) {
-                    // 从文件名提取 sessionId
                     String fileName = path.getFileName().toString();
                     String sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
 
@@ -212,8 +208,7 @@ public class ClaudeHistoryReader {
                                 messages.add(msg);
                             }
                         } catch (Exception e) {
-                            // 跳过解析失败的行，记录日志用于调试
-                            LOG.error("[ClaudeHistoryReader] 解析消息行失败: " + e.getMessage() + " - 行内容: " + (line.length() > 100 ? line.substring(0, 100) + "..." : line));
+                            LOG.error("[ClaudeHistoryReader] Failed to parse message line: " + e.getMessage());
                         }
                     }
 
@@ -222,22 +217,18 @@ public class ClaudeHistoryReader {
                     }
 
                 } catch (Exception e) {
-                    // 跳过读取失败的文件，记录日志用于调试
-                    LOG.error("[ClaudeHistoryReader] 读取会话文件失败: " + e.getMessage());
+                    LOG.error("[ClaudeHistoryReader] Failed to read session file: " + e.getMessage());
                 }
             });
 
-        // 为每个会话生成 SessionInfo
         for (Map.Entry<String, List<ConversationMessage>> entry : sessionMessagesMap.entrySet()) {
             String sessionId = entry.getKey();
             List<ConversationMessage> messages = entry.getValue();
 
             if (messages.isEmpty()) continue;
 
-            // 生成摘要：找到第一条非 meta 的用户消息
             String summary = generateSummary(messages);
 
-            // 获取最后一条消息的时间戳
             long lastTimestamp = 0;
             for (ConversationMessage msg : messages) {
                 if (msg.timestamp != null) {
@@ -247,12 +238,11 @@ public class ClaudeHistoryReader {
                             lastTimestamp = ts;
                         }
                     } catch (Exception e) {
-                        // 忽略无效的时间戳
+                        // Ignore invalid timestamp
                     }
                 }
             }
 
-            // 过滤无效会话
             if (!isValidSession(sessionId, summary, messages.size())) {
                 continue;
             }
@@ -262,20 +252,16 @@ public class ClaudeHistoryReader {
             session.title = summary;
             session.messageCount = messages.size();
             session.lastTimestamp = lastTimestamp;
-            session.firstTimestamp = lastTimestamp; // 简化处理
+            session.firstTimestamp = lastTimestamp;
 
             sessions.add(session);
         }
 
-        // 按最后更新时间倒序排序
         sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
 
         return sessions;
     }
 
-    /**
-     * 生成会话摘要
-     */
     private String generateSummary(List<ConversationMessage> messages) {
         for (ConversationMessage msg : messages) {
             if ("user".equals(msg.type) &&
@@ -285,7 +271,6 @@ public class ClaudeHistoryReader {
 
                 String text = extractTextFromContent(msg.message.content);
                 if (text != null && !text.isEmpty()) {
-                    // 去除换行符并截断
                     text = text.replace("\n", " ").trim();
                     if (text.length() > 45) {
                         text = text.substring(0, 45) + "...";
@@ -294,24 +279,18 @@ public class ClaudeHistoryReader {
                 }
             }
         }
-        return null; // 返回 null 表示没有有效内容
+        return null;
     }
 
-    /**
-     * 判断会话是否有效（过滤掉 Warmup、No prompt 等无效会话）
-     */
     private boolean isValidSession(String sessionId, String summary, int messageCount) {
-        // 过滤 agent-xxx 格式的会话（都是 Warmup）
         if (sessionId != null && sessionId.startsWith("agent-")) {
             return false;
         }
 
-        // 过滤摘要为空或无效的会话
         if (summary == null || summary.isEmpty()) {
             return false;
         }
 
-        // 过滤只有 "Warmup" 或 "No prompt" 的会话
         String lowerSummary = summary.toLowerCase();
         if (lowerSummary.equals("warmup") ||
             lowerSummary.equals("no prompt") ||
@@ -320,7 +299,6 @@ public class ClaudeHistoryReader {
             return false;
         }
 
-        // 过滤消息数太少的会话（少于2条消息通常没什么内容）
         if (messageCount < 2) {
             return false;
         }
@@ -328,25 +306,17 @@ public class ClaudeHistoryReader {
         return true;
     }
 
-    /**
-     * 从 content 提取文本
-     */
     private String extractTextFromContent(Object content) {
-        // 处理 String 类型
         if (content instanceof String) {
             return (String) content;
-        }
-        // 处理 List 类型（这是实际的格式）
-        else if (content instanceof List) {
+        } else if (content instanceof List) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> contentList = (List<Map<String, Object>>) content;
             StringBuilder sb = new StringBuilder();
 
-            // 遍历所有内容项
             for (Map<String, Object> item : contentList) {
                 String type = (String) item.get("type");
 
-                // 处理文本类型
                 if ("text".equals(type)) {
                     Object text = item.get("text");
                     if (text instanceof String) {
@@ -355,23 +325,17 @@ public class ClaudeHistoryReader {
                         }
                         sb.append((String) text);
                     }
-                }
-                // 处理工具使用类型
-                else if ("tool_use".equals(type)) {
+                } else if ("tool_use".equals(type)) {
                     Object name = item.get("name");
                     if (name instanceof String && sb.length() == 0) {
-                        // 如果还没有文本内容，显示工具使用信息
-                        sb.append("[使用工具: ").append(name).append("]");
+                        sb.append("[Tool: ").append(name).append("]");
                     }
                 }
-                // 可以根据需要添加其他类型的处理
             }
 
             String result = sb.toString().trim();
             return result.isEmpty() ? null : result;
-        }
-        // 处理 com.google.gson.JsonArray 类型（从 Gson 解析）
-        else if (content instanceof com.google.gson.JsonArray) {
+        } else if (content instanceof com.google.gson.JsonArray) {
             com.google.gson.JsonArray contentArray = (com.google.gson.JsonArray) content;
             StringBuilder sb = new StringBuilder();
 
@@ -380,22 +344,18 @@ public class ClaudeHistoryReader {
                 if (element.isJsonObject()) {
                     com.google.gson.JsonObject item = element.getAsJsonObject();
 
-                    // 获取类型
                     String type = item.has("type") && !item.get("type").isJsonNull()
                         ? item.get("type").getAsString()
                         : null;
 
-                    // 处理文本类型
                     if ("text".equals(type) && item.has("text") && !item.get("text").isJsonNull()) {
                         if (sb.length() > 0) {
                             sb.append(" ");
                         }
                         sb.append(item.get("text").getAsString());
-                    }
-                    // 处理工具使用类型
-                    else if ("tool_use".equals(type) && item.has("name") && !item.get("name").isJsonNull()) {
+                    } else if ("tool_use".equals(type) && item.has("name") && !item.get("name").isJsonNull()) {
                         if (sb.length() == 0) {
-                            sb.append("[使用工具: ").append(item.get("name").getAsString()).append("]");
+                            sb.append("[Tool: ").append(item.get("name").getAsString()).append("]");
                         }
                     }
                 }
@@ -408,12 +368,8 @@ public class ClaudeHistoryReader {
         return null;
     }
 
-    /**
-     * 解析时间戳（支持 ISO 8601 格式）
-     */
     private long parseTimestamp(String timestamp) {
         try {
-            // ISO 8601 格式如 "2025-11-18T20:16:42.310Z"
             java.time.Instant instant = java.time.Instant.parse(timestamp);
             return instant.toEpochMilli();
         } catch (Exception e) {
@@ -422,7 +378,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 会话信息
+     * Session info.
      */
     public static class SessionInfo {
         public String sessionId;
@@ -433,7 +389,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 统计信息
+     * Statistics.
      */
     public static class Statistics {
         public int totalMessages;
@@ -448,7 +404,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * API响应
+     * API response.
      */
     public static class ApiResponse {
         public boolean success;
@@ -471,7 +427,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 读取所有历史记录
+     * Read all history entries.
      */
     public List<HistoryEntry> readHistory() throws IOException {
         List<HistoryEntry> history = new ArrayList<>();
@@ -490,20 +446,19 @@ public class ClaudeHistoryReader {
                             history.add(entry);
                         }
                     } catch (Exception e) {
-                        // 跳过解析失败的行
+                        // Skip parse failures
                     }
                 }
             }
         }
 
-        // 按时间戳排序（最新的在前）
         history.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
 
         return history;
     }
 
     /**
-     * 获取项目列表
+     * Get project list.
      */
     public List<ProjectInfo> getProjects(List<HistoryEntry> history) {
         Map<String, ProjectInfo> projectsMap = new HashMap<>();
@@ -528,27 +483,24 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 获取统计信息
+     * Get statistics.
      */
     public Statistics getStatistics(List<HistoryEntry> history) {
         Statistics stats = new Statistics();
         stats.totalMessages = history.size();
 
         if (!history.isEmpty()) {
-            // 获取第一条和最后一条消息
             List<HistoryEntry> sorted = new ArrayList<>(history);
             sorted.sort(Comparator.comparingLong(e -> e.timestamp));
             stats.firstMessage = sorted.get(0);
             stats.lastMessage = sorted.get(sorted.size() - 1);
 
-            // 统计项目数
             Set<String> projects = history.stream()
                 .map(e -> e.project)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
             stats.totalProjects = projects.size();
 
-            // 按天统计消息
             for (HistoryEntry entry : history) {
                 if (entry.timestamp > 0) {
                     Date date = new Date(entry.timestamp);
@@ -562,7 +514,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 搜索历史记录
+     * Search history.
      */
     public List<HistoryEntry> searchHistory(List<HistoryEntry> history, String query) {
         if (query == null || query.trim().isEmpty()) {
@@ -580,7 +532,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 读取项目详情
+     * Read project details.
      */
     public Map<String, Object> getProjectDetails(String projectPath) {
         Map<String, Object> details = new HashMap<>();
@@ -592,8 +544,6 @@ public class ClaudeHistoryReader {
             return details;
         }
 
-        // 将路径转换为文件系统安全的名称
-        // 使用 PathUtils 处理跨平台路径规范化（支持 Windows 反斜杠）
         String sanitizedPath = PathUtils.sanitizePath(projectPath);
         Path projectDir = PROJECTS_DIR.resolve(sanitizedPath);
 
@@ -603,7 +553,6 @@ public class ClaudeHistoryReader {
             try {
                 List<Map<String, Object>> conversations = new ArrayList<>();
 
-                // 读取项目目录中的对话文件
                 Files.list(projectDir)
                     .filter(Files::isDirectory)
                     .forEach(subDir -> {
@@ -617,14 +566,14 @@ public class ClaudeHistoryReader {
                                 convData.put("timestamp", Files.getLastModifiedTime(convFile).toMillis());
                                 conversations.add(convData);
                             } catch (Exception e) {
-                                // 跳过读取失败的文件
+                                // Skip read failures
                             }
                         }
                     });
 
                 details.put("conversations", conversations);
             } catch (IOException e) {
-                // 忽略读取失败
+                // Ignore read failures
             }
         }
 
@@ -632,14 +581,12 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 获取项目数据的JSON字符串
+     * Get project data as JSON string.
      */
     public String getProjectDataAsJson(String projectPath) {
         try {
-            // 从 projects 目录读取会话列表
             List<SessionInfo> sessions = readProjectSessions(projectPath);
 
-            // 计算总消息数
             int totalMessages = sessions.stream()
                 .mapToInt(s -> s.messageCount)
                 .sum();
@@ -653,15 +600,12 @@ public class ClaudeHistoryReader {
 
             return gson.toJson(result);
         } catch (Exception e) {
-            return gson.toJson(ApiResponse.error("读取项目数据失败: " + e.getMessage()));
+            return gson.toJson(ApiResponse.error("Failed to read project data: " + e.getMessage()));
         }
     }
 
     /**
-     * 读取单个会话的所有消息
-     * @param projectPath 项目路径
-     * @param sessionId 会话ID
-     * @return 消息列表的JSON字符串
+     * Read a single session's messages.
      */
     public String getSessionMessagesAsJson(String projectPath, String sessionId) {
         try {
@@ -669,7 +613,6 @@ public class ClaudeHistoryReader {
                 return gson.toJson(new ArrayList<>());
             }
 
-            // 转换项目路径为安全的目录名
             String sanitizedPath = PathUtils.sanitizePath(projectPath);
             Path projectDir = PROJECTS_DIR.resolve(sanitizedPath);
 
@@ -677,7 +620,6 @@ public class ClaudeHistoryReader {
                 return gson.toJson(new ArrayList<>());
             }
 
-            // 读取会话文件
             Path sessionFile = projectDir.resolve(sessionId + ".jsonl");
             if (!Files.exists(sessionFile)) {
                 return gson.toJson(new ArrayList<>());
@@ -696,21 +638,20 @@ public class ClaudeHistoryReader {
                             messages.add(msg);
                         }
                     } catch (Exception e) {
-                        // 跳过解析失败的行，记录日志用于调试
-                        LOG.error("[ClaudeHistoryReader] 导出时解析消息行失败: " + e.getMessage());
+                        LOG.error("[ClaudeHistoryReader] Failed to parse message line during export: " + e.getMessage());
                     }
                 }
             }
 
             return gson.toJson(messages);
         } catch (Exception e) {
-            LOG.error("[ClaudeHistoryReader] 读取会话消息失败: " + e.getMessage(), e);
+            LOG.error("[ClaudeHistoryReader] Failed to read session messages: " + e.getMessage(), e);
             return gson.toJson(new ArrayList<>());
         }
     }
 
     /**
-     * 获取所有数据的JSON字符串
+     * Get all data as JSON string.
      */
     public String getAllDataAsJson() {
         try {
@@ -727,11 +668,11 @@ public class ClaudeHistoryReader {
 
             return gson.toJson(result);
         } catch (Exception e) {
-            return gson.toJson(ApiResponse.error("读取数据失败: " + e.getMessage()));
+            return gson.toJson(ApiResponse.error("Failed to read data: " + e.getMessage()));
         }
     }
 
-    // ==================== 统计功能相关代码 ====================
+    // ==================== Statistics related code ====================
 
     private static final Map<String, Map<String, Double>> MODEL_PRICING = new HashMap<>();
     static {
@@ -764,27 +705,21 @@ public class ClaudeHistoryReader {
         } else if (modelLower.contains("haiku-4") || modelLower.contains("claude-haiku-4")) {
             return MODEL_PRICING.get("claude-haiku-4");
         }
-        // 默认使用 Sonnet 4
         return MODEL_PRICING.get("claude-sonnet-4");
     }
 
-    /**
-     * 获取项目目录名称 (移植自 VSCode 插件 getProjectFolderName)
-     * 使用 PathUtils.sanitizePath() 实现跨平台兼容
-     */
     private String getProjectFolderName(String projectPath) {
         if (projectPath == null) return "";
-        // 使用统一的路径处理工具，确保 Windows 和 Unix 路径格式一致
         return PathUtils.sanitizePath(projectPath);
     }
 
     /**
-     * 获取当前项目的使用统计
+     * Get project usage statistics.
      */
     public ProjectStatistics getProjectStatistics(String projectPath) {
         ProjectStatistics stats = new ProjectStatistics();
         stats.projectPath = projectPath;
-        stats.projectName = projectPath.equals("all") ? "所有项目" : Paths.get(projectPath).getFileName().toString();
+        stats.projectName = projectPath.equals("all") ? "All Projects" : Paths.get(projectPath).getFileName().toString();
         stats.totalUsage = new UsageData();
         stats.sessions = new ArrayList<>();
         stats.dailyUsage = new ArrayList<>();
@@ -796,7 +731,6 @@ public class ClaudeHistoryReader {
             List<SessionSummary> allSessions = new ArrayList<>();
 
             if ("all".equals(projectPath)) {
-                // 读取所有项目
                 if (Files.exists(PROJECTS_DIR)) {
                     Files.list(PROJECTS_DIR)
                         .filter(Files::isDirectory)
@@ -804,39 +738,31 @@ public class ClaudeHistoryReader {
                             try {
                                 allSessions.addAll(readSessionsFromDir(dir));
                             } catch (Exception e) {
-                                // 跳过读取失败的目录
+                                // Skip read failures
                             }
                         });
                 }
             } else {
-                // 读取特定项目
-                // 优先尝试原来的 sanitizedPath 逻辑，如果找不到再尝试新的 getProjectFolderName 逻辑
-                // 这是一个兼容性策略
                 String folderName1 = projectPath.replaceAll("[^a-zA-Z0-9]", "-");
                 Path dir1 = PROJECTS_DIR.resolve(folderName1);
-                
+
                 String folderName2 = getProjectFolderName(projectPath);
                 Path dir2 = PROJECTS_DIR.resolve(folderName2);
-                
+
                 if (Files.exists(dir1)) {
                     allSessions.addAll(readSessionsFromDir(dir1));
                 } else if (Files.exists(dir2)) {
                     allSessions.addAll(readSessionsFromDir(dir2));
-                } else {
-                    // 尝试在 history.jsonl 中查找项目对应的真实路径
-                    // 暂时略过，假设路径正确
                 }
             }
 
             stats.totalSessions = allSessions.size();
 
-            // 聚合数据
             processSessions(allSessions, stats);
 
             return stats;
 
         } catch (Exception e) {
-            // 忽略错误，返回空统计
             return stats;
         }
     }
@@ -855,7 +781,7 @@ public class ClaudeHistoryReader {
                     }
                 });
         } catch (IOException e) {
-            // 忽略读取失败
+            // Ignore read failures
         }
         return sessions;
     }
@@ -871,24 +797,15 @@ public class ClaudeHistoryReader {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
-                
+
                 try {
                     ConversationMessage msg = gson.fromJson(line, ConversationMessage.class);
-                    
-                    // 记录时间戳
+
                     if (firstTimestamp == 0 && msg.timestamp != null) {
                         firstTimestamp = parseTimestamp(msg.timestamp);
                     }
 
-                    // 查找 summary
-                    if ("summary".equals(msg.type) && msg.message != null && msg.message.content instanceof String) { // summary usually in separate field in raw json, but here mapping might be tricky. 
-                        // Wait, ConversationMessage structure defined earlier:
-                        // public String type;
-                        // public Message message;
-                        // In VSCode: data.summary is at top level. 
-                        // My ConversationMessage doesn't have 'summary' field at top level.
-                        // I need to check the raw JSON structure or use a generic map for flexible parsing.
-                        // Let's use a flexible parser for this line to capture 'summary' field.
+                    if ("summary".equals(msg.type) && msg.message != null && msg.message.content instanceof String) {
                         Map<String, Object> rawMap = gson.fromJson(line, Map.class);
                         if (rawMap.containsKey("summary")) {
                             Object s = rawMap.get("summary");
@@ -896,27 +813,16 @@ public class ClaudeHistoryReader {
                         }
                     }
 
-                    // 查找 usage
                     if ("assistant".equals(msg.type) && msg.message != null && msg.message.usage != null) {
                         ConversationMessage.Usage u = msg.message.usage;
-                        
-                        // 简单去重 (TODO: 完善去重逻辑，这里假设每行都是唯一的或者是流式的最后一行)
-                        // VSCode logic: message.id + requestId. My ConversationMessage missing id/requestId.
-                        // Assuming simpler accumulation for now or just taking valid chunks.
-                        // Actually, jsonl often contains stream chunks or final message.
-                        // If we sum up everything, we might double count if structure is complex.
-                        // But usually 'usage' is only present in the final message of a turn or specific events.
-                        
+
                         if (u.input_tokens > 0 || u.output_tokens > 0 || u.cache_creation_input_tokens > 0 || u.cache_read_input_tokens > 0) {
                              usage.inputTokens += u.input_tokens;
                              usage.outputTokens += u.output_tokens;
                              usage.cacheWriteTokens += u.cache_creation_input_tokens;
                              usage.cacheReadTokens += u.cache_read_input_tokens;
-                             
+
                              if (msg.message.role != null && model.equals("unknown")) {
-                                 // message.model is needed. My Message class doesn't have model.
-                                 // It's usually at top level or inside message?
-                                 // VSCode: message.model
                                  Map<String, Object> rawMap = gson.fromJson(line, Map.class);
                                  if (rawMap.containsKey("message")) {
                                      Map m = (Map) rawMap.get("message");
@@ -925,8 +831,7 @@ public class ClaudeHistoryReader {
                                      }
                                  }
                              }
-                             
-                             // Calculate cost
+
                              Map<String, Double> pricing = getModelPricing(model);
                              double cost = (u.input_tokens * pricing.get("input") +
                                           u.output_tokens * pricing.get("output") +
@@ -941,7 +846,7 @@ public class ClaudeHistoryReader {
             }
 
             usage.totalTokens = usage.inputTokens + usage.outputTokens + usage.cacheWriteTokens + usage.cacheReadTokens;
-            
+
             if (usage.totalTokens == 0) return null;
 
             SessionSummary session = new SessionSummary();
@@ -951,7 +856,7 @@ public class ClaudeHistoryReader {
             session.usage = usage;
             session.cost = totalCost;
             session.summary = summary;
-            
+
             return session;
 
         } catch (IOException e) {
@@ -963,16 +868,14 @@ public class ClaudeHistoryReader {
         Map<String, DailyUsage> dailyMap = new HashMap<>();
         Map<String, ModelUsage> modelMap = new HashMap<>();
 
-        // 时间范围
         long now = System.currentTimeMillis();
         long oneWeekAgo = now - 7L * 24 * 3600 * 1000;
         long twoWeeksAgo = now - 14L * 24 * 3600 * 1000;
-        
+
         WeeklyComparison.WeekData currentWeek = new WeeklyComparison.WeekData();
         WeeklyComparison.WeekData lastWeek = new WeeklyComparison.WeekData();
 
         for (SessionSummary session : sessions) {
-            // 1. 总计
             stats.totalUsage.inputTokens += session.usage.inputTokens;
             stats.totalUsage.outputTokens += session.usage.outputTokens;
             stats.totalUsage.cacheWriteTokens += session.usage.cacheWriteTokens;
@@ -980,7 +883,6 @@ public class ClaudeHistoryReader {
             stats.totalUsage.totalTokens += session.usage.totalTokens;
             stats.estimatedCost += session.cost;
 
-            // 2. 日统计
             String dateStr = String.format("%tF", new Date(session.timestamp));
             DailyUsage daily = dailyMap.computeIfAbsent(dateStr, k -> {
                 DailyUsage d = new DailyUsage();
@@ -993,12 +895,10 @@ public class ClaudeHistoryReader {
             daily.cost += session.cost;
             daily.usage.inputTokens += session.usage.inputTokens;
             daily.usage.outputTokens += session.usage.outputTokens;
-            // ... others
             if (!daily.modelsUsed.contains(session.model)) {
                 daily.modelsUsed.add(session.model);
             }
 
-            // 3. 模型统计
             ModelUsage modelStat = modelMap.computeIfAbsent(session.model, k -> {
                 ModelUsage m = new ModelUsage();
                 m.model = k;
@@ -1012,7 +912,6 @@ public class ClaudeHistoryReader {
             modelStat.cacheCreationTokens += session.usage.cacheWriteTokens;
             modelStat.cacheReadTokens += session.usage.cacheReadTokens;
 
-            // 4. 周对比
             if (session.timestamp > oneWeekAgo) {
                 currentWeek.sessions++;
                 currentWeek.cost += session.cost;
@@ -1024,7 +923,6 @@ public class ClaudeHistoryReader {
             }
         }
 
-        // Finalize Lists
         stats.dailyUsage = new ArrayList<>(dailyMap.values());
         stats.dailyUsage.sort(Comparator.comparing(d -> d.date));
 
@@ -1037,7 +935,6 @@ public class ClaudeHistoryReader {
             stats.sessions = stats.sessions.subList(0, 200);
         }
 
-        // Calculate Trends
         stats.weeklyComparison.currentWeek = currentWeek;
         stats.weeklyComparison.lastWeek = lastWeek;
         stats.weeklyComparison.trends = new WeeklyComparison.Trends();
@@ -1051,10 +948,8 @@ public class ClaudeHistoryReader {
         return ((current - last) / last) * 100;
     }
 
-
-
     /**
-     * 处理API请求
+     * Handle API request.
      */
     public String handleApiRequest(String endpoint, Map<String, String> params) {
         try {
@@ -1086,8 +981,7 @@ public class ClaudeHistoryReader {
                     return gson.toJson(ApiResponse.error("Unknown endpoint: " + endpoint));
             }
         } catch (Exception e) {
-            return gson.toJson(ApiResponse.error("处理请求失败: " + e.getMessage()));
+            return gson.toJson(ApiResponse.error("Failed to handle request: " + e.getMessage()));
         }
     }
-
 }

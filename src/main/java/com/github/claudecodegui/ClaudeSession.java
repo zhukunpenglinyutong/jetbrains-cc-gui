@@ -7,6 +7,8 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeMessageHandler;
 import com.github.claudecodegui.session.CodexMessageHandler;
 import com.github.claudecodegui.util.EditorFileUtils;
