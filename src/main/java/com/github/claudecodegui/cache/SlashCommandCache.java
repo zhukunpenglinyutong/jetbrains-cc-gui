@@ -76,8 +76,8 @@ public class SlashCommandCache {
         // 2. 设置文件监听
         setupFileWatcher();
 
-        // 3. 设置定期检查
-        schedulePeriodicCheck();
+        // 3. 定期检查已禁用（避免频繁的远程 API 计费）
+        // schedulePeriodicCheck();
     }
 
     /**
@@ -239,10 +239,10 @@ public class SlashCommandCache {
             messageBusConnection.disconnect();
         }
 
-        // 取消定期检查
-        if (periodicCheckTimer != null) {
-            periodicCheckTimer.cancel();
-        }
+        // 定期检查已禁用，无需取消
+        // if (periodicCheckTimer != null) {
+        //     periodicCheckTimer.cancel();
+        // }
 
         refreshAlarm.cancelAllRequests();
         refreshAlarm.dispose();
