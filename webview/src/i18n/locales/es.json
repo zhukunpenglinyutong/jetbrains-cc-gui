@@ -128,6 +128,7 @@
     "agentsDesc": "Gestionar y configurar agentes de IA",
     "skills": "Habilidades",
     "skillsDesc": "Gestionar y configurar módulos de habilidades",
+    "codexFeatureUnavailable": "Esta sección de configuración aún no está disponible en Codex. Cambia a Claude Code.",
     "community": "Comunidad oficial",
     "communityDesc": "Escanea el código QR a continuación para unirte al grupo oficial de WeChat para obtener las últimas noticias y soporte técnico",
     "communityQrTip": "Escanea con WeChat para unirte a la comunidad",
@@ -332,7 +333,6 @@
     "operationFailed": "Operación fallida",
     "copySuccess": "{{label}} copiado al portapapeles",
     "copyFailed": "Error al copiar",
-    "newSessionCreated": "Nueva sesión creada",
     "newSessionCreatedReady": "Nueva sesión creada, puede comenzar a hacer preguntas",
     "providerSwitchSuccess": "¡Proveedor cambiado con éxito!",
     "providerSwitchFailed": "Error al cambiar de proveedor",
@@ -613,6 +613,24 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · El más rápido para respuestas rápidas"
+      }
+    },
+    "codex": {
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "Último modelo de codificación agéntico de frontera."
+      },
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "Modelo insignia optimizado para Codex con razonamiento profundo y rápido."
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "Optimizado para Codex. Más económico y rápido, pero menos capaz."
+      },
+      "gpt52": {
+        "label": "gpt-5.2",
+        "description": "Último modelo de frontera con mejoras en conocimiento."
       }
     }
   }

@@ -1,6 +1,7 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.ClaudeSDKBridge;
+import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.ClaudeSession.Message;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -18,7 +19,7 @@ import java.util.List;
  * - 就像一个翻译官，把Claude说的话翻译成我们能理解的格式
  * - 处理思考过程、文本内容、工具调用结果等等
  */
-public class ClaudeMessageHandler implements ClaudeSDKBridge.MessageCallback {
+public class ClaudeMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(ClaudeMessageHandler.class);
 
     private final SessionState state;
@@ -126,7 +127,7 @@ public class ClaudeMessageHandler implements ClaudeSDKBridge.MessageCallback {
      * 解释：AI说完话了，收工
      */
     @Override
-    public void onComplete(ClaudeSDKBridge.SDKResult result) {
+    public void onComplete(SDKResult result) {
         state.setBusy(false);
         state.setLoading(false);
         state.updateLastModifiedTime();

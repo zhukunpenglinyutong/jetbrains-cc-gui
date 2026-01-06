@@ -23,18 +23,20 @@ const MODEL_LABEL_KEYS: Record<string, string> = {
   'claude-sonnet-4-5': 'models.claude.sonnet45.label',
   'claude-opus-4-5-20251101': 'models.claude.opus45.label',
   'claude-haiku-4-5': 'models.claude.haiku45.label',
-  'gpt-5.1-codex': 'models.codex.gpt51codex.label',
+  'gpt-5.2-codex': 'models.codex.gpt52codex.label',
+  'gpt-5.1-codex-max': 'models.codex.gpt51codexMax.label',
   'gpt-5.1-codex-mini': 'models.codex.gpt51codexMini.label',
-  'gpt-5.1': 'models.codex.gpt51.label',
+  'gpt-5.2': 'models.codex.gpt52.label',
 };
 
 const MODEL_DESCRIPTION_KEYS: Record<string, string> = {
   'claude-sonnet-4-5': 'models.claude.sonnet45.description',
   'claude-opus-4-5-20251101': 'models.claude.opus45.description',
   'claude-haiku-4-5': 'models.claude.haiku45.description',
-  'gpt-5.1-codex': 'models.codex.gpt51codex.description',
+  'gpt-5.2-codex': 'models.codex.gpt52codex.description',
+  'gpt-5.1-codex-max': 'models.codex.gpt51codexMax.description',
   'gpt-5.1-codex-mini': 'models.codex.gpt51codexMini.description',
-  'gpt-5.1': 'models.codex.gpt51.description',
+  'gpt-5.2': 'models.codex.gpt52.description',
 };
 
 /**

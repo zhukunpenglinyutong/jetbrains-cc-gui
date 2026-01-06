@@ -39,7 +39,7 @@ function debounce<T extends (...args: any[]) => void>(
 export const ChatInputBox = ({
   isLoading = false,
   selectedModel = 'claude-sonnet-4-5',
-  permissionMode = 'default',
+  permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
   usagePercentage = 0,
   usageUsedTokens,

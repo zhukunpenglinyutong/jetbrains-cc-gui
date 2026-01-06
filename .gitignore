@@ -68,3 +68,4 @@ logs/*.log
 .intellijPlatform/
 /.idea/
 .ace-tool/
+.workflow

@@ -128,6 +128,7 @@
     "agentsDesc": "管理和配置AI代理",
     "skills": "Skills",
     "skillsDesc": "管理和配置技能模組",
+    "codexFeatureUnavailable": "Codex 暫未適配此功能，請切換到 Claude Code 使用",
     "community": "官方交流群",
     "communityDesc": "掃描下方二維碼加入官方微信交流群，獲取最新資訊和技術支援",
     "communityQrTip": "使用微信掃一掃加入交流群",
@@ -332,7 +333,6 @@
     "operationFailed": "操作失敗",
     "copySuccess": "{{label}}已複製到剪貼簿",
     "copyFailed": "複製失敗",
-    "newSessionCreated": "新會話已建立",
     "newSessionCreatedReady": "新會話已建立，可以開始提問",
     "providerSwitchSuccess": "供應商切換成功！",
     "providerSwitchFailed": "切換供應商失敗",
@@ -613,6 +613,24 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 速度最快，適合快速回覆"
+      }
+    },
+    "codex": {
+      "gpt52codex": {
+        "label": "gpt-5.2-codex",
+        "description": "最新前沿智慧編程模型"
+      },
+      "gpt51codexMax": {
+        "label": "gpt-5.1-codex-max",
+        "description": "針對Codex優化的旗艦模型，深度與快速推理兼備"
+      },
+      "gpt51codexMini": {
+        "label": "gpt-5.1-codex-mini",
+        "description": "針對Codex優化。更便宜、更快，但性能較差"
+      },
+      "gpt52": {
+        "label": "gpt-5.2",
+        "description": "最新前沿模型，知識儲備全面提升"
       }
     }
   }

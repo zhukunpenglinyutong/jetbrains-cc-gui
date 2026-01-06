@@ -1,8 +1,8 @@
 package com.github.claudecodegui.handler;
 
-import com.github.claudecodegui.ClaudeSDKBridge;
 import com.github.claudecodegui.ClaudeSession;
-import com.github.claudecodegui.CodexSDKBridge;
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.CodemossSettingsService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
