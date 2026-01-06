@@ -4,6 +4,8 @@ import MarkdownBlock from './components/MarkdownBlock';
 import CollapsibleTextBlock from './components/CollapsibleTextBlock';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
+import { BlinkingLogo } from './components/BlinkingLogo';
+import { AnimatedText } from './components/AnimatedText';
 import type { SettingsTab } from './components/settings/SettingsSidebar';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
@@ -21,7 +23,6 @@ import {
   TodoListBlock,
 } from './components/toolBlocks';
 import { BackIcon } from './components/Icons';
-import { Claude, OpenAI } from '@lobehub/icons';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
 import { ScrollControl } from './components/ScrollControl';
@@ -1739,16 +1740,14 @@ const App = () => {
               }}
             >
               <div style={{ position: 'relative', display: 'inline-block' }}>
-                {currentProvider === 'codex' ? (
-                  <OpenAI.Avatar size={64} />
-                ) : (
-                  <Claude.Color size={58} />
-                )}
+                <BlinkingLogo provider={currentProvider} onProviderChange={handleProviderSelect} />
                 <span className="version-tag">
                   v{APP_VERSION}
                 </span>
               </div>
-              <div>{t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })}</div>
+              <div>
+                <AnimatedText text={t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })} />
+              </div>
             </div>
           )}
 
