@@ -1,3 +1,8 @@
+##### **2026年1月6日（v0.1.4-codex）**
+
+- [x] P0（feat）适配codex对话功能 #codex
+- [x] P0（feat）适配Codex读取环境变量Key的功能 #codex_1
+
 ##### **2026年1月5日（v0.1.4-beta7）**
 
 English:

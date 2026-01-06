@@ -261,6 +261,9 @@ public class CodexSDKBridge {
                 pb.redirectErrorStream(true);
                 envConfigurator.updateProcessEnvironment(pb, node);
 
+                // Configure Codex-specific env vars from ~/.codex/config.toml (env_key support)
+                envConfigurator.configureCodexEnv(env);
+
                 LOG.info("Command: " + String.join(" ", command));
 
                 Process process = null;
