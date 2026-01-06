@@ -333,7 +333,6 @@
     "operationFailed": "操作失敗",
     "copySuccess": "{{label}}已複製到剪貼簿",
     "copyFailed": "複製失敗",
-    "newSessionCreated": "新會話已建立",
     "newSessionCreatedReady": "新會話已建立，可以開始提問",
     "providerSwitchSuccess": "供應商切換成功！",
     "providerSwitchFailed": "切換供應商失敗",

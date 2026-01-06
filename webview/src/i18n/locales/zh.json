@@ -344,7 +344,6 @@
     "operationFailed": "操作失败",
     "copySuccess": "{{label}}已复制到剪切板",
     "copyFailed": "复制失败",
-    "newSessionCreated": "新会话已创建",
     "newSessionCreatedReady": "新会话已创建，可以开始提问",
     "providerSwitchSuccess": "供应商切换成功！",
     "providerSwitchFailed": "切换供应商失败",

@@ -333,7 +333,6 @@
     "operationFailed": "Opération échouée",
     "copySuccess": "{{label}} copié dans le presse-papiers",
     "copyFailed": "Échec de la copie",
-    "newSessionCreated": "Nouvelle session créée",
     "newSessionCreatedReady": "Nouvelle session créée, vous pouvez commencer à poser des questions",
     "providerSwitchSuccess": "Fournisseur changé avec succès !",
     "providerSwitchFailed": "Échec du changement de fournisseur",

@@ -344,7 +344,6 @@
     "operationFailed": "Operation failed",
     "copySuccess": "{{label}} copied to clipboard",
     "copyFailed": "Copy failed",
-    "newSessionCreated": "New session created",
     "newSessionCreatedReady": "New session created, you can start asking questions",
     "providerSwitchSuccess": "Provider switched successfully!",
     "providerSwitchFailed": "Failed to switch provider",

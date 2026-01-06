@@ -333,7 +333,6 @@
     "operationFailed": "ऑपरेशन विफल",
     "copySuccess": "{{label}} क्लिपबोर्ड पर कॉपी किया गया",
     "copyFailed": "कॉपी विफल",
-    "newSessionCreated": "नया सत्र बनाया गया",
     "newSessionCreatedReady": "नया सत्र बनाया गया, आप प्रश्न पूछना शुरू कर सकते हैं",
     "providerSwitchSuccess": "प्रदाता सफलतापूर्वक स्विच किया गया!",
     "providerSwitchFailed": "प्रदाता स्विच करने में विफल",

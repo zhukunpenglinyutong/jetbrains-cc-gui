@@ -1062,7 +1062,7 @@ const App = () => {
     setUsageUsedTokens(0);
     // 保留 maxTokens，等待后端推送；如果此前已知模型，可按默认 272K 预估
     setUsageMaxTokens((prev) => prev ?? 272000);
-    addToast(t('toast.newSessionCreated'), 'success');
+    // Toast is shown by backend when session is actually created
   };
 
   const handleCancelNewSession = () => {
@@ -1080,7 +1080,7 @@ const App = () => {
     setUsagePercentage(0);
     setUsageUsedTokens(0);
     setUsageMaxTokens((prev) => prev ?? 272000);
-    addToast(t('toast.newSessionCreated'), 'success');
+    // Toast is shown by backend when session is actually created
   };
 
   const handleCancelInterrupt = () => {

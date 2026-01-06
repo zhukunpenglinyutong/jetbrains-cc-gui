@@ -344,7 +344,6 @@
     "operationFailed": "操作失敗",
     "copySuccess": "{{label}}がクリップボードにコピーされました",
     "copyFailed": "コピー失敗",
-    "newSessionCreated": "新しいセッションが作成されました",
     "newSessionCreatedReady": "新しいセッションが作成されました。質問を開始できます",
     "providerSwitchSuccess": "プロバイダーの切り替えに成功しました！",
     "providerSwitchFailed": "プロバイダーの切り替えに失敗しました",
