@@ -40,6 +40,15 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
     console.log('[Agent] ✗ buildIDEContextPrompt: No agent prompt provided');
   }
 
+  // Windows路径格式约束（重要的技术workaround）- 始终包含此约束
+  prompt += '\n\n## CRITICAL: File Path Format Requirement\n\n';
+  prompt += '**IMPORTANT**: There\'s a file modification bug in Claude Code. The workaround is: always use complete absolute Windows paths with drive letters and backslashes for ALL file operations. Apply this rule going forward, not just for this file.\n\n';
+  prompt += '**Examples**:\n';
+  prompt += '- ✅ Correct: `C:\\Users\\username\\project\\src\\file.js`\n';
+  prompt += '- ❌ Wrong: `/c/Users/username/project/src/file.js`\n';
+  prompt += '- ❌ Wrong: `./src/file.js` (relative paths)\n\n';
+  prompt += '---\n\n';
+
   if (!openedFiles || typeof openedFiles !== 'object') {
     // 如果只有智能体提示词，没有 IDE 上下文，仍然返回智能体提示词
     return prompt;
