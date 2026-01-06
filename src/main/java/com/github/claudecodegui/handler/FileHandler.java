@@ -12,6 +12,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -25,12 +26,7 @@ public class FileHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(FileHandler.class);
 
-    private static final String[] SUPPORTED_TYPES = {
-            "list_files",
-            "get_commands",
-            "open_file",
-            "open_browser",
-    };
+    private static final String[] SUPPORTED_TYPES = {"list_files", "get_commands", "open_file", "open_browser",};
 
     // 常量定义
     private static final int MAX_RECENT_FILES = 50;
@@ -100,10 +96,7 @@ public class FileHandler extends BaseMessageHandler {
                 // 6. 返回结果
                 sendResult(files);
             } catch (Exception e) {
-                LOG.error(
-                        "[FileHandler] Failed to list files: " + e.getMessage(),
-                        e
-                );
+                LOG.error("[FileHandler] Failed to list files: " + e.getMessage(), e);
             }
         });
     }
@@ -125,19 +118,12 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 收集当前打开的文件
      */
-    private void collectOpenFiles(
-            List<JsonObject> files,
-            FileSet fileSet,
-            String basePath,
-            FileListRequest request
-    ) {
+    private void collectOpenFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
             if (project == null || project.isDisposed()) return;
 
-            VirtualFile[] openFiles = FileEditorManager.getInstance(
-                    project
-            ).getOpenFiles();
+            VirtualFile[] openFiles = FileEditorManager.getInstance(project).getOpenFiles();
             for (VirtualFile vf : openFiles) {
                 addVirtualFile(vf, basePath, files, fileSet, request, 1);
             }
@@ -147,33 +133,20 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 收集最近打开的文件
      */
-    private void collectRecentFiles(
-            List<JsonObject> files,
-            FileSet fileSet,
-            String basePath,
-            FileListRequest request
-    ) {
+    private void collectRecentFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
             if (project == null || project.isDisposed()) return;
 
             try {
-                List<VirtualFile> recentFiles =
-                        EditorHistoryManager.getInstance(project).getFileList();
+                List<VirtualFile> recentFiles = EditorHistoryManager.getInstance(project).getFileList();
                 // 倒序遍历，取最近的文件
                 int count = 0;
                 for (int i = recentFiles.size() - 1; i >= 0; i--) {
                     if (count >= MAX_RECENT_FILES) {
                         break;
                     }
-                    addVirtualFile(
-                            recentFiles.get(i),
-                            basePath,
-                            files,
-                            fileSet,
-                            request,
-                            2
-                    );
+                    addVirtualFile(recentFiles.get(i), basePath, files, fileSet, request, 2);
                     count++;
                 }
             } catch (Throwable t) {
@@ -185,12 +158,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 收集文件系统文件
      */
-    private void collectFileSystemFiles(
-            List<JsonObject> files,
-            FileSet fileSet,
-            String basePath,
-            FileListRequest request
-    ) {
+    private void collectFileSystemFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
         List<JsonObject> diskFiles = new ArrayList<>();
 
         if (request.hasQuery) {
@@ -223,12 +191,8 @@ public class FileHandler extends BaseMessageHandler {
 
         try {
             JsonObject json = new Gson().fromJson(content, JsonObject.class);
-            String query = json.has("query")
-                    ? json.get("query").getAsString()
-                    : "";
-            String currentPath = json.has("currentPath")
-                    ? json.get("currentPath").getAsString()
-                    : "";
+            String query = json.has("query") ? json.get("query").getAsString() : "";
+            String currentPath = json.has("currentPath") ? json.get("currentPath").getAsString() : "";
             return new FileListRequest(query, currentPath);
         } catch (Exception e) {
             // 如果不是 JSON，当作纯文本 query
@@ -285,9 +249,7 @@ public class FileHandler extends BaseMessageHandler {
             int depthDiff = a.getDepth() - b.getDepth();
             if (depthDiff != 0) return depthDiff;
 
-            int parentDiff = a
-                    .getParentPath()
-                    .compareToIgnoreCase(b.getParentPath());
+            int parentDiff = a.getParentPath().compareToIgnoreCase(b.getParentPath());
             if (parentDiff != 0) return parentDiff;
 
             if (a.isDir != b.isDir) {
@@ -315,10 +277,7 @@ public class FileHandler extends BaseMessageHandler {
                 if (content != null && !content.isEmpty()) {
                     try {
                         Gson gson = new Gson();
-                        JsonObject json = gson.fromJson(
-                                content,
-                                JsonObject.class
-                        );
+                        JsonObject json = gson.fromJson(content, JsonObject.class);
                         if (json.has("query")) {
                             query = json.get("query").getAsString();
                         }
@@ -330,129 +289,74 @@ public class FileHandler extends BaseMessageHandler {
                 // 获取工作目录
                 String cwd = getEffectiveBasePath();
 
-                LOG.info(
-                        "[FileHandler] Getting slash commands from SDK, cwd=" + cwd
-                );
+                LOG.info("[FileHandler] Getting slash commands from SDK, cwd=" + cwd);
 
                 // 调用 ClaudeSDKBridge 获取真实的斜杠命令
                 final String finalQuery = query;
-                context
-                        .getClaudeSDKBridge()
-                        .getSlashCommands(cwd)
-                        .thenAccept(sdkCommands -> {
-                            try {
-                                Gson gson = new Gson();
-                                List<JsonObject> commands = new ArrayList<>();
+                context.getClaudeSDKBridge().getSlashCommands(cwd).thenAccept(sdkCommands -> {
+                    try {
+                        Gson gson = new Gson();
+                        List<JsonObject> commands = new ArrayList<>();
 
-                                // 转换 SDK 返回的命令格式
-                                for (JsonObject cmd : sdkCommands) {
-                                    String name = cmd.has("name")
-                                            ? cmd.get("name").getAsString()
-                                            : "";
-                                    String description = cmd.has("description")
-                                            ? cmd.get("description").getAsString()
-                                            : "";
+                        // 转换 SDK 返回的命令格式
+                        for (JsonObject cmd : sdkCommands) {
+                            String name = cmd.has("name") ? cmd.get("name").getAsString() : "";
+                            String description = cmd.has("description") ? cmd.get("description").getAsString() : "";
 
-                                    // 确保命令以 / 开头
-                                    String label = name.startsWith("/")
-                                            ? name
-                                            : "/" + name;
+                            // 确保命令以 / 开头
+                            String label = name.startsWith("/") ? name : "/" + name;
 
-                                    // 应用过滤
-                                    if (
-                                            finalQuery.isEmpty() ||
-                                                    label
-                                                            .toLowerCase()
-                                                            .contains(finalQuery.toLowerCase()) ||
-                                                    description
-                                                            .toLowerCase()
-                                                            .contains(finalQuery.toLowerCase())
-                                    ) {
-                                        JsonObject cmdObj = new JsonObject();
-                                        cmdObj.addProperty("label", label);
-                                        cmdObj.addProperty(
-                                                "description",
-                                                description
-                                        );
-                                        commands.add(cmdObj);
-                                    }
-                                }
-
-                                LOG.info(
-                                        "[FileHandler] Got " +
-                                                commands.size() +
-                                                " commands from SDK (filtered from " +
-                                                sdkCommands.size() +
-                                                ")"
-                                );
-
-                                // 如果 SDK 没有返回命令，使用本地默认命令作为回退
-                                if (commands.isEmpty() && sdkCommands.isEmpty()) {
-                                    LOG.info(
-                                            "[FileHandler] SDK returned no commands, using local fallback"
-                                    );
-                                    addFallbackCommands(commands, finalQuery);
-                                }
-
-                                JsonObject result = new JsonObject();
-                                result.add("commands", gson.toJsonTree(commands));
-                                String resultJson = gson.toJson(result);
-
-                                ApplicationManager.getApplication().invokeLater(
-                                        () -> {
-                                            String js =
-                                                    "if (window.onCommandListResult) { window.onCommandListResult('" +
-                                                            escapeJs(resultJson) +
-                                                            "'); }";
-                                            context.executeJavaScriptOnEDT(js);
-                                        }
-                                );
-                            } catch (Exception e) {
-                                LOG.error(
-                                        "[FileHandler] Failed to process SDK commands: " +
-                                                e.getMessage(),
-                                        e
-                                );
+                            // 应用过滤
+                            if (finalQuery.isEmpty() || label.toLowerCase().contains(finalQuery.toLowerCase()) || description.toLowerCase().contains(finalQuery.toLowerCase())) {
+                                JsonObject cmdObj = new JsonObject();
+                                cmdObj.addProperty("label", label);
+                                cmdObj.addProperty("description", description);
+                                commands.add(cmdObj);
                             }
-                        })
-                        .exceptionally(ex -> {
-                            LOG.error(
-                                    "[FileHandler] Failed to get commands from SDK: " +
-                                            ex.getMessage()
-                            );
-                            // 出错时使用本地默认命令
-                            try {
-                                Gson gson = new Gson();
-                                List<JsonObject> commands = new ArrayList<>();
-                                addFallbackCommands(commands, finalQuery);
+                        }
 
-                                JsonObject result = new JsonObject();
-                                result.add("commands", gson.toJsonTree(commands));
-                                String resultJson = gson.toJson(result);
+                        LOG.info("[FileHandler] Got " + commands.size() + " commands from SDK (filtered from " + sdkCommands.size() + ")");
 
-                                ApplicationManager.getApplication().invokeLater(
-                                        () -> {
-                                            String js =
-                                                    "if (window.onCommandListResult) { window.onCommandListResult('" +
-                                                            escapeJs(resultJson) +
-                                                            "'); }";
-                                            context.executeJavaScriptOnEDT(js);
-                                        }
-                                );
-                            } catch (Exception e) {
-                                LOG.error(
-                                        "[FileHandler] Failed to send fallback commands: " +
-                                                e.getMessage(),
-                                        e
-                                );
-                            }
-                            return null;
+                        // 如果 SDK 没有返回命令，使用本地默认命令作为回退
+                        if (commands.isEmpty() && sdkCommands.isEmpty()) {
+                            LOG.info("[FileHandler] SDK returned no commands, using local fallback");
+                            addFallbackCommands(commands, finalQuery);
+                        }
+
+                        JsonObject result = new JsonObject();
+                        result.add("commands", gson.toJsonTree(commands));
+                        String resultJson = gson.toJson(result);
+
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            String js = "if (window.onCommandListResult) { window.onCommandListResult('" + escapeJs(resultJson) + "'); }";
+                            context.executeJavaScriptOnEDT(js);
                         });
+                    } catch (Exception e) {
+                        LOG.error("[FileHandler] Failed to process SDK commands: " + e.getMessage(), e);
+                    }
+                }).exceptionally(ex -> {
+                    LOG.error("[FileHandler] Failed to get commands from SDK: " + ex.getMessage());
+                    // 出错时使用本地默认命令
+                    try {
+                        Gson gson = new Gson();
+                        List<JsonObject> commands = new ArrayList<>();
+                        addFallbackCommands(commands, finalQuery);
+
+                        JsonObject result = new JsonObject();
+                        result.add("commands", gson.toJsonTree(commands));
+                        String resultJson = gson.toJson(result);
+
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            String js = "if (window.onCommandListResult) { window.onCommandListResult('" + escapeJs(resultJson) + "'); }";
+                            context.executeJavaScriptOnEDT(js);
+                        });
+                    } catch (Exception e) {
+                        LOG.error("[FileHandler] Failed to send fallback commands: " + e.getMessage(), e);
+                    }
+                    return null;
+                });
             } catch (Exception e) {
-                LOG.error(
-                        "[FileHandler] Failed to get commands: " + e.getMessage(),
-                        e
-                );
+                LOG.error("[FileHandler] Failed to get commands: " + e.getMessage(), e);
             }
         });
     }
@@ -481,8 +385,8 @@ public class FileHandler extends BaseMessageHandler {
         CompletableFuture.runAsync(() -> {
             try {
                 // 解析文件路径和行号
-                final String[] parsedPath = { filePath };
-                final int[] parsedLineNumber = { -1 };
+                final String[] parsedPath = {filePath};
+                final int[] parsedLineNumber = {-1};
 
                 // 检测并提取行号（格式：file.txt:100 或 file.txt:100-200）
                 int colonIndex = filePath.lastIndexOf(':');
@@ -493,10 +397,7 @@ public class FileHandler extends BaseMessageHandler {
                         parsedPath[0] = filePath.substring(0, colonIndex);
                         // 提取起始行号
                         int dashIndex = afterColon.indexOf('-');
-                        String lineStr =
-                                dashIndex > 0
-                                        ? afterColon.substring(0, dashIndex)
-                                        : afterColon;
+                        String lineStr = dashIndex > 0 ? afterColon.substring(0, dashIndex) : afterColon;
                         try {
                             parsedLineNumber[0] = Integer.parseInt(lineStr);
                             LOG.info("检测到行号: " + parsedLineNumber[0]);
@@ -512,19 +413,9 @@ public class FileHandler extends BaseMessageHandler {
                 File file = new File(actualPath);
 
                 // 如果文件不存在且是相对路径，尝试相对于项目根目录解析
-                if (
-                        !file.exists() &&
-                                !file.isAbsolute() &&
-                                context.getProject().getBasePath() != null
-                ) {
-                    File projectFile = new File(
-                            context.getProject().getBasePath(),
-                            actualPath
-                    );
-                    LOG.info(
-                            "尝试相对于项目根目录解析: " +
-                                    projectFile.getAbsolutePath()
-                    );
+                if (!file.exists() && !file.isAbsolute() && context.getProject().getBasePath() != null) {
+                    File projectFile = new File(context.getProject().getBasePath(), actualPath);
+                    LOG.info("尝试相对于项目根目录解析: " + projectFile.getAbsolutePath());
                     if (projectFile.exists()) {
                         file = projectFile;
                     }
@@ -532,96 +423,45 @@ public class FileHandler extends BaseMessageHandler {
 
                 if (!file.exists()) {
                     LOG.error("文件不存在: " + actualPath);
-                    ApplicationManager.getApplication().invokeLater(
-                            () -> {
-                                callJavaScript(
-                                        "addErrorMessage",
-                                        escapeJs(
-                                                "无法打开文件: 文件不存在 (" +
-                                                        actualPath +
-                                                        ")"
-                                        )
-                                );
-                            },
-                            ModalityState.nonModal()
-                    );
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("addErrorMessage", escapeJs("无法打开文件: 文件不存在 (" + actualPath + ")"));
+                    }, ModalityState.nonModal());
                     return;
                 }
 
                 final File finalFile = file;
 
                 // 使用工具类方法异步刷新并查找文件
-                EditorFileUtils.refreshAndFindFileAsync(
-                        finalFile,
-                        virtualFile -> {
-                            // 成功找到文件，在编辑器中打开
-                            FileEditorManager.getInstance(
-                                    context.getProject()
-                            ).openFile(virtualFile, true);
+                EditorFileUtils.refreshAndFindFileAsync(finalFile, virtualFile -> {
+                    // 成功找到文件，在编辑器中打开
+                    FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
 
-                            // 如果有行号，跳转到指定行
-                            if (lineNumber > 0) {
-                                ApplicationManager.getApplication().invokeLater(
-                                        () -> {
-                                            com.intellij.openapi.editor.Editor editor =
-                                                    com.intellij.openapi.fileEditor.FileEditorManager.getInstance(
-                                                            context.getProject()
-                                                    ).getSelectedTextEditor();
-                                            if (
-                                                    editor != null &&
-                                                            editor.getDocument().getTextLength() > 0
-                                            ) {
-                                                // 行号从 0 开始，用户输入从 1 开始
-                                                int zeroBasedLine = Math.max(
-                                                        0,
-                                                        lineNumber - 1
-                                                );
-                                                int lineCount = editor
-                                                        .getDocument()
-                                                        .getLineCount();
-                                                if (zeroBasedLine < lineCount) {
-                                                    int offset = editor
-                                                            .getDocument()
-                                                            .getLineStartOffset(
-                                                                    zeroBasedLine
-                                                            );
-                                                    editor
-                                                            .getCaretModel()
-                                                            .moveToOffset(offset);
-                                                    editor
-                                                            .getScrollingModel()
-                                                            .scrollToCaret(
-                                                                    com.intellij.openapi.editor.ScrollType.CENTER
-                                                            );
-                                                    LOG.info(
-                                                            "跳转到第 " + lineNumber + " 行"
-                                                    );
-                                                } else {
-                                                    LOG.warn(
-                                                            "行号 " +
-                                                                    lineNumber +
-                                                                    " 超出范围（文件共 " +
-                                                                    lineCount +
-                                                                    " 行）"
-                                                    );
-                                                }
-                                            }
-                                        },
-                                        ModalityState.nonModal()
-                                );
+                    // 如果有行号，跳转到指定行
+                    if (lineNumber > 0) {
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            com.intellij.openapi.editor.Editor editor = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(context.getProject()).getSelectedTextEditor();
+                            if (editor != null && editor.getDocument().getTextLength() > 0) {
+                                // 行号从 0 开始，用户输入从 1 开始
+                                int zeroBasedLine = Math.max(0, lineNumber - 1);
+                                int lineCount = editor.getDocument().getLineCount();
+                                if (zeroBasedLine < lineCount) {
+                                    int offset = editor.getDocument().getLineStartOffset(zeroBasedLine);
+                                    editor.getCaretModel().moveToOffset(offset);
+                                    editor.getScrollingModel().scrollToCaret(com.intellij.openapi.editor.ScrollType.CENTER);
+                                    LOG.info("跳转到第 " + lineNumber + " 行");
+                                } else {
+                                    LOG.warn("行号 " + lineNumber + " 超出范围（文件共 " + lineCount + " 行）");
+                                }
                             }
+                        }, ModalityState.nonModal());
+                    }
 
-                            LOG.info("成功打开文件: " + filePath);
-                        },
-                        () -> {
-                            // 失败回调
-                            LOG.error("最终无法获取 VirtualFile: " + filePath);
-                            callJavaScript(
-                                    "addErrorMessage",
-                                    escapeJs("无法打开文件: " + filePath)
-                            );
-                        }
-                );
+                    LOG.info("成功打开文件: " + filePath);
+                }, () -> {
+                    // 失败回调
+                    LOG.error("最终无法获取 VirtualFile: " + filePath);
+                    callJavaScript("addErrorMessage", escapeJs("无法打开文件: " + filePath));
+                });
             } catch (Exception e) {
                 LOG.error("打开文件失败: " + e.getMessage(), e);
             }
@@ -644,11 +484,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 列出目录的直接子文件/文件夹（不递归）
      */
-    private void listDirectChildren(
-            File dir,
-            String basePath,
-            List<JsonObject> files
-    ) {
+    private void listDirectChildren(File dir, String basePath, List<JsonObject> files) {
         if (!dir.isDirectory()) return;
 
         File[] children = dir.listFiles();
@@ -675,19 +511,12 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 递归收集文件
      */
-    private void collectFilesRecursive(
-            File dir,
-            String basePath,
-            List<JsonObject> files,
-            FileListRequest request,
-            int depth
-    ) {
-        if (
-                depth > MAX_SEARCH_DEPTH || files.size() >= MAX_SEARCH_RESULTS
-        ) return;
+    private void collectFilesRecursive(File dir, String basePath, List<JsonObject> files, FileListRequest request, int depth) {
+        if (depth > MAX_SEARCH_DEPTH || files.size() >= MAX_SEARCH_RESULTS) return;
         if (!dir.isDirectory()) return;
 
         File[] children = dir.listFiles();
+
         if (children == null) return;
 
         for (File child : children) {
@@ -706,32 +535,16 @@ public class FileHandler extends BaseMessageHandler {
             boolean matches = true;
             if (request.hasQuery) {
                 matches = request.matches(name, relativePath);
-
-                // 如果当前目录不匹配，且不是递归搜索，可能需要继续深入（如果查询包含路径）
-                if (!matches && isDir) {
-                    // 简单策略：如果不匹配，但可能是路径的一部分，继续递归
-                    // 这里为了简化，我们假设总是递归搜索直到找到匹配或达到深度限制
-                    // 但为了性能，如果当前项不匹配且不是目录，就真的跳过了
-                }
             }
 
             if (matches) {
-                JsonObject fileObj = createFileObject(
-                        child,
-                        name,
-                        relativePath
-                );
+                JsonObject fileObj = createFileObject(child, name, relativePath);
                 files.add(fileObj);
             }
 
+            // 目录总是递归搜索（即使目录本身不匹配，其子文件可能匹配）
             if (isDir) {
-                collectFilesRecursive(
-                        child,
-                        basePath,
-                        files,
-                        request,
-                        depth + 1
-                );
+                collectFilesRecursive(child, basePath, files, request, depth + 1);
             }
         }
     }
@@ -750,12 +563,7 @@ public class FileHandler extends BaseMessageHandler {
 
         // 目录特有
         if (isDirectory) {
-            return (
-                    name.equals("target") ||
-                            name.equals("build") ||
-                            name.equals("dist") ||
-                            name.equals("out")
-            );
+            return (name.equals("target") || name.equals("build") || name.equals("dist") || name.equals("out"));
         }
 
         // 文件特有
@@ -766,9 +574,7 @@ public class FileHandler extends BaseMessageHandler {
      * 获取相对路径
      */
     private String getRelativePath(File file, String basePath) {
-        String relativePath = file
-                .getAbsolutePath()
-                .substring(basePath.length());
+        String relativePath = file.getAbsolutePath().substring(basePath.length());
         if (relativePath.startsWith(File.separator)) {
             relativePath = relativePath.substring(1);
         }
@@ -778,18 +584,11 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 创建文件对象
      */
-    private JsonObject createFileObject(
-            File file,
-            String name,
-            String relativePath
-    ) {
+    private JsonObject createFileObject(File file, String name, String relativePath) {
         JsonObject fileObj = new JsonObject();
         fileObj.addProperty("name", name);
         fileObj.addProperty("path", relativePath);
-        fileObj.addProperty(
-                "absolutePath",
-                file.getAbsolutePath().replace("\\", "/")
-        );
+        fileObj.addProperty("absolutePath", file.getAbsolutePath().replace("\\", "/"));
         fileObj.addProperty("type", file.isDirectory() ? "directory" : "file");
 
         if (file.isFile()) {
@@ -824,17 +623,8 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 添加命令到列表
      */
-    private void addCommand(
-            List<JsonObject> commands,
-            String label,
-            String description,
-            String query
-    ) {
-        if (
-                query.isEmpty() ||
-                        label.toLowerCase().contains(query.toLowerCase()) ||
-                        description.toLowerCase().contains(query.toLowerCase())
-        ) {
+    private void addCommand(List<JsonObject> commands, String label, String description, String query) {
+        if (query.isEmpty() || label.toLowerCase().contains(query.toLowerCase()) || description.toLowerCase().contains(query.toLowerCase())) {
             JsonObject cmd = new JsonObject();
             cmd.addProperty("label", label);
             cmd.addProperty("description", description);
@@ -845,14 +635,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 添加 VirtualFile 到列表
      */
-    private void addVirtualFile(
-            VirtualFile vf,
-            String basePath,
-            List<JsonObject> files,
-            FileSet fileSet,
-            FileListRequest request,
-            int priority
-    ) {
+    private void addVirtualFile(VirtualFile vf, String basePath, List<JsonObject> files, FileSet fileSet, FileListRequest request, int priority) {
         if (vf == null || !vf.isValid() || vf.isDirectory()) return;
 
         String name = vf.getName();
@@ -901,9 +684,7 @@ public class FileHandler extends BaseMessageHandler {
             if (!hasQuery) return true;
             String lowerName = name.toLowerCase();
             String lowerPath = relativePath.toLowerCase();
-            return (
-                    lowerName.contains(queryLower) || lowerPath.contains(queryLower)
-            );
+            return (lowerName.contains(queryLower) || lowerPath.contains(queryLower));
         }
     }
 
