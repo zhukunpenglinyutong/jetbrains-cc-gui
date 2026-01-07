@@ -2,10 +2,15 @@ package com.github.claudecodegui.bridge;
 
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.util.io.FileUtil;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -19,6 +24,8 @@ import java.nio.file.Paths;
 import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -42,6 +49,18 @@ public class BridgeDirectoryResolver {
 
     private File cachedSdkDir = null;
     private final Object bridgeExtractionLock = new Object();
+
+    // Extraction state management
+    private enum ExtractionState {
+        NOT_STARTED,    // Initial state
+        IN_PROGRESS,    // Extraction is running
+        COMPLETED,      // Extraction finished successfully
+        FAILED          // Extraction failed
+    }
+
+    private final AtomicReference<ExtractionState> extractionState = new AtomicReference<>(ExtractionState.NOT_STARTED);
+    private volatile CompletableFuture<File> extractionFuture = null;
+    private volatile CompletableFuture<Boolean> extractionReadyFuture = new CompletableFuture<>();
 
     /**
      * 查找 claude-bridge 目录
@@ -382,10 +401,50 @@ public class BridgeDirectoryResolver {
                     return extractedDir;
                 }
 
+                // Check current extraction state
+                ExtractionState currentState = extractionState.get();
+
+                if (currentState == ExtractionState.IN_PROGRESS) {
+                    // Another thread is already extracting, wait for it
+                    LOG.info("[BridgeResolver] 检测到正在解压中，等待完成...");
+                    return waitForExtraction();
+                }
+
+                if (currentState == ExtractionState.COMPLETED && isValidBridgeDir(extractedDir)) {
+                    // Already extracted and valid
+                    return extractedDir;
+                }
+
+                // Start extraction
                 LOG.info("未检测到已解压的 ai-bridge，开始解压: " + archiveFile.getAbsolutePath());
-                deleteDirectory(extractedDir);
-                unzipArchive(archiveFile, extractedDir);
-                Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
+
+                // Mark as in progress
+                extractionState.set(ExtractionState.IN_PROGRESS);
+
+                // Check if running on EDT thread
+                if (ApplicationManager.getApplication().isDispatchThread()) {
+                    // Extract on background thread with progress indicator to avoid EDT freeze
+                    LOG.info("[BridgeResolver] 检测到EDT线程，使用后台任务解压以避免UI冻结");
+                    extractOnBackgroundThreadAsync(archiveFile, extractedDir, signature, versionFile);
+                    // DO NOT wait here - return null and let caller handle async initialization
+                    // The extractionReadyFuture will be completed when extraction finishes
+                    LOG.info("[BridgeResolver] EDT线程不阻塞等待，返回null，请使用getExtractionFuture()异步等待");
+                    return null;
+                } else {
+                    // Direct extraction on non-EDT thread
+                    try {
+                        deleteDirectory(extractedDir);
+                        unzipArchive(archiveFile, extractedDir);
+                        Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
+                        extractionState.set(ExtractionState.COMPLETED);
+                        extractionReadyFuture.complete(true);
+                    } catch (Exception e) {
+                        extractionState.set(ExtractionState.FAILED);
+                        extractionReadyFuture.complete(false);
+                        LOG.error("[BridgeResolver] 解压失败: " + e.getMessage(), e);
+                        throw e;
+                    }
+                }
             }
 
             if (isValidBridgeDir(extractedDir)) {
@@ -409,6 +468,100 @@ public class BridgeDirectoryResolver {
             return expectedSignature.equals(content);
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    /**
+     * Wait for ongoing extraction to complete.
+     * Returns the extracted directory or null if failed.
+     */
+    private File waitForExtraction() {
+        CompletableFuture<File> future = extractionFuture;
+        if (future == null) {
+            LOG.warn("[BridgeResolver] No extraction future available");
+            return null;
+        }
+
+        try {
+            LOG.info("[BridgeResolver] Waiting for extraction to complete...");
+            File result = future.join(); // Block until completion
+            LOG.info("[BridgeResolver] Extraction completed, result: " + (result != null ? result.getAbsolutePath() : "null"));
+            return result;
+        } catch (Exception e) {
+            LOG.error("[BridgeResolver] Failed to wait for extraction: " + e.getMessage(), e);
+            extractionState.set(ExtractionState.FAILED);
+            return null;
+        }
+    }
+
+    /**
+     * Extract ai-bridge on background thread with progress indicator (async).
+     * This method uses Task.Backgroundable to avoid EDT freeze.
+     * Returns immediately, extraction runs in background.
+     */
+    private void extractOnBackgroundThreadAsync(File archiveFile, File extractedDir, String signature, File versionFile) {
+        // Create a future to track extraction result
+        extractionFuture = new CompletableFuture<>();
+
+        try {
+            ProgressManager.getInstance().run(new Task.Backgroundable(null, "Extracting AI Bridge", true) {
+                @Override
+                public void run(@NotNull ProgressIndicator indicator) {
+                    indicator.setIndeterminate(false);
+                    indicator.setText("Extracting ai-bridge.zip...");
+
+                    try {
+                        // Delete old directory
+                        indicator.setFraction(0.1);
+                        indicator.setText("Cleaning old files...");
+                        deleteDirectory(extractedDir);
+
+                        // Extract archive
+                        indicator.setFraction(0.2);
+                        indicator.setText("Extracting archive...");
+                        unzipArchiveWithProgress(archiveFile, extractedDir, indicator);
+
+                        // Write version file
+                        indicator.setFraction(0.9);
+                        indicator.setText("Finalizing...");
+                        Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
+
+                        indicator.setFraction(1.0);
+                        LOG.info("[BridgeResolver] Background extraction completed successfully");
+
+                        // Mark as completed
+                        extractionState.set(ExtractionState.COMPLETED);
+                        extractionFuture.complete(extractedDir);
+                        extractionReadyFuture.complete(true);
+                    } catch (IOException e) {
+                        LOG.error("[BridgeResolver] Background extraction failed: " + e.getMessage(), e);
+                        extractionState.set(ExtractionState.FAILED);
+                        extractionFuture.completeExceptionally(e);
+                        extractionReadyFuture.complete(false);
+                    }
+                }
+
+                @Override
+                public void onCancel() {
+                    LOG.warn("[BridgeResolver] Extraction cancelled by user");
+                    extractionState.set(ExtractionState.FAILED);
+                    extractionFuture.completeExceptionally(new InterruptedException("Extraction cancelled"));
+                    extractionReadyFuture.complete(false);
+                }
+
+                @Override
+                public void onThrowable(@NotNull Throwable error) {
+                    LOG.error("[BridgeResolver] Extraction task threw error: " + error.getMessage(), error);
+                    extractionState.set(ExtractionState.FAILED);
+                    extractionFuture.completeExceptionally(error);
+                    extractionReadyFuture.complete(false);
+                }
+            });
+        } catch (Exception e) {
+            LOG.error("[BridgeResolver] Failed to start background extraction task: " + e.getMessage(), e);
+            extractionState.set(ExtractionState.FAILED);
+            extractionFuture.completeExceptionally(e);
+            extractionReadyFuture.complete(false);
         }
     }
 
@@ -456,6 +609,60 @@ public class BridgeDirectoryResolver {
     }
 
     /**
+     * Unzip archive with progress indicator support.
+     * This method counts total entries first, then updates progress during extraction.
+     */
+    private void unzipArchiveWithProgress(File archiveFile, File targetDir, ProgressIndicator indicator) throws IOException {
+        Files.createDirectories(targetDir.toPath());
+        Path targetPath = targetDir.toPath();
+        byte[] buffer = new byte[8192];
+
+        // First pass: count total entries
+        int totalEntries = 0;
+        try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(archiveFile)))) {
+            while (zis.getNextEntry() != null) {
+                totalEntries++;
+                zis.closeEntry();
+            }
+        }
+
+        LOG.info("[BridgeResolver] Total entries to extract: " + totalEntries);
+
+        // Second pass: extract with progress
+        try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(archiveFile)))) {
+            ZipEntry entry;
+            int processedEntries = 0;
+
+            while ((entry = zis.getNextEntry()) != null) {
+                Path resolvedPath = targetPath.resolve(entry.getName()).normalize();
+                if (!resolvedPath.startsWith(targetPath)) {
+                    throw new IOException("检测到不安全的 Zip 条目: " + entry.getName());
+                }
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(resolvedPath);
+                } else {
+                    Files.createDirectories(resolvedPath.getParent());
+                    try (FileOutputStream fos = new FileOutputStream(resolvedPath.toFile())) {
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            fos.write(buffer, 0, len);
+                        }
+                    }
+                }
+
+                zis.closeEntry();
+                processedEntries++;
+
+                // Update progress (0.2 to 0.9 range allocated for extraction)
+                double progress = 0.2 + (0.7 * processedEntries / totalEntries);
+                indicator.setFraction(progress);
+                indicator.setText("Extracting: " + entry.getName() + " (" + processedEntries + "/" + totalEntries + ")");
+            }
+        }
+    }
+
+    /**
      * 手动设置 claude-bridge 目录路径.
      */
     public void setSdkDir(String path) {
@@ -477,6 +684,53 @@ public class BridgeDirectoryResolver {
      */
     public void clearCache() {
         this.cachedSdkDir = null;
+        this.extractionState.set(ExtractionState.NOT_STARTED);
+        this.extractionFuture = null;
+        this.extractionReadyFuture = new CompletableFuture<>();
+    }
+
+    /**
+     * Check if extraction is complete (non-blocking).
+     * Returns true if extraction finished successfully and bridge is valid.
+     */
+    public boolean isExtractionComplete() {
+        ExtractionState state = extractionState.get();
+        if (state == ExtractionState.COMPLETED && cachedSdkDir != null) {
+            return isValidBridgeDir(cachedSdkDir);
+        }
+        // Also check if we have a valid configured or cached dir without extraction
+        if (cachedSdkDir != null && isValidBridgeDir(cachedSdkDir)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Get a future that completes when extraction is ready.
+     * This allows callers to wait asynchronously without blocking EDT.
+     *
+     * @return CompletableFuture that completes with true if bridge is ready, false otherwise
+     */
+    public CompletableFuture<Boolean> getExtractionFuture() {
+        // If already completed, return a completed future
+        if (isExtractionComplete()) {
+            return CompletableFuture.completedFuture(true);
+        }
+
+        // If extraction hasn't started yet, trigger it on a background thread
+        if (extractionState.get() == ExtractionState.NOT_STARTED) {
+            // The next call to findSdkDir will trigger extraction
+            // For now, return the ready future which will be completed when extraction finishes
+        }
+
+        return extractionReadyFuture;
+    }
+
+    /**
+     * Check if extraction is currently in progress.
+     */
+    public boolean isExtractionInProgress() {
+        return extractionState.get() == ExtractionState.IN_PROGRESS;
     }
 }
 
