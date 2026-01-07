@@ -197,13 +197,41 @@ tasks.named('processResources') {
     mustRunAfter('buildWebview')
 }
 
-tasks.register('packageAiBridge', Zip) {
+// 使用系统 zip 命令打包 ai-bridge，保留文件权限
+tasks.register('packageAiBridge', Exec) {
     onlyIf { aiBridgeDir.exists() }
-    archiveFileName = 'ai-bridge.zip'
-    destinationDirectory = aiBridgePackDir
-    from(aiBridgeDir)
-    exclude('node_modules/.pnpm/**')
-    includeEmptyDirs = true
+
+    workingDir projectDir
+
+    // 确保输出目录存在
+    doFirst {
+        aiBridgePackDir.mkdirs()
+        // 删除旧的 zip 文件
+        if (aiBridgeArchive.exists()) {
+            aiBridgeArchive.delete()
+        }
+    }
+
+    // 使用系统 zip 命令，-r 递归，-y 保留符号链接
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        // Windows: 使用 PowerShell 的 Compress-Archive 或回退到 Gradle Zip
+        commandLine 'powershell', '-Command',
+            "Compress-Archive -Path '${aiBridgeDir.absolutePath}\\*' -DestinationPath '${aiBridgeArchive.absolutePath}' -Force"
+    } else {
+        // Unix/Linux/macOS: 使用 zip 命令保留权限
+        commandLine 'zip', '-r', '-y', aiBridgeArchive.absolutePath,
+            aiBridgeDir.name,
+            '-x', '*/node_modules/.pnpm/*'
+    }
+
+    doLast {
+        if (aiBridgeArchive.exists()) {
+            println "✓ ai-bridge.zip 已创建: ${aiBridgeArchive.absolutePath}"
+            println "  大小: ${aiBridgeArchive.length() / 1024 / 1024} MB"
+        } else {
+            throw new GradleException("打包失败: ai-bridge.zip 未生成")
+        }
+    }
 }
 
 // 提取插件名称
