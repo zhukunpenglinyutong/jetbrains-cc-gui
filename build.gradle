@@ -167,6 +167,7 @@ tasks.named('runIde') {
 def aiBridgeDir = file("ai-bridge")
 def aiBridgePackDir = layout.buildDirectory.dir('ai-bridge-pack').get().asFile
 def aiBridgeArchive = new File(aiBridgePackDir, 'ai-bridge.zip')
+def aiBridgeHashFile = new File(aiBridgePackDir, 'ai-bridge.hash')
 
 // 自动构建 webview
 def webviewDir = file('webview')
@@ -215,9 +216,12 @@ tasks.register('packageAiBridge', Exec) {
 
     // 使用系统 zip 命令，-r 递归，-y 保留符号链接
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        // Windows: 使用 PowerShell 的 Compress-Archive 或回退到 Gradle Zip
-        commandLine 'powershell', '-Command',
-            "Compress-Archive -Path '*' -DestinationPath '${aiBridgeArchive.absolutePath}' -Force"
+        // Windows: 使用 PowerShell 的 Compress-Archive
+        // Use parameter array to prevent command injection
+        commandLine 'powershell', '-Command', 'Compress-Archive',
+            '-Path', '*',
+            '-DestinationPath', aiBridgeArchive.absolutePath,
+            '-Force'
     } else {
         // Unix/Linux/macOS: 使用 zip 命令保留权限
         commandLine 'zip', '-r', '-y', aiBridgeArchive.absolutePath,
@@ -229,6 +233,19 @@ tasks.register('packageAiBridge', Exec) {
         if (aiBridgeArchive.exists()) {
             println "✓ ai-bridge.zip 已创建: ${aiBridgeArchive.absolutePath}"
             println "  大小: ${aiBridgeArchive.length() / 1024 / 1024} MB"
+
+            // 生成 ai-bridge.hash 文件（SHA-256）
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            aiBridgeArchive.withInputStream { is ->
+                byte[] buffer = new byte[8192]
+                int read
+                while ((read = is.read(buffer)) != -1) {
+                    digest.update(buffer, 0, read)
+                }
+            }
+            def hashHex = digest.digest().collect { String.format('%02x', it) }.join('')
+            aiBridgeHashFile.text = hashHex
+            println "✓ ai-bridge.hash 已创建: ${hashHex}"
         } else {
             throw new GradleException("打包失败: ai-bridge.zip 未生成")
         }
@@ -241,9 +258,13 @@ def pluginName = project.name
 tasks.matching { it.name.startsWith('prepareSandbox') }.configureEach {
     dependsOn('buildWebview', 'packageAiBridge')
     def sandboxRootProvider = layout.buildDirectory.dir('idea-sandbox')
+    // 在配置阶段捕获需要的文件引用
+    def archiveSource = aiBridgeArchive
+    def hashSource = aiBridgeHashFile
+    def bridgeDir = aiBridgeDir
 
     doLast {
-        if (!aiBridgeDir.exists() && !aiBridgeArchive.exists()) {
+        if (!bridgeDir.exists() && !archiveSource.exists()) {
             throw new GradleException('ai-bridge 目录不存在，请确保已拉取并安装依赖。')
         }
         def sandboxRoot = sandboxRootProvider.get().asFile
@@ -251,11 +272,15 @@ tasks.matching { it.name.startsWith('prepareSandbox') }.configureEach {
 
         def extractedDir = new File(pluginDir, 'ai-bridge')
         def archiveTarget = new File(pluginDir, 'ai-bridge.zip')
-        project.delete(extractedDir)
-        project.delete(archiveTarget)
-        project.copy {
-            from(aiBridgeArchive)
-            into(pluginDir)
+        def hashTarget = new File(pluginDir, 'ai-bridge.hash')
+
+        // 使用 ant 任务删除和复制，避免使用 project.* 方法
+        ant.delete(dir: extractedDir, failonerror: false)
+        ant.delete(file: archiveTarget, failonerror: false)
+        ant.delete(file: hashTarget, failonerror: false)
+        ant.copy(file: archiveSource, todir: pluginDir)
+        if (hashSource.exists()) {
+            ant.copy(file: hashSource, todir: pluginDir)
         }
     }
 }
@@ -269,7 +294,7 @@ tasks.named('buildPlugin') {
     dependsOn('packageAiBridge', 'checkstyleMain')
 
     doLast {
-        // 解压插件 zip，添加 ai-bridge.zip，然后重新打包
+        // 解压插件 zip，添加 ai-bridge.zip 和 ai-bridge.hash，然后重新打包
         def distributionFile = archiveFile.get().asFile
         if (distributionFile.exists() && aiBridgeArchive.exists()) {
             def tempDir = file("${layout.buildDirectory.get()}/tmp/plugin-repack")
@@ -281,11 +306,12 @@ tasks.named('buildPlugin') {
                 into tempDir
             }
 
-            // 找到插件目录并添加 ai-bridge.zip
+            // 找到插件目录并添加 ai-bridge.zip 和 ai-bridge.hash
             def pluginDir = new File(tempDir, pluginName)
             if (pluginDir.exists()) {
                 copy {
                     from aiBridgeArchive
+                    from aiBridgeHashFile
                     into pluginDir
                 }
 
@@ -302,7 +328,7 @@ tasks.named('buildPlugin') {
                 ant.zip(destfile: distributionFile) {
                     fileset(dir: tempDir)
                 }
-                println "已将 ai-bridge.zip 添加到插件包并移除 searchableOptions jar"
+                println "已将 ai-bridge.zip 和 ai-bridge.hash 添加到插件包并移除 searchableOptions jar"
             }
 
             delete(tempDir)

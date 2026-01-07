@@ -42,13 +42,14 @@ public class BridgeDirectoryResolver {
     private static final String SDK_DIR_NAME = "ai-bridge";
     private static final String NODE_SCRIPT = "channel-manager.js";
     private static final String SDK_ARCHIVE_NAME = "ai-bridge.zip";
+    private static final String SDK_HASH_FILE_NAME = "ai-bridge.hash";
     private static final String BRIDGE_VERSION_FILE = ".bridge-version";
     private static final String BRIDGE_PATH_PROPERTY = "claude.bridge.path";
     private static final String BRIDGE_PATH_ENV = "CLAUDE_BRIDGE_PATH";
     private static final String PLUGIN_ID = "com.github.idea-claude-code-gui";
     private static final String PLUGIN_DIR_NAME = "idea-claude-code-gui";
 
-    private File cachedSdkDir = null;
+    private volatile File cachedSdkDir = null;
     private final Object bridgeExtractionLock = new Object();
 
     // Extraction state management
@@ -60,7 +61,7 @@ public class BridgeDirectoryResolver {
     }
 
     private final AtomicReference<ExtractionState> extractionState = new AtomicReference<>(ExtractionState.NOT_STARTED);
-    private volatile CompletableFuture<File> extractionFuture = null;
+    private final AtomicReference<CompletableFuture<File>> extractionFutureRef = new AtomicReference<>();
     private volatile CompletableFuture<Boolean> extractionReadyFuture = new CompletableFuture<>();
 
     /**
@@ -71,35 +72,42 @@ public class BridgeDirectoryResolver {
         // ✓ 优先级 1: 配置路径（最高优先级）
         File configuredDir = resolveConfiguredBridgeDir();
         if (configuredDir != null) {
-            LOG.info("[BridgeResolver] 使用配置路径: " + configuredDir.getAbsolutePath());
+            LOG.debug("[BridgeResolver] Using configured path: " + configuredDir.getAbsolutePath());
             this.cachedSdkDir = configuredDir;
             return this.cachedSdkDir;
         }
 
         // ✓ 检查是否正在解压中（避免重复触发解压）
         if (this.extractionState.get() == ExtractionState.IN_PROGRESS) {
-            LOG.info("[BridgeResolver] 解压正在进行中，返回 null 等待完成");
+            LOG.debug("[BridgeResolver] Extraction in progress, returning null");
             return null;
         }
 
         // ✓ 优先级 2: 嵌入式 ai-bridge.zip（生产环境优先）
         File embeddedDir = ensureEmbeddedBridgeExtracted();
         if (embeddedDir != null) {
-            LOG.info("[BridgeResolver] 使用嵌入式路径: " + embeddedDir.getAbsolutePath());
+            LOG.info("[BridgeResolver] Using embedded path: " + embeddedDir.getAbsolutePath());
             // 验证 node_modules 是否存在
             File nodeModules = new File(embeddedDir, "node_modules");
-            LOG.info("[BridgeResolver] node_modules 存在: " + nodeModules.exists());
+            LOG.debug("[BridgeResolver] node_modules exists: " + nodeModules.exists());
             this.cachedSdkDir = embeddedDir;
             return this.cachedSdkDir;
         }
 
+        // ✓ 再次检查：如果 ensureEmbeddedBridgeExtracted() 触发了后台解压（EDT线程场景）
+        // 此时状态会变成 IN_PROGRESS，我们应该返回 null 而不是使用 fallback 路径
+        if (this.extractionState.get() == ExtractionState.IN_PROGRESS) {
+            LOG.debug("[BridgeResolver] Background extraction started, returning null to avoid incorrect fallback path");
+            return null;
+        }
+
         // ✓ 优先级 3: 使用缓存路径（如果存在且有效）
         if (this.cachedSdkDir != null && isValidBridgeDir(this.cachedSdkDir)) {
-            LOG.info("[BridgeResolver] 使用缓存路径: " + this.cachedSdkDir.getAbsolutePath());
+            LOG.debug("[BridgeResolver] Using cached path: " + this.cachedSdkDir.getAbsolutePath());
             return this.cachedSdkDir;
         }
 
-        LOG.info("[BridgeResolver] 嵌入式路径未找到，尝试 fallback 查找...");
+        LOG.debug("[BridgeResolver] Embedded path not found, trying fallback search...");
 
         // ✓ 优先级 4: Fallback（开发环境）
         // 可能的位置列表
@@ -136,22 +144,22 @@ public class BridgeDirectoryResolver {
         for (File dir : possibleDirs) {
             if (isValidBridgeDir(dir)) {
                 this.cachedSdkDir = dir;
-                LOG.info("[BridgeResolver] ✓ 使用 fallback 路径: " + this.cachedSdkDir.getAbsolutePath());
+                LOG.info("[BridgeResolver] Using fallback path: " + this.cachedSdkDir.getAbsolutePath());
                 File nodeModules = new File(this.cachedSdkDir, "node_modules");
-                LOG.info("[BridgeResolver] node_modules 存在: " + nodeModules.exists());
+                LOG.debug("[BridgeResolver] node_modules exists: " + nodeModules.exists());
                 return this.cachedSdkDir;
             }
         }
 
         // 如果都找不到，打印调试信息
-        LOG.warn("⚠️ 无法找到 ai-bridge 目录，已尝试以下位置：");
+        LOG.warn("[BridgeResolver] Cannot find ai-bridge directory, tried locations:");
         for (File dir : possibleDirs) {
-            LOG.warn("  - " + dir.getAbsolutePath() + " (存在: " + dir.exists() + ")");
+            LOG.warn("  - " + dir.getAbsolutePath() + " (exists: " + dir.exists() + ")");
         }
 
         // 返回默认值
         this.cachedSdkDir = new File(currentDir, SDK_DIR_NAME);
-        LOG.warn("  使用默认路径: " + this.cachedSdkDir.getAbsolutePath());
+        LOG.warn("[BridgeResolver] Using default path: " + this.cachedSdkDir.getAbsolutePath());
         return this.cachedSdkDir;
     }
 
@@ -161,14 +169,14 @@ public class BridgeDirectoryResolver {
     private File resolveConfiguredBridgeDir() {
         File fromProperty = tryResolveConfiguredPath(
             System.getProperty(BRIDGE_PATH_PROPERTY),
-            "系统属性 " + BRIDGE_PATH_PROPERTY
+            "system property " + BRIDGE_PATH_PROPERTY
         );
         if (fromProperty != null) {
             return fromProperty;
         }
         return tryResolveConfiguredPath(
             System.getenv(BRIDGE_PATH_ENV),
-            "环境变量 " + BRIDGE_PATH_ENV
+            "environment variable " + BRIDGE_PATH_ENV
         );
     }
 
@@ -178,10 +186,10 @@ public class BridgeDirectoryResolver {
         }
         File dir = new File(path.trim());
         if (isValidBridgeDir(dir)) {
-            LOG.info("✓ 使用 " + source + ": " + dir.getAbsolutePath());
+            LOG.debug("[BridgeResolver] Using " + source + ": " + dir.getAbsolutePath());
             return dir;
         }
-        LOG.warn("⚠️ " + source + " 指向无效目录: " + dir.getAbsolutePath());
+        LOG.warn("[BridgeResolver] " + source + " points to invalid directory: " + dir.getAbsolutePath());
         return null;
     }
 
@@ -194,7 +202,7 @@ public class BridgeDirectoryResolver {
                 addCandidate(possibleDirs, new File(pluginDir, SDK_DIR_NAME));
             }
         } catch (Throwable t) {
-            LOG.debug("  无法从插件描述符推断: " + t.getMessage());
+            LOG.debug("[BridgeResolver] Cannot infer from plugin descriptor: " + t.getMessage());
         }
 
         try {
@@ -204,7 +212,6 @@ public class BridgeDirectoryResolver {
                 addCandidate(possibleDirs, Paths.get(pluginsRoot, PLUGIN_ID, SDK_DIR_NAME).toFile());
             }
 
-            // 使用系统路径下的 plugins 目录代替已废弃的 getPluginTempPath()
             String systemPath = PathManager.getSystemPath();
             if (!systemPath.isEmpty()) {
                 Path sandboxPath = Paths.get(systemPath, "plugins");
@@ -212,7 +219,7 @@ public class BridgeDirectoryResolver {
                 addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_ID).resolve(SDK_DIR_NAME).toFile());
             }
         } catch (Throwable t) {
-            LOG.debug("  无法从插件路径推断: " + t.getMessage());
+            LOG.debug("[BridgeResolver] Cannot infer from plugin path: " + t.getMessage());
         }
     }
 
@@ -220,7 +227,7 @@ public class BridgeDirectoryResolver {
         try {
             CodeSource codeSource = BridgeDirectoryResolver.class.getProtectionDomain().getCodeSource();
             if (codeSource == null || codeSource.getLocation() == null) {
-                LOG.debug("  无法从类路径推断: CodeSource 不可用");
+                LOG.debug("[BridgeResolver] Cannot infer from classpath: CodeSource unavailable");
                 return;
             }
             File location = new File(codeSource.getLocation().toURI());
@@ -237,7 +244,7 @@ public class BridgeDirectoryResolver {
                 classDir = classDir.getParentFile();
             }
         } catch (Exception e) {
-            LOG.debug("  无法从类路径推断: " + e.getMessage());
+            LOG.debug("[BridgeResolver] Cannot infer from classpath: " + e.getMessage());
         }
     }
 
@@ -262,14 +269,14 @@ public class BridgeDirectoryResolver {
         // 检查 node_modules 关键依赖
         File nodeModules = new File(dir, "node_modules");
         if (!nodeModules.exists() || !nodeModules.isDirectory()) {
-            LOG.warn("[BridgeResolver] node_modules 不存在: " + dir.getAbsolutePath());
+            LOG.debug("[BridgeResolver] node_modules not found: " + dir.getAbsolutePath());
             return false;
         }
 
         // 检查 @anthropic-ai/claude-agent-sdk
         File claudeSdk = new File(nodeModules, "@anthropic-ai/claude-agent-sdk");
         if (!claudeSdk.exists()) {
-            LOG.warn("[BridgeResolver] 缺少 @anthropic-ai/claude-agent-sdk: " + dir.getAbsolutePath());
+            LOG.debug("[BridgeResolver] Missing @anthropic-ai/claude-agent-sdk: " + dir.getAbsolutePath());
             return false;
         }
 
@@ -295,12 +302,12 @@ public class BridgeDirectoryResolver {
 
     private File ensureEmbeddedBridgeExtracted() {
         try {
-            LOG.info("[BridgeResolver] 尝试查找内嵌的 ai-bridge.zip...");
+            LOG.debug("[BridgeResolver] Looking for embedded ai-bridge.zip...");
 
             PluginId pluginId = PluginId.getId(PLUGIN_ID);
             IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
             if (descriptor == null) {
-                LOG.info("[BridgeResolver] 无法通过 PluginId 获取插件描述符: " + PLUGIN_ID);
+                LOG.debug("[BridgeResolver] Cannot get plugin descriptor by PluginId: " + PLUGIN_ID);
 
                 // 尝试通过遍历所有插件来查找
                 for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
@@ -309,11 +316,11 @@ public class BridgeDirectoryResolver {
                     // 匹配插件 ID 或名称
                     if (id.contains("claude") || id.contains("Claude") ||
                         (name != null && (name.contains("Claude") || name.contains("claude")))) {
-                        LOG.info("[BridgeResolver] 找到候选插件: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
+                        LOG.debug("[BridgeResolver] Found candidate plugin: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
                         File candidateDir = plugin.getPluginPath().toFile();
                         File candidateArchive = new File(candidateDir, SDK_ARCHIVE_NAME);
                         if (candidateArchive.exists()) {
-                            LOG.info("[BridgeResolver] 在候选插件中找到 ai-bridge.zip: " + candidateArchive.getAbsolutePath());
+                            LOG.debug("[BridgeResolver] Found ai-bridge.zip in candidate plugin: " + candidateArchive.getAbsolutePath());
                             descriptor = plugin;
                             break;
                         }
@@ -321,26 +328,26 @@ public class BridgeDirectoryResolver {
                 }
 
                 if (descriptor == null) {
-                    LOG.info("[BridgeResolver] 未能通过任何方式找到插件描述符");
+                    LOG.debug("[BridgeResolver] Could not find plugin descriptor by any method");
                     return null;
                 }
             }
 
             File pluginDir = descriptor.getPluginPath().toFile();
-            LOG.info("[BridgeResolver] 插件目录: " + pluginDir.getAbsolutePath());
+            LOG.debug("[BridgeResolver] Plugin directory: " + pluginDir.getAbsolutePath());
 
             File archiveFile = new File(pluginDir, SDK_ARCHIVE_NAME);
-            LOG.info("[BridgeResolver] 查找压缩包: " + archiveFile.getAbsolutePath() + " (存在: " + archiveFile.exists() + ")");
+            LOG.debug("[BridgeResolver] Looking for archive: " + archiveFile.getAbsolutePath() + " (exists: " + archiveFile.exists() + ")");
 
             if (!archiveFile.exists()) {
                 // 尝试在 lib 目录下查找
                 File libDir = new File(pluginDir, "lib");
                 if (libDir.exists()) {
-                    LOG.info("[BridgeResolver] 检查 lib 目录: " + libDir.getAbsolutePath());
+                    LOG.debug("[BridgeResolver] Checking lib directory: " + libDir.getAbsolutePath());
                     File[] files = libDir.listFiles();
                     if (files != null) {
                         for (File f : files) {
-                            LOG.info("[BridgeResolver]   - " + f.getName());
+                            LOG.debug("[BridgeResolver]   - " + f.getName());
                         }
                     }
                 }
@@ -382,7 +389,7 @@ public class BridgeDirectoryResolver {
 
                 // 打印并尝试这些候选路径
                 for (File f : fallbackCandidates) {
-                    LOG.info("[BridgeResolver] 尝试候选路径: " + f.getAbsolutePath() + " (存在: " + f.exists() + ")");
+                    LOG.debug("[BridgeResolver] Trying candidate path: " + f.getAbsolutePath() + " (exists: " + f.exists() + ")");
                     if (f.exists()) {
                         archiveFile = f;
                         break;
@@ -396,7 +403,14 @@ public class BridgeDirectoryResolver {
             }
 
             File extractedDir = new File(pluginDir, SDK_DIR_NAME);
-            String archiveHash = calculateFileHash(archiveFile);
+            // Prefer precomputed hash file (generated at build time) to avoid runtime calculation overhead
+            // Note: hash file should be in the same directory as archiveFile
+            File archiveParentDir = archiveFile.getParentFile();
+            String archiveHash = readPrecomputedHash(archiveParentDir);
+            if (archiveHash == null) {
+                LOG.info("[BridgeResolver] Precomputed hash file not found, falling back to runtime calculation");
+                archiveHash = calculateFileHash(archiveFile);
+            }
             if (archiveHash == null) {
                 LOG.warn("[BridgeResolver] Failed to calculate archive hash, falling back to version-based signature");
                 archiveHash = "unknown";
@@ -420,7 +434,7 @@ public class BridgeDirectoryResolver {
 
                 if (currentState == ExtractionState.IN_PROGRESS) {
                     // Another thread is already extracting, wait for it
-                    LOG.info("[BridgeResolver] 检测到正在解压中，等待完成...");
+                    LOG.debug("[BridgeResolver] Extraction in progress, waiting for completion...");
                     return waitForExtraction();
                 }
 
@@ -431,30 +445,32 @@ public class BridgeDirectoryResolver {
                 }
 
                 // Start extraction
-                LOG.info("未检测到已解压的 ai-bridge，开始解压: " + archiveFile.getAbsolutePath());
+                LOG.info("[BridgeResolver] No extracted ai-bridge found, starting extraction: " + archiveFile.getAbsolutePath());
 
                 // Mark as in progress BEFORE checking EDT thread
-                // Also initialize extractionFuture to ensure waitForExtraction() works
+                // Also initialize extractionFutureRef to ensure waitForExtraction() works
                 if (!this.extractionState.compareAndSet(ExtractionState.NOT_STARTED, ExtractionState.IN_PROGRESS) &&
                     !this.extractionState.compareAndSet(ExtractionState.FAILED, ExtractionState.IN_PROGRESS)) {
                     // Another thread just started extraction, wait for it
-                    LOG.info("[BridgeResolver] 另一个线程刚开始解压，等待完成...");
+                    LOG.debug("[BridgeResolver] Another thread just started extraction, waiting...");
                     return waitForExtraction();
                 }
 
-                // Initialize extractionFuture for non-EDT threads to wait on
-                if (this.extractionFuture == null || this.extractionFuture.isDone()) {
-                    this.extractionFuture = new CompletableFuture<>();
+                // Initialize extractionFutureRef for non-EDT threads to wait on
+                CompletableFuture<File> currentFuture = this.extractionFutureRef.get();
+                if (currentFuture == null || currentFuture.isDone()) {
+                    CompletableFuture<File> newFuture = new CompletableFuture<>();
+                    this.extractionFutureRef.compareAndSet(currentFuture, newFuture);
                 }
 
                 // Check if running on EDT thread
                 if (ApplicationManager.getApplication().isDispatchThread()) {
                     // Extract on background thread with progress indicator to avoid EDT freeze
-                    LOG.info("[BridgeResolver] 检测到EDT线程，使用后台任务解压以避免UI冻结");
+                    LOG.debug("[BridgeResolver] EDT thread detected, using background task to avoid UI freeze");
                     extractOnBackgroundThreadAsync(archiveFile, extractedDir, signature, versionFile);
                     // DO NOT wait here - return null and let caller handle async initialization
                     // The extractionReadyFuture will be completed when extraction finishes
-                    LOG.info("[BridgeResolver] EDT线程不阻塞等待，返回null，请使用getExtractionFuture()异步等待");
+                    LOG.debug("[BridgeResolver] EDT thread not blocking, returning null. Use getExtractionFuture() to wait asynchronously");
                     return null;
                 } else {
                     // Direct extraction on non-EDT thread
@@ -464,26 +480,32 @@ public class BridgeDirectoryResolver {
                         Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
                         this.extractionState.set(ExtractionState.COMPLETED);
                         this.cachedSdkDir = extractedDir;
-                        this.extractionFuture.complete(extractedDir);
+                        CompletableFuture<File> future = this.extractionFutureRef.get();
+                        if (future != null) {
+                            future.complete(extractedDir);
+                        }
                         this.extractionReadyFuture.complete(true);
                     } catch (Exception e) {
                         this.extractionState.set(ExtractionState.FAILED);
-                        this.extractionFuture.completeExceptionally(e);
+                        CompletableFuture<File> future = this.extractionFutureRef.get();
+                        if (future != null) {
+                            future.completeExceptionally(e);
+                        }
                         this.extractionReadyFuture.complete(false);
-                        LOG.error("[BridgeResolver] 解压失败: " + e.getMessage(), e);
+                        LOG.error("[BridgeResolver] Extraction failed: " + e.getMessage(), e);
                         throw e;
                     }
                 }
             }
 
             if (isValidBridgeDir(extractedDir)) {
-                LOG.info("✓ ai-bridge 解压完成: " + extractedDir.getAbsolutePath());
+                LOG.info("[BridgeResolver] ai-bridge extraction completed: " + extractedDir.getAbsolutePath());
                 return extractedDir;
             }
 
-            LOG.warn("⚠️ ai-bridge 解压后结构无效: " + extractedDir.getAbsolutePath());
+            LOG.warn("[BridgeResolver] ai-bridge structure invalid after extraction: " + extractedDir.getAbsolutePath());
         } catch (Exception e) {
-            LOG.error("⚠️ 自动解压 ai-bridge 失败: " + e.getMessage());
+            LOG.error("[BridgeResolver] Auto-extraction of ai-bridge failed: " + e.getMessage());
         }
         return null;
     }
@@ -505,7 +527,7 @@ public class BridgeDirectoryResolver {
      * Returns the extracted directory or null if failed.
      */
     private File waitForExtraction() {
-        CompletableFuture<File> future = this.extractionFuture;
+        CompletableFuture<File> future = this.extractionFutureRef.get();
         if (future == null) {
             LOG.warn("[BridgeResolver] No extraction future available");
             return null;
@@ -530,10 +552,10 @@ public class BridgeDirectoryResolver {
      * Extract ai-bridge on background thread with progress indicator (async).
      * This method uses Task.Backgroundable to avoid EDT freeze.
      * Returns immediately, extraction runs in background.
-     * NOTE: extractionFuture should already be initialized by the caller.
+     * NOTE: extractionFutureRef should already be initialized by the caller.
      */
     private void extractOnBackgroundThreadAsync(File archiveFile, File extractedDir, String signature, File versionFile) {
-        // extractionFuture should already be initialized by caller
+        // extractionFutureRef should already be initialized by caller
         // Do NOT recreate it here to avoid race conditions
 
         try {
@@ -565,12 +587,18 @@ public class BridgeDirectoryResolver {
                         // Mark as completed and cache the directory
                         BridgeDirectoryResolver.this.extractionState.set(ExtractionState.COMPLETED);
                         BridgeDirectoryResolver.this.cachedSdkDir = extractedDir;
-                        BridgeDirectoryResolver.this.extractionFuture.complete(extractedDir);
+                        CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
+                        if (future != null) {
+                            future.complete(extractedDir);
+                        }
                         BridgeDirectoryResolver.this.extractionReadyFuture.complete(true);
                     } catch (IOException e) {
                         LOG.error("[BridgeResolver] Background extraction failed: " + e.getMessage(), e);
                         BridgeDirectoryResolver.this.extractionState.set(ExtractionState.FAILED);
-                        BridgeDirectoryResolver.this.extractionFuture.completeExceptionally(e);
+                        CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
+                        if (future != null) {
+                            future.completeExceptionally(e);
+                        }
                         BridgeDirectoryResolver.this.extractionReadyFuture.complete(false);
                     }
                 }
@@ -579,7 +607,10 @@ public class BridgeDirectoryResolver {
                 public void onCancel() {
                     LOG.warn("[BridgeResolver] Extraction cancelled by user");
                     BridgeDirectoryResolver.this.extractionState.set(ExtractionState.FAILED);
-                    BridgeDirectoryResolver.this.extractionFuture.completeExceptionally(new InterruptedException("Extraction cancelled"));
+                    CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
+                    if (future != null) {
+                        future.completeExceptionally(new InterruptedException("Extraction cancelled"));
+                    }
                     BridgeDirectoryResolver.this.extractionReadyFuture.complete(false);
                 }
 
@@ -587,14 +618,20 @@ public class BridgeDirectoryResolver {
                 public void onThrowable(@NotNull Throwable error) {
                     LOG.error("[BridgeResolver] Extraction task threw error: " + error.getMessage(), error);
                     BridgeDirectoryResolver.this.extractionState.set(ExtractionState.FAILED);
-                    BridgeDirectoryResolver.this.extractionFuture.completeExceptionally(error);
+                    CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
+                    if (future != null) {
+                        future.completeExceptionally(error);
+                    }
                     BridgeDirectoryResolver.this.extractionReadyFuture.complete(false);
                 }
             });
         } catch (Exception e) {
             LOG.error("[BridgeResolver] Failed to start background extraction task: " + e.getMessage(), e);
             this.extractionState.set(ExtractionState.FAILED);
-            this.extractionFuture.completeExceptionally(e);
+            CompletableFuture<File> future = this.extractionFutureRef.get();
+            if (future != null) {
+                future.completeExceptionally(e);
+            }
             this.extractionReadyFuture.complete(false);
         }
     }
@@ -603,11 +640,11 @@ public class BridgeDirectoryResolver {
         if (dir == null || !dir.exists()) {
             return;
         }
-        // 使用带重试机制的目录删除，处理 Windows 文件锁定问题
+        // Use retry mechanism for directory deletion to handle Windows file locking issues
         if (!PlatformUtils.deleteDirectoryWithRetry(dir, 3)) {
-            // 如果重试失败，回退到 IntelliJ 的 FileUtil
+            // If retry fails, fall back to IntelliJ's FileUtil
             if (!FileUtil.delete(dir)) {
-                LOG.warn("⚠️ 无法删除目录: " + dir.getAbsolutePath());
+                LOG.warn("[BridgeResolver] Cannot delete directory: " + dir.getAbsolutePath());
             }
         }
     }
@@ -631,6 +668,33 @@ public class BridgeDirectoryResolver {
      * Returns true if successful, false if unzip command is not available.
      */
     private boolean trySystemUnzip(File archiveFile, File targetDir) {
+        return executeSystemUnzip(archiveFile, targetDir, null);
+    }
+
+    /**
+     * Try to extract using system unzip command with progress updates.
+     */
+    private boolean trySystemUnzipWithProgress(File archiveFile, File targetDir, ProgressIndicator indicator) {
+        if (indicator != null) {
+            indicator.setText("Extracting with system unzip...");
+            indicator.setFraction(0.5);
+        }
+        boolean result = executeSystemUnzip(archiveFile, targetDir, indicator);
+        if (result && indicator != null) {
+            indicator.setFraction(0.9);
+        }
+        return result;
+    }
+
+    /**
+     * Core implementation for system unzip extraction.
+     * @param archiveFile The archive to extract
+     * @param targetDir The target directory
+     * @param indicator Optional progress indicator (can be null)
+     * @return true if extraction succeeded, false otherwise
+     */
+    private boolean executeSystemUnzip(File archiveFile, File targetDir, ProgressIndicator indicator) {
+        Process process = null;
         try {
             ProcessBuilder pb;
             if (System.getProperty("os.name").toLowerCase().contains("windows")) {
@@ -642,7 +706,7 @@ public class BridgeDirectoryResolver {
             }
 
             pb.redirectErrorStream(true);
-            Process process = pb.start();
+            process = pb.start();
 
             // Read output to prevent blocking
             try (java.io.BufferedReader reader = new java.io.BufferedReader(
@@ -653,11 +717,23 @@ public class BridgeDirectoryResolver {
                 }
             }
 
-            int exitCode = process.waitFor();
-            return exitCode == 0;
+            // Add timeout (5 minutes) to prevent hanging
+            if (!process.waitFor(5, java.util.concurrent.TimeUnit.MINUTES)) {
+                LOG.warn("[BridgeResolver] Unzip process timeout, killing...");
+                process.destroyForcibly();
+                return false;
+            }
+
+            return process.exitValue() == 0;
         } catch (Exception e) {
             LOG.debug("[BridgeResolver] System unzip failed: " + e.getMessage());
             return false;
+        } finally {
+            // Ensure process is destroyed if still alive
+            if (process != null && process.isAlive()) {
+                LOG.warn("[BridgeResolver] Forcibly destroying unzip process");
+                process.destroyForcibly();
+            }
         }
     }
 
@@ -674,7 +750,7 @@ public class BridgeDirectoryResolver {
             while ((entry = zis.getNextEntry()) != null) {
                 Path resolvedPath = targetPath.resolve(entry.getName()).normalize();
                 if (!resolvedPath.startsWith(targetPath)) {
-                    throw new IOException("检测到不安全的 Zip 条目: " + entry.getName());
+                    throw new IOException("Unsafe zip entry detected: " + entry.getName());
                 }
 
                 if (entry.isDirectory()) {
@@ -713,41 +789,6 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * Try to extract using system unzip command with progress updates.
-     */
-    private boolean trySystemUnzipWithProgress(File archiveFile, File targetDir, ProgressIndicator indicator) {
-        try {
-            indicator.setText("Extracting with system unzip...");
-            indicator.setFraction(0.5);
-
-            ProcessBuilder pb;
-            if (System.getProperty("os.name").toLowerCase().contains("windows")) {
-                pb = new ProcessBuilder("tar", "-xf", archiveFile.getAbsolutePath(), "-C", targetDir.getAbsolutePath());
-            } else {
-                pb = new ProcessBuilder("unzip", "-o", "-q", archiveFile.getAbsolutePath(), "-d", targetDir.getAbsolutePath());
-            }
-
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    LOG.debug("[BridgeResolver] unzip: " + line);
-                }
-            }
-
-            int exitCode = process.waitFor();
-            indicator.setFraction(0.9);
-            return exitCode == 0;
-        } catch (Exception e) {
-            LOG.debug("[BridgeResolver] System unzip with progress failed: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
      * Fallback extraction with progress using Java ZipInputStream.
      */
     private void unzipWithJavaAndProgress(File archiveFile, File targetDir, ProgressIndicator indicator) throws IOException {
@@ -773,7 +814,7 @@ public class BridgeDirectoryResolver {
             while ((entry = zis.getNextEntry()) != null) {
                 Path resolvedPath = targetPath.resolve(entry.getName()).normalize();
                 if (!resolvedPath.startsWith(targetPath)) {
-                    throw new IOException("检测到不安全的 Zip 条目: " + entry.getName());
+                    throw new IOException("Unsafe zip entry detected: " + entry.getName());
                 }
 
                 if (entry.isDirectory()) {
@@ -822,7 +863,7 @@ public class BridgeDirectoryResolver {
     public void clearCache() {
         this.cachedSdkDir = null;
         this.extractionState.set(ExtractionState.NOT_STARTED);
-        this.extractionFuture = null;
+        this.extractionFutureRef.set(null);
         this.extractionReadyFuture = new CompletableFuture<>();
     }
 
@@ -871,8 +912,37 @@ public class BridgeDirectoryResolver {
     }
 
     /**
+     * Read precomputed hash from ai-bridge.hash file (generated at build time).
+     * This avoids expensive runtime hash calculation.
+     *
+     * @param pluginDir The plugin directory containing ai-bridge.hash
+     * @return The hash string, or null if file doesn't exist or read fails
+     */
+    private String readPrecomputedHash(File pluginDir) {
+        File hashFile = new File(pluginDir, SDK_HASH_FILE_NAME);
+        if (!hashFile.exists()) {
+            LOG.debug("[BridgeResolver] Precomputed hash file not found: " + hashFile.getAbsolutePath());
+            return null;
+        }
+
+        try {
+            String hash = Files.readString(hashFile.toPath(), StandardCharsets.UTF_8).trim();
+            if (hash.isEmpty()) {
+                LOG.warn("[BridgeResolver] Precomputed hash file is empty");
+                return null;
+            }
+            LOG.debug("[BridgeResolver] Using precomputed hash: " + hash);
+            return hash;
+        } catch (IOException e) {
+            LOG.warn("[BridgeResolver] Failed to read precomputed hash: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Calculate SHA-256 hash of a file.
-     * This provides a reliable way to detect if the archive has changed.
+     * NOTE: This is a fallback method only used when precomputed hash file is missing.
+     * Prefer using readPrecomputedHash() when available.
      *
      * @param file The file to hash
      * @return Hex string of the hash, or null if calculation fails
@@ -882,6 +952,7 @@ public class BridgeDirectoryResolver {
             return null;
         }
 
+        LOG.info("[BridgeResolver] Calculating archive hash at runtime (fallback mode)");
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[8192];
