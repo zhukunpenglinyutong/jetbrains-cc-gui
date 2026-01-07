@@ -614,6 +614,58 @@ public class BridgeDirectoryResolver {
 
     private void unzipArchive(File archiveFile, File targetDir) throws IOException {
         Files.createDirectories(targetDir.toPath());
+
+        // Try to use system unzip command to preserve permissions
+        if (trySystemUnzip(archiveFile, targetDir)) {
+            LOG.info("[BridgeResolver] Successfully extracted using system unzip command");
+            return;
+        }
+
+        // Fallback to Java ZipInputStream
+        LOG.warn("[BridgeResolver] System unzip not available, using Java ZipInputStream (permissions may be lost)");
+        unzipWithJava(archiveFile, targetDir);
+    }
+
+    /**
+     * Try to extract using system unzip command to preserve file permissions.
+     * Returns true if successful, false if unzip command is not available.
+     */
+    private boolean trySystemUnzip(File archiveFile, File targetDir) {
+        try {
+            ProcessBuilder pb;
+            if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+                // Windows: try to use tar command (available in Windows 10+)
+                pb = new ProcessBuilder("tar", "-xf", archiveFile.getAbsolutePath(), "-C", targetDir.getAbsolutePath());
+            } else {
+                // Unix/Linux/macOS: use unzip command
+                pb = new ProcessBuilder("unzip", "-o", "-q", archiveFile.getAbsolutePath(), "-d", targetDir.getAbsolutePath());
+            }
+
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            // Read output to prevent blocking
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    LOG.debug("[BridgeResolver] unzip: " + line);
+                }
+            }
+
+            int exitCode = process.waitFor();
+            return exitCode == 0;
+        } catch (Exception e) {
+            LOG.debug("[BridgeResolver] System unzip failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Fallback extraction using Java ZipInputStream.
+     * Note: This method does not preserve Unix file permissions.
+     */
+    private void unzipWithJava(File archiveFile, File targetDir) throws IOException {
         Path targetPath = targetDir.toPath();
         byte[] buffer = new byte[8192];
 
@@ -648,6 +700,57 @@ public class BridgeDirectoryResolver {
      */
     private void unzipArchiveWithProgress(File archiveFile, File targetDir, ProgressIndicator indicator) throws IOException {
         Files.createDirectories(targetDir.toPath());
+
+        // Try to use system unzip command first
+        if (trySystemUnzipWithProgress(archiveFile, targetDir, indicator)) {
+            LOG.info("[BridgeResolver] Successfully extracted using system unzip command");
+            return;
+        }
+
+        // Fallback to Java ZipInputStream
+        LOG.warn("[BridgeResolver] System unzip not available, using Java ZipInputStream (permissions may be lost)");
+        unzipWithJavaAndProgress(archiveFile, targetDir, indicator);
+    }
+
+    /**
+     * Try to extract using system unzip command with progress updates.
+     */
+    private boolean trySystemUnzipWithProgress(File archiveFile, File targetDir, ProgressIndicator indicator) {
+        try {
+            indicator.setText("Extracting with system unzip...");
+            indicator.setFraction(0.5);
+
+            ProcessBuilder pb;
+            if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+                pb = new ProcessBuilder("tar", "-xf", archiveFile.getAbsolutePath(), "-C", targetDir.getAbsolutePath());
+            } else {
+                pb = new ProcessBuilder("unzip", "-o", "-q", archiveFile.getAbsolutePath(), "-d", targetDir.getAbsolutePath());
+            }
+
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    LOG.debug("[BridgeResolver] unzip: " + line);
+                }
+            }
+
+            int exitCode = process.waitFor();
+            indicator.setFraction(0.9);
+            return exitCode == 0;
+        } catch (Exception e) {
+            LOG.debug("[BridgeResolver] System unzip with progress failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Fallback extraction with progress using Java ZipInputStream.
+     */
+    private void unzipWithJavaAndProgress(File archiveFile, File targetDir, ProgressIndicator indicator) throws IOException {
         Path targetPath = targetDir.toPath();
         byte[] buffer = new byte[8192];
 
