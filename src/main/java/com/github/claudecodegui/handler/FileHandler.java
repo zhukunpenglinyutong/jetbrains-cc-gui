@@ -121,11 +121,26 @@ public class FileHandler extends BaseMessageHandler {
     private void collectOpenFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
-            if (project == null || project.isDisposed()) return;
+            if (project == null || project.isDisposed()) {
+                LOG.debug("[FileHandler] Project is null or disposed in collectOpenFiles");
+                return;
+            }
 
-            VirtualFile[] openFiles = FileEditorManager.getInstance(project).getOpenFiles();
-            for (VirtualFile vf : openFiles) {
-                addVirtualFile(vf, basePath, files, fileSet, request, 1);
+            try {
+                // Double-check project state inside read action
+                if (project.isDisposed()) {
+                    LOG.debug("[FileHandler] Project disposed during collectOpenFiles");
+                    return;
+                }
+
+                VirtualFile[] openFiles = FileEditorManager.getInstance(project).getOpenFiles();
+                LOG.debug("[FileHandler] Collecting " + openFiles.length + " open files");
+
+                for (VirtualFile vf : openFiles) {
+                    addVirtualFile(vf, basePath, files, fileSet, request, 1);
+                }
+            } catch (Exception e) {
+                LOG.warn("[FileHandler] Error collecting open files: " + e.getMessage(), e);
             }
         });
     }
@@ -136,21 +151,40 @@ public class FileHandler extends BaseMessageHandler {
     private void collectRecentFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
-            if (project == null || project.isDisposed()) return;
+            if (project == null || project.isDisposed()) {
+                LOG.debug("[FileHandler] Project is null or disposed in collectRecentFiles");
+                return;
+            }
 
             try {
+                // Double-check project state inside read action
+                if (project.isDisposed()) {
+                    LOG.debug("[FileHandler] Project disposed during collectRecentFiles");
+                    return;
+                }
+
                 List<VirtualFile> recentFiles = EditorHistoryManager.getInstance(project).getFileList();
+                if (recentFiles == null) {
+                    LOG.warn("[FileHandler] EditorHistoryManager returned null file list");
+                    return;
+                }
+
+                LOG.debug("[FileHandler] Collecting up to " + MAX_RECENT_FILES + " recent files from " + recentFiles.size() + " total");
+
                 // 倒序遍历，取最近的文件
                 int count = 0;
                 for (int i = recentFiles.size() - 1; i >= 0; i--) {
                     if (count >= MAX_RECENT_FILES) {
                         break;
                     }
-                    addVirtualFile(recentFiles.get(i), basePath, files, fileSet, request, 2);
-                    count++;
+                    VirtualFile vf = recentFiles.get(i);
+                    if (vf != null) {
+                        addVirtualFile(vf, basePath, files, fileSet, request, 2);
+                        count++;
+                    }
                 }
             } catch (Throwable t) {
-                LOG.warn("Failed to get recent files: " + t.getMessage());
+                LOG.warn("[FileHandler] Failed to get recent files: " + t.getMessage(), t);
             }
         });
     }
@@ -202,11 +236,13 @@ public class FileHandler extends BaseMessageHandler {
 
     /**
      * 获取有效的基础路径
+     * Ensures a non-null path is always returned with proper fallback chain
      */
     private String getEffectiveBasePath() {
         if (context.getSession() != null) {
             String cwd = context.getSession().getCwd();
             if (cwd != null && !cwd.isEmpty()) {
+                LOG.debug("[FileHandler] Using session cwd as base path: " + cwd);
                 return cwd;
             }
         }
@@ -214,11 +250,20 @@ public class FileHandler extends BaseMessageHandler {
         if (context.getProject() != null) {
             String projectPath = context.getProject().getBasePath();
             if (projectPath != null) {
+                LOG.debug("[FileHandler] Using project base path: " + projectPath);
                 return projectPath;
             }
         }
 
-        return System.getProperty("user.home");
+        String userHome = System.getProperty("user.home");
+        if (userHome != null && !userHome.isEmpty()) {
+            LOG.debug("[FileHandler] Using user.home as base path: " + userHome);
+            return userHome;
+        }
+
+        // Final fallback - should never happen but prevents null
+        LOG.warn("[FileHandler] All base path sources failed, using current directory");
+        return System.getProperty("user.dir", ".");
     }
 
     /**
@@ -636,12 +681,21 @@ public class FileHandler extends BaseMessageHandler {
      * 添加 VirtualFile 到列表
      */
     private void addVirtualFile(VirtualFile vf, String basePath, List<JsonObject> files, FileSet fileSet, FileListRequest request, int priority) {
+        // Enhanced null safety checks
         if (vf == null || !vf.isValid() || vf.isDirectory()) return;
+        if (basePath == null) {
+            LOG.warn("[FileHandler] basePath is null in addVirtualFile, skipping file");
+            return;
+        }
 
         String name = vf.getName();
         if (shouldSkipInSearch(name, false)) return;
 
         String path = vf.getPath();
+        if (path == null) {
+            LOG.warn("[FileHandler] VirtualFile path is null for: " + name);
+            return;
+        }
         if (!fileSet.tryAdd(path)) return;
 
         // 计算相对路径

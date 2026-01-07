@@ -22,17 +22,32 @@ public class FileSortItem {
         this.priority = json.has("priority")
             ? json.get("priority").getAsInt()
             : 3;
-        // 只有 priority >= 3 时才需要以下字段参与复杂排序，但为了简化逻辑，这里先读取基本字段
-        this.path = json.get("path").getAsString();
-        this.isDir = "directory".equals(json.get("type").getAsString());
-        this.name = json.get("name").getAsString();
+        // Add null safety checks with default values
+        this.path = json.has("path") ? json.get("path").getAsString() : "";
+        this.isDir = json.has("type") && "directory".equals(json.get("type").getAsString());
+        this.name = json.has("name") ? json.get("name").getAsString() : "";
     }
 
     public int getDepth() {
         if (depth == -1) {
-            depth = path.isEmpty() ? 0 : path.split("/").length;
+            // Optimized: use character counting instead of split() for better performance
+            depth = path.isEmpty() ? 0 : countPathSeparators(path) + 1;
         }
         return depth;
+    }
+
+    /**
+     * Count the number of path separators in a string
+     * More efficient than split() for large file lists
+     */
+    private static int countPathSeparators(String path) {
+        int count = 0;
+        for (int i = 0; i < path.length(); i++) {
+            if (path.charAt(i) == '/') {
+                count++;
+            }
+        }
+        return count;
     }
 
     public String getParentPath() {
