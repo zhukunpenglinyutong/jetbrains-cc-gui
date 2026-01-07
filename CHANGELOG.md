@@ -1,11 +1,24 @@
-##### **2026年1月6日（v0.1.4-codex）**
+##### **2026年1月7日（v0.1.4）**
 
-- [x] 适配Codex对话功能 #codex
-- [x] 实现Codex读取环境变量Key的功能 #codex_1
-- [x] 实现Codex供应商编辑 #codex_2
-- [x] 实现Codex智能体 #codex_3
-- [x] 实现Codex使用统计 #codex_3
-- [x] 实现Codex增强提示词（其实走的是Claude） #codex_3
+English:
+- [x] Integrate Codex conversation functionality #codex
+- [x] Implement Codex environment variable key reading
+- [x] Implement Codex provider editing
+- [x] Implement Codex agent support
+- [x] Implement Codex usage statistics
+- [x] Implement Codex enhanced prompts (actually powered by Claude)
+- [x] Implement asynchronous extraction on first launch to prevent IDEA blocking
+- [x] Disable slash command periodic update to resolve abnormal API request issues
+
+中文:
+- [x] 适配Codex对话功能
+- [x] 实现Codex读取环境变量Key的功能
+- [x] 实现Codex供应商编辑
+- [x] 实现Codex智能体
+- [x] 实现Codex使用统计
+- [x] 实现Codex增强提示词（其实走的是Claude）
+- [x] 实现首次异步解压，防止阻塞IDEA
+- [x] 禁用斜杠指令定时更新功能，解决异常定时请求接口的问题
 
 ##### **2026年1月5日（v0.1.4-beta7）**
 
