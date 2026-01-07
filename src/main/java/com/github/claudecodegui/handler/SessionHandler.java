@@ -2,13 +2,11 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.bridge.NodeDetector;
-import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.project.Project;
 
 import javax.swing.*;
 import java.io.File;
@@ -65,7 +63,7 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * Send message to Claude
+     * 发送消息到 Claude
      */
     private void handleSendMessage(String prompt) {
         String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
@@ -93,27 +91,13 @@ public class SessionHandler extends BaseMessageHandler {
                 LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
-            // Capture project for use in async callbacks
-            var project = context.getProject();
-            if (project != null) {
-                ClaudeNotifier.setWaiting(project);
-            }
 
-            context.getSession().send(prompt)
-                .thenRun(() -> {
-                    if (project != null) {
-                        ClaudeNotifier.showSuccess(project, "Task completed");
-                    }
-                })
-                .exceptionally(ex -> {
-                    if (project != null) {
-                        ClaudeNotifier.showError(project, "Task failed: " + ex.getMessage());
-                    }
-                    ApplicationManager.getApplication().invokeLater(() -> {
-                        callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
-                    });
-                    return null;
+            context.getSession().send(prompt).exceptionally(ex -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
                 });
+                return null;
+            });
         });
     }
 
@@ -153,10 +137,10 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * Send message with attachments to Claude
+     * 发送带附件的消息到 Claude
      */
     private void sendMessageWithAttachments(String prompt, List<ClaudeSession.Attachment> attachments) {
-        // Version check (consistent with handleSendMessage)
+        // 版本检查（与 handleSendMessage 保持一致）
         String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
         if (nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -181,27 +165,12 @@ public class SessionHandler extends BaseMessageHandler {
                 LOG.info("[SessionHandler] Updated working directory: " + currentWorkingDir);
             }
 
-            // Capture project for use in async callbacks
-            var project = context.getProject();
-            if (project != null) {
-                ClaudeNotifier.setWaiting(project);
-            }
-
-            context.getSession().send(prompt, attachments)
-                .thenRun(() -> {
-                    if (project != null) {
-                        ClaudeNotifier.showSuccess(project, "Task completed");
-                    }
-                })
-                .exceptionally(ex -> {
-                    if (project != null) {
-                        ClaudeNotifier.showError(project, "Task failed: " + ex.getMessage());
-                    }
-                    ApplicationManager.getApplication().invokeLater(() -> {
-                        callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
-                    });
-                    return null;
+            context.getSession().send(prompt, attachments).exceptionally(ex -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
                 });
+                return null;
+            });
         });
     }
 
