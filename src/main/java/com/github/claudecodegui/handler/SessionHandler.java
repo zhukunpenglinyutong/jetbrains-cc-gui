@@ -106,6 +106,7 @@ public class SessionHandler extends BaseMessageHandler {
                     }
                 })
                 .exceptionally(ex -> {
+                    LOG.error("Failed to send message", ex);
                     if (project != null) {
                         ClaudeNotifier.showError(project, "Task failed: " + ex.getMessage());
                     }
@@ -194,6 +195,7 @@ public class SessionHandler extends BaseMessageHandler {
                     }
                 })
                 .exceptionally(ex -> {
+                    LOG.error("Failed to send message with attachments", ex);
                     if (project != null) {
                         ClaudeNotifier.showError(project, "Task failed: " + ex.getMessage());
                     }

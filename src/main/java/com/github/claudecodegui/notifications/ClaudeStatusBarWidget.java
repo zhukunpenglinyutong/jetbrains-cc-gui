@@ -14,6 +14,7 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -23,16 +24,22 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     private final Project project;
     private StatusBar statusBar;
     private JLabel label;
-    private final AtomicReference<String> textRef = new AtomicReference<>("Claude 🤖");
+    private final AtomicReference<String> textRef = new AtomicReference<>("Claude Code GUI 🤖");
     private final AtomicReference<String> tooltipRef = new AtomicReference<>("Claude AI Assistant (Ctrl+Alt+K)");
-    private long visibleUntil = 0;
-    
-    // State for display
-    private String currentStatus = "ready";
-    private String currentTokenInfo = "";
-    private String currentModel = "";
-    private String currentMode = "default";
-    private String currentAgent = "";
+    private final AtomicLong visibleUntil = new AtomicLong(0);
+
+    // Thread-safe state for display
+    private final AtomicReference<String> currentStatus = new AtomicReference<>("ready");
+    private final AtomicReference<String> currentTokenInfo = new AtomicReference<>("");
+    private final AtomicReference<String> currentModel = new AtomicReference<>("");
+    private final AtomicReference<String> currentMode = new AtomicReference<>("default");
+    private final AtomicReference<String> currentAgent = new AtomicReference<>("");
+
+    // Timer management for proper resource cleanup
+    private Timer hideTimer;
+
+    // Track disposed state to prevent operations after disposal
+    private volatile boolean disposed = false;
 
     public ClaudeStatusBarWidget(Project project) {
         this.project = project;
@@ -58,7 +65,11 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
             label.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    ToolWindowManager.getInstance(project).getToolWindow("Claude Code GUI").activate(null);
+                    if (project.isDisposed()) return;
+                    var toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Claude Code GUI");
+                    if (toolWindow != null) {
+                        toolWindow.activate(null);
+                    }
                 }
             });
         }
@@ -69,35 +80,48 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     public void install(@NotNull StatusBar statusBar) { this.statusBar = statusBar; }
 
     @Override
-    public void dispose() { this.statusBar = null; } // Kept original dispose as the provided one was for a different context
+    public void dispose() {
+        disposed = true;
+        if (hideTimer != null) {
+            hideTimer.stop();
+            hideTimer = null;
+        }
+        this.statusBar = null;
+    }
 
     public void updateStatus(String status, String details) {
-        this.currentStatus = status;
+        this.currentStatus.set(status);
         refreshDisplay(details);
     }
-    
+
     public void setTokenInfo(String tokenInfo) {
-        this.currentTokenInfo = tokenInfo;
+        this.currentTokenInfo.set(tokenInfo);
         refreshDisplay(null);
     }
 
     public void setModel(String model) {
-        this.currentModel = model;
+        this.currentModel.set(model);
         refreshDisplay(null);
     }
 
     public void setMode(String mode) {
-        this.currentMode = mode;
+        this.currentMode.set(mode);
         refreshDisplay(null);
     }
 
     public void setAgent(String agent) {
-        this.currentAgent = agent;
+        this.currentAgent.set(agent);
         refreshDisplay(null);
     }
     
     private void refreshDisplay(String details) {
-        String icon = switch (currentStatus) {
+        String status = currentStatus.get();
+        String model = currentModel.get();
+        String mode = currentMode.get();
+        String agent = currentAgent.get();
+        String tokenInfo = currentTokenInfo.get();
+
+        String icon = switch (status) {
             case "thinking" -> "💭";
             case "generating" -> "✏️";
             case "waiting" -> "⏳";
@@ -107,75 +131,84 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
         };
 
         String statusText = "";
-        if ("thinking".equals(currentStatus)) {
+        if ("thinking".equals(status)) {
             statusText = "Thinking...";
-        } else if ("generating".equals(currentStatus)) {
+        } else if ("generating".equals(status)) {
             statusText = "Generating...";
-        } else if ("waiting".equals(currentStatus)) {
+        } else if ("waiting".equals(status)) {
             statusText = "Waiting...";
-        } else if ("error".equals(currentStatus)) {
+        } else if ("error".equals(status)) {
             statusText = "Error";
         }
-        
-        StringBuilder text = new StringBuilder("Claude " + icon);
-        
+
+        StringBuilder text = new StringBuilder("Claude Code GUI " + icon);
+
         // Add Model Info (Shorten names)
-        if (currentModel != null && !currentModel.isEmpty()) {
-            String shortModel = currentModel;
-            if (currentModel.contains("sonnet")) shortModel = "Sonnet";
-            else if (currentModel.contains("opus")) shortModel = "Opus";
-            else if (currentModel.contains("haiku")) shortModel = "Haiku";
+        if (model != null && !model.isEmpty()) {
+            String shortModel = model;
+            if (model.contains("sonnet")) shortModel = "Sonnet";
+            else if (model.contains("opus")) shortModel = "Opus";
+            else if (model.contains("haiku")) shortModel = "Haiku";
             text.append(" [").append(shortModel).append("]");
         }
 
         // Add Mode Info
-        if (currentMode != null && !"default".equals(currentMode)) {
-            String modeLabel = switch (currentMode) {
+        if (mode != null && !"default".equals(mode)) {
+            String modeLabel = switch (mode) {
                 case "plan" -> "Plan";
                 case "acceptEdits" -> "Agent";
                 case "bypassPermissions" -> "Auto";
-                default -> currentMode;
+                default -> mode;
             };
             text.append(" {").append(modeLabel).append("}");
         }
 
         // Add Agent Info
-        if (currentAgent != null && !currentAgent.isEmpty()) {
-            text.append(" @").append(currentAgent);
+        if (agent != null && !agent.isEmpty()) {
+            text.append(" @").append(agent);
         }
 
         if (!statusText.isEmpty()) {
             text.append(" ").append(statusText);
         }
 
-        if (currentTokenInfo != null && !currentTokenInfo.isEmpty()) {
-            text.append(" ").append(currentTokenInfo);
+        if (tokenInfo != null && !tokenInfo.isEmpty()) {
+            text.append(" ").append(tokenInfo);
         }
-        
-        String tooltip = "Status: " + currentStatus 
-            + (currentModel != null && !currentModel.isEmpty() ? "\nModel: " + currentModel : "")
-            + (currentMode != null ? "\nMode: " + currentMode : "")
-            + (currentAgent != null && !currentAgent.isEmpty() ? "\nAgent: " + currentAgent : "")
+
+        String tooltip = "Status: " + status
+            + (model != null && !model.isEmpty() ? "\nModel: " + model : "")
+            + (mode != null ? "\nMode: " + mode : "")
+            + (agent != null && !agent.isEmpty() ? "\nAgent: " + agent : "")
             + (details != null ? "\nDetails: " + details : "");
-            
+
         updateLabel(text.toString(), tooltip);
     }
 
     public void show(String text, String tooltip, long durationMs) {
-        this.visibleUntil = System.currentTimeMillis() + durationMs;
+        if (disposed) return;
+        // Stop any existing timer to prevent resource leaks
+        if (hideTimer != null) {
+            hideTimer.stop();
+        }
+        this.visibleUntil.set(System.currentTimeMillis() + durationMs);
         // Temporary override
         updateLabel(text, tooltip);
-        new Timer((int) durationMs, e -> hide()).start();
+        hideTimer = new Timer((int) durationMs, e -> hide());
+        hideTimer.setRepeats(false);
+        hideTimer.start();
     }
 
     public void hide() {
-        if (System.currentTimeMillis() >= visibleUntil) {
+        if (disposed) return;
+        if (System.currentTimeMillis() >= visibleUntil.get()) {
             // Revert to standard display
             refreshDisplay(null);
         }
     }
 
     private void updateLabel(String text, String tooltip) {
+        if (disposed) return;
         textRef.set(text);
         tooltipRef.set(tooltip);
         if (label != null) {
@@ -192,7 +225,8 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
         @Override public @NotNull StatusBarWidget createWidget(@NotNull Project project) { return new ClaudeStatusBarWidget(project); }
         @Override public void disposeWidget(@NotNull StatusBarWidget widget) { widget.dispose(); }
 
-        public static ClaudeStatusBarWidget getWidget(Project project) {
+        @Nullable
+        public static ClaudeStatusBarWidget getWidget(@NotNull Project project) {
             StatusBar statusBar = WindowManager.getInstance().getStatusBar(project);
             if (statusBar != null) {
                 StatusBarWidget widget = statusBar.getWidget("ClaudeStatusBarWidget");

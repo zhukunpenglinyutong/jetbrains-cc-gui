@@ -3,7 +3,6 @@ package com.github.claudecodegui.notifications;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Simple utility to update the Claude Status Bar Widget.
