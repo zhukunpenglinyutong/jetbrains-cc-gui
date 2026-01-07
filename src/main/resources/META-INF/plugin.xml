@@ -38,6 +38,10 @@
                     anchor="right"
                     factoryClass="com.github.claudecodegui.ClaudeSDKToolWindow"
                     icon="/icons/cc-gui-icon.svg"/>
+
+        <!-- StatusBar widget for task notification -->
+        <statusBarWidgetFactory id="ClaudeStatusBarWidget"
+                                implementation="com.github.claudecodegui.notifications.ClaudeStatusBarWidget$Factory"/>
     </extensions>
 
     <actions>

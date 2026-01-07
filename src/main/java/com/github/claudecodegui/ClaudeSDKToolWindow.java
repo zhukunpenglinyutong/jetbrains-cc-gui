@@ -205,6 +205,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             createUIComponents();
             registerSessionLoadListener();
             registerInstance();
+            initializeStatusBar();
 
             this.initialized = true;
             LOG.info("窗口实例已完全初始化，项目: " + project.getName());
@@ -293,11 +294,41 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     if (session != null) {
                         session.setPermissionMode(mode);
                         LOG.info("Loaded permission mode from settings: " + mode);
+                        // Update status bar
+                        com.github.claudecodegui.notifications.ClaudeNotifier.setMode(project, mode);
                     }
                 }
             } catch (Exception e) {
                 LOG.warn("Failed to load permission mode: " + e.getMessage());
             }
+        }
+
+        private void initializeStatusBar() {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (project == null || disposed) return;
+
+                // Set initial mode
+                String mode = session != null ? session.getPermissionMode() : "default";
+                com.github.claudecodegui.notifications.ClaudeNotifier.setMode(project, mode);
+
+                // Set initial model
+                String model = session != null ? session.getModel() : "claude-sonnet-4-5";
+                com.github.claudecodegui.notifications.ClaudeNotifier.setModel(project, model);
+
+                // Set initial agent
+                try {
+                    String selectedId = settingsService.getSelectedAgentId();
+                    if (selectedId != null) {
+                        JsonObject agent = settingsService.getAgent(selectedId);
+                        if (agent != null) {
+                            String agentName = agent.has("name") ? agent.get("name").getAsString() : "Agent";
+                            com.github.claudecodegui.notifications.ClaudeNotifier.setAgent(project, agentName);
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Failed to set initial agent in status bar: " + e.getMessage());
+                }
+            });
         }
 
         private void savePermissionModeToSettings(String mode) {

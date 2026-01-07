@@ -3,10 +3,12 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.ClaudeSession.Message;
+import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +24,7 @@ import java.util.List;
 public class ClaudeMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(ClaudeMessageHandler.class);
 
+    private final Project project;
     private final SessionState state;
     private final CallbackHandler callbackHandler;
     private final MessageParser messageParser;
@@ -49,12 +52,14 @@ public class ClaudeMessageHandler implements MessageCallback {
      * 解释：创建这个处理器时需要的材料
      */
     public ClaudeMessageHandler(
+        Project project,
         SessionState state,
         CallbackHandler callbackHandler,
         MessageParser messageParser,
         MessageMerger messageMerger,
         Gson gson
     ) {
+        this.project = project;
         this.state = state;
         this.callbackHandler = callbackHandler;
         this.messageParser = messageParser;
@@ -119,6 +124,9 @@ public class ClaudeMessageHandler implements MessageCallback {
         state.addMessage(errorMessage);
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        
+        // Show error in status bar
+        ClaudeNotifier.showError(project, error);
     }
 
     /**
@@ -183,6 +191,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         if (!isThinking) {
             isThinking = true;
             callbackHandler.notifyThinkingStatusChanged(true);
+            // Update StatusBar to show thinking status
+            ClaudeNotifier.setThinking(project);
             LOG.debug("Thinking started");
         }
     }
@@ -197,7 +207,9 @@ public class ClaudeMessageHandler implements MessageCallback {
         if (isThinking) {
             isThinking = false;
             callbackHandler.notifyThinkingStatusChanged(false);
-            LOG.debug("Thinking completed");
+            // Update StatusBar to show generating status
+            ClaudeNotifier.setGenerating(project);
+            LOG.debug("Thinking completed, generating response");
         }
 
         assistantContent.append(content);
@@ -273,6 +285,8 @@ public class ClaudeMessageHandler implements MessageCallback {
             isThinking = false;
             callbackHandler.notifyThinkingStatusChanged(false);
         }
+        // Clear status from StatusBar
+        ClaudeNotifier.clearStatus(project);
         state.setBusy(false);
         state.setLoading(false);
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
@@ -291,6 +305,21 @@ public class ClaudeMessageHandler implements MessageCallback {
         try {
             JsonObject resultJson = gson.fromJson(content, JsonObject.class);
             LOG.debug("Result message received");
+
+            // Always update status bar with token usage if available in result
+            if (resultJson.has("usage")) {
+                JsonObject resultUsage = resultJson.getAsJsonObject("usage");
+                
+                int inputTokens = resultUsage.has("input_tokens") ? resultUsage.get("input_tokens").getAsInt() : 0;
+                int cacheWriteTokens = resultUsage.has("cache_creation_input_tokens") ? resultUsage.get("cache_creation_input_tokens").getAsInt() : 0;
+                int cacheReadTokens = resultUsage.has("cache_read_input_tokens") ? resultUsage.get("cache_read_input_tokens").getAsInt() : 0;
+                int outputTokens = resultUsage.has("output_tokens") ? resultUsage.get("output_tokens").getAsInt() : 0;
+                
+                int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+                int maxTokens = com.github.claudecodegui.handler.SettingsHandler.getModelContextLimit(state.getModel());
+                
+                ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
+            }
 
             // 如果当前消息的raw中usage为0，则用result中的usage进行更新
             if (currentAssistantMessage != null && currentAssistantMessage.raw != null) {

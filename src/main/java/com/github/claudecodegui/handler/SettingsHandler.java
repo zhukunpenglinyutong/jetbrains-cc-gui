@@ -159,6 +159,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 PropertiesComponent props = PropertiesComponent.getInstance();
                 props.setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
                 LOG.info("Saved permission mode to settings: " + mode);
+                com.github.claudecodegui.notifications.ClaudeNotifier.setMode(context.getProject(), mode);
 
                 // 验证设置是否成功
                 // String currentMode = context.getSession().getPermissionMode();
@@ -213,6 +214,9 @@ public class SettingsHandler extends BaseMessageHandler {
             if (context.getSession() != null) {
                 context.getSession().setModel(model);
             }
+
+            // Update status bar with basic model name
+            com.github.claudecodegui.notifications.ClaudeNotifier.setModel(context.getProject(), model);
 
             // 计算新模型的上下文限制
             int newMaxTokens = getModelContextLimit(finalModelName);
