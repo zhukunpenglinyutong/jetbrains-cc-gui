@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.CodeSource;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -395,15 +396,22 @@ public class BridgeDirectoryResolver {
             }
 
             File extractedDir = new File(pluginDir, SDK_DIR_NAME);
-            String signature = descriptor.getVersion() + ":" + archiveFile.lastModified();
+            String archiveHash = calculateFileHash(archiveFile);
+            if (archiveHash == null) {
+                LOG.warn("[BridgeResolver] Failed to calculate archive hash, falling back to version-based signature");
+                archiveHash = "unknown";
+            }
+            String signature = descriptor.getVersion() + ":" + archiveHash;
             File versionFile = new File(extractedDir, BRIDGE_VERSION_FILE);
 
             if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
+                this.cachedSdkDir = extractedDir;
                 return extractedDir;
             }
 
             synchronized (this.bridgeExtractionLock) {
                 if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
+                    this.cachedSdkDir = extractedDir;
                     return extractedDir;
                 }
 
@@ -418,6 +426,7 @@ public class BridgeDirectoryResolver {
 
                 if (currentState == ExtractionState.COMPLETED && isValidBridgeDir(extractedDir)) {
                     // Already extracted and valid
+                    this.cachedSdkDir = extractedDir;
                     return extractedDir;
                 }
 
@@ -454,6 +463,7 @@ public class BridgeDirectoryResolver {
                         unzipArchive(archiveFile, extractedDir);
                         Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
                         this.extractionState.set(ExtractionState.COMPLETED);
+                        this.cachedSdkDir = extractedDir;
                         this.extractionFuture.complete(extractedDir);
                         this.extractionReadyFuture.complete(true);
                     } catch (Exception e) {
@@ -495,7 +505,7 @@ public class BridgeDirectoryResolver {
      * Returns the extracted directory or null if failed.
      */
     private File waitForExtraction() {
-        CompletableFuture<File> future = extractionFuture;
+        CompletableFuture<File> future = this.extractionFuture;
         if (future == null) {
             LOG.warn("[BridgeResolver] No extraction future available");
             return null;
@@ -505,10 +515,13 @@ public class BridgeDirectoryResolver {
             LOG.info("[BridgeResolver] Waiting for extraction to complete...");
             File result = future.join(); // Block until completion
             LOG.info("[BridgeResolver] Extraction completed, result: " + (result != null ? result.getAbsolutePath() : "null"));
+            if (result != null) {
+                this.cachedSdkDir = result;
+            }
             return result;
         } catch (Exception e) {
             LOG.error("[BridgeResolver] Failed to wait for extraction: " + e.getMessage(), e);
-            extractionState.set(ExtractionState.FAILED);
+            this.extractionState.set(ExtractionState.FAILED);
             return null;
         }
     }
@@ -549,8 +562,9 @@ public class BridgeDirectoryResolver {
                         indicator.setFraction(1.0);
                         LOG.info("[BridgeResolver] Background extraction completed successfully");
 
-                        // Mark as completed
+                        // Mark as completed and cache the directory
                         BridgeDirectoryResolver.this.extractionState.set(ExtractionState.COMPLETED);
+                        BridgeDirectoryResolver.this.cachedSdkDir = extractedDir;
                         BridgeDirectoryResolver.this.extractionFuture.complete(extractedDir);
                         BridgeDirectoryResolver.this.extractionReadyFuture.complete(true);
                     } catch (IOException e) {
@@ -750,7 +764,48 @@ public class BridgeDirectoryResolver {
      * Check if extraction is currently in progress.
      */
     public boolean isExtractionInProgress() {
-        return extractionState.get() == ExtractionState.IN_PROGRESS;
+        return this.extractionState.get() == ExtractionState.IN_PROGRESS;
+    }
+
+    /**
+     * Calculate SHA-256 hash of a file.
+     * This provides a reliable way to detect if the archive has changed.
+     *
+     * @param file The file to hash
+     * @return Hex string of the hash, or null if calculation fails
+     */
+    private String calculateFileHash(File file) {
+        if (file == null || !file.exists()) {
+            return null;
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+
+            try (FileInputStream fis = new FileInputStream(file);
+                 BufferedInputStream bis = new BufferedInputStream(fis)) {
+                int bytesRead;
+                while ((bytesRead = bis.read(buffer)) != -1) {
+                    digest.update(buffer, 0, bytesRead);
+                }
+            }
+
+            byte[] hashBytes = digest.digest();
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+
+            return hexString.toString();
+        } catch (Exception e) {
+            LOG.warn("[BridgeResolver] Failed to calculate file hash: " + e.getMessage());
+            return null;
+        }
     }
 }
 

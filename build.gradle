@@ -201,7 +201,8 @@ tasks.named('processResources') {
 tasks.register('packageAiBridge', Exec) {
     onlyIf { aiBridgeDir.exists() }
 
-    workingDir projectDir
+    // 切换到 ai-bridge 目录内部进行打包，避免包含顶层目录
+    workingDir aiBridgeDir
 
     // 确保输出目录存在
     doFirst {
@@ -216,11 +217,11 @@ tasks.register('packageAiBridge', Exec) {
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         // Windows: 使用 PowerShell 的 Compress-Archive 或回退到 Gradle Zip
         commandLine 'powershell', '-Command',
-            "Compress-Archive -Path '${aiBridgeDir.absolutePath}\\*' -DestinationPath '${aiBridgeArchive.absolutePath}' -Force"
+            "Compress-Archive -Path '*' -DestinationPath '${aiBridgeArchive.absolutePath}' -Force"
     } else {
         // Unix/Linux/macOS: 使用 zip 命令保留权限
         commandLine 'zip', '-r', '-y', aiBridgeArchive.absolutePath,
-            aiBridgeDir.name,
+            '.',
             '-x', '*/node_modules/.pnpm/*'
     }
 
