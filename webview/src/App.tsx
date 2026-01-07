@@ -10,6 +10,8 @@ import type { SettingsTab } from './components/settings/SettingsSidebar';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import AskUserQuestionDialog, { type AskUserQuestionRequest } from './components/AskUserQuestionDialog';
+import RewindDialog, { type RewindRequest } from './components/RewindDialog';
+import { rewindFiles } from './utils/bridge';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
 import type { Attachment, PermissionMode, SelectedAgent } from './components/ChatInputBox/types';
@@ -97,6 +99,10 @@ const App = () => {
   const askUserQuestionDialogOpenRef = useRef(false);
   const currentAskUserQuestionRequestRef = useRef<AskUserQuestionRequest | null>(null);
   const pendingAskUserQuestionRequestsRef = useRef<AskUserQuestionRequest[]>([]);
+
+  // Rewind 弹窗状态
+  const [rewindDialogOpen, setRewindDialogOpen] = useState(false);
+  const [currentRewindRequest, setCurrentRewindRequest] = useState<RewindRequest | null>(null);
 
   // ChatInputBox 相关状态
   const [currentProvider, setCurrentProvider] = useState('claude');
@@ -362,6 +368,73 @@ const App = () => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
+  // Rewind 相关处理函数
+  const handleRewindClick = (messageIndex: number, message: ClaudeMessage) => {
+    if (!currentSessionId) {
+      addToast(t('rewind.notAvailable'), 'warning');
+      return;
+    }
+
+    const isToolResultOnlyUserMessage = (msg: ClaudeMessage) => {
+      if (msg.type !== 'user') return false;
+      if ((msg.content || '').trim() === '[tool_result]') return true;
+      const raw = msg.raw;
+      if (!raw || typeof raw === 'string') return false;
+      const content = (raw as any).content ?? (raw as any).message?.content;
+      if (!Array.isArray(content)) return false;
+      return content.some((block: any) => block && block.type === 'tool_result');
+    };
+
+    let targetIndex = messageIndex;
+    let targetMessage: ClaudeMessage = message;
+    if (isToolResultOnlyUserMessage(message)) {
+      for (let i = messageIndex - 1; i >= 0; i -= 1) {
+        const candidate = mergedMessages[i];
+        if (candidate.type !== 'user') continue;
+        if (isToolResultOnlyUserMessage(candidate)) continue;
+        targetIndex = i;
+        targetMessage = candidate;
+        break;
+      }
+    }
+
+    const raw = targetMessage.raw;
+    const uuid = typeof raw === 'object' ? (raw as any)?.uuid : undefined;
+    if (!uuid) {
+      addToast(t('rewind.notAvailable'), 'warning');
+      console.warn('[Rewind] No UUID found in message:', targetMessage);
+      return;
+    }
+
+    // Calculate messages after this one
+    const messagesAfterCount = mergedMessages.length - targetIndex - 1;
+
+    // Get display content for the dialog
+    const content = targetMessage.content || getMessageText(targetMessage);
+    const timestamp = targetMessage.timestamp ? formatTime(targetMessage.timestamp) : undefined;
+
+    setCurrentRewindRequest({
+      sessionId: currentSessionId,
+      userMessageId: uuid,
+      messageContent: content,
+      messageTimestamp: timestamp,
+      messagesAfterCount,
+    });
+    setRewindDialogOpen(true);
+  };
+
+  const handleRewindConfirm = (sessionId: string, userMessageId: string) => {
+    console.log('[Rewind] Confirming rewind:', { sessionId, userMessageId });
+    rewindFiles(sessionId, userMessageId);
+    setRewindDialogOpen(false);
+    setCurrentRewindRequest(null);
+  };
+
+  const handleRewindCancel = () => {
+    setRewindDialogOpen(false);
+    setCurrentRewindRequest(null);
+  };
+
   useEffect(() => {
     window.updateMessages = (json) => {
       // const timestamp = Date.now();
@@ -430,6 +503,19 @@ const App = () => {
     window.addHistoryMessage = (message: ClaudeMessage) => {
       setMessages((prev) => [...prev, message]);
     };
+
+    // 设置当前会话 ID（用于 rewind 功能）
+    window.setSessionId = (sessionId: string) => {
+      console.log('[Frontend] Received session ID:', sessionId);
+      setCurrentSessionId(sessionId);
+    };
+
+    // 检查是否有待处理的 sessionId（Java 端可能先于 React 组件挂载）
+    if ((window as any).__pendingSessionId) {
+      console.log('[Frontend] Found pending session ID, applying...');
+      setCurrentSessionId((window as any).__pendingSessionId);
+      delete (window as any).__pendingSessionId;
+    }
 
     // 注册 toast 回调（后端调用）
     window.addToast = (message, type) => {
@@ -1594,6 +1680,42 @@ const App = () => {
     return result;
   }, [messages]);
 
+  const canRewindFromMessageIndex = (userMessageIndex: number) => {
+    if (userMessageIndex < 0 || userMessageIndex >= mergedMessages.length) {
+      return false;
+    }
+
+    const current = mergedMessages[userMessageIndex];
+    if (current.type !== 'user') return false;
+    if ((current.content || '').trim() === '[tool_result]') return false;
+    const raw = current.raw;
+    if (raw && typeof raw !== 'string') {
+      const content = (raw as any).content ?? (raw as any).message?.content;
+      if (Array.isArray(content) && content.some((block: any) => block && block.type === 'tool_result')) {
+        return false;
+      }
+    }
+
+    for (let i = userMessageIndex + 1; i < mergedMessages.length; i += 1) {
+      const msg = mergedMessages[i];
+      if (msg.type === 'user') {
+        break;
+      }
+      const blocks = getContentBlocks(msg);
+      for (const block of blocks) {
+        if (block.type !== 'tool_use') {
+          continue;
+        }
+        const toolName = (block.name ?? '').toLowerCase();
+        if (['edit', 'edit_file', 'replace_string', 'write_to_file'].includes(toolName)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
   const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') {
       return null;
@@ -1756,9 +1878,29 @@ const App = () => {
 
             return (
               <div key={messageIndex} className={`message ${message.type}`}>
-                {message.type === 'user' && message.timestamp && (
-                  <div className="message-timestamp-header">
-                    {formatTime(message.timestamp)}
+                {message.type === 'user' && (
+                  <div className="message-header-row">
+                    {message.timestamp && (
+                      <div className="message-timestamp-header">
+                        {formatTime(message.timestamp)}
+                      </div>
+                    )}
+                    {/* Rewind button - only show if not the last user message and has session */}
+                    {currentProvider === 'claude' &&
+                      currentSessionId &&
+                      messageIndex < mergedMessages.length - 1 &&
+                      canRewindFromMessageIndex(messageIndex) && (
+                      <button
+                        className="rewind-button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRewindClick(messageIndex, message);
+                        }}
+                        title={t('rewind.tooltip')}
+                      >
+                        &#x21BA;
+                      </button>
+                    )}
                   </div>
                 )}
                 {message.type !== 'assistant' && message.type !== 'user' && (
@@ -1972,6 +2114,13 @@ const App = () => {
         request={currentAskUserQuestionRequest}
         onSubmit={handleAskUserQuestionSubmit}
         onCancel={handleAskUserQuestionCancel}
+      />
+
+      <RewindDialog
+        isOpen={rewindDialogOpen}
+        request={currentRewindRequest}
+        onConfirm={handleRewindConfirm}
+        onCancel={handleRewindCancel}
       />
     </>
   );

@@ -633,5 +633,20 @@
         "description": "Dernier modèle de pointe avec des améliorations en connaissances."
       }
     }
+  },
+  "rewind": {
+    "title": "Restaurer les fichiers à l'état précédent",
+    "tooltip": "Restaurer les fichiers à leur état à ce message",
+    "rewindTo": "Restaurer à",
+    "impact": "Impact",
+    "willRestore": "Restaurera les fichiers à leur état à ce message",
+    "changesLost": "Les modifications effectuées après ce point seront perdues",
+    "messagesAffected": "messages affectés",
+    "historyKept": "L'historique de conversation sera conservé",
+    "cannotUndo": "Cette action ne peut pas être annulée.",
+    "restoreFiles": "Restaurer les fichiers",
+    "success": "Fichiers restaurés avec succès",
+    "failed": "Échec de la restauration des fichiers",
+    "notAvailable": "Restauration non disponible pour cette session"
   }
 }

@@ -745,5 +745,20 @@
     "enhanceFailed": "Failed to enhance prompt",
     "emptyPrompt": "Please enter a prompt first",
     "copyEnhanced": "Copy Enhanced"
+  },
+  "rewind": {
+    "title": "Rewind Files to Previous State",
+    "tooltip": "Restore files to their state at this message",
+    "rewindTo": "Rewind to",
+    "impact": "Impact",
+    "willRestore": "Will restore files to their state at this message",
+    "changesLost": "Changes made after this point will be lost",
+    "messagesAffected": "messages affected",
+    "historyKept": "Conversation history will be kept",
+    "cannotUndo": "This action cannot be undone.",
+    "restoreFiles": "Restore Files",
+    "success": "Files restored successfully",
+    "failed": "Failed to restore files",
+    "notAvailable": "Rewind not available for this session"
   }
 }

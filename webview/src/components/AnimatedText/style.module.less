@@ -1,21 +1,21 @@
 .container {
   display: inline-block;
-  white-space: pre;
-  vertical-align: bottom; /* Align with icon */
+  white-space: pre-wrap;
 }
 
 .char {
   display: inline-block;
-  transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 4px; /* Ensure spaces have width */
-  
-  &.visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  
-  &.hidden {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
+  transition: opacity 35ms ease, transform 35ms ease;
+  will-change: opacity, transform;
 }
+
+.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hidden {
+  opacity: 0;
+  transform: translateY(0.25em);
+}
+

@@ -58,3 +58,12 @@ export const showMultiEditDiff = (
 ) => {
   sendToJava('show_multi_edit_diff', { filePath, edits, currentContent });
 };
+
+/**
+ * Rewind files to a specific user message state
+ * @param sessionId - Session ID
+ * @param userMessageId - User message UUID to rewind to
+ */
+export const rewindFiles = (sessionId: string, userMessageId: string) => {
+  sendToJava('rewind_files', { sessionId, userMessageId });
+};

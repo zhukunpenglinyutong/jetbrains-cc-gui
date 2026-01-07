@@ -698,5 +698,20 @@
     "enhanceFailed": "プロンプトの強化に失敗しました",
     "emptyPrompt": "最初にプロンプトを入力してください",
     "copyEnhanced": "強化版をコピー"
+  },
+  "rewind": {
+    "title": "ファイルを以前の状態に巻き戻す",
+    "tooltip": "このメッセージ時点のファイル状態に復元",
+    "rewindTo": "巻き戻し先",
+    "impact": "影響",
+    "willRestore": "このメッセージ時点のファイル状態に復元します",
+    "changesLost": "この時点以降の変更は失われます",
+    "messagesAffected": "件のメッセージが影響を受けます",
+    "historyKept": "会話履歴は保持されます",
+    "cannotUndo": "この操作は元に戻せません。",
+    "restoreFiles": "ファイルを復元",
+    "success": "ファイルの復元に成功しました",
+    "failed": "ファイルの復元に失敗しました",
+    "notAvailable": "このセッションでは巻き戻しを利用できません"
   }
 }

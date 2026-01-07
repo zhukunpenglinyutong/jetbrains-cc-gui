@@ -63,6 +63,11 @@ interface Window {
   addHistoryMessage?: (message: any) => void;
 
   /**
+   * Set current session ID (for rewind feature)
+   */
+  setSessionId?: (sessionId: string) => void;
+
+  /**
    * Add toast notification (called from backend)
    */
   addToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -222,6 +227,11 @@ interface Window {
    * Pending slash commands payload before provider initialization
    */
   __pendingSlashCommands?: string;
+
+  /**
+   * Pending session ID before App component mounts (for rewind feature)
+   */
+  __pendingSessionId?: string;
 
   /**
    * Apply IDEA editor font configuration (called from Java backend)

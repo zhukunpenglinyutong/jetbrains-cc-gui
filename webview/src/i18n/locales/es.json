@@ -633,5 +633,20 @@
         "description": "Último modelo de frontera con mejoras en conocimiento."
       }
     }
+  },
+  "rewind": {
+    "title": "Restaurar archivos al estado anterior",
+    "tooltip": "Restaurar archivos a su estado en este mensaje",
+    "rewindTo": "Restaurar a",
+    "impact": "Impacto",
+    "willRestore": "Restaurará los archivos a su estado en este mensaje",
+    "changesLost": "Los cambios realizados después de este punto se perderán",
+    "messagesAffected": "mensajes afectados",
+    "historyKept": "El historial de conversación se conservará",
+    "cannotUndo": "Esta acción no se puede deshacer.",
+    "restoreFiles": "Restaurar archivos",
+    "success": "Archivos restaurados correctamente",
+    "failed": "Error al restaurar archivos",
+    "notAvailable": "Restauración no disponible para esta sesión"
   }
 }
