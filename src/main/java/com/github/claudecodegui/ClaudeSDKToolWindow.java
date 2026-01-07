@@ -7,6 +7,7 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.handler.*;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
+import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.HtmlLoader;
@@ -205,6 +206,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             createUIComponents();
             registerSessionLoadListener();
             registerInstance();
+            initializeStatusBar();
 
             this.initialized = true;
             LOG.info("窗口实例已完全初始化，项目: " + project.getName());
@@ -293,11 +295,41 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     if (session != null) {
                         session.setPermissionMode(mode);
                         LOG.info("Loaded permission mode from settings: " + mode);
+                        // Update status bar
+                        com.github.claudecodegui.notifications.ClaudeNotifier.setMode(project, mode);
                     }
                 }
             } catch (Exception e) {
                 LOG.warn("Failed to load permission mode: " + e.getMessage());
             }
+        }
+
+        private void initializeStatusBar() {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (project == null || disposed) return;
+
+                // Set initial mode
+                String mode = session != null ? session.getPermissionMode() : "default";
+                com.github.claudecodegui.notifications.ClaudeNotifier.setMode(project, mode);
+
+                // Set initial model
+                String model = session != null ? session.getModel() : "claude-sonnet-4-5";
+                com.github.claudecodegui.notifications.ClaudeNotifier.setModel(project, model);
+
+                // Set initial agent
+                try {
+                    String selectedId = settingsService.getSelectedAgentId();
+                    if (selectedId != null) {
+                        JsonObject agent = settingsService.getAgent(selectedId);
+                        if (agent != null) {
+                            String agentName = agent.has("name") ? agent.get("name").getAsString() : "Agent";
+                            com.github.claudecodegui.notifications.ClaudeNotifier.setAgent(project, agentName);
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Failed to set initial agent in status bar: " + e.getMessage());
+                }
+            });
         }
 
         private void savePermissionModeToSettings(String mode) {
@@ -468,6 +500,25 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void createUIComponents() {
+            // Use the shared resolver from BridgePreloader for consistent state
+            com.github.claudecodegui.bridge.BridgeDirectoryResolver sharedResolver = BridgePreloader.getSharedResolver();
+
+            // Check if bridge extraction is in progress (non-blocking check)
+            if (sharedResolver.isExtractionInProgress()) {
+                LOG.info("[ClaudeSDKToolWindow] Bridge extraction in progress, showing loading panel...");
+                showLoadingPanel();
+
+                // Register async callback to reinitialize when extraction completes
+                sharedResolver.getExtractionFuture().thenAcceptAsync(ready -> {
+                    if (ready) {
+                        reinitializeAfterExtraction();
+                    } else {
+                        ApplicationManager.getApplication().invokeLater(this::showErrorPanel);
+                    }
+                });
+                return;
+            }
+
             PropertiesComponent props = PropertiesComponent.getInstance();
             String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
             com.github.claudecodegui.model.NodeDetectionResult nodeResult = null;
@@ -493,6 +544,20 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             if (!claudeSDKBridge.checkEnvironment()) {
+                // Check if bridge extraction is still in progress
+                // If so, show loading panel instead of error panel
+                if (sharedResolver.isExtractionInProgress()) {
+                    LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction in progress, showing loading panel...");
+                    showLoadingPanel();
+                    sharedResolver.getExtractionFuture().thenAcceptAsync(ready -> {
+                        if (ready) {
+                            reinitializeAfterExtraction();
+                        } else {
+                            ApplicationManager.getApplication().invokeLater(this::showErrorPanel);
+                        }
+                    });
+                    return;
+                }
                 showErrorPanel();
                 return;
             }
@@ -714,6 +779,60 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 this::handleNodePathSave
             );
             mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
+        /**
+         * Show a loading panel while AI Bridge is being extracted.
+         * This avoids EDT freeze during first-time setup.
+         */
+        private void showLoadingPanel() {
+            JPanel loadingPanel = new JPanel(new BorderLayout());
+            loadingPanel.setBackground(new Color(30, 30, 30));
+
+            JPanel centerPanel = new JPanel();
+            centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+            centerPanel.setBackground(new Color(30, 30, 30));
+            centerPanel.setBorder(BorderFactory.createEmptyBorder(100, 50, 100, 50));
+
+            // Loading icon/spinner placeholder
+            JLabel iconLabel = new JLabel("⏳");
+            iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 48));
+            iconLabel.setForeground(Color.WHITE);
+            iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel titleLabel = new JLabel("AI BridgPreparinge...(插件解压中...)");
+            titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+            titleLabel.setForeground(Color.WHITE);
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel descLabel = new JLabel("<html><center>First-time setup: extracting AI Bridge components.<br>This only happens once.<br>仅在首次安装/更新时候需要解压（大约10s~30s），解压后就没有此页面了</center></html>");
+            descLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+            descLabel.setForeground(new Color(180, 180, 180));
+            descLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            centerPanel.add(iconLabel);
+            centerPanel.add(Box.createVerticalStrut(20));
+            centerPanel.add(titleLabel);
+            centerPanel.add(Box.createVerticalStrut(10));
+            centerPanel.add(descLabel);
+
+            loadingPanel.add(centerPanel, BorderLayout.CENTER);
+            mainPanel.add(loadingPanel, BorderLayout.CENTER);
+
+            LOG.info("[ClaudeSDKToolWindow] Showing loading panel while bridge extracts...");
+        }
+
+        /**
+         * Reinitialize UI after bridge extraction completes.
+         */
+        private void reinitializeAfterExtraction() {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                LOG.info("[ClaudeSDKToolWindow] Bridge extraction complete, reinitializing UI...");
+                mainPanel.removeAll();
+                createUIComponents();
+                mainPanel.revalidate();
+                mainPanel.repaint();
+            });
         }
 
         private void handleNodePathSave(String manualPath) {

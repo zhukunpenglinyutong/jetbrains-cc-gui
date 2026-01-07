@@ -7,6 +7,7 @@ import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.startup.BridgePreloader;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
@@ -32,7 +33,14 @@ public abstract class BaseSDKBridge {
     protected final NodeDetector nodeDetector = new NodeDetector();
     protected final ProcessManager processManager = new ProcessManager();
     protected final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
-    protected final BridgeDirectoryResolver directoryResolver = new BridgeDirectoryResolver();
+
+    /**
+     * Get the shared BridgeDirectoryResolver from BridgePreloader.
+     * This ensures consistent extraction state across all components.
+     */
+    protected BridgeDirectoryResolver getDirectoryResolver() {
+        return BridgePreloader.getSharedResolver();
+    }
 
     protected BaseSDKBridge(Class<?> loggerClass) {
         this.LOG = Logger.getInstance(loggerClass);
@@ -161,7 +169,7 @@ public abstract class BaseSDKBridge {
             }
 
             // Check bridge directory
-            File bridgeDir = directoryResolver.findSdkDir();
+            File bridgeDir = getDirectoryResolver().findSdkDir();
             File scriptFile = new File(bridgeDir, CHANNEL_SCRIPT);
             if (!scriptFile.exists()) {
                 LOG.error("channel-manager.js not found at: " + scriptFile.getAbsolutePath());
@@ -205,7 +213,7 @@ public abstract class BaseSDKBridge {
             final String[] lastNodeError = {null};
 
             try {
-                File bridgeDir = directoryResolver.findSdkDir();
+                File bridgeDir = getDirectoryResolver().findSdkDir();
                 File processTempDir = processManager.prepareClaudeTempDir();
                 Set<String> existingTempMarkers = processManager.snapshotClaudeCwdFiles(processTempDir);
 
@@ -326,7 +334,7 @@ public abstract class BaseSDKBridge {
         List<String> command = new ArrayList<>();
         try {
             String node = nodeDetector.findNodeExecutable();
-            File bridgeDir = directoryResolver.findSdkDir();
+            File bridgeDir = getDirectoryResolver().findSdkDir();
 
             command.add(node);
             command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
