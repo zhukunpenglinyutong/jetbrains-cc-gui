@@ -804,11 +804,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
             titleLabel.setForeground(Color.WHITE);
             titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
             JLabel descLabel = new JLabel("<html><center>First-time setup: extracting AI Bridge components.<br>This only happens once.<br>仅在首次安装/更新时候需要解压（大约10s~30s），解压后就没有此页面了</center></html>");
             descLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
             descLabel.setForeground(new Color(180, 180, 180));
             descLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            descLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
             centerPanel.add(iconLabel);
             centerPanel.add(Box.createVerticalStrut(20));
