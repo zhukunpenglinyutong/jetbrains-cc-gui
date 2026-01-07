@@ -15,12 +15,14 @@ const enableVConsole =
 if (enableVConsole) {
   void import('vconsole').then(({ default: VConsole }) => {
     new VConsole();
-    // 将 vConsole 按钮移到左下角，避免遮挡右下角的发送按钮
+    // 将 vConsole 按钮移到左上角，避免遮挡右下角的发送按钮
     setTimeout(() => {
       const vcSwitch = document.getElementById('__vconsole') as HTMLElement;
       if (vcSwitch) {
         vcSwitch.style.left = '10px';
         vcSwitch.style.right = 'auto';
+        vcSwitch.style.top = '10px';
+        vcSwitch.style.bottom = 'auto';
       }
     }, 100);
   });
