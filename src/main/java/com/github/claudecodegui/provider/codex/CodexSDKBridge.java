@@ -217,7 +217,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
             try {
                 String node = nodeDetector.findNodeExecutable();
-                File bridgeDir = directoryResolver.findSdkDir();
+                File bridgeDir = getDirectoryResolver().findSdkDir();
 
                 // Ensure Codex SDK binary has executable permission
                 setCodexExecutablePermission(bridgeDir);

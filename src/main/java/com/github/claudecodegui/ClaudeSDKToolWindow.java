@@ -7,6 +7,7 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.handler.*;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
+import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.HtmlLoader;
@@ -468,6 +469,25 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void createUIComponents() {
+            // Use the shared resolver from BridgePreloader for consistent state
+            com.github.claudecodegui.bridge.BridgeDirectoryResolver sharedResolver = BridgePreloader.getSharedResolver();
+
+            // Check if bridge extraction is in progress (non-blocking check)
+            if (sharedResolver.isExtractionInProgress()) {
+                LOG.info("[ClaudeSDKToolWindow] Bridge extraction in progress, showing loading panel...");
+                showLoadingPanel();
+
+                // Register async callback to reinitialize when extraction completes
+                sharedResolver.getExtractionFuture().thenAcceptAsync(ready -> {
+                    if (ready) {
+                        reinitializeAfterExtraction();
+                    } else {
+                        ApplicationManager.getApplication().invokeLater(this::showErrorPanel);
+                    }
+                });
+                return;
+            }
+
             PropertiesComponent props = PropertiesComponent.getInstance();
             String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
             com.github.claudecodegui.model.NodeDetectionResult nodeResult = null;
@@ -493,6 +513,20 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             if (!claudeSDKBridge.checkEnvironment()) {
+                // Check if bridge extraction is still in progress
+                // If so, show loading panel instead of error panel
+                if (sharedResolver.isExtractionInProgress()) {
+                    LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction in progress, showing loading panel...");
+                    showLoadingPanel();
+                    sharedResolver.getExtractionFuture().thenAcceptAsync(ready -> {
+                        if (ready) {
+                            reinitializeAfterExtraction();
+                        } else {
+                            ApplicationManager.getApplication().invokeLater(this::showErrorPanel);
+                        }
+                    });
+                    return;
+                }
                 showErrorPanel();
                 return;
             }
@@ -714,6 +748,60 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 this::handleNodePathSave
             );
             mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
+        /**
+         * Show a loading panel while AI Bridge is being extracted.
+         * This avoids EDT freeze during first-time setup.
+         */
+        private void showLoadingPanel() {
+            JPanel loadingPanel = new JPanel(new BorderLayout());
+            loadingPanel.setBackground(new Color(30, 30, 30));
+
+            JPanel centerPanel = new JPanel();
+            centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+            centerPanel.setBackground(new Color(30, 30, 30));
+            centerPanel.setBorder(BorderFactory.createEmptyBorder(100, 50, 100, 50));
+
+            // Loading icon/spinner placeholder
+            JLabel iconLabel = new JLabel("⏳");
+            iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 48));
+            iconLabel.setForeground(Color.WHITE);
+            iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel titleLabel = new JLabel("AI BridgPreparinge...(插件解压中...)");
+            titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+            titleLabel.setForeground(Color.WHITE);
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel descLabel = new JLabel("<html><center>First-time setup: extracting AI Bridge components.<br>This only happens once.<br>仅在首次安装/更新时候需要解压，解压后就没有此页面了</center></html>");
+            descLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+            descLabel.setForeground(new Color(180, 180, 180));
+            descLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            centerPanel.add(iconLabel);
+            centerPanel.add(Box.createVerticalStrut(20));
+            centerPanel.add(titleLabel);
+            centerPanel.add(Box.createVerticalStrut(10));
+            centerPanel.add(descLabel);
+
+            loadingPanel.add(centerPanel, BorderLayout.CENTER);
+            mainPanel.add(loadingPanel, BorderLayout.CENTER);
+
+            LOG.info("[ClaudeSDKToolWindow] Showing loading panel while bridge extracts...");
+        }
+
+        /**
+         * Reinitialize UI after bridge extraction completes.
+         */
+        private void reinitializeAfterExtraction() {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                LOG.info("[ClaudeSDKToolWindow] Bridge extraction complete, reinitializing UI...");
+                mainPanel.removeAll();
+                createUIComponents();
+                mainPanel.revalidate();
+                mainPanel.repaint();
+            });
         }
 
         private void handleNodePathSave(String manualPath) {

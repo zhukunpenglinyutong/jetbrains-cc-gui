@@ -38,6 +38,9 @@
                     anchor="right"
                     factoryClass="com.github.claudecodegui.ClaudeSDKToolWindow"
                     icon="/icons/cc-gui-icon.svg"/>
+
+        <!-- Pre-extract AI Bridge on project open to avoid EDT freeze -->
+        <postStartupActivity implementation="com.github.claudecodegui.startup.BridgePreloader"/>
     </extensions>
 
     <actions>
