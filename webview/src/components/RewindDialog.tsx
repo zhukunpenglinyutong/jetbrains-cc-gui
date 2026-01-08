@@ -12,6 +12,7 @@ export interface RewindRequest {
 interface RewindDialogProps {
   isOpen: boolean;
   request: RewindRequest | null;
+  isLoading?: boolean;
   onConfirm: (sessionId: string, userMessageId: string) => void;
   onCancel: () => void;
 }
@@ -19,6 +20,7 @@ interface RewindDialogProps {
 const RewindDialog = ({
   isOpen,
   request,
+  isLoading = false,
   onConfirm,
   onCancel,
 }: RewindDialogProps) => {
@@ -58,50 +60,67 @@ const RewindDialog = ({
           </h3>
         </div>
         <div className="confirm-dialog-body">
-          <div className="rewind-target">
-            <div className="rewind-target-label">{t('rewind.rewindTo', 'Rewind to')}:</div>
-            <div className="rewind-target-message">
-              {request.messageTimestamp && (
-                <span className="rewind-timestamp">[{request.messageTimestamp}]</span>
-              )}
-              <span className="rewind-content">"{displayContent}"</span>
+          {isLoading ? (
+            <div className="rewind-loading">
+              <span className="codicon codicon-loading codicon-modifier-spin rewind-loading-icon" />
+              <span className="rewind-loading-text">{t('rewind.restoring', 'Restoring files...')}</span>
             </div>
-          </div>
-
-          <div className="rewind-warning">
-            <div className="rewind-warning-icon">&#x26A0;</div>
-            <div className="rewind-warning-content">
-              <div className="rewind-warning-title">{t('rewind.impact', 'Impact')}:</div>
-              <ul className="rewind-warning-list">
-                <li>{t('rewind.willRestore', 'Will restore files to their state at this message')}</li>
-                <li>
-                  {t('rewind.changesLost', 'Changes made after this point will be lost')}
-                  {request.messagesAfterCount > 0 && (
-                    <span className="rewind-affected-count">
-                      ({request.messagesAfterCount} {t('rewind.messagesAffected', 'messages affected')})
-                    </span>
+          ) : (
+            <>
+              <div className="rewind-target">
+                <div className="rewind-target-label">{t('rewind.rewindTo', 'Rewind to')}:</div>
+                <div className="rewind-target-message">
+                  {request.messageTimestamp && (
+                    <span className="rewind-timestamp">[{request.messageTimestamp}]</span>
                   )}
-                </li>
-                <li>{t('rewind.historyKept', 'Conversation history will be kept')}</li>
-              </ul>
-            </div>
-          </div>
+                  <span className="rewind-content">"{displayContent}"</span>
+                </div>
+              </div>
 
-          <p className="rewind-note">
-            {t('rewind.cannotUndo', 'This action cannot be undone.')}
-          </p>
+              <div className="rewind-warning">
+                <div className="rewind-warning-icon">&#x26A0;</div>
+                <div className="rewind-warning-content">
+                  <div className="rewind-warning-title">{t('rewind.impact', 'Impact')}:</div>
+                  <ul className="rewind-warning-list">
+                    <li>{t('rewind.willRestore', 'Will restore files to their state at this message')}</li>
+                    <li>
+                      {t('rewind.changesLost', 'Changes made after this point will be lost')}
+                      {request.messagesAfterCount > 0 && (
+                        <span className="rewind-affected-count">
+                          ({request.messagesAfterCount} {t('rewind.messagesAffected', 'messages affected')})
+                        </span>
+                      )}
+                    </li>
+                    <li>{t('rewind.historyKept', 'Conversation history will be kept')}</li>
+                  </ul>
+                </div>
+              </div>
+
+              <p className="rewind-note">
+                {t('rewind.cannotUndo', 'This action cannot be undone.')}
+              </p>
+            </>
+          )}
         </div>
         <div className="confirm-dialog-footer">
-          <button className="confirm-dialog-button cancel-button" onClick={onCancel}>
-            {t('common.cancel', 'Cancel')}
-          </button>
-          <button
-            className="confirm-dialog-button confirm-button rewind-confirm-button"
-            onClick={handleConfirm}
-            autoFocus
-          >
-            {t('rewind.restoreFiles', 'Restore Files')}
-          </button>
+          {isLoading ? (
+            <button className="confirm-dialog-button cancel-button" onClick={onCancel}>
+              {t('common.close', 'Close')}
+            </button>
+          ) : (
+            <>
+              <button className="confirm-dialog-button cancel-button" onClick={onCancel}>
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                className="confirm-dialog-button confirm-button rewind-confirm-button"
+                onClick={handleConfirm}
+                autoFocus
+              >
+                {t('rewind.restoreFiles', 'Restore Files')}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -315,4 +315,9 @@ interface Window {
    * Update current Codex config (from ~/.codex/)
    */
   updateCurrentCodexConfig?: (json: string) => void;
+
+  /**
+   * Rewind result callback - 回滚操作结果回调
+   */
+  onRewindResult?: (json: string) => void;
 }

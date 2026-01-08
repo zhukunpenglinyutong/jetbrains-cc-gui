@@ -77,20 +77,48 @@ public class RewindHandler extends BaseMessageHandler {
                 context.getClaudeSDKBridge().rewindFiles(sessionId, userMessageId, cwd)
                     .thenAccept(result -> {
                         boolean success = result.has("success") && result.get("success").getAsBoolean();
+                        LOG.info("[RewindHandler] Rewind result: success=" + success + ", result=" + result);
+
+                        // Build the result JSON for the frontend callback
+                        JsonObject callbackResult = new JsonObject();
+                        callbackResult.addProperty("success", success);
+
                         if (success) {
                             LOG.info("[RewindHandler] Rewind successful");
-                            ApplicationManager.getApplication().invokeLater(() -> {
-                                callJavaScript("addToast", escapeJs("Files restored successfully"), escapeJs("success"));
-                            });
+                            // Pass filesRestored if available (SDK may return it)
+                            if (result.has("filesRestored")) {
+                                callbackResult.addProperty("filesRestored", result.get("filesRestored").getAsInt());
+                            }
                         } else {
                             String error = result.has("error") ? result.get("error").getAsString() : "Unknown error";
                             LOG.warn("[RewindHandler] Rewind failed: " + error);
-                            showError("Failed to restore files: " + error);
+                            callbackResult.addProperty("message", "Failed to restore files: " + error);
                         }
+
+                        // Call the frontend callback to update UI state
+                        String callbackJson = gson.toJson(callbackResult);
+                        LOG.info("[RewindHandler] >>> Calling onRewindResult with: " + callbackJson);
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            LOG.info("[RewindHandler] >>> invokeLater executing, calling callJavaScript...");
+                            callJavaScript("onRewindResult", escapeJs(callbackJson));
+                            LOG.info("[RewindHandler] >>> callJavaScript completed");
+                        });
                     })
                     .exceptionally(ex -> {
                         LOG.error("[RewindHandler] Rewind exception: " + ex.getMessage(), ex);
-                        showError("Rewind operation failed: " + ex.getMessage());
+
+                        // Build error result for frontend callback
+                        JsonObject errorResult = new JsonObject();
+                        errorResult.addProperty("success", false);
+                        errorResult.addProperty("message", "Rewind operation failed: " + ex.getMessage());
+
+                        String errorJson = gson.toJson(errorResult);
+                        LOG.info("[RewindHandler] >>> Calling onRewindResult (exception) with: " + errorJson);
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            LOG.info("[RewindHandler] >>> invokeLater (exception) executing...");
+                            callJavaScript("onRewindResult", escapeJs(errorJson));
+                            LOG.info("[RewindHandler] >>> callJavaScript (exception) completed");
+                        });
                         return null;
                     });
 
@@ -102,11 +130,19 @@ public class RewindHandler extends BaseMessageHandler {
     }
 
     /**
-     * Show an error toast in the frontend.
+     * Send error result to the frontend, which will update UI state and show error toast.
      */
     private void showError(String message) {
+        JsonObject errorResult = new JsonObject();
+        errorResult.addProperty("success", false);
+        errorResult.addProperty("message", message);
+
+        String errorJson = gson.toJson(errorResult);
+        LOG.info("[RewindHandler] >>> showError calling onRewindResult with: " + errorJson);
         ApplicationManager.getApplication().invokeLater(() -> {
-            callJavaScript("addToast", escapeJs(message), escapeJs("error"));
+            LOG.info("[RewindHandler] >>> showError invokeLater executing...");
+            callJavaScript("onRewindResult", escapeJs(errorJson));
+            LOG.info("[RewindHandler] >>> showError callJavaScript completed");
         });
     }
 }

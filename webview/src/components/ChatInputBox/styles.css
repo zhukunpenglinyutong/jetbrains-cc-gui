@@ -216,11 +216,22 @@
   color: var(--text-secondary);
   transition: all 0.2s;
   font-size: 14px;
+  /* Reset button styles */
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  outline: none;
 }
 
-.context-tool-btn:hover {
+.context-tool-btn:hover:not(:disabled) {
   background: var(--button-hover);
   color: var(--text-primary);
+}
+
+.context-tool-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 
 .context-tool-divider {

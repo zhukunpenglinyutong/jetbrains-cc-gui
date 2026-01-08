@@ -11,6 +11,7 @@ import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog, { type PermissionRequest } from './components/PermissionDialog';
 import AskUserQuestionDialog, { type AskUserQuestionRequest } from './components/AskUserQuestionDialog';
 import RewindDialog, { type RewindRequest } from './components/RewindDialog';
+import RewindSelectDialog, { type RewindableMessage } from './components/RewindSelectDialog';
 import { rewindFiles } from './utils/bridge';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
@@ -103,6 +104,9 @@ const App = () => {
   // Rewind 弹窗状态
   const [rewindDialogOpen, setRewindDialogOpen] = useState(false);
   const [currentRewindRequest, setCurrentRewindRequest] = useState<RewindRequest | null>(null);
+  const [isRewinding, setIsRewinding] = useState(false);
+  // Rewind 选择弹窗状态
+  const [rewindSelectDialogOpen, setRewindSelectDialogOpen] = useState(false);
 
   // ChatInputBox 相关状态
   const [currentProvider, setCurrentProvider] = useState('claude');
@@ -134,6 +138,8 @@ const App = () => {
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
   // 追踪用户是否在底部（用于判断是否需要自动滚动）
   const isUserAtBottomRef = useRef(true);
+  // 追踪上次按下 ESC 的时间（用于双击 ESC 快捷键）
+  const lastEscPressTimeRef = useRef<number>(0);
 
   useEffect(() => {
     permissionDialogOpenRef.current = permissionDialogOpen;
@@ -425,14 +431,34 @@ const App = () => {
 
   const handleRewindConfirm = (sessionId: string, userMessageId: string) => {
     console.log('[Rewind] Confirming rewind:', { sessionId, userMessageId });
+    setIsRewinding(true);
     rewindFiles(sessionId, userMessageId);
+  };
+
+  const handleRewindCancel = () => {
+    // Allow cancel even while rewinding (user can dismiss the dialog)
+    if (isRewinding) {
+      setIsRewinding(false);
+    }
     setRewindDialogOpen(false);
     setCurrentRewindRequest(null);
   };
 
-  const handleRewindCancel = () => {
-    setRewindDialogOpen(false);
-    setCurrentRewindRequest(null);
+  // Open the rewind select dialog
+  const handleOpenRewindSelectDialog = () => {
+    setRewindSelectDialogOpen(true);
+  };
+
+  // Handle selection from the rewind select dialog
+  const handleRewindSelect = (item: RewindableMessage) => {
+    setRewindSelectDialogOpen(false);
+    // Trigger the confirmation dialog
+    handleRewindClick(item.messageIndex, item.message);
+  };
+
+  // Close the rewind select dialog
+  const handleRewindSelectCancel = () => {
+    setRewindSelectDialogOpen(false);
   };
 
   useEffect(() => {
@@ -832,6 +858,37 @@ const App = () => {
         console.error('[Frontend] Failed to parse selected agent changed:', error);
       }
     };
+
+    // Rewind result callback from Java
+    window.onRewindResult = (json: string) => {
+      console.log('[Frontend] onRewindResult:', json);
+      try {
+        const result = JSON.parse(json);
+        console.log('[Frontend] Parsed rewind result:', result);
+
+        setIsRewinding(false);
+        setRewindDialogOpen(false);
+        setCurrentRewindRequest(null);
+
+        if (result.success) {
+          window.addToast?.(
+            t('rewind.successSimple'),
+            'success'
+          );
+        } else {
+          window.addToast?.(
+            result.message || t('rewind.failed'),
+            'error'
+          );
+        }
+      } catch (error) {
+        console.error('[Frontend] Failed to parse rewind result:', error);
+        setIsRewinding(false);
+        setRewindDialogOpen(false);
+        setCurrentRewindRequest(null);
+        window.addToast?.(t('rewind.parseError'), 'error');
+      }
+    };
   }, []); // 移除 currentProvider 依赖，因为现在使用 ref 获取最新值
 
   useEffect(() => {
@@ -931,11 +988,44 @@ const App = () => {
     }
   }, [currentView]);
 
+  // 双击 ESC 快捷键打开回滚弹窗
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+
+      // 如果有其他弹窗打开，不处理双击 ESC
+      if (permissionDialogOpen || askUserQuestionDialogOpen || rewindDialogOpen || rewindSelectDialogOpen) {
+        return;
+      }
+
+      // 只在 claude provider 且有消息时才触发
+      if (currentProvider !== 'claude' || messages.length === 0) {
+        return;
+      }
+
+      const now = Date.now();
+      const timeSinceLastEsc = now - lastEscPressTimeRef.current;
+
+      // 如果两次 ESC 间隔小于 400ms，触发回滚弹窗
+      if (timeSinceLastEsc < 400) {
+        e.preventDefault();
+        setRewindSelectDialogOpen(true);
+        lastEscPressTimeRef.current = 0; // 重置，避免连续触发
+      } else {
+        lastEscPressTimeRef.current = now;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentProvider, messages.length, permissionDialogOpen, askUserQuestionDialogOpen, rewindDialogOpen, rewindSelectDialogOpen]);
+
   /**
    * 处理消息发送（来自 ChatInputBox）
    */
   const handleSubmit = (content: string, attachments?: Attachment[]) => {
-    const text = content.trim();
+    // Remove zero-width spaces and other invisible characters
+    const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     if (!text && !hasAttachments) {
@@ -1266,7 +1356,7 @@ const App = () => {
       channelId,
       allow: false,
       remember: false,
-      rejectMessage: 'User denied the permission request',
+      rejectMessage: t('permission.userDenied'),
     });
     console.log('[PERM_DEBUG][FRONTEND] Sending decision payload:', payload);
     sendBridgeMessage('permission_decision', payload);
@@ -1323,7 +1413,7 @@ const App = () => {
       }
 
       // 显示成功提示
-      addToast('会话已删除', 'success');
+      addToast(t('history.sessionDeleted'), 'success');
     }
   };
 
@@ -1425,7 +1515,7 @@ const App = () => {
     } else {
       const raw = message.raw;
       if (!raw) {
-        return '(空消息)';
+        return `(${t('chat.emptyMessage')})`;
       }
       if (typeof raw === 'string') {
         text = raw;
@@ -1442,7 +1532,7 @@ const App = () => {
           .map((block) => block.text ?? '')
           .join('\n');
       } else {
-        return '(空消息)';
+        return `(${t('chat.emptyMessage')})`;
       }
     }
 
@@ -1478,7 +1568,7 @@ const App = () => {
     }
     if (message.type === 'user' || message.type === 'error') {
       // 检查是否有有效的文本内容
-      if (text && text.trim() && text !== '(空消息)' && text !== '(无法解析内容)') {
+      if (text && text.trim() && text !== `(${t('chat.emptyMessage')})` && text !== `(${t('chat.parseError')})`) {
         return true;
       }
       // 检查是否有有效的内容块（如图片等）
@@ -1544,7 +1634,7 @@ const App = () => {
           blocks.push({
             type: 'tool_use',
             id: typeof candidate.id === 'string' ? (candidate.id as string) : undefined,
-            name: typeof candidate.name === 'string' ? (candidate.name as string) : '未知工具',
+            name: typeof candidate.name === 'string' ? (candidate.name as string) : t('tools.unknownTool'),
             input: (candidate.input as Record<string, unknown>) ?? {},
           });
         } else if (type === 'image') {
@@ -1707,7 +1797,8 @@ const App = () => {
           continue;
         }
         const toolName = (block.name ?? '').toLowerCase();
-        if (['edit', 'edit_file', 'replace_string', 'write_to_file'].includes(toolName)) {
+        // Include all file modification tools: write (create), edit, notebookedit, etc.
+        if (['write', 'edit', 'edit_file', 'replace_string', 'write_to_file', 'notebookedit', 'create_file'].includes(toolName)) {
           return true;
         }
       }
@@ -1715,6 +1806,36 @@ const App = () => {
 
     return false;
   };
+
+  // Calculate rewindable messages for the select dialog
+  const rewindableMessages = useMemo((): RewindableMessage[] => {
+    if (currentProvider !== 'claude') {
+      return [];
+    }
+
+    const result: RewindableMessage[] = [];
+
+    for (let i = 0; i < mergedMessages.length - 1; i++) {
+      if (!canRewindFromMessageIndex(i)) {
+        continue;
+      }
+
+      const message = mergedMessages[i];
+      const content = message.content || getMessageText(message);
+      const timestamp = message.timestamp ? formatTime(message.timestamp) : undefined;
+      const messagesAfterCount = mergedMessages.length - i - 1;
+
+      result.push({
+        messageIndex: i,
+        message,
+        displayContent: content,
+        timestamp,
+        messagesAfterCount,
+      });
+    }
+
+    return result;
+  }, [mergedMessages, currentProvider]);
 
   const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') {
@@ -1878,29 +1999,11 @@ const App = () => {
 
             return (
               <div key={messageIndex} className={`message ${message.type}`}>
-                {message.type === 'user' && (
+                {message.type === 'user' && message.timestamp && (
                   <div className="message-header-row">
-                    {message.timestamp && (
-                      <div className="message-timestamp-header">
-                        {formatTime(message.timestamp)}
-                      </div>
-                    )}
-                    {/* Rewind button - only show if not the last user message and has session */}
-                    {currentProvider === 'claude' &&
-                      currentSessionId &&
-                      messageIndex < mergedMessages.length - 1 &&
-                      canRewindFromMessageIndex(messageIndex) && (
-                      <button
-                        className="rewind-button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRewindClick(messageIndex, message);
-                        }}
-                        title={t('rewind.tooltip')}
-                      >
-                        &#x21BA;
-                      </button>
-                    )}
+                    <div className="message-timestamp-header">
+                      {formatTime(message.timestamp)}
+                    </div>
                   </div>
                 )}
                 {message.type !== 'assistant' && message.type !== 'user' && (
@@ -2075,6 +2178,8 @@ const App = () => {
               setSettingsInitialTab('agents');
               setCurrentView('settings');
             }}
+            hasMessages={messages.length > 0}
+            onRewind={handleOpenRewindSelectDialog}
           />
         </div>
       )}
@@ -2116,9 +2221,17 @@ const App = () => {
         onCancel={handleAskUserQuestionCancel}
       />
 
+      <RewindSelectDialog
+        isOpen={rewindSelectDialogOpen}
+        rewindableMessages={rewindableMessages}
+        onSelect={handleRewindSelect}
+        onCancel={handleRewindSelectCancel}
+      />
+
       <RewindDialog
         isOpen={rewindDialogOpen}
         request={currentRewindRequest}
+        isLoading={isRewinding}
         onConfirm={handleRewindConfirm}
         onCancel={handleRewindCancel}
       />

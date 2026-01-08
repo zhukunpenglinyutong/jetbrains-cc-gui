@@ -383,6 +383,11 @@ export interface ChatInputBoxProps {
   onClearAgent?: () => void;
   /** 打开智能体设置回调 */
   onOpenAgentSettings?: () => void;
+
+  /** 是否有消息（用于回滚按钮显示） */
+  hasMessages?: boolean;
+  /** 回溯文件回调 */
+  onRewind?: () => void;
 }
 
 /**
