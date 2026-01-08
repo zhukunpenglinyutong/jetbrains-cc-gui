@@ -49,6 +49,7 @@
     "usage": "Utilisation",
     "usagePercentage": "Utilisation: {{percentage}}",
     "noThinkingContent": "Pas de contenu de réflexion",
+    "parseError": "Échec de l'analyse du contenu",
     "noMatchingFiles": "Aucun fichier correspondant",
     "noMatchingCommands": "Aucune commande correspondante",
     "noAvailableAgents": "Aucun agent disponible",
@@ -301,6 +302,7 @@
     "allow": "Autoriser une fois",
     "allowAlways": "Toujours autoriser",
     "deny": "Refuser",
+    "userDenied": "L'utilisateur a refusé la demande de permission",
     "fromExternalProcess": "Demande du processus externe",
     "tools": {
       "Write": "Écrire le fichier",
@@ -519,7 +521,8 @@
     "diffButton": "Diff",
     "editPrefix": "Modifier : {{fileName}}",
     "lineRange": "Lignes {{start}}-{{end}}",
-    "filePath": "Chemin du fichier :"
+    "filePath": "Chemin du fichier :",
+    "unknownTool": "Outil inconnu"
   },
   "skills": {
     "title": "Skills",
@@ -633,5 +636,25 @@
         "description": "Dernier modèle de pointe avec des améliorations en connaissances."
       }
     }
+  },
+  "rewind": {
+    "title": "Restaurer les fichiers à l'état précédent",
+    "tooltip": "Restaurer les fichiers à leur état à ce message",
+    "selectTitle": "Sélectionner le point de restauration",
+    "noRewindableMessages": "Aucun message restaurable dans cette session",
+    "rewindTo": "Restaurer à",
+    "impact": "Impact",
+    "willRestore": "Restaurera les fichiers à leur état à ce message",
+    "changesLost": "Les modifications effectuées après ce point seront perdues",
+    "messagesAffected": "messages affectés",
+    "historyKept": "L'historique de conversation sera conservé",
+    "cannotUndo": "Cette action ne peut pas être annulée.",
+    "restoreFiles": "Restaurer les fichiers",
+    "restoring": "Restauration des fichiers...",
+    "success": "Retour en arrière réussi",
+    "successSimple": "Retour en arrière réussi",
+    "failed": "Échec de la restauration des fichiers",
+    "notAvailable": "Restauration non disponible pour cette session",
+    "parseError": "Échec de l'analyse du résultat"
   }
 }

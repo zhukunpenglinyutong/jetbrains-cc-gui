@@ -324,7 +324,11 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
                 className={`task-summary-text tool-title-summary ${isFilePath ? 'clickable-file' : ''}`}
                 title={isFilePath ? `点击打开 ${filePath}` : summary}
                 onClick={isFilePath ? handleFileClick : undefined}
-                style={(isFilePath || isDirectoryPath) ? { display: 'flex', alignItems: 'center' } : undefined}
+                style={(isFilePath || isDirectoryPath) ? {
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  maxWidth: 'fit-content'
+                } : undefined}
               >
                 {(isFilePath || isDirectoryPath) && (
                    <span

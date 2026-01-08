@@ -32,6 +32,12 @@
 
 ---
 
+### 贡献代码
+
+贡献代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
+
 
 ## 本地开发调试
 
@@ -145,6 +151,11 @@ AGPL-3.0
     <td align="center">
       <a href="https://github.com/dungnguyent8">
         <img src="https://avatars.githubusercontent.com/u/39462756?size=100" width="100" height="100" alt="dungnguyent8" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/magic5295">
+        <img src="https://avatars.githubusercontent.com/u/157901486?size=100" width="100" height="100" alt="magic5295" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>

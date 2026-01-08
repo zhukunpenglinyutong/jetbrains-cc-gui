@@ -1,3 +1,29 @@
+##### **2026年1月8日（v0.1.5-beta1）**
+
+English:
+- [x] Implement conversation rewind feature with message selection dialog and ESC shortcut support
+- [x] Add JCEF availability check with user-friendly error panel
+- [x] Optimize IME composition detection for better input accuracy
+- [x] Add draft input state to preserve content during page navigation
+- [x] Add getMcpServerStatus API for MCP server status query
+- [x] Improve security: refactor PowerShell command construction to prevent injection
+- [x] Improve performance: add caching and timeout safeguards for archive extraction
+- [x] Preserve Unix file permissions during extraction
+- [x] Add automatic cleanup of outdated ai-bridge cache on plugin version change
+- [x] Fix bridge directory null check during extraction
+
+中文:
+- [x] 实现对话回退功能，支持消息选择对话框和 ESC 快捷键
+- [x] 添加 JCEF 可用性检查，提供友好的错误提示面板
+- [x] 优化输入法组合检测，提升输入准确性
+- [x] 添加草稿输入状态，页面导航时保留内容
+- [x] 添加 getMcpServerStatus API，支持查询 MCP 服务器状态
+- [x] 安全改进：重构 PowerShell 命令构建以防止注入攻击
+- [x] 性能改进：为压缩包解压添加缓存和超时保护
+- [x] 解压时保留 Unix 文件权限
+- [x] 插件版本更新时自动清理过期的 ai-bridge 缓存
+- [x] 修复解压过程中桥接目录空指针检查
+
 ##### **2026年1月7日（v0.1.4）**
 
 English:

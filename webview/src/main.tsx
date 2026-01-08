@@ -15,12 +15,14 @@ const enableVConsole =
 if (enableVConsole) {
   void import('vconsole').then(({ default: VConsole }) => {
     new VConsole();
-    // 将 vConsole 按钮移到左下角，避免遮挡右下角的发送按钮
+    // 将 vConsole 按钮移到左上角，避免遮挡右下角的发送按钮
     setTimeout(() => {
       const vcSwitch = document.getElementById('__vconsole') as HTMLElement;
       if (vcSwitch) {
         vcSwitch.style.left = '10px';
         vcSwitch.style.right = 'auto';
+        vcSwitch.style.top = '10px';
+        vcSwitch.style.bottom = 'auto';
       }
     }, 100);
   });
@@ -66,9 +68,17 @@ if (window.__pendingFontConfig) {
 
 /**
  * 应用 IDEA 语言配置到 i18n
+ * Only applies IDEA language if user hasn't manually set a language preference
  */
 function applyLanguageConfig(config: { language: string; ideaLocale?: string }) {
   const { language } = config;
+
+  // Check if user has manually set a language preference
+  const manuallySet = localStorage.getItem('languageManuallySet') === 'true';
+  if (manuallySet) {
+    console.log('[Main] User has manually set language preference, skipping IDEA language config');
+    return;
+  }
 
   // 验证语言代码是否支持
   const supportedLanguages = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja'];
@@ -104,6 +114,16 @@ if (typeof window !== 'undefined' && !window.updateSlashCommands) {
   window.updateSlashCommands = (json: string) => {
     console.log('[Main] Storing pending slash commands, length=' + json.length);
     window.__pendingSlashCommands = json;
+  };
+}
+
+// 预注册 setSessionId，避免后端调用早于 React 初始化
+// 这是 rewind 功能所需的会话 ID
+if (typeof window !== 'undefined' && !window.setSessionId) {
+  console.log('[Main] Pre-registering setSessionId placeholder');
+  window.setSessionId = (sessionId: string) => {
+    console.log('[Main] Storing pending session ID:', sessionId);
+    (window as any).__pendingSessionId = sessionId;
   };
 }
 

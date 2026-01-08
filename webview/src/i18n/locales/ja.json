@@ -49,6 +49,7 @@
     "usage": "使用状況",
     "usagePercentage": "使用率: {{percentage}}",
     "noThinkingContent": "思考内容がありません",
+    "parseError": "コンテンツの解析に失敗しました",
     "noMatchingFiles": "一致するファイルがありません",
     "noMatchingCommands": "一致するコマンドがありません",
     "noAvailableAgents": "利用可能なエージェントがいません",
@@ -311,6 +312,7 @@
     "allow": "1回のみ許可",
     "allowAlways": "常に許可",
     "deny": "拒否",
+    "userDenied": "ユーザーが権限リクエストを拒否しました",
     "fromExternalProcess": "外部プロセスからのリクエスト",
     "tools": {
       "Write": "ファイルを書き込む",
@@ -538,7 +540,8 @@
     "diffButton": "差分",
     "editPrefix": "編集: {{fileName}}",
     "lineRange": "{{start}}-{{end}}行目",
-    "filePath": "ファイルパス："
+    "filePath": "ファイルパス：",
+    "unknownTool": "不明なツール"
   },
   "skills": {
     "title": "スキル",
@@ -698,5 +701,25 @@
     "enhanceFailed": "プロンプトの強化に失敗しました",
     "emptyPrompt": "最初にプロンプトを入力してください",
     "copyEnhanced": "強化版をコピー"
+  },
+  "rewind": {
+    "title": "ファイルを以前の状態に巻き戻す",
+    "tooltip": "このメッセージ時点のファイル状態に復元",
+    "selectTitle": "巻き戻しポイントを選択",
+    "noRewindableMessages": "このセッションには巻き戻し可能なメッセージがありません",
+    "rewindTo": "巻き戻し先",
+    "impact": "影響",
+    "willRestore": "このメッセージ時点のファイル状態に復元します",
+    "changesLost": "この時点以降の変更は失われます",
+    "messagesAffected": "件のメッセージが影響を受けます",
+    "historyKept": "会話履歴は保持されます",
+    "cannotUndo": "この操作は元に戻せません。",
+    "restoreFiles": "ファイルを復元",
+    "restoring": "ファイルを復元中...",
+    "success": "巻き戻しに成功しました",
+    "successSimple": "巻き戻しに成功しました",
+    "failed": "ファイルの復元に失敗しました",
+    "notAvailable": "このセッションでは巻き戻しを利用できません",
+    "parseError": "結果の解析に失敗しました"
   }
 }

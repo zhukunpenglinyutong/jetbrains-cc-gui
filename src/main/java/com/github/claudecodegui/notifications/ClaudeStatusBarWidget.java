@@ -24,7 +24,7 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     private final Project project;
     private StatusBar statusBar;
     private JLabel label;
-    private final AtomicReference<String> textRef = new AtomicReference<>("Claude Code GUI 🤖");
+    private final AtomicReference<String> textRef = new AtomicReference<>("GUI 🤖");
     private final AtomicReference<String> tooltipRef = new AtomicReference<>("Claude AI Assistant (Ctrl+Alt+K)");
     private final AtomicLong visibleUntil = new AtomicLong(0);
 
@@ -141,7 +141,7 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
             statusText = "Error";
         }
 
-        StringBuilder text = new StringBuilder("Claude Code GUI " + icon);
+        StringBuilder text = new StringBuilder("GUI " + icon);
 
         // Add Model Info (Shorten names)
         if (model != null && !model.isEmpty()) {
@@ -163,10 +163,10 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
             text.append(" {").append(modeLabel).append("}");
         }
 
-        // Add Agent Info
-        if (agent != null && !agent.isEmpty()) {
-            text.append(" @").append(agent);
-        }
+        // Agent info hidden for cleaner display
+        // if (agent != null && !agent.isEmpty()) {
+        //     text.append(" @").append(agent);
+        // }
 
         if (!statusText.isEmpty()) {
             text.append(" ").append(statusText);
