@@ -738,7 +738,8 @@
   },
   "promptEnhancer": {
     "title": "Prompt Enhancer",
-    "tooltip": "Rewrite prompt to provide more context and improve agent responses",
+    "tooltip": "Enhance Prompt",
+    "tooltipFull": "Rewrite prompt to provide more context and improve agent responses",
     "shortcut": "⌘/",
     "enhancing": "Enhancing prompt...",
     "originalPrompt": "Original Prompt",
@@ -751,7 +752,8 @@
   },
   "rewind": {
     "title": "Rewind Files to Previous State",
-    "tooltip": "Restore files to their state at this message",
+    "tooltip": "Rewind",
+    "tooltipFull": "Restore files to their state at this message",
     "selectTitle": "Select Rewind Point",
     "noRewindableMessages": "No rewindable messages in this session",
     "rewindTo": "Rewind to",

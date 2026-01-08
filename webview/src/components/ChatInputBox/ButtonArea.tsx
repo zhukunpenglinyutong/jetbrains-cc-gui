@@ -147,10 +147,10 @@ export const ButtonArea = ({
 
         {/* 增强提示词按钮 */}
         <button
-          className="enhance-prompt-button"
+          className="enhance-prompt-button has-tooltip"
           onClick={handleEnhanceClick}
           disabled={disabled || !hasInputContent || isLoading || isEnhancing}
-          title={`${t('promptEnhancer.tooltip')} (${t('promptEnhancer.shortcut')})`}
+          data-tooltip={`${t('promptEnhancer.tooltip')} (${t('promptEnhancer.shortcut')})`}
         >
           <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
         </button>

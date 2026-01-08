@@ -171,10 +171,10 @@ export const ContextBar: React.FC<ContextBarProps> = ({
       {currentProvider === 'claude' && onRewind && (
         <div className="context-tools-right">
           <button
-            className="context-tool-btn"
+            className="context-tool-btn has-tooltip"
             onClick={onRewind}
             disabled={!hasMessages}
-            title={t('rewind.tooltip')}
+            data-tooltip={t('rewind.tooltip')}
           >
             <span className="codicon codicon-discard" />
           </button>

@@ -734,7 +734,8 @@
   },
   "promptEnhancer": {
     "title": "增强提示词",
-    "tooltip": "重写提示词以提供更多上下文并改善 AI 响应",
+    "tooltip": "增强提示词",
+    "tooltipFull": "重写提示词以提供更多上下文并改善 AI 响应",
     "shortcut": "⌘/",
     "enhancing": "正在增强提示词...",
     "originalPrompt": "原始提示词",
@@ -747,7 +748,8 @@
   },
   "rewind": {
     "title": "回溯文件到之前的状态",
-    "tooltip": "将文件恢复到此消息时的状态",
+    "tooltip": "回溯",
+    "tooltipFull": "将文件恢复到此消息时的状态",
     "selectTitle": "选择回溯点",
     "noRewindableMessages": "当前会话中没有可回溯的消息",
     "rewindTo": "回溯到",
