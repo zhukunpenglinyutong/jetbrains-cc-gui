@@ -678,8 +678,11 @@ export const ChatInputBox = ({
     const isCurrentlyComposing = isComposingFromEvent ?? isComposingRef.current ?? isComposing;
 
     const text = getTextContent();
-    const isEmpty = !text.trim();
-    setHasContent(!isEmpty);
+    // 移除零宽字符和其他不可见字符后再检查是否为空，确保在只剩零宽字符时能正确显示 placeholder
+    const cleanText = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
+    const isEmpty = !cleanText.trim();
+    
+    // setHasContent(!isEmpty); // 移到下方处理，避免 IME 干扰
 
     // 如果内容为空，清空 innerHTML 以确保 :empty 伪类生效（显示 placeholder）
     if (isEmpty && editableRef.current) {
@@ -690,12 +693,17 @@ export const ChatInputBox = ({
     adjustHeight();
 
     // 组合输入期间不触发补全检测，待组合结束后统一处理
+    // 同时也控制 hasContent 状态更新，避免在 IME 开始时(false->true)触发重渲染
     if (!isCurrentlyComposing) {
       debouncedDetectCompletion();
+      setHasContent(!isEmpty);
+    } else if (isEmpty) {
+      setHasContent(false);
     }
 
     // 通知父组件
-    onInput?.(text);
+    // 如果判定为空（只有零宽字符），传递空字符串给父组件，防止父组件回传脏数据导致 DOM 重置从而隐藏 placeholder
+    onInput?.(isEmpty ? '' : text);
   }, [getTextContent, adjustHeight, debouncedDetectCompletion, onInput, isComposing]);
 
   /**
@@ -1124,6 +1132,9 @@ export const ChatInputBox = ({
   useEffect(() => {
     if (value === undefined) return;
     if (!editableRef.current) return;
+
+    // 如果正在组合输入，不要更新 DOM，否则会打断 IME，导致重复输入（如 ni -> nni）
+    if (isComposingRef.current) return;
 
     const currentText = getTextContent();
     // 仅当外部值与当前值不同时更新，避免光标跳动

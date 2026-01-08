@@ -640,6 +640,7 @@
   "rewind": {
     "title": "回溯檔案到之前的狀態",
     "tooltip": "將檔案恢復到此訊息時的狀態",
+    "shortcut": "ESC ESC",
     "selectTitle": "選擇回溯點",
     "noRewindableMessages": "目前會話中沒有可回溯的訊息",
     "rewindTo": "回溯到",

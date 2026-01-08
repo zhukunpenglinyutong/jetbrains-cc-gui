@@ -749,6 +749,7 @@
   "rewind": {
     "title": "回溯文件到之前的状态",
     "tooltip": "回溯",
+    "shortcut": "ESC ESC",
     "tooltipFull": "将文件恢复到此消息时的状态",
     "selectTitle": "选择回溯点",
     "noRewindableMessages": "当前会话中没有可回溯的消息",

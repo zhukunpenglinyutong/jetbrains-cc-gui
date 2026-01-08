@@ -753,6 +753,7 @@
   "rewind": {
     "title": "Rewind Files to Previous State",
     "tooltip": "Rewind",
+    "shortcut": "ESC ESC",
     "tooltipFull": "Restore files to their state at this message",
     "selectTitle": "Select Rewind Point",
     "noRewindableMessages": "No rewindable messages in this session",

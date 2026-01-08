@@ -705,6 +705,7 @@
   "rewind": {
     "title": "ファイルを以前の状態に巻き戻す",
     "tooltip": "このメッセージ時点のファイル状態に復元",
+    "shortcut": "ESC ESC",
     "selectTitle": "巻き戻しポイントを選択",
     "noRewindableMessages": "このセッションには巻き戻し可能なメッセージがありません",
     "rewindTo": "巻き戻し先",
