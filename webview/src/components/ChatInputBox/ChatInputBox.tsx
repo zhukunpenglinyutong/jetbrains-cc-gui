@@ -65,6 +65,8 @@ export const ChatInputBox = ({
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
+  hasMessages,
+  onRewind,
 }: ChatInputBoxProps) => {
   const { t } = useTranslation();
 
@@ -703,9 +705,11 @@ export const ChatInputBox = ({
    */
   const handleSubmit = useCallback(() => {
     const content = getTextContent();
+    // Remove zero-width spaces and other invisible characters
+    const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
     // 只在判断是否为空时使用 trim，不修改实际发送的内容
-    if (!content.trim() && attachments.length === 0) {
+    if (!cleanContent && attachments.length === 0) {
       return;
     }
     if (isLoading) {
@@ -1724,6 +1728,9 @@ export const ChatInputBox = ({
         onAddAttachment={handleAddAttachment}
         selectedAgent={selectedAgent}
         onClearAgent={() => onAgentSelect?.(null)}
+        currentProvider={currentProvider}
+        hasMessages={hasMessages}
+        onRewind={onRewind}
       />
 
       {/* 输入区域 */}

@@ -49,6 +49,7 @@
     "usage": "Uso",
     "usagePercentage": "Uso: {{percentage}}",
     "noThinkingContent": "Sin contenido de pensamiento",
+    "parseError": "Error al analizar el contenido",
     "noMatchingFiles": "Sin archivos coincidentes",
     "noMatchingCommands": "Sin comandos coincidentes",
     "noAvailableAgents": "Sin agentes disponibles",
@@ -301,6 +302,7 @@
     "allow": "Permitir una vez",
     "allowAlways": "Permitir siempre",
     "deny": "Denegar",
+    "userDenied": "El usuario denegó la solicitud de permiso",
     "fromExternalProcess": "Solicitud del proceso externo",
     "tools": {
       "Write": "Escribir archivo",
@@ -519,7 +521,8 @@
     "diffButton": "Diff",
     "editPrefix": "Editar: {{fileName}}",
     "lineRange": "Líneas {{start}}-{{end}}",
-    "filePath": "Ruta del archivo:"
+    "filePath": "Ruta del archivo:",
+    "unknownTool": "Herramienta desconocida"
   },
   "skills": {
     "title": "Skills",
@@ -633,5 +636,25 @@
         "description": "Último modelo de frontera con mejoras en conocimiento."
       }
     }
+  },
+  "rewind": {
+    "title": "Restaurar archivos al estado anterior",
+    "tooltip": "Restaurar archivos a su estado en este mensaje",
+    "selectTitle": "Seleccionar punto de restauración",
+    "noRewindableMessages": "No hay mensajes restaurables en esta sesión",
+    "rewindTo": "Restaurar a",
+    "impact": "Impacto",
+    "willRestore": "Restaurará los archivos a su estado en este mensaje",
+    "changesLost": "Los cambios realizados después de este punto se perderán",
+    "messagesAffected": "mensajes afectados",
+    "historyKept": "El historial de conversación se conservará",
+    "cannotUndo": "Esta acción no se puede deshacer.",
+    "restoreFiles": "Restaurar archivos",
+    "restoring": "Restaurando archivos...",
+    "success": "Reversión exitosa",
+    "successSimple": "Reversión exitosa",
+    "failed": "Error al restaurar archivos",
+    "notAvailable": "Restauración no disponible para esta sesión",
+    "parseError": "Error al analizar el resultado"
   }
 }

@@ -34,6 +34,7 @@
     "userUploadedImage": "用户上传的图片",
     "inputPlaceholder": "@引用文件，#唤起智能体，shift + enter 换行",
     "noThinkingContent": "无思考内容",
+    "parseError": "无法解析内容",
     "sendMessageEnter": "发送消息 (Enter)",
     "currentMode": "当前模式: {{mode}}",
     "currentModel": "当前模型: {{model}}",
@@ -336,6 +337,7 @@
     "allow": "允许一次",
     "allowAlways": "总是允许",
     "deny": "拒绝",
+    "userDenied": "用户拒绝了权限请求",
     "fromExternalProcess": "来自外部进程的请求",
     "tools": {
       "Write": "写入文件",
@@ -564,7 +566,8 @@
     "diffButton": "Diff",
     "editPrefix": "编辑: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
-    "filePath": "文件路径："
+    "filePath": "文件路径：",
+    "unknownTool": "未知工具"
   },
   "skills": {
     "title": "Skills",
@@ -741,5 +744,25 @@
     "enhanceFailed": "增强提示词失败",
     "emptyPrompt": "请先输入提示词",
     "copyEnhanced": "复制增强版本"
+  },
+  "rewind": {
+    "title": "回溯文件到之前的状态",
+    "tooltip": "将文件恢复到此消息时的状态",
+    "selectTitle": "选择回溯点",
+    "noRewindableMessages": "当前会话中没有可回溯的消息",
+    "rewindTo": "回溯到",
+    "impact": "影响",
+    "willRestore": "将文件恢复到此消息时的状态",
+    "changesLost": "此消息之后的更改将丢失",
+    "messagesAffected": "条消息受影响",
+    "historyKept": "对话历史将保留",
+    "cannotUndo": "此操作无法撤销。",
+    "restoreFiles": "恢复文件",
+    "restoring": "正在恢复文件...",
+    "success": "回滚成功",
+    "successSimple": "回滚成功",
+    "failed": "文件恢复失败",
+    "notAvailable": "当前会话不支持回溯",
+    "parseError": "解析结果失败"
   }
 }

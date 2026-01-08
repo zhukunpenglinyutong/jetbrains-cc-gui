@@ -6,6 +6,7 @@ import {
   sendMessage as claudeSendMessage,
   sendMessageWithAttachments as claudeSendMessageWithAttachments,
   getSlashCommands as claudeGetSlashCommands,
+  rewindFiles as claudeRewindFiles,
   getMcpServerStatus as claudeGetMcpServerStatus
 } from '../services/claude/message-service.js';
 import { getSessionMessages as claudeGetSessionMessages } from '../services/claude/session-service.js';
@@ -63,6 +64,26 @@ export async function handleClaudeCommand(command, args, stdinData) {
       break;
     }
 
+    case 'rewindFiles': {
+      console.log('[CHANNEL] rewindFiles command received');
+      console.log('[CHANNEL] stdinData:', JSON.stringify(stdinData));
+      console.log('[CHANNEL] args:', JSON.stringify(args));
+      const sessionId = stdinData?.sessionId || args[0];
+      const userMessageId = stdinData?.userMessageId || args[1];
+      const cwd = stdinData?.cwd || args[2] || null;
+      console.log('[CHANNEL] Parsed sessionId:', sessionId);
+      console.log('[CHANNEL] Parsed userMessageId:', userMessageId);
+      if (!sessionId || !userMessageId) {
+        console.log(JSON.stringify({
+          success: false,
+          error: 'Missing required parameters: sessionId and userMessageId'
+        }));
+        return;
+      }
+      await claudeRewindFiles(sessionId, userMessageId, cwd);
+      break;
+    }
+
     case 'getMcpServerStatus': {
       const cwd = stdinData?.cwd || args[0] || null;
       await claudeGetMcpServerStatus(cwd);
@@ -75,5 +96,5 @@ export async function handleClaudeCommand(command, args, stdinData) {
 }
 
 export function getClaudeCommandList() {
-  return ['send', 'sendWithAttachments', 'getSession', 'getSlashCommands', 'getMcpServerStatus'];
+  return ['send', 'sendWithAttachments', 'getSession', 'getSlashCommands', 'rewindFiles', 'getMcpServerStatus'];
 }

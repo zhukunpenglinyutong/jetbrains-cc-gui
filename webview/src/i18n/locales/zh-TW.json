@@ -49,6 +49,7 @@
     "usage": "上下文",
     "usagePercentage": "上下文: {{percentage}}",
     "noThinkingContent": "無思考內容",
+    "parseError": "無法解析內容",
     "noMatchingFiles": "無匹配檔案",
     "noMatchingCommands": "無匹配指令",
     "noAvailableAgents": "無可用代理程式",
@@ -301,6 +302,7 @@
     "allow": "允許一次",
     "allowAlways": "總是允許",
     "deny": "拒絕",
+    "userDenied": "使用者拒絕了權限請求",
     "fromExternalProcess": "來自外部處理程序的請求",
     "tools": {
       "Write": "寫入檔案",
@@ -519,7 +521,8 @@
     "diffButton": "Diff",
     "editPrefix": "編輯: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
-    "filePath": "檔案路徑："
+    "filePath": "檔案路徑：",
+    "unknownTool": "未知工具"
   },
   "skills": {
     "title": "Skills",
@@ -633,5 +636,25 @@
         "description": "最新前沿模型，知識儲備全面提升"
       }
     }
+  },
+  "rewind": {
+    "title": "回溯檔案到之前的狀態",
+    "tooltip": "將檔案恢復到此訊息時的狀態",
+    "selectTitle": "選擇回溯點",
+    "noRewindableMessages": "目前會話中沒有可回溯的訊息",
+    "rewindTo": "回溯到",
+    "impact": "影響",
+    "willRestore": "將檔案恢復到此訊息時的狀態",
+    "changesLost": "此訊息之後的更改將遺失",
+    "messagesAffected": "則訊息受影響",
+    "historyKept": "對話歷史將保留",
+    "cannotUndo": "此操作無法撤銷。",
+    "restoreFiles": "恢復檔案",
+    "restoring": "正在恢復檔案...",
+    "success": "回滾成功",
+    "successSimple": "回滾成功",
+    "failed": "檔案恢復失敗",
+    "notAvailable": "目前會話不支援回溯",
+    "parseError": "解析結果失敗"
   }
 }

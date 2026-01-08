@@ -7,6 +7,10 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
 import { randomUUID } from 'crypto';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import { homedir } from 'os';
 
 import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
@@ -16,6 +20,10 @@ import { canUseTool } from '../../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
+
+// Store active query results for rewind operations
+// Key: sessionId, Value: query result object
+const activeQueryResults = new Map();
 
 const ACCEPT_EDITS_AUTO_APPROVE_TOOLS = new Set([
   'Write',
@@ -264,6 +272,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      permissionMode: effectivePermissionMode,
 	      model: sdkModelName,
 	      maxTurns: 100,
+	      // Enable file checkpointing for rewind feature
+	      enableFileCheckpointing: true,
 	      // Extended Thinking 配置（根据 settings.json 的 alwaysThinkingEnabled 决定）
 	      // 思考内容会通过 [THINKING] 标签输出给前端展示
 	      ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
@@ -371,6 +381,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       if (msg.type === 'system' && msg.session_id) {
         currentSessionId = msg.session_id;
         console.log('[SESSION_ID]', msg.session_id);
+
+        // Store the query result for rewind operations
+        activeQueryResults.set(msg.session_id, result);
+        console.log('[REWIND_DEBUG] Stored query result for session:', msg.session_id);
 
         // 输出 slash_commands（如果存在）
         if (msg.subtype === 'init' && Array.isArray(msg.slash_commands)) {
@@ -711,6 +725,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       permissionMode: normalizedPermissionMode,
       model: sdkModelName,
       maxTurns: 100,
+      // Enable file checkpointing for rewind feature
+      enableFileCheckpointing: true,
       // Extended Thinking 配置（根据 settings.json 的 alwaysThinkingEnabled 决定）
       // 思考内容会通过 [THINKING] 标签输出给前端展示
       ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
@@ -803,6 +819,10 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	      if (msg.type === 'system' && msg.session_id) {
 	    	        currentSessionId = msg.session_id;
 	    	        console.log('[SESSION_ID]', msg.session_id);
+
+	    	        // Store the query result for rewind operations
+	    	        activeQueryResults.set(msg.session_id, result);
+	    	        console.log('[REWIND_DEBUG] (withAttachments) Stored query result for session:', msg.session_id);
 	    	      }
 
 	    	      // 检查是否收到错误结果消息（快速检测 API Key 错误）
@@ -997,4 +1017,280 @@ export async function getMcpServerStatus(cwd = null) {
       servers: []
     }));
   }
+}
+
+/**
+ * Rewind files to a specific user message state
+ * Uses the SDK's rewindFiles() API to restore files to their state at a given message
+ * @param {string} sessionId - Session ID
+ * @param {string} userMessageId - User message UUID to rewind to
+ */
+export async function rewindFiles(sessionId, userMessageId, cwd = null) {
+  let result = null;
+  try {
+    console.log('[REWIND] ========== REWIND OPERATION START ==========');
+    console.log('[REWIND] Session ID:', sessionId);
+    console.log('[REWIND] Target message ID:', userMessageId);
+    console.log('[REWIND] CWD:', cwd);
+    console.log('[REWIND] Active sessions in memory:', Array.from(activeQueryResults.keys()));
+
+    // Get the stored query result for this session
+    result = activeQueryResults.get(sessionId);
+    console.log('[REWIND] Result found in memory:', !!result);
+
+    // If result not in memory, try to resume the session to get a fresh query result
+    if (!result) {
+      console.log('[REWIND] Session not in memory, attempting to resume...');
+
+      try {
+        process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
+
+        setupApiKey();
+
+        if (!process.env.HOME) {
+          const os = await import('os');
+          process.env.HOME = os.homedir();
+        }
+
+        const workingDirectory = selectWorkingDirectory(cwd);
+        try {
+          process.chdir(workingDirectory);
+        } catch (chdirError) {
+          console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
+        }
+
+        const options = {
+          resume: sessionId,
+          cwd: workingDirectory,
+          permissionMode: 'default',
+          enableFileCheckpointing: true,
+          maxTurns: 1,
+          tools: { type: 'preset', preset: 'claude_code' },
+          settingSources: ['user', 'project', 'local'],
+          additionalDirectories: Array.from(
+            new Set(
+              [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
+            )
+          ),
+          canUseTool: async () => ({
+            behavior: 'deny',
+            message: 'Rewind operation'
+          }),
+          stderr: (data) => {
+            if (data && data.trim()) {
+              console.log(`[SDK-STDERR] ${data.trim()}`);
+            }
+          }
+        };
+
+        console.log('[REWIND] Resuming session with options:', JSON.stringify(options));
+        result = query({ prompt: '', options });
+
+      } catch (resumeError) {
+        const errorMsg = `Failed to resume session ${sessionId}: ${resumeError.message}`;
+        console.error('[REWIND_ERROR]', errorMsg);
+        console.log(JSON.stringify({
+          success: false,
+          error: errorMsg
+        }));
+        return;
+      }
+    }
+
+    // Check if rewindFiles method exists on the result object
+    if (typeof result.rewindFiles !== 'function') {
+      const errorMsg = 'rewindFiles method not available. File checkpointing may not be enabled or SDK version too old.';
+      console.error('[REWIND_ERROR]', errorMsg);
+      console.log(JSON.stringify({
+        success: false,
+        error: errorMsg
+      }));
+      return;
+    }
+
+    const timeoutMs = 45000;
+
+    const attemptRewind = async (targetUserMessageId) => {
+      console.log('[REWIND] Calling result.rewindFiles()...', JSON.stringify({ targetUserMessageId }));
+      await Promise.race([
+        result.rewindFiles(targetUserMessageId),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Rewind timeout (${timeoutMs}ms)`)), timeoutMs))
+      ]);
+      return targetUserMessageId;
+    };
+
+    let usedMessageId = null;
+    try {
+      usedMessageId = await attemptRewind(userMessageId);
+    } catch (primaryError) {
+      const msg = primaryError?.message || String(primaryError);
+      if (!msg.includes('No file checkpoint found for message')) {
+        throw primaryError;
+      }
+
+      console.log('[REWIND] No checkpoint for requested message, attempting to resolve alternative user message id...');
+
+      const candidateIds = await resolveRewindCandidateMessageIds(sessionId, cwd, userMessageId);
+      console.log('[REWIND] Candidate message ids:', JSON.stringify(candidateIds));
+
+      let lastError = primaryError;
+      for (const candidateId of candidateIds) {
+        if (!candidateId || candidateId === userMessageId) continue;
+        try {
+          usedMessageId = await attemptRewind(candidateId);
+          lastError = null;
+          break;
+        } catch (candidateError) {
+          lastError = candidateError;
+          const candidateMsg = candidateError?.message || String(candidateError);
+          if (!candidateMsg.includes('No file checkpoint found for message')) {
+            throw candidateError;
+          }
+        }
+      }
+
+      if (!usedMessageId) {
+        throw lastError;
+      }
+    }
+
+    console.log('[REWIND] Files rewound successfully');
+
+    console.log(JSON.stringify({
+      success: true,
+      message: 'Files restored successfully',
+      sessionId,
+      targetMessageId: usedMessageId
+    }));
+
+  } catch (error) {
+    console.error('[REWIND_ERROR]', error.message);
+    console.error('[REWIND_ERROR_STACK]', error.stack);
+    console.log(JSON.stringify({
+      success: false,
+      error: error.message
+    }));
+  } finally {
+    try {
+      await result?.return?.();
+    } catch {
+    }
+  }
+}
+
+async function resolveRewindCandidateMessageIds(sessionId, cwd, providedMessageId) {
+  const messages = await readClaudeProjectSessionMessages(sessionId, cwd);
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return [];
+  }
+
+  const byId = new Map();
+  for (const m of messages) {
+    if (m && typeof m === 'object' && typeof m.uuid === 'string') {
+      byId.set(m.uuid, m);
+    }
+  }
+
+  const isUserTextMessage = (m) => {
+    if (!m || m.type !== 'user') return false;
+    const content = m.message?.content;
+    if (!content) return false;
+    if (typeof content === 'string') {
+      return content.trim().length > 0;
+    }
+    if (Array.isArray(content)) {
+      return content.some((b) => b && b.type === 'text' && String(b.text || '').trim().length > 0);
+    }
+    return false;
+  };
+
+  const candidates = [];
+  const visited = new Set();
+
+  let current = providedMessageId ? byId.get(providedMessageId) : null;
+  while (current && current.uuid && !visited.has(current.uuid)) {
+    visited.add(current.uuid);
+    if (typeof current.uuid === 'string') {
+      candidates.push(current.uuid);
+    }
+    if (isUserTextMessage(current) && typeof current.uuid === 'string') {
+      candidates.push(current.uuid);
+      break;
+    }
+    const parent = current.parentUuid ? byId.get(current.parentUuid) : null;
+    current = parent || null;
+  }
+
+  const lastUserText = [...messages].reverse().find(isUserTextMessage);
+  if (lastUserText?.uuid) {
+    candidates.push(lastUserText.uuid);
+  }
+
+  const unique = [];
+  const seen = new Set();
+  for (const id of candidates) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+  }
+
+  const maxCandidates = 8;
+  if (unique.length <= maxCandidates) return unique;
+  return unique.slice(0, maxCandidates);
+}
+
+async function readClaudeProjectSessionMessages(sessionId, cwd) {
+  try {
+    const projectsDir = join(homedir(), '.claude', 'projects');
+    const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
+    const sessionFile = join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
+    if (!existsSync(sessionFile)) {
+      return [];
+    }
+    const content = await readFile(sessionFile, 'utf8');
+    return content
+      .split('\n')
+      .filter((line) => line.trim())
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get active session IDs for debugging
+ * @returns {string[]} Array of active session IDs
+ */
+export function getActiveSessionIds() {
+  return Array.from(activeQueryResults.keys());
+}
+
+/**
+ * Check if a session has an active query result for rewind operations
+ * @param {string} sessionId - Session ID to check
+ * @returns {boolean} True if session has active query result
+ */
+export function hasActiveSession(sessionId) {
+  return activeQueryResults.has(sessionId);
+}
+
+/**
+ * Remove a session from the active query results map
+ * Should be called when a session ends to free up memory
+ * @param {string} sessionId - Session ID to remove
+ */
+export function removeSession(sessionId) {
+  if (activeQueryResults.has(sessionId)) {
+    activeQueryResults.delete(sessionId);
+    console.log('[REWIND_DEBUG] Removed session from active queries:', sessionId);
+    return true;
+  }
+  return false;
 }

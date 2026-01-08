@@ -109,6 +109,16 @@ if (typeof window !== 'undefined' && !window.updateSlashCommands) {
   };
 }
 
+// 预注册 setSessionId，避免后端调用早于 React 初始化
+// 这是 rewind 功能所需的会话 ID
+if (typeof window !== 'undefined' && !window.setSessionId) {
+  console.log('[Main] Pre-registering setSessionId placeholder');
+  window.setSessionId = (sessionId: string) => {
+    console.log('[Main] Storing pending session ID:', sessionId);
+    (window as any).__pendingSessionId = sessionId;
+  };
+}
+
 // 渲染 React 应用
 ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
   <ErrorBoundary>
