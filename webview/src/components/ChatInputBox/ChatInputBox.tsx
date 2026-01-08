@@ -81,6 +81,7 @@ export const ChatInputBox = ({
   const completionSelectedRef = useRef(false);
   const justRenderedTagRef = useRef(false); // 标记是否刚刚渲染了文件标签 // 标记补全菜单刚选中项目，防止回车同时发送消息
   const [isComposing, setIsComposing] = useState(false);
+  const isComposingRef = useRef(false); // 同步的 IME 状态 ref，比 React state 更快响应
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
   const lastCompositionEndTimeRef = useRef<number>(0);
@@ -542,8 +543,10 @@ export const ChatInputBox = ({
       editableRef.current.innerHTML = '';
       editableRef.current.style.height = 'auto';
       setHasContent(false);
+      // Notify parent component that input is cleared
+      onInput?.('');
     }
-  }, []);
+  }, [onInput]);
 
   /**
    * 调整输入框高度
@@ -665,8 +668,15 @@ export const ChatInputBox = ({
 
   /**
    * 处理输入事件（优化版：使用防抖减少性能开销）
+   * @param isComposingFromEvent - 从原生事件中获取的 isComposing 状态（优先级更高）
    */
-  const handleInput = useCallback(() => {
+  const handleInput = useCallback((isComposingFromEvent?: boolean) => {
+    // 使用多重检查确保正确检测 IME 状态：
+    // 1. 原生事件的 isComposing（最准确，可在 compositionStart 之前检测）
+    // 2. isComposingRef（同步的 ref，比 React state 更快）
+    // 3. React state isComposing（作为后备）
+    const isCurrentlyComposing = isComposingFromEvent ?? isComposingRef.current ?? isComposing;
+
     const text = getTextContent();
     const isEmpty = !text.trim();
     setHasContent(!isEmpty);
@@ -680,7 +690,7 @@ export const ChatInputBox = ({
     adjustHeight();
 
     // 组合输入期间不触发补全检测，待组合结束后统一处理
-    if (!isComposing) {
+    if (!isCurrentlyComposing) {
       debouncedDetectCompletion();
     }
 
@@ -1140,6 +1150,13 @@ export const ChatInputBox = ({
     if (!el) return;
 
     const nativeKeyDown = (ev: KeyboardEvent) => {
+      // 检测 IME 输入：keyCode 229 表示 IME 正在处理按键
+      // 这比 compositionStart 事件更早，可以更早地设置 composing 状态
+      const isIMEProcessing = (ev as unknown as { keyCode?: number }).keyCode === 229 || ev.isComposing;
+      if (isIMEProcessing) {
+        isComposingRef.current = true;
+      }
+
       const isEnterKey =
         ev.key === 'Enter' ||
         (ev as unknown as { keyCode?: number }).keyCode === 13 ||
@@ -1188,7 +1205,8 @@ export const ChatInputBox = ({
       // 检查是否刚刚结束组合输入
       const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
 
-      if (isEnterKey && !shift && !isComposing && !isRecentlyComposing) {
+      // 使用 ref 而不是 state 来检查 composing 状态，因为 ref 是同步的
+      if (isEnterKey && !shift && !isComposingRef.current && !isComposing && !isRecentlyComposing) {
         ev.preventDefault();
         submittedOnEnterRef.current = true;
         handleSubmit();
@@ -1255,6 +1273,8 @@ export const ChatInputBox = ({
       clearTimeout(compositionTimeoutRef.current);
       compositionTimeoutRef.current = null;
     }
+    // 同时更新 ref 和 state，ref 是同步的，state 是异步的
+    isComposingRef.current = true;
     setIsComposing(true);
   }, []);
 
@@ -1263,9 +1283,12 @@ export const ChatInputBox = ({
    */
   const handleCompositionEnd = useCallback(() => {
     lastCompositionEndTimeRef.current = Date.now();
+    // 同时更新 ref 和 state
+    isComposingRef.current = false;
     setIsComposing(false);
     // 增加稍长的延迟以确保低性能环境下 DOM/IME 状态稳定
     compositionTimeoutRef.current = window.setTimeout(() => {
+      isComposingRef.current = false;
       setIsComposing(false);
       compositionTimeoutRef.current = null;
       // 组合结束后，强制同步一次输入状态并触发文件标签渲染，清理可能残留的上屏字符/下划线
@@ -1744,7 +1767,11 @@ export const ChatInputBox = ({
           className="input-editable"
           contentEditable={!disabled}
           data-placeholder={placeholder}
-          onInput={handleInput}
+          onInput={(e) => {
+            // 传递原生事件的 isComposing 状态，这比 React 状态更准确
+            // 可以正确捕获 compositionStart 之前的输入
+            handleInput((e.nativeEvent as InputEvent).isComposing);
+          }}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
           onBeforeInput={(e) => {

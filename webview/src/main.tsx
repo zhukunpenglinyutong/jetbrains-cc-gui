@@ -68,9 +68,17 @@ if (window.__pendingFontConfig) {
 
 /**
  * 应用 IDEA 语言配置到 i18n
+ * Only applies IDEA language if user hasn't manually set a language preference
  */
 function applyLanguageConfig(config: { language: string; ideaLocale?: string }) {
   const { language } = config;
+
+  // Check if user has manually set a language preference
+  const manuallySet = localStorage.getItem('languageManuallySet') === 'true';
+  if (manuallySet) {
+    console.log('[Main] User has manually set language preference, skipping IDEA language config');
+    return;
+  }
 
   // 验证语言代码是否支持
   const supportedLanguages = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja'];

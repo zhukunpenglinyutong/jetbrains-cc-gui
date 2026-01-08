@@ -573,6 +573,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 }
             }
 
+            // Check JCEF support before creating browser
+            if (!JBCefBrowserFactory.isJcefSupported()) {
+                LOG.warn("JCEF is not supported in this environment");
+                showJcefNotSupportedPanel();
+                return;
+            }
+
             try {
                 browser = JBCefBrowserFactory.create();
                 handlerContext.setBrowser(browser);
@@ -728,6 +735,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 mainPanel.add(browserComponent, BorderLayout.CENTER);
 
+            } catch (IllegalStateException e) {
+                // JCEF-related errors typically throw IllegalStateException
+                if (e.getMessage() != null && e.getMessage().contains("JCEF")) {
+                    LOG.error("JCEF initialization failed: " + e.getMessage(), e);
+                    showJcefNotSupportedPanel();
+                } else {
+                    LOG.error("Failed to create UI components: " + e.getMessage(), e);
+                    showErrorPanel();
+                }
             } catch (Exception e) {
                 LOG.error("Failed to create UI components: " + e.getMessage(), e);
                 showErrorPanel();
@@ -779,6 +795,57 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 path,
                 this::handleNodePathSave
             );
+            mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
+        private void showJcefNotSupportedPanel() {
+            JPanel errorPanel = new JPanel(new BorderLayout());
+            errorPanel.setBackground(new Color(30, 30, 30));
+
+            JPanel centerPanel = new JPanel();
+            centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+            centerPanel.setBackground(new Color(30, 30, 30));
+            centerPanel.setBorder(BorderFactory.createEmptyBorder(50, 50, 50, 50));
+
+            JLabel iconLabel = new JLabel("⚠️");
+            iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 48));
+            iconLabel.setForeground(Color.WHITE);
+            iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel titleLabel = new JLabel("JCEF 不可用");
+            titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+            titleLabel.setForeground(Color.WHITE);
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JTextArea messageArea = new JTextArea();
+            messageArea.setText(
+                "当前环境不支持 JCEF (Java Chromium Embedded Framework)。\n\n" +
+                "可能的原因：\n" +
+                "• 使用了不支持 JCEF 的 IDE 版本或运行时\n" +
+                "• IDE 启动时使用了 -Dide.browser.jcef.enabled=false 参数\n" +
+                "• 系统环境缺少必要的依赖库\n\n" +
+                "解决方案：\n" +
+                "1. 确保使用支持 JCEF 的 IntelliJ IDEA 版本 (2020.2+)\n" +
+                "2. 检查 IDE 设置：Help → Find Action → Registry，\n" +
+                "   确保 ide.browser.jcef.enabled 为 true\n" +
+                "3. 尝试重启 IDE\n" +
+                "4. 如果使用 JetBrains Runtime，确保版本支持 JCEF"
+            );
+            messageArea.setEditable(false);
+            messageArea.setBackground(new Color(45, 45, 45));
+            messageArea.setForeground(new Color(200, 200, 200));
+            messageArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+            messageArea.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+            messageArea.setAlignmentX(Component.CENTER_ALIGNMENT);
+            messageArea.setMaximumSize(new Dimension(500, 300));
+
+            centerPanel.add(iconLabel);
+            centerPanel.add(Box.createVerticalStrut(15));
+            centerPanel.add(titleLabel);
+            centerPanel.add(Box.createVerticalStrut(20));
+            centerPanel.add(messageArea);
+
+            errorPanel.add(centerPanel, BorderLayout.CENTER);
             mainPanel.add(errorPanel, BorderLayout.CENTER);
         }
 
@@ -1068,13 +1135,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 @Override
                 public void onStateChange(boolean busy, boolean loading, String error) {
-                    // long callbackTime = System.currentTimeMillis();
-                    // LOG.info("[PERF][" + callbackTime + "] onStateChange 回调: busy=" + busy + ", loading=" + loading);
-
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        // long uiUpdateTime = System.currentTimeMillis();
-                        // LOG.info("[PERF][" + uiUpdateTime + "] invokeLater 执行，准备调用 showLoading(" + loading + ")，等待: " + (uiUpdateTime - callbackTime) + "ms");
-
                         callJavaScript("showLoading", String.valueOf(loading));
                         if (error != null) {
                             callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
@@ -1082,8 +1143,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         if (!busy && !loading) {
                             VirtualFileManager.getInstance().asyncRefresh(null);
                         }
-
-                        // LOG.info("[PERF][" + System.currentTimeMillis() + "] showLoading 调用完成");
                     });
                 }
 

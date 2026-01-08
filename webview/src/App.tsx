@@ -84,6 +84,8 @@ const App = () => {
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  // 输入框草稿内容（页面切换时保持）
+  const [draftInput, setDraftInput] = useState('');
   // 标志位：是否抑制下一次 updateStatus 触发的 toast（用于删除当前会话后自动创建新会话的场景）
   const suppressNextStatusToastRef = useRef(false);
 
@@ -344,23 +346,6 @@ const App = () => {
     };
   }, []);
 
-  // 检查当前会话是否还存在（防止显示已删除的会话）
-  useEffect(() => {
-    if (currentView === 'chat' && historyData?.sessions) {
-      // 只有当 currentSessionId 存在且在历史记录中找不到时才清空
-      // 注意：currentSessionId 为 null 表示新会话，这是合法的，不应该清空
-      if (messages.length > 0 && currentSessionId) {
-        if (!historyData.sessions.some(s => s.sessionId === currentSessionId)) {
-          console.log('[App] 当前会话已被删除，清空聊天界面');
-          setMessages([]);
-          setCurrentSessionId(null);
-          setUsagePercentage(0);
-          setUsageUsedTokens(0);
-        }
-      }
-    }
-  }, [currentView, currentSessionId, historyData, messages.length]);
-
   // Toast helper functions
   const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
     // Don't show toast for default status
@@ -494,25 +479,7 @@ const App = () => {
     };
     window.showLoading = (value) => {
       const isLoading = isTruthy(value);
-      // const timestamp = Date.now();
-      // const sendTime = (window as any).__lastMessageSendTime;
-
-      // if (isLoading) {
-      //   console.log(`[Frontend][${timestamp}][PERF] showLoading(true) - 开始加载`);
-      //   if (sendTime) {
-      //     console.log(`[Frontend][${timestamp}][PERF] 距消息发送 ${timestamp - sendTime}ms 后开始显示加载状态`);
-      //   }
-      // } else {
-      //   console.log(`[Frontend][${timestamp}][PERF] showLoading(false) - 加载完成`);
-      //   if (sendTime) {
-      //     console.log(`[Frontend][${timestamp}][PERF] >>> 总耗时: ${timestamp - sendTime}ms <<<`);
-      //     // 清除记录的发送时间
-      //     delete (window as any).__lastMessageSendTime;
-      //   }
-      // }
-
       setLoading(isLoading);
-      // 开始加载时记录时间，结束时清除
       if (isLoading) {
         setLoadingStartTime(Date.now());
       } else {
@@ -1077,6 +1044,12 @@ const App = () => {
       },
     };
     setMessages((prev) => [...prev, userMessage]);
+
+    // 【FIX】立即设置 loading 状态，避免与后端回调的竞态条件
+    // 第二次发送消息时，后端的 channelId 已存在，响应可能非常快
+    // 如果等待后端回调设置 loading，可能会被 message_end 的 loading=false 覆盖
+    setLoading(true);
+    setLoadingStartTime(Date.now());
 
     // 发送消息后强制滚动到底部，确保用户能看到"正在生成响应"提示和新内容
     isUserAtBottomRef.current = true;
@@ -2159,6 +2132,8 @@ const App = () => {
             showUsage={true}
             alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
             placeholder={t('chat.inputPlaceholder')}
+            value={draftInput}
+            onInput={setDraftInput}
             onSubmit={handleSubmit}
             onStop={interruptSession}
             onModeSelect={handleModeSelect}

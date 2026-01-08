@@ -329,7 +329,6 @@ public class ClaudeMessageHandler implements MessageCallback {
             isThinking = false;
             callbackHandler.notifyThinkingStatusChanged(false);
         }
-        // Clear status from StatusBar
         ClaudeNotifier.clearStatus(project);
         state.setBusy(false);
         state.setLoading(false);
