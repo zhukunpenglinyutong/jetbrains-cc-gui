@@ -37,7 +37,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_usage_statistics",
         "get_working_directory",
         "set_working_directory",
-        "get_editor_font_config"
+        "get_editor_font_config",
+        "get_streaming_enabled",
+        "set_streaming_enabled"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -88,6 +90,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "get_editor_font_config":
                 handleGetEditorFontConfig();
+                return true;
+            case "get_streaming_enabled":
+                handleGetStreamingEnabled();
+                return true;
+            case "set_streaming_enabled":
+                handleSetStreamingEnabled(content);
                 return true;
             default:
                 return false;
@@ -656,6 +664,82 @@ public class SettingsHandler extends BaseMessageHandler {
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get editor font config: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 🔧 获取流式传输配置
+     */
+    private void handleGetStreamingEnabled() {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    JsonObject response = new JsonObject();
+                    response.addProperty("streamingEnabled", false);
+                    callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+                });
+                return;
+            }
+
+            com.github.claudecodegui.CodemossSettingsService settingsService =
+                new com.github.claudecodegui.CodemossSettingsService();
+            boolean streamingEnabled = settingsService.getStreamingEnabled(projectPath);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("streamingEnabled", streamingEnabled);
+                callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get streaming enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("streamingEnabled", false);
+                callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+            });
+        }
+    }
+
+    /**
+     * 🔧 设置流式传输配置
+     */
+    private void handleSetStreamingEnabled(String content) {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("无法获取项目路径"));
+                });
+                return;
+            }
+
+            Gson gson = new Gson();
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean streamingEnabled = false;
+
+            if (json != null && json.has("streamingEnabled") && !json.get("streamingEnabled").isJsonNull()) {
+                streamingEnabled = json.get("streamingEnabled").getAsBoolean();
+            }
+
+            com.github.claudecodegui.CodemossSettingsService settingsService =
+                new com.github.claudecodegui.CodemossSettingsService();
+            settingsService.setStreamingEnabled(projectPath, streamingEnabled);
+
+            LOG.info("[SettingsHandler] Set streaming enabled: " + streamingEnabled);
+
+            // 返回更新后的状态
+            final boolean finalStreamingEnabled = streamingEnabled;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("streamingEnabled", finalStreamingEnabled);
+                callJavaScript("window.updateStreamingEnabled", escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set streaming enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("保存流式传输配置失败: " + e.getMessage()));
+            });
         }
     }
 

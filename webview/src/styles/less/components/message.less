@@ -5,7 +5,6 @@
     overflow-y: auto;
     overflow-x: hidden; /* 防止横向滚动 */
     padding: 0;
-    scroll-behavior: smooth;
     background: var(--bg-primary);
 }
 
@@ -403,11 +402,25 @@
     color: var(--color-thinking-text);
     font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     font-size: 12.5px;
-    white-space: pre-wrap;
     line-height: 1.5;
     word-wrap: break-word;
     overflow-wrap: break-word;
     max-width: 100%;
+}
+
+.thinking-content .markdown-content p {
+    margin-bottom: 0;
+    white-space: pre-wrap;
+}
+
+.thinking-content .markdown-content ul,
+.thinking-content .markdown-content ol {
+    margin: 0;
+}
+
+.thinking-content .markdown-content li {
+    margin-bottom: 0;
+    white-space: pre-wrap;
 }
 
 /* 思考状态指示器 */

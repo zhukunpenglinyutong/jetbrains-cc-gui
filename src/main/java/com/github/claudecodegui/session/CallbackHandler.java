@@ -69,4 +69,42 @@ public class CallbackHandler {
             callback.onSlashCommandsReceived(slashCommands);
         }
     }
+
+    // ===== 🔧 流式传输通知方法 =====
+
+    /**
+     * 通知流式传输开始
+     */
+    public void notifyStreamStart() {
+        if (callback != null) {
+            callback.onStreamStart();
+        }
+    }
+
+    /**
+     * 通知流式传输结束
+     */
+    public void notifyStreamEnd() {
+        if (callback != null) {
+            callback.onStreamEnd();
+        }
+    }
+
+    /**
+     * 通知内容增量（已在现有的 onContentDelta 中处理）
+     */
+    public void notifyContentDelta(String delta) {
+        if (callback != null) {
+            callback.onContentDelta(delta);
+        }
+    }
+
+    /**
+     * 通知思考增量
+     */
+    public void notifyThinkingDelta(String delta) {
+        if (callback != null) {
+            callback.onThinkingDelta(delta);
+        }
+    }
 }

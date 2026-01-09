@@ -305,4 +305,35 @@ interface Window {
    * Update current Codex config (from ~/.codex/)
    */
   updateCurrentCodexConfig?: (json: string) => void;
+
+  // ============================================================================
+  // 🔧 流式传输回调函数
+  // ============================================================================
+
+  /**
+   * Stream start callback - 流式传输开始时调用
+   */
+  onStreamStart?: () => void;
+
+  /**
+   * Content delta callback - 收到内容增量时调用
+   * @param delta 内容增量字符串
+   */
+  onContentDelta?: (delta: string) => void;
+
+  /**
+   * Thinking delta callback - 收到思考增量时调用
+   * @param delta 思考增量字符串
+   */
+  onThinkingDelta?: (delta: string) => void;
+
+  /**
+   * Stream end callback - 流式传输结束时调用
+   */
+  onStreamEnd?: () => void;
+
+  /**
+   * Update streaming enabled configuration - 接收流式传输配置
+   */
+  updateStreamingEnabled?: (json: string) => void;
 }

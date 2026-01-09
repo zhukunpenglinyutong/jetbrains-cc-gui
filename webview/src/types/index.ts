@@ -30,6 +30,7 @@ export interface ClaudeMessage {
   content?: string;
   raw?: ClaudeRawMessage | string;
   timestamp?: string;
+  isStreaming?: boolean; // 🔧 流式传输：标记消息是否正在流式接收中
   [key: string]: unknown;
 }
 
