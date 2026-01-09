@@ -124,6 +124,8 @@ const App = () => {
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
   const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
+  // 🔧 流式传输开关状态（同步设置页面）
+  const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(false);
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -1074,6 +1076,16 @@ const App = () => {
       }
     };
 
+    // 🔧 流式传输开关状态同步回调
+    window.updateStreamingEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setStreamingEnabledSetting(data.streamingEnabled ?? false);
+      } catch (error) {
+        console.error('[Frontend] Failed to parse streaming config:', error);
+      }
+    };
+
     // Retry getting active provider
     let retryCount = 0;
     const MAX_RETRIES = 30;
@@ -1104,6 +1116,21 @@ const App = () => {
       }
     };
     setTimeout(requestThinkingEnabled, 200);
+
+    // 🔧 请求流式传输初始状态
+    let streamingRetryCount = 0;
+    const MAX_STREAMING_RETRIES = 30;
+    const requestStreamingEnabled = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_streaming_enabled');
+      } else {
+        streamingRetryCount++;
+        if (streamingRetryCount < MAX_STREAMING_RETRIES) {
+          setTimeout(requestStreamingEnabled, 100);
+        }
+      }
+    };
+    setTimeout(requestStreamingEnabled, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -1612,6 +1639,16 @@ const App = () => {
     });
     sendBridgeMessage('update_provider', payload);
     addToast(enabled ? t('toast.thinkingEnabled') : t('toast.thinkingDisabled'), 'success');
+  };
+
+  /**
+   * 处理流式传输开关切换
+   */
+  const handleStreamingEnabledChange = (enabled: boolean) => {
+    setStreamingEnabledSetting(enabled);
+    const payload = { streamingEnabled: enabled };
+    sendBridgeMessage('set_streaming_enabled', JSON.stringify(payload));
+    addToast(enabled ? t('settings.basic.streaming.enabled') : t('settings.basic.streaming.disabled'), 'success');
   };
 
   const interruptSession = () => {
@@ -2625,6 +2662,8 @@ const App = () => {
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
             onToggleThinking={handleToggleThinking}
+            streamingEnabled={streamingEnabledSetting}
+            onStreamingEnabledChange={handleStreamingEnabledChange}
             selectedAgent={selectedAgent}
             onAgentSelect={handleAgentSelect}
             activeFile={contextInfo?.file}

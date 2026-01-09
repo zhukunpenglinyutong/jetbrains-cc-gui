@@ -164,6 +164,11 @@ interface Window {
   updateThinkingEnabled?: (json: string) => void;
 
   /**
+   * Update streaming enabled setting
+   */
+  updateStreamingEnabled?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;

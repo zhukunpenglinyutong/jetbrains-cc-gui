@@ -24,6 +24,8 @@ export const ButtonArea = ({
   onEnhancePrompt,
   alwaysThinkingEnabled = false,
   onToggleThinking,
+  streamingEnabled = false,
+  onStreamingEnabledChange,
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
@@ -133,6 +135,8 @@ export const ButtonArea = ({
           onProviderChange={handleProviderSelect}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}
+          streamingEnabled={streamingEnabled}
+          onStreamingEnabledChange={onStreamingEnabledChange}
           selectedAgent={selectedAgent}
           onAgentSelect={onAgentSelect}
           onOpenAgentSettings={onOpenAgentSettings}

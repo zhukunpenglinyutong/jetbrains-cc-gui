@@ -62,6 +62,8 @@ export const ChatInputBox = ({
   onClearContext,
   alwaysThinkingEnabled,
   onToggleThinking,
+  streamingEnabled,
+  onStreamingEnabledChange,
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
@@ -1840,6 +1842,8 @@ export const ChatInputBox = ({
         onEnhancePrompt={handleEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}
+        streamingEnabled={streamingEnabled}
+        onStreamingEnabledChange={onStreamingEnabledChange}
         selectedAgent={selectedAgent}
         onAgentSelect={(agent) => onAgentSelect?.(agent)}
         onOpenAgentSettings={onOpenAgentSettings}

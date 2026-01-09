@@ -190,12 +190,8 @@ public class MessageParser {
                     }
                     sb.append("[使用工具: ").append(block.get("name").getAsString()).append("]");
                     hasContent = true;
-                } else if ("thinking".equals(blockType) && block.has("thinking") && !block.get("thinking").isJsonNull()) {
-                    if (sb.length() > 0) {
-                        sb.append("\n");
-                    }
-                    sb.append("[思考过程]");
-                    hasContent = true;
+                } else if ("thinking".equals(blockType)) {
+                    // 跳过 thinking 块，不显示固定文案
                 } else if ("image".equals(blockType)) {
                     if (sb.length() > 0) {
                         sb.append("\n");

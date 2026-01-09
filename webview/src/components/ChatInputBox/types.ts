@@ -374,6 +374,10 @@ export interface ChatInputBoxProps {
   onProviderSelect?: (providerId: string) => void;
   /** 切换思考模式 */
   onToggleThinking?: (enabled: boolean) => void;
+  /** 是否开启流式传输 */
+  streamingEnabled?: boolean;
+  /** 切换流式传输 */
+  onStreamingEnabledChange?: (enabled: boolean) => void;
 
   /** 当前选中的智能体 */
   selectedAgent?: SelectedAgent | null;
@@ -421,6 +425,10 @@ export interface ButtonAreaProps {
   alwaysThinkingEnabled?: boolean;
   /** 切换思考模式 */
   onToggleThinking?: (enabled: boolean) => void;
+  /** 是否开启流式传输 */
+  streamingEnabled?: boolean;
+  /** 切换流式传输 */
+  onStreamingEnabledChange?: (enabled: boolean) => void;
   /** 当前选中的智能体 */
   selectedAgent?: SelectedAgent | null;
   /** 智能体选择回调 */
