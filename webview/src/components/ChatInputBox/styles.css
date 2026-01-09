@@ -216,11 +216,22 @@
   color: var(--text-secondary);
   transition: all 0.2s;
   font-size: 14px;
+  /* Reset button styles */
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  outline: none;
 }
 
-.context-tool-btn:hover {
+.context-tool-btn:hover:not(:disabled) {
   background: var(--button-hover);
   color: var(--text-primary);
+}
+
+.context-tool-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 
 .context-tool-divider {
@@ -468,6 +479,52 @@
 }
 
 .code-snippet-tag.has-tooltip:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  border: 6px solid transparent;
+  border-top-color: var(--dropdown-border);
+  z-index: 1000;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+/* Tooltip for tool buttons (rewind, enhance prompt, etc.) */
+.context-tool-btn.has-tooltip,
+.enhance-prompt-button.has-tooltip {
+  position: relative;
+}
+
+.context-tool-btn.has-tooltip:hover::after,
+.enhance-prompt-button.has-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+.context-tool-btn.has-tooltip:hover::before,
+.enhance-prompt-button.has-tooltip:hover::before {
   content: '';
   position: absolute;
   bottom: 100%;

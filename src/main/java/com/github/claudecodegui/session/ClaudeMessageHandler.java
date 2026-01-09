@@ -87,6 +87,9 @@ public class ClaudeMessageHandler implements MessageCallback {
         // 英文：Choose different handling based on message type
         // 解释：就像分拣邮件，不同类型的信放到不同的格子里
         switch (type) {
+            case "user":
+                handleUserMessage(content);
+                break;
             case "assistant":
                 handleAssistantMessage(content);
                 break;
@@ -336,6 +339,47 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
+     * 处理用户消息（来自SDK）
+     * 英文：Handle user message from SDK
+     * 解释：SDK返回的用户消息包含uuid，需要更新已有的用户消息
+     */
+    private void handleUserMessage(String content) {
+        if (!content.startsWith("{")) {
+            return;
+        }
+
+        try {
+            JsonObject userMsg = gson.fromJson(content, JsonObject.class);
+
+            // 提取 uuid（用于 rewind 功能）
+            String uuid = userMsg.has("uuid") ? userMsg.get("uuid").getAsString() : null;
+            if (uuid == null) {
+                LOG.debug("User message from SDK has no uuid, skipping update");
+                return;
+            }
+
+            // 查找最后一个用户消息并更新其 raw 字段
+            List<Message> messages = state.getMessages();
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                Message msg = messages.get(i);
+                if (msg.type == Message.Type.USER && msg.raw != null) {
+                    // 检查这个消息是否已经有 uuid
+                    if (!msg.raw.has("uuid")) {
+                        // 更新 raw 字段，添加 uuid
+                        msg.raw.addProperty("uuid", uuid);
+                        LOG.info("Updated user message with uuid: " + uuid);
+                        // 通知前端更新
+                        callbackHandler.notifyMessageUpdate(messages);
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to parse user message from SDK: " + e.getMessage());
+        }
+    }
+
+    /**
      * 处理工具调用结果
      * 英文：Handle tool result
      * 解释：AI用了某个工具（比如搜索、计算），这是工具的结果
@@ -385,7 +429,6 @@ public class ClaudeMessageHandler implements MessageCallback {
             isThinking = false;
             callbackHandler.notifyThinkingStatusChanged(false);
         }
-        // Clear status from StatusBar
         ClaudeNotifier.clearStatus(project);
         state.setBusy(false);
         state.setLoading(false);

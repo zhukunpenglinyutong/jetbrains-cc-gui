@@ -102,6 +102,8 @@ const BasicConfigSection = ({
     const language = event.target.value;
     i18n.changeLanguage(language);
     localStorage.setItem('language', language);
+    // Mark that user has manually set the language, so IDEA language won't override it
+    localStorage.setItem('languageManuallySet', 'true');
   };
 
   return (

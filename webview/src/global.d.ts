@@ -63,6 +63,11 @@ interface Window {
   addHistoryMessage?: (message: any) => void;
 
   /**
+   * Set current session ID (for rewind feature)
+   */
+  setSessionId?: (sessionId: string) => void;
+
+  /**
    * Add toast notification (called from backend)
    */
   addToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -224,6 +229,11 @@ interface Window {
   __pendingSlashCommands?: string;
 
   /**
+   * Pending session ID before App component mounts (for rewind feature)
+   */
+  __pendingSessionId?: string;
+
+  /**
    * Apply IDEA editor font configuration (called from Java backend)
    * @param config Font configuration object containing fontFamily, fontSize, lineSpacing, fallbackFonts
    */
@@ -306,7 +316,7 @@ interface Window {
    */
   updateCurrentCodexConfig?: (json: string) => void;
 
-  // ============================================================================
+// ============================================================================
   // 🔧 流式传输回调函数
   // ============================================================================
 
@@ -336,4 +346,9 @@ interface Window {
    * Update streaming enabled configuration - 接收流式传输配置
    */
   updateStreamingEnabled?: (json: string) => void;
+
+  /**
+   * Rewind result callback - 回滚操作结果回调
+   */
+  onRewindResult?: (json: string) => void;
 }

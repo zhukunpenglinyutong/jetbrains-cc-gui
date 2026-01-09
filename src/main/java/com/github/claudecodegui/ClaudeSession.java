@@ -427,8 +427,6 @@ public class ClaudeSession {
         notifyMessageUpdate();
 
         // 更新摘要（第一条消息）
-        // Update summary (first message)
-        // 解释：如果是第一条消息，用它作为对话标题
         if (state.getSummary() == null) {
             String baseSummary = (userMessage.content != null && !userMessage.content.isEmpty())
                 ? userMessage.content
@@ -438,8 +436,6 @@ public class ClaudeSession {
         }
 
         // 更新状态
-        // Update state
-        // 解释：告诉系统现在正在忙，正在加载
         state.updateLastModifiedTime();
         state.setError(null);
         state.setBusy(true);

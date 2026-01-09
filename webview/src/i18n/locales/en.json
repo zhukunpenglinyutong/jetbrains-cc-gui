@@ -34,6 +34,7 @@
     "userUploadedImage": "User uploaded image",
     "inputPlaceholder": "@reference files, shift + enter for new line",
     "noThinkingContent": "No thinking content",
+    "parseError": "Failed to parse content",
     "sendMessageEnter": "Send message (Enter)",
     "currentMode": "Current mode: {{mode}}",
     "currentModel": "Current model: {{model}}",
@@ -342,6 +343,7 @@
     "allow": "Allow Once",
     "allowAlways": "Always Allow",
     "deny": "Deny",
+    "userDenied": "User denied the permission request",
     "fromExternalProcess": "Request from external process",
     "tools": {
       "Write": "Write File",
@@ -569,7 +571,8 @@
     "diffButton": "Diff",
     "editPrefix": "Edit: {{fileName}}",
     "lineRange": "Lines {{start}}-{{end}}",
-    "filePath": "File path:"
+    "filePath": "File path:",
+    "unknownTool": "Unknown tool"
   },
   "skills": {
     "title": "Skills",
@@ -741,7 +744,8 @@
   },
   "promptEnhancer": {
     "title": "Prompt Enhancer",
-    "tooltip": "Rewrite prompt to provide more context and improve agent responses",
+    "tooltip": "Enhance Prompt",
+    "tooltipFull": "Rewrite prompt to provide more context and improve agent responses",
     "shortcut": "⌘/",
     "enhancing": "Enhancing prompt...",
     "originalPrompt": "Original Prompt",
@@ -751,5 +755,27 @@
     "enhanceFailed": "Failed to enhance prompt",
     "emptyPrompt": "Please enter a prompt first",
     "copyEnhanced": "Copy Enhanced"
+  },
+  "rewind": {
+    "title": "Rewind Files to Previous State",
+    "tooltip": "Rewind",
+    "shortcut": "ESC ESC",
+    "tooltipFull": "Restore files to their state at this message",
+    "selectTitle": "Select Rewind Point",
+    "noRewindableMessages": "No rewindable messages in this session",
+    "rewindTo": "Rewind to",
+    "impact": "Impact",
+    "willRestore": "Will restore files to their state at this message",
+    "changesLost": "Changes made after this point will be lost",
+    "messagesAffected": "messages affected",
+    "historyKept": "Conversation history will be kept",
+    "cannotUndo": "This action cannot be undone.",
+    "restoreFiles": "Restore Files",
+    "restoring": "Restoring files...",
+    "success": "Rewind successful",
+    "successSimple": "Rewind successful",
+    "failed": "Failed to restore files",
+    "notAvailable": "Rewind not available for this session",
+    "parseError": "Failed to parse result"
   }
 }
