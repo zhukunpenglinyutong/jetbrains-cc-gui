@@ -26,6 +26,7 @@ import java.util.function.Function;
 public class ProviderManager {
     private static final Logger LOG = Logger.getInstance(ProviderManager.class);
     private static final String BACKUP_FILE_NAME = "config.json.bak";
+    public static final String LOCAL_SETTINGS_PROVIDER_ID = "__local_settings_json__";
 
     private final Gson gson;
     private final Function<Void, JsonObject> configReader;
@@ -54,24 +55,33 @@ public class ProviderManager {
         List<JsonObject> result = new ArrayList<>();
 
         if (!config.has("claude")) {
-            return result;
+            JsonObject claude = new JsonObject();
+            claude.add("providers", new JsonObject());
+            claude.addProperty("current", "");
+            config.add("claude", claude);
         }
 
         JsonObject claude = config.getAsJsonObject("claude");
+        String currentId = claude.has("current") ? claude.get("current").getAsString() : null;
+
+        JsonObject localProvider = new JsonObject();
+        localProvider.addProperty("id", LOCAL_SETTINGS_PROVIDER_ID);
+        localProvider.addProperty("name", "本地 settings.json");
+        localProvider.addProperty("isActive", LOCAL_SETTINGS_PROVIDER_ID.equals(currentId));
+        localProvider.addProperty("isLocalProvider", true);
+        result.add(localProvider);
+
         if (!claude.has("providers")) {
             return result;
         }
 
         JsonObject providers = claude.getAsJsonObject("providers");
-        String currentId = claude.has("current") ? claude.get("current").getAsString() : null;
 
         for (String key : providers.keySet()) {
             JsonObject provider = providers.getAsJsonObject(key);
-            // 兼容旧版配置:若缺失 id 字段则使用 key 作为补充
             if (!provider.has("id")) {
                 provider.addProperty("id", key);
             }
-            // 添加 isActive 标记
             provider.addProperty("isActive", key.equals(currentId));
             result.add(provider);
         }
@@ -90,11 +100,21 @@ public class ProviderManager {
         }
 
         JsonObject claude = config.getAsJsonObject("claude");
-        if (!claude.has("current") || !claude.has("providers")) {
+        String currentId = claude.has("current") ? claude.get("current").getAsString() : null;
+
+        if (LOCAL_SETTINGS_PROVIDER_ID.equals(currentId)) {
+            JsonObject localProvider = new JsonObject();
+            localProvider.addProperty("id", LOCAL_SETTINGS_PROVIDER_ID);
+            localProvider.addProperty("name", "本地 settings.json");
+            localProvider.addProperty("isLocal", true);
+            localProvider.addProperty("isActive", true);
+            return localProvider;
+        }
+
+        if (!claude.has("providers")) {
             return null;
         }
 
-        String currentId = claude.get("current").getAsString();
         JsonObject providers = claude.getAsJsonObject("providers");
 
         if (providers.has(currentId)) {
@@ -403,6 +423,15 @@ public class ProviderManager {
      * 应用激活的供应商到 Claude settings.json
      */
     public void applyActiveProviderToClaudeSettings() throws IOException {
+        JsonObject config = configReader.apply(null);
+
+        if (config.has("claude") &&
+            config.getAsJsonObject("claude").has("current") &&
+            LOCAL_SETTINGS_PROVIDER_ID.equals(config.getAsJsonObject("claude").get("current").getAsString())) {
+            LOG.info("[ProviderManager] Local settings.json provider active, skipping sync to settings.json");
+            return;
+        }
+
         JsonObject activeProvider = getActiveClaudeProvider();
         if (activeProvider == null) {
             LOG.info("[ProviderManager] No active provider to sync to .claude/settings.json");
@@ -559,5 +588,21 @@ public class ProviderManager {
             return null;
         }
         return settingsConfig.getAsJsonObject("env");
+    }
+
+    public boolean isLocalSettingsProvider(String providerId) {
+        return LOCAL_SETTINGS_PROVIDER_ID.equals(providerId);
+    }
+
+    public boolean isLocalProviderActive() {
+        JsonObject config = configReader.apply(null);
+        if (!config.has("claude")) {
+            return false;
+        }
+        JsonObject claude = config.getAsJsonObject("claude");
+        if (!claude.has("current")) {
+            return false;
+        }
+        return LOCAL_SETTINGS_PROVIDER_ID.equals(claude.get("current").getAsString());
     }
 }

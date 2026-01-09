@@ -333,14 +333,37 @@ public class ProviderHandler extends BaseMessageHandler {
             JsonObject data = gson.fromJson(content, JsonObject.class);
             String id = data.get("id").getAsString();
 
+            if ("__local_settings_json__".equals(id)) {
+                JsonObject config = context.getSettingsService().readConfig();
+                if (!config.has("claude")) {
+                    JsonObject claude = new JsonObject();
+                    claude.add("providers", new JsonObject());
+                    claude.addProperty("current", "");
+                    config.add("claude", claude);
+                }
+                config.getAsJsonObject("claude").addProperty("current", id);
+                context.getSettingsService().writeConfig(config);
+
+                LOG.info("[ProviderHandler] Switched to LOCAL settings.json provider");
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.showSwitchSuccess",
+                        escapeJs("已切换到本地 settings.json\n\n配置将直接读取自 ~/.claude/settings.json，不会被覆盖。"));
+                    handleGetProviders();
+                    handleGetCurrentClaudeConfig();
+                    handleGetActiveProvider();
+                });
+                return;
+            }
+
             context.getSettingsService().switchClaudeProvider(id);
             context.getSettingsService().applyActiveProviderToClaudeSettings();
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showSwitchSuccess", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + "\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
-                handleGetProviders(); // 刷新供应商列表
-                handleGetCurrentClaudeConfig(); // 刷新 Claude CLI 配置显示
-                handleGetActiveProvider(); // 刷新当前激活的供应商配置
+                handleGetProviders();
+                handleGetCurrentClaudeConfig();
+                handleGetActiveProvider();
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to switch provider: " + e.getMessage(), e);
