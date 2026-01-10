@@ -184,20 +184,12 @@ public class MessageParser {
                     }
                     sb.append(block.get("text").getAsString());
                     hasContent = true;
-                } else if ("tool_use".equals(blockType) && block.has("name") && !block.get("name").isJsonNull()) {
-                    if (sb.length() > 0) {
-                        sb.append("\n");
-                    }
-                    sb.append("[使用工具: ").append(block.get("name").getAsString()).append("]");
-                    hasContent = true;
+                } else if ("tool_use".equals(blockType)) {
+                    // Skip tool_use block, don't display tool usage text
                 } else if ("thinking".equals(blockType)) {
-                    // 跳过 thinking 块，不显示固定文案
+                    // Skip thinking block, don't display fixed text
                 } else if ("image".equals(blockType)) {
-                    if (sb.length() > 0) {
-                        sb.append("\n");
-                    }
-                    sb.append("[图片]");
-                    hasContent = true;
+                    // Skip image block, don't display fixed text
                 }
             } else if (element.isJsonPrimitive()) {
                 String text = element.getAsString();

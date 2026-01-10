@@ -311,32 +311,16 @@ public class CodexMessageHandler implements MessageCallback {
                         }
                         sb.append(text);
                         hasContent = true;
-                    } else if ("tool_use".equals(blockType) && block.has("name") && !block.get("name").isJsonNull()) {
-                        // 工具使用消息
-                        String toolName = block.get("name").getAsString();
-                        if (sb.length() > 0) {
-                            sb.append("\n");
-                        }
-                        sb.append("[Using tool: ").append(toolName).append("]");
-                        hasContent = true;
+                    } else if ("tool_use".equals(blockType)) {
+                        // Skip tool_use, don't display tool usage text
                     } else if ("tool_result".equals(blockType)) {
                         // 工具结果 - 不展示，因为对用户没有实际意义
                         // 工具结果通常很长，且已经在 assistant 的响应中体现
                         // 这里跳过不处理
-                    } else if ("thinking".equals(blockType) && block.has("thinking") && !block.get("thinking").isJsonNull()) {
-                        // 思考过程 - 添加一个简短提示
-                        if (sb.length() > 0) {
-                            sb.append("\n");
-                        }
-                        sb.append("[Thinking...]");
-                        hasContent = true;
+                    } else if ("thinking".equals(blockType)) {
+                        // Skip thinking block, don't display fixed text
                     } else if ("image".equals(blockType)) {
-                        // 图片消息
-                        if (sb.length() > 0) {
-                            sb.append("\n");
-                        }
-                        sb.append("[Image]");
-                        hasContent = true;
+                        // Skip image block, don't display fixed text
                     }
                 } else if (element.isJsonPrimitive()) {
                     // 某些情况下，数组元素可能直接是字符串

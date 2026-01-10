@@ -326,10 +326,7 @@ public class ClaudeHistoryReader {
                         sb.append((String) text);
                     }
                 } else if ("tool_use".equals(type)) {
-                    Object name = item.get("name");
-                    if (name instanceof String && sb.length() == 0) {
-                        sb.append("[Tool: ").append(name).append("]");
-                    }
+                    // Skip tool_use, don't display tool usage text
                 }
             }
 
@@ -353,10 +350,8 @@ public class ClaudeHistoryReader {
                             sb.append(" ");
                         }
                         sb.append(item.get("text").getAsString());
-                    } else if ("tool_use".equals(type) && item.has("name") && !item.get("name").isJsonNull()) {
-                        if (sb.length() == 0) {
-                            sb.append("[Tool: ").append(item.get("name").getAsString()).append("]");
-                        }
+                    } else if ("tool_use".equals(type)) {
+                        // Skip tool_use, don't display tool usage text
                     }
                 }
             }

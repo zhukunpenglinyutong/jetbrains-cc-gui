@@ -242,6 +242,8 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
             const isInstalling = installingSdk === sdk.id;
             const isUninstalling = uninstallingSdk === sdk.id;
             const hasUpdate = info?.hasUpdate;
+            // Only allow one operation at a time (install or uninstall)
+            const isAnyOperationInProgress = installingSdk !== null || uninstallingSdk !== null;
 
             return (
               <div key={sdk.id} className={styles.sdkCard}>
@@ -267,7 +269,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
                       <button
                         className={`${styles.installBtn} ${isInstalling ? styles.installing : ''}`}
                         onClick={() => handleInstall(sdk.id)}
-                        disabled={isInstalling || nodeAvailable === false}
+                        disabled={isAnyOperationInProgress || nodeAvailable === false}
                       >
                         {isInstalling ? (
                           <>
@@ -287,7 +289,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
                           <button
                             className={styles.updateBtn}
                             onClick={() => handleInstall(sdk.id)}
-                            disabled={isInstalling}
+                            disabled={isAnyOperationInProgress}
                           >
                             <span className="codicon codicon-sync" />
                             <span>{t('settings.dependency.update')}</span>
@@ -296,7 +298,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
                         <button
                           className={styles.uninstallBtn}
                           onClick={() => handleUninstall(sdk.id)}
-                          disabled={isUninstalling}
+                          disabled={isAnyOperationInProgress}
                         >
                           {isUninstalling ? (
                             <>
