@@ -1,11 +1,13 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.dependency.DependencyManager;
 import com.github.claudecodegui.dependency.InstallResult;
 import com.github.claudecodegui.dependency.SdkDefinition;
 import com.github.claudecodegui.dependency.UpdateInfo;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -18,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 public class DependencyHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(DependencyHandler.class);
+    private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
 
     private static final String[] SUPPORTED_TYPES = {
         "get_dependency_status",      // 获取所有 SDK 状态
@@ -32,8 +35,36 @@ public class DependencyHandler extends BaseMessageHandler {
 
     public DependencyHandler(HandlerContext context) {
         super(context);
-        this.dependencyManager = new DependencyManager();
+        // 创建 NodeDetector 并尝试使用配置中的 Node.js 路径
+        NodeDetector nodeDetector = new NodeDetector();
+        String configuredNodePath = getConfiguredNodePath();
+        if (configuredNodePath != null && !configuredNodePath.isEmpty()) {
+            String version = nodeDetector.verifyNodePath(configuredNodePath);
+            if (version != null) {
+                nodeDetector.setNodeExecutable(configuredNodePath);
+                LOG.info("[DependencyHandler] Using configured Node.js path: " + configuredNodePath + " (" + version + ")");
+            } else {
+                LOG.warn("[DependencyHandler] Configured Node.js path is invalid: " + configuredNodePath);
+            }
+        }
+        this.dependencyManager = new DependencyManager(nodeDetector);
         this.gson = new Gson();
+    }
+
+    /**
+     * 从设置中获取配置的 Node.js 路径
+     */
+    private String getConfiguredNodePath() {
+        try {
+            PropertiesComponent props = PropertiesComponent.getInstance();
+            String savedPath = props.getValue(NODE_PATH_PROPERTY_KEY);
+            if (savedPath != null && !savedPath.trim().isEmpty()) {
+                return savedPath.trim();
+            }
+        } catch (Exception e) {
+            LOG.warn("[DependencyHandler] Failed to get configured Node.js path: " + e.getMessage());
+        }
+        return null;
     }
 
     @Override
@@ -213,13 +244,43 @@ public class DependencyHandler extends BaseMessageHandler {
 
     /**
      * 检查 Node.js 环境
+     * 优先使用配置中的 Node.js 路径，如果未配置则使用自动检测
      */
     private void handleCheckNodeEnvironment() {
         try {
-            boolean available = dependencyManager.checkNodeEnvironment();
+            // 首先检查是否有配置的 Node.js 路径
+            String configuredPath = getConfiguredNodePath();
+            boolean available = false;
+            String detectedPath = null;
+            String detectedVersion = null;
+
+            if (configuredPath != null && !configuredPath.isEmpty()) {
+                // 使用配置的路径
+                NodeDetector nodeDetector = new NodeDetector();
+                String version = nodeDetector.verifyNodePath(configuredPath);
+                if (version != null) {
+                    available = true;
+                    detectedPath = configuredPath;
+                    detectedVersion = version;
+                    LOG.info("[DependencyHandler] Node.js found at configured path: " + configuredPath + " (" + version + ")");
+                } else {
+                    LOG.warn("[DependencyHandler] Configured Node.js path is invalid: " + configuredPath);
+                }
+            }
+
+            // 如果配置的路径无效，尝试自动检测
+            if (!available) {
+                available = dependencyManager.checkNodeEnvironment();
+            }
 
             JsonObject result = new JsonObject();
             result.addProperty("available", available);
+            if (detectedPath != null) {
+                result.addProperty("path", detectedPath);
+            }
+            if (detectedVersion != null) {
+                result.addProperty("version", detectedVersion);
+            }
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.nodeEnvironmentStatus", escapeJs(gson.toJson(result)));
