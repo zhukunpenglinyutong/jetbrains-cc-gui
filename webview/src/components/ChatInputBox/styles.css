@@ -1403,3 +1403,97 @@
 [data-theme="light"] .enhanced-prompt {
   background: rgba(0, 120, 212, 0.08);
 }
+
+/* ============================================================
+   SDK 未安装提示条
+   ============================================================ */
+.sdk-warning-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(255, 152, 0, 0.15); /* Orange tint */
+  border-bottom: 1px solid rgba(255, 152, 0, 0.3);
+  color: #ffb74d; /* Orange text */
+  font-size: 12px;
+  /* 圆角由 .chat-input-box > :first-child 控制，但在某些情况下可能需要显式设置 */
+}
+
+.sdk-warning-bar .codicon-warning {
+  margin-right: 8px;
+  font-size: 14px;
+  color: #ffb74d;
+}
+
+.sdk-warning-text {
+  flex: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sdk-install-btn {
+  background: rgba(255, 152, 0, 0.2);
+  border: 1px solid rgba(255, 152, 0, 0.4);
+  color: #ffb74d;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 12px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.sdk-install-btn:hover {
+  background: rgba(255, 152, 0, 0.3);
+  border-color: rgba(255, 152, 0, 0.6);
+}
+
+/* 亮色主题适配 */
+[data-theme="light"] .sdk-warning-bar {
+  background: rgba(255, 149, 0, 0.1);
+  border-bottom-color: rgba(255, 149, 0, 0.2);
+  color: #e65100;
+}
+
+[data-theme="light"] .sdk-warning-bar .codicon-warning {
+  color: #ef6c00;
+}
+
+[data-theme="light"] .sdk-install-btn {
+  background: rgba(255, 149, 0, 0.15);
+  border-color: rgba(255, 149, 0, 0.3);
+  color: #ef6c00;
+}
+
+[data-theme="light"] .sdk-install-btn:hover {
+  background: rgba(255, 149, 0, 0.25);
+  border-color: rgba(255, 149, 0, 0.5);
+}
+
+/* SDK 状态加载中样式 */
+.sdk-warning-bar.sdk-loading {
+  background: rgba(33, 150, 243, 0.1);
+  border-bottom-color: rgba(33, 150, 243, 0.2);
+  color: #64b5f6;
+}
+
+.sdk-warning-bar.sdk-loading .codicon-loading {
+  margin-right: 8px;
+  font-size: 14px;
+  color: #64b5f6;
+}
+
+[data-theme="light"] .sdk-warning-bar.sdk-loading {
+  background: rgba(33, 150, 243, 0.08);
+  border-bottom-color: rgba(33, 150, 243, 0.15);
+  color: #1976d2;
+}
+
+[data-theme="light"] .sdk-warning-bar.sdk-loading .codicon-loading {
+  color: #1976d2;
+}

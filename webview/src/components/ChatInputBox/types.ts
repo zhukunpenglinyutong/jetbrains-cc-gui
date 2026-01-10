@@ -392,6 +392,15 @@ export interface ChatInputBoxProps {
   hasMessages?: boolean;
   /** 回溯文件回调 */
   onRewind?: () => void;
+
+  /** 🔧 SDK 是否已安装（用于在未安装时禁止提问） */
+  sdkInstalled?: boolean;
+  /** 🔧 SDK 状态是否正在加载 */
+  sdkStatusLoading?: boolean;
+  /** 🔧 前往安装 SDK 回调 */
+  onInstallSdk?: () => void;
+  /** 显示 Toast 提示 */
+  addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
 /**

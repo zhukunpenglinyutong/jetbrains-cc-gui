@@ -1,0 +1,312 @@
+/* ============================================================
+   SDK 未安装提示条 (从 ChatInputBox 复用的样式逻辑，但使用 Less 语法)
+   ============================================================ */
+.sdkWarningBar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  background: rgba(255, 152, 0, 0.15); /* Orange tint */
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 6px;
+  color: #ffb74d; /* Orange text */
+  font-size: 12px;
+  margin-bottom: 16px;
+
+  :global(.codicon) {
+    margin-right: 8px;
+    font-size: 14px;
+    color: #ffb74d;
+    flex-shrink: 0;
+  }
+
+  .warningText {
+    flex: 1;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+}
+
+/* 亮色主题适配 - 通过全局 data-theme 属性选择 */
+:global([data-theme="light"]) {
+  .sdkWarningBar {
+    background: rgba(255, 149, 0, 0.1);
+    border-color: rgba(255, 149, 0, 0.2);
+    color: #e65100;
+
+    .codicon {
+      color: #ef6c00;
+    }
+  }
+}
+
+.dependencySection {
+  max-width: 800px;
+  padding-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.sectionDesc {
+  color: var(--text-tertiary);
+  margin: 0 0 24px 0;
+  font-size: 13px;
+}
+
+.warningBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 8px;
+  margin-bottom: 24px;
+  color: var(--text-secondary);
+
+  .codicon {
+    color: #ffc107;
+    font-size: 16px;
+  }
+}
+
+.sdkList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.loadingState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: var(--text-tertiary);
+
+  .codicon {
+    font-size: 16px;
+  }
+}
+
+.sdkCard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--border-hover);
+  }
+}
+
+.sdkHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sdkInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.sdkName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+
+  .codicon {
+    font-size: 16px;
+
+    &.codicon-check {
+      color: #4caf50;
+    }
+
+    &.codicon-package {
+      color: var(--text-tertiary);
+    }
+  }
+}
+
+.versionBadge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.updateBadge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: rgba(33, 150, 243, 0.15);
+  border-radius: 4px;
+  color: #2196f3;
+}
+
+.sdkDescription {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.sdkActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.installBtn,
+.updateBtn,
+.uninstallBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  .codicon {
+    font-size: 14px;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.installBtn {
+  background: var(--accent-primary);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  &.installing {
+    background: var(--accent-primary);
+    opacity: 0.8;
+  }
+}
+
+.updateBtn {
+  background: rgba(33, 150, 243, 0.15);
+  color: #2196f3;
+
+  &:hover:not(:disabled) {
+    background: rgba(33, 150, 243, 0.25);
+  }
+}
+
+.uninstallBtn {
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+
+  &:hover:not(:disabled) {
+    background: rgba(244, 67, 54, 0.2);
+  }
+}
+
+.installPath {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-secondary);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: monospace;
+  word-break: break-all;
+
+  .codicon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+}
+
+.logsSection {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.logsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.closeLogsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+}
+
+.logsContainer {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: #1e1e1e;
+
+  pre {
+    margin: 0;
+    font-size: 12px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #d4d4d4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.6;
+  }
+}
+
+// Light theme overrides
+[data-theme='light'] {
+  .logsContainer {
+    background: #f5f5f5;
+
+    pre {
+      color: #333333;
+    }
+  }
+}

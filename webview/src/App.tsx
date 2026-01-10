@@ -127,6 +127,10 @@ const App = () => {
   // 🔧 流式传输开关状态（同步设置页面）
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(false);
 
+  // 🔧 SDK 安装状态（用于在未安装时禁止提问）
+  const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
+  const [sdkStatusLoaded, setSdkStatusLoaded] = useState(false); // 标记 SDK 状态是否已从后端加载
+
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
   useEffect(() => {
@@ -138,6 +142,24 @@ const App = () => {
 
   // 根据当前提供商选择显示的模型
   const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
+
+  // 🔧 根据当前提供商判断对应的 SDK 是否已安装
+  const currentSdkInstalled = (() => {
+    // 状态未加载时，返回 false（显示加载中或未安装提示）
+    if (!sdkStatusLoaded) return false;
+    // 提供商 -> SDK 映射
+    const providerToSdk: Record<string, string> = {
+      claude: 'claude-sdk',
+      anthropic: 'claude-sdk',
+      bedrock: 'claude-sdk',
+      codex: 'codex-sdk',
+      openai: 'codex-sdk',
+    };
+    const sdkId = providerToSdk[currentProvider] || 'claude-sdk';
+    const status = sdkStatus[sdkId];
+    // 检查 status 字段（优先）或 installed 字段
+    return status?.status === 'installed' || status?.installed === true;
+  })();
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -990,6 +1012,40 @@ const App = () => {
     resetFileReferenceState(); // 重置文件引用状态，防止 Promise 泄漏
     setupSlashCommandsCallback();
 
+    // 🔧 SDK 状态回调（用于在未安装时禁止提问）
+    // 使用装饰器模式，保存原有回调并扩展，避免与 DependencySection 的回调冲突
+    const originalUpdateDependencyStatus = window.updateDependencyStatus;
+    window.updateDependencyStatus = (jsonStr: string) => {
+      try {
+        const status = JSON.parse(jsonStr);
+        console.log('[Frontend] SDK status updated (App):', status);
+        setSdkStatus(status);
+        setSdkStatusLoaded(true); // 标记状态已加载
+      } catch (error) {
+        console.error('[Frontend] Failed to parse SDK status:', error);
+        setSdkStatusLoaded(true); // 即使解析失败也标记为已加载，避免永久等待
+      }
+      // 如果有原有回调（来自 DependencySection），也调用它
+      if (originalUpdateDependencyStatus && originalUpdateDependencyStatus !== window.updateDependencyStatus) {
+        originalUpdateDependencyStatus(jsonStr);
+      }
+    };
+    // 保存 App 的回调引用，供 DependencySection 使用
+    (window as any)._appUpdateDependencyStatus = window.updateDependencyStatus;
+
+    // 处理 pending 的 SDK 状态（后端可能在 React 初始化前就返回了）
+    if (window.__pendingDependencyStatus) {
+      console.log('[Frontend] Found pending dependency status, applying...');
+      const pending = window.__pendingDependencyStatus;
+      delete window.__pendingDependencyStatus;
+      window.updateDependencyStatus?.(pending);
+    }
+
+    // 初始化请求 SDK 状态
+    if (window.sendToJava) {
+      window.sendToJava('get_dependency_status:');
+    }
+
     // ChatInputBox 相关回调
     window.onUsageUpdate = (json) => {
       try {
@@ -1465,6 +1521,21 @@ const App = () => {
       return;
     }
     if (loading) {
+      return;
+    }
+
+    // 🔧 防御性校验：即使输入框侧 gating 失效，也不能在 SDK 状态未知/未安装时发送
+    if (!sdkStatusLoaded) {
+      addToast(t('chat.sdkStatusLoading'), 'info');
+      return;
+    }
+    if (!currentSdkInstalled) {
+      addToast(
+        t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' }) + ' ' + t('chat.goInstallSdk'),
+        'warning'
+      );
+      setSettingsInitialTab('dependencies');
+      setCurrentView('settings');
       return;
     }
 
@@ -2654,6 +2725,12 @@ const App = () => {
             showUsage={true}
             alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
             placeholder={t('chat.inputPlaceholder')}
+            sdkInstalled={currentSdkInstalled}
+            sdkStatusLoading={!sdkStatusLoaded}
+            onInstallSdk={() => {
+              setSettingsInitialTab('dependencies');
+              setCurrentView('settings');
+            }}
             value={draftInput}
             onInput={setDraftInput}
             onSubmit={handleSubmit}
@@ -2679,6 +2756,7 @@ const App = () => {
             }}
             hasMessages={messages.length > 0}
             onRewind={handleOpenRewindSelectDialog}
+            addToast={addToast}
           />
         </div>
       )}

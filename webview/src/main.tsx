@@ -127,6 +127,24 @@ if (typeof window !== 'undefined' && !window.setSessionId) {
   };
 }
 
+// 预注册 updateDependencyStatus，避免后端返回状态早于 React 初始化
+if (typeof window !== 'undefined' && !window.updateDependencyStatus) {
+  console.log('[Main] Pre-registering updateDependencyStatus placeholder');
+  window.updateDependencyStatus = (json: string) => {
+    console.log('[Main] Storing pending dependency status, length=' + (json ? json.length : 0));
+    window.__pendingDependencyStatus = json;
+  };
+}
+
+// 预注册 dependencyUpdateAvailable，避免后端检查更新早于 Settings/React 初始化
+if (typeof window !== 'undefined' && !window.dependencyUpdateAvailable) {
+  console.log('[Main] Pre-registering dependencyUpdateAvailable placeholder');
+  window.dependencyUpdateAvailable = (json: string) => {
+    console.log('[Main] Storing pending dependency updates, length=' + (json ? json.length : 0));
+    window.__pendingDependencyUpdates = json;
+  };
+}
+
 // 渲染 React 应用
 ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
   <ErrorBoundary>
@@ -165,4 +183,8 @@ waitForBridge(() => {
 
   console.log('[Main] Sending refresh_slash_commands request');
   sendBridgeEvent('refresh_slash_commands');
+
+  // Ensure SDK dependency status is fetched on initial load (not only after opening Settings).
+  console.log('[Main] Requesting dependency status');
+  sendBridgeEvent('get_dependency_status');
 });
