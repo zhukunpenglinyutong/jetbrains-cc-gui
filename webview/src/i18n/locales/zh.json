@@ -188,6 +188,9 @@
       "confirmConvert": "确认转换",
       "inUse": "使用中",
       "enable": "启用",
+      "localProviderName": "本地 settings.json",
+      "localProviderDescription": "直接使用 ~/.claude/settings.json 配置",
+      "localProviderHelp": "使用本地供应商模式时：\n• 插件不会修改您的 ~/.claude/settings.json 文件\n• 您需要手动管理配置\n• 确保文件存在且包含有效的 JSON\n• 适合喜欢手动控制的高级用户",
       "importDialog": {
         "title": "导入 cc-switch 配置",
         "summary": "共识别到 {{total}} 个配置，其中",

@@ -188,6 +188,9 @@
       "confirmConvert": "Confirm Conversion",
       "inUse": "In Use",
       "enable": "Enable",
+      "localProviderName": "Local settings.json",
+      "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
+      "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
       "importDialog": {
         "title": "Import cc-switch Configuration",
         "summary": "Found {{total}} configurations, including",
