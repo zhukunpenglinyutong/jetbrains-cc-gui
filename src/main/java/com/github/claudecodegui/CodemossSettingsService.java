@@ -299,6 +299,63 @@ public class CodemossSettingsService {
         return workingDirectoryManager.getAllWorkingDirectories();
     }
 
+    // ==================== 🔧 Streaming 配置管理 ====================
+
+    /**
+     * 获取流式传输配置
+     * @param projectPath 项目路径
+     * @return 是否启用流式传输
+     */
+    public boolean getStreamingEnabled(String projectPath) throws IOException {
+        JsonObject config = readConfig();
+
+        // 检查是否有 streaming 配置
+        if (!config.has("streaming")) {
+            return false;
+        }
+
+        JsonObject streaming = config.getAsJsonObject("streaming");
+
+        // 先检查项目特定的配置
+        if (projectPath != null && streaming.has(projectPath)) {
+            return streaming.get(projectPath).getAsBoolean();
+        }
+
+        // 如果没有项目特定的配置，使用全局默认值
+        if (streaming.has("default")) {
+            return streaming.get("default").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * 设置流式传输配置
+     * @param projectPath 项目路径
+     * @param enabled 是否启用
+     */
+    public void setStreamingEnabled(String projectPath, boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        // 确保 streaming 对象存在
+        JsonObject streaming;
+        if (config.has("streaming")) {
+            streaming = config.getAsJsonObject("streaming");
+        } else {
+            streaming = new JsonObject();
+            config.add("streaming", streaming);
+        }
+
+        // 保存项目特定配置（同时也作为默认值）
+        if (projectPath != null) {
+            streaming.addProperty(projectPath, enabled);
+        }
+        streaming.addProperty("default", enabled);
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set streaming enabled to " + enabled + " for project: " + projectPath);
+    }
+
     // ==================== Provider 管理 ====================
 
     public List<JsonObject> getClaudeProviders() throws IOException {
@@ -343,6 +400,10 @@ public class CodemossSettingsService {
 
     public int saveProviders(List<JsonObject> providers) throws IOException {
         return providerManager.saveProviders(providers);
+    }
+
+    public boolean isLocalProviderActive() {
+        return providerManager.isLocalProviderActive();
     }
 
     // ==================== MCP Server 管理 ====================

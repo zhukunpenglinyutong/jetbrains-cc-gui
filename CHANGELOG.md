@@ -1,3 +1,35 @@
+##### **2026年1月10日（v0.1.5-beta2）**
+
+English:
+- [x] Add streaming transmission toggle switch (Claude Code)
+- [x] Add local settings.json provider option with i18n support
+- [x] Implement SDK lazy loading architecture with concurrency control
+- [x] Add Claude getMcpServerStatus API
+- [x] Add JCEF support check and improve input handling
+- [x] Improve ai-bridge caching and cleanup mechanism
+- [x] Improve IME input handling and UI feedback
+- [x] Fix Unix permissions preservation during extraction
+- [x] Replace native title tooltips with custom CSS tooltips
+- [x] Move vConsole button to top-left corner
+- [x] Add contributing guidelines (CONTRIBUTING.md)
+- [x] Refactor README with dual AI engine features description
+- [x] Improve security and performance optimizations
+
+中文:
+- [x] 增加流式传输开关（Claude Code）
+- [x] 增加本地 settings.json Provider 选项及国际化支持
+- [x] 实现 SDK 懒加载架构，增加并发控制和安全增强
+- [x] 增加 Claude getMcpServerStatus API
+- [x] 增加 JCEF 支持检测，改进输入处理
+- [x] 优化 ai-bridge 缓存和清理机制
+- [x] 改进中文输入法处理和 UI 反馈
+- [x] 修复解压时 Unix 权限丢失问题
+- [x] 工具按钮使用自定义 CSS 提示框替代原生 title
+- [x] 将 vConsole 按钮移至左上角
+- [x] 添加贡献指南（CONTRIBUTING.md）
+- [x] 重构 README，突出双 AI 引擎特性描述
+- [x] 提升安全性和性能优化
+
 ##### **2026年1月8日（v0.1.5-beta1）**
 
 English:

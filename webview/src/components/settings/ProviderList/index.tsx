@@ -25,6 +25,7 @@ export default function ProviderList({
   emptyState,
 }: ProviderListProps) {
   const { t } = useTranslation();
+  const LOCAL_PROVIDER_ID = '__local_settings_json__';
   const [importMenuOpen, setImportMenuOpen] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
@@ -338,8 +339,48 @@ export default function ProviderList({
       </div>
 
       <div className={styles.list}>
-        {providers.length > 0 ? (
-          providers.map((provider) => (
+        <>
+          <div
+            key={LOCAL_PROVIDER_ID}
+            className={`${styles.card} ${providers.some(p => p.id === LOCAL_PROVIDER_ID && p.isActive) ? styles.active : ''} ${styles.localProviderCard}`}
+          >
+            <div className={styles.cardInfo}>
+              <div className={styles.name}>
+                <span className="codicon codicon-file" style={{ marginRight: '8px' }} />
+                {t('settings.provider.localProviderName')}
+                <span
+                  className="codicon codicon-info"
+                  style={{ marginLeft: '8px', cursor: 'help', opacity: 0.7 }}
+                  title={t('settings.provider.localProviderHelp')}
+                />
+              </div>
+              <div className={styles.website} title={t('settings.provider.localProviderDescription')}>
+                {t('settings.provider.localProviderDescription')}
+              </div>
+            </div>
+
+            <div className={styles.cardActions}>
+              {providers.some(p => p.id === LOCAL_PROVIDER_ID && p.isActive) ? (
+                <div className={styles.activeBadge}>
+                  <span className="codicon codicon-check" />
+                  {t('settings.provider.inUse')}
+                </div>
+              ) : (
+                <button
+                  className={styles.useButton}
+                  onClick={() => onSwitch(LOCAL_PROVIDER_ID)}
+                >
+                  <span className="codicon codicon-play" />
+                  {t('settings.provider.enable')}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {(() => {
+            const regularProviders = providers.filter(p => p.id !== LOCAL_PROVIDER_ID);
+            return regularProviders.length > 0 ? (
+              regularProviders.map((provider) => (
             <div 
               key={provider.id} 
               className={`${styles.card} ${provider.isActive ? styles.active : ''}`}
@@ -379,43 +420,52 @@ export default function ProviderList({
                 <div className={styles.divider}></div>
 
                 <div className={styles.actionButtons}>
-                  {provider.source === 'cc-switch' && (
-                    <button
-                      className={styles.iconBtn}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConvertingProvider(provider);
-                      }}
-                      title={t('settings.provider.convertToPlugin')}
-                    >
-                      <span className="codicon codicon-arrow-swap" />
-                    </button>
+                  {!provider.isLocalProvider && (
+                    <>
+                      {provider.source === 'cc-switch' && (
+                        <button
+                          className={styles.iconBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConvertingProvider(provider);
+                          }}
+                          title={t('settings.provider.convertToPlugin')}
+                        >
+                          <span className="codicon codicon-arrow-swap" />
+                        </button>
+                      )}
+                      <button
+                        className={styles.iconBtn}
+                        onClick={() => handleEditClick(provider)}
+                        title={t('common.edit')}
+                      >
+                        <span className="codicon codicon-edit" />
+                      </button>
+                      <button
+                        className={styles.iconBtn}
+                        onClick={() => onDelete(provider)}
+                        title={t('common.delete')}
+                      >
+                        <span className="codicon codicon-trash" />
+                      </button>
+                    </>
                   )}
-                  <button
-                    className={styles.iconBtn}
-                    onClick={() => handleEditClick(provider)}
-                    title={t('common.edit')}
-                  >
-                    <span className="codicon codicon-edit" />
-                  </button>
-                  <button
-                    className={styles.iconBtn}
-                    onClick={() => onDelete(provider)}
-                    title={t('common.delete')}
-                  >
-                    <span className="codicon codicon-trash" />
-                  </button>
                 </div>
               </div>
             </div>
           ))
-        ) : (
-          emptyState && (
-            <div className={styles.emptyState}>
-              {emptyState}
-            </div>
-          )
-        )}
+        ) : null;
+          })()}
+
+          {(() => {
+            const regularProviders = providers.filter(p => p.id !== LOCAL_PROVIDER_ID);
+            return regularProviders.length === 0 && emptyState ? (
+              <div className={styles.emptyState}>
+                {emptyState}
+              </div>
+            ) : null;
+          })()}
+        </>
       </div>
     </div>
   );

@@ -6,23 +6,15 @@
  * 供应商配置（简化版，适配当前项目）
  */
 export interface ProviderConfig {
-  /** 供应商唯一 ID */
   id: string;
-  /** 供应商名称 */
   name: string;
-  /** 备注 */
   remark?: string;
-  /** 官网链接 (已弃用，保留兼容) */
   websiteUrl?: string;
-  /** 供应商分类 */
   category?: ProviderCategory;
-  /** 创建时间戳（毫秒） */
   createdAt?: number;
-  /** 是否为当前使用的供应商 */
   isActive?: boolean;
-  /** 来源 */
   source?: 'cc-switch' | string;
-  /** 配置信息 */
+  isLocalProvider?: boolean;
   settingsConfig?: {
     env?: {
       ANTHROPIC_AUTH_TOKEN?: string;

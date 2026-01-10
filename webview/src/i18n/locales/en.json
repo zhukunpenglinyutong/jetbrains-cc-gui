@@ -71,7 +71,10 @@
     "retrying": "Retrying ({{count}}/{{max}})...",
     "global": "Global",
     "localProject": "Local",
-    "disabled": "Disabled"
+    "disabled": "Disabled",
+    "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
+    "sdkStatusLoading": "Checking SDK status...",
+    "goInstallSdk": "Go to Install"
   },
   "settings": {
     "title": "Settings",
@@ -120,10 +123,41 @@
       "editorFont": {
         "label": "Font (follows editor font)",
         "hint": "Not editable here. To modify, go to IDEA Settings → Editor → Font (restart IDEA for plugin font to take effect)"
+      },
+      "streaming": {
+        "label": "Streaming",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, AI responses will appear character by character in real-time, instead of waiting for the complete response. May consume more resources."
       }
     },
     "providers": "Provider Management",
     "providersDesc": "Manage Claude API provider configurations and switch between different API service providers",
+    "dependencies": "SDK Dependencies",
+    "dependenciesDesc": "Manage AI SDK dependency installations and updates",
+    "dependency": {
+      "title": "SDK Dependency Management",
+      "description": "Manage AI SDK dependencies. Install the required SDK before first use.",
+      "installPolicyTip": "To reduce package size, SDKs now need to be installed manually",
+      "claudeSdkName": "Claude Code SDK",
+      "claudeSdkDescription": "Required for Claude AI features. Includes Claude Code SDK and related dependencies.",
+      "codexSdkName": "Codex SDK",
+      "codexSdkDescription": "Required for Codex AI features. Includes OpenAI Codex SDK.",
+      "loading": "Loading dependency status...",
+      "install": "Install",
+      "installing": "Installing...",
+      "uninstall": "Uninstall",
+      "uninstalling": "Uninstalling...",
+      "update": "Update",
+      "updateAvailable": "Update available",
+      "installLogs": "Install Logs",
+      "waitingForLogs": "Waiting for log output...",
+      "nodeNotConfigured": "Node.js is not configured. Please set the Node.js path in Basic Settings first.",
+      "installSuccess": "{{name}} installed successfully",
+      "installFailed": "Installation failed: {{error}}",
+      "uninstallSuccess": "{{name}} has been uninstalled",
+      "uninstallFailed": "Uninstall failed: {{error}}"
+    },
     "usage": "Usage Statistics",
     "usageDesc": "View your Token consumption, cost statistics and usage trend analysis",
     "mcp": "MCP Servers",
@@ -182,6 +216,9 @@
       "confirmConvert": "Confirm Conversion",
       "inUse": "In Use",
       "enable": "Enable",
+      "localProviderName": "Local settings.json",
+      "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
+      "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
       "importDialog": {
         "title": "Import cc-switch Configuration",
         "summary": "Found {{total}} configurations, including",
@@ -753,6 +790,7 @@
   "rewind": {
     "title": "Rewind Files to Previous State",
     "tooltip": "Rewind",
+    "shortcut": "ESC ESC",
     "tooltipFull": "Restore files to their state at this message",
     "selectTitle": "Select Rewind Point",
     "noRewindableMessages": "No rewindable messages in this session",

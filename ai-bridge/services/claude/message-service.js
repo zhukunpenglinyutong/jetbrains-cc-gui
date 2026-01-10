@@ -3,10 +3,55 @@
  * 负责通过 Claude Agent SDK 发送消息
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import Anthropic from '@anthropic-ai/sdk';
-import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
+// SDK 动态加载 - 不再静态导入，而是按需加载
+import {
+    loadClaudeSdk,
+    loadAnthropicSdk,
+    loadBedrockSdk,
+    isClaudeSdkAvailable
+} from '../../utils/sdk-loader.js';
 import { randomUUID } from 'crypto';
+
+// SDK 缓存
+let claudeSdk = null;
+let anthropicSdk = null;
+let bedrockSdk = null;
+
+/**
+ * 确保 Claude SDK 已加载
+ */
+async function ensureClaudeSdk() {
+    if (!claudeSdk) {
+        if (!isClaudeSdkAvailable()) {
+            const error = new Error('Claude Code SDK not installed. Please install via Settings > Dependencies.');
+            error.code = 'SDK_NOT_INSTALLED';
+            error.provider = 'claude';
+            throw error;
+        }
+        claudeSdk = await loadClaudeSdk();
+    }
+    return claudeSdk;
+}
+
+/**
+ * 确保 Anthropic SDK 已加载
+ */
+async function ensureAnthropicSdk() {
+    if (!anthropicSdk) {
+        anthropicSdk = await loadAnthropicSdk();
+    }
+    return anthropicSdk;
+}
+
+/**
+ * 确保 Bedrock SDK 已加载
+ */
+async function ensureBedrockSdk() {
+    if (!bedrockSdk) {
+        bedrockSdk = await loadBedrockSdk();
+    }
+    return bedrockSdk;
+}
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -189,9 +234,28 @@ function createPreToolUseHook(permissionMode) {
   }
 }
 
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null) {
+/**
+ * 发送消息（支持会话恢复和流式传输）
+ * @param {string} message - 要发送的消息
+ * @param {string} resumeSessionId - 要恢复的会话ID
+ * @param {string} cwd - 工作目录
+ * @param {string} permissionMode - 权限模式（可选）
+ * @param {string} model - 模型名称（可选）
+ * @param {object} openedFiles - 打开的文件列表（可选）
+ * @param {string} agentPrompt - 智能体提示词（可选）
+ * @param {boolean} streaming - 是否启用流式传输（可选，默认从配置读取）
+ */
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
 	  let timeoutId;
+	  // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
+	  let streamingEnabled = false;
+	  let streamStarted = false;
+	  let streamEnded = false;
 	  try {
+    // 动态加载 Claude SDK
+    const sdk = await ensureClaudeSdk();
+    const { query } = sdk;
+
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
@@ -259,6 +323,14 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
       || 10000;
 
+    // 🔧 从 settings.json 读取流式传输配置
+    // streaming 参数优先，否则从配置读取，默认关闭（首次安装时为非流式）
+    // 注意：使用 != null 同时处理 null 和 undefined，避免 undefined 被当成"有值"
+    streamingEnabled = streaming != null ? streaming : (settings?.streamingEnabled ?? false);
+    console.log('[STREAMING_DEBUG] streaming param:', streaming);
+    console.log('[STREAMING_DEBUG] settings.streamingEnabled:', settings?.streamingEnabled);
+    console.log('[STREAMING_DEBUG] streamingEnabled (final):', streamingEnabled);
+
 	    // 根据配置决定是否启用 Extended Thinking
 	    // - 如果 alwaysThinkingEnabled 为 true，使用配置的 maxThinkingTokens 值
 	    // - 如果 alwaysThinkingEnabled 为 false，不设置 maxThinkingTokens（让 SDK 使用默认行为）
@@ -277,6 +349,9 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      // Extended Thinking 配置（根据 settings.json 的 alwaysThinkingEnabled 决定）
 	      // 思考内容会通过 [THINKING] 标签输出给前端展示
 	      ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
+	      // 🔧 流式传输配置：启用 includePartialMessages 以获取增量内容
+	      // 当 streamingEnabled 为 true 时，SDK 会返回包含增量内容的部分消息
+	      ...(streamingEnabled && { includePartialMessages: true }),
 	      additionalDirectories: Array.from(
 	        new Set(
 	          [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
@@ -301,6 +376,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    };
 	    console.log('[PERM_DEBUG] options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
 	    console.log('[PERM_DEBUG] options.hooks:', options.hooks ? 'SET (PreToolUse)' : 'NOT SET');
+	    console.log('[STREAMING_DEBUG] options.includePartialMessages:', options.includePartialMessages ? 'SET' : 'NOT SET');
 
 		// 使用 AbortController 实现 60 秒超时控制（已发现严重问题，暂时禁用自动超时，仅保留正常查询逻辑）
 		// const abortController = new AbortController();
@@ -336,31 +412,136 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
     // 流式输出
     let messageCount = 0;
+    // 🔧 流式传输状态追踪（已在函数开头声明 streamingEnabled, streamStarted, streamEnded）
+    // 🔧 标记是否收到了 stream_event（用于避免 fallback diff 重复输出）
+    let hasStreamEvents = false;
+    // 🔧 diff fallback: 追踪上次的 assistant 内容，用于计算增量
+    let lastAssistantContent = '';
+    let lastThinkingContent = '';
+
     try {
     for await (const msg of result) {
       messageCount++;
       console.log(`[DEBUG] Received message #${messageCount}, type: ${msg.type}`);
 
-      // 输出原始消息（方便 Java 解析）
-      console.log('[MESSAGE]', JSON.stringify(msg));
+      // 🔧 流式传输：输出流式开始标记（仅首次）
+      if (streamingEnabled && !streamStarted) {
+        console.log('[STREAM_START]');
+        streamStarted = true;
+      }
 
-      // 实时输出助手内容
+      // 🔧 流式传输：处理 SDKPartialAssistantMessage（type: 'stream_event'）
+      // SDK 通过 includePartialMessages 返回的流式事件
+      // 放宽识别条件：只要是 stream_event 类型就尝试处理
+      if (streamingEnabled && msg.type === 'stream_event') {
+        hasStreamEvents = true;
+        const event = msg.event;
+
+        if (event) {
+          // content_block_delta: 文本或 JSON 增量
+          if (event.type === 'content_block_delta' && event.delta) {
+            if (event.delta.type === 'text_delta' && event.delta.text) {
+              // 🔧 使用 JSON 编码，保留换行符等特殊字符
+              console.log('[CONTENT_DELTA]', JSON.stringify(event.delta.text));
+              // 同步累积，避免后续 fallback diff 重复输出
+              lastAssistantContent += event.delta.text;
+            } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
+              // 🔧 使用 JSON 编码，保留换行符等特殊字符
+              console.log('[THINKING_DELTA]', JSON.stringify(event.delta.thinking));
+              lastThinkingContent += event.delta.thinking;
+            }
+            // input_json_delta 用于工具调用，暂不处理
+          }
+
+          // content_block_start: 新内容块开始（可用于识别 thinking 块）
+          if (event.type === 'content_block_start' && event.content_block) {
+            if (event.content_block.type === 'thinking') {
+              console.log('[THINKING_START]');
+            }
+          }
+        }
+
+        // 🔧 关键修复：stream_event 不输出 [MESSAGE]，避免污染 Java 侧解析链路
+        // console.log('[STREAM_DEBUG]', JSON.stringify(msg));
+        continue; // 流式事件已处理，跳过后续逻辑
+      }
+
+      // 输出原始消息（方便 Java 解析）
+      // 🔧 流式模式下，assistant 消息需要特殊处理
+      // - 如果包含 tool_use，需要输出让前端显示工具块
+      // - 纯文本 assistant 消息不输出，避免覆盖流式状态
+      let shouldOutputMessage = true;
+      if (streamingEnabled && msg.type === 'assistant') {
+        const msgContent = msg.message?.content;
+        const hasToolUse = Array.isArray(msgContent) && msgContent.some(block => block.type === 'tool_use');
+        if (!hasToolUse) {
+          shouldOutputMessage = false;
+        }
+      }
+      if (shouldOutputMessage) {
+        console.log('[MESSAGE]', JSON.stringify(msg));
+      }
+
+      // 实时输出助手内容（非流式或完整消息）
       if (msg.type === 'assistant') {
         const content = msg.message?.content;
+
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'text') {
-              console.log('[CONTENT]', block.text);
+              const currentText = block.text || '';
+              // 🔧 流式 fallback: 如果启用流式但 SDK 没给 stream_event，则用 diff 计算 delta
+              if (streamingEnabled && !hasStreamEvents && currentText.length > lastAssistantContent.length) {
+                const delta = currentText.substring(lastAssistantContent.length);
+                if (delta) {
+                  console.log('[CONTENT_DELTA]', delta);
+                }
+                lastAssistantContent = currentText;
+              } else if (streamingEnabled && hasStreamEvents) {
+                // 已通过 stream_event 输出过增量，避免重复；仅做状态对齐
+                if (currentText.length > lastAssistantContent.length) {
+                  lastAssistantContent = currentText;
+                }
+              } else if (!streamingEnabled) {
+                // 非流式模式：输出完整内容
+                console.log('[CONTENT]', currentText);
+              }
             } else if (block.type === 'thinking') {
-              // 输出思考过程（用于实时显示）
+              // 输出思考过程
               const thinkingText = block.thinking || block.text || '';
-              console.log('[THINKING]', thinkingText);
+              // 🔧 流式 fallback: thinking 也用 diff
+              if (streamingEnabled && !hasStreamEvents && thinkingText.length > lastThinkingContent.length) {
+                const delta = thinkingText.substring(lastThinkingContent.length);
+                if (delta) {
+                  console.log('[THINKING_DELTA]', delta);
+                }
+                lastThinkingContent = thinkingText;
+              } else if (streamingEnabled && hasStreamEvents) {
+                if (thinkingText.length > lastThinkingContent.length) {
+                  lastThinkingContent = thinkingText;
+                }
+              } else if (!streamingEnabled) {
+                console.log('[THINKING]', thinkingText);
+              }
             } else if (block.type === 'tool_use') {
               console.log('[DEBUG] Tool use payload:', JSON.stringify(block));
             }
           }
         } else if (typeof content === 'string') {
-          console.log('[CONTENT]', content);
+          // 🔧 流式 fallback: 字符串内容也用 diff
+          if (streamingEnabled && !hasStreamEvents && content.length > lastAssistantContent.length) {
+            const delta = content.substring(lastAssistantContent.length);
+            if (delta) {
+              console.log('[CONTENT_DELTA]', delta);
+            }
+            lastAssistantContent = content;
+          } else if (streamingEnabled && hasStreamEvents) {
+            if (content.length > lastAssistantContent.length) {
+              lastAssistantContent = content;
+            }
+          } else if (!streamingEnabled) {
+            console.log('[CONTENT]', content);
+          }
         }
       }
 
@@ -425,6 +606,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
     console.log(`[DEBUG] Message loop completed. Total messages: ${messageCount}`);
 
+    // 🔧 流式传输：输出流式结束标记
+    if (streamingEnabled && streamStarted) {
+      console.log('[STREAM_END]');
+      streamEnded = true;
+    }
+
 	    console.log('[MESSAGE_END]');
 	    console.log(JSON.stringify({
 	      success: true,
@@ -432,6 +619,11 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    }));
 
 	  } catch (error) {
+	    // 🔧 流式传输：异常时也要结束流式，避免前端卡在 streaming 状态
+	    if (streamingEnabled && streamStarted && !streamEnded) {
+	      console.log('[STREAM_END]');
+	      streamEnded = true;
+	    }
 	    const payload = buildConfigErrorPayload(error);
 	    console.error('[SEND_ERROR]', JSON.stringify(payload));
 	    console.log(JSON.stringify(payload));
@@ -445,6 +637,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
  */
 export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl, authType) {
   try {
+    // 动态加载 Anthropic SDK
+    const anthropicModule = await ensureAnthropicSdk();
+    const Anthropic = anthropicModule.default || anthropicModule.Anthropic || anthropicModule;
+
     const workingDirectory = selectWorkingDirectory(cwd);
     try { process.chdir(workingDirectory); } catch {}
 
@@ -468,6 +664,9 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
     } else if (authType === 'aws_bedrock') {
         console.log('[DEBUG] Using AWS_BEDROCK authentication (AWS_BEDROCK)');
+        // 动态加载 Bedrock SDK
+        const bedrockModule = await ensureBedrockSdk();
+        const AnthropicBedrock = bedrockModule.AnthropicBedrock || bedrockModule.default || bedrockModule;
         client = new AnthropicBedrock();
     } else {
       console.log('[DEBUG] Using API Key authentication (ANTHROPIC_API_KEY)');
@@ -641,6 +840,10 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
  */
 export async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, stdinData = null) {
 	  let timeoutId;
+	  // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
+	  let streamingEnabled = false;
+	  let streamStarted = false;
+	  let streamEnded = false;
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
@@ -712,6 +915,17 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
       || 10000;
 
+    // 🔧 从 stdinData 或 settings.json 读取流式传输配置
+    // 注意：使用 != null 同时处理 null 和 undefined
+    // 注意：变量已在 try 块外部声明，这里只赋值
+    const streamingParam = stdinData?.streaming;
+    streamingEnabled = streamingParam != null
+      ? streamingParam
+      : (settings?.streamingEnabled ?? false);
+    console.log('[STREAMING_DEBUG] (withAttachments) stdinData.streaming:', streamingParam);
+    console.log('[STREAMING_DEBUG] (withAttachments) settings.streamingEnabled:', settings?.streamingEnabled);
+    console.log('[STREAMING_DEBUG] (withAttachments) streamingEnabled (final):', streamingEnabled);
+
     // 根据配置决定是否启用 Extended Thinking
     // - 如果 alwaysThinkingEnabled 为 true，使用配置的 maxThinkingTokens 值
     // - 如果 alwaysThinkingEnabled 为 false，不设置 maxThinkingTokens（让 SDK 使用默认行为）
@@ -730,6 +944,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       // Extended Thinking 配置（根据 settings.json 的 alwaysThinkingEnabled 决定）
       // 思考内容会通过 [THINKING] 标签输出给前端展示
       ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
+      // 🔧 流式传输配置：启用 includePartialMessages 以获取增量内容
+      ...(streamingEnabled && { includePartialMessages: true }),
       additionalDirectories: Array.from(
         new Set(
           [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
@@ -757,6 +973,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     console.log('[PERM_DEBUG] (withAttachments) options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
     console.log('[PERM_DEBUG] (withAttachments) options.hooks:', options.hooks ? 'SET (PreToolUse)' : 'NOT SET');
     console.log('[PERM_DEBUG] (withAttachments) options.permissionMode:', options.permissionMode);
+    console.log('[STREAMING_DEBUG] (withAttachments) options.includePartialMessages:', options.includePartialMessages ? 'SET' : 'NOT SET');
 
 	    // 之前这里通过 AbortController + 30 秒自动超时来中断带附件的请求
 	    // 这会导致在配置正确的情况下仍然出现 "Claude Code process aborted by user" 的误导性错误
@@ -769,29 +986,118 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	      console.log('[RESUMING]', resumeSessionId);
 	    }
 
+		    // 动态加载 Claude SDK
+		    const sdk = await ensureClaudeSdk();
+		    const { query } = sdk;
+
 		    const result = query({
 		      prompt: inputStream,
 		      options
 		    });
 
-	    // 如需再次启用自动超时，可在此处通过 AbortController 实现，并确保给出清晰的“响应超时”提示
+	    // 如需再次启用自动超时，可在此处通过 AbortController 实现，并确保给出清晰的"响应超时"提示
 	    // timeoutId = setTimeout(() => {
 	    //   console.log('[DEBUG] Query with attachments timeout after 30 seconds, aborting...');
 	    //   abortController.abort();
 	    // }, 30000);
 
 		    let currentSessionId = resumeSessionId;
+		    // 🔧 流式传输状态追踪（已在函数开头声明 streamingEnabled, streamStarted, streamEnded）
+		    let hasStreamEvents = false;
+		    // 🔧 diff fallback: 追踪上次的 assistant 内容，用于计算增量
+		    let lastAssistantContent = '';
+		    let lastThinkingContent = '';
 
 		    try {
 		    for await (const msg of result) {
-	    	      console.log('[MESSAGE]', JSON.stringify(msg));
+		      // 🔧 流式传输：输出流式开始标记（仅首次）
+		      if (streamingEnabled && !streamStarted) {
+		        console.log('[STREAM_START]');
+		        streamStarted = true;
+		      }
 
+		      // 🔧 流式传输：处理 SDKPartialAssistantMessage（type: 'stream_event'）
+		      // 放宽识别条件：只要是 stream_event 类型就尝试处理
+		      if (streamingEnabled && msg.type === 'stream_event') {
+		        hasStreamEvents = true;
+		        const event = msg.event;
+
+		        if (event) {
+		          // content_block_delta: 文本或 JSON 增量
+		          if (event.type === 'content_block_delta' && event.delta) {
+		            if (event.delta.type === 'text_delta' && event.delta.text) {
+		              console.log('[CONTENT_DELTA]', event.delta.text);
+		              lastAssistantContent += event.delta.text;
+		            } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
+		              console.log('[THINKING_DELTA]', event.delta.thinking);
+		              lastThinkingContent += event.delta.thinking;
+		            }
+		          }
+
+		          // content_block_start: 新内容块开始
+		          if (event.type === 'content_block_start' && event.content_block) {
+		            if (event.content_block.type === 'thinking') {
+		              console.log('[THINKING_START]');
+		            }
+		          }
+		        }
+
+		        // 🔧 关键修复：stream_event 不输出 [MESSAGE]
+		        // console.log('[STREAM_DEBUG]', JSON.stringify(msg));
+		        continue;
+		      }
+
+	    	      // 🔧 流式模式下，assistant 消息需要特殊处理
+	    	      let shouldOutputMessage2 = true;
+	    	      if (streamingEnabled && msg.type === 'assistant') {
+	    	        const msgContent2 = msg.message?.content;
+	    	        const hasToolUse2 = Array.isArray(msgContent2) && msgContent2.some(block => block.type === 'tool_use');
+	    	        if (!hasToolUse2) {
+	    	          shouldOutputMessage2 = false;
+	    	        }
+	    	      }
+	    	      if (shouldOutputMessage2) {
+	    	        console.log('[MESSAGE]', JSON.stringify(msg));
+	    	      }
+
+	    	      // 处理完整的助手消息
 	    	      if (msg.type === 'assistant') {
 	    	        const content = msg.message?.content;
+
 	    	        if (Array.isArray(content)) {
 	    	          for (const block of content) {
 	    	            if (block.type === 'text') {
-	    	              console.log('[CONTENT]', block.text);
+	    	              const currentText = block.text || '';
+	    	              // 🔧 流式 fallback: 如果启用流式但 SDK 没给 stream_event，则用 diff 计算 delta
+	    	              if (streamingEnabled && !hasStreamEvents && currentText.length > lastAssistantContent.length) {
+	    	                const delta = currentText.substring(lastAssistantContent.length);
+	    	                if (delta) {
+	    	                  console.log('[CONTENT_DELTA]', delta);
+	    	                }
+	    	                lastAssistantContent = currentText;
+	    	              } else if (streamingEnabled && hasStreamEvents) {
+	    	                if (currentText.length > lastAssistantContent.length) {
+	    	                  lastAssistantContent = currentText;
+	    	                }
+	    	              } else if (!streamingEnabled) {
+	    	                console.log('[CONTENT]', currentText);
+	    	              }
+	    	            } else if (block.type === 'thinking') {
+	    	              const thinkingText = block.thinking || block.text || '';
+	    	              // 🔧 流式 fallback: thinking 也用 diff
+	    	              if (streamingEnabled && !hasStreamEvents && thinkingText.length > lastThinkingContent.length) {
+	    	                const delta = thinkingText.substring(lastThinkingContent.length);
+	    	                if (delta) {
+	    	                  console.log('[THINKING_DELTA]', delta);
+	    	                }
+	    	                lastThinkingContent = thinkingText;
+	    	              } else if (streamingEnabled && hasStreamEvents) {
+	    	                if (thinkingText.length > lastThinkingContent.length) {
+	    	                  lastThinkingContent = thinkingText;
+	    	                }
+	    	              } else if (!streamingEnabled) {
+	    	                console.log('[THINKING]', thinkingText);
+	    	              }
 	    	            } else if (block.type === 'tool_use') {
 	    	              console.log('[DEBUG] Tool use payload (withAttachments):', JSON.stringify(block));
 	    	            } else if (block.type === 'tool_result') {
@@ -799,7 +1105,20 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	            }
 	    	          }
 	    	        } else if (typeof content === 'string') {
-	    	          console.log('[CONTENT]', content);
+	    	          // 🔧 流式 fallback: 字符串内容也用 diff
+	    	          if (streamingEnabled && !hasStreamEvents && content.length > lastAssistantContent.length) {
+	    	            const delta = content.substring(lastAssistantContent.length);
+	    	            if (delta) {
+	    	              console.log('[CONTENT_DELTA]', delta);
+	    	            }
+	    	            lastAssistantContent = content;
+	    	          } else if (streamingEnabled && hasStreamEvents) {
+	    	            if (content.length > lastAssistantContent.length) {
+	    	              lastAssistantContent = content;
+	    	            }
+	    	          } else if (!streamingEnabled) {
+	    	            console.log('[CONTENT]', content);
+	    	          }
 	    	        }
 	    	      }
 
@@ -845,6 +1164,12 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	      throw loopError;
 	    	    }
 
+	    // 🔧 流式传输：输出流式结束标记
+	    if (streamingEnabled && streamStarted) {
+	      console.log('[STREAM_END]');
+	      streamEnded = true;
+	    }
+
 	    console.log('[MESSAGE_END]');
 	    console.log(JSON.stringify({
 	      success: true,
@@ -852,6 +1177,11 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    }));
 
 	  } catch (error) {
+	    // 🔧 流式传输：异常时也要结束流式，避免前端卡在 streaming 状态
+	    if (streamingEnabled && streamStarted && !streamEnded) {
+	      console.log('[STREAM_END]');
+	      streamEnded = true;
+	    }
 	    const payload = buildConfigErrorPayload(error);
 	    console.error('[SEND_ERROR]', JSON.stringify(payload));
 	    console.log(JSON.stringify(payload));

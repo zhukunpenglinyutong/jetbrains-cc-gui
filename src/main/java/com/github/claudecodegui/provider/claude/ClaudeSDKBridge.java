@@ -97,12 +97,39 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             assistantContent.append(content);
             callback.onMessage("content", content);
         } else if (line.startsWith("[CONTENT_DELTA]")) {
-            String delta = line.substring("[CONTENT_DELTA]".length()).trim();
+            // 🔧 流式传输：解析 JSON 编码的 delta，保留换行符
+            String rawDelta = line.substring("[CONTENT_DELTA]".length());
+            String jsonStr = rawDelta.startsWith(" ") ? rawDelta.substring(1) : rawDelta;
+            String delta;
+            try {
+                // JSON 解码，还原换行符等特殊字符
+                delta = new com.google.gson.Gson().fromJson(jsonStr, String.class);
+            } catch (Exception e) {
+                // 解析失败时使用原始字符串
+                delta = jsonStr;
+            }
             assistantContent.append(delta);
             callback.onMessage("content_delta", delta);
         } else if (line.startsWith("[THINKING]")) {
             String thinkingContent = line.substring("[THINKING]".length()).trim();
             callback.onMessage("thinking", thinkingContent);
+        } else if (line.startsWith("[THINKING_DELTA]")) {
+            // 🔧 流式传输：解析 JSON 编码的 thinking delta
+            String rawDelta = line.substring("[THINKING_DELTA]".length());
+            String jsonStr = rawDelta.startsWith(" ") ? rawDelta.substring(1) : rawDelta;
+            String thinkingDelta;
+            try {
+                thinkingDelta = new com.google.gson.Gson().fromJson(jsonStr, String.class);
+            } catch (Exception e) {
+                thinkingDelta = jsonStr;
+            }
+            callback.onMessage("thinking_delta", thinkingDelta);
+        } else if (line.startsWith("[STREAM_START]")) {
+            // 🔧 流式传输：开始标记
+            callback.onMessage("stream_start", "");
+        } else if (line.startsWith("[STREAM_END]")) {
+            // 🔧 流式传输：结束标记
+            callback.onMessage("stream_end", "");
         } else if (line.startsWith("[SESSION_ID]")) {
             String capturedSessionId = line.substring("[SESSION_ID]".length()).trim();
             callback.onMessage("session_id", capturedSessionId);
@@ -453,7 +480,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, null, null, null, callback);
     }
 
     /**
@@ -469,6 +496,25 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String model,
             JsonObject openedFiles,
             String agentPrompt,
+            MessageCallback callback
+    ) {
+        return sendMessage(channelId, message, sessionId, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, null, callback);
+    }
+
+    /**
+     * Send message in existing channel (streaming response, with all options including streaming flag).
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -524,6 +570,11 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 if (agentPrompt != null && !agentPrompt.isEmpty()) {
                     stdinInput.addProperty("agentPrompt", agentPrompt);
                     LOG.info("[Agent] ✓ Adding agentPrompt to stdinInput (length: " + agentPrompt.length() + " chars)");
+                }
+                // 🔧 流式传输配置
+                if (streaming != null) {
+                    stdinInput.addProperty("streaming", streaming);
+                    LOG.info("[Streaming] ✓ Adding streaming to stdinInput: " + streaming);
                 }
                 String stdinJson = gson.toJson(stdinInput);
 
@@ -654,12 +705,37 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                                 assistantContent.append(content);
                                 callback.onMessage("content", content);
                             } else if (line.startsWith("[CONTENT_DELTA]")) {
-                                String delta = line.substring("[CONTENT_DELTA]".length()).trim();
+                                // 🔧 流式传输：解析 JSON 编码的 delta，保留换行符
+                                String rawDelta = line.substring("[CONTENT_DELTA]".length());
+                                String jsonStr = rawDelta.startsWith(" ") ? rawDelta.substring(1) : rawDelta;
+                                String delta;
+                                try {
+                                    delta = new com.google.gson.Gson().fromJson(jsonStr, String.class);
+                                } catch (Exception e) {
+                                    delta = jsonStr;
+                                }
                                 assistantContent.append(delta);
                                 callback.onMessage("content_delta", delta);
                             } else if (line.startsWith("[THINKING]")) {
                                 String thinkingContent = line.substring("[THINKING]".length()).trim();
                                 callback.onMessage("thinking", thinkingContent);
+                            } else if (line.startsWith("[THINKING_DELTA]")) {
+                                // 🔧 流式传输：解析 JSON 编码的 thinking delta
+                                String rawDelta = line.substring("[THINKING_DELTA]".length());
+                                String jsonStr = rawDelta.startsWith(" ") ? rawDelta.substring(1) : rawDelta;
+                                String thinkingDelta;
+                                try {
+                                    thinkingDelta = new com.google.gson.Gson().fromJson(jsonStr, String.class);
+                                } catch (Exception e) {
+                                    thinkingDelta = jsonStr;
+                                }
+                                callback.onMessage("thinking_delta", thinkingDelta);
+                            } else if (line.startsWith("[STREAM_START]")) {
+                                // 🔧 流式传输：开始标记
+                                callback.onMessage("stream_start", "");
+                            } else if (line.startsWith("[STREAM_END]")) {
+                                // 🔧 流式传输：结束标记
+                                callback.onMessage("stream_end", "");
                             } else if (line.startsWith("[SESSION_ID]")) {
                                 String capturedSessionId = line.substring("[SESSION_ID]".length()).trim();
                                 callback.onMessage("session_id", capturedSessionId);

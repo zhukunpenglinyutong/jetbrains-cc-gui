@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './components/MarkdownBlock';
 import CollapsibleTextBlock from './components/CollapsibleTextBlock';
@@ -77,6 +77,7 @@ const App = () => {
   const [loadingStartTime, setLoadingStartTime] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
+  const [streamingActive, setStreamingActive] = useState(false);
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
@@ -123,6 +124,12 @@ const App = () => {
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
   const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
+  // 🔧 流式传输开关状态（同步设置页面）
+  const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(false);
+
+  // 🔧 SDK 安装状态（用于在未安装时禁止提问）
+  const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
+  const [sdkStatusLoaded, setSdkStatusLoaded] = useState(false); // 标记 SDK 状态是否已从后端加载
 
   // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
   const currentProviderRef = useRef(currentProvider);
@@ -136,12 +143,56 @@ const App = () => {
   // 根据当前提供商选择显示的模型
   const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
 
+  // 🔧 根据当前提供商判断对应的 SDK 是否已安装
+  const currentSdkInstalled = (() => {
+    // 状态未加载时，返回 false（显示加载中或未安装提示）
+    if (!sdkStatusLoaded) return false;
+    // 提供商 -> SDK 映射
+    const providerToSdk: Record<string, string> = {
+      claude: 'claude-sdk',
+      anthropic: 'claude-sdk',
+      bedrock: 'claude-sdk',
+      codex: 'codex-sdk',
+      openai: 'codex-sdk',
+    };
+    const sdkId = providerToSdk[currentProvider] || 'claude-sdk';
+    const status = sdkStatus[sdkId];
+    // 检查 status 字段（优先）或 installed 字段
+    return status?.status === 'installed' || status?.installed === true;
+  })();
+
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
   // 追踪用户是否在底部（用于判断是否需要自动滚动）
   const isUserAtBottomRef = useRef(true);
   // 追踪上次按下 ESC 的时间（用于双击 ESC 快捷键）
   const lastEscPressTimeRef = useRef<number>(0);
+
+  // 🔧 流式传输状态
+  // 使用 useRef 累积流式内容，避免频繁状态更新
+  const streamingContentRef = useRef('');
+  const isStreamingRef = useRef(false);
+  const useBackendStreamingRenderRef = useRef(false);
+  // 🔧 标记是否正在自动滚动（防止 scroll 事件误判）
+  const isAutoScrollingRef = useRef(false);
+  const autoExpandedThinkingKeysRef = useRef<Set<string>>(new Set());
+  // 🔧 流式文本：按“阶段”切分（工具调用前/后等）
+  const streamingTextSegmentsRef = useRef<string[]>([]);
+  const activeTextSegmentIndexRef = useRef<number>(-1);
+  // 🔧 流式思考：支持多段 thinking（例如工具调用前后多次思考）
+  const streamingThinkingSegmentsRef = useRef<string[]>([]);
+  const activeThinkingSegmentIndexRef = useRef<number>(-1);
+  // 🔧 工具调用计数：用于识别“新 tool_use”边界，避免重复重置分段
+  const seenToolUseCountRef = useRef(0);
+  // 🔧 真正的节流控制（分离 content 和 thinking，避免互相干扰）
+  // 🔧 追踪流式消息的索引，用于在 updateMessages 后仍能正确定位
+  const streamingMessageIndexRef = useRef<number>(-1);
+  const contentUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const thinkingUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastContentUpdateRef = useRef(0);  // 上次 content 更新时间
+  const lastThinkingUpdateRef = useRef(0); // 上次 thinking 更新时间
+  const THROTTLE_INTERVAL = 50; // 50ms 节流间隔
 
   useEffect(() => {
     permissionDialogOpenRef.current = permissionDialogOpen;
@@ -447,6 +498,98 @@ const App = () => {
   };
 
   useEffect(() => {
+    const findLastAssistantIndex = (list: ClaudeMessage[]) => {
+      for (let i = list.length - 1; i >= 0; i -= 1) {
+        if (list[i]?.type === 'assistant') return i;
+      }
+      return -1;
+    };
+
+    const extractRawBlocks = (raw: unknown): any[] => {
+      if (!raw || typeof raw !== 'object') return [];
+      const rawObj: any = raw;
+      const blocks = rawObj.content ?? rawObj.message?.content;
+      return Array.isArray(blocks) ? blocks : [];
+    };
+
+    const buildStreamingBlocks = (existingBlocks: any[]) => {
+      const toolUseBlocks = existingBlocks.filter((b) => b?.type === 'tool_use');
+      const otherBlocks = existingBlocks.filter(
+        (b) => b && b.type !== 'text' && b.type !== 'thinking' && b.type !== 'tool_use',
+      );
+
+      const textSegments = streamingTextSegmentsRef.current;
+      const thinkingSegments = streamingThinkingSegmentsRef.current;
+      const phasesCount = Math.max(textSegments.length, thinkingSegments.length, toolUseBlocks.length + 1);
+
+      const blocks: any[] = [];
+      for (let phase = 0; phase < phasesCount; phase += 1) {
+        const thinking = thinkingSegments[phase];
+        if (typeof thinking === 'string' && thinking.length > 0) {
+          // 🔧 更彻底地清理换行符：合并连续空白行，去除首尾空白
+          const normalizedThinking = thinking
+            .replace(/\r\n?/g, '\n')          // 统一换行符
+            .replace(/\n[ \t]*\n+/g, '\n')    // 移除空白行（包含仅空格/Tab 的行）
+            .replace(/^\n+/, '')              // 去除开头换行
+            .replace(/\n+$/, '');             // 去除结尾换行
+          if (normalizedThinking.length > 0) {
+            blocks.push({ type: 'thinking', thinking: normalizedThinking });
+          }
+        }
+        const text = textSegments[phase];
+        if (typeof text === 'string' && text.length > 0) {
+          blocks.push({ type: 'text', text });
+        }
+        if (phase < toolUseBlocks.length) {
+          blocks.push(toolUseBlocks[phase]);
+        }
+      }
+
+      if (otherBlocks.length > 0) {
+        blocks.push(...otherBlocks);
+      }
+      return blocks;
+    };
+
+    const getOrCreateStreamingAssistantIndex = (list: ClaudeMessage[]) => {
+      const currentIdx = streamingMessageIndexRef.current;
+      if (currentIdx >= 0 && currentIdx < list.length && list[currentIdx]?.type === 'assistant') {
+        return currentIdx;
+      }
+      const lastAssistantIdx = findLastAssistantIndex(list);
+      if (lastAssistantIdx >= 0) {
+        streamingMessageIndexRef.current = lastAssistantIdx;
+        return lastAssistantIdx;
+      }
+      // 没有 assistant：追加一个占位
+      streamingMessageIndexRef.current = list.length;
+      list.push({
+        type: 'assistant',
+        content: '',
+        isStreaming: true,
+        timestamp: new Date().toISOString(),
+        raw: { message: { content: [] } } as any,
+      });
+      return streamingMessageIndexRef.current;
+    };
+
+    const patchAssistantForStreaming = (assistant: ClaudeMessage) => {
+      const existingRaw = (assistant.raw && typeof assistant.raw === 'object') ? (assistant.raw as any) : { message: { content: [] } };
+      const existingBlocks = extractRawBlocks(existingRaw);
+      const newBlocks = buildStreamingBlocks(existingBlocks);
+
+      const rawPatched = existingRaw.message
+        ? { ...existingRaw, message: { ...(existingRaw.message || {}), content: newBlocks } }
+        : { ...existingRaw, content: newBlocks };
+
+      return {
+        ...assistant,
+        content: streamingContentRef.current,
+        raw: rawPatched,
+        isStreaming: true,
+      } as ClaudeMessage;
+    };
+
     window.updateMessages = (json) => {
       // const timestamp = Date.now();
       // const sendTime = (window as any).__lastMessageSendTime;
@@ -454,13 +597,70 @@ const App = () => {
       //   console.log(`[Frontend][${timestamp}][PERF] updateMessages 收到响应，距发送 ${timestamp - sendTime}ms`);
       // }
       try {
-        console.log('[Frontend] updateMessages received, json length:', json?.length);
         const parsed = JSON.parse(json) as ClaudeMessage[];
-        console.log('[Frontend] updateMessages parsed, count:', parsed.length, 'types:', parsed.map(m => m.type).join(','));
-        if (parsed.length > 0) {
-          console.log('[Frontend] First message:', JSON.stringify(parsed[0]).substring(0, 200));
-        }
-        setMessages(parsed);
+
+        // 🔧 禁用后端渲染模式，使用 onContentDelta 进行流式渲染
+        // 这样可以确保 Markdown 在流式输出时正确渲染
+        // if (isStreamingRef.current && currentProviderRef.current === 'claude') {
+        //   const lastAssistantIdx = findLastAssistantIndex(parsed);
+        //   if (lastAssistantIdx >= 0) {
+        //     const rawBlocks = normalizeBlocks(parsed[lastAssistantIdx].raw) || [];
+        //     const hasStreamingBlocks = rawBlocks.some(
+        //       (block) => block?.type === 'text' || block?.type === 'thinking',
+        //     );
+        //     if (hasStreamingBlocks) {
+        //       useBackendStreamingRenderRef.current = true;
+        //       streamingMessageIndexRef.current = lastAssistantIdx;
+        //     }
+        //   }
+        // }
+
+        setMessages((prev) => {
+          if (!isStreamingRef.current) {
+            return parsed;
+          }
+
+          if (useBackendStreamingRenderRef.current) {
+            return parsed;
+          }
+
+          const lastAssistantIdx = findLastAssistantIndex(parsed);
+          if (lastAssistantIdx < 0) {
+            return parsed;
+          }
+
+          const lastAssistant = parsed[lastAssistantIdx];
+          const lastAssistantBlocks = extractRawBlocks(lastAssistant.raw);
+          const toolUseCount = lastAssistantBlocks.filter((b) => b?.type === 'tool_use').length;
+          if (toolUseCount < seenToolUseCountRef.current) {
+            seenToolUseCountRef.current = toolUseCount;
+          }
+          const hasNewToolUse = toolUseCount > seenToolUseCountRef.current;
+          const hasToolUse = toolUseCount > 0;
+
+          // 工具调用是一个“阶段”边界：后续文本/思考应该进入新的段落
+          if (hasNewToolUse) {
+            seenToolUseCountRef.current = toolUseCount;
+            activeTextSegmentIndexRef.current = -1;
+            activeThinkingSegmentIndexRef.current = -1;
+          }
+
+          // 流式期间：仅当“没有新增消息且最后一条是 assistant 且不含 tool_use”时跳过，避免覆盖流式 UI
+          const isAssistantOnlyRefresh =
+            parsed.length === prev.length &&
+            parsed[parsed.length - 1]?.type === 'assistant' &&
+            !hasToolUse;
+          if (isAssistantOnlyRefresh) {
+            return prev;
+          }
+
+          const patched = [...parsed];
+          const targetIdx = getOrCreateStreamingAssistantIndex(patched);
+          if (targetIdx >= 0 && patched[targetIdx]?.type === 'assistant') {
+            patched[targetIdx] = patchAssistantForStreaming(patched[targetIdx]);
+          }
+          return patched;
+        });
       } catch (error) {
         console.error('[Frontend] Failed to parse messages:', error);
         console.error('[Frontend] Raw JSON:', json?.substring(0, 500));
@@ -495,6 +695,249 @@ const App = () => {
     // 添加单条历史消息（用于 Codex 会话加载）
     window.addHistoryMessage = (message: ClaudeMessage) => {
       setMessages((prev) => [...prev, message]);
+    };
+
+    // 🔧 流式传输回调函数
+    // 流式开始时调用
+    window.onStreamStart = () => {
+      console.log('[Frontend] Stream started');
+      streamingContentRef.current = '';
+      isStreamingRef.current = true;
+      // Claude 流式：由后端通过 updateMessages 增量写入 raw blocks 进行渲染
+      useBackendStreamingRenderRef.current = currentProviderRef.current === 'claude';
+      autoExpandedThinkingKeysRef.current.clear();
+      setStreamingActive(true);
+      isUserAtBottomRef.current = true;
+      streamingTextSegmentsRef.current = [];
+      activeTextSegmentIndexRef.current = -1;
+      streamingThinkingSegmentsRef.current = [];
+      activeThinkingSegmentIndexRef.current = -1;
+      seenToolUseCountRef.current = 0;
+
+      // Claude 流式由后端通过 updateMessages 驱动，不需要前端占位消息
+      if (useBackendStreamingRenderRef.current) {
+        return;
+      }
+      // 添加一个占位的 assistant 消息用于流式更新
+      setMessages((prev) => {
+        // 检查最后一条消息是否已经是正在流式的 assistant 消息
+        const last = prev[prev.length - 1];
+        if (last?.type === 'assistant' && last?.isStreaming) {
+          // 🔧 记录流式消息索引
+          streamingMessageIndexRef.current = prev.length - 1;
+          return prev; // 已存在，不重复添加
+        }
+        // 🔧 记录新增的流式消息索引
+        streamingMessageIndexRef.current = prev.length;
+        return [...prev, {
+          type: 'assistant',
+          content: '',
+          isStreaming: true,
+          timestamp: new Date().toISOString()
+        }];
+      });
+    };
+
+    // 内容增量回调 - 🔧 使用索引定位流式消息，避免 isStreaming 被覆盖问题
+    window.onContentDelta = (delta: string) => {
+      if (!isStreamingRef.current) return;
+      streamingContentRef.current += delta;
+      // 收到内容输出，视为当前 thinking 段结束（后续 thinking_delta 将新开一段）
+      activeThinkingSegmentIndexRef.current = -1;
+
+      // 🔧 计算/创建当前文本段（工具调用后会从新段开始）
+      if (activeTextSegmentIndexRef.current < 0) {
+        activeTextSegmentIndexRef.current = streamingTextSegmentsRef.current.length;
+        streamingTextSegmentsRef.current.push('');
+      }
+      streamingTextSegmentsRef.current[activeTextSegmentIndexRef.current] += delta;
+
+      const now = Date.now();
+      const timeSinceLastUpdate = now - lastContentUpdateRef.current;
+
+      // 🔧 真正的节流：如果距上次更新超过阈值，立即更新
+      if (timeSinceLastUpdate >= THROTTLE_INTERVAL) {
+        lastContentUpdateRef.current = now;
+        const currentContent = streamingContentRef.current;
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          // 🔧 使用索引定位，而不是检查 isStreaming 标志（避免被 updateMessages 覆盖）
+          const idx = getOrCreateStreamingAssistantIndex(newMessages);
+          if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
+            newMessages[idx] = patchAssistantForStreaming({
+              ...newMessages[idx],
+              content: currentContent,
+              isStreaming: true,
+            });
+          }
+          return newMessages;
+        });
+      } else {
+        // 🔧 如果还没到阈值，确保在阈值到期时更新（不会丢失最后一次更新）
+        if (!contentUpdateTimeoutRef.current) {
+          const remainingTime = THROTTLE_INTERVAL - timeSinceLastUpdate;
+          contentUpdateTimeoutRef.current = setTimeout(() => {
+            contentUpdateTimeoutRef.current = null;
+            lastContentUpdateRef.current = Date.now();
+            const currentContent = streamingContentRef.current;
+            setMessages((prev) => {
+              const newMessages = [...prev];
+              const idx = getOrCreateStreamingAssistantIndex(newMessages);
+              if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
+                newMessages[idx] = patchAssistantForStreaming({
+                  ...newMessages[idx],
+                  content: currentContent,
+                  isStreaming: true,
+                });
+              }
+              return newMessages;
+            });
+          }, remainingTime);
+        }
+      }
+    };
+
+    // 思考增量回调 - 🔧 使用索引定位流式消息
+    window.onThinkingDelta = (delta: string) => {
+      if (!isStreamingRef.current) return;
+      // 🔧 统一换行符，但不在这里做过度清理（累积后在 buildStreamingBlocks 中统一处理）
+      const normalizedDelta = delta.replace(/\r\n/g, '\n');
+      // 🔧 多段 thinking：按"阶段"聚合（工具调用前/后分别进入不同段）
+      if (activeThinkingSegmentIndexRef.current < 0) {
+        const phaseIndex = activeTextSegmentIndexRef.current >= 0
+          ? activeTextSegmentIndexRef.current
+          : streamingTextSegmentsRef.current.length; // 工具调用后但文本未开始时，应进入下一段
+        while (streamingThinkingSegmentsRef.current.length <= phaseIndex) {
+          streamingThinkingSegmentsRef.current.push('');
+        }
+        activeThinkingSegmentIndexRef.current = phaseIndex;
+      }
+      streamingThinkingSegmentsRef.current[activeThinkingSegmentIndexRef.current] += normalizedDelta;
+
+      const now = Date.now();
+      const timeSinceLastUpdate = now - lastThinkingUpdateRef.current;
+
+      // 更新 UI 的函数
+      const updateThinkingUI = () => {
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          const idx = getOrCreateStreamingAssistantIndex(newMessages);
+          if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
+            newMessages[idx] = patchAssistantForStreaming({
+              ...newMessages[idx],
+              isStreaming: true,
+            });
+
+            const rawBlocks = extractRawBlocks(newMessages[idx].raw);
+            let lastThinkingIndex = -1;
+            for (let i = rawBlocks.length - 1; i >= 0; i -= 1) {
+              if (rawBlocks[i]?.type === 'thinking') {
+                lastThinkingIndex = i;
+                break;
+              }
+            }
+            if (lastThinkingIndex >= 0) {
+              const thinkingKey = `${idx}_${lastThinkingIndex}`;
+              setExpandedThinking((prevExpanded) => ({ ...prevExpanded, [thinkingKey]: true }));
+            }
+          }
+          return newMessages;
+        });
+        setIsThinking(true);
+      };
+
+      // 🔧 真正的节流：如果距上次更新超过阈值，立即更新
+      if (timeSinceLastUpdate >= THROTTLE_INTERVAL) {
+        lastThinkingUpdateRef.current = now;
+        updateThinkingUI();
+      } else {
+        // 🔧 如果还没到阈值，确保在阈值到期时更新
+        if (!thinkingUpdateTimeoutRef.current) {
+          const remainingTime = THROTTLE_INTERVAL - timeSinceLastUpdate;
+          thinkingUpdateTimeoutRef.current = setTimeout(() => {
+            thinkingUpdateTimeoutRef.current = null;
+            lastThinkingUpdateRef.current = Date.now();
+            updateThinkingUI();
+          }, remainingTime);
+        }
+      }
+    };
+
+    // 流式结束回调
+    window.onStreamEnd = () => {
+      console.log('[Frontend] Stream ended');
+      const useBackendRender = useBackendStreamingRenderRef.current;
+      isStreamingRef.current = false;
+      useBackendStreamingRenderRef.current = false;
+      setStreamingActive(false);
+      activeThinkingSegmentIndexRef.current = -1;
+      activeTextSegmentIndexRef.current = -1;
+      seenToolUseCountRef.current = 0;
+
+      // 清除节流定时器
+      if (contentUpdateTimeoutRef.current) {
+        clearTimeout(contentUpdateTimeoutRef.current);
+        contentUpdateTimeoutRef.current = null;
+      }
+      if (thinkingUpdateTimeoutRef.current) {
+        clearTimeout(thinkingUpdateTimeoutRef.current);
+        thinkingUpdateTimeoutRef.current = null;
+      }
+
+      if (useBackendRender) {
+        const keysToCollapse = Array.from(autoExpandedThinkingKeysRef.current);
+        autoExpandedThinkingKeysRef.current.clear();
+        if (keysToCollapse.length > 0) {
+          setExpandedThinking((prevExpanded) => {
+            let changed = false;
+            const next = { ...prevExpanded };
+            for (const key of keysToCollapse) {
+              if (next[key]) {
+                next[key] = false;
+                changed = true;
+              }
+            }
+            return changed ? next : prevExpanded;
+          });
+        }
+
+        streamingContentRef.current = '';
+        streamingTextSegmentsRef.current = [];
+        streamingThinkingSegmentsRef.current = [];
+        streamingMessageIndexRef.current = -1;
+        setIsThinking(false);
+        return;
+      }
+
+      // 确保最终内容被写入
+      const finalContent = streamingContentRef.current;
+      // 🔧 捕获当前索引值
+      const targetIdx = streamingMessageIndexRef.current;
+
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        const idx = targetIdx >= 0 && targetIdx < prev.length ? targetIdx : findLastAssistantIndex(newMessages);
+        if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
+          const patched = patchAssistantForStreaming(newMessages[idx]);
+          const rawBlocks = extractRawBlocks(patched.raw);
+          for (let blockIndex = 0; blockIndex < rawBlocks.length; blockIndex += 1) {
+            if (rawBlocks[blockIndex]?.type === 'thinking') {
+              const thinkingKey = `${idx}_${blockIndex}`;
+              setExpandedThinking((prevExpanded) => ({ ...prevExpanded, [thinkingKey]: false }));
+            }
+          }
+          newMessages[idx] = { ...patched, content: finalContent, isStreaming: false };
+        }
+        return newMessages;
+      });
+
+      // 重置流式状态
+      streamingContentRef.current = '';
+      streamingTextSegmentsRef.current = [];
+      streamingThinkingSegmentsRef.current = [];
+      // 🔧 重置索引
+      streamingMessageIndexRef.current = -1;
+      setIsThinking(false);
     };
 
     // 设置当前会话 ID（用于 rewind 功能）
@@ -568,6 +1011,40 @@ const App = () => {
     resetSlashCommandsState(); // 重置状态，确保首次加载时能正确触发刷新
     resetFileReferenceState(); // 重置文件引用状态，防止 Promise 泄漏
     setupSlashCommandsCallback();
+
+    // 🔧 SDK 状态回调（用于在未安装时禁止提问）
+    // 使用装饰器模式，保存原有回调并扩展，避免与 DependencySection 的回调冲突
+    const originalUpdateDependencyStatus = window.updateDependencyStatus;
+    window.updateDependencyStatus = (jsonStr: string) => {
+      try {
+        const status = JSON.parse(jsonStr);
+        console.log('[Frontend] SDK status updated (App):', status);
+        setSdkStatus(status);
+        setSdkStatusLoaded(true); // 标记状态已加载
+      } catch (error) {
+        console.error('[Frontend] Failed to parse SDK status:', error);
+        setSdkStatusLoaded(true); // 即使解析失败也标记为已加载，避免永久等待
+      }
+      // 如果有原有回调（来自 DependencySection），也调用它
+      if (originalUpdateDependencyStatus && originalUpdateDependencyStatus !== window.updateDependencyStatus) {
+        originalUpdateDependencyStatus(jsonStr);
+      }
+    };
+    // 保存 App 的回调引用，供 DependencySection 使用
+    (window as any)._appUpdateDependencyStatus = window.updateDependencyStatus;
+
+    // 处理 pending 的 SDK 状态（后端可能在 React 初始化前就返回了）
+    if (window.__pendingDependencyStatus) {
+      console.log('[Frontend] Found pending dependency status, applying...');
+      const pending = window.__pendingDependencyStatus;
+      delete window.__pendingDependencyStatus;
+      window.updateDependencyStatus?.(pending);
+    }
+
+    // 初始化请求 SDK 状态
+    if (window.sendToJava) {
+      window.sendToJava('get_dependency_status:');
+    }
 
     // ChatInputBox 相关回调
     window.onUsageUpdate = (json) => {
@@ -655,6 +1132,16 @@ const App = () => {
       }
     };
 
+    // 🔧 流式传输开关状态同步回调
+    window.updateStreamingEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setStreamingEnabledSetting(data.streamingEnabled ?? false);
+      } catch (error) {
+        console.error('[Frontend] Failed to parse streaming config:', error);
+      }
+    };
+
     // Retry getting active provider
     let retryCount = 0;
     const MAX_RETRIES = 30;
@@ -685,6 +1172,21 @@ const App = () => {
       }
     };
     setTimeout(requestThinkingEnabled, 200);
+
+    // 🔧 请求流式传输初始状态
+    let streamingRetryCount = 0;
+    const MAX_STREAMING_RETRIES = 30;
+    const requestStreamingEnabled = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_streaming_enabled');
+      } else {
+        streamingRetryCount++;
+        if (streamingRetryCount < MAX_STREAMING_RETRIES) {
+          setTimeout(requestStreamingEnabled, 100);
+        }
+      }
+    };
+    setTimeout(requestStreamingEnabled, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -920,40 +1422,60 @@ const App = () => {
     if (!container) return;
 
     const handleScroll = () => {
-      // 计算距离底部的距离（容差 50 像素）
+      // 🔧 如果正在自动滚动，跳过判断（防止快速流式输出时误判）
+      if (isAutoScrollingRef.current) return;
+      // 计算距离底部的距离
       const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      // 如果距离底部小于 50 像素，认为用户在底部
-      isUserAtBottomRef.current = distanceFromBottom < 50;
+      // 如果距离底部小于 100 像素，认为用户在底部
+      isUserAtBottomRef.current = distanceFromBottom < 100;
     };
 
     container.addEventListener('scroll', handleScroll);
     return () => container.removeEventListener('scroll', handleScroll);
   }, [currentView]);
 
-  useEffect(() => {
-    // 只有当用户在底部时，才自动滚动到底部
-    if (messagesContainerRef.current && isUserAtBottomRef.current) {
-      // 使用 requestAnimationFrame 确保 DOM 已完全渲染
+  const scrollToBottom = useCallback(() => {
+    const endElement = messagesEndRef.current;
+    if (endElement) {
+      isAutoScrollingRef.current = true;
+      try {
+        endElement.scrollIntoView({ block: 'end', behavior: 'auto' });
+      } catch {
+        endElement.scrollIntoView(false);
+      }
       requestAnimationFrame(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-        }
+        isAutoScrollingRef.current = false;
       });
+      return;
     }
-  }, [messages]);
+
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    isAutoScrollingRef.current = true;
+    container.scrollTop = container.scrollHeight;
+    requestAnimationFrame(() => {
+      isAutoScrollingRef.current = false;
+    });
+  }, []);
+
+  // 🔧 自动滚动：用户在底部时，跟随最新内容（包括流式/展开思考块/加载指示器等导致的高度变化）
+  useLayoutEffect(() => {
+    if (currentView !== 'chat') return;
+    if (!isUserAtBottomRef.current) return;
+    scrollToBottom();
+  }, [currentView, messages, expandedThinking, loading, streamingActive, scrollToBottom]);
 
   // 切换回聊天视图时，自动滚动到底部
   useEffect(() => {
-    if (currentView === 'chat' && messagesContainerRef.current) {
+    if (currentView === 'chat') {
       // 使用 setTimeout 确保视图完全渲染后再滚动
       const timer = setTimeout(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-        }
+        scrollToBottom();
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [currentView]);
+  }, [currentView, scrollToBottom]);
 
   // 双击 ESC 快捷键打开回滚弹窗
   useEffect(() => {
@@ -999,6 +1521,21 @@ const App = () => {
       return;
     }
     if (loading) {
+      return;
+    }
+
+    // 🔧 防御性校验：即使输入框侧 gating 失效，也不能在 SDK 状态未知/未安装时发送
+    if (!sdkStatusLoaded) {
+      addToast(t('chat.sdkStatusLoading'), 'info');
+      return;
+    }
+    if (!currentSdkInstalled) {
+      addToast(
+        t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' }) + ' ' + t('chat.goInstallSdk'),
+        'warning'
+      );
+      setSettingsInitialTab('dependencies');
+      setCurrentView('settings');
       return;
     }
 
@@ -1173,6 +1710,16 @@ const App = () => {
     });
     sendBridgeMessage('update_provider', payload);
     addToast(enabled ? t('toast.thinkingEnabled') : t('toast.thinkingDisabled'), 'success');
+  };
+
+  /**
+   * 处理流式传输开关切换
+   */
+  const handleStreamingEnabledChange = (enabled: boolean) => {
+    setStreamingEnabledSetting(enabled);
+    const payload = { streamingEnabled: enabled };
+    sendBridgeMessage('set_streaming_enabled', JSON.stringify(payload));
+    addToast(enabled ? t('settings.basic.streaming.enabled') : t('settings.basic.streaming.disabled'), 'success');
   };
 
   const interruptSession = () => {
@@ -1516,7 +2063,6 @@ const App = () => {
   const shouldShowMessage = (message: ClaudeMessage) => {
     // 过滤 isMeta 消息（如 "Caveat: The messages below were generated..."）
     if (message.raw && typeof message.raw === 'object' && 'isMeta' in message.raw && message.raw.isMeta === true) {
-      console.log('[Frontend] shouldShowMessage: filtered isMeta message');
       return false;
     }
 
@@ -1529,11 +2075,9 @@ const App = () => {
       text.includes('<command-message>') ||
       text.includes('<command-args>')
     )) {
-      console.log('[Frontend] shouldShowMessage: filtered command message');
       return false;
     }
     if (message.type === 'user' && text === '[tool_result]') {
-      console.log('[Frontend] shouldShowMessage: filtered tool_result');
       return false;
     }
     if (message.type === 'assistant') {
@@ -1555,12 +2099,8 @@ const App = () => {
           // 图片、工具使用等其他类型的块都应该显示
           return true;
         });
-        if (!hasValidBlock) {
-          console.log('[Frontend] shouldShowMessage: user message filtered - no valid blocks', { type: message.type, text: text?.substring(0, 100), rawBlocks });
-        }
         return hasValidBlock;
       }
-      console.log('[Frontend] shouldShowMessage: user message filtered - empty content', { type: message.type, text: text?.substring(0, 100), hasRaw: !!message.raw });
       return false;
     }
     return true;
@@ -1683,6 +2223,13 @@ const App = () => {
   const getContentBlocks = (message: ClaudeMessage): ClaudeContentBlock[] => {
     const rawBlocks = normalizeBlocks(message.raw);
     if (rawBlocks && rawBlocks.length > 0) {
+      // 🔧 流式/工具场景：如果 raw 里没有 text，但 message.content 有文本，仍需要展示文本
+      const hasTextBlock = rawBlocks.some(
+        (block) => block.type === 'text' && typeof (block as any).text === 'string' && String((block as any).text).trim().length > 0,
+      );
+      if (!hasTextBlock && message.content && message.content.trim()) {
+        return [...rawBlocks, { type: 'text', text: localizeMessage(message.content) }];
+      }
       return rawBlocks;
     }
     if (message.content && message.content.trim()) {
@@ -1742,6 +2289,45 @@ const App = () => {
     if (current) result.push(current);
     return result;
   }, [messages]);
+
+// Claude 流式：思考块在输出中自动展开，输出结束自动折叠（见 onStreamEnd）
+  useEffect(() => {
+    if (currentProvider !== 'claude') return;
+    if (!streamingActive) return;
+
+    let lastAssistantIdx = -1;
+    for (let i = mergedMessages.length - 1; i >= 0; i -= 1) {
+      if (mergedMessages[i]?.type === 'assistant') {
+        lastAssistantIdx = i;
+        break;
+      }
+    }
+    if (lastAssistantIdx < 0) return;
+
+    const blocks = getContentBlocks(mergedMessages[lastAssistantIdx]);
+    if (!Array.isArray(blocks) || blocks.length === 0) return;
+
+    const keysToOpen: string[] = [];
+    for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+      if (blocks[blockIndex]?.type === 'thinking') {
+        keysToOpen.push(`${lastAssistantIdx}_${blockIndex}`);
+      }
+    }
+    if (keysToOpen.length === 0) return;
+
+    setExpandedThinking((prevExpanded) => {
+      let changed = false;
+      const next = { ...prevExpanded };
+      for (const key of keysToOpen) {
+        if (!next[key]) {
+          next[key] = true;
+          autoExpandedThinkingKeysRef.current.add(key);
+          changed = true;
+        }
+      }
+      return changed ? next : prevExpanded;
+    });
+  }, [currentProvider, mergedMessages, streamingActive]);
 
   const canRewindFromMessageIndex = (userMessageIndex: number) => {
     if (userMessageIndex < 0 || userMessageIndex >= mergedMessages.length) {
@@ -1990,13 +2576,16 @@ const App = () => {
                   ) : (
                     getContentBlocks(message).map((block, blockIndex) => (
                       <div key={`${messageIndex}-${blockIndex}`} className="content-block">
-                        {block.type === 'text' && (
-                          message.type === 'user' ? (
-                            <CollapsibleTextBlock content={block.text ?? ''} />
-                          ) : (
-                            <MarkdownBlock content={block.text ?? ''} />
-                          )
-                        )}
+                         {block.type === 'text' && (
+                           message.type === 'user' ? (
+                             <CollapsibleTextBlock content={block.text ?? ''} />
+                           ) : (
+                            <MarkdownBlock
+                              content={block.text ?? ''}
+                              isStreaming={streamingActive && message.type === 'assistant' && messageIndex === mergedMessages.length - 1}
+                            />
+                           )
+                         )}
                         {block.type === 'image' && block.src && (
                           <div
                             className={`message-image-block ${message.type === 'user' ? 'user-image' : ''}`}
@@ -2035,7 +2624,7 @@ const App = () => {
                               onClick={() => toggleThinking(messageIndex, blockIndex)}
                             >
                               <span className="thinking-title">
-                                {isThinking && messageIndex === messages.length - 1
+                                {isThinking && messageIndex === mergedMessages.length - 1
                                   ? t('common.thinking')
                                   : t('common.thinkingProcess')}
                               </span>
@@ -2045,7 +2634,10 @@ const App = () => {
                             </div>
                             {isThinkingExpanded(messageIndex, blockIndex) && (
                               <div className="thinking-content">
-                                {block.thinking ?? block.text ?? t('chat.noThinkingContent')}
+                                <MarkdownBlock
+                                  content={block.thinking ?? block.text ?? t('chat.noThinkingContent')}
+                                  isStreaming={streamingActive && message.type === 'assistant' && messageIndex === mergedMessages.length - 1}
+                                />
                               </div>
                             )}
                           </div>
@@ -2102,6 +2694,7 @@ const App = () => {
 
           {/* Loading indicator */}
           {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* 滚动控制按钮 */}
@@ -2132,6 +2725,12 @@ const App = () => {
             showUsage={true}
             alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
             placeholder={t('chat.inputPlaceholder')}
+            sdkInstalled={currentSdkInstalled}
+            sdkStatusLoading={!sdkStatusLoaded}
+            onInstallSdk={() => {
+              setSettingsInitialTab('dependencies');
+              setCurrentView('settings');
+            }}
             value={draftInput}
             onInput={setDraftInput}
             onSubmit={handleSubmit}
@@ -2140,6 +2739,8 @@ const App = () => {
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
             onToggleThinking={handleToggleThinking}
+            streamingEnabled={streamingEnabledSetting}
+            onStreamingEnabledChange={handleStreamingEnabledChange}
             selectedAgent={selectedAgent}
             onAgentSelect={handleAgentSelect}
             activeFile={contextInfo?.file}
@@ -2155,6 +2756,7 @@ const App = () => {
             }}
             hasMessages={messages.length > 0}
             onRewind={handleOpenRewindSelectDialog}
+            addToast={addToast}
           />
         </div>
       )}

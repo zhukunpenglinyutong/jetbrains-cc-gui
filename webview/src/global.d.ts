@@ -164,6 +164,11 @@ interface Window {
   updateThinkingEnabled?: (json: string) => void;
 
   /**
+   * Update streaming enabled setting
+   */
+  updateStreamingEnabled?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;
@@ -316,8 +321,83 @@ interface Window {
    */
   updateCurrentCodexConfig?: (json: string) => void;
 
+// ============================================================================
+  // 🔧 流式传输回调函数
+  // ============================================================================
+
+  /**
+   * Stream start callback - 流式传输开始时调用
+   */
+  onStreamStart?: () => void;
+
+  /**
+   * Content delta callback - 收到内容增量时调用
+   * @param delta 内容增量字符串
+   */
+  onContentDelta?: (delta: string) => void;
+
+  /**
+   * Thinking delta callback - 收到思考增量时调用
+   * @param delta 思考增量字符串
+   */
+  onThinkingDelta?: (delta: string) => void;
+
+  /**
+   * Stream end callback - 流式传输结束时调用
+   */
+  onStreamEnd?: () => void;
+
+  /**
+   * Update streaming enabled configuration - 接收流式传输配置
+   */
+  updateStreamingEnabled?: (json: string) => void;
+
   /**
    * Rewind result callback - 回滚操作结果回调
    */
   onRewindResult?: (json: string) => void;
+
+  // ============================================================================
+  // 🔧 依赖管理回调函数
+  // ============================================================================
+
+  /**
+   * Update dependency status callback - 更新依赖状态
+   */
+  updateDependencyStatus?: (json: string) => void;
+
+  /**
+   * Dependency install progress callback - 依赖安装进度
+   */
+  dependencyInstallProgress?: (json: string) => void;
+
+  /**
+   * Dependency install result callback - 依赖安装结果
+   */
+  dependencyInstallResult?: (json: string) => void;
+
+  /**
+   * Dependency uninstall result callback - 依赖卸载结果
+   */
+  dependencyUninstallResult?: (json: string) => void;
+
+  /**
+   * Node environment status callback - Node.js 环境状态
+   */
+  nodeEnvironmentStatus?: (json: string) => void;
+
+  /**
+   * Dependency update available callback - 依赖更新检查结果
+   */
+  dependencyUpdateAvailable?: (json: string) => void;
+
+  /**
+   * Pending dependency updates payload before settings initialization
+   */
+  __pendingDependencyUpdates?: string;
+
+  /**
+   * Pending dependency status payload before React initialization
+   */
+  __pendingDependencyStatus?: string;
 }

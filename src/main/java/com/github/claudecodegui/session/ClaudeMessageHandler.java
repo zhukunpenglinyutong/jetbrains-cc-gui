@@ -46,6 +46,15 @@ public class ClaudeMessageHandler implements MessageCallback {
     // 解释：AI是不是在想问题（还没开始说话）
     private boolean isThinking = false;
 
+    // 🔧 流式传输状态追踪
+    // 英文：Whether streaming is active
+    // 解释：是否正在接收流式内容
+    private boolean isStreaming = false;
+
+    // 🔧 流式分段状态（用于在工具调用前/后切分 text/thinking）
+    private boolean textSegmentActive = false;
+    private boolean thinkingSegmentActive = false;
+
     /**
      * 构造函数
      * 英文：Constructor
@@ -88,8 +97,23 @@ public class ClaudeMessageHandler implements MessageCallback {
                 handleThinkingMessage();
                 break;
             case "content":
+                // 非流式模式：完整内容，更新消息
+                handleContent(content);
+                break;
             case "content_delta":
+                // 🔧 流式传输：增量内容，转发给前端
                 handleContentDelta(content);
+                break;
+            // 🔧 流式传输：思考增量
+            case "thinking_delta":
+                handleThinkingDelta(content);
+                break;
+            // 🔧 流式传输：开始和结束标记
+            case "stream_start":
+                handleStreamStart();
+                break;
+            case "stream_end":
+                handleStreamEnd();
                 break;
             case "session_id":
                 handleSessionId(content);
@@ -172,14 +196,56 @@ public class ClaudeMessageHandler implements MessageCallback {
                 currentAssistantMessage.raw = mergedRaw;
             }
 
+            // 🔧 流式模式：不要用完整消息覆盖已累积的流式内容（工具调用消息通常不含 text）
+            // 非流式模式：使用完整消息的 text 重建内容
             String aggregatedText = messageParser.extractMessageContent(mergedRaw);
-            assistantContent.setLength(0);
-            if (aggregatedText != null) {
+            if (!isStreaming) {
+                assistantContent.setLength(0);
+                if (aggregatedText != null) {
+                    assistantContent.append(aggregatedText);
+                }
+                currentAssistantMessage.content = assistantContent.toString();
+            } else if (aggregatedText != null && aggregatedText.length() > assistantContent.length()) {
+                // 保守同步：如果完整文本更长，更新累积器（避免极端情况下 delta 丢失）
+                assistantContent.setLength(0);
                 assistantContent.append(aggregatedText);
+                currentAssistantMessage.content = assistantContent.toString();
             }
-            currentAssistantMessage.content = assistantContent.toString();
             currentAssistantMessage.raw = mergedRaw;
-            callbackHandler.notifyMessageUpdate(state.getMessages());
+
+            // 🔧 流式传输：检查是否包含工具调用
+            // 如果包含 tool_use，即使在流式模式下也需要更新消息以显示工具块
+            boolean hasToolUse = false;
+            if (mergedRaw.has("message") && mergedRaw.getAsJsonObject("message").has("content")) {
+                var contentArray = mergedRaw.getAsJsonObject("message").get("content");
+                if (contentArray.isJsonArray()) {
+                    for (var element : contentArray.getAsJsonArray()) {
+                        if (element.isJsonObject() && element.getAsJsonObject().has("type")) {
+                            String type = element.getAsJsonObject().get("type").getAsString();
+                            if ("tool_use".equals(type)) {
+                                hasToolUse = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 🔧 工具调用是一个“分段边界”：后续的 text/thinking 应该进入新的块
+            if (hasToolUse) {
+                textSegmentActive = false;
+                thinkingSegmentActive = false;
+            }
+
+            // 🔧 流式传输：流式模式下跳过全量更新，除非有工具调用
+            if (!isStreaming || hasToolUse) {
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                if (hasToolUse) {
+                    LOG.debug("Streaming active but tool_use detected, sending message update");
+                }
+            } else {
+                LOG.debug("Streaming active, skipping full message update in handleAssistantMessage");
+            }
         } catch (Exception e) {
             LOG.warn("Failed to parse assistant message JSON: " + e.getMessage());
         }
@@ -201,6 +267,37 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
+     * 处理完整内容（非流式模式）
+     * 英文：Handle complete content (non-streaming mode)
+     * 解释：AI发来完整的内容块，直接更新消息
+     */
+    private void handleContent(String content) {
+        // 如果之前在思考，现在开始输出内容，说明思考完成
+        if (isThinking) {
+            isThinking = false;
+            callbackHandler.notifyThinkingStatusChanged(false);
+            ClaudeNotifier.setGenerating(project);
+            LOG.debug("Thinking completed, generating response");
+        }
+
+        assistantContent.append(content);
+
+        if (currentAssistantMessage == null) {
+            currentAssistantMessage = new Message(Message.Type.ASSISTANT, assistantContent.toString());
+            state.addMessage(currentAssistantMessage);
+        } else {
+            currentAssistantMessage.content = assistantContent.toString();
+        }
+
+        // 🔧 流式传输：流式模式下跳过全量更新
+        if (!isStreaming) {
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+        } else {
+            LOG.debug("Streaming active, skipping full message update in handleContent");
+        }
+    }
+
+    /**
      * 处理内容增量（流式输出）
      * 英文：Handle content delta (streaming output)
      * 解释：AI正在一字一字地说话
@@ -215,15 +312,18 @@ public class ClaudeMessageHandler implements MessageCallback {
             LOG.debug("Thinking completed, generating response");
         }
 
+        // 开始输出内容时，认为当前 thinking 段结束
+        thinkingSegmentActive = false;
+
+        // 累积内容用于最终消息
         assistantContent.append(content);
 
-        if (currentAssistantMessage == null) {
-            currentAssistantMessage = new Message(Message.Type.ASSISTANT, assistantContent.toString());
-            state.addMessage(currentAssistantMessage);
-        } else {
-            currentAssistantMessage.content = assistantContent.toString();
-        }
+        ensureCurrentAssistantMessageExists();
+        currentAssistantMessage.content = assistantContent.toString();
+        applyTextDeltaToRaw(content);
+        textSegmentActive = true;
 
+        // 🔧 流式渲染：通过 updateMessages 实时刷新（与 stream 分支一致）
         callbackHandler.notifyMessageUpdate(state.getMessages());
     }
 
@@ -441,5 +541,156 @@ public class ClaudeMessageHandler implements MessageCallback {
         } catch (Exception e) {
             LOG.warn("Failed to extract slash commands from system message: " + e.getMessage());
         }
+    }
+
+    // ===== 🔧 流式传输处理方法 =====
+    // Streaming message handlers
+    // 解释：处理实时流式传输的消息
+
+    /**
+     * 处理流式开始
+     * 英文：Handle stream start
+     * 解释：流式传输开始，通知前端准备接收增量内容
+     */
+    private void handleStreamStart() {
+        LOG.debug("Stream started");
+        isStreaming = true;  // 🔧 标记流式传输开始
+        textSegmentActive = false;
+        thinkingSegmentActive = false;
+        callbackHandler.notifyStreamStart();
+    }
+
+    /**
+     * 处理流式结束
+     * 英文：Handle stream end
+     * 解释：流式传输结束，通知前端完成消息
+     */
+    private void handleStreamEnd() {
+        LOG.debug("Stream ended");
+        isStreaming = false;  // 🔧 标记流式传输结束
+        textSegmentActive = false;
+        thinkingSegmentActive = false;
+        // 流式结束后，发送最终的消息更新，确保消息列表同步
+        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyStreamEnd();
+    }
+
+    /**
+     * 处理思考增量
+     * 英文：Handle thinking delta
+     * 解释：收到思考内容的增量，转发给前端实时显示
+     */
+    private void handleThinkingDelta(String content) {
+        // 确保思考状态已开启
+        if (!isThinking) {
+            isThinking = true;
+            callbackHandler.notifyThinkingStatusChanged(true);
+        }
+        // 🔧 流式思考：将 thinking delta 写入 raw，确保结束后不会丢失
+        ensureCurrentAssistantMessageExists();
+        applyThinkingDeltaToRaw(content);
+        thinkingSegmentActive = true;
+        callbackHandler.notifyMessageUpdate(state.getMessages());
+    }
+
+    private void ensureCurrentAssistantMessageExists() {
+        if (currentAssistantMessage == null) {
+            JsonObject raw = new JsonObject();
+            raw.addProperty("type", "assistant");
+            JsonObject messageObj = new JsonObject();
+            messageObj.add("content", new JsonArray());
+            raw.add("message", messageObj);
+            currentAssistantMessage = new Message(Message.Type.ASSISTANT, "", raw);
+            state.addMessage(currentAssistantMessage);
+        }
+        if (currentAssistantMessage.raw == null) {
+            JsonObject raw = new JsonObject();
+            raw.addProperty("type", "assistant");
+            JsonObject messageObj = new JsonObject();
+            messageObj.add("content", new JsonArray());
+            raw.add("message", messageObj);
+            currentAssistantMessage.raw = raw;
+        }
+    }
+
+    private JsonArray ensureAssistantContentArray() {
+        ensureCurrentAssistantMessageExists();
+        JsonObject raw = currentAssistantMessage.raw;
+        JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
+            ? raw.getAsJsonObject("message")
+            : new JsonObject();
+        JsonArray content = message.has("content") && message.get("content").isJsonArray()
+            ? message.getAsJsonArray("content")
+            : new JsonArray();
+        message.add("content", content);
+        raw.add("message", message);
+        currentAssistantMessage.raw = raw;
+        return content;
+    }
+
+    private void applyTextDeltaToRaw(String delta) {
+        if (delta == null || delta.isEmpty()) {
+            return;
+        }
+        JsonArray contentArray = ensureAssistantContentArray();
+        JsonObject target = null;
+
+        if (textSegmentActive) {
+            for (int i = contentArray.size() - 1; i >= 0; i--) {
+                if (!contentArray.get(i).isJsonObject()) {
+                    continue;
+                }
+                JsonObject block = contentArray.get(i).getAsJsonObject();
+                if (block.has("type") && "text".equals(block.get("type").getAsString())) {
+                    target = block;
+                    break;
+                }
+            }
+        }
+
+        if (target == null) {
+            target = new JsonObject();
+            target.addProperty("type", "text");
+            target.addProperty("text", "");
+            contentArray.add(target);
+        }
+
+        String existing = target.has("text") && !target.get("text").isJsonNull()
+            ? target.get("text").getAsString()
+            : "";
+        target.addProperty("text", existing + delta);
+    }
+
+    private void applyThinkingDeltaToRaw(String delta) {
+        if (delta == null || delta.isEmpty()) {
+            return;
+        }
+        JsonArray contentArray = ensureAssistantContentArray();
+        JsonObject target = null;
+
+        if (thinkingSegmentActive) {
+            for (int i = contentArray.size() - 1; i >= 0; i--) {
+                if (!contentArray.get(i).isJsonObject()) {
+                    continue;
+                }
+                JsonObject block = contentArray.get(i).getAsJsonObject();
+                if (block.has("type") && "thinking".equals(block.get("type").getAsString())) {
+                    target = block;
+                    break;
+                }
+            }
+        }
+
+        if (target == null) {
+            target = new JsonObject();
+            target.addProperty("type", "thinking");
+            target.addProperty("thinking", "");
+            contentArray.add(target);
+        }
+
+        String existing = target.has("thinking") && !target.get("thinking").isJsonNull()
+            ? target.get("thinking").getAsString()
+            : "";
+        target.addProperty("thinking", existing + delta);
     }
 }

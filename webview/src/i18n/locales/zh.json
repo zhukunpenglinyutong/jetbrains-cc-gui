@@ -71,7 +71,10 @@
     "retrying": "正在重试 ({{count}}/{{max}})...",
     "global": "全局",
     "localProject": "本项目",
-    "disabled": "已停用"
+    "disabled": "已停用",
+    "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
+    "sdkStatusLoading": "正在检查 SDK 状态...",
+    "goInstallSdk": "前往安装"
   },
   "settings": {
     "title": "设置",
@@ -120,10 +123,41 @@
       "editorFont": {
         "label": "字体（跟随编辑器字体）",
         "hint": "此处暂时不可修改，如需修改，请在 IDEA 设置 → 编辑器 → 字体 中调整（重启 IDEA 后本插件字体生效）"
+      },
+      "streaming": {
+        "label": "流式传输",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，AI 回复将实时逐字显示，而非等待完整响应后一次性展示。可能会消耗更多资源。"
       }
     },
     "providers": "供应商管理",
     "providersDesc": "管理 Claude API 供应商配置，切换不同的 API 服务提供商",
+    "dependencies": "SDK 依赖",
+    "dependenciesDesc": "管理 AI SDK 依赖包的安装和更新",
+    "dependency": {
+      "title": "SDK 依赖管理",
+      "description": "管理 AI SDK 依赖包。首次使用时需要安装对应的 SDK。",
+      "installPolicyTip": "为了减少包体积，SDK现在将需要主动安装",
+      "claudeSdkName": "Claude Code SDK",
+      "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相关依赖。",
+      "codexSdkName": "Codex SDK",
+      "codexSdkDescription": "Codex AI 功能所需。包含 OpenAI Codex SDK。",
+      "loading": "正在加载依赖状态...",
+      "install": "安装",
+      "installing": "安装中...",
+      "uninstall": "卸载",
+      "uninstalling": "卸载中...",
+      "update": "更新",
+      "updateAvailable": "有更新",
+      "installLogs": "安装日志",
+      "waitingForLogs": "等待日志输出...",
+      "nodeNotConfigured": "Node.js 未配置，请先在基础配置中设置 Node.js 路径。",
+      "installSuccess": "{{name}} 安装成功",
+      "installFailed": "安装失败: {{error}}",
+      "uninstallSuccess": "{{name}} 已卸载",
+      "uninstallFailed": "卸载失败: {{error}}"
+    },
     "usage": "使用统计",
     "usageDesc": "查看您的 Token 消耗、费用统计和使用趋势分析",
     "mcp": "MCP 服务器",
@@ -182,6 +216,9 @@
       "confirmConvert": "确认转换",
       "inUse": "使用中",
       "enable": "启用",
+      "localProviderName": "本地 settings.json",
+      "localProviderDescription": "直接使用 ~/.claude/settings.json 配置",
+      "localProviderHelp": "使用本地供应商模式时：\n• 插件不会修改您的 ~/.claude/settings.json 文件\n• 您需要手动管理配置\n• 确保文件存在且包含有效的 JSON\n• 适合喜欢手动控制的高级用户",
       "importDialog": {
         "title": "导入 cc-switch 配置",
         "summary": "共识别到 {{total}} 个配置，其中",
@@ -749,6 +786,7 @@
   "rewind": {
     "title": "回溯文件到之前的状态",
     "tooltip": "回溯",
+    "shortcut": "ESC ESC",
     "tooltipFull": "将文件恢复到此消息时的状态",
     "selectTitle": "选择回溯点",
     "noRewindableMessages": "当前会话中没有可回溯的消息",

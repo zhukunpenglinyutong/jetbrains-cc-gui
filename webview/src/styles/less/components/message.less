@@ -5,7 +5,6 @@
     overflow-y: auto;
     overflow-x: hidden; /* 防止横向滚动 */
     padding: 0;
-    scroll-behavior: smooth;
     background: var(--bg-primary);
 }
 
@@ -372,7 +371,7 @@
 /* Thinking Block - Minimalist */
 .thinking-block {
     margin-bottom: 16px;
-    font-size: 13px;
+    font-size: 12.5px;
 }
 
 .thinking-header {
@@ -385,6 +384,7 @@
     transition: opacity 0.2s;
     background: transparent;
     font-weight: 500;
+    font-size: 13px;
 }
 
 .thinking-header:hover {
@@ -400,14 +400,51 @@
     margin-top: 8px;
     padding-left: 12px;
     border-left: 2px solid var(--color-thinking-border);
-    color: var(--color-thinking-text);
-    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
-    font-size: 12.5px;
-    white-space: pre-wrap;
+    color: var(--text-tertiary);
+    font-family: inherit;
+    font-size: 12px;
     line-height: 1.5;
     word-wrap: break-word;
     overflow-wrap: break-word;
     max-width: 100%;
+}
+
+.thinking-content .markdown-content {
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+}
+
+.thinking-content .markdown-content h1, .thinking-content .markdown-content h2, .thinking-content .markdown-content h3,
+.thinking-content .markdown-content h4, .thinking-content .markdown-content h5, .thinking-content .markdown-content h6 {
+    color: inherit;
+    font-size: 1em;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.thinking-content .markdown-content code {
+    font-size: inherit;
+}
+
+.thinking-content .markdown-content pre {
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.thinking-content .markdown-content p {
+    margin-bottom: 0;
+    white-space: pre-wrap;
+}
+
+.thinking-content .markdown-content ul,
+.thinking-content .markdown-content ol {
+    margin: 0;
+}
+
+.thinking-content .markdown-content li {
+    margin-bottom: 0;
+    white-space: pre-wrap;
 }
 
 /* 思考状态指示器 */

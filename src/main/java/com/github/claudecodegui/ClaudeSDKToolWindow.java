@@ -171,6 +171,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private JBCefBrowser browser;
         private ClaudeSession session;
 
+        // ===== 🔧 Streaming message update coalescing =====
+        private static final int STREAM_MESSAGE_UPDATE_INTERVAL_MS = 50;
+        private final Object streamMessageUpdateLock = new Object();
+        private final Alarm streamMessageUpdateAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD);
+        private volatile boolean streamActive = false;
+        private volatile boolean streamMessageUpdateScheduled = false;
+        private volatile long lastStreamMessageUpdateAtMs = 0L;
+        private volatile long streamMessageUpdateSequence = 0L;
+        private volatile List<ClaudeSession.Message> pendingStreamMessages = null;
+        private volatile List<ClaudeSession.Message> lastMessagesSnapshot = null;
+
         private volatile boolean disposed = false;
         private volatile boolean initialized = false;
         private volatile boolean slashCommandsFetched = false;  // 标记是否已通过 API 获取了完整命令列表
@@ -344,6 +355,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void syncActiveProvider() {
             try {
+                if (settingsService.isLocalProviderActive()) {
+                    LOG.info("[ClaudeSDKToolWindow] Local provider active, skipping startup sync");
+                    return;
+                }
                 settingsService.applyActiveProviderToClaudeSettings();
             } catch (Exception e) {
                 LOG.warn("Failed to sync active provider on startup: " + e.getMessage());
@@ -391,6 +406,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
             messageDispatcher.registerHandler(new AgentHandler(handlerContext));
             messageDispatcher.registerHandler(new RewindHandler(handlerContext));
+            messageDispatcher.registerHandler(new DependencyHandler(handlerContext));
 
             // 权限处理器（需要特殊回调）
             this.permissionHandler = new PermissionHandler(handlerContext);
@@ -1114,6 +1130,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             session.setCallback(new ClaudeSession.SessionCallback() {
                 @Override
                 public void onMessageUpdate(List<ClaudeSession.Message> messages) {
+                    lastMessagesSnapshot = messages;
+
+                    if (streamActive) {
+                        enqueueStreamMessageUpdate(messages);
+                        return;
+                    }
+
                     LOG.info("[ClaudeSDKToolWindow] onMessageUpdate called, message count: " + messages.size());
                     if (!messages.isEmpty()) {
                         ClaudeSession.Message first = messages.get(0);
@@ -1183,6 +1206,169 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         LOG.debug("Received " + incomingCount + " slash commands (old format), but keeping existing commands with descriptions");
                     }
                 }
+
+                // ===== 🔧 流式传输回调方法 =====
+
+                @Override
+                public void onStreamStart() {
+                    synchronized (streamMessageUpdateLock) {
+                        streamActive = true;
+                        pendingStreamMessages = null;
+                        streamMessageUpdateAlarm.cancelAllRequests();
+                        streamMessageUpdateScheduled = false;
+                        lastStreamMessageUpdateAtMs = 0L;
+                        streamMessageUpdateSequence += 1;
+                    }
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("onStreamStart");
+                        LOG.debug("Stream started - notified frontend");
+                    });
+                }
+
+                @Override
+                public void onStreamEnd() {
+                    synchronized (streamMessageUpdateLock) {
+                        streamActive = false;
+                    }
+                    flushStreamMessageUpdates(() -> {
+                        callJavaScript("onStreamEnd");
+                        LOG.debug("Stream ended - notified frontend");
+                    });
+                }
+
+                @Override
+                public void onContentDelta(String delta) {
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("onContentDelta", JsUtils.escapeJs(delta));
+                    });
+                }
+
+                @Override
+                public void onThinkingDelta(String delta) {
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("onThinkingDelta", JsUtils.escapeJs(delta));
+                    });
+                }
+            });
+        }
+
+        private void enqueueStreamMessageUpdate(List<ClaudeSession.Message> messages) {
+            if (disposed) {
+                return;
+            }
+            synchronized (streamMessageUpdateLock) {
+                pendingStreamMessages = messages;
+            }
+            scheduleStreamMessageUpdatePush();
+        }
+
+        private void scheduleStreamMessageUpdatePush() {
+            if (disposed) {
+                return;
+            }
+
+            final int delayMs;
+            final long sequence;
+            synchronized (streamMessageUpdateLock) {
+                if (!streamActive) {
+                    return;
+                }
+                if (streamMessageUpdateScheduled) {
+                    return;
+                }
+                long elapsed = System.currentTimeMillis() - lastStreamMessageUpdateAtMs;
+                delayMs = (int) Math.max(0L, STREAM_MESSAGE_UPDATE_INTERVAL_MS - elapsed);
+                streamMessageUpdateScheduled = true;
+                sequence = ++streamMessageUpdateSequence;
+            }
+
+            streamMessageUpdateAlarm.addRequest(() -> {
+                final List<ClaudeSession.Message> snapshot;
+                synchronized (streamMessageUpdateLock) {
+                    streamMessageUpdateScheduled = false;
+                    lastStreamMessageUpdateAtMs = System.currentTimeMillis();
+                    snapshot = pendingStreamMessages;
+                    pendingStreamMessages = null;
+                }
+
+                if (disposed) {
+                    return;
+                }
+
+                if (snapshot != null) {
+                    sendStreamMessagesToWebView(snapshot, sequence, null);
+                }
+
+                boolean hasPending;
+                synchronized (streamMessageUpdateLock) {
+                    hasPending = pendingStreamMessages != null;
+                }
+                if (hasPending && streamActive && !disposed) {
+                    scheduleStreamMessageUpdatePush();
+                }
+            }, delayMs);
+        }
+
+        private void flushStreamMessageUpdates(Runnable afterFlushOnEdt) {
+            if (disposed) {
+                return;
+            }
+
+            final List<ClaudeSession.Message> snapshot;
+            final long sequence;
+            synchronized (streamMessageUpdateLock) {
+                streamMessageUpdateAlarm.cancelAllRequests();
+                streamMessageUpdateScheduled = false;
+                snapshot = pendingStreamMessages != null ? pendingStreamMessages : lastMessagesSnapshot;
+                pendingStreamMessages = null;
+                sequence = ++streamMessageUpdateSequence;
+            }
+
+            if (snapshot == null) {
+                if (afterFlushOnEdt != null) {
+                    ApplicationManager.getApplication().invokeLater(afterFlushOnEdt);
+                }
+                return;
+            }
+
+            sendStreamMessagesToWebView(snapshot, sequence, afterFlushOnEdt);
+        }
+
+        private void sendStreamMessagesToWebView(
+            List<ClaudeSession.Message> messages,
+            long sequence,
+            Runnable afterSendOnEdt
+        ) {
+            ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                final String escapedMessagesJson;
+                try {
+                    escapedMessagesJson = JsUtils.escapeJs(convertMessagesToJson(messages));
+                } catch (Exception e) {
+                    LOG.warn("Failed to serialize messages for streaming update: " + e.getMessage(), e);
+                    if (afterSendOnEdt != null) {
+                        ApplicationManager.getApplication().invokeLater(afterSendOnEdt);
+                    }
+                    return;
+                }
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (disposed) {
+                        return;
+                    }
+
+                    synchronized (streamMessageUpdateLock) {
+                        if (sequence != streamMessageUpdateSequence) {
+                            return;
+                        }
+                    }
+
+                    callJavaScript("updateMessages", escapedMessagesJson);
+                    pushUsageUpdateFromMessages(messages);
+
+                    if (afterSendOnEdt != null) {
+                        afterSendOnEdt.run();
+                    }
+                });
             });
         }
 
@@ -1672,6 +1858,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
             if (contextUpdateAlarm != null) {
                 contextUpdateAlarm.dispose();
+            }
+            try {
+                streamMessageUpdateAlarm.cancelAllRequests();
+                streamMessageUpdateAlarm.dispose();
+            } catch (Exception e) {
+                LOG.warn("Failed to dispose stream message update alarm: " + e.getMessage());
             }
 
             // 清理斜杠命令缓存

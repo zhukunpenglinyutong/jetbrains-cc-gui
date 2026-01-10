@@ -374,6 +374,10 @@ export interface ChatInputBoxProps {
   onProviderSelect?: (providerId: string) => void;
   /** 切换思考模式 */
   onToggleThinking?: (enabled: boolean) => void;
+  /** 是否开启流式传输 */
+  streamingEnabled?: boolean;
+  /** 切换流式传输 */
+  onStreamingEnabledChange?: (enabled: boolean) => void;
 
   /** 当前选中的智能体 */
   selectedAgent?: SelectedAgent | null;
@@ -388,6 +392,15 @@ export interface ChatInputBoxProps {
   hasMessages?: boolean;
   /** 回溯文件回调 */
   onRewind?: () => void;
+
+  /** 🔧 SDK 是否已安装（用于在未安装时禁止提问） */
+  sdkInstalled?: boolean;
+  /** 🔧 SDK 状态是否正在加载 */
+  sdkStatusLoading?: boolean;
+  /** 🔧 前往安装 SDK 回调 */
+  onInstallSdk?: () => void;
+  /** 显示 Toast 提示 */
+  addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
 /**
@@ -421,6 +434,10 @@ export interface ButtonAreaProps {
   alwaysThinkingEnabled?: boolean;
   /** 切换思考模式 */
   onToggleThinking?: (enabled: boolean) => void;
+  /** 是否开启流式传输 */
+  streamingEnabled?: boolean;
+  /** 切换流式传输 */
+  onStreamingEnabledChange?: (enabled: boolean) => void;
   /** 当前选中的智能体 */
   selectedAgent?: SelectedAgent | null;
   /** 智能体选择回调 */

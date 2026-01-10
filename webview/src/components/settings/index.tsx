@@ -16,6 +16,7 @@ import SettingsHeader from './SettingsHeader';
 import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
 import BasicConfigSection from './BasicConfigSection';
 import ProviderManageSection from './ProviderManageSection';
+import DependencySection from './DependencySection';
 import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
 import CommunitySection from './CommunitySection';
@@ -154,6 +155,9 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
     fontSize: number;
     lineSpacing: number;
   } | undefined>();
+
+  // 🔧 流式传输配置
+  const [streamingEnabled, setStreamingEnabled] = useState<boolean>(false);
 
   // Toast 状态管理
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -321,6 +325,16 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
       }
     };
 
+    // 🔧 流式传输配置回调
+    window.updateStreamingEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setStreamingEnabled(data.streamingEnabled ?? false);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse streaming config:', error);
+      }
+    };
+
     // Agent 智能体回调
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
@@ -412,6 +426,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
     sendToJava('get_working_directory:');
     // 加载 IDEA 编辑器字体配置
     sendToJava('get_editor_font_config:');
+    // 🔧 加载流式传输配置
+    sendToJava('get_streaming_enabled:');
 
     return () => {
       // 清理超时定时器
@@ -430,6 +446,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
       window.onEditorFontConfigReceived = undefined;
+      window.updateStreamingEnabled = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       // Cleanup Codex callbacks
@@ -554,6 +571,13 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
     setSavingWorkingDirectory(true);
     const payload = { customWorkingDir: (workingDirectory || '').trim() };
     sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
+  };
+
+  // 🔧 流式传输开关变更处理
+  const handleStreamingEnabledChange = (enabled: boolean) => {
+    setStreamingEnabled(enabled);
+    const payload = { streamingEnabled: enabled };
+    sendToJava(`set_streaming_enabled:${JSON.stringify(payload)}`);
   };
 
   const handleEditProvider = (provider: ProviderConfig) => {
@@ -834,6 +858,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
               onSaveWorkingDirectory={handleSaveWorkingDirectory}
               savingWorkingDirectory={savingWorkingDirectory}
               editorFontConfig={editorFontConfig}
+              streamingEnabled={streamingEnabled}
+              onStreamingEnabledChange={handleStreamingEnabledChange}
             />
           )}
 
@@ -935,6 +961,9 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
               )}
             </div>
           )}
+
+          {/* SDK 依赖管理 */}
+          {currentTab === 'dependencies' && <DependencySection addToast={addToast} />}
 
           {/* 使用统计 */}
           {currentTab === 'usage' && <UsageSection currentProvider={currentProvider} />}

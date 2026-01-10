@@ -21,7 +21,8 @@ export async function handleClaudeCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
-        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt } = stdinData;
+        // 🔧 解构时包含 streaming 参数
+        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming } = stdinData;
         await claudeSendMessage(
           message,
           sessionId || '',
@@ -29,7 +30,8 @@ export async function handleClaudeCommand(command, args, stdinData) {
           permissionMode || '',
           model || '',
           openedFiles || null,
-          agentPrompt || null
+          agentPrompt || null,
+          streaming  // 🔧 传递 streaming 参数
         );
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
@@ -39,14 +41,15 @@ export async function handleClaudeCommand(command, args, stdinData) {
 
     case 'sendWithAttachments': {
       if (stdinData && stdinData.message !== undefined) {
-        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt } = stdinData;
+        // 🔧 解构时包含 streaming 参数
+        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming } = stdinData;
         await claudeSendMessageWithAttachments(
           message,
           sessionId || '',
           cwd || '',
           permissionMode || '',
           model || '',
-          attachments ? { attachments, openedFiles, agentPrompt } : { openedFiles, agentPrompt }
+          attachments ? { attachments, openedFiles, agentPrompt, streaming } : { openedFiles, agentPrompt, streaming }
         );
       } else {
         await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);

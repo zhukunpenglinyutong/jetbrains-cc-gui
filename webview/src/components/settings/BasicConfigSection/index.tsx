@@ -41,6 +41,9 @@ interface BasicConfigSectionProps {
     fontSize: number;
     lineSpacing: number;
   };
+  // 🔧 流式传输配置
+  streamingEnabled?: boolean;
+  onStreamingEnabledChange?: (enabled: boolean) => void;
 }
 
 const BasicConfigSection = ({
@@ -59,6 +62,9 @@ const BasicConfigSection = ({
   onSaveWorkingDirectory = () => {},
   savingWorkingDirectory = false,
   editorFontConfig,
+  // 🔧 流式传输配置
+  streamingEnabled = false,
+  onStreamingEnabledChange = () => {},
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
 
@@ -285,6 +291,32 @@ const BasicConfigSection = ({
           <span>
             {t('settings.basic.workingDirectory.hint')}
           </span>
+        </small>
+      </div>
+
+      {/* 🔧 流式传输配置 */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-sync" />
+          <span className={styles.fieldLabel}>{t('settings.basic.streaming.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={streamingEnabled}
+            onChange={(e) => onStreamingEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {streamingEnabled
+              ? t('settings.basic.streaming.enabled')
+              : t('settings.basic.streaming.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.streaming.hint')}</span>
         </small>
       </div>
     </div>

@@ -10,7 +10,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.5-beta1'
+version = '0.1.5-beta2'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -215,18 +215,45 @@ tasks.register('packageAiBridge', Exec) {
     }
 
     // 使用系统 zip 命令，-r 递归，-y 保留符号链接
+    // 排除 SDK 包（它们将由用户按需安装到 ~/.codemoss/dependencies/）
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        // Windows: 使用 PowerShell 的 Compress-Archive
+        // Windows: 使用 PowerShell 排除 SDK 包
+        // Compress-Archive 不支持排除模式，需要先复制到临时目录
         // Use parameter array to prevent command injection
-        commandLine 'powershell', '-Command', 'Compress-Archive',
-            '-Path', '*',
-            '-DestinationPath', aiBridgeArchive.absolutePath,
-            '-Force'
+        commandLine 'powershell', '-Command', '''
+            $excludeDirs = @(
+                "node_modules\\.pnpm",
+                "node_modules\\@anthropic-ai",
+                "node_modules\\@openai"
+            )
+            $tempDir = Join-Path $env:TEMP "ai-bridge-temp-$(Get-Random)"
+            New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+            Get-ChildItem -Path . -Recurse | Where-Object {
+                $path = $_.FullName
+                -not ($excludeDirs | Where-Object { $path -like "*$_*" })
+            } | ForEach-Object {
+                $dest = Join-Path $tempDir $_.FullName.Substring((Get-Location).Path.Length + 1)
+                if ($_.PSIsContainer) {
+                    New-Item -ItemType Directory -Path $dest -Force | Out-Null
+                } else {
+                    $destDir = Split-Path $dest -Parent
+                    if (-not (Test-Path $destDir)) {
+                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                    }
+                    Copy-Item $_.FullName -Destination $dest -Force
+                }
+            }
+            Compress-Archive -Path "$tempDir\\*" -DestinationPath "''' + aiBridgeArchive.absolutePath + '''" -Force
+            Remove-Item -Path $tempDir -Recurse -Force
+        '''
     } else {
         // Unix/Linux/macOS: 使用 zip 命令保留权限
+        // 排除 SDK 包目录
         commandLine 'zip', '-r', '-y', aiBridgeArchive.absolutePath,
             '.',
-            '-x', '*/node_modules/.pnpm/*'
+            '-x', '*/node_modules/.pnpm/*',
+            '-x', '*/node_modules/@anthropic-ai/*',
+            '-x', '*/node_modules/@openai/*'
     }
 
     doLast {

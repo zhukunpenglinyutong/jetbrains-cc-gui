@@ -29,6 +29,7 @@ marked.setOptions({
 
 interface MarkdownBlockProps {
   content?: string;
+  isStreaming?: boolean; // App.tsx 传递的属性，MarkdownBlock 不使用
 }
 
 const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {

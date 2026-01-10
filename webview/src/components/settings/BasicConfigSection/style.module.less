@@ -327,6 +327,70 @@
   }
 }
 
+.workingDirSection {
+  margin-bottom: 24px;
+}
+
+/* 🔧 流式传输开关样式 */
+.streamingSection {
+  margin-bottom: 24px;
+}
+
+.toggleWrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+
+.toggleInput {
+  display: none;
+}
+
+.toggleSlider {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: var(--text-tertiary);
+    border-radius: 50%;
+    transition: all 0.2s ease;
+  }
+}
+
+.toggleInput:checked + .toggleSlider {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+
+  &::after {
+    left: 22px;
+    background: #ffffff;
+  }
+}
+
+.toggleInput:focus + .toggleSlider {
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.3);
+}
+
+.toggleLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 /* 响应式适配 */
 @media (max-width: 480px) {
   .sectionTitle {
