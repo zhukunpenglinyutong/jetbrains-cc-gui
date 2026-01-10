@@ -628,6 +628,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                                     earlyOutput.append(line).append("\n");
                                     LOG.error("[ClaudeSDKBridge] Process output: " + line);
                                 }
+                                LOG.debug("[ClaudeSDKBridge] Early exit - captured " + earlyOutput.length() + " chars");
                                 if (earlyOutput.length() > 0) {
                                     lastNodeError[0] = earlyOutput.toString().trim();
                                 }
@@ -753,10 +754,12 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                         }
                     }
 
+                    LOG.debug("[ClaudeSDKBridge] Output loop ended, waiting for process to exit...");
                     process.waitFor();
 
                     int exitCode = process.exitValue();
                     boolean wasInterrupted = processManager.wasInterrupted(channelId);
+                    LOG.debug("[ClaudeSDKBridge] Process exited, exitCode=" + exitCode + ", wasInterrupted=" + wasInterrupted + ", hadSendError=" + hadSendError[0]);
 
                     result.finalResult = assistantContent.toString();
                     result.messageCount = result.messages.size();
@@ -769,12 +772,19 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                             callback.onComplete(result);
                         } else {
                             String errorMsg = "Process exited with code: " + exitCode;
+
                             if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
                                 errorMsg = errorMsg + "\n\nDetails: " + lastNodeError[0];
                             }
                             result.success = false;
                             result.error = errorMsg;
                             callback.onError(errorMsg);
+                        }
+                    } else {
+                        // 已经有 SEND_ERROR，不再附加输出
+                        if (exitCode == 0) {
+                            result.success = true;
+                            callback.onComplete(result);
                         }
                     }
 

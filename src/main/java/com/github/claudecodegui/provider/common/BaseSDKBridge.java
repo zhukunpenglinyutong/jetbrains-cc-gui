@@ -217,7 +217,6 @@ public abstract class BaseSDKBridge {
             StringBuilder assistantContent = new StringBuilder();
             final boolean[] hadSendError = {false};
             final String[] lastNodeError = {null};
-            final StringBuilder allOutput = new StringBuilder(); // 捕获所有输出
 
             try {
                 File bridgeDir = getDirectoryResolver().findSdkDir();
@@ -276,8 +275,6 @@ public abstract class BaseSDKBridge {
 
                         String line;
                         while ((line = reader.readLine()) != null) {
-                            // Capture all output
-                            allOutput.append(line).append("\n");
 
                             // Capture Node.js error logs
                             if (line.startsWith("[UNCAUGHT_ERROR]")
@@ -312,24 +309,16 @@ public abstract class BaseSDKBridge {
                             callback.onComplete(result);
                         } else {
                             String errorMsg = getProviderName() + " process exited with code: " + exitCode;
-
-                            // Detach recent output for context
-                            String fullOutput = allOutput.toString().trim();
-                            if (!fullOutput.isEmpty()) {
-                                String[] lines = fullOutput.split("\n");
-                                int startLine = Math.max(0, lines.length - 50);
-                                StringBuilder recentOutput = new StringBuilder();
-                                for (int i = startLine; i < lines.length; i++) {
-                                    recentOutput.append(lines[i]).append("\n");
-                                }
-                                errorMsg = errorMsg + "\n\nRecent Output:\n" + recentOutput.toString();
-                            }
-
                             if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
                                 errorMsg = errorMsg + "\n\nDetails: " + lastNodeError[0];
                             }
                             result.error = errorMsg;
                             callback.onError(errorMsg);
+                        }
+                    } else {
+                        // 发送阶段已处理错误，不再附加 Recent Output
+                        if (exitCode != 0 && result.error != null) {
+                            callback.onError(result.error);
                         }
                     }
 
