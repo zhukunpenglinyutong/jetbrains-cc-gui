@@ -3,10 +3,55 @@
  * 负责通过 Claude Agent SDK 发送消息
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import Anthropic from '@anthropic-ai/sdk';
-import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
+// SDK 动态加载 - 不再静态导入，而是按需加载
+import {
+    loadClaudeSdk,
+    loadAnthropicSdk,
+    loadBedrockSdk,
+    isClaudeSdkAvailable
+} from '../../utils/sdk-loader.js';
 import { randomUUID } from 'crypto';
+
+// SDK 缓存
+let claudeSdk = null;
+let anthropicSdk = null;
+let bedrockSdk = null;
+
+/**
+ * 确保 Claude SDK 已加载
+ */
+async function ensureClaudeSdk() {
+    if (!claudeSdk) {
+        if (!isClaudeSdkAvailable()) {
+            const error = new Error('Claude Code SDK not installed. Please install via Settings > Dependencies.');
+            error.code = 'SDK_NOT_INSTALLED';
+            error.provider = 'claude';
+            throw error;
+        }
+        claudeSdk = await loadClaudeSdk();
+    }
+    return claudeSdk;
+}
+
+/**
+ * 确保 Anthropic SDK 已加载
+ */
+async function ensureAnthropicSdk() {
+    if (!anthropicSdk) {
+        anthropicSdk = await loadAnthropicSdk();
+    }
+    return anthropicSdk;
+}
+
+/**
+ * 确保 Bedrock SDK 已加载
+ */
+async function ensureBedrockSdk() {
+    if (!bedrockSdk) {
+        bedrockSdk = await loadBedrockSdk();
+    }
+    return bedrockSdk;
+}
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -207,6 +252,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	  let streamStarted = false;
 	  let streamEnded = false;
 	  try {
+    // 动态加载 Claude SDK
+    const sdk = await ensureClaudeSdk();
+    const { query } = sdk;
+
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
@@ -588,6 +637,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
  */
 export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl, authType) {
   try {
+    // 动态加载 Anthropic SDK
+    const anthropicModule = await ensureAnthropicSdk();
+    const Anthropic = anthropicModule.default || anthropicModule.Anthropic || anthropicModule;
+
     const workingDirectory = selectWorkingDirectory(cwd);
     try { process.chdir(workingDirectory); } catch {}
 
@@ -611,6 +664,9 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
     } else if (authType === 'aws_bedrock') {
         console.log('[DEBUG] Using AWS_BEDROCK authentication (AWS_BEDROCK)');
+        // 动态加载 Bedrock SDK
+        const bedrockModule = await ensureBedrockSdk();
+        const AnthropicBedrock = bedrockModule.AnthropicBedrock || bedrockModule.default || bedrockModule;
         client = new AnthropicBedrock();
     } else {
       console.log('[DEBUG] Using API Key authentication (ANTHROPIC_API_KEY)');
@@ -861,6 +917,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
     // 🔧 从 stdinData 或 settings.json 读取流式传输配置
     // 注意：使用 != null 同时处理 null 和 undefined
+    // 注意：变量已在 try 块外部声明，这里只赋值
     const streamingParam = stdinData?.streaming;
     streamingEnabled = streamingParam != null
       ? streamingParam
@@ -928,6 +985,10 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	      options.resume = resumeSessionId;
 	      console.log('[RESUMING]', resumeSessionId);
 	    }
+
+		    // 动态加载 Claude SDK
+		    const sdk = await ensureClaudeSdk();
+		    const { query } = sdk;
 
 		    const result = query({
 		      prompt: inputStream,

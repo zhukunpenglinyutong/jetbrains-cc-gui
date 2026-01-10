@@ -26,6 +26,7 @@
 import { readStdinData } from './utils/stdin-utils.js';
 import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
+import { getSdkStatus, isClaudeSdkAvailable, isCodexSdkAvailable } from './utils/sdk-loader.js';
 
 // 命令行参数解析
 const provider = process.argv[2];
@@ -51,9 +52,49 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
+/**
+ * 处理系统级命令（如 SDK 状态检查）
+ */
+async function handleSystemCommand(command, args, stdinData) {
+  switch (command) {
+    case 'getSdkStatus':
+      // 返回所有 SDK 的安装状态
+      const status = getSdkStatus();
+      console.log(JSON.stringify({
+        success: true,
+        data: status
+      }));
+      break;
+
+    case 'checkClaudeSdk':
+      // 检查 Claude SDK 是否可用
+      console.log(JSON.stringify({
+        success: true,
+        available: isClaudeSdkAvailable()
+      }));
+      break;
+
+    case 'checkCodexSdk':
+      // 检查 Codex SDK 是否可用
+      console.log(JSON.stringify({
+        success: true,
+        available: isCodexSdkAvailable()
+      }));
+      break;
+
+    default:
+      console.log(JSON.stringify({
+        success: false,
+        error: 'Unknown system command: ' + command
+      }));
+      process.exit(1);
+  }
+}
+
 const providerHandlers = {
   claude: handleClaudeCommand,
-  codex: handleCodexCommand
+  codex: handleCodexCommand,
+  system: handleSystemCommand
 };
 
 // 执行命令
@@ -61,7 +102,7 @@ const providerHandlers = {
   try {
     // 验证 provider
     if (!provider || !providerHandlers[provider]) {
-      console.error('Invalid provider. Use "claude" or "codex"');
+      console.error('Invalid provider. Use "claude", "codex", or "system"');
       console.log(JSON.stringify({
         success: false,
         error: 'Invalid provider: ' + provider

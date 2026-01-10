@@ -10,10 +10,24 @@
  * - 相关文件信息
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { loadClaudeSdk, isClaudeSdkAvailable } from '../utils/sdk-loader.js';
 import { setupApiKey, loadClaudeSettings } from '../config/api-config.js';
 import { mapModelIdToSdkName } from '../utils/model-utils.js';
 import { homedir } from 'os';
+
+let claudeSdk = null;
+
+async function ensureClaudeSdk() {
+  if (!claudeSdk) {
+    if (!isClaudeSdkAvailable()) {
+      const error = new Error('Claude Code SDK not installed. Please install via Settings > Dependencies.');
+      error.code = 'SDK_NOT_INSTALLED';
+      throw error;
+    }
+    claudeSdk = await loadClaudeSdk();
+  }
+  return claudeSdk;
+}
 
 // 上下文长度限制（字符数），避免超出模型 token 限制
 const MAX_SELECTED_CODE_LENGTH = 2000;      // 选中代码最大长度
@@ -228,6 +242,9 @@ function buildFullPrompt(originalPrompt, context) {
  */
 async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
   try {
+    const sdk = await ensureClaudeSdk();
+    const { query } = sdk;
+
     // 设置环境变量（与正常对话功能相同）
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
@@ -357,4 +374,3 @@ async function main() {
 }
 
 main();
-
