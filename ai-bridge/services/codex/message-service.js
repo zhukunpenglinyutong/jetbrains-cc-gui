@@ -13,9 +13,29 @@
  * @author Crafted with geek spirit
  */
 
-import { Codex } from '@openai/codex-sdk';
+// SDK 动态加载 - 不再静态导入，而是按需加载
+import { loadCodexSdk, isCodexSdkAvailable } from '../../utils/sdk-loader.js';
 import { CodexPermissionMapper } from '../../utils/permission-mapper.js';
 import { randomUUID } from 'crypto';
+
+// SDK 缓存
+let codexSdk = null;
+
+/**
+ * 确保 Codex SDK 已加载
+ */
+async function ensureCodexSdk() {
+    if (!codexSdk) {
+        if (!isCodexSdkAvailable()) {
+            const error = new Error('Codex SDK not installed. Please install via Settings > Dependencies.');
+            error.code = 'SDK_NOT_INSTALLED';
+            error.provider = 'codex';
+            throw error;
+        }
+        codexSdk = await loadCodexSdk();
+    }
+    return codexSdk;
+}
 
 const MAX_TOOL_RESULT_CHARS = 20000;
 
@@ -52,8 +72,12 @@ export async function sendMessage(
     console.log('[MESSAGE_START]');
 
     // ============================================================
-    // 1. Initialize Codex SDK
+    // 1. Initialize Codex SDK (动态加载)
     // ============================================================
+
+    // 动态加载 Codex SDK
+    const sdk = await ensureCodexSdk();
+    const Codex = sdk.Codex || sdk.default || sdk;
 
     const codexOptions = {};
 

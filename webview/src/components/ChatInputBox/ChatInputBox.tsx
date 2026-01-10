@@ -69,6 +69,10 @@ export const ChatInputBox = ({
   onOpenAgentSettings,
   hasMessages,
   onRewind,
+  sdkInstalled = true, // 默认为 true，避免初始状态时禁用输入框
+  sdkStatusLoading = false, // SDK 状态是否正在加载
+  onInstallSdk,
+  addToast,
 }: ChatInputBoxProps) => {
   const { t } = useTranslation();
 
@@ -728,6 +732,19 @@ export const ChatInputBox = ({
     // Remove zero-width spaces and other invisible characters
     const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
+    if (sdkStatusLoading) {
+      // SDK 状态加载中，不允许发送
+      addToast?.(t('chat.sdkStatusLoading'), 'info');
+      return;
+    }
+
+    if (!sdkInstalled) {
+      // 提示用户去下载依赖包
+      addToast?.(t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' }) + ' ' + t('chat.goInstallSdk'), 'warning');
+      onInstallSdk?.();
+      return;
+    }
+
     // 只在判断是否为空时使用 trim，不修改实际发送的内容
     if (!cleanContent && attachments.length === 0) {
       return;
@@ -760,6 +777,12 @@ export const ChatInputBox = ({
     fileCompletion,
     commandCompletion,
     agentCompletion,
+    sdkStatusLoading,
+    sdkInstalled,
+    onInstallSdk,
+    addToast,
+    t,
+    currentProvider,
   ]);
 
   /**
@@ -1098,13 +1121,17 @@ export const ChatInputBox = ({
     // Enter 发送（非 Shift 组合，非 IME 组合）
     if (isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing) {
       e.preventDefault();
+      if (sdkStatusLoading || !sdkInstalled) {
+        // SDK 状态加载中或未安装时，回车不发送
+        return;
+      }
       submittedOnEnterRef.current = true;
       handleSubmit();
       return;
     }
 
     // Shift+Enter 允许换行（默认行为）
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion]);
+  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion, sdkStatusLoading, sdkInstalled]);
 
   const handleKeyUp = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     const isEnterKey =
@@ -1744,6 +1771,26 @@ export const ChatInputBox = ({
 
   return (
     <div className="chat-input-box" onClick={focusInput} ref={containerRef}>
+      {/* 🔧 SDK 状态加载中或未安装时的提示条 */}
+      {(sdkStatusLoading || !sdkInstalled) && (
+        <div className={`sdk-warning-bar ${sdkStatusLoading ? 'sdk-loading' : ''}`}>
+          <span className={`codicon ${sdkStatusLoading ? 'codicon-loading codicon-modifier-spin' : 'codicon-warning'}`} />
+          <span className="sdk-warning-text">
+            {sdkStatusLoading
+              ? t('chat.sdkStatusLoading')
+              : t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' })}
+          </span>
+          {!sdkStatusLoading && (
+            <button className="sdk-install-btn" onClick={(e) => {
+              e.stopPropagation();
+              onInstallSdk?.();
+            }}>
+              {t('chat.goInstallSdk')}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 附件列表 */}
       {attachments.length > 0 && (
         <AttachmentList

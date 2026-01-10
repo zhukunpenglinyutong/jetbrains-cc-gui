@@ -356,4 +356,48 @@ interface Window {
    * Rewind result callback - 回滚操作结果回调
    */
   onRewindResult?: (json: string) => void;
+
+  // ============================================================================
+  // 🔧 依赖管理回调函数
+  // ============================================================================
+
+  /**
+   * Update dependency status callback - 更新依赖状态
+   */
+  updateDependencyStatus?: (json: string) => void;
+
+  /**
+   * Dependency install progress callback - 依赖安装进度
+   */
+  dependencyInstallProgress?: (json: string) => void;
+
+  /**
+   * Dependency install result callback - 依赖安装结果
+   */
+  dependencyInstallResult?: (json: string) => void;
+
+  /**
+   * Dependency uninstall result callback - 依赖卸载结果
+   */
+  dependencyUninstallResult?: (json: string) => void;
+
+  /**
+   * Node environment status callback - Node.js 环境状态
+   */
+  nodeEnvironmentStatus?: (json: string) => void;
+
+  /**
+   * Dependency update available callback - 依赖更新检查结果
+   */
+  dependencyUpdateAvailable?: (json: string) => void;
+
+  /**
+   * Pending dependency updates payload before settings initialization
+   */
+  __pendingDependencyUpdates?: string;
+
+  /**
+   * Pending dependency status payload before React initialization
+   */
+  __pendingDependencyStatus?: string;
 }

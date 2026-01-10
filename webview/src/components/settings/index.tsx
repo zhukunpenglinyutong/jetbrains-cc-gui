@@ -16,6 +16,7 @@ import SettingsHeader from './SettingsHeader';
 import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
 import BasicConfigSection from './BasicConfigSection';
 import ProviderManageSection from './ProviderManageSection';
+import DependencySection from './DependencySection';
 import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
 import CommunitySection from './CommunitySection';
@@ -960,6 +961,9 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
               )}
             </div>
           )}
+
+          {/* SDK 依赖管理 */}
+          {currentTab === 'dependencies' && <DependencySection addToast={addToast} />}
 
           {/* 使用统计 */}
           {currentTab === 'usage' && <UsageSection currentProvider={currentProvider} />}
