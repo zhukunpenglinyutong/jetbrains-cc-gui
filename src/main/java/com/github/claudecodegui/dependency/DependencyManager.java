@@ -269,54 +269,127 @@ public class DependencyManager {
             createPackageJson(sdkDir, sdk);
             log.accept("Created package.json");
 
-            // 4. 执行 npm install
-            log.accept("Running npm install...");
-            List<String> packages = sdk.getAllPackages();
+            // 4. 预检查 npm 缓存权限
+            log.accept("Checking npm cache permissions...");
+            if (!NpmPermissionHelper.checkCachePermission()) {
+                log.accept("⚠️ Warning: npm cache may have permission issues, attempting to fix...");
 
-            // 🔧 再次校验：确保使用规范化后的路径
-            String safeSdkDirPath = normalizedSdkDir.toString();
-
-            List<String> command = new ArrayList<>();
-            command.add(npmPath);
-            command.add("install");
-            command.add("--prefix");
-            command.add(safeSdkDirPath);
-            command.addAll(packages);
-
-            ProcessBuilder pb = new ProcessBuilder(command);
-            pb.directory(sdkDir.toFile());
-            pb.redirectErrorStream(true);
-            configureProcessEnvironment(pb);
-
-            Process process = pb.start();
-
-            // 实时读取输出
-            try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    log.accept(line);
+                // 尝试清理缓存
+                if (NpmPermissionHelper.cleanNpmCache(npmPath)) {
+                    log.accept("✓ npm cache cleaned successfully");
+                } else if (NpmPermissionHelper.forceDeleteCache()) {
+                    log.accept("✓ npm cache directory deleted successfully");
+                } else {
+                    log.accept("⚠️ Warning: Could not clean cache automatically, will try installation anyway");
                 }
             }
 
-            boolean finished = process.waitFor(3, TimeUnit.MINUTES);
-            if (!finished) {
-                process.destroyForcibly();
-                return InstallResult.failure(sdkId, "Installation timed out (3 minutes)", logs.toString());
+            // 5. 执行 npm install（带重试机制）
+            List<String> packages = sdk.getAllPackages();
+            int maxRetries = 2;
+            InstallResult lastResult = null;
+
+            for (int attempt = 0; attempt <= maxRetries; attempt++) {
+                if (attempt > 0) {
+                    log.accept("\n🔄 Retry attempt " + attempt + "/" + maxRetries + "...");
+                }
+
+                log.accept("Running npm install...");
+                List<String> command = NpmPermissionHelper.buildInstallCommandWithFallback(
+                    npmPath, normalizedSdkDir, packages, attempt
+                );
+
+                ProcessBuilder pb = new ProcessBuilder(command);
+                pb.directory(sdkDir.toFile());
+                pb.redirectErrorStream(true);
+                configureProcessEnvironment(pb);
+
+                Process process = pb.start();
+
+                // 实时读取输出并收集日志
+                StringBuilder installLogs = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        log.accept(line);
+                        installLogs.append(line).append("\n");
+                    }
+                }
+
+                boolean finished = process.waitFor(3, TimeUnit.MINUTES);
+                if (!finished) {
+                    process.destroyForcibly();
+                    lastResult = InstallResult.failure(sdkId,
+                        "Installation timed out (3 minutes)", logs.toString());
+                    continue; // 尝试重试
+                }
+
+                int exitCode = process.exitValue();
+                if (exitCode == 0) {
+                    // 安装成功，跳到后续步骤
+                    break;
+                }
+
+                // 安装失败，记录结果
+                String logsStr = logs.toString();
+                lastResult = InstallResult.failure(sdkId,
+                    "npm install failed with exit code: " + exitCode, logsStr);
+
+                // 如果是最后一次尝试，不再重试
+                if (attempt == maxRetries) {
+                    // 添加错误解决方案提示
+                    String solution = NpmPermissionHelper.generateErrorSolution(logsStr);
+                    return InstallResult.failure(sdkId,
+                        lastResult.getErrorMessage() + solution,
+                        lastResult.getLogs());
+                }
+
+                // 检测错误类型并尝试修复
+                boolean fixed = false;
+                if (NpmPermissionHelper.hasPermissionError(logsStr) ||
+                    NpmPermissionHelper.hasCacheError(logsStr)) {
+
+                    log.accept("⚠️ Detected npm cache/permission error, attempting to fix...");
+
+                    // 策略1: 清理缓存
+                    if (NpmPermissionHelper.cleanNpmCache(npmPath)) {
+                        log.accept("✓ Cache cleaned, will retry");
+                        fixed = true;
+                    } else if (NpmPermissionHelper.forceDeleteCache()) {
+                        log.accept("✓ Cache deleted, will retry");
+                        fixed = true;
+                    }
+
+                    // 策略2: 修复权限（Unix only）
+                    if (!fixed && !PlatformUtils.isWindows()) {
+                        log.accept("Attempting to fix cache ownership (may require password)...");
+                        if (NpmPermissionHelper.fixCacheOwnership()) {
+                            log.accept("✓ Ownership fixed, will retry");
+                            fixed = true;
+                        }
+                    }
+                }
+
+                if (!fixed) {
+                    log.accept("⚠️ Could not auto-fix the issue, will retry with --force flag");
+                }
+
+                // 短暂延迟后重试
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return InstallResult.failure(sdkId, "Installation interrupted", logs.toString());
+                }
             }
 
-            int exitCode = process.exitValue();
-            if (exitCode != 0) {
-                return InstallResult.failure(sdkId,
-                    "npm install failed with exit code: " + exitCode, logs.toString());
-            }
-
-            // 5. 创建安装标记文件
+            // 6. 创建安装标记文件
             String installedVersion = getInstalledVersion(sdkId);
             Path markerFile = sdkDir.resolve(INSTALLED_MARKER);
             Files.writeString(markerFile, installedVersion != null ? installedVersion : "unknown");
 
-            // 6. 更新 manifest
+            // 7. 更新 manifest
             updateManifest(sdkId, installedVersion);
 
             log.accept("Installation completed successfully!");
