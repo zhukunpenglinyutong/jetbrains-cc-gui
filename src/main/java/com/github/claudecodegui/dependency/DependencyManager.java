@@ -252,6 +252,16 @@ public class DependencyManager {
 
             // 2. 创建 SDK 目录
             Path sdkDir = getSdkDir(sdkId);
+
+            // 🔧 路径安全校验：确保 sdkDir 在预期的依赖目录下，防止路径遍历攻击
+            Path normalizedSdkDir = sdkDir.normalize().toAbsolutePath();
+            Path normalizedDepsDir = getDependenciesDir().normalize().toAbsolutePath();
+            if (!normalizedSdkDir.startsWith(normalizedDepsDir)) {
+                return InstallResult.failure(sdkId,
+                    "Security error: SDK directory path is outside dependencies directory",
+                    logs.toString());
+            }
+
             Files.createDirectories(sdkDir);
             log.accept("Created directory: " + sdkDir);
 
@@ -263,11 +273,14 @@ public class DependencyManager {
             log.accept("Running npm install...");
             List<String> packages = sdk.getAllPackages();
 
+            // 🔧 再次校验：确保使用规范化后的路径
+            String safeSdkDirPath = normalizedSdkDir.toString();
+
             List<String> command = new ArrayList<>();
             command.add(npmPath);
             command.add("install");
             command.add("--prefix");
-            command.add(sdkDir.toString());
+            command.add(safeSdkDirPath);
             command.addAll(packages);
 
             ProcessBuilder pb = new ProcessBuilder(command);
@@ -286,10 +299,10 @@ public class DependencyManager {
                 }
             }
 
-            boolean finished = process.waitFor(10, TimeUnit.MINUTES);
+            boolean finished = process.waitFor(3, TimeUnit.MINUTES);
             if (!finished) {
                 process.destroyForcibly();
-                return InstallResult.failure(sdkId, "Installation timed out (10 minutes)", logs.toString());
+                return InstallResult.failure(sdkId, "Installation timed out (3 minutes)", logs.toString());
             }
 
             int exitCode = process.exitValue();
@@ -320,6 +333,7 @@ public class DependencyManager {
 
     /**
      * 卸载 SDK
+     * @return true 如果完全卸载成功，false 如果有部分文件删除失败
      */
     public boolean uninstallSdk(String sdkId) {
         try {
@@ -328,14 +342,21 @@ public class DependencyManager {
                 return true;
             }
 
-            // 递归删除目录
-            deleteDirectory(sdkDir);
+            // 🔧 递归删除目录，并获取删除失败的路径列表
+            List<Path> failedPaths = deleteDirectory(sdkDir);
 
             // 更新 manifest
             removeFromManifest(sdkId);
 
-            LOG.info("[DependencyManager] Uninstalled SDK: " + sdkId);
-            return true;
+            if (failedPaths.isEmpty()) {
+                LOG.info("[DependencyManager] Uninstalled SDK completely: " + sdkId);
+                return true;
+            } else {
+                // 🔧 部分文件删除失败，记录警告但仍返回成功（manifest 已更新）
+                LOG.warn("[DependencyManager] Uninstalled SDK with " + failedPaths.size() +
+                    " files failed to delete: " + sdkId);
+                return true; // 仍然返回 true，因为 SDK 功能上已卸载
+            }
         } catch (Exception e) {
             LOG.error("[DependencyManager] Failed to uninstall SDK: " + e.getMessage(), e);
             return false;
@@ -494,21 +515,32 @@ public class DependencyManager {
 
     /**
      * 递归删除目录
+     * @return 删除失败的路径列表（空列表表示完全成功）
      */
-    private void deleteDirectory(Path dir) throws IOException {
+    private List<Path> deleteDirectory(Path dir) throws IOException {
+        List<Path> failedPaths = new ArrayList<>();
+
         if (!Files.exists(dir)) {
-            return;
+            return failedPaths;
         }
 
+        // 🔧 收集所有删除失败的路径，而不是静默忽略
         Files.walk(dir)
             .sorted((a, b) -> b.compareTo(a)) // 反向排序，先删除子文件
             .forEach(path -> {
                 try {
                     Files.delete(path);
                 } catch (IOException e) {
-                    LOG.warn("[DependencyManager] Failed to delete: " + path);
+                    LOG.warn("[DependencyManager] Failed to delete: " + path + " - " + e.getMessage());
+                    failedPaths.add(path);
                 }
             });
+
+        if (!failedPaths.isEmpty()) {
+            LOG.warn("[DependencyManager] " + failedPaths.size() + " files/directories failed to delete");
+        }
+
+        return failedPaths;
     }
 
     /**

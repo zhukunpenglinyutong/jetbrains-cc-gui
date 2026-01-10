@@ -15,6 +15,8 @@ const DEPS_BASE = join(homedir(), '.codemoss', 'dependencies');
 
 // SDK 缓存
 const sdkCache = new Map();
+// 🔧 加载中的 Promise 缓存，防止并发加载同一 SDK
+const loadingPromises = new Map();
 
 function getSdkRootDir(sdkId) {
     return join(DEPS_BASE, sdkId);
@@ -123,8 +125,14 @@ export function isCodexSdkAvailable() {
  * @throws {Error} 如果 SDK 未安装
  */
 export async function loadClaudeSdk() {
+    // 🔧 优先返回已缓存的 SDK
     if (sdkCache.has('claude')) {
         return sdkCache.get('claude');
+    }
+
+    // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
+    if (loadingPromises.has('claude')) {
+        return loadingPromises.get('claude');
     }
 
     const sdkPath = getClaudeSdkPath();
@@ -133,21 +141,30 @@ export async function loadClaudeSdk() {
         throw new Error('SDK_NOT_INSTALLED:claude');
     }
 
-    try {
-        const sdkRootDir = getSdkRootDir('claude-sdk');
+    // 🔧 创建加载 Promise 并缓存
+    const loadPromise = (async () => {
+        try {
+            const sdkRootDir = getSdkRootDir('claude-sdk');
 
-        // 🔧 Node ESM 不支持 import(目录)，必须解析到具体文件（如 sdk.mjs）
-        const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/claude-agent-sdk', sdkRootDir);
-        const sdk = await import(resolvedUrl);
+            // 🔧 Node ESM 不支持 import(目录)，必须解析到具体文件（如 sdk.mjs）
+            const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/claude-agent-sdk', sdkRootDir);
+            const sdk = await import(resolvedUrl);
 
-        sdkCache.set('claude', sdk);
-        return sdk;
-    } catch (error) {
-        const pkgDir = getClaudeSdkPath();
-        const hintFile = join(pkgDir, 'sdk.mjs');
-        const hint = existsSync(hintFile) ? ` Did you mean to import ${hintFile}?` : '';
-        throw new Error(`Failed to load Claude SDK: ${error.message}${hint}`);
-    }
+            sdkCache.set('claude', sdk);
+            return sdk;
+        } catch (error) {
+            const pkgDir = getClaudeSdkPath();
+            const hintFile = join(pkgDir, 'sdk.mjs');
+            const hint = existsSync(hintFile) ? ` Did you mean to import ${hintFile}?` : '';
+            throw new Error(`Failed to load Claude SDK: ${error.message}${hint}`);
+        } finally {
+            // 🔧 加载完成后清除 Promise 缓存
+            loadingPromises.delete('claude');
+        }
+    })();
+
+    loadingPromises.set('claude', loadPromise);
+    return loadPromise;
 }
 
 /**
@@ -156,8 +173,14 @@ export async function loadClaudeSdk() {
  * @throws {Error} 如果 SDK 未安装
  */
 export async function loadCodexSdk() {
+    // 🔧 优先返回已缓存的 SDK
     if (sdkCache.has('codex')) {
         return sdkCache.get('codex');
+    }
+
+    // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
+    if (loadingPromises.has('codex')) {
+        return loadingPromises.get('codex');
     }
 
     const sdkPath = getCodexSdkPath();
@@ -166,16 +189,24 @@ export async function loadCodexSdk() {
         throw new Error('SDK_NOT_INSTALLED:codex');
     }
 
-    try {
-        const sdkRootDir = getSdkRootDir('codex-sdk');
-        const resolvedUrl = resolveExternalPackageUrl('@openai/codex-sdk', sdkRootDir);
-        const sdk = await import(resolvedUrl);
+    // 🔧 创建加载 Promise 并缓存
+    const loadPromise = (async () => {
+        try {
+            const sdkRootDir = getSdkRootDir('codex-sdk');
+            const resolvedUrl = resolveExternalPackageUrl('@openai/codex-sdk', sdkRootDir);
+            const sdk = await import(resolvedUrl);
 
-        sdkCache.set('codex', sdk);
-        return sdk;
-    } catch (error) {
-        throw new Error(`Failed to load Codex SDK: ${error.message}`);
-    }
+            sdkCache.set('codex', sdk);
+            return sdk;
+        } catch (error) {
+            throw new Error(`Failed to load Codex SDK: ${error.message}`);
+        } finally {
+            loadingPromises.delete('codex');
+        }
+    })();
+
+    loadingPromises.set('codex', loadPromise);
+    return loadPromise;
 }
 
 /**
@@ -183,8 +214,14 @@ export async function loadCodexSdk() {
  * @returns {Promise<{Anthropic: Class}>}
  */
 export async function loadAnthropicSdk() {
+    // 🔧 优先返回已缓存的 SDK
     if (sdkCache.has('anthropic')) {
         return sdkCache.get('anthropic');
+    }
+
+    // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
+    if (loadingPromises.has('anthropic')) {
+        return loadingPromises.get('anthropic');
     }
 
     const sdkRootDir = getSdkRootDir('claude-sdk');
@@ -194,15 +231,23 @@ export async function loadAnthropicSdk() {
         throw new Error('SDK_NOT_INSTALLED:anthropic');
     }
 
-    try {
-        const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/sdk', sdkRootDir);
-        const sdk = await import(resolvedUrl);
+    // 🔧 创建加载 Promise 并缓存
+    const loadPromise = (async () => {
+        try {
+            const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/sdk', sdkRootDir);
+            const sdk = await import(resolvedUrl);
 
-        sdkCache.set('anthropic', sdk);
-        return sdk;
-    } catch (error) {
-        throw new Error(`Failed to load Anthropic SDK: ${error.message}`);
-    }
+            sdkCache.set('anthropic', sdk);
+            return sdk;
+        } catch (error) {
+            throw new Error(`Failed to load Anthropic SDK: ${error.message}`);
+        } finally {
+            loadingPromises.delete('anthropic');
+        }
+    })();
+
+    loadingPromises.set('anthropic', loadPromise);
+    return loadPromise;
 }
 
 /**
@@ -210,8 +255,14 @@ export async function loadAnthropicSdk() {
  * @returns {Promise<{AnthropicBedrock: Class}>}
  */
 export async function loadBedrockSdk() {
+    // 🔧 优先返回已缓存的 SDK
     if (sdkCache.has('bedrock')) {
         return sdkCache.get('bedrock');
+    }
+
+    // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
+    if (loadingPromises.has('bedrock')) {
+        return loadingPromises.get('bedrock');
     }
 
     const sdkRootDir = getSdkRootDir('claude-sdk');
@@ -221,15 +272,23 @@ export async function loadBedrockSdk() {
         throw new Error('SDK_NOT_INSTALLED:bedrock');
     }
 
-    try {
-        const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/bedrock-sdk', sdkRootDir);
-        const sdk = await import(resolvedUrl);
+    // 🔧 创建加载 Promise 并缓存
+    const loadPromise = (async () => {
+        try {
+            const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/bedrock-sdk', sdkRootDir);
+            const sdk = await import(resolvedUrl);
 
-        sdkCache.set('bedrock', sdk);
-        return sdk;
-    } catch (error) {
-        throw new Error(`Failed to load Bedrock SDK: ${error.message}`);
-    }
+            sdkCache.set('bedrock', sdk);
+            return sdk;
+        } catch (error) {
+            throw new Error(`Failed to load Bedrock SDK: ${error.message}`);
+        } finally {
+            loadingPromises.delete('bedrock');
+        }
+    })();
+
+    loadingPromises.set('bedrock', loadPromise);
+    return loadPromise;
 }
 
 /**

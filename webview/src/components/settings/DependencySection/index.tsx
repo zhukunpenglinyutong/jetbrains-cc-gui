@@ -49,9 +49,19 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
   }, [installLogs, showLogs]);
 
   useEffect(() => {
-    // Set up global callbacks
-    // 🔧 使用装饰器模式，保存 App.tsx 的回调并扩展
-    const appCallback = (window as any)._appUpdateDependencyStatus;
+    // 🔧 使用更安全的回调管理方式：
+    // 1. 保存原有回调的引用（在 effect 执行时捕获）
+    // 2. 创建包装函数而不是直接覆盖
+    // 3. 清理时恢复原有回调
+
+    // 捕获当前的回调引用（可能是 App.tsx 设置的）
+    const savedUpdateDependencyStatus = window.updateDependencyStatus;
+    const savedDependencyInstallProgress = window.dependencyInstallProgress;
+    const savedDependencyInstallResult = window.dependencyInstallResult;
+    const savedDependencyUninstallResult = window.dependencyUninstallResult;
+    const savedNodeEnvironmentStatus = window.nodeEnvironmentStatus;
+
+    // 🔧 创建包装后的回调函数
     window.updateDependencyStatus = (jsonStr: string) => {
       try {
         const status = JSON.parse(jsonStr);
@@ -61,9 +71,13 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         console.error('[DependencySection] Failed to parse dependency status:', error);
         setLoading(false);
       }
-      // 同时调用 App.tsx 的回调，确保全局 SDK 状态也更新
-      if (appCallback) {
-        appCallback(jsonStr);
+      // 🔧 链式调用：同时触发之前保存的回调（如 App.tsx 的）
+      if (typeof savedUpdateDependencyStatus === 'function') {
+        try {
+          savedUpdateDependencyStatus(jsonStr);
+        } catch (e) {
+          console.error('[DependencySection] Error in chained updateDependencyStatus:', e);
+        }
       }
     };
 
@@ -73,6 +87,14 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         setInstallLogs((prev) => prev + progress.log + '\n');
       } catch (error) {
         console.error('[DependencySection] Failed to parse install progress:', error);
+      }
+      // 链式调用
+      if (typeof savedDependencyInstallProgress === 'function') {
+        try {
+          savedDependencyInstallProgress(jsonStr);
+        } catch (e) {
+          console.error('[DependencySection] Error in chained dependencyInstallProgress:', e);
+        }
       }
     };
 
@@ -94,6 +116,14 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         console.error('[DependencySection] Failed to parse install result:', error);
         setInstallingSdk(null);
       }
+      // 链式调用
+      if (typeof savedDependencyInstallResult === 'function') {
+        try {
+          savedDependencyInstallResult(jsonStr);
+        } catch (e) {
+          console.error('[DependencySection] Error in chained dependencyInstallResult:', e);
+        }
+      }
     };
 
     window.dependencyUninstallResult = (jsonStr: string) => {
@@ -112,6 +142,14 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         console.error('[DependencySection] Failed to parse uninstall result:', error);
         setUninstallingSdk(null);
       }
+      // 链式调用
+      if (typeof savedDependencyUninstallResult === 'function') {
+        try {
+          savedDependencyUninstallResult(jsonStr);
+        } catch (e) {
+          console.error('[DependencySection] Error in chained dependencyUninstallResult:', e);
+        }
+      }
     };
 
     window.nodeEnvironmentStatus = (jsonStr: string) => {
@@ -121,6 +159,14 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       } catch (error) {
         console.error('[DependencySection] Failed to parse node environment status:', error);
       }
+      // 链式调用
+      if (typeof savedNodeEnvironmentStatus === 'function') {
+        try {
+          savedNodeEnvironmentStatus(jsonStr);
+        } catch (e) {
+          console.error('[DependencySection] Error in chained nodeEnvironmentStatus:', e);
+        }
+      }
     };
 
     // Load initial status
@@ -128,16 +174,12 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
     sendToJava('check_node_environment:');
 
     return () => {
-      // 🔧 恢复 App.tsx 的回调，而不是设置为 undefined
-      if (appCallback) {
-        window.updateDependencyStatus = appCallback;
-      } else {
-        window.updateDependencyStatus = undefined;
-      }
-      window.dependencyInstallProgress = undefined;
-      window.dependencyInstallResult = undefined;
-      window.dependencyUninstallResult = undefined;
-      window.nodeEnvironmentStatus = undefined;
+      // 🔧 清理时恢复之前保存的回调，确保不丢失其他组件的回调
+      window.updateDependencyStatus = savedUpdateDependencyStatus;
+      window.dependencyInstallProgress = savedDependencyInstallProgress;
+      window.dependencyInstallResult = savedDependencyInstallResult;
+      window.dependencyUninstallResult = savedDependencyUninstallResult;
+      window.nodeEnvironmentStatus = savedNodeEnvironmentStatus;
     };
   }, [addToast, t]);
 
