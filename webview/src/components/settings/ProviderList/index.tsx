@@ -340,20 +340,25 @@ export default function ProviderList({
 
       <div className={styles.list}>
         <>
-          <div 
+          <div
             key={LOCAL_PROVIDER_ID}
             className={`${styles.card} ${providers.some(p => p.id === LOCAL_PROVIDER_ID && p.isActive) ? styles.active : ''} ${styles.localProviderCard}`}
           >
             <div className={styles.cardInfo}>
               <div className={styles.name}>
                 <span className="codicon codicon-file" style={{ marginRight: '8px' }} />
-                本地 settings.json
+                {t('settings.provider.localProviderName')}
+                <span
+                  className="codicon codicon-info"
+                  style={{ marginLeft: '8px', cursor: 'help', opacity: 0.7 }}
+                  title={t('settings.provider.localProviderHelp')}
+                />
               </div>
-              <div className={styles.website} title="直接使用 ~/.claude/settings.json 配置">
-                直接使用 ~/.claude/settings.json 配置
+              <div className={styles.website} title={t('settings.provider.localProviderDescription')}>
+                {t('settings.provider.localProviderDescription')}
               </div>
             </div>
-            
+
             <div className={styles.cardActions}>
               {providers.some(p => p.id === LOCAL_PROVIDER_ID && p.isActive) ? (
                 <div className={styles.activeBadge}>
@@ -372,8 +377,10 @@ export default function ProviderList({
             </div>
           </div>
 
-          {providers.filter(p => p.id !== LOCAL_PROVIDER_ID).length > 0 ? (
-            providers.filter(p => p.id !== LOCAL_PROVIDER_ID).map((provider) => (
+          {(() => {
+            const regularProviders = providers.filter(p => p.id !== LOCAL_PROVIDER_ID);
+            return regularProviders.length > 0 ? (
+              regularProviders.map((provider) => (
             <div 
               key={provider.id} 
               className={`${styles.card} ${provider.isActive ? styles.active : ''}`}
@@ -447,13 +454,17 @@ export default function ProviderList({
               </div>
             </div>
           ))
-        ) : null}
-        
-        {providers.filter(p => p.id !== LOCAL_PROVIDER_ID).length === 0 && emptyState && (
-          <div className={styles.emptyState}>
-            {emptyState}
-          </div>
-        )}
+        ) : null;
+          })()}
+
+          {(() => {
+            const regularProviders = providers.filter(p => p.id !== LOCAL_PROVIDER_ID);
+            return regularProviders.length === 0 && emptyState ? (
+              <div className={styles.emptyState}>
+                {emptyState}
+              </div>
+            ) : null;
+          })()}
         </>
       </div>
     </div>

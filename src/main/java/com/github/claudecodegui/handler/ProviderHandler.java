@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileChooser.FileChooser;
@@ -13,6 +14,9 @@ import com.intellij.openapi.vfs.VirtualFile;
 
 import javax.swing.*;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -334,6 +338,30 @@ public class ProviderHandler extends BaseMessageHandler {
             String id = data.get("id").getAsString();
 
             if ("__local_settings_json__".equals(id)) {
+                // Validate settings.json exists
+                Path settingsPath = Paths.get(System.getProperty("user.home"), ".claude", "settings.json");
+                if (!Files.exists(settingsPath)) {
+                    LOG.warn("[ProviderHandler] Local settings.json does not exist at: " + settingsPath);
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.showError",
+                            escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.localProviderSettingsNotFound")));
+                    });
+                    return;
+                }
+
+                // Validate JSON format
+                try {
+                    String settingsContent = Files.readString(settingsPath);
+                    gson.fromJson(settingsContent, JsonObject.class);
+                } catch (JsonSyntaxException e) {
+                    LOG.error("[ProviderHandler] Invalid JSON in settings.json: " + e.getMessage(), e);
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.showError",
+                            escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.localProviderInvalidJson", e.getMessage())));
+                    });
+                    return;
+                }
+
                 JsonObject config = context.getSettingsService().readConfig();
                 if (!config.has("claude")) {
                     JsonObject claude = new JsonObject();
@@ -348,7 +376,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("window.showSwitchSuccess",
-                        escapeJs("已切换到本地 settings.json\n\n配置将直接读取自 ~/.claude/settings.json，不会被覆盖。"));
+                        escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.localProviderSwitchSuccess")));
                     handleGetProviders();
                     handleGetCurrentClaudeConfig();
                     handleGetActiveProvider();

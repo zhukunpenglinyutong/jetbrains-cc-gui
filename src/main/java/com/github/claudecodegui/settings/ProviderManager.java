@@ -1,5 +1,6 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.DeleteResult;
 import com.google.gson.Gson;
@@ -64,12 +65,8 @@ public class ProviderManager {
         JsonObject claude = config.getAsJsonObject("claude");
         String currentId = claude.has("current") ? claude.get("current").getAsString() : null;
 
-        JsonObject localProvider = new JsonObject();
-        localProvider.addProperty("id", LOCAL_SETTINGS_PROVIDER_ID);
-        localProvider.addProperty("name", "本地 settings.json");
-        localProvider.addProperty("isActive", LOCAL_SETTINGS_PROVIDER_ID.equals(currentId));
-        localProvider.addProperty("isLocalProvider", true);
-        result.add(localProvider);
+        // Add local provider using the extracted method
+        result.add(createLocalProviderObject(LOCAL_SETTINGS_PROVIDER_ID.equals(currentId)));
 
         if (!claude.has("providers")) {
             return result;
@@ -102,13 +99,9 @@ public class ProviderManager {
         JsonObject claude = config.getAsJsonObject("claude");
         String currentId = claude.has("current") ? claude.get("current").getAsString() : null;
 
+        // Return local provider using the extracted method
         if (LOCAL_SETTINGS_PROVIDER_ID.equals(currentId)) {
-            JsonObject localProvider = new JsonObject();
-            localProvider.addProperty("id", LOCAL_SETTINGS_PROVIDER_ID);
-            localProvider.addProperty("name", "本地 settings.json");
-            localProvider.addProperty("isLocal", true);
-            localProvider.addProperty("isActive", true);
-            return localProvider;
+            return createLocalProviderObject(true);
         }
 
         if (!claude.has("providers")) {
@@ -588,6 +581,20 @@ public class ProviderManager {
             return null;
         }
         return settingsConfig.getAsJsonObject("env");
+    }
+
+    /**
+     * Create local provider object with internationalized name and description
+     * @param isActive whether this provider is currently active
+     * @return JsonObject representing the local provider
+     */
+    private JsonObject createLocalProviderObject(boolean isActive) {
+        JsonObject localProvider = new JsonObject();
+        localProvider.addProperty("id", LOCAL_SETTINGS_PROVIDER_ID);
+        localProvider.addProperty("name", ClaudeCodeGuiBundle.message("provider.local.name"));
+        localProvider.addProperty("isActive", isActive);
+        localProvider.addProperty("isLocalProvider", true);
+        return localProvider;
     }
 
     public boolean isLocalSettingsProvider(String providerId) {
