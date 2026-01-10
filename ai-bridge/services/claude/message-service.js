@@ -202,6 +202,10 @@ function createPreToolUseHook(permissionMode) {
  */
 export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
 	  let timeoutId;
+	  // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
+	  let streamingEnabled = false;
+	  let streamStarted = false;
+	  let streamEnded = false;
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
@@ -273,7 +277,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     // 🔧 从 settings.json 读取流式传输配置
     // streaming 参数优先，否则从配置读取，默认关闭（首次安装时为非流式）
     // 注意：使用 != null 同时处理 null 和 undefined，避免 undefined 被当成"有值"
-    const streamingEnabled = streaming != null ? streaming : (settings?.streamingEnabled ?? false);
+    streamingEnabled = streaming != null ? streaming : (settings?.streamingEnabled ?? false);
     console.log('[STREAMING_DEBUG] streaming param:', streaming);
     console.log('[STREAMING_DEBUG] settings.streamingEnabled:', settings?.streamingEnabled);
     console.log('[STREAMING_DEBUG] streamingEnabled (final):', streamingEnabled);
@@ -359,9 +363,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
     // 流式输出
     let messageCount = 0;
-    // 🔧 流式传输状态追踪
-    let streamStarted = false;
-    let streamEnded = false;
+    // 🔧 流式传输状态追踪（已在函数开头声明 streamingEnabled, streamStarted, streamEnded）
     // 🔧 标记是否收到了 stream_event（用于避免 fallback diff 重复输出）
     let hasStreamEvents = false;
     // 🔧 diff fallback: 追踪上次的 assistant 内容，用于计算增量
@@ -782,6 +784,10 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
  */
 export async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, stdinData = null) {
 	  let timeoutId;
+	  // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
+	  let streamingEnabled = false;
+	  let streamStarted = false;
+	  let streamEnded = false;
 	  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
@@ -856,7 +862,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     // 🔧 从 stdinData 或 settings.json 读取流式传输配置
     // 注意：使用 != null 同时处理 null 和 undefined
     const streamingParam = stdinData?.streaming;
-    const streamingEnabled = streamingParam != null
+    streamingEnabled = streamingParam != null
       ? streamingParam
       : (settings?.streamingEnabled ?? false);
     console.log('[STREAMING_DEBUG] (withAttachments) stdinData.streaming:', streamingParam);
@@ -935,9 +941,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    // }, 30000);
 
 		    let currentSessionId = resumeSessionId;
-		    // 🔧 流式传输状态追踪
-		    let streamStarted = false;
-		    let streamEnded = false;
+		    // 🔧 流式传输状态追踪（已在函数开头声明 streamingEnabled, streamStarted, streamEnded）
 		    let hasStreamEvents = false;
 		    // 🔧 diff fallback: 追踪上次的 assistant 内容，用于计算增量
 		    let lastAssistantContent = '';
