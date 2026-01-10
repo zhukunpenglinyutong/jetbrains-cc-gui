@@ -35,6 +35,9 @@ public class SessionState {
     // 斜杠命令
     private List<String> slashCommands = new ArrayList<>();
 
+    // PSI上下文收集开关
+    private boolean psiContextEnabled = true;
+
     // Getters
     public String getSessionId() {
         return sessionId;
@@ -92,6 +95,12 @@ public class SessionState {
         return new ArrayList<>(slashCommands);
     }
 
+
+
+    public boolean isPsiContextEnabled() {
+        return psiContextEnabled;
+    }
+
     // Setters
     public void setSessionId(String sessionId) {
         this.sessionId = sessionId;
@@ -139,6 +148,12 @@ public class SessionState {
 
     public void setSlashCommands(List<String> slashCommands) {
         this.slashCommands = new ArrayList<>(slashCommands);
+    }
+
+
+
+    public void setPsiContextEnabled(boolean psiContextEnabled) {
+        this.psiContextEnabled = psiContextEnabled;
     }
 
     /**

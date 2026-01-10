@@ -4,6 +4,8 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.cache.SlashCommandCache;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.handler.*;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
@@ -35,6 +37,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
+import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.jcef.JBCefBrowser;
@@ -163,6 +166,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private final Project project;
         private final CodemossSettingsService settingsService;
         private final HtmlLoader htmlLoader;
+        private Content parentContent;
 
         // Editor Event Listeners
         private Alarm contextUpdateAlarm;
@@ -197,6 +201,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private HistoryHandler historyHandler;
 
         public ClaudeChatWindow(Project project) {
+            this(project, false);
+        }
+
+        public ClaudeChatWindow(Project project, boolean skipRegister) {
             this.project = project;
             this.claudeSDKBridge = new ClaudeSDKBridge();
             this.codexSDKBridge = new CodexSDKBridge();
@@ -216,7 +224,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             createUIComponents();
             registerSessionLoadListener();
-            registerInstance();
+            if (!skipRegister) {
+                registerInstance();
+            }
             initializeStatusBar();
 
             this.initialized = true;
@@ -225,6 +235,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 注意：斜杠命令的加载现在由前端发起
             // 前端在 bridge 准备好后会发送 frontend_ready 和 refresh_slash_commands 事件
             // 这确保了前后端初始化时序正确
+        }
+
+        public void setParentContent(Content content) {
+            this.parentContent = content;
         }
 
         /**
@@ -405,6 +419,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new DiffHandler(handlerContext));
             messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
             messageDispatcher.registerHandler(new AgentHandler(handlerContext));
+            messageDispatcher.registerHandler(new TabHandler(handlerContext));
             messageDispatcher.registerHandler(new RewindHandler(handlerContext));
             messageDispatcher.registerHandler(new DependencyHandler(handlerContext));
 
@@ -1207,6 +1222,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     }
                 }
 
+                @Override
+                public void onSummaryReceived(String summary) {
+                    LOG.debug("Summary received: " + (summary != null ? summary.substring(0, Math.min(50, summary.length())) : "null"));
+                }
+
+                @Override
+                public void onNodeLog(String log) {
+                    LOG.debug("Node log: " + (log != null ? log.substring(0, Math.min(100, log.length())) : "null"));
+                }
                 // ===== 🔧 流式传输回调方法 =====
 
                 @Override
@@ -1818,7 +1842,35 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             ClaudeChatWindow window = instances.get(project);
             if (window == null) {
-                LOG.error("找不到项目 " + project.getName() + " 的窗口实例");
+                // 如果窗口不存在，自动打开工具窗口
+                LOG.info("窗口实例不存在，自动打开工具窗口: " + project.getName());
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    try {
+                        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Claude Code GUI");
+                        if (toolWindow != null) {
+                            toolWindow.show(null);
+                            // 等待窗口初始化完成后添加代码片段
+                            ApplicationManager.getApplication().invokeLater(() -> {
+                                ClaudeChatWindow newWindow = instances.get(project);
+                                if (newWindow != null && newWindow.initialized && !newWindow.disposed) {
+                                    newWindow.addCodeSnippet(selectionInfo);
+                                } else {
+                                    // 如果仍未初始化，稍后重试
+                                    ApplicationManager.getApplication().invokeLater(() -> {
+                                        ClaudeChatWindow retryWindow = instances.get(project);
+                                        if (retryWindow != null && retryWindow.initialized && !retryWindow.disposed) {
+                                            retryWindow.addCodeSnippet(selectionInfo);
+                                        }
+                                    });
+                                }
+                            });
+                        } else {
+                            LOG.error("无法找到 Claude Code GUI 工具窗口");
+                        }
+                    } catch (Exception e) {
+                        LOG.error("打开工具窗口时出错: " + e.getMessage());
+                    }
+                });
                 return;
             }
 
@@ -1844,6 +1896,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             // 从外部调用，使用 addCodeSnippet 添加代码片段标签
             window.addCodeSnippet(selectionInfo);
+        }
+
+        /**
+         * 发送 QuickFix 消息 - 供 QuickFixWithClaudeAction 调用
+         */
+        public void sendQuickFixMessage(String prompt, boolean isQuickFix, MessageCallback callback) {
+            if (session != null) {
+                session.getContextCollector().setQuickFix(isQuickFix);
+
+                session.send(prompt).thenRun(() -> {
+                    List<ClaudeSession.Message> messages = session.getMessages();
+                    if (!messages.isEmpty()) {
+                        ClaudeSession.Message last = messages.get(messages.size() - 1);
+                        if (last.type == ClaudeSession.Message.Type.ASSISTANT && last.content != null) {
+                            ApplicationManager.getApplication().invokeLater(() -> {
+                                callback.onComplete(SDKResult.success(last.content));
+                            });
+                        }
+                    }
+                }).exceptionally(ex -> {
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callback.onError(ex.getMessage());
+                    });
+                    return null;
+                });
+            }
         }
 
         public JPanel getContent() {

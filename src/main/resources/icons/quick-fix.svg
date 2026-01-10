@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Terminal window outline -->
+  <rect x="1" y="2" width="14" height="12" rx="1" fill="none" stroke="#8b5cf6" stroke-width="1.2"/>
+
+  <!-- Terminal prompt symbol (>) -->
+  <path d="M 3 5 L 6 7.5 L 3 10" fill="none" stroke="#8b5cf6" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Text lines representing system prompt content -->
+  <line x1="7" y1="6" x2="12" y2="6" stroke="#8b5cf6" stroke-width="1" stroke-linecap="round"/>
+  <line x1="7" y1="8" x2="10" y2="8" stroke="#8b5cf6" stroke-width="1" stroke-linecap="round"/>
+  <line x1="7" y1="10" x2="11" y2="10" stroke="#8b5cf6" stroke-width="1" stroke-linecap="round"/>
+</svg>

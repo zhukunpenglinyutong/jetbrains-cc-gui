@@ -15,6 +15,7 @@ import com.github.claudecodegui.util.EditorFileUtils;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -88,6 +89,8 @@ public class ClaudeSession {
         void onPermissionRequested(PermissionRequest request);
         void onThinkingStatusChanged(boolean isThinking);
         void onSlashCommandsReceived(List<String> slashCommands);
+        void onNodeLog(String log);
+        void onSummaryReceived(String summary);
 
         // 🔧 流式传输回调方法（带默认实现，保持向后兼容）
         default void onStreamStart() {}
@@ -116,6 +119,10 @@ public class ClaudeSession {
 
     public void setCallback(SessionCallback callback) {
         callbackHandler.setCallback(callback);
+    }
+
+    public com.github.claudecodegui.session.EditorContextCollector getContextCollector() {
+        return contextCollector;
     }
 
     // Getters - 委托给 SessionState
@@ -273,11 +280,13 @@ public class ClaudeSession {
         // 第3步：启动Claude并发送消息
         // Step 3: Launch Claude and send message
         // 解释：叫醒AI，发消息过去
-        return launchClaude().thenCompose(chId ->
-            contextCollector.collectContext().thenCompose(openedFilesJson ->
+        return launchClaude().thenCompose(chId -> {
+            // 设置是否启用PSI语义上下文收集
+            contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
+            return contextCollector.collectContext().thenCompose(openedFilesJson ->
                 sendMessageToProvider(chId, normalizedInput, attachments, openedFilesJson)
-            )
-        ).exceptionally(ex -> {
+            );
+        }).exceptionally(ex -> {
             state.setError(ex.getMessage());
             state.setBusy(false);
             state.setLoading(false);
@@ -433,6 +442,7 @@ public class ClaudeSession {
                 : normalizedInput;
             String newSummary = baseSummary.length() > 45 ? baseSummary.substring(0, 45) + "..." : baseSummary;
             state.setSummary(newSummary);
+            callbackHandler.notifySummaryReceived(newSummary);
         }
 
         // 更新状态
@@ -784,6 +794,8 @@ public class ClaudeSession {
     public List<String> getSlashCommands() {
         return state.getSlashCommands();
     }
+
+
 
     /**
      * 创建权限请求（供SDK调用）
