@@ -247,6 +247,13 @@ function createPreToolUseHook(permissionMode) {
  * @param {boolean} streaming - 是否启用流式传输（可选，默认从配置读取）
  */
 export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
+  console.log('[DIAG] ========== sendMessage() START ==========');
+  console.log('[DIAG] message length:', message ? message.length : 0);
+  console.log('[DIAG] resumeSessionId:', resumeSessionId || '(new session)');
+  console.log('[DIAG] cwd:', cwd);
+  console.log('[DIAG] permissionMode:', permissionMode);
+  console.log('[DIAG] model:', model);
+
   const sdkStderrLines = [];
   let timeoutId;
   // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
@@ -409,17 +416,21 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    console.log('[DEBUG] Query started, waiting for messages...');
 
 	    // 动态加载 Claude SDK 并获取 query 函数
+	    console.log('[DIAG] Loading Claude SDK...');
 	    const sdk = await ensureClaudeSdk();
+	    console.log('[DIAG] SDK loaded, exports:', sdk ? Object.keys(sdk) : 'null');
 	    const query = sdk?.query;
 	    if (typeof query !== 'function') {
 	      throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
 	    }
+	    console.log('[DIAG] query function available, calling...');
 
 	    // 调用 query 函数
 	    const result = query({
 	      prompt: message,
 	      options
 	    });
+	    console.log('[DIAG] query() returned, starting message loop...');
 
 		// 设置 60 秒超时，超时后通过 AbortController 取消查询（已发现严重问题，暂时注释掉自动超时逻辑）
 		// timeoutId = setTimeout(() => {

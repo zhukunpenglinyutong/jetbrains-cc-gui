@@ -28,10 +28,22 @@ import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
 import { getSdkStatus, isClaudeSdkAvailable, isCodexSdkAvailable } from './utils/sdk-loader.js';
 
+// 🔧 诊断日志：启动信息
+console.log('[DIAG-ENTRY] ========== CHANNEL-MANAGER STARTUP ==========');
+console.log('[DIAG-ENTRY] Node.js version:', process.version);
+console.log('[DIAG-ENTRY] Platform:', process.platform);
+console.log('[DIAG-ENTRY] CWD:', process.cwd());
+console.log('[DIAG-ENTRY] argv:', process.argv);
+
 // 命令行参数解析
 const provider = process.argv[2];
 const command = process.argv[3];
 const args = process.argv.slice(4);
+
+// 🔧 诊断日志：参数信息
+console.log('[DIAG-ENTRY] Provider:', provider);
+console.log('[DIAG-ENTRY] Command:', command);
+console.log('[DIAG-ENTRY] Args:', args);
 
 // 错误处理
 process.on('uncaughtException', (error) => {
@@ -99,8 +111,10 @@ const providerHandlers = {
 
 // 执行命令
 (async () => {
+  console.log('[DIAG-EXEC] ========== STARTING EXECUTION ==========');
   try {
     // 验证 provider
+    console.log('[DIAG-EXEC] Validating provider...');
     if (!provider || !providerHandlers[provider]) {
       console.error('Invalid provider. Use "claude", "codex", or "system"');
       console.log(JSON.stringify({
@@ -121,11 +135,15 @@ const providerHandlers = {
     }
 
     // 读取 stdin 数据
+    console.log('[DIAG-EXEC] Reading stdin data...');
     const stdinData = await readStdinData(provider);
+    console.log('[DIAG-EXEC] Stdin data received, keys:', stdinData ? Object.keys(stdinData) : 'null');
 
     // 根据 provider 分发
+    console.log('[DIAG-EXEC] Dispatching to handler:', provider);
     const handler = providerHandlers[provider];
     await handler(command, args, stdinData);
+    console.log('[DIAG-EXEC] Handler completed successfully');
 
     // 🔥 重要：不要使用 process.exit(0)，因为它会在 stdout 缓冲区刷新前终止进程
     // 导致大量 JSON 输出（如 getSession 返回的历史消息）被截断

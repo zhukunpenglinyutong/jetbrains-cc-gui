@@ -1,3 +1,30 @@
+##### **2026年1月11日（v0.1.5-beta3）**
+English:
+- [x] Implement Quick Fix feature with Claude integration (right-click context menu)
+- [x] Add npm permission issue detection and auto-fix mechanism with retry support
+- [x] Add nvmd (Node Version Manager Desktop) support and custom Node.js path configuration
+- [x] Improve tab management: rename tabs to sequential format (AI1, AI2, etc.), add "New Tab" button
+- [x] Prevent closing the last tab in tool window
+- [x] Pass agent prompt per-tab instead of using global setting
+- [x] Add response size guard (1MB limit) to prevent regex issues
+- [x] Fix Windows package aiBridge issue
+- [x] Fix SDK process error display
+- [x] Fix Quick Fix timing and Settings streaming state synchronization issues
+- [x] Rename "Quick Fix with Claude" to "Ask Claude Code GUI" with i18n support (8 languages)
+
+中文:
+- [x] 实现标签页管理（多开AI功能），添加"新建标签页"按钮
+- [x] 实现Quick Fix功能与Claude集成（右键上下文菜单）
+- [x] 添加npm权限问题检测和自动修复机制，支持重试
+- [x] 添加nvmd（Node版本管理器桌面版）支持和自定义Node.js路径配置
+- [x] 防止关闭工具窗口中的最后一个标签页
+- [x] 每个标签页独立使用各自选择的智能体，而非全局设置
+- [x] 添加响应大小限制（1MB）以防止正则表达式问题
+- [x] 修复Windows打包aiBridge问题
+- [x] 修复SDK进程错误显示问题
+- [x] 修复Quick Fix时序和Settings流式状态同步问题
+- [x] 将"Quick Fix with Claude"重命名为"Ask Claude Code GUI"，支持8种语言国际化
+
 ##### **2026年1月10日（v0.1.5-beta2）**
 
 English:

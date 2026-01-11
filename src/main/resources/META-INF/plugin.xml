@@ -73,7 +73,8 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.java</depends>
+    <!-- Optional: Java support for enhanced context collection in Java/Kotlin IDEs -->
+    <depends optional="true" config-file="java-features.xml">com.intellij.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Claude Code GUI 工具窗口（包含历史记录功能） -->
