@@ -295,12 +295,21 @@ public class NodeDetector {
                 }
             }
 
+            // 动态查找 nvmd 管理的 Node.js
+            // nvmd (Node Version Manager Desktop): ~/.nvmd/bin/node
+            File nvmdBin = new File(userHome + "/.nvmd/bin/node");
+            if (nvmdBin.exists()) {
+                pathsToCheck.add(nvmdBin.getAbsolutePath());
+                LOG.info("  发现 nvmd Node.js: " + nvmdBin.getAbsolutePath());
+            }
+
             // 添加常见 Unix/macOS 路径
             pathsToCheck.add("/usr/local/bin/node");           // Homebrew (macOS Intel)
             pathsToCheck.add("/opt/homebrew/bin/node");        // Homebrew (Apple Silicon)
             pathsToCheck.add("/usr/bin/node");                 // Linux 系统
             pathsToCheck.add(userHome + "/.volta/bin/node");   // Volta
             pathsToCheck.add(userHome + "/.fnm/aliases/default/bin/node"); // fnm
+            pathsToCheck.add(userHome + "/.nvmd/bin/node");    // nvmd (Node Version Manager Desktop)
         }
 
         // 遍历检查每个路径

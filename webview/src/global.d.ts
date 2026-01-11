@@ -63,6 +63,12 @@ interface Window {
   addHistoryMessage?: (message: any) => void;
 
   /**
+   * Add user message to chat (used for external Quick Fix feature)
+   * Immediately shows the user's message in the chat UI before AI response
+   */
+  addUserMessage?: (content: string) => void;
+
+  /**
    * Set current session ID (for rewind feature)
    */
   setSessionId?: (sessionId: string) => void;
@@ -400,4 +406,14 @@ interface Window {
    * Pending dependency status payload before React initialization
    */
   __pendingDependencyStatus?: string;
+
+  /**
+   * Pending user message before addUserMessage is registered (for Quick Fix feature)
+   */
+  __pendingUserMessage?: string;
+
+  /**
+   * Pending loading state before showLoading is registered (for Quick Fix feature)
+   */
+  __pendingLoadingState?: boolean;
 }

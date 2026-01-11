@@ -188,6 +188,7 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
       <a href="https://github.com/dungnguyent8">
         <img src="https://avatars.githubusercontent.com/u/39462756?size=100" width="100" height="100" alt="dungnguyent8" style="border-radius: 50%;" />
       </a>
+      <div>🔥</div>
     </td>
     <td align="center">
       <a href="https://github.com/magic5295">

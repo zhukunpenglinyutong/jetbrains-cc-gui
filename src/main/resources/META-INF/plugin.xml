@@ -73,13 +73,15 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Claude Code GUI 工具窗口（包含历史记录功能） -->
-        <toolWindow id="Claude Code GUI"
+        <toolWindow id="CCG"
                     anchor="right"
                     factoryClass="com.github.claudecodegui.ClaudeSDKToolWindow"
-                    icon="/icons/cc-gui-icon.svg"/>
+                    icon="/icons/cc-gui-icon.svg"
+                    canCloseContents="true"/>
 
         <!-- Pre-extract AI Bridge on project open to avoid EDT freeze -->
         <postStartupActivity implementation="com.github.claudecodegui.startup.BridgePreloader"/>
@@ -103,5 +105,21 @@
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt K"/>
             <keyboard-shortcut keymap="macOS" first-keystroke="meta alt K"/>
         </action>
+
+        <!-- Quick Fix with Claude Action -->
+        <action id="ClaudeCodeGUI.QuickFixWithClaudeAction"
+                class="com.github.claudecodegui.QuickFixWithClaudeAction"
+                icon="/icons/quick-fix.svg">
+            <add-to-group group-id="EditorPopupMenu"
+                           anchor="after"
+                           relative-to-action="ClaudeCodeGUI.SendSelectionToTerminalAction"/>
+        </action>
+
+        <!-- Create New Tab Action (can be invoked via Find Action or programmatically) -->
+        <action id="ClaudeCodeGUI.CreateNewTabAction"
+                class="com.github.claudecodegui.CreateNewTabAction"
+                icon="AllIcons.General.Add"
+                text="New Chat Tab"
+                description="Create a new chat tab in Claude Code GUI tool window"/>
     </actions>
 </idea-plugin>

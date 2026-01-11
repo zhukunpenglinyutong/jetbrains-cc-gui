@@ -15,6 +15,7 @@ import com.github.claudecodegui.util.EditorFileUtils;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -88,6 +89,8 @@ public class ClaudeSession {
         void onPermissionRequested(PermissionRequest request);
         void onThinkingStatusChanged(boolean isThinking);
         void onSlashCommandsReceived(List<String> slashCommands);
+        void onNodeLog(String log);
+        void onSummaryReceived(String summary);
 
         // 🔧 流式传输回调方法（带默认实现，保持向后兼容）
         default void onStreamStart() {}
@@ -116,6 +119,10 @@ public class ClaudeSession {
 
     public void setCallback(SessionCallback callback) {
         callbackHandler.setCallback(callback);
+    }
+
+    public com.github.claudecodegui.session.EditorContextCollector getContextCollector() {
+        return contextCollector;
     }
 
     // Getters - 委托给 SessionState
@@ -247,18 +254,39 @@ public class ClaudeSession {
     }
 
     /**
-     * 发送消息
+     * 发送消息（使用全局智能体设置）
+     * 【注意】此方法用于向后兼容，优先使用 send(input, agentPrompt) 版本
      */
     public CompletableFuture<Void> send(String input) {
-        return send(input, null);
+        return send(input, (List<Attachment>) null, null);
     }
 
     /**
-     * 发送消息（支持附件）
-     * 英文：Send message with attachments support
-     * 解释：发送消息给AI，带上图片等附件
+     * 【FIX】发送消息（指定智能体提示词）
+     * 英文：Send message with specific agent prompt
+     * 解释：发送消息给AI，使用指定的智能体提示词（用于多标签页独立智能体选择）
+     */
+    public CompletableFuture<Void> send(String input, String agentPrompt) {
+        return send(input, null, agentPrompt);
+    }
+
+    /**
+     * 发送消息（支持附件，使用全局智能体设置）
+     * 【注意】此方法用于向后兼容，优先使用 send(input, attachments, agentPrompt) 版本
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments) {
+        return send(input, attachments, null);
+    }
+
+    /**
+     * 【FIX】发送消息（支持附件和指定智能体提示词）
+     * 英文：Send message with attachments and specific agent prompt
+     * 解释：发送消息给AI，带上图片等附件，使用指定的智能体提示词（用于多标签页独立智能体选择）
+     * @param input 用户输入的消息文本
+     * @param attachments 附件列表（可为空）
+     * @param agentPrompt 智能体提示词（如为空则使用全局设置）
+     */
+    public CompletableFuture<Void> send(String input, List<Attachment> attachments, String agentPrompt) {
         // 第1步：准备用户消息
         // Step 1: Prepare user message
         // 解释：把用户说的话和图片整理好
@@ -270,14 +298,19 @@ public class ClaudeSession {
         // 解释：把消息存起来，更新状态
         updateSessionStateForSend(userMessage, normalizedInput);
 
+        // 保存 agentPrompt 用于后续发送
+        final String finalAgentPrompt = agentPrompt;
+
         // 第3步：启动Claude并发送消息
         // Step 3: Launch Claude and send message
         // 解释：叫醒AI，发消息过去
-        return launchClaude().thenCompose(chId ->
-            contextCollector.collectContext().thenCompose(openedFilesJson ->
-                sendMessageToProvider(chId, normalizedInput, attachments, openedFilesJson)
-            )
-        ).exceptionally(ex -> {
+        return launchClaude().thenCompose(chId -> {
+            // 设置是否启用PSI语义上下文收集
+            contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
+            return contextCollector.collectContext().thenCompose(openedFilesJson ->
+                sendMessageToProvider(chId, normalizedInput, attachments, openedFilesJson, finalAgentPrompt)
+            );
+        }).exceptionally(ex -> {
             state.setError(ex.getMessage());
             state.setBusy(false);
             state.setLoading(false);
@@ -433,6 +466,7 @@ public class ClaudeSession {
                 : normalizedInput;
             String newSummary = baseSummary.length() > 45 ? baseSummary.substring(0, 45) + "..." : baseSummary;
             state.setSummary(newSummary);
+            callbackHandler.notifySummaryReceived(newSummary);
         }
 
         // 更新状态
@@ -445,20 +479,32 @@ public class ClaudeSession {
     }
 
     /**
-     * 发送消息到AI提供商
+     * 【FIX】发送消息到AI提供商
      * 英文：Send message to AI provider
      * 解释：根据选择的AI（Claude或Codex），发送消息
+     * @param channelId 通道ID
+     * @param input 用户输入
+     * @param attachments 附件列表
+     * @param openedFilesJson 已打开文件信息
+     * @param externalAgentPrompt 外部传入的智能体提示词（如为空则使用全局设置）
      */
     private CompletableFuture<Void> sendMessageToProvider(
         String channelId,
         String input,
         List<Attachment> attachments,
-        JsonObject openedFilesJson
+        JsonObject openedFilesJson,
+        String externalAgentPrompt
     ) {
-        // 获取智能体提示词
-        // Get agent prompt
-        // 解释：看看用户选了什么智能体角色
-        String agentPrompt = getAgentPrompt();
+        // 【FIX】优先使用外部传入的智能体提示词，否则回退到全局设置
+        // Use external agent prompt if provided, otherwise fall back to global setting
+        String agentPrompt = externalAgentPrompt;
+        if (agentPrompt == null) {
+            // 回退到全局设置（向后兼容）
+            agentPrompt = getAgentPrompt();
+            LOG.info("[Agent] Using agent from global setting (fallback)");
+        } else {
+            LOG.info("[Agent] Using agent from message (per-tab selection)");
+        }
 
         // 根据 provider 选择 SDK
         // Choose SDK based on provider
@@ -784,6 +830,8 @@ public class ClaudeSession {
     public List<String> getSlashCommands() {
         return state.getSlashCommands();
     }
+
+
 
     /**
      * 创建权限请求（供SDK调用）

@@ -697,6 +697,25 @@ const App = () => {
       setMessages((prev) => [...prev, message]);
     };
 
+    // 添加用户消息（用于外部 Quick Fix 功能）
+    // Add user message to chat (for external Quick Fix feature)
+    // Backend now waits for frontend_ready signal before calling this
+    window.addUserMessage = (content: string) => {
+      const userMessage: ClaudeMessage = {
+        type: 'user',
+        content: content || '',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      // Auto-scroll to bottom to show the user's message
+      isUserAtBottomRef.current = true;
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      });
+    };
+
     // 🔧 流式传输回调函数
     // 流式开始时调用
     window.onStreamStart = () => {
@@ -1600,7 +1619,14 @@ const App = () => {
     console.log('[DEBUG] Current provider before send:', currentProvider);
     sendBridgeMessage('set_provider', currentProvider);
 
-    // 发送消息（智能体提示词由后端自动注入）
+    // 【FIX】构建智能体信息，随消息一起发送，确保每个标签页使用自己选择的智能体
+    const agentInfo = selectedAgent ? {
+      id: selectedAgent.id,
+      name: selectedAgent.name,
+      prompt: selectedAgent.prompt,
+    } : null;
+
+    // 发送消息（智能体提示词由前端传递，不依赖后端全局设置）
     if (hasAttachments) {
       try {
         const payload = JSON.stringify({
@@ -1609,15 +1635,20 @@ const App = () => {
             fileName: a.fileName,
             mediaType: a.mediaType,
             data: a.data,
-          }))
+          })),
+          agent: agentInfo,
         });
         sendBridgeMessage('send_message_with_attachments', payload);
       } catch (error) {
         console.error('[Frontend] Failed to serialize attachments payload', error);
-        sendBridgeMessage('send_message', text);
+        // Fallback: send message with agent info
+        const fallbackPayload = JSON.stringify({ text, agent: agentInfo });
+        sendBridgeMessage('send_message', fallbackPayload);
       }
     } else {
-      sendBridgeMessage('send_message', text);
+      // 【FIX】将消息和智能体信息打包成 JSON 发送
+      const payload = JSON.stringify({ text, agent: agentInfo });
+      sendBridgeMessage('send_message', payload);
     }
   };
 
@@ -1715,12 +1746,12 @@ const App = () => {
   /**
    * 处理流式传输开关切换
    */
-  const handleStreamingEnabledChange = (enabled: boolean) => {
+  const handleStreamingEnabledChange = useCallback((enabled: boolean) => {
     setStreamingEnabledSetting(enabled);
     const payload = { streamingEnabled: enabled };
     sendBridgeMessage('set_streaming_enabled', JSON.stringify(payload));
     addToast(enabled ? t('settings.basic.streaming.enabled') : t('settings.basic.streaming.disabled'), 'success');
-  };
+  }, [t, addToast]);
 
   const interruptSession = () => {
     sendBridgeMessage('interrupt_session');
@@ -2499,6 +2530,13 @@ const App = () => {
                 </button>
                 <button
                   className="icon-button"
+                  onClick={() => sendBridgeMessage('create_new_tab')}
+                  data-tooltip={t('common.newTab')}
+                >
+                  <span className="codicon codicon-split-horizontal" style={{ fontSize: '14px' }} />
+                </button>
+                <button
+                  className="icon-button"
                   onClick={() => setCurrentView('history')}
                   data-tooltip={t('common.history')}
                 >
@@ -2525,6 +2563,8 @@ const App = () => {
           onClose={() => setCurrentView('chat')}
           initialTab={settingsInitialTab}
           currentProvider={currentProvider}
+          streamingEnabled={streamingEnabledSetting}
+          onStreamingEnabledChange={handleStreamingEnabledChange}
         />
       ) : currentView === 'chat' ? (
         <>
