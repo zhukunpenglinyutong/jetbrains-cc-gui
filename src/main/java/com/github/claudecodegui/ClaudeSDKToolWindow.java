@@ -860,7 +860,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void showErrorPanel() {
-            String message = "无法找到 Node.js\n\n" +
+            String message = "无法找到 Node.js（下方保存后请重启尝试）\n\n" +
                 "请确保:\n" +
                 "• Node.js 已安装 (可以在终端运行: node --version)\n\n" +
                 "如果自动检测 Node.js 失败，可以在终端运行以下命令获取 Node.js 路径:\n" +

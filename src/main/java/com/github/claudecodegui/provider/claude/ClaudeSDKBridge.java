@@ -856,11 +856,19 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             process.waitFor();
 
             String outputStr = output.toString().trim();
+            LOG.info("[getSessionMessages] Raw output length: " + outputStr.length());
+            LOG.info("[getSessionMessages] Raw output (first 300 chars): " +
+                     (outputStr.length() > 300 ? outputStr.substring(0, 300) + "..." : outputStr));
 
-            int jsonStart = outputStr.indexOf("{");
-            if (jsonStart != -1) {
-                String jsonStr = outputStr.substring(jsonStart);
+            // Find the last complete JSON object in the output
+            // This handles cases where Node.js outputs multiple lines (logs, warnings)
+            // before the actual JSON result
+            String jsonStr = extractLastJsonLine(outputStr);
+            if (jsonStr != null) {
+                LOG.info("[getSessionMessages] Extracted JSON: " + (jsonStr.length() > 500 ? jsonStr.substring(0, 500) + "..." : jsonStr));
                 JsonObject jsonResult = gson.fromJson(jsonStr, JsonObject.class);
+                LOG.info("[getSessionMessages] JSON parsed successfully, success=" +
+                         (jsonResult.has("success") ? jsonResult.get("success").getAsBoolean() : "null"));
 
                 if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
                     List<JsonObject> messages = new ArrayList<>();
@@ -877,9 +885,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                             : "Unknown error";
                     throw new RuntimeException("Get session failed: " + errorMsg);
                 }
+            } else {
+                LOG.error("[getSessionMessages] Failed to extract JSON from output");
+                throw new RuntimeException("Failed to extract JSON from Node.js output");
             }
-
-            return new ArrayList<>();
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to get session messages: " + e.getMessage(), e);
@@ -975,11 +984,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     }
                 }
 
-                // Fallback
+                // Fallback: use extractLastJsonLine for multi-line output handling
                 String outputStr = output.toString().trim();
-                int jsonStart = outputStr.lastIndexOf("{");
-                if (jsonStart != -1) {
-                    String jsonStr = outputStr.substring(jsonStart);
+                String jsonStr = extractLastJsonLine(outputStr);
+                if (jsonStr != null) {
                     try {
                         JsonObject jsonResult = gson.fromJson(jsonStr, JsonObject.class);
                         if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
@@ -1103,11 +1111,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     }
                 }
 
-                // Fallback
+                // Fallback: use extractLastJsonLine for multi-line output handling
                 String outputStr = output.toString().trim();
-                int jsonStart = outputStr.lastIndexOf("{");
-                if (jsonStart != -1) {
-                    String jsonStr = outputStr.substring(jsonStart);
+                String jsonStr = extractLastJsonLine(outputStr);
+                if (jsonStr != null) {
                     try {
                         JsonObject jsonResult = this.gson.fromJson(jsonStr, JsonObject.class);
                         if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
@@ -1235,16 +1242,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 }
                 LOG.info("[Rewind] Process exited with code: " + exitCode);
 
-                // Parse result
+                // Parse result: use extractLastJsonLine for multi-line output handling
                 String outputStr;
                 try {
                     outputStr = outputFuture.get(5, TimeUnit.SECONDS).trim();
                 } catch (Exception e) {
                     outputStr = "";
                 }
-                int jsonStart = outputStr.lastIndexOf("{");
-                if (jsonStart != -1) {
-                    String jsonStr = outputStr.substring(jsonStart);
+                String jsonStr = extractLastJsonLine(outputStr);
+                if (jsonStr != null) {
                     try {
                         JsonObject result = gson.fromJson(jsonStr, JsonObject.class);
                         return result;
@@ -1290,5 +1296,42 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         if (endIdx == -1) return null;
 
         return text.substring(startIdx, endIdx);
+    }
+
+    /**
+     * Extract the last complete JSON object from multi-line output.
+     * Handles cases where Node.js outputs debug logs before the JSON result.
+     *
+     * @param outputStr The complete output string
+     * @return The extracted JSON string, or null if not found
+     */
+    private String extractLastJsonLine(String outputStr) {
+        if (outputStr == null || outputStr.isEmpty()) {
+            return null;
+        }
+
+        // Split by newlines and search backwards for a line starting with '{'
+        String[] lines = outputStr.split("\\r?\\n");
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = lines[i].trim();
+            if (line.startsWith("{") && line.endsWith("}")) {
+                // This looks like a complete JSON object
+                return line;
+            }
+        }
+
+        // Fallback: If no complete JSON line found, try to parse the entire output
+        // This handles single-line output without newlines
+        if (outputStr.startsWith("{") && outputStr.endsWith("}")) {
+            return outputStr;
+        }
+
+        // Last resort: find the first '{' and try to extract from there
+        int jsonStart = outputStr.indexOf("{");
+        if (jsonStart != -1) {
+            return outputStr.substring(jsonStart);
+        }
+
+        return null;
     }
 }

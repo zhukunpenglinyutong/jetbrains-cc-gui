@@ -2533,7 +2533,7 @@ const App = () => {
                   onClick={() => sendBridgeMessage('create_new_tab')}
                   data-tooltip={t('common.newTab')}
                 >
-                  <span className="codicon codicon-split-horizontal" style={{ fontSize: '14px' }} />
+                  <span className="codicon codicon-split-horizontal" />
                 </button>
                 <button
                   className="icon-button"
