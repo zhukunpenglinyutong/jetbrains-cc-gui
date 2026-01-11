@@ -218,34 +218,53 @@ tasks.register('packageAiBridge', Exec) {
     // 排除 SDK 包（它们将由用户按需安装到 ~/.codemoss/dependencies/）
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         // Windows: 使用 PowerShell 排除 SDK 包
-        // Compress-Archive 不支持排除模式，需要先复制到临时目录
-        // Use parameter array to prevent command injection
-        commandLine 'powershell', '-Command', '''
-            $excludeDirs = @(
-                "node_modules\\.pnpm",
-                "node_modules\\@anthropic-ai",
-                "node_modules\\@openai"
+        // 创建临时 PowerShell 脚本文件以避免转义问题
+        def tempScript = File.createTempFile('ai-bridge-pack', '.ps1')
+        tempScript.deleteOnExit()
+
+        def scriptContent = '''
+            $excludePatterns = @(
+                '*node_modules\\.pnpm*',
+                '*node_modules\\@anthropic-ai*',
+                '*node_modules\\@openai*'
             )
             $tempDir = Join-Path $env:TEMP "ai-bridge-temp-$(Get-Random)"
             New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-            Get-ChildItem -Path . -Recurse | Where-Object {
-                $path = $_.FullName
-                -not ($excludeDirs | Where-Object { $path -like "*$_*" })
-            } | ForEach-Object {
-                $dest = Join-Path $tempDir $_.FullName.Substring((Get-Location).Path.Length + 1)
-                if ($_.PSIsContainer) {
-                    New-Item -ItemType Directory -Path $dest -Force | Out-Null
-                } else {
-                    $destDir = Split-Path $dest -Parent
-                    if (-not (Test-Path $destDir)) {
-                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            try {
+                Get-ChildItem -Path . -Recurse -Force | Where-Object {
+                    $itemPath = $_.FullName
+                    $shouldExclude = $false
+                    foreach ($pattern in $excludePatterns) {
+                        if ($itemPath -like $pattern) {
+                            $shouldExclude = $true
+                            break
+                        }
                     }
-                    Copy-Item $_.FullName -Destination $dest -Force
+                    -not $shouldExclude
+                } | ForEach-Object {
+                    $relativePath = $_.FullName.Substring((Get-Location).Path.Length + 1)
+                    $dest = Join-Path $tempDir $relativePath
+                    if ($_.PSIsContainer) {
+                        if (-not (Test-Path $dest)) {
+                            New-Item -ItemType Directory -Path $dest -Force | Out-Null
+                        }
+                    } else {
+                        $destDir = Split-Path $dest -Parent
+                        if (-not (Test-Path $destDir)) {
+                            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                        }
+                        Copy-Item $_.FullName -Destination $dest -Force
+                    }
+                }
+                Compress-Archive -Path "$tempDir\\*" -DestinationPath "''' + aiBridgeArchive.absolutePath.replace('\\', '\\\\') + '''" -Force
+            } finally {
+                if (Test-Path $tempDir) {
+                    Remove-Item -Path $tempDir -Recurse -Force
                 }
             }
-            Compress-Archive -Path "$tempDir\\*" -DestinationPath "''' + aiBridgeArchive.absolutePath + '''" -Force
-            Remove-Item -Path $tempDir -Recurse -Force
-        '''
+            '''
+        tempScript.text = scriptContent
+        commandLine 'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tempScript.absolutePath
     } else {
         // Unix/Linux/macOS: 使用 zip 命令保留权限
         // 排除 SDK 包目录

@@ -246,16 +246,13 @@ function createPreToolUseHook(permissionMode) {
  * @param {boolean} streaming - 是否启用流式传输（可选，默认从配置读取）
  */
 export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
-	  let timeoutId;
-	  // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
-	  let streamingEnabled = false;
-	  let streamStarted = false;
-	  let streamEnded = false;
-	  try {
-    // 动态加载 Claude SDK
-    const sdk = await ensureClaudeSdk();
-    const { query } = sdk;
-
+  const sdkStderrLines = [];
+  let timeoutId;
+  // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
+  let streamingEnabled = false;
+  let streamStarted = false;
+  let streamEnded = false;
+  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
@@ -372,6 +369,17 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	        type: 'preset',
 	        preset: 'claude_code',
 	        ...(systemPromptAppend && { append: systemPromptAppend })
+	      },
+	      // 新增：捕获 SDK/CLI 的标准错误输出
+	      stderr: (data) => {
+	        try {
+	          const text = (data ?? '').toString().trim();
+	          if (text) {
+	            sdkStderrLines.push(text);
+	            if (sdkStderrLines.length > 50) sdkStderrLines.shift();
+	            console.error(`[SDK-STDERR] ${text}`);
+	          }
+	        } catch (_) {}
 	      }
 	    };
 	    console.log('[PERM_DEBUG] options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
@@ -393,6 +401,13 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     }
 
 	    console.log('[DEBUG] Query started, waiting for messages...');
+
+	    // 动态加载 Claude SDK 并获取 query 函数
+	    const sdk = await ensureClaudeSdk();
+	    const query = sdk?.query;
+	    if (typeof query !== 'function') {
+	      throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
+	    }
 
 	    // 调用 query 函数
 	    const result = query({
@@ -625,12 +640,18 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      streamEnded = true;
 	    }
 	    const payload = buildConfigErrorPayload(error);
-	    console.error('[SEND_ERROR]', JSON.stringify(payload));
-	    console.log(JSON.stringify(payload));
-	  } finally {
-	    if (timeoutId) clearTimeout(timeoutId);
-	  }
-	}
+    if (sdkStderrLines.length > 0) {
+      const sdkErrorText = sdkStderrLines.slice(-10).join('\n');
+      // 在错误信息最前面添加 SDK-STDERR
+      payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
+      payload.details.sdkError = sdkErrorText;
+    }
+    console.error('[SEND_ERROR]', JSON.stringify(payload));
+    console.log(JSON.stringify(payload));
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 /**
  * 使用 Anthropic SDK 发送消息（用于第三方 API 代理的回退方案）
@@ -839,12 +860,13 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
  * 使用 Claude Agent SDK 发送带附件的消息（多模态）
  */
 export async function sendMessageWithAttachments(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, stdinData = null) {
-	  let timeoutId;
-	  // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
-	  let streamingEnabled = false;
-	  let streamStarted = false;
-	  let streamEnded = false;
-	  try {
+  const sdkStderrLines = [];
+  let timeoutId;
+  // 🔧 BUG FIX: 提前声明这些变量，避免在 setupApiKey() 抛出错误时，catch 块访问未定义变量
+  let streamingEnabled = false;
+  let streamStarted = false;
+  let streamEnded = false;
+  try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
     // 设置 API Key 并获取配置信息（包含认证类型）
@@ -968,6 +990,17 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
         type: 'preset',
         preset: 'claude_code',
         ...(systemPromptAppend && { append: systemPromptAppend })
+      },
+      // 新增：捕获 SDK/CLI 的标准错误输出
+      stderr: (data) => {
+        try {
+          const text = (data ?? '').toString().trim();
+          if (text) {
+            sdkStderrLines.push(text);
+            if (sdkStderrLines.length > 50) sdkStderrLines.shift();
+            console.error(`[SDK-STDERR] ${text}`);
+          }
+        } catch (_) {}
       }
     };
     console.log('[PERM_DEBUG] (withAttachments) options.canUseTool:', options.canUseTool ? 'SET' : 'NOT SET');
@@ -988,9 +1021,12 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
 		    // 动态加载 Claude SDK
 		    const sdk = await ensureClaudeSdk();
-		    const { query } = sdk;
+		    const queryFn = sdk?.query;
+            if (typeof queryFn !== 'function') {
+              throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
+            }
 
-		    const result = query({
+		    const result = queryFn({
 		      prompt: inputStream,
 		      options
 		    });
@@ -1183,8 +1219,14 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	      streamEnded = true;
 	    }
 	    const payload = buildConfigErrorPayload(error);
-	    console.error('[SEND_ERROR]', JSON.stringify(payload));
-	    console.log(JSON.stringify(payload));
+    if (sdkStderrLines.length > 0) {
+      const sdkErrorText = sdkStderrLines.slice(-10).join('\n');
+      // 在错误信息最前面添加 SDK-STDERR
+      payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
+      payload.details.sdkError = sdkErrorText;
+    }
+    console.error('[SEND_ERROR]', JSON.stringify(payload));
+    console.log(JSON.stringify(payload));
 	  } finally {
 	    if (timeoutId) clearTimeout(timeoutId);
 	  }
@@ -1218,6 +1260,13 @@ export async function getSlashCommands(cwd = null) {
 
     // 创建一个空的输入流
     const inputStream = new AsyncStream();
+
+    // 动态加载 Claude SDK
+    const sdk = await ensureClaudeSdk();
+    const query = sdk?.query;
+    if (typeof query !== 'function') {
+      throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
+    }
 
     // 调用 query 函数，使用空输入流
     // 这样不会发送任何消息，只是初始化 SDK 以获取配置
@@ -1299,6 +1348,13 @@ export async function getMcpServerStatus(cwd = null) {
 
     // 创建一个空的输入流
     const inputStream = new AsyncStream();
+
+    // 动态加载 Claude SDK
+    const sdk = await ensureClaudeSdk();
+    const query = sdk?.query;
+    if (typeof query !== 'function') {
+      throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
+    }
 
     // 调用 query 函数，使用空输入流
     const result = query({
@@ -1414,6 +1470,14 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
         };
 
         console.log('[REWIND] Resuming session with options:', JSON.stringify(options));
+
+        // 动态加载 Claude SDK
+        const sdk = await ensureClaudeSdk();
+        const query = sdk?.query;
+        if (typeof query !== 'function') {
+          throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
+        }
+
         result = query({ prompt: '', options });
 
       } catch (resumeError) {
