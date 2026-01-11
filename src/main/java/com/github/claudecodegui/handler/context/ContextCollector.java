@@ -3,14 +3,17 @@ package com.github.claudecodegui.handler.context;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.codeInsight.daemon.impl.HighlightInfo;
-import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl;
+import com.intellij.codeInsight.intention.IntentionAction;
+import com.intellij.codeInsight.intention.IntentionManager;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.lang.injection.InjectedLanguageManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.ex.MarkupModelEx;
+import com.intellij.openapi.editor.impl.DocumentMarkupModel;
+import com.intellij.openapi.editor.markup.RangeHighlighter;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -230,36 +233,49 @@ public class ContextCollector {
             Project project = editor.getProject();
             if (project == null) return highlights;
 
-            List<HighlightInfo> infoList = DaemonCodeAnalyzerImpl.getHighlights(document, HighlightSeverity.INFORMATION, project);
+            // Use public API: DocumentMarkupModel instead of internal DaemonCodeAnalyzerImpl
+            MarkupModelEx markupModel = (MarkupModelEx) DocumentMarkupModel.forDocument(document, project, false);
+            if (markupModel == null) return highlights;
 
-            if (infoList != null) {
-                int cursorLine = document.getLineNumber(offset);
-                int startLine = Math.max(0, cursorLine - HIGHLIGHT_LINES_RANGE);
-                int endLine = Math.min(document.getLineCount() - 1, cursorLine + HIGHLIGHT_LINES_RANGE);
+            int cursorLine = document.getLineNumber(offset);
+            int startLine = Math.max(0, cursorLine - HIGHLIGHT_LINES_RANGE);
+            int endLine = Math.min(document.getLineCount() - 1, cursorLine + HIGHLIGHT_LINES_RANGE);
 
-                int searchStart = document.getLineStartOffset(startLine);
-                int searchEnd = document.getLineEndOffset(endLine);
+            int searchStart = document.getLineStartOffset(startLine);
+            int searchEnd = document.getLineEndOffset(endLine);
 
-                for (HighlightInfo info : infoList) {
-                    if (info.getStartOffset() < searchEnd && info.getEndOffset() > searchStart) {
-                        String description = info.getDescription();
-                        String severityName = info.getSeverity().getName();
-
-                        if ("INFO".equals(severityName) && (description == null || description.isEmpty() || "Editor highlight".equals(description))) {
-                            continue;
-                        }
-
-                        JsonObject h = new JsonObject();
-                        int line = document.getLineNumber(info.getStartOffset()) + 1;
-                        h.addProperty("line", line);
-                        h.addProperty("severity", severityName);
-                        h.addProperty("description", description != null ? description : "highlighted element");
-                        if (info.getToolTip() != null) {
-                            h.addProperty("toolTip", info.getToolTip());
-                        }
-                        highlights.add(h);
-                    }
+            // Iterate through all highlighters and extract HighlightInfo
+            for (RangeHighlighter highlighter : markupModel.getAllHighlighters()) {
+                if (highlighter.getStartOffset() >= searchEnd || highlighter.getEndOffset() <= searchStart) {
+                    continue;
                 }
+
+                // Extract HighlightInfo from the highlighter's error stripe tooltip
+                HighlightInfo info = HighlightInfo.fromRangeHighlighter(highlighter);
+                if (info == null) continue;
+
+                String description = info.getDescription();
+                String severityName = info.getSeverity().getName();
+
+                // Filter out generic INFO highlights
+                if ("INFO".equals(severityName) && (description == null || description.isEmpty() || "Editor highlight".equals(description))) {
+                    continue;
+                }
+
+                // Skip highlights below INFORMATION severity threshold
+                if (info.getSeverity().compareTo(HighlightSeverity.INFORMATION) < 0) {
+                    continue;
+                }
+
+                JsonObject h = new JsonObject();
+                int line = document.getLineNumber(info.getStartOffset()) + 1;
+                h.addProperty("line", line);
+                h.addProperty("severity", severityName);
+                h.addProperty("description", description != null ? description : "highlighted element");
+                if (info.getToolTip() != null) {
+                    h.addProperty("toolTip", info.getToolTip());
+                }
+                highlights.add(h);
             }
         } catch (Exception e) {
             LOG.warn("Failed to get rich highlight info: " + e.getMessage());
@@ -332,28 +348,64 @@ public class ContextCollector {
     private JsonArray getQuickFixes(Editor editor, PsiFile psiFile, Project project) {
         JsonArray quickFixes = new JsonArray();
         try {
-            List<HighlightInfo> highlights =
-                DaemonCodeAnalyzerImpl.getHighlights(editor.getDocument(), HighlightSeverity.INFORMATION, project);
+            Document document = editor.getDocument();
+            int cursorOffset = editor.getCaretModel().getOffset();
 
-            if (highlights != null) {
-                int cursorOffset = editor.getCaretModel().getOffset();
+            // Use public API: DocumentMarkupModel instead of internal DaemonCodeAnalyzerImpl
+            MarkupModelEx markupModel = (MarkupModelEx) DocumentMarkupModel.forDocument(document, project, false);
+            if (markupModel == null) return quickFixes;
 
-                for (HighlightInfo info : highlights) {
-                    if (info.getStartOffset() <= cursorOffset && info.getEndOffset() >= cursorOffset) {
-                        if (info.quickFixActionRanges != null) {
-                            for (Pair<HighlightInfo.IntentionActionDescriptor, TextRange> pair : info.quickFixActionRanges) {
-                                HighlightInfo.IntentionActionDescriptor desc = pair.getFirst();
-                                if (desc != null) {
-                                    JsonObject fix = new JsonObject();
-                                    fix.addProperty("name", desc.getAction().getText());
-                                    fix.addProperty("family", desc.getAction().getFamilyName());
-                                    if (info.getDescription() != null) {
-                                        fix.addProperty("problem", info.getDescription());
-                                    }
-                                    quickFixes.add(fix);
-                                }
+            Set<String> addedFixes = new HashSet<>();
+
+            // Collect quick fixes from HighlightInfo
+            for (RangeHighlighter highlighter : markupModel.getAllHighlighters()) {
+                if (highlighter.getStartOffset() > cursorOffset || highlighter.getEndOffset() < cursorOffset) {
+                    continue;
+                }
+
+                HighlightInfo info = HighlightInfo.fromRangeHighlighter(highlighter);
+                if (info == null) continue;
+
+                // Use public API: findRegisteredQuickFix instead of deprecated quickFixActionRanges
+                info.findRegisteredQuickFix((descriptor, range) -> {
+                    if (descriptor != null && descriptor.getAction() != null) {
+                        IntentionAction action = descriptor.getAction();
+                        String fixKey = action.getText() + "|" + action.getFamilyName();
+
+                        if (!addedFixes.contains(fixKey)) {
+                            addedFixes.add(fixKey);
+                            JsonObject fix = new JsonObject();
+                            fix.addProperty("name", action.getText());
+                            fix.addProperty("family", action.getFamilyName());
+                            if (info.getDescription() != null) {
+                                fix.addProperty("problem", info.getDescription());
+                            }
+                            quickFixes.add(fix);
+                        }
+                    }
+                    return null; // Continue iteration
+                });
+            }
+
+            // Also include available intention actions at cursor position
+            PsiElement elementAtCursor = psiFile.findElementAt(cursorOffset);
+            if (elementAtCursor != null) {
+                List<IntentionAction> availableIntentions = IntentionManager.getInstance().getAvailableIntentions();
+                for (IntentionAction intention : availableIntentions) {
+                    try {
+                        if (intention.isAvailable(project, editor, psiFile)) {
+                            String fixKey = intention.getText() + "|" + intention.getFamilyName();
+                            if (!addedFixes.contains(fixKey)) {
+                                addedFixes.add(fixKey);
+                                JsonObject fix = new JsonObject();
+                                fix.addProperty("name", intention.getText());
+                                fix.addProperty("family", intention.getFamilyName());
+                                fix.addProperty("type", "intention");
+                                quickFixes.add(fix);
                             }
                         }
+                    } catch (Exception ignored) {
+                        // Some intentions may throw exceptions during availability check
                     }
                 }
             }
