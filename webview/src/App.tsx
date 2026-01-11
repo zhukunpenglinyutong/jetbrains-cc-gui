@@ -2499,6 +2499,13 @@ const App = () => {
                 </button>
                 <button
                   className="icon-button"
+                  onClick={() => sendBridgeMessage('create_new_tab')}
+                  data-tooltip={t('common.newTab')}
+                >
+                  <span className="codicon codicon-split-horizontal" style={{ fontSize: '14px' }} />
+                </button>
+                <button
+                  className="icon-button"
                   onClick={() => setCurrentView('history')}
                   data-tooltip={t('common.history')}
                 >

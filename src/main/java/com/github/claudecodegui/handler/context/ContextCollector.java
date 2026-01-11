@@ -51,7 +51,14 @@ import java.util.Set;
 public class ContextCollector {
 
     private static final Logger LOG = Logger.getInstance(ContextCollector.class);
-    
+
+    // Constants for context collection limits
+    private static final int CODE_WINDOW_LINES_RANGE = 40;
+    private static final int MAX_RELATED_DEFINITIONS = 8;
+    private static final int MAX_USAGES_LIMIT = 20;
+    private static final int HIGHLIGHT_LINES_RANGE = 10;
+    private static final int INJECTION_SEARCH_RANGE = 500;
+
     private static final Set<String> IGNORED_DIRS = new HashSet<>(List.of(
         "node_modules", "build", "out", "target", "vendor", ".gradle", ".idea", ".git", ".vh", "dist", "bin"
     ));
@@ -81,16 +88,20 @@ public class ContextCollector {
         try {
             JsonObject scopeInfo = getCurrentScope(psiFile, offset);
             if (scopeInfo != null && scopeInfo.size() > 0) semanticData.add("scope", scopeInfo);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect scope info: " + t.getMessage());
+        }
 
         // 2. References
         try {
             SelectionModel selectionModel = editor.getSelectionModel();
-            JsonArray references = selectionModel.hasSelection() ? 
-                getReferences(psiFile, selectionModel.getSelectionStart(), selectionModel.getSelectionEnd()) : 
+            JsonArray references = selectionModel.hasSelection() ?
+                getReferences(psiFile, selectionModel.getSelectionStart(), selectionModel.getSelectionEnd()) :
                 getReferences(psiFile, offset, offset);
             if (references.size() > 0) semanticData.add("references", references);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect references: " + t.getMessage());
+        }
 
         // 3. Class Hierarchy, Fields, Annotations
         try {
@@ -103,55 +114,73 @@ public class ContextCollector {
                 JsonArray annotations = getAnnotations(cls);
                 if (annotations.size() > 0) semanticData.add("annotations", annotations);
             }
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect class info: " + t.getMessage());
+        }
 
         // 4. Method Calls
         try {
             JsonArray methodCalls = getMethodCalls(psiFile, offset);
             if (methodCalls.size() > 0) semanticData.add("methodCalls", methodCalls);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect method calls: " + t.getMessage());
+        }
 
         // 5. Imports
         try {
             JsonArray imports = getImports(psiFile);
             if (imports.size() > 0) semanticData.add("imports", imports);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect imports: " + t.getMessage());
+        }
 
         // 6. Comments
         try {
             JsonObject comments = getNearbyComments(psiFile, offset);
             if (comments.size() > 0) semanticData.add("comments", comments);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect comments: " + t.getMessage());
+        }
 
         // 7. Package Info
         try {
             String pkg = getPackageName(psiFile);
             if (pkg != null) semanticData.addProperty("package", pkg);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect package info: " + t.getMessage());
+        }
 
         // 8. Highlight Information
         try {
             JsonArray highlights = getHighlightInfo(editor, document);
             if (highlights.size() > 0) semanticData.add("highlights", highlights);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect highlights: " + t.getMessage());
+        }
 
         // 9. Injected Languages
         try {
             JsonArray injected = getInjectedLanguages(psiFile, offset, project);
             if (injected.size() > 0) semanticData.add("injectedLanguages", injected);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect injected languages: " + t.getMessage());
+        }
 
         // 10. Errors
         try {
             JsonArray errors = getSyntaxErrors(psiFile);
             if (errors.size() > 0) semanticData.add("errors", errors);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect syntax errors: " + t.getMessage());
+        }
 
         // 11. Quick Fixes (High Risk)
         try {
             JsonArray quickFixes = getQuickFixes(editor, psiFile, project);
             if (quickFixes.size() > 0) semanticData.add("quickFixes", quickFixes);
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect quick fixes: " + t.getMessage());
+        }
 
         // 12. Focused Context
         try {
@@ -164,7 +193,9 @@ public class ContextCollector {
                 semanticData.add("currentWindow", getCodeWindow(editor, document));
                 semanticData.add("relatedDefinitions", getRelatedDefinitions(psiFile, offset, project));
             }
-        } catch (Throwable t) {}
+        } catch (Throwable t) {
+            LOG.debug("Failed to collect focused context: " + t.getMessage());
+        }
 
     }
 
@@ -174,11 +205,10 @@ public class ContextCollector {
         try {
             int cursorLine = document.getLineNumber(editor.getCaretModel().getOffset());
             int totalLines = document.getLineCount();
-            
-            // Collect +/- 40 lines around cursor
-            int range = 40;
-            int startLine = Math.max(0, cursorLine - range);
-            int endLine = Math.min(totalLines - 1, cursorLine + range);
+
+            // Collect +/- CODE_WINDOW_LINES_RANGE lines around cursor
+            int startLine = Math.max(0, cursorLine - CODE_WINDOW_LINES_RANGE);
+            int endLine = Math.min(totalLines - 1, cursorLine + CODE_WINDOW_LINES_RANGE);
             
             int startOffset = document.getLineStartOffset(startLine);
             int endOffset = document.getLineEndOffset(endLine);
@@ -265,24 +295,26 @@ public class ContextCollector {
         try {
              // Need to run on background ideally, but we are already in ReadAction.nonBlocking() which is good.
              // But ReferencesSearch might be slow. Limit results.
-             if (functions.size() == 0) return usages;
-             
-             // Get the primary method PsiElement again
-             String primaryName = functions.get(0).getAsJsonObject().get("name").getAsString();
-             
-             // This is tricky without passing the PsiElement directly. 
-             // Let's re-find it.
+             if (functions == null || functions.size() == 0) return usages;
+
+             // Get the primary method name with null safety
+             var firstFunction = functions.get(0);
+             if (firstFunction == null || !firstFunction.isJsonObject()) return usages;
+             var nameElement = firstFunction.getAsJsonObject().get("name");
+             if (nameElement == null || nameElement.isJsonNull()) return usages;
+
+             // Re-find the method from offset
              int offset = editor.getCaretModel().getOffset();
              PsiElement element = psiFile.findElementAt(offset);
              PsiMethod method = PsiTreeUtil.getParentOfType(element, PsiMethod.class);
-             
+
              if (method != null) {
                  SearchScope scope = GlobalSearchScope.projectScope(project);
                  Query<PsiReference> query = ReferencesSearch.search(method, scope);
-                 
+
                  int count = 0;
                  for (PsiReference ref : query.findAll()) {
-                     if (count++ > 20) break; // Limit
+                     if (count++ > MAX_USAGES_LIMIT) break; // Limit
                      
                      PsiElement refElem = ref.getElement();
                      PsiFile refFile = refElem.getContainingFile();
@@ -348,10 +380,10 @@ public class ContextCollector {
                 }
             }
 
-            // 4. Limit to max 8 definitions to save tokens
+            // 4. Limit to max definitions to save tokens
             int count = 0;
             for (PsiClass cls : classesToResolve) {
-                if (count >= 8) break;
+                if (count >= MAX_RELATED_DEFINITIONS) break;
                 if (definitions.has(cls.getQualifiedName())) continue;
 
                 JsonObject def = collectClassDetails(cls);
@@ -716,10 +748,10 @@ public class ContextCollector {
             List<HighlightInfo> infoList = DaemonCodeAnalyzerImpl.getHighlights(document, HighlightSeverity.INFORMATION, project);
             
             if (infoList != null) {
-                // Focus on highlights around the cursor (+/- 10 lines)
+                // Focus on highlights around the cursor (+/- HIGHLIGHT_LINES_RANGE lines)
                 int cursorLine = document.getLineNumber(offset);
-                int startLine = Math.max(0, cursorLine - 10);
-                int endLine = Math.min(document.getLineCount() - 1, cursorLine + 10);
+                int startLine = Math.max(0, cursorLine - HIGHLIGHT_LINES_RANGE);
+                int endLine = Math.min(document.getLineCount() - 1, cursorLine + HIGHLIGHT_LINES_RANGE);
                 
                 int searchStart = document.getLineStartOffset(startLine);
                 int searchEnd = document.getLineEndOffset(endLine);
@@ -759,9 +791,9 @@ public class ContextCollector {
             Document document = PsiDocumentManager.getInstance(project).getDocument(psiFile);
             if (document == null) return injected;
 
-            // Define a range around the cursor to search for injections (+/- 500 characters)
-            int start = Math.max(0, offset - 500);
-            int end = Math.min(psiFile.getTextLength(), offset + 500);
+            // Define a range around the cursor to search for injections
+            int start = Math.max(0, offset - INJECTION_SEARCH_RANGE);
+            int end = Math.min(psiFile.getTextLength(), offset + INJECTION_SEARCH_RANGE);
             
             manager.enumerateEx(psiFile, psiFile, false, (injectedFile, places) -> {
                 // Check if any of the places intersect our search range
@@ -886,9 +918,10 @@ public class ContextCollector {
     }
     private String formatPath(String path) {
         if (path == null) return null;
-        // Standardize to backslashes for Windows if we are on Windows, 
-        // but Claude generally prefers consistent separators. 
-        // The user specifically asked for Windows-style backslashes.
-        return path.replace('/', '\\');
+        // Use platform-specific path separators
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {
+            return path.replace('/', '\\');
+        }
+        return path;
     }
 }

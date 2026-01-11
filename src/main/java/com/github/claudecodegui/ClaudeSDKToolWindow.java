@@ -40,6 +40,9 @@ import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
+import com.intellij.ui.content.ContentManager;
+import com.intellij.ui.content.ContentManagerEvent;
+import com.intellij.ui.content.ContentManagerListener;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
@@ -73,6 +76,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     private static final Logger LOG = Logger.getInstance(ClaudeSDKToolWindow.class);
     private static final Map<Project, ClaudeChatWindow> instances = new ConcurrentHashMap<>();
     private static volatile boolean shutdownHookRegistered = false;
+    private static final String TAB_NAME_PREFIX = "AI";
 
     /**
      * 获取指定项目的聊天窗口实例.
@@ -84,6 +88,39 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         return instances.get(project);
     }
 
+    /**
+     * Generate the next available tab name in the format "AIN".
+     * Finds the next available number by checking existing tab names.
+     *
+     * @param toolWindow the tool window to check existing tabs
+     * @return the next available tab name (e.g., "AI1", "AI2", etc.)
+     */
+    public static String getNextTabName(ToolWindow toolWindow) {
+        if (toolWindow == null) {
+            return TAB_NAME_PREFIX + "1";
+        }
+
+        ContentManager contentManager = toolWindow.getContentManager();
+        int maxNumber = 0;
+
+        // Find the highest existing AIN number
+        for (Content content : contentManager.getContents()) {
+            String displayName = content.getDisplayName();
+            if (displayName != null && displayName.startsWith(TAB_NAME_PREFIX)) {
+                try {
+                    int number = Integer.parseInt(displayName.substring(TAB_NAME_PREFIX.length()));
+                    if (number > maxNumber) {
+                        maxNumber = number;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Ignore non-numeric suffixes
+                }
+            }
+        }
+
+        return TAB_NAME_PREFIX + (maxNumber + 1);
+    }
+
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         // 注册 JVM Shutdown Hook（只注册一次）
@@ -91,8 +128,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
         ContentFactory contentFactory = ContentFactory.getInstance();
-        Content content = contentFactory.createContent(chatWindow.getContent(), "", false);
-        toolWindow.getContentManager().addContent(content);
+        // Set the initial tab name to "AI1"
+        Content content = contentFactory.createContent(chatWindow.getContent(), TAB_NAME_PREFIX + "1", false);
+
+        ContentManager contentManager = toolWindow.getContentManager();
+        contentManager.addContent(content);
 
         content.setDisposer(() -> {
             ClaudeChatWindow window = instances.get(project);
@@ -100,6 +140,38 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 window.dispose();
             }
         });
+
+        // Add listener to manage tab closeable state based on tab count
+        // When there's only one tab, disable the close button to prevent closing the last tab
+        contentManager.addContentManagerListener(new ContentManagerListener() {
+            @Override
+            public void contentAdded(@NotNull ContentManagerEvent event) {
+                updateTabCloseableState(contentManager);
+            }
+
+            @Override
+            public void contentRemoved(@NotNull ContentManagerEvent event) {
+                updateTabCloseableState(contentManager);
+            }
+        });
+
+        // Initialize closeable state for the first tab
+        updateTabCloseableState(contentManager);
+    }
+
+    /**
+     * Update the closeable state of all tabs based on the tab count.
+     * If there's only one tab, disable the close button; otherwise enable it.
+     */
+    private void updateTabCloseableState(ContentManager contentManager) {
+        int tabCount = contentManager.getContentCount();
+        boolean closeable = tabCount > 1;
+
+        for (Content tab : contentManager.getContents()) {
+            tab.setCloseable(closeable);
+        }
+
+        LOG.debug("[TabManager] Updated tab closeable state: count=" + tabCount + ", closeable=" + closeable);
     }
 
     /**
@@ -1146,29 +1218,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 @Override
                 public void onMessageUpdate(List<ClaudeSession.Message> messages) {
                     lastMessagesSnapshot = messages;
-
-                    if (streamActive) {
-                        enqueueStreamMessageUpdate(messages);
-                        return;
-                    }
-
-                    LOG.info("[ClaudeSDKToolWindow] onMessageUpdate called, message count: " + messages.size());
-                    if (!messages.isEmpty()) {
-                        ClaudeSession.Message first = messages.get(0);
-                        LOG.info("[ClaudeSDKToolWindow] First message: type=" + first.type +
-                                ", content=" + (first.content != null ? first.content.substring(0, Math.min(50, first.content.length())) : "null") +
-                                ", hasRaw=" + (first.raw != null));
-                    }
-                    ApplicationManager.getApplication().invokeLater(() -> {
-                        String messagesJson = convertMessagesToJson(messages);
-                        LOG.debug("Sending " + messages.size() + " messages to WebView, JSON length: " + messagesJson.length());
-                        if (!messages.isEmpty()) {
-                            ClaudeSession.Message lastMsg = messages.get(messages.size() - 1);
-                            LOG.debug("Last message: type=" + lastMsg.type + ", content length=" + (lastMsg.content != null ? lastMsg.content.length() : 0));
-                        }
-                        callJavaScript("updateMessages", JsUtils.escapeJs(messagesJson));
-                    });
-                    pushUsageUpdateFromMessages(messages);
+                    // Always use throttled update mechanism to prevent excessive refreshes
+                    // regardless of whether streamActive is true or false
+                    enqueueStreamMessageUpdate(messages);
                 }
 
                 @Override
@@ -1294,9 +1346,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             final int delayMs;
             final long sequence;
             synchronized (streamMessageUpdateLock) {
-                if (!streamActive) {
-                    return;
-                }
+                // Removed streamActive check - throttling should work regardless of stream mode
                 if (streamMessageUpdateScheduled) {
                     return;
                 }
@@ -1327,7 +1377,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 synchronized (streamMessageUpdateLock) {
                     hasPending = pendingStreamMessages != null;
                 }
-                if (hasPending && streamActive && !disposed) {
+                // Continue scheduling if there are pending messages (regardless of stream mode)
+                if (hasPending && !disposed) {
                     scheduleStreamMessageUpdatePush();
                 }
             }, delayMs);
@@ -1846,26 +1897,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 LOG.info("窗口实例不存在，自动打开工具窗口: " + project.getName());
                 ApplicationManager.getApplication().invokeLater(() -> {
                     try {
-                        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Claude Code GUI");
+                        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
                         if (toolWindow != null) {
                             toolWindow.show(null);
-                            // 等待窗口初始化完成后添加代码片段
-                            ApplicationManager.getApplication().invokeLater(() -> {
-                                ClaudeChatWindow newWindow = instances.get(project);
-                                if (newWindow != null && newWindow.initialized && !newWindow.disposed) {
-                                    newWindow.addCodeSnippet(selectionInfo);
-                                } else {
-                                    // 如果仍未初始化，稍后重试
-                                    ApplicationManager.getApplication().invokeLater(() -> {
-                                        ClaudeChatWindow retryWindow = instances.get(project);
-                                        if (retryWindow != null && retryWindow.initialized && !retryWindow.disposed) {
-                                            retryWindow.addCodeSnippet(selectionInfo);
-                                        }
-                                    });
-                                }
-                            });
+                            // Use Alarm for proper delayed retry instead of nested invokeLater
+                            scheduleCodeSnippetRetry(project, selectionInfo, 3);
                         } else {
-                            LOG.error("无法找到 Claude Code GUI 工具窗口");
+                            LOG.error("无法找到 CCG 工具窗口");
                         }
                     } catch (Exception e) {
                         LOG.error("打开工具窗口时出错: " + e.getMessage());
@@ -1880,17 +1918,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             if (!window.initialized) {
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    try {
-                        Thread.sleep(500);
-                        if (window.initialized && !window.disposed) {
-                            // 从外部调用，使用 addCodeSnippet 添加代码片段标签
-                            window.addCodeSnippet(selectionInfo);
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                });
+                // Use proper retry mechanism instead of Thread.sleep on EDT
+                scheduleCodeSnippetRetry(project, selectionInfo, 3);
                 return;
             }
 
@@ -1899,29 +1928,61 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
+         * Schedule code snippet addition with retry mechanism using Alarm.
+         * This avoids race conditions from nested invokeLater calls.
+         */
+        private static void scheduleCodeSnippetRetry(Project project, String selectionInfo, int retriesLeft) {
+            if (retriesLeft <= 0) {
+                LOG.warn("Failed to add code snippet after max retries");
+                return;
+            }
+
+            Alarm alarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD, project);
+            alarm.addRequest(() -> {
+                ClaudeChatWindow retryWindow = instances.get(project);
+                if (retryWindow != null && retryWindow.initialized && !retryWindow.disposed) {
+                    retryWindow.addCodeSnippet(selectionInfo);
+                    alarm.dispose();
+                } else {
+                    // Retry with exponential backoff (200ms, 400ms, 800ms)
+                    int delay = 200 * (4 - retriesLeft);
+                    LOG.debug("Window not ready, retrying in " + delay + "ms (retries left: " + (retriesLeft - 1) + ")");
+                    alarm.dispose();
+                    scheduleCodeSnippetRetry(project, selectionInfo, retriesLeft - 1);
+                }
+            }, 200);
+        }
+
+        /**
          * 发送 QuickFix 消息 - 供 QuickFixWithClaudeAction 调用
          */
         public void sendQuickFixMessage(String prompt, boolean isQuickFix, MessageCallback callback) {
-            if (session != null) {
-                session.getContextCollector().setQuickFix(isQuickFix);
-
-                session.send(prompt).thenRun(() -> {
-                    List<ClaudeSession.Message> messages = session.getMessages();
-                    if (!messages.isEmpty()) {
-                        ClaudeSession.Message last = messages.get(messages.size() - 1);
-                        if (last.type == ClaudeSession.Message.Type.ASSISTANT && last.content != null) {
-                            ApplicationManager.getApplication().invokeLater(() -> {
-                                callback.onComplete(SDKResult.success(last.content));
-                            });
-                        }
-                    }
-                }).exceptionally(ex -> {
-                    ApplicationManager.getApplication().invokeLater(() -> {
-                        callback.onError(ex.getMessage());
-                    });
-                    return null;
+            if (session == null) {
+                LOG.warn("QuickFix: Session is null, cannot send message");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callback.onError("Session not initialized. Please wait for the tool window to fully load.");
                 });
+                return;
             }
+
+            session.getContextCollector().setQuickFix(isQuickFix);
+
+            session.send(prompt).thenRun(() -> {
+                List<ClaudeSession.Message> messages = session.getMessages();
+                if (!messages.isEmpty()) {
+                    ClaudeSession.Message last = messages.get(messages.size() - 1);
+                    if (last.type == ClaudeSession.Message.Type.ASSISTANT && last.content != null) {
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            callback.onComplete(SDKResult.success(last.content));
+                        });
+                    }
+                }
+            }).exceptionally(ex -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callback.onError(ex.getMessage());
+                });
+                return null;
+            });
         }
 
         public JPanel getContent() {

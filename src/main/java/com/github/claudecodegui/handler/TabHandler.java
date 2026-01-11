@@ -10,8 +10,6 @@ import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.content.ContentManager;
 
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Tab management handler
@@ -53,18 +51,18 @@ public class TabHandler extends BaseMessageHandler {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 // Get the tool window
-                ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Claude Code GUI");
+                ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
                 if (toolWindow == null) {
                     LOG.error("[TabHandler] Tool window not found");
-                    callJavaScript("addErrorMessage", escapeJs("无法找到 Claude Code GUI 工具窗口"));
+                    callJavaScript("addErrorMessage", escapeJs("无法找到 CCG 工具窗口"));
                     return;
                 }
 
                 // Create a new chat window instance with skipRegister=true (don't replace the main instance)
                 ClaudeSDKToolWindow.ClaudeChatWindow newChatWindow = new ClaudeSDKToolWindow.ClaudeChatWindow(project, true);
 
-                // Create a tab name with timestamp
-                String tabName = "Chat " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+                // Create a tab name in the format "AIN"
+                String tabName = ClaudeSDKToolWindow.getNextTabName(toolWindow);
 
                 // Create and add the new tab content
                 ContentFactory contentFactory = ContentFactory.getInstance();

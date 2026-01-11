@@ -77,7 +77,7 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Claude Code GUI 工具窗口（包含历史记录功能） -->
-        <toolWindow id="Claude Code GUI"
+        <toolWindow id="CCG"
                     anchor="right"
                     factoryClass="com.github.claudecodegui.ClaudeSDKToolWindow"
                     icon="/icons/cc-gui-icon.svg"
@@ -115,13 +115,11 @@
                            relative-to-action="ClaudeCodeGUI.SendSelectionToTerminalAction"/>
         </action>
 
-        <!-- Create New Tab Action -->
+        <!-- Create New Tab Action (can be invoked via Find Action or programmatically) -->
         <action id="ClaudeCodeGUI.CreateNewTabAction"
                 class="com.github.claudecodegui.CreateNewTabAction"
                 icon="AllIcons.General.Add"
                 text="New Chat Tab"
-                description="Create a new chat tab">
-            <add-to-group group-id="ClaudeCodeGUI" anchor="last"/>
-        </action>
+                description="Create a new chat tab in Claude Code GUI tool window"/>
     </actions>
 </idea-plugin>
