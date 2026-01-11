@@ -38,6 +38,9 @@ public class ContextCollector {
     private static Method collectJavaContextMethod;
     private static Method collectFocusedContextMethod;
 
+    private static final boolean PYTHON_PLUGIN_AVAILABLE = isPythonPluginAvailable();
+    private static Method collectPythonContextMethod;
+
     static {
         if (JAVA_PLUGIN_AVAILABLE) {
             try {
@@ -53,6 +56,18 @@ public class ContextCollector {
                 LOG.warn("Failed to load JavaContextCollector: " + e.getMessage());
             }
         }
+
+        if (PYTHON_PLUGIN_AVAILABLE) {
+            try {
+                Class<?> pythonCollectorClass = Class.forName(
+                    "com.github.claudecodegui.handler.context.PythonContextCollector");
+                collectPythonContextMethod = pythonCollectorClass.getMethod(
+                    "collectPythonContext",
+                    JsonObject.class, Editor.class, Project.class, PsiFile.class, Document.class);
+            } catch (Exception e) {
+                LOG.warn("Failed to load PythonContextCollector: " + e.getMessage());
+            }
+        }
     }
 
     private static boolean isJavaPluginAvailable() {
@@ -62,6 +77,16 @@ public class ContextCollector {
             return true;
         } catch (ClassNotFoundException e) {
             LOG.info("Java plugin not available - running in platform-compatible mode (PyCharm/WebStorm)");
+            return false;
+        }
+    }
+
+    private static boolean isPythonPluginAvailable() {
+        try {
+            Class.forName("com.jetbrains.python.psi.PyFile");
+            LOG.info("Python plugin detected - Python context collection enabled");
+            return true;
+        } catch (ClassNotFoundException e) {
             return false;
         }
     }
@@ -101,6 +126,17 @@ public class ContextCollector {
                 collectJavaContextMethod.invoke(null, semanticData, editor, project, psiFile, document);
             } catch (Throwable t) {
                 LOG.debug("Failed to collect Java context: " + t.getMessage());
+            }
+        }
+
+        // Python-specific context
+        if (PYTHON_PLUGIN_AVAILABLE && collectPythonContextMethod != null) {
+            try {
+                if (isPythonFile(psiFile)) {
+                    collectPythonContextMethod.invoke(null, semanticData, editor, project, psiFile, document);
+                }
+            } catch (Throwable t) {
+                LOG.debug("Failed to collect Python context: " + t.getMessage());
             }
         }
 
@@ -188,6 +224,14 @@ public class ContextCollector {
             LOG.warn("Failed to get code window: " + e.getMessage());
         }
         return window;
+    }
+
+    private boolean isPythonFile(PsiFile psiFile) {
+        try {
+            return Class.forName("com.jetbrains.python.psi.PyFile").isInstance(psiFile);
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
     private JsonObject getNearbyComments(PsiFile psiFile, int offset) {
