@@ -1619,7 +1619,14 @@ const App = () => {
     console.log('[DEBUG] Current provider before send:', currentProvider);
     sendBridgeMessage('set_provider', currentProvider);
 
-    // 发送消息（智能体提示词由后端自动注入）
+    // 【FIX】构建智能体信息，随消息一起发送，确保每个标签页使用自己选择的智能体
+    const agentInfo = selectedAgent ? {
+      id: selectedAgent.id,
+      name: selectedAgent.name,
+      prompt: selectedAgent.prompt,
+    } : null;
+
+    // 发送消息（智能体提示词由前端传递，不依赖后端全局设置）
     if (hasAttachments) {
       try {
         const payload = JSON.stringify({
@@ -1628,15 +1635,20 @@ const App = () => {
             fileName: a.fileName,
             mediaType: a.mediaType,
             data: a.data,
-          }))
+          })),
+          agent: agentInfo,
         });
         sendBridgeMessage('send_message_with_attachments', payload);
       } catch (error) {
         console.error('[Frontend] Failed to serialize attachments payload', error);
-        sendBridgeMessage('send_message', text);
+        // Fallback: send message with agent info
+        const fallbackPayload = JSON.stringify({ text, agent: agentInfo });
+        sendBridgeMessage('send_message', fallbackPayload);
       }
     } else {
-      sendBridgeMessage('send_message', text);
+      // 【FIX】将消息和智能体信息打包成 JSON 发送
+      const payload = JSON.stringify({ text, agent: agentInfo });
+      sendBridgeMessage('send_message', payload);
     }
   };
 

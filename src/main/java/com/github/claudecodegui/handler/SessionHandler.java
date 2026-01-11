@@ -66,8 +66,9 @@ public class SessionHandler extends BaseMessageHandler {
 
     /**
      * Send message to Claude
+     * 【FIX】Now parses JSON format to extract text and agent info
      */
-    private void handleSendMessage(String prompt) {
+    private void handleSendMessage(String content) {
         String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
         if (nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -84,6 +85,34 @@ public class SessionHandler extends BaseMessageHandler {
             return;
         }
 
+        // 【FIX】Parse JSON format to extract text and agent info for per-tab agent selection
+        String prompt;
+        String agentPrompt = null;
+        try {
+            Gson gson = new Gson();
+            JsonObject payload = gson.fromJson(content, JsonObject.class);
+            prompt = payload != null && payload.has("text") && !payload.get("text").isJsonNull()
+                ? payload.get("text").getAsString()
+                : content; // Fallback to raw content if not JSON
+
+            // Extract agent prompt from the message
+            if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
+                JsonObject agent = payload.getAsJsonObject("agent");
+                if (agent.has("prompt") && !agent.get("prompt").isJsonNull()) {
+                    agentPrompt = agent.get("prompt").getAsString();
+                    String agentName = agent.has("name") ? agent.get("name").getAsString() : "Unknown";
+                    LOG.info("[SessionHandler] Using agent from message: " + agentName);
+                }
+            }
+        } catch (Exception e) {
+            // If parsing fails, treat content as plain text (backward compatibility)
+            LOG.debug("[SessionHandler] Message is plain text, not JSON: " + e.getMessage());
+            prompt = content;
+        }
+
+        final String finalPrompt = prompt;
+        final String finalAgentPrompt = agentPrompt;
+
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
@@ -99,7 +128,8 @@ public class SessionHandler extends BaseMessageHandler {
                 ClaudeNotifier.setWaiting(project);
             }
 
-            context.getSession().send(prompt)
+            // 【FIX】Pass agent prompt directly to session instead of relying on global setting
+            context.getSession().send(finalPrompt, finalAgentPrompt)
                 .thenRun(() -> {
                     if (project != null) {
                         ClaudeNotifier.showSuccess(project, "Task completed");
@@ -120,6 +150,7 @@ public class SessionHandler extends BaseMessageHandler {
 
     /**
      * 发送带附件的消息
+     * 【FIX】Now extracts agent info from payload for per-tab agent selection
      */
     private void handleSendMessageWithAttachments(String content) {
         try {
@@ -146,7 +177,19 @@ public class SessionHandler extends BaseMessageHandler {
                     atts.add(new ClaudeSession.Attachment(fileName, mediaType, data));
                 }
             }
-            sendMessageWithAttachments(text, atts);
+
+            // 【FIX】Extract agent prompt from the payload for per-tab agent selection
+            String agentPrompt = null;
+            if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
+                JsonObject agent = payload.getAsJsonObject("agent");
+                if (agent.has("prompt") && !agent.get("prompt").isJsonNull()) {
+                    agentPrompt = agent.get("prompt").getAsString();
+                    String agentName = agent.has("name") ? agent.get("name").getAsString() : "Unknown";
+                    LOG.info("[SessionHandler] Using agent from attachment message: " + agentName);
+                }
+            }
+
+            sendMessageWithAttachments(text, atts, agentPrompt);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
@@ -155,8 +198,9 @@ public class SessionHandler extends BaseMessageHandler {
 
     /**
      * Send message with attachments to Claude
+     * 【FIX】Now accepts agent prompt parameter for per-tab agent selection
      */
-    private void sendMessageWithAttachments(String prompt, List<ClaudeSession.Attachment> attachments) {
+    private void sendMessageWithAttachments(String prompt, List<ClaudeSession.Attachment> attachments, String agentPrompt) {
         // Version check (consistent with handleSendMessage)
         String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
         if (nodeVersion == null) {
@@ -174,6 +218,8 @@ public class SessionHandler extends BaseMessageHandler {
             return;
         }
 
+        final String finalAgentPrompt = agentPrompt;
+
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
@@ -188,7 +234,8 @@ public class SessionHandler extends BaseMessageHandler {
                 ClaudeNotifier.setWaiting(project);
             }
 
-            context.getSession().send(prompt, attachments)
+            // 【FIX】Pass agent prompt directly to session instead of relying on global setting
+            context.getSession().send(prompt, attachments, finalAgentPrompt)
                 .thenRun(() -> {
                     if (project != null) {
                         ClaudeNotifier.showSuccess(project, "Task completed");
