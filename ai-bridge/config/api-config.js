@@ -127,7 +127,13 @@ export function hasCliSessionAuth() {
  * @returns {Object} 包含 apiKey, baseUrl, authType 及其来源
  */
 export function setupApiKey() {
+  console.log('[DIAG-CONFIG] ========== setupApiKey() START ==========');
+
   const settings = loadClaudeSettings();
+  console.log('[DIAG-CONFIG] Settings loaded:', settings ? 'yes' : 'no');
+  if (settings?.env) {
+    console.log('[DIAG-CONFIG] Settings env keys:', Object.keys(settings.env));
+  }
 
   let apiKey;
   let baseUrl;
@@ -214,6 +220,13 @@ export function setupApiKey() {
   }
 
   console.log('[DEBUG] Auth type:', authType);
+
+  console.log('[DIAG-CONFIG] ========== setupApiKey() RESULT ==========');
+  console.log('[DIAG-CONFIG] authType:', authType);
+  console.log('[DIAG-CONFIG] apiKeySource:', apiKeySource);
+  console.log('[DIAG-CONFIG] baseUrl:', baseUrl || '(not set)');
+  console.log('[DIAG-CONFIG] baseUrlSource:', baseUrlSource);
+  console.log('[DIAG-CONFIG] apiKey preview:', apiKey ? `${apiKey.substring(0, 10)}...` : '(null)');
 
   return { apiKey, baseUrl, authType, apiKeySource, baseUrlSource };
 }

@@ -125,19 +125,26 @@ export function isCodexSdkAvailable() {
  * @throws {Error} 如果 SDK 未安装
  */
 export async function loadClaudeSdk() {
+    console.log('[DIAG-SDK] loadClaudeSdk() called');
+
     // 🔧 优先返回已缓存的 SDK
     if (sdkCache.has('claude')) {
+        console.log('[DIAG-SDK] Returning cached SDK');
         return sdkCache.get('claude');
     }
 
     // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
     if (loadingPromises.has('claude')) {
+        console.log('[DIAG-SDK] SDK loading in progress, returning existing promise');
         return loadingPromises.get('claude');
     }
 
     const sdkPath = getClaudeSdkPath();
+    console.log('[DIAG-SDK] SDK path:', sdkPath);
+    console.log('[DIAG-SDK] SDK path exists:', existsSync(sdkPath));
 
     if (!existsSync(sdkPath)) {
+        console.log('[DIAG-SDK] SDK not installed at path');
         throw new Error('SDK_NOT_INSTALLED:claude');
     }
 
@@ -145,14 +152,20 @@ export async function loadClaudeSdk() {
     const loadPromise = (async () => {
         try {
             const sdkRootDir = getSdkRootDir('claude-sdk');
+            console.log('[DIAG-SDK] SDK root dir:', sdkRootDir);
 
             // 🔧 Node ESM 不支持 import(目录)，必须解析到具体文件（如 sdk.mjs）
             const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/claude-agent-sdk', sdkRootDir);
+            console.log('[DIAG-SDK] Resolved URL:', resolvedUrl);
+
+            console.log('[DIAG-SDK] Starting dynamic import...');
             const sdk = await import(resolvedUrl);
+            console.log('[DIAG-SDK] SDK imported successfully, exports:', Object.keys(sdk));
 
             sdkCache.set('claude', sdk);
             return sdk;
         } catch (error) {
+            console.log('[DIAG-SDK] SDK import failed:', error.message);
             const pkgDir = getClaudeSdkPath();
             const hintFile = join(pkgDir, 'sdk.mjs');
             const hint = existsSync(hintFile) ? ` Did you mean to import ${hintFile}?` : '';
