@@ -29,6 +29,10 @@ public class ClaudeNotifier {
         show(project, "Claude ✗", message, 8000);
     }
 
+    public static void showWarning(@NotNull Project project, String message) {
+        show(project, "Claude ⚠", message, 6000);
+    }
+
     public static void clearStatus(@NotNull Project project) {
         update(project, "ready", null);
     }

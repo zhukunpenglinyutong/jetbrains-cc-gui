@@ -58,7 +58,7 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(JBUI.Borders.empty(8));
 
-        JBLabel label = new JBLabel("Ask Claude to fix or improve this code:");
+        JBLabel label = new JBLabel(ClaudeCodeGuiBundle.message("action.quickFixWithClaude.dialogLabel"));
         label.setBorder(JBUI.Borders.emptyBottom(4));
         panel.add(label, BorderLayout.NORTH);
 
@@ -72,7 +72,7 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
                 .setFocusable(true)
                 .setResizable(true)
                 .setMovable(true)
-                .setTitle("Quick Fix with Claude")
+                .setTitle(ClaudeCodeGuiBundle.message("action.quickFixWithClaude.dialogTitle"))
                 .createPopup();
 
         textField.addKeyListener(new KeyAdapter() {
@@ -94,9 +94,9 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
     }
 
     private void executeQuickFix(@NotNull Project project, @NotNull Editor editor, @NotNull String userPrompt) {
-        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Claude Code GUI");
+        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
         if (toolWindow == null) {
-            ClaudeNotifier.showError(project, "Claude Code GUI tool window not found");
+            ClaudeNotifier.showError(project, "CCG tool window not found");
             return;
         }
 
@@ -105,10 +105,10 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
 
         // 1. Create a new "Secondary" chat window specifically for this Quick Fix
         ClaudeSDKToolWindow.ClaudeChatWindow quickFixWindow = new ClaudeSDKToolWindow.ClaudeChatWindow(project, true);
-        
-        // 2. Add as a new tab in the tool window
+
+        // 2. Add as a new tab in the tool window with "AIN" naming format
         ContentFactory contentFactory = ContentFactory.getInstance();
-        String tabName = "Quick Fix - " + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        String tabName = ClaudeSDKToolWindow.getNextTabName(toolWindow);
         Content content = contentFactory.createContent(quickFixWindow.getContent(), tabName, false);
         content.setCloseable(true);
         quickFixWindow.setParentContent(content);

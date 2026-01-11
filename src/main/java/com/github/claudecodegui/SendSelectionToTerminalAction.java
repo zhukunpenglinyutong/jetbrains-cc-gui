@@ -176,7 +176,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         try {
             // 获取插件的工具窗口
             ToolWindowManager toolWindowManager = ToolWindowManager.getInstance(project);
-            ToolWindow toolWindow = toolWindowManager.getToolWindow("Claude Code GUI");
+            ToolWindow toolWindow = toolWindowManager.getToolWindow("CCG");
 
             if (toolWindow != null) {
                 // 如果窗口未激活，先激活窗口，等待窗口打开后再发送内容
@@ -202,7 +202,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
                     LOG.info("聊天窗口已激活并发送内容到项目: " + project.getName());
                 }
             } else {
-                showError(project, "找不到 Claude Code GUI 工具窗口");
+                showError(project, "找不到 CCG 工具窗口");
             }
 
         } catch (Exception ex) {

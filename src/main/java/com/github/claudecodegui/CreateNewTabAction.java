@@ -11,8 +11,6 @@ import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.content.ContentManager;
 import org.jetbrains.annotations.NotNull;
 
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Action to create a new chat tab in the Claude Code GUI tool window
@@ -29,7 +27,7 @@ public class CreateNewTabAction extends AnAction {
             return;
         }
 
-        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Claude Code GUI");
+        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
         if (toolWindow == null) {
             LOG.error("[CreateNewTabAction] Tool window not found");
             return;
@@ -38,8 +36,8 @@ public class CreateNewTabAction extends AnAction {
         // Create a new chat window instance with skipRegister=true (don't replace the main instance)
         ClaudeSDKToolWindow.ClaudeChatWindow newChatWindow = new ClaudeSDKToolWindow.ClaudeChatWindow(project, true);
 
-        // Create a tab name with timestamp
-        String tabName = "Chat " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+        // Create a tab name in the format "AIN"
+        String tabName = ClaudeSDKToolWindow.getNextTabName(toolWindow);
 
         // Create and add the new tab content
         ContentFactory contentFactory = ContentFactory.getInstance();
