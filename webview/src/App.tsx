@@ -697,6 +697,25 @@ const App = () => {
       setMessages((prev) => [...prev, message]);
     };
 
+    // 添加用户消息（用于外部 Quick Fix 功能）
+    // Add user message to chat (for external Quick Fix feature)
+    // Backend now waits for frontend_ready signal before calling this
+    window.addUserMessage = (content: string) => {
+      const userMessage: ClaudeMessage = {
+        type: 'user',
+        content: content || '',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      // Auto-scroll to bottom to show the user's message
+      isUserAtBottomRef.current = true;
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      });
+    };
+
     // 🔧 流式传输回调函数
     // 流式开始时调用
     window.onStreamStart = () => {
@@ -1715,12 +1734,12 @@ const App = () => {
   /**
    * 处理流式传输开关切换
    */
-  const handleStreamingEnabledChange = (enabled: boolean) => {
+  const handleStreamingEnabledChange = useCallback((enabled: boolean) => {
     setStreamingEnabledSetting(enabled);
     const payload = { streamingEnabled: enabled };
     sendBridgeMessage('set_streaming_enabled', JSON.stringify(payload));
     addToast(enabled ? t('settings.basic.streaming.enabled') : t('settings.basic.streaming.disabled'), 'success');
-  };
+  }, [t, addToast]);
 
   const interruptSession = () => {
     sendBridgeMessage('interrupt_session');
@@ -2532,6 +2551,8 @@ const App = () => {
           onClose={() => setCurrentView('chat')}
           initialTab={settingsInitialTab}
           currentProvider={currentProvider}
+          streamingEnabled={streamingEnabledSetting}
+          onStreamingEnabledChange={handleStreamingEnabledChange}
         />
       ) : currentView === 'chat' ? (
         <>

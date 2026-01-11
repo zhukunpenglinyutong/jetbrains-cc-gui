@@ -41,6 +41,16 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
   const [nodeAvailable, setNodeAvailable] = useState<boolean | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
+  // Use refs to store the latest callback and t function to avoid useEffect re-runs
+  const addToastRef = useRef(addToast);
+  const tRef = useRef(t);
+
+  // Update refs when props change
+  useEffect(() => {
+    addToastRef.current = addToast;
+    tRef.current = t;
+  }, [addToast, t]);
+
   // Auto-scroll logs to bottom
   useEffect(() => {
     if (logContainerRef.current && showLogs) {
@@ -48,6 +58,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
     }
   }, [installLogs, showLogs]);
 
+  // Setup window callbacks - only run once on mount
   useEffect(() => {
     // 🔧 使用更安全的回调管理方式：
     // 1. 保存原有回调的引用（在 effect 执行时捕获）
@@ -105,12 +116,12 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
 
         if (result.success) {
           const sdkDef = SDK_DEFINITIONS.find(d => d.id === result.sdkId);
-          const sdkName = sdkDef ? t(sdkDef.nameKey) : result.sdkId;
-          addToast?.(t('settings.dependency.installSuccess', { name: sdkName }), 'success');
+          const sdkName = sdkDef ? tRef.current(sdkDef.nameKey) : result.sdkId;
+          addToastRef.current?.(tRef.current('settings.dependency.installSuccess', { name: sdkName }), 'success');
         } else if (result.error === 'node_not_configured') {
-          addToast?.(t('settings.dependency.nodeNotConfigured'), 'warning');
+          addToastRef.current?.(tRef.current('settings.dependency.nodeNotConfigured'), 'warning');
         } else {
-          addToast?.(t('settings.dependency.installFailed', { error: result.error }), 'error');
+          addToastRef.current?.(tRef.current('settings.dependency.installFailed', { error: result.error }), 'error');
         }
       } catch (error) {
         console.error('[DependencySection] Failed to parse install result:', error);
@@ -133,10 +144,10 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
 
         if (result.success) {
           const sdkDef = SDK_DEFINITIONS.find(d => d.id === result.sdkId);
-          const sdkName = sdkDef ? t(sdkDef.nameKey) : result.sdkId;
-          addToast?.(t('settings.dependency.uninstallSuccess', { name: sdkName }), 'success');
+          const sdkName = sdkDef ? tRef.current(sdkDef.nameKey) : result.sdkId;
+          addToastRef.current?.(tRef.current('settings.dependency.uninstallSuccess', { name: sdkName }), 'success');
         } else {
-          addToast?.(t('settings.dependency.uninstallFailed', { error: result.error }), 'error');
+          addToastRef.current?.(tRef.current('settings.dependency.uninstallFailed', { error: result.error }), 'error');
         }
       } catch (error) {
         console.error('[DependencySection] Failed to parse uninstall result:', error);
@@ -169,7 +180,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       }
     };
 
-    // Load initial status
+    // Load initial status - only once on mount
     sendToJava('get_dependency_status:');
     sendToJava('check_node_environment:');
 
@@ -181,7 +192,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       window.dependencyUninstallResult = savedDependencyUninstallResult;
       window.nodeEnvironmentStatus = savedNodeEnvironmentStatus;
     };
-  }, [addToast, t]);
+  }, []); // Empty dependency array - only run once on mount
 
   const handleInstall = (sdkId: SdkId) => {
     if (nodeAvailable === false) {

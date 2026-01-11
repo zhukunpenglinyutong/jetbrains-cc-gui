@@ -29,6 +29,9 @@ interface SettingsViewProps {
   onClose: () => void;
   initialTab?: SettingsTab;
   currentProvider: 'claude' | 'codex' | string;
+  // Streaming configuration (passed from App.tsx for state sync)
+  streamingEnabled?: boolean;
+  onStreamingEnabledChange?: (enabled: boolean) => void;
 }
 
 const sendToJava = (message: string) => {
@@ -42,7 +45,7 @@ const sendToJava = (message: string) => {
 // 自动折叠阈值（窗口宽度）
 const AUTO_COLLAPSE_THRESHOLD = 900;
 
-const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProps) => {
+const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: streamingEnabledProp, onStreamingEnabledChange: onStreamingEnabledChangeProp }: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
   // Codex mode: allow providers and usage tabs, disable other features
@@ -156,8 +159,9 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
     lineSpacing: number;
   } | undefined>();
 
-  // 🔧 流式传输配置
-  const [streamingEnabled, setStreamingEnabled] = useState<boolean>(false);
+  // 🔧 流式传输配置 - 优先使用 props，否则使用本地状态（兼容未传递 props 的场景）
+  const [localStreamingEnabled, setLocalStreamingEnabled] = useState<boolean>(false);
+  const streamingEnabled = streamingEnabledProp ?? localStreamingEnabled;
 
   // Toast 状态管理
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -325,15 +329,18 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
       }
     };
 
-    // 🔧 流式传输配置回调
-    window.updateStreamingEnabled = (jsonStr: string) => {
-      try {
-        const data = JSON.parse(jsonStr);
-        setStreamingEnabled(data.streamingEnabled ?? false);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse streaming config:', error);
-      }
-    };
+    // 🔧 流式传输配置回调 - 仅在未从 App.tsx 传递 props 时使用本地状态
+    const previousUpdateStreamingEnabled = window.updateStreamingEnabled;
+    if (!onStreamingEnabledChangeProp) {
+      window.updateStreamingEnabled = (jsonStr: string) => {
+        try {
+          const data = JSON.parse(jsonStr);
+          setLocalStreamingEnabled(data.streamingEnabled ?? false);
+        } catch (error) {
+          console.error('[SettingsView] Failed to parse streaming config:', error);
+        }
+      };
+    }
 
     // Agent 智能体回调
     const previousUpdateAgents = window.updateAgents;
@@ -446,7 +453,10 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
       window.onEditorFontConfigReceived = undefined;
-      window.updateStreamingEnabled = undefined;
+      // Restore previous streaming callback if we overrode it
+      if (!onStreamingEnabledChangeProp) {
+        window.updateStreamingEnabled = previousUpdateStreamingEnabled;
+      }
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       // Cleanup Codex callbacks
@@ -454,7 +464,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
       window.updateActiveCodexProvider = undefined;
       window.updateCurrentCodexConfig = undefined;
     };
-  }, [t]);
+  }, [t, onStreamingEnabledChangeProp]);
 
   // 监听窗口大小变化
   useEffect(() => {
@@ -575,9 +585,15 @@ const SettingsView = ({ onClose, initialTab, currentProvider }: SettingsViewProp
 
   // 🔧 流式传输开关变更处理
   const handleStreamingEnabledChange = (enabled: boolean) => {
-    setStreamingEnabled(enabled);
-    const payload = { streamingEnabled: enabled };
-    sendToJava(`set_streaming_enabled:${JSON.stringify(payload)}`);
+    // If prop callback is provided (from App.tsx), use it for centralized state management
+    if (onStreamingEnabledChangeProp) {
+      onStreamingEnabledChangeProp(enabled);
+    } else {
+      // Fallback to local state if no prop callback provided
+      setLocalStreamingEnabled(enabled);
+      const payload = { streamingEnabled: enabled };
+      sendToJava(`set_streaming_enabled:${JSON.stringify(payload)}`);
+    }
   };
 
   const handleEditProvider = (provider: ProviderConfig) => {

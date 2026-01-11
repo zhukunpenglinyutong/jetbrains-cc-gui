@@ -36,11 +36,14 @@ public class QuickFixService {
         }
 
         final String processedResponse;
+        final boolean wasTruncated;
         if (response.length() > MAX_RESPONSE_SIZE) {
             LOG.warn("Quick Fix: Response too large (" + response.length() + " bytes), truncating for safety");
             processedResponse = response.substring(0, MAX_RESPONSE_SIZE);
+            wasTruncated = true;
         } else {
             processedResponse = response;
+            wasTruncated = false;
         }
 
         // Extract code block
@@ -70,11 +73,24 @@ public class QuickFixService {
             }
 
             ApplicationManager.getApplication().invokeLater(() -> {
+                // Warn user if response was truncated - code block may be incomplete
+                if (wasTruncated) {
+                    ClaudeNotifier.showWarning(project,
+                        "Response was truncated due to size limit. The suggested code may be incomplete.");
+                }
                 showDiffAndApply(project, editor, oldCode, newCode, startOffset, endOffset);
             });
         } else {
-            // No code block found, silently log and skip popup
-            LOG.info("Quick Fix: No code block found in response, skipping dialog");
+            // No code block found
+            if (wasTruncated) {
+                // If truncated and no code block found, the code block was likely cut off
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    ClaudeNotifier.showWarning(project,
+                        "Response was too large and truncated. No complete code block could be extracted.");
+                });
+            } else {
+                LOG.info("Quick Fix: No code block found in response, skipping dialog");
+            }
         }
 
         ClaudeNotifier.clearStatus(project);

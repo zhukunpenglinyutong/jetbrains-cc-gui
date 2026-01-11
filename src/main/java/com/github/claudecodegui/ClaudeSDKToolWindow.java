@@ -47,6 +47,7 @@ import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import com.intellij.util.Alarm;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.messages.MessageBusConnection;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
@@ -260,8 +261,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private volatile boolean disposed = false;
         private volatile boolean initialized = false;
+        private volatile boolean frontendReady = false;  // Frontend React app ready flag
         private volatile boolean slashCommandsFetched = false;  // 标记是否已通过 API 获取了完整命令列表
         private volatile int fetchedSlashCommandsCount = 0;
+
+        // Pending QuickFix message (waiting for frontend to be ready)
+        private volatile String pendingQuickFixPrompt = null;
+        private volatile MessageCallback pendingQuickFixCallback = null;
 
         // 斜杠命令智能缓存
         private SlashCommandCache slashCommandCache;
@@ -1098,6 +1104,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 特殊处理:前端准备就绪信号
             if ("frontend_ready".equals(type)) {
                 LOG.info("Received frontend_ready signal, frontend is now ready to receive data");
+                frontendReady = true;
 
                 // 发送当前权限模式到前端
                 sendCurrentPermissionMode();
@@ -1106,6 +1113,19 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 if (slashCommandCache != null && !slashCommandCache.isEmpty()) {
                     LOG.info("Cache has data, sending immediately");
                     sendCachedSlashCommands();
+                }
+
+                // [FIX] Process pending QuickFix message if exists
+                if (pendingQuickFixPrompt != null && pendingQuickFixCallback != null) {
+                    LOG.info("Processing pending QuickFix message after frontend ready");
+                    String prompt = pendingQuickFixPrompt;
+                    MessageCallback callback = pendingQuickFixCallback;
+                    pendingQuickFixPrompt = null;
+                    pendingQuickFixCallback = null;
+                    // Execute on a separate thread to avoid blocking
+                    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                        executePendingQuickFix(prompt, callback);
+                    });
                 }
                 return;
             }
@@ -1928,8 +1948,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
-         * Schedule code snippet addition with retry mechanism using Alarm.
-         * This avoids race conditions from nested invokeLater calls.
+         * Schedule code snippet addition with retry mechanism using ScheduledExecutorService.
+         * Uses exponential backoff (200ms, 400ms, 800ms) to avoid resource waste.
          */
         private static void scheduleCodeSnippetRetry(Project project, String selectionInfo, int retriesLeft) {
             if (retriesLeft <= 0) {
@@ -1937,24 +1957,28 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
 
-            Alarm alarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD, project);
-            alarm.addRequest(() -> {
-                ClaudeChatWindow retryWindow = instances.get(project);
-                if (retryWindow != null && retryWindow.initialized && !retryWindow.disposed) {
-                    retryWindow.addCodeSnippet(selectionInfo);
-                    alarm.dispose();
-                } else {
-                    // Retry with exponential backoff (200ms, 400ms, 800ms)
-                    int delay = 200 * (4 - retriesLeft);
-                    LOG.debug("Window not ready, retrying in " + delay + "ms (retries left: " + (retriesLeft - 1) + ")");
-                    alarm.dispose();
-                    scheduleCodeSnippetRetry(project, selectionInfo, retriesLeft - 1);
-                }
-            }, 200);
+            // Calculate delay with exponential backoff (200ms, 400ms, 800ms)
+            int delay = 200 * (int) Math.pow(2, 3 - retriesLeft);
+
+            AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed()) {
+                        return;
+                    }
+                    ClaudeChatWindow retryWindow = instances.get(project);
+                    if (retryWindow != null && retryWindow.initialized && !retryWindow.disposed) {
+                        retryWindow.addCodeSnippet(selectionInfo);
+                    } else {
+                        LOG.debug("Window not ready, retrying (retries left: " + (retriesLeft - 1) + ")");
+                        scheduleCodeSnippetRetry(project, selectionInfo, retriesLeft - 1);
+                    }
+                });
+            }, delay, java.util.concurrent.TimeUnit.MILLISECONDS);
         }
 
         /**
          * 发送 QuickFix 消息 - 供 QuickFixWithClaudeAction 调用
+         * Send QuickFix message - called by QuickFixWithClaudeAction
          */
         public void sendQuickFixMessage(String prompt, boolean isQuickFix, MessageCallback callback) {
             if (session == null) {
@@ -1966,6 +1990,41 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             session.getContextCollector().setQuickFix(isQuickFix);
+
+            // [FIX] If frontend is not ready yet, queue the message for later processing
+            if (!frontendReady) {
+                LOG.info("QuickFix: Frontend not ready, queuing message for later");
+                pendingQuickFixPrompt = prompt;
+                pendingQuickFixCallback = callback;
+                return;
+            }
+
+            // Frontend is ready, execute immediately
+            executeQuickFixInternal(prompt, callback);
+        }
+
+        /**
+         * Execute pending QuickFix message after frontend is ready
+         */
+        private void executePendingQuickFix(String prompt, MessageCallback callback) {
+            if (session == null || disposed) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callback.onError("Session not available");
+                });
+                return;
+            }
+            executeQuickFixInternal(prompt, callback);
+        }
+
+        /**
+         * Internal method to execute QuickFix message
+         */
+        private void executeQuickFixInternal(String prompt, MessageCallback callback) {
+            // [FIX] Issue 1: Immediately show user message in frontend before sending
+            // Issue 2: Set loading state to disable send button during AI response
+            String escapedPrompt = JsUtils.escapeJs(prompt);
+            callJavaScript("addUserMessage", escapedPrompt);
+            callJavaScript("showLoading", "true");
 
             session.send(prompt).thenRun(() -> {
                 List<ClaudeSession.Message> messages = session.getMessages();
