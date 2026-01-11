@@ -133,6 +133,10 @@ public class ClaudeMessageHandler implements MessageCallback {
             case "system":
                 handleSystemMessage(content);
                 break;
+            case "node_log":
+                // Forward Node.js logs to frontend console
+                callbackHandler.notifyNodeLog(content);
+                break;
         }
     }
 

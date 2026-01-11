@@ -750,6 +750,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                                 callback.onMessage("message_start", "");
                             } else if (line.startsWith("[MESSAGE_END]")) {
                                 callback.onMessage("message_end", "");
+                            } else {
+                                // Forward all other Node.js output to frontend for debugging
+                                callback.onMessage("node_log", line);
                             }
                         }
                     }

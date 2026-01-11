@@ -65,6 +65,7 @@ import { canUseTool } from '../../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
+import { buildQuickFixPrompt } from '../quickfix-prompts.js';
 
 // Store active query results for rewind operations
 // Key: sessionId, Value: query result object
@@ -300,7 +301,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    // Build systemPrompt.append content (for adding opened files context and agent prompt)
 	    // 使用统一的提示词管理模块构建 IDE 上下文提示词（包括智能体提示词）
 	    console.log('[Agent] message-service.sendMessage received agentPrompt:', agentPrompt ? `✓ (${agentPrompt.length} chars)` : '✗ null');
-	    const systemPromptAppend = buildIDEContextPrompt(openedFiles, agentPrompt);
+	    let systemPromptAppend;
+	    if (openedFiles && openedFiles.isQuickFix) {
+	      systemPromptAppend = buildQuickFixPrompt(openedFiles, message);
+	    } else {
+	      systemPromptAppend = buildIDEContextPrompt(openedFiles, agentPrompt);
+	    }
 	    console.log('[Agent] systemPromptAppend built:', systemPromptAppend ? `✓ (${systemPromptAppend.length} chars)` : '✗ empty');
 
 	    // 准备选项
@@ -891,7 +897,12 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
     // Build systemPrompt.append content (for adding opened files context and agent prompt)
     // 使用统一的提示词管理模块构建 IDE 上下文提示词（包括智能体提示词）
-    const systemPromptAppend = buildIDEContextPrompt(openedFiles, agentPrompt);
+    let systemPromptAppend;
+    if (openedFiles && openedFiles.isQuickFix) {
+      systemPromptAppend = buildQuickFixPrompt(openedFiles, message);
+    } else {
+      systemPromptAppend = buildIDEContextPrompt(openedFiles, agentPrompt);
+    }
     console.log('[Agent] systemPromptAppend built (with attachments):', systemPromptAppend ? `✓ (${systemPromptAppend.length} chars)` : '✗ empty');
 
     // 构建用户消息内容块

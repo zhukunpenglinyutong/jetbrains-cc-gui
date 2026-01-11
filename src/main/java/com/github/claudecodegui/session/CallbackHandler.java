@@ -70,6 +70,19 @@ public class CallbackHandler {
         }
     }
 
+    /**
+     * 通知 Node.js 日志（转发到前端 console）
+     */
+    public void notifyNodeLog(String log) {
+        if (callback != null) {
+            callback.onNodeLog(log);
+        }
+    }
+    public void notifySummaryReceived(String summary) {
+        if (callback != null) {
+            callback.onSummaryReceived(summary);
+        }
+    }
     // ===== 🔧 流式传输通知方法 =====
 
     /**
