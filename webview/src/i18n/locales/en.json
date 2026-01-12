@@ -809,5 +809,24 @@
     "failed": "Failed to restore files",
     "notAvailable": "Rewind not available for this session",
     "parseError": "Failed to parse result"
+  },
+  "reasoning": {
+    "title": "Select reasoning depth",
+    "minimal": {
+      "label": "Minimal",
+      "description": "Fastest, minimal thinking"
+    },
+    "low": {
+      "label": "Low",
+      "description": "Quick responses with basic reasoning"
+    },
+    "medium": {
+      "label": "Medium",
+      "description": "Balanced thinking (default)"
+    },
+    "high": {
+      "label": "High",
+      "description": "Deep reasoning for complex tasks"
+    }
   }
 }

@@ -685,5 +685,24 @@
     "failed": "檔案恢復失敗",
     "notAvailable": "目前會話不支援回溯",
     "parseError": "解析結果失敗"
+  },
+  "reasoning": {
+    "title": "選擇思考深度",
+    "minimal": {
+      "label": "最少",
+      "description": "最快速度，最少思考"
+    },
+    "low": {
+      "label": "較少",
+      "description": "快速響應，基礎推理"
+    },
+    "medium": {
+      "label": "中等",
+      "description": "平衡思考（預設）"
+    },
+    "high": {
+      "label": "較多",
+      "description": "深度推理，適合複雜任務"
+    }
   }
 }

@@ -57,6 +57,8 @@ export const ChatInputBox = ({
   onModeSelect,
   onModelSelect,
   onProviderSelect,
+  reasoningEffort = 'medium',
+  onReasoningChange,
   activeFile,
   selectedLines,
   onClearContext,
@@ -1881,11 +1883,13 @@ export const ChatInputBox = ({
         selectedModel={selectedModel}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
+        reasoningEffort={reasoningEffort}
         onSubmit={handleSubmit}
         onStop={onStop}
         onModeSelect={handleModeSelect}
         onModelSelect={handleModelSelect}
         onProviderSelect={onProviderSelect}
+        onReasoningChange={onReasoningChange}
         onEnhancePrompt={handleEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}

@@ -57,7 +57,8 @@ export async function sendMessage(
   permissionMode = null,
   model = null,
   baseUrl = null,
-  apiKey = null
+  apiKey = null,
+  reasoningEffort = 'medium'
 ) {
   try {
     console.log('[DEBUG] Codex sendMessage called with params:', {
@@ -65,6 +66,7 @@ export async function sendMessage(
       cwd,
       permissionMode,
       model,
+      reasoningEffort,
       hasBaseUrl: !!baseUrl,
       hasApiKey: !!apiKey
     });
@@ -112,9 +114,11 @@ export async function sendMessage(
       maxTurns: 20  // Prevent infinite loops
     };
 
-    // [DISABLED] Force-enable deeper reasoning to surface thinking output
-    // Uncomment below to enable Codex thinking output
-    // threadOptions.modelReasoningEffort = 'high';
+    // Set reasoning effort (thinking depth)
+    if (reasoningEffort && reasoningEffort.trim() !== '') {
+      threadOptions.modelReasoningEffort = reasoningEffort;
+      console.log('[DEBUG] Reasoning effort:', reasoningEffort);
+    }
 
     if (permissionConfig.approvalPolicy) {
       threadOptions.approvalPolicy = permissionConfig.approvalPolicy;

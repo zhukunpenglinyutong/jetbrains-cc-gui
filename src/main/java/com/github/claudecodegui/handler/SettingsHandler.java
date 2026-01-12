@@ -32,6 +32,7 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_mode",
         "set_model",
         "set_provider",
+        "set_reasoning_effort",
         "get_node_path",
         "set_node_path",
         "get_usage_statistics",
@@ -72,6 +73,9 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_provider":
                 handleSetProvider(content);
+                return true;
+            case "set_reasoning_effort":
+                handleSetReasoningEffort(content);
                 return true;
             case "get_node_path":
                 handleGetNodePath();
@@ -360,6 +364,34 @@ public class SettingsHandler extends BaseMessageHandler {
             }
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set provider: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 处理设置思考深度请求 (仅 Codex)
+     */
+    private void handleSetReasoningEffort(String content) {
+        try {
+            String effort = content;
+            if (content != null && !content.isEmpty()) {
+                try {
+                    Gson gson = new Gson();
+                    JsonObject json = gson.fromJson(content, JsonObject.class);
+                    if (json.has("reasoningEffort")) {
+                        effort = json.get("reasoningEffort").getAsString();
+                    }
+                } catch (Exception e) {
+                    // content 本身就是 effort
+                }
+            }
+
+            LOG.info("[SettingsHandler] Setting reasoning effort to: " + effort);
+
+            if (context.getSession() != null) {
+                context.getSession().setReasoningEffort(effort);
+            }
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set reasoning effort: " + e.getMessage(), e);
         }
     }
 

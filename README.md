@@ -196,6 +196,13 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
       </a>
     </td>
   </tr>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/JackWPP">
+        <img src="https://avatars.githubusercontent.com/u/120316122?size=100" width="100" height="100" alt="JackWPP" style="border-radius: 50%;" />
+      </a>
+    </td>
+  </tr>
 </table>
 
 ---

@@ -15,7 +15,7 @@ import RewindSelectDialog, { type RewindableMessage } from './components/RewindS
 import { rewindFiles } from './utils/bridge';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode, SelectedAgent } from './components/ChatInputBox/types';
+import type { Attachment, PermissionMode, ReasoningEffort, SelectedAgent } from './components/ChatInputBox/types';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from './components/ChatInputBox/providers';
 import {
   BashToolBlock,
@@ -117,6 +117,8 @@ const App = () => {
   const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
   const [claudePermissionMode, setClaudePermissionMode] = useState<PermissionMode>('bypassPermissions');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
+  // Codex reasoning effort (thinking depth)
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
@@ -1694,6 +1696,14 @@ const App = () => {
   };
 
   /**
+   * 处理思考深度选择 (Codex only)
+   */
+  const handleReasoningChange = (effort: ReasoningEffort) => {
+    setReasoningEffort(effort);
+    sendBridgeMessage('set_reasoning_effort', effort);
+  };
+
+  /**
    * 处理智能体选择
    */
   const handleAgentSelect = (agent: SelectedAgent | null) => {
@@ -2778,6 +2788,8 @@ const App = () => {
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
+            reasoningEffort={reasoningEffort}
+            onReasoningChange={handleReasoningChange}
             onToggleThinking={handleToggleThinking}
             streamingEnabled={streamingEnabledSetting}
             onStreamingEnabledChange={handleStreamingEnabledChange}

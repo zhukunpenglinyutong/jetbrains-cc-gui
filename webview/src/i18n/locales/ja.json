@@ -750,5 +750,24 @@
     "failed": "ファイルの復元に失敗しました",
     "notAvailable": "このセッションでは巻き戻しを利用できません",
     "parseError": "結果の解析に失敗しました"
+  },
+  "reasoning": {
+    "title": "思考深度を選択",
+    "minimal": {
+      "label": "最小",
+      "description": "最速、最小限の思考"
+    },
+    "low": {
+      "label": "低",
+      "description": "基本的な推論による迅速な応答"
+    },
+    "medium": {
+      "label": "中",
+      "description": "バランスの取れた思考（デフォルト）"
+    },
+    "high": {
+      "label": "高",
+      "description": "複雑なタスク向けの深い推論"
+    }
   }
 }

@@ -685,5 +685,24 @@
     "failed": "Échec de la restauration des fichiers",
     "notAvailable": "Restauration non disponible pour cette session",
     "parseError": "Échec de l'analyse du résultat"
+  },
+  "reasoning": {
+    "title": "Sélectionner la profondeur de raisonnement",
+    "minimal": {
+      "label": "Minimal",
+      "description": "Plus rapide, réflexion minimale"
+    },
+    "low": {
+      "label": "Faible",
+      "description": "Réponses rapides avec raisonnement de base"
+    },
+    "medium": {
+      "label": "Moyen",
+      "description": "Réflexion équilibrée (par défaut)"
+    },
+    "high": {
+      "label": "Élevé",
+      "description": "Raisonnement approfondi pour tâches complexes"
+    }
   }
 }

@@ -143,7 +143,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
         title={t('chat.currentModel', { model: getModelLabel(currentModel) })}
       >
         <ModelIcon provider={currentProvider} size={12} />
-        <span>{getModelLabel(currentModel)}</span>
+        <span className="selector-button-text">{getModelLabel(currentModel)}</span>
         <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
       </button>
 

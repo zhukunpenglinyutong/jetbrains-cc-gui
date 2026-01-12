@@ -685,5 +685,24 @@
     "failed": "Error al restaurar archivos",
     "notAvailable": "Restauración no disponible para esta sesión",
     "parseError": "Error al analizar el resultado"
+  },
+  "reasoning": {
+    "title": "Seleccionar profundidad de razonamiento",
+    "minimal": {
+      "label": "Mínimo",
+      "description": "Más rápido, mínimo pensamiento"
+    },
+    "low": {
+      "label": "Bajo",
+      "description": "Respuestas rápidas con razonamiento básico"
+    },
+    "medium": {
+      "label": "Medio",
+      "description": "Pensamiento equilibrado (predeterminado)"
+    },
+    "high": {
+      "label": "Alto",
+      "description": "Razonamiento profundo para tareas complejas"
+    }
   }
 }
