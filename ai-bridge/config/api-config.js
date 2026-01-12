@@ -156,7 +156,9 @@ export function setupApiKey() {
     authType = 'api_key';  // x-api-key 认证
     apiKeySource = 'settings.json (ANTHROPIC_API_KEY)';
   } else if (settings?.env?.CLAUDE_CODE_USE_BEDROCK === '1' || settings?.env?.CLAUDE_CODE_USE_BEDROCK === 1 || settings?.env?.CLAUDE_CODE_USE_BEDROCK === 'true' || settings?.env?.CLAUDE_CODE_USE_BEDROCK === true) {
-    apiKey = settings?.env?.CLAUDE_CODE_USE_BEDROCK;
+    // aws的配置方式有很多 参考某一变量都不太准确。例如 AWS_PROFILE AWS_SECRET_ACCESS_KEY AWS_BEARER_TOKEN_BEDROCK 还有未知 aws login及 aws configure产生的配置
+    // 由于CLAUDE_CODE_USE_BEDROCK可能为数字 1 ，与其他apiKey为字符串不同，防止后续日志、校验出现问题 修改为固定字符串
+    apiKey = 'AWS_BEDROCK';
     authType = 'aws_bedrock';  // aws_bedrock 认证
     apiKeySource = 'settings.json (AWS_BEDROCK)';
   }
