@@ -10,7 +10,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.5-beta3-fix'
+version = '0.1.5-beta4'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -28,9 +28,31 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
 
     intellijPlatform {
-        intellijIdeaCommunity('2024.3.1')
-        bundledPlugin('com.intellij.java')
+        def targetIde = project.findProperty('targetIde') ?: 'IC'
+        if (targetIde == 'PC') {
+            pycharmCommunity('2024.3')
+            bundledPlugin('PythonCore')
+        } else if (targetIde == 'PY') {
+            pycharmProfessional('2024.3')
+            bundledPlugin('Pythonid')
+        } else {
+            intellijIdeaCommunity('2024.3.1')
+            bundledPlugin('com.intellij.java')
+            // Add Python plugin to support compiling PythonContextCollector
+            plugin('PythonCore', '243.22562.145')
+        }
+
         instrumentationTools()
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            if (project.findProperty('targetIde') == 'PC' || project.findProperty('targetIde') == 'PY') {
+                exclude '**/JavaContextCollector.java'
+            }
+        }
     }
 }
 
