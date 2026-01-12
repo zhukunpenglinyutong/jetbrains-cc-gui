@@ -1,0 +1,4 @@
+<idea-plugin>
+    <!-- This file is loaded only when com.intellij.modules.python plugin is available -->
+    <!-- Python-specific extensions can be added here if needed in the future -->
+</idea-plugin>

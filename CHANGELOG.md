@@ -1,3 +1,15 @@
+##### **2026年1月12日（v0.1.5-beta4）**
+
+English:
+- [x] Add experimental PyCharm support (Install from Disk)
+- [x] Implement Python semantic context collection (requires Python plugin)
+- [x] Optimize cross-IDE compatibility for ContextCollector
+
+中文:
+- [x] 新增 PyCharm 实验性支持（支持本地安装）
+- [x] 实现 Python 语义上下文采集（依赖 Python 插件）
+- [x] 优化 ContextCollector 跨 IDE 兼容性
+
 ##### **2026年1月11日（v0.1.5-beta3）**
 English:
 - [x] Implement Quick Fix feature with Claude integration (right-click context menu)

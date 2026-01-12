@@ -114,8 +114,8 @@ public class EditorContextCollector {
                     selectionInfo.get("startLine") + "-" + selectionInfo.get("endLine"));
             }
 
-            // 收集 PSI 语义上下文 (仅 Java 文件)
-            if (psiContextEnabled && editor != null && activeFile.toLowerCase().endsWith(".java")) {
+            // 收集 PSI 语义上下文 (所有文件)
+            if (psiContextEnabled && editor != null && activeFile != null) {
                 try {
                     ContextCollector semanticCollector = new ContextCollector();
                     JsonObject semanticContext = semanticCollector.collectSemanticContext(editor, project);
