@@ -808,10 +808,6 @@
   },
   "reasoning": {
     "title": "选择思考深度",
-    "minimal": {
-      "label": "最少",
-      "description": "最快速度，最少思考"
-    },
     "low": {
       "label": "较少",
       "description": "快速响应，基础推理"
@@ -823,6 +819,10 @@
     "high": {
       "label": "较多",
       "description": "深度推理，适合复杂任务"
+    },
+    "xhigh": {
+      "label": "最多",
+      "description": "最深推理，最高精度"
     }
   }
 }

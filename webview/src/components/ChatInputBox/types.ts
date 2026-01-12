@@ -297,8 +297,9 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
 /**
  * Codex Reasoning Effort (思考深度)
  * Controls the depth of reasoning for Codex models
+ * Valid values: low, medium, high, xhigh
  */
-export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 
 /**
  * Reasoning level information
@@ -314,10 +315,10 @@ export interface ReasoningInfo {
  * Available reasoning levels for Codex
  */
 export const REASONING_LEVELS: ReasoningInfo[] = [
-  { id: 'minimal', label: 'Minimal', icon: 'codicon-circle-outline', description: 'Fastest, minimal thinking' },
   { id: 'low', label: 'Low', icon: 'codicon-circle-small', description: 'Quick responses with basic reasoning' },
   { id: 'medium', label: 'Medium', icon: 'codicon-circle-filled', description: 'Balanced thinking (default)' },
   { id: 'high', label: 'High', icon: 'codicon-circle-large-filled', description: 'Deep reasoning for complex tasks' },
+  { id: 'xhigh', label: 'Max', icon: 'codicon-flame', description: 'Maximum reasoning depth' },
 ];
 
 // ============================================================

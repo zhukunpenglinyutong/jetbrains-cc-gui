@@ -753,10 +753,6 @@
   },
   "reasoning": {
     "title": "思考深度を選択",
-    "minimal": {
-      "label": "最小",
-      "description": "最速、最小限の思考"
-    },
     "low": {
       "label": "低",
       "description": "基本的な推論による迅速な応答"
@@ -768,6 +764,10 @@
     "high": {
       "label": "高",
       "description": "複雑なタスク向けの深い推論"
+    },
+    "xhigh": {
+      "label": "最大",
+      "description": "最大の推論深度"
     }
   }
 }

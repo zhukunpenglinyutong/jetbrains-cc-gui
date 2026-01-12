@@ -812,10 +812,6 @@
   },
   "reasoning": {
     "title": "Select reasoning depth",
-    "minimal": {
-      "label": "Minimal",
-      "description": "Fastest, minimal thinking"
-    },
     "low": {
       "label": "Low",
       "description": "Quick responses with basic reasoning"
@@ -827,6 +823,10 @@
     "high": {
       "label": "High",
       "description": "Deep reasoning for complex tasks"
+    },
+    "xhigh": {
+      "label": "Max",
+      "description": "Maximum reasoning depth"
     }
   }
 }

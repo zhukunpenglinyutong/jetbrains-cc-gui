@@ -688,10 +688,6 @@
   },
   "reasoning": {
     "title": "Sélectionner la profondeur de raisonnement",
-    "minimal": {
-      "label": "Minimal",
-      "description": "Plus rapide, réflexion minimale"
-    },
     "low": {
       "label": "Faible",
       "description": "Réponses rapides avec raisonnement de base"
@@ -703,6 +699,10 @@
     "high": {
       "label": "Élevé",
       "description": "Raisonnement approfondi pour tâches complexes"
+    },
+    "xhigh": {
+      "label": "Maximum",
+      "description": "Profondeur de raisonnement maximale"
     }
   }
 }

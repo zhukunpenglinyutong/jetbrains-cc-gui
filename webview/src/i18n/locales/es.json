@@ -688,10 +688,6 @@
   },
   "reasoning": {
     "title": "Seleccionar profundidad de razonamiento",
-    "minimal": {
-      "label": "Mínimo",
-      "description": "Más rápido, mínimo pensamiento"
-    },
     "low": {
       "label": "Bajo",
       "description": "Respuestas rápidas con razonamiento básico"
@@ -703,6 +699,10 @@
     "high": {
       "label": "Alto",
       "description": "Razonamiento profundo para tareas complejas"
+    },
+    "xhigh": {
+      "label": "Máximo",
+      "description": "Profundidad máxima de razonamiento"
     }
   }
 }
