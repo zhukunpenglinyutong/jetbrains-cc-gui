@@ -80,16 +80,48 @@ public class DependencyManager {
             return false;
         }
 
-        Path sdkDir = getSdkDir(sdkId);
-        Path markerFile = sdkDir.resolve(INSTALLED_MARKER);
-
-        if (!Files.exists(markerFile)) {
+        // 检查主包是否存在于 node_modules 中
+        Path packageDir = getPackageDir(sdkId, sdk.getNpmPackage());
+        if (!Files.exists(packageDir)) {
             return false;
         }
 
-        // 检查主包是否存在
-        Path packageDir = getPackageDir(sdkId, sdk.getNpmPackage());
-        return Files.exists(packageDir);
+        // 如果包存在但没有 .installed 标记文件，自动创建标记文件
+        // 这支持用户手动运行 npm install 的情况
+        Path sdkDir = getSdkDir(sdkId);
+        Path markerFile = sdkDir.resolve(INSTALLED_MARKER);
+        if (!Files.exists(markerFile)) {
+            try {
+                String version = getInstalledVersionFromPackage(sdkId, sdk.getNpmPackage());
+                Files.writeString(markerFile, version != null ? version : "unknown");
+                LOG.info("[DependencyManager] Created missing marker file for manually installed SDK: " + sdkId);
+            } catch (Exception e) {
+                LOG.warn("[DependencyManager] Failed to create marker file: " + e.getMessage());
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 从 package.json 读取版本（内部使用，不依赖 isInstalled）
+     */
+    private String getInstalledVersionFromPackage(String sdkId, String npmPackage) {
+        Path packageJson = getPackageDir(sdkId, npmPackage).resolve("package.json");
+        if (!Files.exists(packageJson)) {
+            return null;
+        }
+
+        try (Reader reader = Files.newBufferedReader(packageJson, StandardCharsets.UTF_8)) {
+            JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+            if (json.has("version")) {
+                return json.get("version").getAsString();
+            }
+        } catch (Exception e) {
+            LOG.warn("[DependencyManager] Failed to read version from package.json: " + e.getMessage());
+        }
+
+        return null;
     }
 
     /**
@@ -115,22 +147,7 @@ public class DependencyManager {
             return null;
         }
 
-        // 读取 node_modules 中的 package.json
-        Path packageJson = getPackageDir(sdkId, sdk.getNpmPackage()).resolve("package.json");
-        if (!Files.exists(packageJson)) {
-            return null;
-        }
-
-        try (Reader reader = Files.newBufferedReader(packageJson, StandardCharsets.UTF_8)) {
-            JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
-            if (json.has("version")) {
-                return json.get("version").getAsString();
-            }
-        } catch (Exception e) {
-            LOG.warn("[DependencyManager] Failed to read version from package.json: " + e.getMessage());
-        }
-
-        return null;
+        return getInstalledVersionFromPackage(sdkId, sdk.getNpmPackage());
     }
 
     /**
@@ -490,23 +507,36 @@ public class DependencyManager {
      * 获取 npm 路径（基于 node 路径）
      */
     private String getNpmPath(String nodePath) {
-        if (nodePath == null || "node".equals(nodePath)) {
-            return "npm";
-        }
-
-        File nodeFile = new File(nodePath);
-        String dir = nodeFile.getParent();
-        if (dir == null) {
-            return "npm";
-        }
-
         String npmName = PlatformUtils.isWindows() ? "npm.cmd" : "npm";
-        File npmFile = new File(dir, npmName);
-        if (npmFile.exists()) {
-            return npmFile.getAbsolutePath();
+
+        // 1. 尝试从 Node.js 同目录查找
+        if (nodePath != null && !"node".equals(nodePath)) {
+            File nodeFile = new File(nodePath);
+            String dir = nodeFile.getParent();
+            if (dir != null) {
+                File npmFile = new File(dir, npmName);
+                if (npmFile.exists()) {
+                    return npmFile.getAbsolutePath();
+                }
+            }
         }
 
-        return "npm";
+        // 2. Windows: 尝试从环境变量 PATH 中查找 npm.cmd 的完整路径
+        if (PlatformUtils.isWindows()) {
+            String pathEnv = System.getenv("PATH");
+            if (pathEnv != null) {
+                for (String pathDir : pathEnv.split(File.pathSeparator)) {
+                    File npmFile = new File(pathDir, npmName);
+                    if (npmFile.exists()) {
+                        LOG.info("[DependencyManager] Found npm in PATH: " + npmFile.getAbsolutePath());
+                        return npmFile.getAbsolutePath();
+                    }
+                }
+            }
+        }
+
+        // 3. 回退到简单命令名（Unix 通常可以工作）
+        return PlatformUtils.isWindows() ? npmName : "npm";
     }
 
     /**
