@@ -708,7 +708,7 @@
 }
 
 /* Container query for Codex: hide text when narrow (< 350px) */
-@container button-area (max-width: 400px) {
+@container button-area (max-width: 380px) {
   .button-area[data-provider="codex"] .selector-button-text {
     max-width: 0;
     opacity: 0;
