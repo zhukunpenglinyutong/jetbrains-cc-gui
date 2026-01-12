@@ -83,10 +83,10 @@ cd webview
 npm install
 ```
 
-### 2. Install ai-bridge Dependencies
+### 2. Install claude-bridge Dependencies
 
 ```bash
-cd ai-bridge
+cd claude-bridge
 npm install
 ```
 

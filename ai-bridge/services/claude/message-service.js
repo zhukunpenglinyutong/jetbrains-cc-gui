@@ -160,7 +160,6 @@ function createPreToolUseHook(permissionMode) {
         ? env.ANTHROPIC_AUTH_TOKEN
         : env.ANTHROPIC_API_KEY !== undefined && env.ANTHROPIC_API_KEY !== null
           ? env.ANTHROPIC_API_KEY
-          : (env.CLAUDE_CODE_USE_BEDROCK === 1) ? 'AWS_BEDROCK'
           : null;
 
     const settingsBaseUrl =
