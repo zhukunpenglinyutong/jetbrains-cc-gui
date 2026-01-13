@@ -57,7 +57,8 @@ export async function sendMessage(
   permissionMode = null,
   model = null,
   baseUrl = null,
-  apiKey = null
+  apiKey = null,
+  reasoningEffort = 'medium'
 ) {
   try {
     console.log('[DEBUG] Codex sendMessage called with params:', {
@@ -65,6 +66,7 @@ export async function sendMessage(
       cwd,
       permissionMode,
       model,
+      reasoningEffort,
       hasBaseUrl: !!baseUrl,
       hasApiKey: !!apiKey
     });
@@ -112,9 +114,11 @@ export async function sendMessage(
       maxTurns: 20  // Prevent infinite loops
     };
 
-    // [DISABLED] Force-enable deeper reasoning to surface thinking output
-    // Uncomment below to enable Codex thinking output
-    // threadOptions.modelReasoningEffort = 'high';
+    // Set reasoning effort (thinking depth)
+    if (reasoningEffort && reasoningEffort.trim() !== '') {
+      threadOptions.modelReasoningEffort = reasoningEffort;
+      console.log('[DEBUG] Reasoning effort:', reasoningEffort);
+    }
 
     if (permissionConfig.approvalPolicy) {
       threadOptions.approvalPolicy = permissionConfig.approvalPolicy;
@@ -573,7 +577,7 @@ export async function sendMessage(
     }
 
     if (!reasoningObserved) {
-      console.warn('[THINKING_HINT]', 'Codex 未返回 reasoning 项。若依然看不到思考过程，请参考 docs/codex/docs/config.md 中 hide_agent_reasoning/show_raw_agent_reasoning 的说明，并确认 OpenAI 账号已完成验证。');
+      console.warn('[THINKING_HINT]', 'Codex did not return reasoning items. If you still cannot see the thinking process, please refer to docs/codex/docs/config.md for hide_agent_reasoning/show_raw_agent_reasoning settings, and ensure your OpenAI account has been verified.');
     }
 
     // ============================================================
@@ -648,32 +652,32 @@ function buildErrorPayload(error) {
 
   if (isAuthError) {
     userMessage = [
-      'Codex 认证错误:',
-      `- 错误信息: ${rawError}`,
+      'Codex authentication error:',
+      `- Error message: ${rawError}`,
       '',
-      '请检查以下配置:',
-      '1. 插件设置中的 Codex API Key 是否正确',
-      '2. API Key 是否有足够的权限',
-      '3. 如果使用自定义 Base URL，请确认地址正确',
+      'Please check the following:',
+      '1. Is the Codex API Key in plugin settings correct',
+      '2. Does the API Key have sufficient permissions',
+      '3. If using a custom Base URL, please confirm the address is correct',
       '',
-      '提示: Codex 需要有效的 OpenAI API Key'
+      'Tip: Codex requires a valid OpenAI API Key'
     ].join('\n');
   } else if (isNetworkError) {
     userMessage = [
-      'Codex 网络错误:',
-      `- 错误信息: ${rawError}`,
+      'Codex network error:',
+      `- Error message: ${rawError}`,
       '',
-      '请检查:',
-      '1. 网络连接是否正常',
-      '2. 如果使用代理，请确认代理配置',
-      '3. 防火墙是否阻止了连接'
+      'Please check:',
+      '1. Is the network connection working',
+      '2. If using a proxy, please confirm proxy configuration',
+      '3. Is the firewall blocking the connection'
     ].join('\n');
   } else {
     userMessage = [
-      'Codex 出现错误:',
-      `- 错误信息: ${rawError}`,
+      'Codex error:',
+      `- Error message: ${rawError}`,
       '',
-      '请检查网络连接和 Codex 配置'
+      'Please check network connection and Codex configuration'
     ].join('\n');
   }
 

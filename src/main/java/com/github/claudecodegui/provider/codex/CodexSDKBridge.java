@@ -207,6 +207,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
             String permissionMode,
             String model,
             String agentPrompt,  // Agent prompt (appended to message for Codex)
+            String reasoningEffort,  // Codex reasoning effort (thinking depth)
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -237,6 +238,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
                 stdinInput.addProperty("model", model != null ? model : "");
+                // Reasoning effort (thinking depth)
+                stdinInput.addProperty("reasoningEffort", reasoningEffort != null ? reasoningEffort : "medium");
                 // API configuration
                 stdinInput.addProperty("baseUrl", baseUrl != null ? baseUrl : "");
                 stdinInput.addProperty("apiKey", apiKey != null ? apiKey : "");

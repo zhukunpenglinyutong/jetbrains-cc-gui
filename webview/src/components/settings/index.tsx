@@ -32,6 +32,9 @@ interface SettingsViewProps {
   // Streaming configuration (passed from App.tsx for state sync)
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
+  // Send shortcut configuration (passed from App.tsx for state sync)
+  sendShortcut?: 'enter' | 'cmdEnter';
+  onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
 }
 
 const sendToJava = (message: string) => {
@@ -45,7 +48,7 @@ const sendToJava = (message: string) => {
 // 自动折叠阈值（窗口宽度）
 const AUTO_COLLAPSE_THRESHOLD = 900;
 
-const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: streamingEnabledProp, onStreamingEnabledChange: onStreamingEnabledChangeProp }: SettingsViewProps) => {
+const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: streamingEnabledProp, onStreamingEnabledChange: onStreamingEnabledChangeProp, sendShortcut: sendShortcutProp, onSendShortcutChange: onSendShortcutChangeProp }: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
   // Codex mode: allow providers and usage tabs, disable other features
@@ -162,6 +165,10 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
   // 🔧 流式传输配置 - 优先使用 props，否则使用本地状态（兼容未传递 props 的场景）
   const [localStreamingEnabled, setLocalStreamingEnabled] = useState<boolean>(false);
   const streamingEnabled = streamingEnabledProp ?? localStreamingEnabled;
+
+  // 发送快捷键配置 - 优先使用 props，否则使用本地状态
+  const [localSendShortcut, setLocalSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
+  const sendShortcut = sendShortcutProp ?? localSendShortcut;
 
   // Toast 状态管理
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -342,6 +349,19 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       };
     }
 
+    // 发送快捷键配置回调 - 仅在未从 App.tsx 传递 props 时使用本地状态
+    const previousUpdateSendShortcut = window.updateSendShortcut;
+    if (!onSendShortcutChangeProp) {
+      window.updateSendShortcut = (jsonStr: string) => {
+        try {
+          const data = JSON.parse(jsonStr);
+          setLocalSendShortcut(data.sendShortcut ?? 'enter');
+        } catch (error) {
+          console.error('[SettingsView] Failed to parse send shortcut config:', error);
+        }
+      };
+    }
+
     // Agent 智能体回调
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
@@ -457,6 +477,10 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       if (!onStreamingEnabledChangeProp) {
         window.updateStreamingEnabled = previousUpdateStreamingEnabled;
       }
+      // Restore previous send shortcut callback if we overrode it
+      if (!onSendShortcutChangeProp) {
+        window.updateSendShortcut = previousUpdateSendShortcut;
+      }
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       // Cleanup Codex callbacks
@@ -464,7 +488,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       window.updateActiveCodexProvider = undefined;
       window.updateCurrentCodexConfig = undefined;
     };
-  }, [t, onStreamingEnabledChangeProp]);
+  }, [t, onStreamingEnabledChangeProp, onSendShortcutChangeProp]);
 
   // 监听窗口大小变化
   useEffect(() => {
@@ -593,6 +617,19 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       setLocalStreamingEnabled(enabled);
       const payload = { streamingEnabled: enabled };
       sendToJava(`set_streaming_enabled:${JSON.stringify(payload)}`);
+    }
+  };
+
+  // 发送快捷键变更处理
+  const handleSendShortcutChange = (shortcut: 'enter' | 'cmdEnter') => {
+    // If prop callback is provided (from App.tsx), use it for centralized state management
+    if (onSendShortcutChangeProp) {
+      onSendShortcutChangeProp(shortcut);
+    } else {
+      // Fallback to local state if no prop callback provided
+      setLocalSendShortcut(shortcut);
+      const payload = { sendShortcut: shortcut };
+      sendToJava(`set_send_shortcut:${JSON.stringify(payload)}`);
     }
   };
 
@@ -876,6 +913,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
               editorFontConfig={editorFontConfig}
               streamingEnabled={streamingEnabled}
               onStreamingEnabledChange={handleStreamingEnabledChange}
+              sendShortcut={sendShortcut}
+              onSendShortcutChange={handleSendShortcutChange}
             />
           )}
 

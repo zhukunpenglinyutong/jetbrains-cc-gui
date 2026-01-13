@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * 读取 cc-switch SQLite 数据库中的 Claude 供应商配置
- * 使用 sql.js (纯 JavaScript 实现，跨平台兼容)
+ * Read Claude provider configuration from cc-switch SQLite database.
+ * Uses sql.js (pure JavaScript implementation, cross-platform compatible)
  *
- * 用法: node read-cc-switch-db.js <数据库文件路径>
- * 输出: JSON 格式的供应商列表
+ * Usage: node read-cc-switch-db.js <database file path>
+ * Output: JSON format provider list
  */
 
 import initSqlJs from 'sql.js';
@@ -16,7 +16,7 @@ const dbPath = process.argv[2];
 if (!dbPath) {
     console.error(JSON.stringify({
         success: false,
-        error: '缺少数据库文件路径参数'
+        error: 'Missing database file path argument'
     }));
     process.exit(1);
 }
@@ -25,7 +25,7 @@ if (!dbPath) {
 if (!fs.existsSync(dbPath)) {
     console.error(JSON.stringify({
         success: false,
-        error: `数据库文件不存在: ${dbPath}`
+        error: `Database file does not exist: ${dbPath}`
     }));
     process.exit(1);
 }
@@ -151,7 +151,7 @@ try {
 
             return provider;
         } catch (e) {
-            console.error(`解析供应商配置失败:`, e.message);
+            console.error(`Failed to parse provider config:`, e.message);
             return null;
         }
     }).filter(p => p !== null);
@@ -169,7 +169,7 @@ try {
 } catch (error) {
     console.error(JSON.stringify({
         success: false,
-        error: `读取数据库失败: ${error.message}`,
+        error: `Failed to read database: ${error.message}`,
         stack: error.stack
     }));
     process.exit(1);

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ButtonAreaProps, ModelInfo, PermissionMode } from './types';
-import { ConfigSelect, ModelSelect, ModeSelect } from './selectors';
+import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from './types';
+import { ConfigSelect, ModelSelect, ModeSelect, ReasoningSelect } from './selectors';
 import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 
 /**
@@ -16,11 +16,13 @@ export const ButtonArea = ({
   selectedModel = 'claude-sonnet-4-5',
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
+  reasoningEffort = 'medium',
   onSubmit,
   onStop,
   onModeSelect,
   onModelSelect,
   onProviderSelect,
+  onReasoningChange,
   onEnhancePrompt,
   alwaysThinkingEnabled = false,
   onToggleThinking,
@@ -119,6 +121,13 @@ export const ButtonArea = ({
   }, [onProviderSelect]);
 
   /**
+   * 处理思考深度选择 (Codex only)
+   */
+  const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
+    onReasoningChange?.(effort);
+  }, [onReasoningChange]);
+
+  /**
    * 处理增强提示词按钮点击
    */
   const handleEnhanceClick = useCallback((e: React.MouseEvent) => {
@@ -127,7 +136,7 @@ export const ButtonArea = ({
   }, [onEnhancePrompt]);
 
   return (
-    <div className="button-area">
+    <div className="button-area" data-provider={currentProvider}>
       {/* 左侧：选择器 */}
       <div className="button-area-left">
         <ConfigSelect
@@ -143,6 +152,9 @@ export const ButtonArea = ({
         />
         <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />
+        {currentProvider === 'codex' && (
+          <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} />
+        )}
       </div>
 
       {/* 右侧:工具按钮 */}

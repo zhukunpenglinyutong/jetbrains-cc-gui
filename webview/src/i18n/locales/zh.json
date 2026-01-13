@@ -130,6 +130,13 @@
         "enabled": "已开启",
         "disabled": "已关闭",
         "hint": "开启后，AI 回复将实时逐字显示，而非等待完整响应后一次性展示。可能会消耗更多资源。"
+      },
+      "sendShortcut": {
+        "label": "发送快捷键",
+        "enter": "Enter 发送",
+        "enterDesc": "按 Enter 发送消息，Shift+Enter 换行",
+        "cmdEnter": "⌘/Ctrl+Enter 发送",
+        "cmdEnterDesc": "按 ⌘/Ctrl+Enter 发送消息，Enter 换行"
       }
     },
     "providers": "供应商管理",
@@ -427,6 +434,7 @@
   },
   "markdown": {
     "copyCode": "复制代码",
+    "copyMessage": "复制消息",
     "copySuccess": "复制成功"
   },
   "usage": {
@@ -805,5 +813,59 @@
     "failed": "文件恢复失败",
     "notAvailable": "当前会话不支持回溯",
     "parseError": "解析结果失败"
+  },
+  "reasoning": {
+    "title": "选择思考深度",
+    "low": {
+      "label": "较少",
+      "description": "快速响应，基础推理"
+    },
+    "medium": {
+      "label": "中等",
+      "description": "平衡思考（默认）"
+    },
+    "high": {
+      "label": "较多",
+      "description": "深度推理，适合复杂任务"
+    },
+    "xhigh": {
+      "label": "最多",
+      "description": "最深推理，最高精度"
+    }
+  },
+  "aiBridge": {
+    "claudeCodeInterrupted": "Claude Code 运行被中断（可能是响应超时或用户取消）：",
+    "claudeCodeError": "Claude Code 出现错误：",
+    "errorMessage": "错误信息",
+    "currentApiKeySource": "当前 API Key 来源",
+    "currentApiKeyPreview": "当前 API Key 预览",
+    "currentBaseUrl": "当前 Base URL",
+    "source": "来源",
+    "notConfigured": "未配置",
+    "notConfiguredEmpty": "未配置（值为空或缺失）",
+    "defaultBaseUrl": "默认值（https://api.anthropic.com）",
+    "configTip": "提示：CLI 可以读取环境变量或 settings.json 两种方式；本插件为了避免产生问题，只支持读取 settings.json 内容，您可以在本插件右上角设置 - 供应商管理配置下即可使用",
+    "apiError": "API 错误",
+    "apiErrorCauses": "可能的原因：\n1. API Key 配置不正确\n2. 第三方代理服务配置问题\n3. 请检查 ~/.claude/settings.json 中的配置",
+    "codexAuthError": "Codex 认证错误：",
+    "codexAuthErrorChecks": "请检查以下配置：\n1. 插件设置中的 Codex API Key 是否正确\n2. API Key 是否有足够的权限\n3. 如果使用自定义 Base URL，请确认地址正确",
+    "codexAuthTip": "提示：Codex 需要有效的 OpenAI API Key",
+    "codexNetworkError": "Codex 网络错误：",
+    "codexNetworkErrorChecks": "请检查：\n1. 网络连接是否正常\n2. 如果使用代理，请确认代理配置\n3. 防火墙是否阻止了连接",
+    "codexError": "Codex 出现错误：",
+    "codexErrorCheck": "请检查网络连接和 Codex 配置",
+    "codexThinkingHint": "Codex 未返回 reasoning 项。若依然看不到思考过程，请参考 docs/codex/docs/config.md 中 hide_agent_reasoning/show_raw_agent_reasoning 的说明，并确认 OpenAI 账号已完成验证。",
+    "userDeniedPermission": "用户拒绝了 {{toolName}} 工具的使用权限",
+    "userDidNotProvideAnswers": "用户未提供问题答案",
+    "dbMissingPath": "缺少数据库文件路径参数",
+    "dbFileNotExist": "数据库文件不存在",
+    "dbReadFailed": "读取数据库失败",
+    "dbParseProviderFailed": "解析供应商配置失败",
+    "aiResponseEmpty": "AI 响应为空",
+    "enhancementFailed": "增强失败",
+    "uploadedImages": "已上传 {{count}} 张图片",
+    "uploadedAttachments": "已上传附件",
+    "emptyMessage": "空消息",
+    "attachment": "附件"
   }
 }

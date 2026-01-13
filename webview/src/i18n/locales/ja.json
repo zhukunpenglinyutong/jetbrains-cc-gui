@@ -123,6 +123,13 @@
       "editorFont": {
         "label": "フォント (エディタフォントに従う)",
         "hint": "ここでは編集できません。変更するには、IDEA設定 → エディタ → フォントに移動してください(プラグインフォントを有効にするにはIDEAを再起動してください)"
+      },
+      "sendShortcut": {
+        "label": "送信ショートカット",
+        "enter": "Enterで送信",
+        "enterDesc": "Enterでメッセージを送信、Shift+Enterで改行",
+        "cmdEnter": "⌘/Ctrl+Enterで送信",
+        "cmdEnterDesc": "⌘/Ctrl+Enterでメッセージを送信、Enterで改行"
       }
     },
     "providers": "プロバイダー管理",
@@ -392,6 +399,7 @@
   },
   "markdown": {
     "copyCode": "コードをコピー",
+    "copyMessage": "メッセージをコピー",
     "copySuccess": "コピーされました!"
   },
   "usage": {
@@ -750,5 +758,59 @@
     "failed": "ファイルの復元に失敗しました",
     "notAvailable": "このセッションでは巻き戻しを利用できません",
     "parseError": "結果の解析に失敗しました"
+  },
+  "reasoning": {
+    "title": "思考深度を選択",
+    "low": {
+      "label": "低",
+      "description": "基本的な推論による迅速な応答"
+    },
+    "medium": {
+      "label": "中",
+      "description": "バランスの取れた思考（デフォルト）"
+    },
+    "high": {
+      "label": "高",
+      "description": "複雑なタスク向けの深い推論"
+    },
+    "xhigh": {
+      "label": "最大",
+      "description": "最大の推論深度"
+    }
+  },
+  "aiBridge": {
+    "claudeCodeInterrupted": "Claude Code が中断されました（レスポンスタイムアウトまたはユーザーキャンセルの可能性）：",
+    "claudeCodeError": "Claude Code エラー：",
+    "errorMessage": "エラーメッセージ",
+    "currentApiKeySource": "現在の API Key ソース",
+    "currentApiKeyPreview": "現在の API Key プレビュー",
+    "currentBaseUrl": "現在の Base URL",
+    "source": "ソース",
+    "notConfigured": "未設定",
+    "notConfiguredEmpty": "未設定（値が空または欠落）",
+    "defaultBaseUrl": "デフォルト（https://api.anthropic.com）",
+    "configTip": "ヒント：CLI は環境変数または settings.json から読み取れますが、このプラグインは問題を避けるため settings.json からの読み取りのみサポートしています。プラグイン右上の設定 > プロバイダー管理で設定できます",
+    "apiError": "API エラー",
+    "apiErrorCauses": "考えられる原因：\n1. API Key が正しく設定されていない\n2. サードパーティプロキシサービスの設定問題\n3. ~/.claude/settings.json の設定を確認してください",
+    "codexAuthError": "Codex 認証エラー：",
+    "codexAuthErrorChecks": "以下を確認してください：\n1. プラグイン設定の Codex API Key は正しいですか\n2. API Key に十分な権限がありますか\n3. カスタム Base URL を使用している場合、アドレスが正しいか確認してください",
+    "codexAuthTip": "ヒント：Codex には有効な OpenAI API Key が必要です",
+    "codexNetworkError": "Codex ネットワークエラー：",
+    "codexNetworkErrorChecks": "確認してください：\n1. ネットワーク接続は正常ですか\n2. プロキシを使用している場合、プロキシ設定を確認してください\n3. ファイアウォールが接続をブロックしていませんか",
+    "codexError": "Codex エラー：",
+    "codexErrorCheck": "ネットワーク接続と Codex 設定を確認してください",
+    "codexThinkingHint": "Codex が reasoning 項目を返しませんでした。思考プロセスが表示されない場合は、docs/codex/docs/config.md の hide_agent_reasoning/show_raw_agent_reasoning 設定を参照し、OpenAI アカウントが認証済みであることを確認してください。",
+    "userDeniedPermission": "ユーザーが {{toolName}} ツールの使用権限を拒否しました",
+    "userDidNotProvideAnswers": "ユーザーが回答を提供しませんでした",
+    "dbMissingPath": "データベースファイルパス引数がありません",
+    "dbFileNotExist": "データベースファイルが存在しません",
+    "dbReadFailed": "データベースの読み取りに失敗しました",
+    "dbParseProviderFailed": "プロバイダー設定の解析に失敗しました",
+    "aiResponseEmpty": "AI レスポンスが空です",
+    "enhancementFailed": "強化に失敗しました",
+    "uploadedImages": "{{count}} 枚の画像をアップロードしました",
+    "uploadedAttachments": "添付ファイルをアップロードしました",
+    "emptyMessage": "空のメッセージ",
+    "attachment": "添付ファイル"
   }
 }

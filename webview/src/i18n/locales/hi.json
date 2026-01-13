@@ -118,6 +118,13 @@
       "editorFont": {
         "label": "फ़ॉन्ट (संपादक फ़ॉन्ट का अनुसरण करता है)",
         "hint": "यहाँ संपादन योग्य नहीं है। संशोधित करने के लिए, IDEA सेटिंग्स → संपादक → फ़ॉन्ट पर जाएं (प्लगइन फ़ॉन्ट प्रभावी होने के लिए IDEA पुनः आरंभ करें)"
+      },
+      "sendShortcut": {
+        "label": "भेजने का शॉर्टकट",
+        "enter": "Enter से भेजें",
+        "enterDesc": "संदेश भेजने के लिए Enter दबाएं, नई पंक्ति के लिए Shift+Enter",
+        "cmdEnter": "⌘/Ctrl+Enter से भेजें",
+        "cmdEnterDesc": "संदेश भेजने के लिए ⌘/Ctrl+Enter दबाएं, नई पंक्ति के लिए Enter"
       }
     },
     "providers": "प्रदाता प्रबंधन",
@@ -381,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "कोड कॉपी करें",
+    "copyMessage": "संदेश कॉपी करें",
     "copySuccess": "कॉपी हो गया"
   },
   "usage": {
@@ -685,5 +693,59 @@
     "failed": "फ़ाइलें पुनर्स्थापित करने में विफल",
     "notAvailable": "इस सत्र के लिए पुनर्स्थापना उपलब्ध नहीं है",
     "parseError": "परिणाम पार्स करने में विफल"
+  },
+  "reasoning": {
+    "title": "तर्क गहराई चुनें",
+    "low": {
+      "label": "कम",
+      "description": "बुनियादी तर्क के साथ त्वरित उत्तर"
+    },
+    "medium": {
+      "label": "मध्यम",
+      "description": "संतुलित सोच (डिफ़ॉल्ट)"
+    },
+    "high": {
+      "label": "उच्च",
+      "description": "जटिल कार्यों के लिए गहन तर्क"
+    },
+    "xhigh": {
+      "label": "अधिकतम",
+      "description": "अधिकतम तर्क गहराई"
+    }
+  },
+  "aiBridge": {
+    "claudeCodeInterrupted": "Claude Code बाधित हुआ (संभवतः प्रतिक्रिया समय समाप्त या उपयोगकर्ता रद्दीकरण):",
+    "claudeCodeError": "Claude Code त्रुटि:",
+    "errorMessage": "त्रुटि संदेश",
+    "currentApiKeySource": "वर्तमान API Key स्रोत",
+    "currentApiKeyPreview": "वर्तमान API Key पूर्वावलोकन",
+    "currentBaseUrl": "वर्तमान Base URL",
+    "source": "स्रोत",
+    "notConfigured": "कॉन्फ़िगर नहीं किया गया",
+    "notConfiguredEmpty": "कॉन्फ़िगर नहीं किया गया (मान खाली या गायब है)",
+    "defaultBaseUrl": "डिफ़ॉल्ट (https://api.anthropic.com)",
+    "configTip": "सुझाव: CLI पर्यावरण चर या settings.json से पढ़ सकता है; यह प्लगइन समस्याओं से बचने के लिए केवल settings.json से पढ़ने का समर्थन करता है। आप इसे प्लगइन के ऊपरी दाएं कोने में सेटिंग्स > प्रदाता प्रबंधन में कॉन्फ़िगर कर सकते हैं",
+    "apiError": "API त्रुटि",
+    "apiErrorCauses": "संभावित कारण:\n1. API Key सही ढंग से कॉन्फ़िगर नहीं है\n2. तृतीय-पक्ष प्रॉक्सी सेवा कॉन्फ़िगरेशन समस्या\n3. कृपया ~/.claude/settings.json में कॉन्फ़िगरेशन जांचें",
+    "codexAuthError": "Codex प्रमाणीकरण त्रुटि:",
+    "codexAuthErrorChecks": "कृपया निम्नलिखित जांचें:\n1. क्या प्लगइन सेटिंग्स में Codex API Key सही है\n2. क्या API Key के पास पर्याप्त अनुमतियां हैं\n3. यदि कस्टम Base URL का उपयोग कर रहे हैं, तो कृपया पता सही होने की पुष्टि करें",
+    "codexAuthTip": "सुझाव: Codex को एक वैध OpenAI API Key की आवश्यकता है",
+    "codexNetworkError": "Codex नेटवर्क त्रुटि:",
+    "codexNetworkErrorChecks": "कृपया जांचें:\n1. क्या नेटवर्क कनेक्शन काम कर रहा है\n2. यदि प्रॉक्सी का उपयोग कर रहे हैं, तो कृपया प्रॉक्सी कॉन्फ़िगरेशन की पुष्टि करें\n3. क्या फ़ायरवॉल कनेक्शन को अवरुद्ध कर रहा है",
+    "codexError": "Codex त्रुटि:",
+    "codexErrorCheck": "कृपया नेटवर्क कनेक्शन और Codex कॉन्फ़िगरेशन जांचें",
+    "codexThinkingHint": "Codex ने reasoning आइटम नहीं लौटाए। यदि आप अभी भी सोचने की प्रक्रिया नहीं देख सकते हैं, तो कृपया hide_agent_reasoning/show_raw_agent_reasoning सेटिंग्स के लिए docs/codex/docs/config.md देखें, और सुनिश्चित करें कि आपका OpenAI खाता सत्यापित हो गया है।",
+    "userDeniedPermission": "उपयोगकर्ता ने {{toolName}} टूल के लिए अनुमति अस्वीकार कर दी",
+    "userDidNotProvideAnswers": "उपयोगकर्ता ने उत्तर प्रदान नहीं किए",
+    "dbMissingPath": "डेटाबेस फ़ाइल पथ तर्क गायब है",
+    "dbFileNotExist": "डेटाबेस फ़ाइल मौजूद नहीं है",
+    "dbReadFailed": "डेटाबेस पढ़ने में विफल",
+    "dbParseProviderFailed": "प्रदाता कॉन्फ़िगरेशन पार्स करने में विफल",
+    "aiResponseEmpty": "AI प्रतिक्रिया खाली है",
+    "enhancementFailed": "संवर्धन विफल",
+    "uploadedImages": "{{count}} छवि(यां) अपलोड की गईं",
+    "uploadedAttachments": "अनुलग्नक अपलोड किए गए",
+    "emptyMessage": "खाली संदेश",
+    "attachment": "अनुलग्नक"
   }
 }

@@ -118,6 +118,13 @@
       "editorFont": {
         "label": "Fuente (sigue la fuente del editor)",
         "hint": "No editable aquí. Para modificar, ve a Configuración de IDEA → Editor → Fuente (reinicia IDEA para que la fuente del plugin surta efecto)"
+      },
+      "sendShortcut": {
+        "label": "Atajo de envío",
+        "enter": "Enter para enviar",
+        "enterDesc": "Presiona Enter para enviar mensaje, Shift+Enter para nueva línea",
+        "cmdEnter": "⌘/Ctrl+Enter para enviar",
+        "cmdEnterDesc": "Presiona ⌘/Ctrl+Enter para enviar mensaje, Enter para nueva línea"
       }
     },
     "providers": "Gestión de proveedores",
@@ -381,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "Copiar código",
+    "copyMessage": "Copiar mensaje",
     "copySuccess": "¡Copiado!"
   },
   "usage": {
@@ -685,5 +693,59 @@
     "failed": "Error al restaurar archivos",
     "notAvailable": "Restauración no disponible para esta sesión",
     "parseError": "Error al analizar el resultado"
+  },
+  "reasoning": {
+    "title": "Seleccionar profundidad de razonamiento",
+    "low": {
+      "label": "Bajo",
+      "description": "Respuestas rápidas con razonamiento básico"
+    },
+    "medium": {
+      "label": "Medio",
+      "description": "Pensamiento equilibrado (predeterminado)"
+    },
+    "high": {
+      "label": "Alto",
+      "description": "Razonamiento profundo para tareas complejas"
+    },
+    "xhigh": {
+      "label": "Máximo",
+      "description": "Profundidad máxima de razonamiento"
+    }
+  },
+  "aiBridge": {
+    "claudeCodeInterrupted": "Claude Code fue interrumpido (posiblemente tiempo de espera de respuesta o cancelación del usuario):",
+    "claudeCodeError": "Error de Claude Code:",
+    "errorMessage": "Mensaje de error",
+    "currentApiKeySource": "Fuente actual de API Key",
+    "currentApiKeyPreview": "Vista previa de API Key actual",
+    "currentBaseUrl": "Base URL actual",
+    "source": "fuente",
+    "notConfigured": "No configurado",
+    "notConfiguredEmpty": "No configurado (valor vacío o faltante)",
+    "defaultBaseUrl": "Predeterminado (https://api.anthropic.com)",
+    "configTip": "Consejo: CLI puede leer de variables de entorno o settings.json; este plugin solo admite lectura de settings.json para evitar problemas. Puede configurarlo en Configuración > Gestión de proveedores en la esquina superior derecha del plugin",
+    "apiError": "Error de API",
+    "apiErrorCauses": "Posibles causas:\n1. API Key no está configurada correctamente\n2. Problema de configuración del servicio proxy de terceros\n3. Por favor verifique la configuración en ~/.claude/settings.json",
+    "codexAuthError": "Error de autenticación de Codex:",
+    "codexAuthErrorChecks": "Por favor verifique lo siguiente:\n1. ¿Es correcta la API Key de Codex en la configuración del plugin?\n2. ¿Tiene la API Key permisos suficientes?\n3. Si usa una Base URL personalizada, confirme que la dirección sea correcta",
+    "codexAuthTip": "Consejo: Codex requiere una API Key válida de OpenAI",
+    "codexNetworkError": "Error de red de Codex:",
+    "codexNetworkErrorChecks": "Por favor verifique:\n1. ¿Funciona la conexión de red?\n2. Si usa un proxy, confirme la configuración del proxy\n3. ¿El firewall está bloqueando la conexión?",
+    "codexError": "Error de Codex:",
+    "codexErrorCheck": "Por favor verifique la conexión de red y la configuración de Codex",
+    "codexThinkingHint": "Codex no devolvió elementos de razonamiento. Si aún no puede ver el proceso de pensamiento, consulte docs/codex/docs/config.md para la configuración de hide_agent_reasoning/show_raw_agent_reasoning, y asegúrese de que su cuenta de OpenAI haya sido verificada.",
+    "userDeniedPermission": "El usuario denegó el permiso para la herramienta {{toolName}}",
+    "userDidNotProvideAnswers": "El usuario no proporcionó respuestas",
+    "dbMissingPath": "Falta el argumento de ruta del archivo de base de datos",
+    "dbFileNotExist": "El archivo de base de datos no existe",
+    "dbReadFailed": "Error al leer la base de datos",
+    "dbParseProviderFailed": "Error al analizar la configuración del proveedor",
+    "aiResponseEmpty": "La respuesta de AI está vacía",
+    "enhancementFailed": "Mejora fallida",
+    "uploadedImages": "{{count}} imagen(es) subida(s)",
+    "uploadedAttachments": "Archivo(s) adjunto(s) subido(s)",
+    "emptyMessage": "Mensaje vacío",
+    "attachment": "Adjunto"
   }
 }
