@@ -405,6 +405,9 @@ public class PermissionService {
             return;
         }
 
+        // 清理旧的响应文件,避免误处理
+        cleanupOldResponseFiles();
+
         running = true;
 
         watchThread = new Thread(this::watchLoop, "PermissionWatcher");
@@ -412,6 +415,62 @@ public class PermissionService {
         watchThread.start();
 
         debugLog("START", "Started polling on: " + permissionDir);
+    }
+
+    /**
+     * 清理旧的响应文件和请求文件
+     */
+    private void cleanupOldResponseFiles() {
+        try {
+            File dir = permissionDir.toFile();
+            if (!dir.exists()) {
+                return;
+            }
+
+            // 清理普通权限响应文件
+            File[] responseFiles = dir.listFiles((d, name) -> name.startsWith("response-") && name.endsWith(".json"));
+            if (responseFiles != null) {
+                for (File file : responseFiles) {
+                    try {
+                        Files.delete(file.toPath());
+                        debugLog("CLEANUP", "Deleted old response file: " + file.getName());
+                    } catch (Exception e) {
+                        debugLog("CLEANUP_ERROR", "Failed to delete response file: " + file.getName());
+                    }
+                }
+            }
+
+            // 清理普通权限请求文件（可能是未完成的请求）
+            File[] requestFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
+            if (requestFiles != null) {
+                for (File file : requestFiles) {
+                    try {
+                        Files.delete(file.toPath());
+                        debugLog("CLEANUP", "Deleted old request file: " + file.getName());
+                    } catch (Exception e) {
+                        debugLog("CLEANUP_ERROR", "Failed to delete request file: " + file.getName());
+                    }
+                }
+            }
+
+            // 清理所有 AskUserQuestion 相关文件（请求和响应）
+            File[] askFiles = dir.listFiles((d, name) ->
+                name.startsWith("ask-user-question-") && name.endsWith(".json"));
+            if (askFiles != null) {
+                for (File file : askFiles) {
+                    try {
+                        Files.delete(file.toPath());
+                        debugLog("CLEANUP", "Deleted old AskUserQuestion file: " + file.getName());
+                    } catch (Exception e) {
+                        debugLog("CLEANUP_ERROR", "Failed to delete AskUserQuestion file: " + file.getName());
+                    }
+                }
+            }
+
+            debugLog("CLEANUP", "All old permission files cleanup complete");
+        } catch (Exception e) {
+            debugLog("CLEANUP_ERROR", "Error during cleanup: " + e.getMessage());
+        }
     }
 
     /**
@@ -432,8 +491,11 @@ public class PermissionService {
                 // 监控普通权限请求文件
                 File[] requestFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
 
-                // 监控 AskUserQuestion 请求文件
-                File[] askUserQuestionFiles = dir.listFiles((d, name) -> name.startsWith("ask-user-question-") && name.endsWith(".json"));
+                // 监控 AskUserQuestion 请求文件 (排除响应文件)
+                File[] askUserQuestionFiles = dir.listFiles((d, name) ->
+                    name.startsWith("ask-user-question-") &&
+                    !name.startsWith("ask-user-question-response-") &&
+                    name.endsWith(".json"));
 
                 // 每20次轮询（约10秒）输出一次状态
                 // 降低日志频率：每100次轮询（约50秒）记录一次状态
@@ -759,113 +821,138 @@ public class PermissionService {
 
     /**
      * 处理 AskUserQuestion 请求
+     *
+     * ⚠️ 关键修复说明：
+     * 原问题：轮询间隔 500ms，但异步处理对话框需要用户交互（可能几秒到几十秒）
+     * 在用户响应之前，轮询会多次检测到同一个请求文件，导致：
+     * 1. 多次调用 showAskUserQuestionDialog，前端队列堆积
+     * 2. 用户第一次点击后请求文件被删除，响应成功返回
+     * 3. 队列中的后续请求仍然弹出对话框，但 pendingRequest 已不存在
+     *
+     * 修复方案：读取文件内容后立即删除请求文件，然后再进行异步处理
      */
     private void handleAskUserQuestionRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
         long startTime = System.currentTimeMillis();
         debugLog("HANDLE_ASK_USER_QUESTION", "Processing AskUserQuestion file: " + fileName);
 
-        // 检查是否正在处理该请求
+        // 检查是否正在处理该请求（基于文件名去重）
         if (!processingRequests.add(fileName)) {
             debugLog("SKIP_DUPLICATE_ASK", "AskUserQuestion already being processed, skipping: " + fileName);
             return;
         }
 
+        String content;
         try {
             Thread.sleep(100); // 等待文件写入完成
 
             if (!Files.exists(requestFile)) {
                 debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing before read, likely already handled: " + fileName);
+                processingRequests.remove(fileName);
                 return;
             }
 
-            String content;
-            try {
-                content = Files.readString(requestFile);
-            } catch (NoSuchFileException e) {
-                debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing while reading, likely already handled: " + fileName);
-                return;
-            }
+            // 读取文件内容
+            content = Files.readString(requestFile);
             debugLog("ASK_FILE_READ", "Read AskUserQuestion content: " + content.substring(0, Math.min(200, content.length())) + "...");
 
-            JsonObject request = gson.fromJson(content, JsonObject.class);
-
-            String requestId = request.get("requestId").getAsString();
-            String toolName = request.get("toolName").getAsString();
-            // questions 是一个 JSON 对象，包含问题数据
-            JsonObject questionsData = request;
-
-            debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
-
-            // 获取 AskUserQuestion 对话框显示器
-            // 由于 AskUserQuestion 不涉及文件路径，使用第一个注册的项目
-            AskUserQuestionDialogShower dialogShower = null;
-            if (!askUserQuestionDialogShowers.isEmpty()) {
-                dialogShower = askUserQuestionDialogShowers.values().iterator().next();
-            }
-
-            if (dialogShower != null) {
-                debugLog("ASK_DIALOG_SHOWER", "Using AskUserQuestion dialog shower");
-
-                // 立即删除请求文件，避免重复处理
-                try {
-                    Files.deleteIfExists(requestFile);
-                    debugLog("ASK_FILE_DELETE", "Deleted AskUserQuestion request file: " + fileName);
-                } catch (Exception e) {
-                    debugLog("ASK_FILE_DELETE_ERROR", "Failed to delete AskUserQuestion request file: " + e.getMessage());
-                }
-
-                final long dialogStartTime = System.currentTimeMillis();
-
-                // 异步调用前端弹窗
-                debugLog("ASK_DIALOG_SHOW", "Calling dialogShower.showAskUserQuestionDialog");
-                CompletableFuture<JsonObject> future = dialogShower.showAskUserQuestionDialog(requestId, questionsData);
-
-                // 异步处理结果
-                future.thenAccept(answers -> {
-                    long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
-                    debugLog("ASK_DIALOG_RESPONSE", String.format("Got answers after %dms", dialogElapsed));
-                    try {
-                        debugLog("ASK_WRITE_RESPONSE", String.format("Writing AskUserQuestion response for %s", requestId));
-                        writeAskUserQuestionResponse(requestId, answers);
-
-                        debugLog("ASK_DIALOG_COMPLETE", "AskUserQuestion dialog processing complete");
-                    } catch (Exception e) {
-                        debugLog("ASK_DIALOG_ERROR", "Error processing AskUserQuestion dialog result: " + e.getMessage());
-                        LOG.error("Error occurred", e);
-                    } finally {
-                        processingRequests.remove(fileName);
-                    }
-                }).exceptionally(ex -> {
-                    debugLog("ASK_DIALOG_EXCEPTION", "AskUserQuestion dialog exception: " + ex.getMessage());
-                    try {
-                        // 用户取消或出错，写入空答案
-                        writeAskUserQuestionResponse(requestId, new JsonObject());
-                    } catch (Exception e) {
-                        LOG.error("Error occurred", e);
-                    }
-                    processingRequests.remove(fileName);
-                    return null;
-                });
-
-                // 异步处理，直接返回，不阻塞
-                return;
-            }
-
-            // 没有对话框显示器，写入空答案（拒绝）
-            debugLog("ASK_NO_DIALOG_SHOWER", "No AskUserQuestion dialog shower available, denying");
-            writeAskUserQuestionResponse(requestId, new JsonObject());
+            // ⚠️ 关键修复: 读取后立即删除请求文件，避免轮询重复处理
+            // 必须在解析和异步调用之前删除，因为轮询间隔只有 500ms
             Files.deleteIfExists(requestFile);
+            debugLog("ASK_FILE_DELETE", "Deleted AskUserQuestion request file: " + fileName);
 
-            long elapsed = System.currentTimeMillis() - startTime;
-            debugLog("ASK_REQUEST_COMPLETE", String.format("AskUserQuestion request %s completed in %dms", requestId, elapsed));
-
-        } catch (Exception e) {
-            debugLog("ASK_HANDLE_ERROR", "Error handling AskUserQuestion request: " + e.getMessage());
-            LOG.error("Error occurred", e);
-        } finally {
+        } catch (NoSuchFileException e) {
+            debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing while reading, likely already handled: " + fileName);
             processingRequests.remove(fileName);
+            return;
+        } catch (Exception e) {
+            debugLog("ASK_FILE_READ_ERROR", "Error reading AskUserQuestion file: " + e.getMessage());
+            LOG.error("Error occurred", e);
+            processingRequests.remove(fileName);
+            return;
         }
+
+        // 解析 JSON（文件已删除，即使解析失败也不会重复处理）
+        JsonObject request;
+        try {
+            request = gson.fromJson(content, JsonObject.class);
+        } catch (Exception e) {
+            debugLog("ASK_PARSE_ERROR", "Failed to parse AskUserQuestion JSON: " + fileName);
+            processingRequests.remove(fileName);
+            return;
+        }
+
+        // 验证必需字段
+        if (!request.has("requestId") || request.get("requestId").isJsonNull()) {
+            debugLog("ASK_INVALID_FORMAT", "AskUserQuestion missing requestId field: " + fileName);
+            processingRequests.remove(fileName);
+            return;
+        }
+
+        if (!request.has("toolName") || request.get("toolName").isJsonNull()) {
+            debugLog("ASK_INVALID_FORMAT", "AskUserQuestion missing toolName field: " + fileName);
+            processingRequests.remove(fileName);
+            return;
+        }
+
+        String requestId = request.get("requestId").getAsString();
+        String toolName = request.get("toolName").getAsString();
+        JsonObject questionsData = request;
+
+        debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
+
+        // 获取 AskUserQuestion 对话框显示器
+        AskUserQuestionDialogShower dialogShower = null;
+        if (!askUserQuestionDialogShowers.isEmpty()) {
+            dialogShower = askUserQuestionDialogShowers.values().iterator().next();
+        }
+
+        if (dialogShower != null) {
+            debugLog("ASK_DIALOG_SHOWER", "Using AskUserQuestion dialog shower");
+
+            final long dialogStartTime = System.currentTimeMillis();
+
+            // 异步调用前端弹窗
+            debugLog("ASK_DIALOG_SHOW", "Calling dialogShower.showAskUserQuestionDialog");
+            CompletableFuture<JsonObject> future = dialogShower.showAskUserQuestionDialog(requestId, questionsData);
+
+            // 异步处理结果
+            future.thenAccept(answers -> {
+                long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
+                debugLog("ASK_DIALOG_RESPONSE", String.format("Got answers after %dms", dialogElapsed));
+                try {
+                    debugLog("ASK_WRITE_RESPONSE", String.format("Writing AskUserQuestion response for %s", requestId));
+                    writeAskUserQuestionResponse(requestId, answers);
+
+                    debugLog("ASK_DIALOG_COMPLETE", "AskUserQuestion dialog processing complete");
+                } catch (Exception e) {
+                    debugLog("ASK_DIALOG_ERROR", "Error processing AskUserQuestion dialog result: " + e.getMessage());
+                    LOG.error("Error occurred", e);
+                } finally {
+                    processingRequests.remove(fileName);
+                }
+            }).exceptionally(ex -> {
+                debugLog("ASK_DIALOG_EXCEPTION", "AskUserQuestion dialog exception: " + ex.getMessage());
+                try {
+                    writeAskUserQuestionResponse(requestId, new JsonObject());
+                } catch (Exception e) {
+                    LOG.error("Error occurred", e);
+                }
+                processingRequests.remove(fileName);
+                return null;
+            });
+
+            // 异步处理，不在这里移除 processingRequests，由回调处理
+            return;
+        }
+
+        // 没有对话框显示器，写入空答案（拒绝）
+        debugLog("ASK_NO_DIALOG_SHOWER", "No AskUserQuestion dialog shower available, denying");
+        writeAskUserQuestionResponse(requestId, new JsonObject());
+        processingRequests.remove(fileName);
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        debugLog("ASK_REQUEST_COMPLETE", String.format("AskUserQuestion request %s completed in %dms", requestId, elapsed));
     }
 
     /**

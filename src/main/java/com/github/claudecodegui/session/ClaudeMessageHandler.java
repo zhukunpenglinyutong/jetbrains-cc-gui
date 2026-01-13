@@ -345,7 +345,8 @@ public class ClaudeMessageHandler implements MessageCallback {
     /**
      * 处理用户消息（来自SDK）
      * 英文：Handle user message from SDK
-     * 解释：SDK返回的用户消息包含uuid，需要更新已有的用户消息
+     * 解释：SDK返回的用户消息包含uuid，需要更新已有的用户消息；
+     *       如果是包含 tool_result 的消息，需要添加到消息列表中
      */
     private void handleUserMessage(String content) {
         if (!content.startsWith("{")) {
@@ -354,6 +355,16 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         try {
             JsonObject userMsg = gson.fromJson(content, JsonObject.class);
+
+            // 检查是否包含 tool_result（工具调用结果）
+            if (messageParser.hasToolResult(userMsg)) {
+                // 这是一个包含 tool_result 的 user 消息，需要添加到消息列表
+                Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", userMsg);
+                state.addMessage(toolResultMessage);
+                LOG.debug("Added tool_result user message to state");
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                return;
+            }
 
             // 提取 uuid（用于 rewind 功能）
             String uuid = userMsg.has("uuid") ? userMsg.get("uuid").getAsString() : null;

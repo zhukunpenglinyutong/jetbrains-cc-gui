@@ -97,7 +97,7 @@ public class MessageParser {
     /**
      * 检查消息是否包含 tool_result
      */
-    private boolean hasToolResult(JsonObject msg) {
+    public boolean hasToolResult(JsonObject msg) {
         if (!msg.has("message") || !msg.get("message").isJsonObject()) {
             return false;
         }

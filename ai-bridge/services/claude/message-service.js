@@ -81,8 +81,13 @@ const ACCEPT_EDITS_AUTO_APPROVE_TOOLS = new Set([
   'Rename'
 ]);
 
+// Tools that require user interaction even in bypassPermissions mode
+const INTERACTIVE_TOOLS = new Set(['AskUserQuestion']);
+
 function shouldAutoApproveTool(permissionMode, toolName) {
   if (!toolName) return false;
+  // Interactive tools always need user input, never auto-approve
+  if (INTERACTIVE_TOOLS.has(toolName)) return false;
   if (permissionMode === 'bypassPermissions') return true;
   if (permissionMode === 'acceptEdits') return ACCEPT_EDITS_AUTO_APPROVE_TOOLS.has(toolName);
   return false;
@@ -112,6 +117,9 @@ function createPreToolUseHook(permissionMode) {
       console.log('[PERM_DEBUG] canUseTool returned:', result?.behavior);
 
       if (result?.behavior === 'allow') {
+        if (result?.updatedInput !== undefined) {
+          return { decision: 'approve', updatedInput: result.updatedInput };
+        }
         return { decision: 'approve' };
       }
       if (result?.behavior === 'deny') {
@@ -556,7 +564,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
                 console.log('[THINKING]', thinkingText);
               }
             } else if (block.type === 'tool_use') {
-              console.log('[DEBUG] Tool use payload:', JSON.stringify(block));
+              console.log('[TOOL_USE]', JSON.stringify({ id: block.id, name: block.name }));
             }
           }
         } else if (typeof content === 'string') {
@@ -579,12 +587,11 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
       // 实时输出工具调用结果（user 消息中的 tool_result）
       if (msg.type === 'user') {
-        const content = msg.message?.content;
+        const content = msg.message?.content ?? msg.content;
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'tool_result') {
-              // 输出工具调用结果，前端可以实时更新工具状态
-              console.log('[TOOL_RESULT]', JSON.stringify(block));
+              console.log('[TOOL_RESULT]', JSON.stringify({ tool_use_id: block.tool_use_id, is_error: block.is_error }));
             }
           }
         }
@@ -1157,7 +1164,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	                console.log('[THINKING]', thinkingText);
 	    	              }
 	    	            } else if (block.type === 'tool_use') {
-	    	              console.log('[DEBUG] Tool use payload (withAttachments):', JSON.stringify(block));
+	    	              console.log('[TOOL_USE]', JSON.stringify({ id: block.id, name: block.name }));
 	    	            } else if (block.type === 'tool_result') {
 	    	              console.log('[DEBUG] Tool result payload (withAttachments):', JSON.stringify(block));
 	    	            }
@@ -1182,12 +1189,11 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
 	    	      // 实时输出工具调用结果（user 消息中的 tool_result）
 	    	      if (msg.type === 'user') {
-	    	        const content = msg.message?.content;
+	    	        const content = msg.message?.content ?? msg.content;
 	    	        if (Array.isArray(content)) {
 	    	          for (const block of content) {
 	    	            if (block.type === 'tool_result') {
-	    	              // 输出工具调用结果，前端可以实时更新工具状态
-	    	              console.log('[TOOL_RESULT]', JSON.stringify(block));
+	    	              console.log('[TOOL_RESULT]', JSON.stringify({ tool_use_id: block.tool_use_id, is_error: block.is_error }));
 	    	            }
 	    	          }
 	    	        }
