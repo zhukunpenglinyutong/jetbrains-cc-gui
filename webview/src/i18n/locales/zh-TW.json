@@ -388,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "複製程式碼",
+    "copyMessage": "複製訊息",
     "copySuccess": "複製成功"
   },
   "usage": {

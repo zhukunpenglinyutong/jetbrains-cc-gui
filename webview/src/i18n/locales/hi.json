@@ -388,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "कोड कॉपी करें",
+    "copyMessage": "संदेश कॉपी करें",
     "copySuccess": "कॉपी हो गया"
   },
   "usage": {

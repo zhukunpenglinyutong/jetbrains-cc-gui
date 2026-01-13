@@ -434,6 +434,7 @@
   },
   "markdown": {
     "copyCode": "复制代码",
+    "copyMessage": "复制消息",
     "copySuccess": "复制成功"
   },
   "usage": {

@@ -388,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "Copiar código",
+    "copyMessage": "Copiar mensaje",
     "copySuccess": "¡Copiado!"
   },
   "usage": {
