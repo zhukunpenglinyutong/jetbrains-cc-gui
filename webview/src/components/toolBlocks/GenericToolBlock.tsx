@@ -231,7 +231,10 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
 
   // Determine tool call status based on result
   const isCompleted = result !== undefined && result !== null;
-  const isError = isCompleted && result?.is_error === true;
+  // AskUserQuestion tool should never show as error - it's a user interaction tool
+  // The is_error field may be set by SDK but it doesn't indicate a real error
+  const isAskUserQuestion = lowerName === 'askuserquestion';
+  const isError = isCompleted && result?.is_error === true && !isAskUserQuestion;
 
   if (!input) {
     return null;
