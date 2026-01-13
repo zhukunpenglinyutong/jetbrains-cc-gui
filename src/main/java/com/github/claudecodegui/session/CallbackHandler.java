@@ -35,6 +35,15 @@ public class CallbackHandler {
     }
 
     /**
+     * Notify status message (e.g., reconnecting notices).
+     */
+    public void notifyStatusMessage(String message) {
+        if (callback != null) {
+            callback.onStatusMessage(message);
+        }
+    }
+
+    /**
      * 通知会话ID接收
      */
     public void notifySessionIdReceived(String sessionId) {

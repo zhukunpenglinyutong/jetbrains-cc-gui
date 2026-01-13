@@ -21,6 +21,21 @@ import { randomUUID } from 'crypto';
 // SDK 缓存
 let codexSdk = null;
 
+const isReconnectNotice = (message) =>
+  typeof message === 'string' && /Reconnecting\.\.\./i.test(message);
+
+const extractReconnectStatus = (message) => {
+  if (typeof message !== 'string') return '';
+  const match = message.match(/Reconnecting\.\.\.\s*\d+\/\d+/i);
+  return match ? match[0] : message;
+};
+
+const emitStatusMessage = (emitMessage, message) => {
+  const status = extractReconnectStatus(message);
+  if (!status) return;
+  emitMessage({ type: 'status', message: status });
+};
+
 /**
  * 确保 Codex SDK 已加载
  */
@@ -560,12 +575,22 @@ export async function sendMessage(
 
         case 'turn.failed': {
           const errorMsg = event.error?.message || 'Turn failed';
+          if (isReconnectNotice(errorMsg)) {
+            console.warn('[DEBUG] Codex reconnect notice:', errorMsg);
+            emitStatusMessage(emitMessage, errorMsg);
+            break;
+          }
           console.error('[DEBUG] Turn failed:', errorMsg);
           throw new Error(errorMsg);
         }
 
         case 'error': {
           const generalError = event.message || 'Unknown error';
+          if (isReconnectNotice(generalError)) {
+            console.warn('[DEBUG] Codex reconnect notice:', generalError);
+            emitStatusMessage(emitMessage, generalError);
+            break;
+          }
           console.error('[DEBUG] Codex error:', generalError);
           throw new Error(generalError);
         }

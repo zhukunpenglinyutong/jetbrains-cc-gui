@@ -1257,6 +1257,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 }
 
                 @Override
+                public void onStatusMessage(String message) {
+                    if (message == null || message.trim().isEmpty()) {
+                        return;
+                    }
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("updateStatus", JsUtils.escapeJs(message));
+                    });
+                }
+
+                @Override
                 public void onSessionIdReceived(String sessionId) {
                     LOG.info("Session ID: " + sessionId);
                     // Send sessionId to frontend for rewind feature

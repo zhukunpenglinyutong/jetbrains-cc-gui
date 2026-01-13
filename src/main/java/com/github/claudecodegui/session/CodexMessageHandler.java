@@ -66,6 +66,10 @@ public class CodexMessageHandler implements MessageCallback {
             // content_delta: 流式增量
             // content: 完整内容块
             handleContentDelta(content);
+        } else if ("status".equals(type)) {
+            if (content != null && !content.trim().isEmpty()) {
+                callbackHandler.notifyStatusMessage(content);
+            }
         } else if ("message_end".equals(type)) {
             handleMessageEnd();
         } else {
