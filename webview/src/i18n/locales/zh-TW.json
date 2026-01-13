@@ -118,6 +118,13 @@
       "editorFont": {
         "label": "字體（跟隨編輯器字體）",
         "hint": "此處暫時不可修改，如需修改，請在 IDEA 設定 → 編輯器 → 字體 中調整（重啟 IDEA 後本外掛字體生效）"
+      },
+      "sendShortcut": {
+        "label": "發送快捷鍵",
+        "enter": "Enter 發送",
+        "enterDesc": "按 Enter 發送訊息，Shift+Enter 換行",
+        "cmdEnter": "⌘/Ctrl+Enter 發送",
+        "cmdEnterDesc": "按 ⌘/Ctrl+Enter 發送訊息，Enter 換行"
       }
     },
     "providers": "供應商管理",
@@ -381,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "複製程式碼",
+    "copyMessage": "複製訊息",
     "copySuccess": "複製成功"
   },
   "usage": {
@@ -686,6 +694,25 @@
     "notAvailable": "目前會話不支援回溯",
     "parseError": "解析結果失敗"
   },
+  "reasoning": {
+    "title": "選擇思考深度",
+    "low": {
+      "label": "較少",
+      "description": "快速響應，基礎推理"
+    },
+    "medium": {
+      "label": "中等",
+      "description": "平衡思考（預設）"
+    },
+    "high": {
+      "label": "較多",
+      "description": "深度推理，適合複雜任務"
+    },
+    "xhigh": {
+      "label": "最多",
+      "description": "最深推理，最高精度"
+    }
+  },
   "aiBridge": {
     "claudeCodeInterrupted": "Claude Code 運行被中斷（可能是響應超時或用戶取消）：",
     "claudeCodeError": "Claude Code 出現錯誤：",
@@ -707,8 +734,8 @@
     "codexNetworkErrorChecks": "請檢查：\n1. 網路連線是否正常\n2. 如果使用代理，請確認代理配置\n3. 防火牆是否阻止了連線",
     "codexError": "Codex 出現錯誤：",
     "codexErrorCheck": "請檢查網路連線和 Codex 配置",
-    "codexThinkingHint": "Codex 未返回 reasoning 項。若依然看不到思考過程，請參考 docs/codex/docs/config.md ��� hide_agent_reasoning/show_raw_agent_reasoning 的說明，並確認 OpenAI 帳號已完成驗證。",
-    "userDeniedPermission": "用戶拒絕了 {{toolName}} 工具的使用權���",
+    "codexThinkingHint": "Codex 未返回 reasoning 項。若依然看不到思考過程，請參考 docs/codex/docs/config.md 中 hide_agent_reasoning/show_raw_agent_reasoning 的說明，並確認 OpenAI 帳號已完成驗證。",
+    "userDeniedPermission": "用戶拒絕了 {{toolName}} 工具的使用權限",
     "userDidNotProvideAnswers": "用戶未提供問題答案",
     "dbMissingPath": "缺少資料庫檔案路徑參數",
     "dbFileNotExist": "資料庫檔案不存在",

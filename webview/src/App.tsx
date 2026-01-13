@@ -15,7 +15,7 @@ import RewindSelectDialog, { type RewindableMessage } from './components/RewindS
 import { rewindFiles } from './utils/bridge';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode, SelectedAgent } from './components/ChatInputBox/types';
+import type { Attachment, PermissionMode, ReasoningEffort, SelectedAgent } from './components/ChatInputBox/types';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from './components/ChatInputBox/providers';
 import {
   BashToolBlock,
@@ -30,6 +30,7 @@ import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
 import { ScrollControl } from './components/ScrollControl';
 import { APP_VERSION } from './version/version';
+import { extractMarkdownContent, copyToClipboard } from './utils/copyUtils';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -77,6 +78,7 @@ const App = () => {
   const [loadingStartTime, setLoadingStartTime] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [streamingActive, setStreamingActive] = useState(false);
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
@@ -117,6 +119,8 @@ const App = () => {
   const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
   const [claudePermissionMode, setClaudePermissionMode] = useState<PermissionMode>('bypassPermissions');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
+  // Codex reasoning effort (thinking depth)
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
@@ -126,6 +130,8 @@ const App = () => {
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
   // 🔧 流式传输开关状态（同步设置页面）
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(false);
+  // 发送快捷键设置
+  const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
 
   // 🔧 SDK 安装状态（用于在未安装时禁止提问）
   const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
@@ -1161,6 +1167,16 @@ const App = () => {
       }
     };
 
+    // 发送快捷键设置同步回调
+    window.updateSendShortcut = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setSendShortcut(data.sendShortcut ?? 'enter');
+      } catch (error) {
+        console.error('[Frontend] Failed to parse send shortcut config:', error);
+      }
+    };
+
     // Retry getting active provider
     let retryCount = 0;
     const MAX_RETRIES = 30;
@@ -1206,6 +1222,21 @@ const App = () => {
       }
     };
     setTimeout(requestStreamingEnabled, 200);
+
+    // 请求发送快捷键初始状态
+    let sendShortcutRetryCount = 0;
+    const MAX_SEND_SHORTCUT_RETRIES = 30;
+    const requestSendShortcut = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_send_shortcut');
+      } else {
+        sendShortcutRetryCount++;
+        if (sendShortcutRetryCount < MAX_SEND_SHORTCUT_RETRIES) {
+          setTimeout(requestSendShortcut, 100);
+        }
+      }
+    };
+    setTimeout(requestSendShortcut, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -1694,6 +1725,14 @@ const App = () => {
   };
 
   /**
+   * 处理思考深度选择 (Codex only)
+   */
+  const handleReasoningChange = (effort: ReasoningEffort) => {
+    setReasoningEffort(effort);
+    sendBridgeMessage('set_reasoning_effort', effort);
+  };
+
+  /**
    * 处理智能体选择
    */
   const handleAgentSelect = (agent: SelectedAgent | null) => {
@@ -1752,6 +1791,15 @@ const App = () => {
     sendBridgeMessage('set_streaming_enabled', JSON.stringify(payload));
     addToast(enabled ? t('settings.basic.streaming.enabled') : t('settings.basic.streaming.disabled'), 'success');
   }, [t, addToast]);
+
+  /**
+   * 处理发送快捷键变更
+   */
+  const handleSendShortcutChange = useCallback((shortcut: 'enter' | 'cmdEnter') => {
+    setSendShortcut(shortcut);
+    const payload = { sendShortcut: shortcut };
+    sendBridgeMessage('set_send_shortcut', JSON.stringify(payload));
+  }, []);
 
   const interruptSession = () => {
     sendBridgeMessage('interrupt_session');
@@ -2642,6 +2690,8 @@ const App = () => {
           currentProvider={currentProvider}
           streamingEnabled={streamingEnabledSetting}
           onStreamingEnabledChange={handleStreamingEnabledChange}
+          sendShortcut={sendShortcut}
+          onSendShortcutChange={handleSendShortcutChange}
         />
       ) : currentView === 'chat' ? (
         <>
@@ -2672,9 +2722,39 @@ const App = () => {
 
           {mergedMessages.map((message, messageIndex) => {
             // mergedMessages 已经过滤了不显示的消息
+            const isLastAssistantMessage = message.type === 'assistant' && messageIndex === mergedMessages.length - 1;
+            const isMessageStreaming = streamingActive && isLastAssistantMessage;
+
+            const handleCopyMessage = async () => {
+              const content = extractMarkdownContent(message);
+              if (!content.trim()) return;
+
+              const success = await copyToClipboard(content);
+              if (success) {
+                setCopiedMessageIndex(messageIndex);
+                setTimeout(() => setCopiedMessageIndex(null), 1500);
+              }
+            };
 
             return (
               <div key={messageIndex} className={`message ${message.type}`}>
+                {/* Copy button for assistant messages - floating position */}
+                {message.type === 'assistant' && !isMessageStreaming && (
+                  <button
+                    className={`message-copy-btn ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
+                    onClick={handleCopyMessage}
+                    title={t('markdown.copyMessage')}
+                    aria-label={t('markdown.copyMessage')}
+                  >
+                    <span className="copy-icon">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
+                        <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
+                      </svg>
+                    </span>
+                    <span className="copy-tooltip">{t('markdown.copySuccess')}</span>
+                  </button>
+                )}
                 {message.type === 'user' && message.timestamp && (
                   <div className="message-header-row">
                     <div className="message-timestamp-header">
@@ -2855,9 +2935,12 @@ const App = () => {
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
+            reasoningEffort={reasoningEffort}
+            onReasoningChange={handleReasoningChange}
             onToggleThinking={handleToggleThinking}
             streamingEnabled={streamingEnabledSetting}
             onStreamingEnabledChange={handleStreamingEnabledChange}
+            sendShortcut={sendShortcut}
             selectedAgent={selectedAgent}
             onAgentSelect={handleAgentSelect}
             activeFile={contextInfo?.file}

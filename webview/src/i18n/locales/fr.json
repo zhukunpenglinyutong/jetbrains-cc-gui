@@ -118,6 +118,13 @@
       "editorFont": {
         "label": "Police (suit la police de l'éditeur)",
         "hint": "Non modifiable ici. Pour modifier, allez dans Paramètres IDEA → Éditeur → Police (redémarrez IDEA pour que la police du plugin prenne effet)"
+      },
+      "sendShortcut": {
+        "label": "Raccourci d'envoi",
+        "enter": "Entrée pour envoyer",
+        "enterDesc": "Appuyez sur Entrée pour envoyer le message, Shift+Entrée pour nouvelle ligne",
+        "cmdEnter": "⌘/Ctrl+Entrée pour envoyer",
+        "cmdEnterDesc": "Appuyez sur ⌘/Ctrl+Entrée pour envoyer le message, Entrée pour nouvelle ligne"
       }
     },
     "providers": "Gestion des fournisseurs",
@@ -381,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "Copier le code",
+    "copyMessage": "Copier le message",
     "copySuccess": "Copié !"
   },
   "usage": {
@@ -685,6 +693,25 @@
     "failed": "Échec de la restauration des fichiers",
     "notAvailable": "Restauration non disponible pour cette session",
     "parseError": "Échec de l'analyse du résultat"
+  },
+  "reasoning": {
+    "title": "Sélectionner la profondeur de raisonnement",
+    "low": {
+      "label": "Faible",
+      "description": "Réponses rapides avec raisonnement de base"
+    },
+    "medium": {
+      "label": "Moyen",
+      "description": "Réflexion équilibrée (par défaut)"
+    },
+    "high": {
+      "label": "Élevé",
+      "description": "Raisonnement approfondi pour tâches complexes"
+    },
+    "xhigh": {
+      "label": "Maximum",
+      "description": "Profondeur de raisonnement maximale"
+    }
   },
   "aiBridge": {
     "claudeCodeInterrupted": "Claude Code a été interrompu (possiblement délai de réponse dépassé ou annulation par l'utilisateur) :",

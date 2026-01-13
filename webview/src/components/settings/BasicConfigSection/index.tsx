@@ -44,6 +44,9 @@ interface BasicConfigSectionProps {
   // 🔧 流式传输配置
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
+  // 发送快捷键配置
+  sendShortcut?: 'enter' | 'cmdEnter';
+  onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
 }
 
 const BasicConfigSection = ({
@@ -65,6 +68,9 @@ const BasicConfigSection = ({
   // 🔧 流式传输配置
   streamingEnabled = false,
   onStreamingEnabledChange = () => {},
+  // 发送快捷键配置
+  sendShortcut = 'enter',
+  onSendShortcutChange = () => {},
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
 
@@ -318,6 +324,43 @@ const BasicConfigSection = ({
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.streaming.hint')}</span>
         </small>
+      </div>
+
+      {/* 发送快捷键配置 */}
+      <div className={styles.sendShortcutSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-keyboard" />
+          <span className={styles.fieldLabel}>{t('settings.basic.sendShortcut.label')}</span>
+        </div>
+        <div className={styles.themeGrid}>
+          {/* Enter 发送 */}
+          <div
+            className={`${styles.themeCard} ${sendShortcut === 'enter' ? styles.active : ''}`}
+            onClick={() => onSendShortcutChange('enter')}
+          >
+            {sendShortcut === 'enter' && (
+              <div className={styles.checkBadge}>
+                <span className="codicon codicon-check" />
+              </div>
+            )}
+            <div className={styles.themeCardTitle}>{t('settings.basic.sendShortcut.enter')}</div>
+            <div className={styles.themeCardDesc}>{t('settings.basic.sendShortcut.enterDesc')}</div>
+          </div>
+
+          {/* Cmd/Ctrl+Enter 发送 */}
+          <div
+            className={`${styles.themeCard} ${sendShortcut === 'cmdEnter' ? styles.active : ''}`}
+            onClick={() => onSendShortcutChange('cmdEnter')}
+          >
+            {sendShortcut === 'cmdEnter' && (
+              <div className={styles.checkBadge}>
+                <span className="codicon codicon-check" />
+              </div>
+            )}
+            <div className={styles.themeCardTitle}>{t('settings.basic.sendShortcut.cmdEnter')}</div>
+            <div className={styles.themeCardDesc}>{t('settings.basic.sendShortcut.cmdEnterDesc')}</div>
+          </div>
+        </div>
       </div>
     </div>
   );

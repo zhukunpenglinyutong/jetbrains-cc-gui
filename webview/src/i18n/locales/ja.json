@@ -123,6 +123,13 @@
       "editorFont": {
         "label": "フォント (エディタフォントに従う)",
         "hint": "ここでは編集できません。変更するには、IDEA設定 → エディタ → フォントに移動してください(プラグインフォントを有効にするにはIDEAを再起動してください)"
+      },
+      "sendShortcut": {
+        "label": "送信ショートカット",
+        "enter": "Enterで送信",
+        "enterDesc": "Enterでメッセージを送信、Shift+Enterで改行",
+        "cmdEnter": "⌘/Ctrl+Enterで送信",
+        "cmdEnterDesc": "⌘/Ctrl+Enterでメッセージを送信、Enterで改行"
       }
     },
     "providers": "プロバイダー管理",
@@ -392,6 +399,7 @@
   },
   "markdown": {
     "copyCode": "コードをコピー",
+    "copyMessage": "メッセージをコピー",
     "copySuccess": "コピーされました!"
   },
   "usage": {
@@ -750,6 +758,25 @@
     "failed": "ファイルの復元に失敗しました",
     "notAvailable": "このセッションでは巻き戻しを利用できません",
     "parseError": "結果の解析に失敗しました"
+  },
+  "reasoning": {
+    "title": "思考深度を選択",
+    "low": {
+      "label": "低",
+      "description": "基本的な推論による迅速な応答"
+    },
+    "medium": {
+      "label": "中",
+      "description": "バランスの取れた思考（デフォルト）"
+    },
+    "high": {
+      "label": "高",
+      "description": "複雑なタスク向けの深い推論"
+    },
+    "xhigh": {
+      "label": "最大",
+      "description": "最大の推論深度"
+    }
   },
   "aiBridge": {
     "claudeCodeInterrupted": "Claude Code が中断されました（レスポンスタイムアウトまたはユーザーキャンセルの可能性）：",

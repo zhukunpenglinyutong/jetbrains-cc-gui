@@ -130,6 +130,13 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "When enabled, AI responses will appear character by character in real-time, instead of waiting for the complete response. May consume more resources."
+      },
+      "sendShortcut": {
+        "label": "Send Shortcut",
+        "enter": "Enter to Send",
+        "enterDesc": "Press Enter to send message, Shift+Enter for new line",
+        "cmdEnter": "⌘/Ctrl+Enter to Send",
+        "cmdEnterDesc": "Press ⌘/Ctrl+Enter to send message, Enter for new line"
       }
     },
     "providers": "Provider Management",
@@ -427,6 +434,7 @@
   },
   "markdown": {
     "copyCode": "Copy code",
+    "copyMessage": "Copy message",
     "copySuccess": "Copied!"
   },
   "usage": {
@@ -809,6 +817,25 @@
     "failed": "Failed to restore files",
     "notAvailable": "Rewind not available for this session",
     "parseError": "Failed to parse result"
+  },
+  "reasoning": {
+    "title": "Select reasoning depth",
+    "low": {
+      "label": "Low",
+      "description": "Quick responses with basic reasoning"
+    },
+    "medium": {
+      "label": "Medium",
+      "description": "Balanced thinking (default)"
+    },
+    "high": {
+      "label": "High",
+      "description": "Deep reasoning for complex tasks"
+    },
+    "xhigh": {
+      "label": "Max",
+      "description": "Maximum reasoning depth"
+    }
   },
   "aiBridge": {
     "claudeCodeInterrupted": "Claude Code was interrupted (possibly response timeout or user cancellation):",

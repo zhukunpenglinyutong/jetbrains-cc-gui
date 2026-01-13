@@ -53,7 +53,7 @@ public class ErrorPanelBuilder {
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 20, 20));
         bottomPanel.setBackground(new Color(30, 30, 30));
 
-        JLabel nodeLabel = new JLabel("Node.js 路径（可选：手动指定）:");
+        JLabel nodeLabel = new JLabel("Node.js 路径（注意：保存后需手动重启IDE）:");
         nodeLabel.setForeground(Color.WHITE);
         nodeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -74,7 +74,7 @@ public class ErrorPanelBuilder {
             LOG.warn("Failed to preload Node.js path: " + e.getMessage());
         }
 
-        JButton saveAndRetryButton = new JButton("保存并重试");
+        JButton saveAndRetryButton = new JButton("保存");
         saveAndRetryButton.setAlignmentX(Component.LEFT_ALIGNMENT);
         saveAndRetryButton.addActionListener(e -> {
             String manualPath = nodeField.getText();

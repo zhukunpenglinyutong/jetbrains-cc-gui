@@ -540,6 +540,7 @@ public class ClaudeSession {
             state.getPermissionMode(),
             state.getModel(),
             agentPrompt,
+            state.getReasoningEffort(),
             handler
         ).thenApply(result -> null);
     }
@@ -822,6 +823,21 @@ public class ClaudeSession {
      */
     public String getProvider() {
         return state.getProvider();
+    }
+
+    /**
+     * 设置推理深度 (Reasoning Effort)
+     */
+    public void setReasoningEffort(String effort) {
+        state.setReasoningEffort(effort);
+        LOG.info("Reasoning effort updated to: " + effort);
+    }
+
+    /**
+     * 获取推理深度 (Reasoning Effort)
+     */
+    public String getReasoningEffort() {
+        return state.getReasoningEffort();
     }
 
     /**

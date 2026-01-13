@@ -118,6 +118,13 @@
       "editorFont": {
         "label": "Fuente (sigue la fuente del editor)",
         "hint": "No editable aquí. Para modificar, ve a Configuración de IDEA → Editor → Fuente (reinicia IDEA para que la fuente del plugin surta efecto)"
+      },
+      "sendShortcut": {
+        "label": "Atajo de envío",
+        "enter": "Enter para enviar",
+        "enterDesc": "Presiona Enter para enviar mensaje, Shift+Enter para nueva línea",
+        "cmdEnter": "⌘/Ctrl+Enter para enviar",
+        "cmdEnterDesc": "Presiona ⌘/Ctrl+Enter para enviar mensaje, Enter para nueva línea"
       }
     },
     "providers": "Gestión de proveedores",
@@ -381,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "Copiar código",
+    "copyMessage": "Copiar mensaje",
     "copySuccess": "¡Copiado!"
   },
   "usage": {
@@ -685,6 +693,25 @@
     "failed": "Error al restaurar archivos",
     "notAvailable": "Restauración no disponible para esta sesión",
     "parseError": "Error al analizar el resultado"
+  },
+  "reasoning": {
+    "title": "Seleccionar profundidad de razonamiento",
+    "low": {
+      "label": "Bajo",
+      "description": "Respuestas rápidas con razonamiento básico"
+    },
+    "medium": {
+      "label": "Medio",
+      "description": "Pensamiento equilibrado (predeterminado)"
+    },
+    "high": {
+      "label": "Alto",
+      "description": "Razonamiento profundo para tareas complejas"
+    },
+    "xhigh": {
+      "label": "Máximo",
+      "description": "Profundidad máxima de razonamiento"
+    }
   },
   "aiBridge": {
     "claudeCodeInterrupted": "Claude Code fue interrumpido (posiblemente tiempo de espera de respuesta o cancelación del usuario):",

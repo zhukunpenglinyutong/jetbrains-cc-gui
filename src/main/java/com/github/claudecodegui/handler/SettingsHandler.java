@@ -26,12 +26,14 @@ public class SettingsHandler extends BaseMessageHandler {
 
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
+    private static final String SEND_SHORTCUT_PROPERTY_KEY = "claude.code.send.shortcut";
 
     private static final String[] SUPPORTED_TYPES = {
         "get_mode",
         "set_mode",
         "set_model",
         "set_provider",
+        "set_reasoning_effort",
         "get_node_path",
         "set_node_path",
         "get_usage_statistics",
@@ -39,7 +41,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_working_directory",
         "get_editor_font_config",
         "get_streaming_enabled",
-        "set_streaming_enabled"
+        "set_streaming_enabled",
+        "get_send_shortcut",
+        "set_send_shortcut"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -73,6 +77,9 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_provider":
                 handleSetProvider(content);
                 return true;
+            case "set_reasoning_effort":
+                handleSetReasoningEffort(content);
+                return true;
             case "get_node_path":
                 handleGetNodePath();
                 return true;
@@ -96,6 +103,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_streaming_enabled":
                 handleSetStreamingEnabled(content);
+                return true;
+            case "get_send_shortcut":
+                handleGetSendShortcut();
+                return true;
+            case "set_send_shortcut":
+                handleSetSendShortcut(content);
                 return true;
             default:
                 return false;
@@ -360,6 +373,34 @@ public class SettingsHandler extends BaseMessageHandler {
             }
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set provider: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 处理设置思考深度请求 (仅 Codex)
+     */
+    private void handleSetReasoningEffort(String content) {
+        try {
+            String effort = content;
+            if (content != null && !content.isEmpty()) {
+                try {
+                    Gson gson = new Gson();
+                    JsonObject json = gson.fromJson(content, JsonObject.class);
+                    if (json.has("reasoningEffort")) {
+                        effort = json.get("reasoningEffort").getAsString();
+                    }
+                } catch (Exception e) {
+                    // content 本身就是 effort
+                }
+            }
+
+            LOG.info("[SettingsHandler] Setting reasoning effort to: " + effort);
+
+            if (context.getSession() != null) {
+                context.getSession().setReasoningEffort(effort);
+            }
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set reasoning effort: " + e.getMessage(), e);
         }
     }
 
@@ -861,5 +902,61 @@ public class SettingsHandler extends BaseMessageHandler {
         // 如果没有容量后缀，尝试从预定义映射中查找
         // 先尝试完整匹配，如果不存在则使用默认值
         return MODEL_CONTEXT_LIMITS.getOrDefault(model, 200_000);
+    }
+
+    /**
+     * Get send shortcut setting
+     */
+    private void handleGetSendShortcut() {
+        try {
+            PropertiesComponent props = PropertiesComponent.getInstance();
+            String sendShortcut = props.getValue(SEND_SHORTCUT_PROPERTY_KEY, "enter");
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("sendShortcut", sendShortcut);
+                callJavaScript("window.updateSendShortcut", escapeJs(new Gson().toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get send shortcut: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Set send shortcut setting
+     */
+    private void handleSetSendShortcut(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String sendShortcut = "enter";
+
+            if (json != null && json.has("sendShortcut") && !json.get("sendShortcut").isJsonNull()) {
+                sendShortcut = json.get("sendShortcut").getAsString();
+            }
+
+            // Validate value
+            if (!"enter".equals(sendShortcut) && !"cmdEnter".equals(sendShortcut)) {
+                sendShortcut = "enter";
+            }
+
+            PropertiesComponent props = PropertiesComponent.getInstance();
+            props.setValue(SEND_SHORTCUT_PROPERTY_KEY, sendShortcut);
+
+            LOG.info("[SettingsHandler] Set send shortcut: " + sendShortcut);
+
+            // Return updated state
+            final String finalSendShortcut = sendShortcut;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("sendShortcut", finalSendShortcut);
+                callJavaScript("window.updateSendShortcut", escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set send shortcut: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("保存发送快捷键设置失败: " + e.getMessage()));
+            });
+        }
     }
 }
