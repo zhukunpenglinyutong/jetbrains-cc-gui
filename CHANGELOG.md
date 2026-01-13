@@ -1,14 +1,24 @@
-##### **2026年1月12日（v0.1.5-beta4）**
+##### **2026年1月13日（v0.1.5-beta4）**
 
 English:
-- [x] Add experimental PyCharm support (Install from Disk)
-- [x] Implement Python semantic context collection (requires Python plugin)
-- [x] Optimize cross-IDE compatibility for ContextCollector
+- [x] Add experimental PyCharm support with Python semantic context collection #pycharm
+- [x] Add Codex reasoning effort selector with responsive UI improvements #codex
+- [x] Add configurable send shortcut for chat input (Ctrl+Enter / Cmd+Enter)
+- [x] Add copy message button for assistant responses
+- [x] Fix ai-bridge extraction waiting mechanism improvement
+- [x] Fix ai-bridge localization issues
+- [x] Adjust Codex button container query breakpoint for better responsiveness
+- [x] Update Codex reasoning effort levels
 
 中文:
-- [x] 新增 PyCharm 实验性支持（支持本地安装）
-- [x] 实现 Python 语义上下文采集（依赖 Python 插件）
-- [x] 优化 ContextCollector 跨 IDE 兼容性
+- [x] 添加实验性 PyCharm 支持，支持 Python 语义上下文收集
+- [x] 添加 Codex 推理努力程度选择器，优化响应式 UI
+- [x] 添加可配置的发送快捷键（Ctrl+Enter / Cmd+Enter）
+- [x] 添加助手回复的复制消息按钮
+- [x] 修复 ai-bridge 解压等待机制
+- [x] 修复 ai-bridge 国际化问题
+- [x] 调整 Codex 按钮容器查询断点，提升响应式体验
+- [x] 更新 Codex 推理努力程度级别
 
 ##### **2026年1月11日（v0.1.5-beta3）**
 English:
