@@ -271,7 +271,7 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
             )}
           </div>
 
-          <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} style={{ flexShrink: 0, marginLeft: '8px' }} />
+          <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
         </div>
 
         {expanded && (
