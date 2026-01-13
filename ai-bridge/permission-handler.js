@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * 权限处理器
- * 为 Claude SDK 提供权限请求的交互式处理
+ * Permission Handler.
+ * Provides interactive permission request handling for Claude SDK.
  */
 
 import { writeFileSync, readFileSync, existsSync, unlinkSync, readdirSync } from 'fs';
@@ -96,9 +96,9 @@ function rewriteToolInputPaths(toolName, input) {
 }
 
 /**
- * 通过文件系统与 Java 进程通信请求 AskUserQuestion 的答案
- * @param {Object} input - AskUserQuestion 工具参数（包含 questions 数组）
- * @returns {Promise<Object|null>} - 用户答案对象（格式：{ "问题文本": "答案" }），失败返回 null
+ * Request AskUserQuestion answers via file system communication with Java process.
+ * @param {Object} input - AskUserQuestion tool parameters (contains questions array)
+ * @returns {Promise<Object|null>} - User answers object (format: { "question text": "answer" }), returns null on failure
  */
 async function requestAskUserQuestionAnswers(input) {
   const requestStartTime = Date.now();
@@ -190,10 +190,10 @@ async function requestAskUserQuestionAnswers(input) {
 }
 
 /**
- * 通过文件系统与 Java 进程通信请求权限
- * @param {string} toolName - 工具名称
- * @param {Object} input - 工具参数
- * @returns {Promise<boolean>} - 是否允许
+ * Request permission via file system communication with Java process.
+ * @param {string} toolName - Tool name
+ * @param {Object} input - Tool parameters
+ * @returns {Promise<boolean>} - Whether allowed
  */
 export async function requestPermissionFromJava(toolName, input) {
   const requestStartTime = Date.now();
@@ -335,10 +335,10 @@ export async function requestPermissionFromJava(toolName, input) {
 }
 
 /**
- * canUseTool 回调函数
- * 供 Claude SDK 使用
- * 签名：(toolName: string, input: ToolInput, options: { signal: AbortSignal; suggestions?: PermissionUpdate[] }) => Promise<PermissionResult>
- * SDK 期望的返回格式：{ behavior: 'allow' | 'deny', updatedInput?: object, message?: string }
+ * canUseTool callback function.
+ * Used by Claude SDK.
+ * Signature: (toolName: string, input: ToolInput, options: { signal: AbortSignal; suggestions?: PermissionUpdate[] }) => Promise<PermissionResult>
+ * SDK expected return format: { behavior: 'allow' | 'deny', updatedInput?: object, message?: string }
  */
 export async function canUseTool(toolName, input, options = {}) {
   const callStartTime = Date.now();
@@ -376,7 +376,7 @@ export async function canUseTool(toolName, input, options = {}) {
       // 如果用户取消或超时，拒绝工具调用
       return {
         behavior: 'deny',
-        message: '用户未提供问题答案'
+        message: 'User did not provide answers'
       };
     }
   }
@@ -421,7 +421,7 @@ export async function canUseTool(toolName, input, options = {}) {
     debugLog('PERMISSION_DENIED', `User denied ${toolName}`, { elapsed: `${elapsed}ms` });
     return {
       behavior: 'deny',
-      message: `用户拒绝了 ${toolName} 工具的使用权限`
+      message: `User denied permission for ${toolName} tool`
     };
   }
 }
