@@ -1,13 +1,13 @@
 /**
- * 提示词增强服务
- * 使用 Claude Agent SDK 调用 AI 对用户的提示词进行优化重写
- * 与正常对话功能使用相同的认证方式和配置
+ * Prompt Enhancement Service.
+ * Uses Claude Agent SDK to call AI to optimize and rewrite user prompts.
+ * Uses the same authentication method and configuration as normal conversation.
  *
- * 支持上下文信息：
- * - 用户选中的代码片段
- * - 当前打开的文件信息（路径、内容、语言类型）
- * - 光标位置及周围代码
- * - 相关文件信息
+ * Supports context information:
+ * - User selected code snippets
+ * - Current open file information (path, content, language type)
+ * - Cursor position and surrounding code
+ * - Related file information
  */
 
 import { loadClaudeSdk, isClaudeSdkAvailable } from '../utils/sdk-loader.js';
@@ -140,7 +140,7 @@ function getLanguageFromPath(filePath) {
  * @returns {string} - 构建的完整提示词
  */
 function buildFullPrompt(originalPrompt, context) {
-  let fullPrompt = `请优化以下提示词：\n\n${originalPrompt}`;
+  let fullPrompt = `Please optimize the following prompt:\n\n${originalPrompt}`;
 
   // 如果没有上下文信息，直接返回
   if (!context) {
@@ -153,7 +153,7 @@ function buildFullPrompt(originalPrompt, context) {
   if (context.selectedCode && context.selectedCode.trim()) {
     const truncatedCode = truncateText(context.selectedCode, MAX_SELECTED_CODE_LENGTH);
     const language = context.currentFile?.language || getLanguageFromPath(context.currentFile?.path) || 'text';
-    contextParts.push(`【用户选中的代码】\n\`\`\`${language}\n${truncatedCode}\n\`\`\``);
+    contextParts.push(`[User Selected Code]\n\`\`\`${language}\n${truncatedCode}\n\`\`\``);
     console.log(`[PromptEnhancer] 添加选中代码上下文，长度: ${context.selectedCode.length}`);
   }
 
@@ -161,8 +161,8 @@ function buildFullPrompt(originalPrompt, context) {
   if (!context.selectedCode && context.cursorContext && context.cursorContext.trim()) {
     const truncatedContext = truncateText(context.cursorContext, MAX_CURSOR_CONTEXT_LENGTH);
     const language = context.currentFile?.language || getLanguageFromPath(context.currentFile?.path) || 'text';
-    const lineInfo = context.cursorPosition ? `（第 ${context.cursorPosition.line} 行）` : '';
-    contextParts.push(`【光标位置${lineInfo}周围的代码】\n\`\`\`${language}\n${truncatedContext}\n\`\`\``);
+    const lineInfo = context.cursorPosition ? ` (line ${context.cursorPosition.line})` : '';
+    contextParts.push(`[Code Around Cursor${lineInfo}]\n\`\`\`${language}\n${truncatedContext}\n\`\`\``);
     console.log(`[PromptEnhancer] 添加光标上下文，长度: ${context.cursorContext.length}`);
   }
 
@@ -173,12 +173,12 @@ function buildFullPrompt(originalPrompt, context) {
 
     if (path) {
       const lang = language || getLanguageFromPath(path);
-      fileInfo = `【当前文件】${path}\n【语言类型】${lang}`;
+      fileInfo = `[Current File] ${path}\n[Language Type] ${lang}`;
 
       // 如果没有选中代码和光标上下文，可以包含部分文件内容
       if (!context.selectedCode && !context.cursorContext && content && content.trim()) {
         const truncatedContent = truncateText(content, MAX_CURRENT_FILE_LENGTH);
-        fileInfo += `\n【文件内容预览】\n\`\`\`${lang}\n${truncatedContent}\n\`\`\``;
+        fileInfo += `\n[File Content Preview]\n\`\`\`${lang}\n${truncatedContent}\n\`\`\``;
         console.log(`[PromptEnhancer] 添加文件内容预览，长度: ${content.length}`);
       }
 
@@ -213,20 +213,20 @@ function buildFullPrompt(originalPrompt, context) {
     }
 
     if (relatedFilesInfo.length > 0) {
-      contextParts.push(`【相关文件】\n${relatedFilesInfo.join('\n')}`);
+      contextParts.push(`[Related Files]\n${relatedFilesInfo.join('\n')}`);
       console.log(`[PromptEnhancer] 添加 ${relatedFilesInfo.length} 个相关文件`);
     }
   }
 
   // 5. 项目类型信息
   if (context.projectType) {
-    contextParts.push(`【项目类型】${context.projectType}`);
+    contextParts.push(`[Project Type] ${context.projectType}`);
     console.log(`[PromptEnhancer] 添加项目类型: ${context.projectType}`);
   }
 
   // 组合所有上下文信息
   if (contextParts.length > 0) {
-    fullPrompt += '\n\n---\n以下是相关的上下文信息，请在优化提示词时参考：\n\n' + contextParts.join('\n\n');
+    fullPrompt += '\n\n---\nThe following is relevant context information, please refer to it when optimizing the prompt:\n\n' + contextParts.join('\n\n');
   }
 
   return fullPrompt;
@@ -316,7 +316,7 @@ async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
       return responseText.trim();
     }
 
-    throw new Error('AI 响应为空');
+    throw new Error('AI response is empty');
   } catch (error) {
     console.error('[PromptEnhancer] 增强失败:', error.message);
     throw error;
@@ -368,7 +368,7 @@ async function main() {
     process.exit(0);
   } catch (error) {
     console.error('[PromptEnhancer] 错误:', error.message);
-    console.log(`[ENHANCED]增强失败: ${error.message}`);
+    console.log(`[ENHANCED]Enhancement failed: ${error.message}`);
     process.exit(1);
   }
 }

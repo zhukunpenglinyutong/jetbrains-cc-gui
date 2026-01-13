@@ -1,6 +1,6 @@
 /**
- * 消息发送服务模块
- * 负责通过 Claude Agent SDK 发送消息
+ * Message sending service module.
+ * Responsible for sending messages through Claude Agent SDK.
  */
 
 // SDK 动态加载 - 不再静态导入，而是按需加载
@@ -168,7 +168,7 @@ function createPreToolUseHook(permissionMode) {
         : null;
 
     // 注意：配置只从 settings.json 读取，不再检查 shell 环境变量
-    let keySource = '未配置';
+    let keySource = 'Not configured';
     let rawKey = null;
 
     if (settingsApiKey !== null) {
@@ -183,28 +183,28 @@ function createPreToolUseHook(permissionMode) {
     }
 
     const keyPreview = rawKey && rawKey.length > 0
-      ? `${rawKey.substring(0, 10)}...（长度 ${rawKey.length} 字符）`
-      : '未配置（值为空或缺失）';
+      ? `${rawKey.substring(0, 10)}... (length: ${rawKey.length} chars)`
+      : 'Not configured (value is empty or missing)';
 
 		    let baseUrl = settingsBaseUrl || 'https://api.anthropic.com';
 		    let baseUrlSource;
 		    if (settingsBaseUrl) {
 		      baseUrlSource = '~/.claude/settings.json: ANTHROPIC_BASE_URL';
 		    } else {
-		      baseUrlSource = '默认值（https://api.anthropic.com）';
+		      baseUrlSource = 'Default (https://api.anthropic.com)';
 		    }
 
 		    const heading = isAbortError
-		      ? 'Claude Code 运行被中断（可能是响应超时或用户取消）：'
-		      : 'Claude Code 出现错误：';
+		      ? 'Claude Code was interrupted (possibly response timeout or user cancellation):'
+		      : 'Claude Code error:';
 
 		    const userMessage = [
 	      heading,
-	      `- 错误信息: ${rawError}`,
-	      `- 当前 API Key 来源: ${keySource}`,
-	      `- 当前 API Key 预览: ${keyPreview}`,
-	      `- 当前 Base URL: ${baseUrl}（来源: ${baseUrlSource}）`,
-	      `- tip：cli可以读取 环境变量 或者 setting.json 两种方式；本插件为了避免产生问题，只支持读取setting.json 内容，您可以在 本插件右上角设置 - 供应商管理配置下即可使用`,
+	      `- Error message: ${rawError}`,
+	      `- Current API Key source: ${keySource}`,
+	      `- Current API Key preview: ${keyPreview}`,
+	      `- Current Base URL: ${baseUrl} (source: ${baseUrlSource})`,
+	      `- Tip: CLI can read from environment variables or settings.json; this plugin only supports reading from settings.json to avoid issues. You can configure it in the plugin's top-right Settings > Provider Management`,
 	      ''
 	    ].join('\n');
 
@@ -768,7 +768,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 
       const errorContent = [{
         type: 'text',
-        text: `API 错误: ${errorMsg}\n\n可能的原因:\n1. API Key 配置不正确\n2. 第三方代理服务配置问题\n3. 请检查 ~/.claude/settings.json 中的配置`
+        text: `API error: ${errorMsg}\n\nPossible causes:\n1. API Key is not configured correctly\n2. Third-party proxy service configuration issue\n3. Please check the configuration in ~/.claude/settings.json`
       }];
 
       const assistantMsg = {

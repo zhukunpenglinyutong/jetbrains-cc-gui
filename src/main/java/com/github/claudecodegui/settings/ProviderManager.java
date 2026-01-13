@@ -554,10 +554,29 @@ public class ProviderManager {
      * 获取 ai-bridge 目录路径(使用 BridgeDirectoryResolver 自动处理解压)
      */
     private String getAiBridgePath() throws IOException {
+        // 使用共享的 BridgeDirectoryResolver 实例，以便正确检测解压状态
         com.github.claudecodegui.bridge.BridgeDirectoryResolver resolver =
-                new com.github.claudecodegui.bridge.BridgeDirectoryResolver();
+                com.github.claudecodegui.startup.BridgePreloader.getSharedResolver();
 
         File aiBridgeDir = resolver.findSdkDir();
+
+        // 如果返回 null，可能是正在后台解压中，等待解压完成
+        if (aiBridgeDir == null) {
+            if (resolver.isExtractionInProgress()) {
+                LOG.info("[ProviderManager] ai-bridge 正在解压中，等待完成...");
+                try {
+                    // 等待解压完成（最多等待 60 秒）
+                    Boolean ready = resolver.getExtractionFuture().get(60, java.util.concurrent.TimeUnit.SECONDS);
+                    if (ready != null && ready) {
+                        aiBridgeDir = resolver.getSdkDir();
+                    }
+                } catch (java.util.concurrent.TimeoutException e) {
+                    throw new IOException("ai-bridge 解压超时，请稍后重试", e);
+                } catch (Exception e) {
+                    throw new IOException("等待 ai-bridge 解压时发生错误: " + e.getMessage(), e);
+                }
+            }
+        }
 
         if (aiBridgeDir == null || !aiBridgeDir.exists()) {
             throw new IOException("无法找到 ai-bridge 目录,请检查插件安装");
