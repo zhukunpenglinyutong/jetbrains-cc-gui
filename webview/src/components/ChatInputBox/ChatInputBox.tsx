@@ -17,7 +17,7 @@ import {
   type AgentItem,
 } from './providers';
 import { getFileIcon } from '../../utils/fileIcons';
-import { icon_folder } from '../../utils/icons';
+import { icon_folder, icon_terminal } from '../../utils/icons';
 import './styles.css';
 
 // 防抖函数工具
@@ -196,14 +196,14 @@ export const ChatInputBox = ({
           const text = getTextContent();
           const newText = agentCompletion.replaceText(text, '', query);
           editableRef.current.innerText = newText;
-          
+
           const range = document.createRange();
           const selection = window.getSelection();
           range.selectNodeContents(editableRef.current);
           range.collapse(false);
           selection?.removeAllRanges();
           selection?.addRange(range);
-          
+
           handleInput();
         }
         return;
@@ -277,7 +277,7 @@ export const ChatInputBox = ({
       const lastChild = editableRef.current.lastChild;
       // 只有当最后一个节点不是 br 标签时，才移除末尾换行（说明是 JCEF 添加的）
       if (lastChild?.nodeType !== Node.ELEMENT_NODE ||
-          (lastChild as HTMLElement).tagName?.toLowerCase() !== 'br') {
+        (lastChild as HTMLElement).tagName?.toLowerCase() !== 'br') {
         text = text.slice(0, -1);
       }
     }
@@ -383,11 +383,16 @@ export const ChatInputBox = ({
       // 获取显示文件名（包含行号，用于显示）
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
 
-      // 判断是文件还是目录（使用纯文件名）
-      const isDirectory = !pureFileName.includes('.');
+      // 判断是否是终端
+      const isTerminal = pureFilePath.startsWith('terminal://');
+
+      // 判断是文件还是目录（使用纯文件名，仅当不是终端时）
+      const isDirectory = !isTerminal && !pureFileName.includes('.');
 
       let iconSvg = '';
-      if (isDirectory) {
+      if (isTerminal) {
+        iconSvg = icon_terminal;
+      } else if (isDirectory) {
         iconSvg = icon_folder;
       } else {
         const extension = pureFileName.indexOf('.') !== -1 ? pureFileName.split('.').pop() : '';
@@ -690,7 +695,7 @@ export const ChatInputBox = ({
     // 移除零宽字符和其他不可见字符后再检查是否为空，确保在只剩零宽字符时能正确显示 placeholder
     const cleanText = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
     const isEmpty = !cleanText.trim();
-    
+
     // setHasContent(!isEmpty); // 移到下方处理，避免 IME 干扰
 
     // 如果内容为空，清空 innerHTML 以确保 :empty 伪类生效（显示 placeholder）

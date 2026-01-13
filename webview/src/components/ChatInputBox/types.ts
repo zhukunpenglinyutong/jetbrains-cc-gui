@@ -67,6 +67,7 @@ export type CompletionType =
   | 'directory'
   | 'command'
   | 'agent'
+  | 'terminal'
   | 'info'
   | 'separator'
   | 'section-header';
@@ -102,7 +103,7 @@ export interface FileItem {
   /** 绝对路径 (可选) */
   absolutePath?: string;
   /** 类型 */
-  type: 'file' | 'directory';
+  type: 'file' | 'directory' | 'terminal';
   /** 扩展名 */
   extension?: string;
 }

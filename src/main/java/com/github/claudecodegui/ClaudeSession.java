@@ -15,6 +15,7 @@ import com.github.claudecodegui.util.EditorFileUtils;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import com.github.claudecodegui.terminal.TerminalMonitorService;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -309,7 +310,7 @@ public class ClaudeSession {
             // 设置是否启用PSI语义上下文收集
             contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
             return contextCollector.collectContext().thenCompose(openedFilesJson ->
-                sendMessageToProvider(chId, normalizedInput, attachments, openedFilesJson, finalAgentPrompt)
+                sendMessageToProvider(chId, userMessage.content, attachments, openedFilesJson, finalAgentPrompt)
             );
         }).exceptionally(ex -> {
             state.setError(ex.getMessage());
@@ -351,6 +352,32 @@ public class ClaudeSession {
                 }
             }
 
+            // 处理终端引用
+            // Handle terminal references
+            StringBuilder processedText = new StringBuilder(normalizedInput);
+            java.util.regex.Pattern termPattern = java.util.regex.Pattern.compile("@terminal://([a-zA-Z0-9_]+)");
+            java.util.regex.Matcher termMatcher = termPattern.matcher(normalizedInput);
+            int matchCount = 0;
+            while (termMatcher.find()) {
+                 matchCount++;
+                 String safeName = termMatcher.group(1);
+                 LOG.info("[Terminal] Found mention in message: @terminal://" + safeName);
+                 String content = resolveTerminalContent(safeName);
+                 if (content != null && !content.isEmpty()) {
+                     String terminalBlock = "\n\nTerminal Output (" + safeName + "):\n```\n" + content + "\n```";
+                     contentArr.add(createTextBlock(terminalBlock));
+                     processedText.append(terminalBlock);
+                     LOG.info("[Terminal] Successfully added content block for: " + safeName);
+                 } else {
+                     LOG.warn("[Terminal] Content was empty or null for: " + safeName);
+                 }
+            }
+            if (matchCount == 0 && normalizedInput.contains("@terminal://")) {
+                LOG.warn("[Terminal] Message contains '@terminal://' but regex did not match correctly.");
+            }
+
+            userDisplayText = processedText.toString();
+
             // 添加文本块（始终添加）
             // Always add text block
             // 解释：把用户说的话也加进去
@@ -374,6 +401,40 @@ public class ClaudeSession {
         }
 
         return userMessage;
+    }
+
+    private String resolveTerminalContent(String safeName) {
+        return ReadAction.compute(() -> {
+            try {
+                List<Object> widgets = TerminalMonitorService.getWidgets(project);
+                LOG.info("[Terminal] Resolving: " + safeName + ". Available widgets: " + widgets.size());
+                
+                Map<String, Integer> nameCounts = new HashMap<>();
+                for (Object widget : widgets) {
+                    String baseTitle = TerminalMonitorService.getWidgetTitle(widget);
+                    int count = nameCounts.getOrDefault(baseTitle, 0) + 1;
+                    nameCounts.put(baseTitle, count);
+                    
+                    String titleText = baseTitle;
+                    if (count > 1) {
+                        titleText = baseTitle + " (" + count + ")";
+                    }
+                    
+                    String wSafeName = titleText.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
+                    LOG.info("[Terminal] - Candidate: " + titleText + " (Safe: " + wSafeName + ") ID: " + Integer.toHexString(System.identityHashCode(widget)));
+                    
+                    if (wSafeName.equals(safeName)) {
+                        String content = TerminalMonitorService.getWidgetContent(widget);
+                        LOG.info("[Terminal] Match found! Content length: " + (content != null ? content.length() : "null"));
+                        return content;
+                    }
+                }
+                LOG.warn("[Terminal] No matching terminal found for: " + safeName);
+            } catch (Exception e) {
+                LOG.error("[Terminal] Error resolving terminal content: " + e.getMessage(), e);
+            }
+            return "";
+        });
     }
 
     /**

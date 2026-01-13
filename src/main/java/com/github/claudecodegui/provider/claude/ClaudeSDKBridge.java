@@ -578,6 +578,12 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 }
                 String stdinJson = gson.toJson(stdinInput);
 
+                // Log the full prompt being sent to Node.js
+                String preview = stdinJson.length() > 2000
+                    ? stdinJson.substring(0, 2000) + "\n... (truncated, total: " + stdinJson.length() + " chars)"
+                    : stdinJson;
+                LOG.info("[PROMPT] Sending to Node.js (" + stdinJson.length() + " chars):\n" + preview);
+
                 List<String> command = new ArrayList<>();
                 command.add(node);
                 command.add(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath());

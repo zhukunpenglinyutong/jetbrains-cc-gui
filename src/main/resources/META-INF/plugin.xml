@@ -73,6 +73,7 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
     <!-- Optional: Java support for enhanced context collection in Java/Kotlin IDEs -->
     <depends optional="true" config-file="java-features.xml">com.intellij.java</depends>
     <!-- Optional: Python support for enhanced context collection in PyCharm/IDEA with Python plugin -->
@@ -91,6 +92,9 @@
 
         <!-- Cleanup old ai-bridge cache when plugin version changes -->
         <postStartupActivity implementation="com.github.claudecodegui.startup.PluginUpdateListener"/>
+
+        <!-- Monitor Terminal Output -->
+        <postStartupActivity implementation="com.github.claudecodegui.terminal.TerminalMonitorService"/>
 
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
@@ -124,5 +128,6 @@
                 icon="AllIcons.General.Add"
                 text="New Chat Tab"
                 description="Create a new chat tab in Claude Code GUI tool window"/>
+
     </actions>
 </idea-plugin>

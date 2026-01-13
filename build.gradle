@@ -40,6 +40,8 @@ dependencies {
             bundledPlugin('com.intellij.java')
             // Add Python plugin to support compiling PythonContextCollector
             plugin('PythonCore', '243.22562.145')
+            // Enable Terminal Plugin support
+            bundledPlugin('org.jetbrains.plugins.terminal')
         }
 
         instrumentationTools()
