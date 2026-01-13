@@ -410,6 +410,9 @@ export interface ChatInputBoxProps {
   /** 切换流式传输 */
   onStreamingEnabledChange?: (enabled: boolean) => void;
 
+  /** 发送快捷键设置: 'enter' = Enter发送 | 'cmdEnter' = Cmd/Ctrl+Enter发送 */
+  sendShortcut?: 'enter' | 'cmdEnter';
+
   /** 当前选中的智能体 */
   selectedAgent?: SelectedAgent | null;
   /** 选择智能体回调 */

@@ -130,6 +130,13 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "When enabled, AI responses will appear character by character in real-time, instead of waiting for the complete response. May consume more resources."
+      },
+      "sendShortcut": {
+        "label": "Send Shortcut",
+        "enter": "Enter to Send",
+        "enterDesc": "Press Enter to send message, Shift+Enter for new line",
+        "cmdEnter": "⌘/Ctrl+Enter to Send",
+        "cmdEnterDesc": "Press ⌘/Ctrl+Enter to send message, Enter for new line"
       }
     },
     "providers": "Provider Management",

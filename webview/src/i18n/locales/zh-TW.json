@@ -118,6 +118,13 @@
       "editorFont": {
         "label": "字體（跟隨編輯器字體）",
         "hint": "此處暫時不可修改，如需修改，請在 IDEA 設定 → 編輯器 → 字體 中調整（重啟 IDEA 後本外掛字體生效）"
+      },
+      "sendShortcut": {
+        "label": "發送快捷鍵",
+        "enter": "Enter 發送",
+        "enterDesc": "按 Enter 發送訊息，Shift+Enter 換行",
+        "cmdEnter": "⌘/Ctrl+Enter 發送",
+        "cmdEnterDesc": "按 ⌘/Ctrl+Enter 發送訊息，Enter 換行"
       }
     },
     "providers": "供應商管理",

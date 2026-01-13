@@ -118,6 +118,13 @@
       "editorFont": {
         "label": "Police (suit la police de l'éditeur)",
         "hint": "Non modifiable ici. Pour modifier, allez dans Paramètres IDEA → Éditeur → Police (redémarrez IDEA pour que la police du plugin prenne effet)"
+      },
+      "sendShortcut": {
+        "label": "Raccourci d'envoi",
+        "enter": "Entrée pour envoyer",
+        "enterDesc": "Appuyez sur Entrée pour envoyer le message, Shift+Entrée pour nouvelle ligne",
+        "cmdEnter": "⌘/Ctrl+Entrée pour envoyer",
+        "cmdEnterDesc": "Appuyez sur ⌘/Ctrl+Entrée pour envoyer le message, Entrée pour nouvelle ligne"
       }
     },
     "providers": "Gestion des fournisseurs",

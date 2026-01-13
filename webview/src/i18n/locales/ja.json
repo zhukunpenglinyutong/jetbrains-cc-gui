@@ -123,6 +123,13 @@
       "editorFont": {
         "label": "フォント (エディタフォントに従う)",
         "hint": "ここでは編集できません。変更するには、IDEA設定 → エディタ → フォントに移動してください(プラグインフォントを有効にするにはIDEAを再起動してください)"
+      },
+      "sendShortcut": {
+        "label": "送信ショートカット",
+        "enter": "Enterで送信",
+        "enterDesc": "Enterでメッセージを送信、Shift+Enterで改行",
+        "cmdEnter": "⌘/Ctrl+Enterで送信",
+        "cmdEnterDesc": "⌘/Ctrl+Enterでメッセージを送信、Enterで改行"
       }
     },
     "providers": "プロバイダー管理",

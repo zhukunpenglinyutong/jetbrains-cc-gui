@@ -128,6 +128,8 @@ const App = () => {
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
   // 🔧 流式传输开关状态（同步设置页面）
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(false);
+  // 发送快捷键设置
+  const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
 
   // 🔧 SDK 安装状态（用于在未安装时禁止提问）
   const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
@@ -1163,6 +1165,16 @@ const App = () => {
       }
     };
 
+    // 发送快捷键设置同步回调
+    window.updateSendShortcut = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setSendShortcut(data.sendShortcut ?? 'enter');
+      } catch (error) {
+        console.error('[Frontend] Failed to parse send shortcut config:', error);
+      }
+    };
+
     // Retry getting active provider
     let retryCount = 0;
     const MAX_RETRIES = 30;
@@ -1208,6 +1220,21 @@ const App = () => {
       }
     };
     setTimeout(requestStreamingEnabled, 200);
+
+    // 请求发送快捷键初始状态
+    let sendShortcutRetryCount = 0;
+    const MAX_SEND_SHORTCUT_RETRIES = 30;
+    const requestSendShortcut = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_send_shortcut');
+      } else {
+        sendShortcutRetryCount++;
+        if (sendShortcutRetryCount < MAX_SEND_SHORTCUT_RETRIES) {
+          setTimeout(requestSendShortcut, 100);
+        }
+      }
+    };
+    setTimeout(requestSendShortcut, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -1762,6 +1789,15 @@ const App = () => {
     sendBridgeMessage('set_streaming_enabled', JSON.stringify(payload));
     addToast(enabled ? t('settings.basic.streaming.enabled') : t('settings.basic.streaming.disabled'), 'success');
   }, [t, addToast]);
+
+  /**
+   * 处理发送快捷键变更
+   */
+  const handleSendShortcutChange = useCallback((shortcut: 'enter' | 'cmdEnter') => {
+    setSendShortcut(shortcut);
+    const payload = { sendShortcut: shortcut };
+    sendBridgeMessage('set_send_shortcut', JSON.stringify(payload));
+  }, []);
 
   const interruptSession = () => {
     sendBridgeMessage('interrupt_session');
@@ -2652,6 +2688,8 @@ const App = () => {
           currentProvider={currentProvider}
           streamingEnabled={streamingEnabledSetting}
           onStreamingEnabledChange={handleStreamingEnabledChange}
+          sendShortcut={sendShortcut}
+          onSendShortcutChange={handleSendShortcutChange}
         />
       ) : currentView === 'chat' ? (
         <>
@@ -2870,6 +2908,7 @@ const App = () => {
             onToggleThinking={handleToggleThinking}
             streamingEnabled={streamingEnabledSetting}
             onStreamingEnabledChange={handleStreamingEnabledChange}
+            sendShortcut={sendShortcut}
             selectedAgent={selectedAgent}
             onAgentSelect={handleAgentSelect}
             activeFile={contextInfo?.file}
