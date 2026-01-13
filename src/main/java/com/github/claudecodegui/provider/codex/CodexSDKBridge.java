@@ -73,10 +73,23 @@ public class CodexSDKBridge extends BaseSDKBridge {
             try {
                 JsonObject msg = gson.fromJson(jsonStr, JsonObject.class);
                 if (msg != null) {
-                    result.messages.add(msg);
                     String msgType = msg.has("type") && !msg.get("type").isJsonNull()
                             ? msg.get("type").getAsString()
                             : "unknown";
+
+                    if ("status".equals(msgType)) {
+                        String status = "";
+                        if (msg.has("message") && !msg.get("message").isJsonNull()) {
+                            JsonElement statusEl = msg.get("message");
+                            status = statusEl.isJsonPrimitive() ? statusEl.getAsString() : statusEl.toString();
+                        }
+                        if (status != null && !status.isEmpty()) {
+                            callback.onMessage("status", status);
+                        }
+                        return;
+                    }
+
+                    result.messages.add(msg);
 
                     if ("assistant".equals(msgType)) {
                         try {
@@ -330,10 +343,23 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                 try {
                                     JsonObject msg = gson.fromJson(jsonStr, JsonObject.class);
                                     if (msg != null) {
-                                        result.messages.add(msg);
                                         String msgType = msg.has("type") && !msg.get("type").isJsonNull()
                                                 ? msg.get("type").getAsString()
                                                 : "unknown";
+
+                                        if ("status".equals(msgType)) {
+                                            String status = "";
+                                            if (msg.has("message") && !msg.get("message").isJsonNull()) {
+                                                JsonElement statusEl = msg.get("message");
+                                                status = statusEl.isJsonPrimitive() ? statusEl.getAsString() : statusEl.toString();
+                                            }
+                                            if (status != null && !status.isEmpty()) {
+                                                callback.onMessage("status", status);
+                                            }
+                                            continue;
+                                        }
+
+                                        result.messages.add(msg);
 
                                         if ("assistant".equals(msgType)) {
                                             try {

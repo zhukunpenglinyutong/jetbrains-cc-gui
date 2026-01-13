@@ -85,6 +85,7 @@ public class ClaudeSession {
     public interface SessionCallback {
         void onMessageUpdate(List<Message> messages);
         void onStateChange(boolean busy, boolean loading, String error);
+        default void onStatusMessage(String message) {}
         void onSessionIdReceived(String sessionId);
         void onPermissionRequested(PermissionRequest request);
         void onThinkingStatusChanged(boolean isThinking);
@@ -512,7 +513,7 @@ public class ClaudeSession {
         String currentProvider = state.getProvider();
 
         if ("codex".equals(currentProvider)) {
-            return sendToCodex(channelId, input, attachments, agentPrompt);
+            return sendToCodex(channelId, input, attachments, openedFilesJson, agentPrompt);
         } else {
             return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt);
         }
@@ -527,13 +528,17 @@ public class ClaudeSession {
         String channelId,
         String input,
         List<Attachment> attachments,
+        JsonObject openedFilesJson,
         String agentPrompt
     ) {
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
 
+        String contextAppend = buildCodexContextAppend(openedFilesJson);
+        String finalInput = (input != null ? input : "") + contextAppend;
+
         return codexSDKBridge.sendMessage(
             channelId,
-            input,
+            finalInput,
             state.getSessionId(),
             state.getCwd(),
             attachments,
@@ -543,6 +548,61 @@ public class ClaudeSession {
             state.getReasoningEffort(),
             handler
         ).thenApply(result -> null);
+    }
+
+    private String buildCodexContextAppend(JsonObject openedFilesJson) {
+        if (openedFilesJson == null || openedFilesJson.isJsonNull()) {
+            return "";
+        }
+
+        JsonObject selection = null;
+        if (openedFilesJson.has("selection") && openedFilesJson.get("selection").isJsonObject()) {
+            selection = openedFilesJson.getAsJsonObject("selection");
+        }
+        if (selection == null) {
+            return "";
+        }
+
+        String selectedText = null;
+        if (selection.has("selectedText") && !selection.get("selectedText").isJsonNull()) {
+            selectedText = selection.get("selectedText").getAsString();
+        }
+        if (selectedText == null || selectedText.trim().isEmpty()) {
+            return "";
+        }
+
+        String activeFile = null;
+        if (openedFilesJson.has("active") && !openedFilesJson.get("active").isJsonNull()) {
+            activeFile = openedFilesJson.get("active").getAsString();
+        }
+
+        Integer startLine = null;
+        Integer endLine = null;
+        if (selection.has("startLine") && selection.get("startLine").isJsonPrimitive()) {
+            startLine = selection.get("startLine").getAsInt();
+        }
+        if (selection.has("endLine") && selection.get("endLine").isJsonPrimitive()) {
+            endLine = selection.get("endLine").getAsInt();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n\n## IDE Context\n\n");
+        if (activeFile != null && !activeFile.trim().isEmpty()) {
+            sb.append("Active file: `").append(activeFile);
+            if (startLine != null && endLine != null) {
+                if (startLine.equals(endLine)) {
+                    sb.append("#L").append(startLine);
+                } else {
+                    sb.append("#L").append(startLine).append("-").append(endLine);
+                }
+            }
+            sb.append("`\n\n");
+        }
+        sb.append("Selected code:\n```\n");
+        sb.append(selectedText);
+        sb.append("\n```\n");
+        sb.append("The selected code above is the primary subject of the user's question.\n");
+        return sb.toString();
     }
 
     /**
