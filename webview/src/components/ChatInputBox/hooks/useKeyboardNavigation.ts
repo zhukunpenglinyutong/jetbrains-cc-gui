@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { deleteSelection, deleteToPosition } from '../utils/selectionUtils.js';
 
 interface UseKeyboardNavigationOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
@@ -44,9 +45,9 @@ export function useKeyboardNavigation({
         const node = range.startContainer;
         const offset = range.startOffset;
 
-        // If there's selected content, use execCommand to delete (supports undo)
+        // If there's selected content, use modern Selection API to delete
         if (!range.collapsed) {
-          document.execCommand('delete', false);
+          deleteSelection(editableRef.current);
           handleInput();
           return true;
         }
@@ -70,15 +71,8 @@ export function useKeyboardNavigation({
           return true;
         }
 
-        // Select content from line start to current cursor
-        const newRange = document.createRange();
-        newRange.setStart(node, lineStartOffset);
-        newRange.setEnd(node, offset);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-
-        // Use execCommand to delete selected content (supports undo)
-        document.execCommand('delete', false);
+        // Delete content from line start to current cursor using modern API
+        deleteToPosition(node, lineStartOffset, editableRef.current);
 
         // Trigger input event to update state
         handleInput();

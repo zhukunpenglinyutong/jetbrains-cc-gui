@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { Attachment } from '../types.js';
 import { generateId } from '../utils/generateId.js';
+import { insertTextAtCursor } from '../utils/selectionUtils.js';
 
 interface UsePasteAndDropOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
@@ -128,8 +129,8 @@ export function usePasteAndDrop({
               .getClipboardFilePath()
               .then((fullPath: string) => {
                 if (fullPath && fullPath.trim()) {
-                  // Insert full path
-                  document.execCommand('insertText', false, fullPath);
+                  // Insert full path using modern Selection API
+                  insertTextAtCursor(fullPath, editableRef.current);
                   handleInput();
                 }
               })
@@ -141,8 +142,8 @@ export function usePasteAndDrop({
         }
 
         if (text && text.trim()) {
-          // Use document.execCommand to insert plain text (maintains cursor position)
-          document.execCommand('insertText', false, text);
+          // Use modern Selection API to insert plain text (maintains cursor position)
+          insertTextAtCursor(text, editableRef.current);
 
           // Trigger input event to update state
           handleInput();
