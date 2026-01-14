@@ -34,6 +34,8 @@
     "clickToPreview": "點選預覽大圖",
     "userUploadedImage": "使用者上傳的圖片",
     "inputPlaceholder": "@引用檔案，shift + enter 換行",
+    "inputPlaceholderEnter": "@引用檔案，Shift+Enter 換行",
+    "inputPlaceholderCmdEnter": "@引用檔案，Enter 換行",
     "sendMessageEnter": "發送訊息 (Enter)",
     "currentMode": "目前模式: {{mode}}",
     "currentModel": "目前模型: {{model}}",
@@ -559,6 +561,9 @@
     "lineRange": "第 {{start}}-{{end}} 行",
     "filePath": "檔案路徑：",
     "unknownTool": "未知工具"
+  },
+  "todo": {
+    "progress": "已完成 {{completed}}/{{total}} 個任務"
   },
   "skills": {
     "title": "Skills",

@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DropdownItemData, DropdownPosition, TriggerQuery } from '../types';
+import type { DropdownItemData, DropdownPosition, TriggerQuery } from '../types.js';
 
 interface CompletionDropdownOptions<T> {
-  /** 触发符号 */
+  /** Trigger symbol */
   trigger: string;
-  /** 数据提供者 */
+  /** Data provider */
   provider: (query: string, signal: AbortSignal) => Promise<T[]>;
-  /** 转换为下拉项 */
+  /** Convert to dropdown item */
   toDropdownItem: (item: T) => DropdownItemData;
-  /** 选择回调 */
+  /** Selection callback */
   onSelect: (item: T, query: TriggerQuery | null) => void;
-  /** 防抖延迟 (ms) */
+  /** Debounce delay (ms) */
   debounceMs?: number;
-  /** 最小查询长度 */
+  /** Minimum query length */
   minQueryLength?: number;
 }
 
@@ -28,8 +28,8 @@ interface CompletionDropdownState {
 }
 
 /**
- * useCompletionDropdown - 统一补全下拉 Hook
- * 支持防抖搜索、竞态保护、键盘导航
+ * useCompletionDropdown - Unified completion dropdown hook
+ * Supports debounced search, race condition protection, keyboard navigation
  */
 export function useCompletionDropdown<T>({
   trigger: _trigger,
@@ -39,7 +39,7 @@ export function useCompletionDropdown<T>({
   debounceMs = 200,
   minQueryLength = 0,
 }: CompletionDropdownOptions<T>) {
-  // trigger 用于标识当前 hook 实例，在调试时有用
+  // trigger is used to identify this hook instance, useful for debugging
   void _trigger;
   const [state, setState] = useState<CompletionDropdownState>({
     isOpen: false,
@@ -52,20 +52,20 @@ export function useCompletionDropdown<T>({
     navigationMode: 'keyboard',
   });
 
-  // 防抖计时器
+  // Debounce timer
   const debounceTimerRef = useRef<number | null>(null);
-  // AbortController 用于取消请求
+  // AbortController for canceling requests
   const abortControllerRef = useRef<AbortController | null>(null);
-  // 保存最新的 state，用于键盘事件处理（避免闭包问题）
+  // Save latest state for keyboard event handling (avoid closure issues)
   const stateRef = useRef<CompletionDropdownState>(state);
 
-  // 同步更新 stateRef
+  // Sync update stateRef
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
   /**
-   * 打开下拉
+   * Open dropdown
    */
   const open = useCallback((position: DropdownPosition, triggerQuery: TriggerQuery) => {
     console.log('[useCompletionDropdown] open:', { position, triggerQuery });
@@ -80,10 +80,10 @@ export function useCompletionDropdown<T>({
   }, []);
 
   /**
-   * 关闭下拉
+   * Close dropdown
    */
   const close = useCallback(() => {
-    // 取消待处理的请求
+    // Cancel pending requests
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
@@ -104,23 +104,23 @@ export function useCompletionDropdown<T>({
   }, []);
 
   /**
-   * 搜索
+   * Search
    */
   const search = useCallback(async (query: string) => {
     const startedAt = performance.now?.() ?? Date.now();
     console.log('[useCompletionDropdown] search start:', { query });
-    // 取消之前的请求
+    // Cancel previous request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
 
-    // 检查最小查询长度
+    // Check minimum query length
     if (query.length < minQueryLength) {
       setState(prev => ({ ...prev, items: [], rawItems: [], loading: false }));
       return;
     }
 
-    // 创建新的 AbortController
+    // Create new AbortController
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -129,7 +129,7 @@ export function useCompletionDropdown<T>({
     try {
       const results = await provider(query, controller.signal);
 
-      // 检查是否被取消
+      // Check if aborted
       if (controller.signal.aborted) return;
 
       const items = results.map(toDropdownItem);
@@ -145,7 +145,7 @@ export function useCompletionDropdown<T>({
         activeIndex: 0,
       }));
     } catch (error) {
-      // 忽略取消错误
+      // Ignore abort errors
       if ((error as Error).name === 'AbortError') return;
 
       console.error('[useCompletionDropdown] Search error:', error);
@@ -154,22 +154,22 @@ export function useCompletionDropdown<T>({
   }, [provider, toDropdownItem, minQueryLength]);
 
   /**
-   * 防抖搜索
+   * Debounced search
    */
   const debouncedSearch = useCallback((query: string) => {
-    // 清除之前的计时器
+    // Clear previous timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
 
-    // 设置新的计时器
+    // Set new timer
     debounceTimerRef.current = window.setTimeout(() => {
       search(query);
     }, debounceMs);
   }, [search, debounceMs]);
 
   /**
-   * 更新查询
+   * Update query
    */
   const updateQuery = useCallback((triggerQuery: TriggerQuery) => {
     console.log('[useCompletionDropdown] updateQuery:', triggerQuery);
@@ -178,7 +178,7 @@ export function useCompletionDropdown<T>({
   }, [debouncedSearch]);
 
   /**
-   * 选择当前项
+   * Select active item
    */
   const selectActive = useCallback(() => {
     const { activeIndex, rawItems, triggerQuery } = stateRef.current;
@@ -190,7 +190,7 @@ export function useCompletionDropdown<T>({
   }, [onSelect, close]);
 
   /**
-   * 选择指定索引
+   * Select item by index
    */
   const selectIndex = useCallback((index: number) => {
     const { rawItems, triggerQuery } = stateRef.current;
@@ -202,17 +202,17 @@ export function useCompletionDropdown<T>({
   }, [onSelect, close]);
 
   /**
-   * 处理键盘事件
-   * 返回 true 表示事件已处理
+   * Handle keyboard event
+   * Returns true if event was handled
    */
   const handleKeyDown = useCallback((e: KeyboardEvent): boolean => {
-    // 使用 ref 获取最新的 state，避免闭包问题
+    // Use ref to get latest state, avoid closure issues
     const currentState = stateRef.current;
 
     if (!currentState.isOpen) return false;
 
     const { items } = currentState;
-    // 过滤可选择的项（排除分隔线和标题）
+    // Filter selectable items (exclude separators and headers)
     const selectableCount = items.filter(
       i => i.type !== 'separator' && i.type !== 'section-header'
     ).length;
@@ -220,7 +220,7 @@ export function useCompletionDropdown<T>({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        // 防止除零错误：当没有可选择项时，保持 activeIndex 为 0
+        // Prevent division by zero: when no selectable items, keep activeIndex at 0
         if (selectableCount === 0) return true;
         setState(prev => ({
           ...prev,
@@ -231,7 +231,7 @@ export function useCompletionDropdown<T>({
 
       case 'ArrowUp':
         e.preventDefault();
-        // 防止除零错误：当没有可选择项时，保持 activeIndex 为 0
+        // Prevent division by zero: when no selectable items, keep activeIndex at 0
         if (selectableCount === 0) return true;
         setState(prev => ({
           ...prev,
@@ -254,10 +254,10 @@ export function useCompletionDropdown<T>({
       default:
         return false;
     }
-  }, [selectActive, close]); // 只依赖不经常变化的函数
+  }, [selectActive, close]); // Only depend on functions that don't change frequently
 
   /**
-   * 处理鼠标进入
+   * Handle mouse enter
    */
   const handleMouseEnter = useCallback((index: number) => {
     setState(prev => ({
@@ -268,7 +268,7 @@ export function useCompletionDropdown<T>({
   }, []);
 
   /**
-   * 替换文本
+   * Replace text
    */
   const replaceText = useCallback((
     fullText: string,
@@ -283,7 +283,7 @@ export function useCompletionDropdown<T>({
     return before + replacement + after;
   }, []);
 
-  // 清理
+  // Cleanup
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
@@ -296,7 +296,7 @@ export function useCompletionDropdown<T>({
   }, []);
 
   return {
-    // 状态
+    // State
     isOpen: state.isOpen,
     items: state.items,
     activeIndex: state.activeIndex,
@@ -305,7 +305,7 @@ export function useCompletionDropdown<T>({
     loading: state.loading,
     navigationMode: state.navigationMode,
 
-    // 方法
+    // Methods
     open,
     close,
     updateQuery,

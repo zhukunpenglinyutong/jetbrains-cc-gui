@@ -568,7 +568,11 @@ public class SettingsHandler extends BaseMessageHandler {
                 callJavaScript("window.updateNodePath", escapeJs(gson.toJson(response)));
 
                 if (successFlag) {
-                    callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存。\n\n如果环境检查仍然失败，请关闭并重新打开工具窗口后重试。"));
+                    // 🔧 触发环境重新检查,无需重启IDE
+                    callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存并生效,无需重启IDE"));
+
+                    // 通知 DependencySection 重新检查 Node.js 环境
+                    callJavaScript("window.checkNodeEnvironment");
                 } else {
                     String msg = failureMsgFinal != null ? failureMsgFinal : "无法验证指定的 Node.js 路径";
                     callJavaScript("window.showError", escapeJs("保存的 Node.js 路径无效: " + msg));

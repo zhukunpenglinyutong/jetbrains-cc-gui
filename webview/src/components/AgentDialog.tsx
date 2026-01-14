@@ -62,8 +62,8 @@ export default function AgentDialog({
 
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-    // 限制最多10000字符
-    if (value.length <= 10000) {
+    // 限制最多100000字符
+    if (value.length <= 100000) {
       setPrompt(value);
     }
   };
@@ -132,10 +132,10 @@ export default function AgentDialog({
                 placeholder={t('settings.agent.dialog.promptPlaceholder')}
                 value={prompt}
                 onChange={handlePromptChange}
-                maxLength={10000}
+                maxLength={100000}
                 rows={8}
               />
-              <span className="char-counter">{prompt.length}/10000</span>
+              <span className="char-counter">{prompt.length}/100000</span>
             </div>
             <small className="form-hint">{t('settings.agent.dialog.promptHint')}</small>
           </div>

@@ -34,6 +34,8 @@
     "clickToPreview": "Click to preview",
     "userUploadedImage": "User uploaded image",
     "inputPlaceholder": "@reference files, shift + enter for new line",
+    "inputPlaceholderEnter": "@reference files, Shift+Enter for new line",
+    "inputPlaceholderCmdEnter": "@reference files, Enter for new line",
     "noThinkingContent": "No thinking content",
     "parseError": "Failed to parse content",
     "sendMessageEnter": "Send message (Enter)",
@@ -614,6 +616,10 @@
     "filePath": "File path:",
     "unknownTool": "Unknown tool"
   },
+  "todo": {
+    "inProgress": "{{completed}}/{{total}} tasks in progress",
+    "allCompleted": "{{completed}}/{{total}} tasks completed"
+  },
   "skills": {
     "title": "Skills",
     "all": "All",
@@ -780,6 +786,9 @@
     },
     "gemini": {
       "label": "Gemini Cli"
+    },
+    "opencode": {
+      "label": "OpenCode"
     }
   },
   "promptEnhancer": {

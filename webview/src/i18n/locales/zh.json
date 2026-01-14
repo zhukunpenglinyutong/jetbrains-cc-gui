@@ -34,6 +34,8 @@
     "clickToPreview": "点击预览大图",
     "userUploadedImage": "用户上传的图片",
     "inputPlaceholder": "@引用文件，#唤起智能体，shift + enter 换行",
+    "inputPlaceholderEnter": "@引用文件，#唤起智能体，Shift+Enter 换行",
+    "inputPlaceholderCmdEnter": "@引用文件，#唤起智能体，Enter 换行",
     "noThinkingContent": "无思考内容",
     "parseError": "无法解析内容",
     "sendMessageEnter": "发送消息 (Enter)",
@@ -146,7 +148,7 @@
     "dependency": {
       "title": "SDK 依赖管理",
       "description": "管理 AI SDK 依赖包。首次使用时需要安装对应的 SDK。",
-      "installPolicyTip": "为了减少包体积，SDK现在将需要主动安装",
+      "installPolicyTip": "为了减少包体积，SDK现在需要主动安装",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相关依赖。",
       "codexSdkName": "Codex SDK",
@@ -615,6 +617,10 @@
     "filePath": "文件路径：",
     "unknownTool": "未知工具"
   },
+  "todo": {
+    "inProgress": "进行中 {{completed}}/{{total}} 个任务",
+    "allCompleted": "已完成 {{completed}}/{{total}} 个任务"
+  },
   "skills": {
     "title": "Skills",
     "all": "全部",
@@ -776,6 +782,9 @@
     },
     "gemini": {
       "label": "Gemini Cli"
+    },
+    "opencode": {
+      "label": "OpenCode"
     }
   },
   "promptEnhancer": {

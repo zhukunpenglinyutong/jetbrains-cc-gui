@@ -50,6 +50,13 @@ public class BridgeDirectoryResolver {
     private static final String PLUGIN_DIR_NAME = "idea-claude-code-gui";
 
     private volatile File cachedSdkDir = null;
+    /**
+     * 通过 setSdkDir() 手动设置的目录路径，具有最高优先级。
+     * 与 cachedSdkDir 的区别：
+     * - manuallySdkDir: 用户显式调用 setSdkDir() 设置，不会被自动发现逻辑覆盖
+     * - cachedSdkDir: 通过任何途径（手动或自动）找到的目录缓存
+     */
+    private volatile File manuallySdkDir = null;
     private final Object bridgeExtractionLock = new Object();
 
     // Extraction state management
@@ -66,10 +73,17 @@ public class BridgeDirectoryResolver {
 
     /**
      * 查找 claude-bridge 目录
-     * 优先级: 配置路径 > 嵌入式路径 > 缓存路径 > Fallback
+     * 优先级: 手动设置路径 > 配置路径 > 嵌入式路径 > 缓存路径 > Fallback
      */
     public File findSdkDir() {
-        // ✓ 优先级 1: 配置路径（最高优先级）
+        // ✓ 优先级 0: 手动设置路径（通过 setSdkDir() 调用，最高优先级）
+        if (this.manuallySdkDir != null && isValidBridgeDir(this.manuallySdkDir)) {
+            LOG.debug("[BridgeResolver] Using manually set path: " + this.manuallySdkDir.getAbsolutePath());
+            this.cachedSdkDir = this.manuallySdkDir;
+            return this.cachedSdkDir;
+        }
+
+        // ✓ 优先级 1: 配置路径
         File configuredDir = resolveConfiguredBridgeDir();
         if (configuredDir != null) {
             LOG.debug("[BridgeResolver] Using configured path: " + configuredDir.getAbsolutePath());
@@ -842,9 +856,15 @@ public class BridgeDirectoryResolver {
 
     /**
      * 手动设置 claude-bridge 目录路径.
+     * 此方法设置的路径具有最高优先级，会覆盖配置路径和嵌入式路径。
+     * 设置后，findSdkDir() 将优先返回此路径。
+     *
+     * @param path 目录路径
      */
     public void setSdkDir(String path) {
-        this.cachedSdkDir = new File(path);
+        this.manuallySdkDir = new File(path);
+        this.cachedSdkDir = this.manuallySdkDir;
+        LOG.debug("[BridgeResolver] Manually set SDK directory to: " + path);
     }
 
     /**
@@ -858,10 +878,12 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * 清除缓存.
+     * 清除所有缓存，包括手动设置的路径和自动发现的缓存。
+     * 调用后，下次 findSdkDir() 将重新执行完整的路径发现逻辑。
      */
     public void clearCache() {
         this.cachedSdkDir = null;
+        this.manuallySdkDir = null;
         this.extractionState.set(ExtractionState.NOT_STARTED);
         this.extractionFutureRef.set(null);
         this.extractionReadyFuture = new CompletableFuture<>();
