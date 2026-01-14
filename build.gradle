@@ -198,8 +198,8 @@ def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() 
 def enableVConsoleInWebview = requestedTasks.any { it.contains('runide') }
 
 /**
- * 跨平台查找 npm 可执行文件路径
- * 按优先级尝试多个可能的路径
+ * Cross-platform npm executable path finder
+ * Tries multiple possible paths in priority order
  */
 def findNpmPath() {
     def osName = System.getProperty('os.name').toLowerCase()
@@ -207,7 +207,7 @@ def findNpmPath() {
     def isMac = osName.contains('mac')
     def isLinux = osName.contains('linux')
 
-    // 1. 首先尝试通过 which/where 命令查找（适用于已配置 PATH 的情况）
+    // 1. First try to find npm using which/where command (when PATH is configured)
     try {
         def whichCmd = isWindows ? 'where' : 'which'
         def proc = "${whichCmd} npm".execute()
@@ -221,13 +221,13 @@ def findNpmPath() {
         println "⚠ Could not find npm using which/where: ${e.message}"
     }
 
-    // 2. 尝试常见的 nvm 路径（仅 Unix-like 系统）
+    // 2. Try common nvm paths (Unix-like systems only)
     if (!isWindows) {
         def userHome = System.getProperty('user.home')
         def nvmBaseDir = new File(userHome, ".nvm/versions/node")
 
         if (nvmBaseDir.exists()) {
-            // 查找 nvm 管理的所有 Node.js 版本
+            // Find all Node.js versions managed by nvm
             def versionDirs = nvmBaseDir.listFiles()
             if (versionDirs) {
                 for (File versionDir : versionDirs) {
@@ -240,7 +240,7 @@ def findNpmPath() {
             }
         }
 
-        // 3. 尝试系统默认路径
+        // 3. Try system default paths
         def systemPaths = []
         if (isMac) {
             systemPaths = [
@@ -265,13 +265,13 @@ def findNpmPath() {
         }
     }
 
-    // 4. Windows: 尝试 nvm-windows 路径
+    // 4. Windows: Try nvm-windows paths
     if (isWindows) {
         def userHome = System.getProperty('user.home')
         def nvmWindowsDir = new File(userHome, "AppData/Roaming/nvm")
 
         if (nvmWindowsDir.exists()) {
-            // 查找 nvm-windows 管理的 Node.js 版本
+            // Find Node.js versions managed by nvm-windows
             def versionDirs = nvmWindowsDir.listFiles()
             if (versionDirs) {
                 for (File versionDir : versionDirs) {
@@ -286,7 +286,7 @@ def findNpmPath() {
             }
         }
 
-        // 尝试系统默认路径
+        // Try system default paths
         def systemPaths = [
             "C:/Program Files/nodejs/npm.cmd",
             "${userHome}/AppData/Local/npm/npm.cmd"
@@ -301,7 +301,7 @@ def findNpmPath() {
         }
     }
 
-    // 5. 最后尝试直接使用 'npm'（依赖系统 PATH）
+    // 5. Fallback to using 'npm' directly (relies on system PATH)
     println "⚠ Could not locate npm automatically, using system PATH"
     return isWindows ? ["cmd", "/c", "npm"] : ["npm"]
 }
@@ -310,7 +310,7 @@ tasks.register('buildWebview', Exec) {
     workingDir webviewDir
     environment 'VITE_ENABLE_VCONSOLE', enableVConsoleInWebview ? 'true' : 'false'
 
-    // 使用跨平台的 npm 查找方法
+    // Use cross-platform npm finder
     def npmCommand = findNpmPath()
     commandLine npmCommand + ['run', 'build']
 
