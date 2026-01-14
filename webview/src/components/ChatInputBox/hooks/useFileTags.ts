@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
 import { getFileIcon } from '../../../utils/fileIcons.js';
-import { icon_folder } from '../../../utils/icons.js';
+import { icon_folder, icon_terminal } from '../../../utils/icons.js';
 
 interface UseFileTagsOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
@@ -118,11 +118,16 @@ export function useFileTags({
       // Get display filename (with line number, for display)
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
 
-      // Determine if file or directory (using pure filename)
-      const isDirectory = !pureFileName.includes('.');
+      // Check if it's a terminal
+      const isTerminal = pureFilePath.startsWith('terminal://');
+
+      // Determine if file or directory (only when not terminal)
+      const isDirectory = !isTerminal && !pureFileName.includes('.');
 
       let iconSvg = '';
-      if (isDirectory) {
+      if (isTerminal) {
+        iconSvg = icon_terminal;
+      } else if (isDirectory) {
         iconSvg = icon_folder;
       } else {
         const extension = pureFileName.indexOf('.') !== -1 ? pureFileName.split('.').pop() : '';
