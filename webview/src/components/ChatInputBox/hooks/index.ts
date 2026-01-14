@@ -1,2 +1,10 @@
-export { useTriggerDetection, getRectAtCharOffset } from './useTriggerDetection';
-export { useCompletionDropdown } from './useCompletionDropdown';
+export { useTriggerDetection, getRectAtCharOffset } from './useTriggerDetection.js';
+export { useCompletionDropdown } from './useCompletionDropdown.js';
+export { useTextContent } from './useTextContent.js';
+export { useFileTags } from './useFileTags.js';
+export { useTooltip } from './useTooltip.js';
+export { useKeyboardNavigation } from './useKeyboardNavigation.js';
+export { useIMEComposition } from './useIMEComposition.js';
+export { usePasteAndDrop } from './usePasteAndDrop.js';
+export { usePromptEnhancer } from './usePromptEnhancer.js';
+export { useGlobalCallbacks } from './useGlobalCallbacks.js';

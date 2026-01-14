@@ -34,6 +34,8 @@
     "clickToPreview": "クリックしてプレビュー",
     "userUploadedImage": "ユーザーがアップロードした画像",
     "inputPlaceholder": "@でファイルを参照、Shift + Enterで改行",
+    "inputPlaceholderEnter": "@でファイルを参照、Shift+Enterで改行",
+    "inputPlaceholderCmdEnter": "@でファイルを参照、Enterで改行",
     "sendMessageEnter": "メッセージを送信 (Enter)",
     "currentMode": "現在のモード: {{mode}}",
     "currentModel": "現在のモデル: {{model}}",
@@ -578,6 +580,9 @@
     "lineRange": "{{start}}-{{end}}行目",
     "filePath": "ファイルパス：",
     "unknownTool": "不明なツール"
+  },
+  "todo": {
+    "progress": "{{total}} 件中 {{completed}} 件完了"
   },
   "skills": {
     "title": "スキル",

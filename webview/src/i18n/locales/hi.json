@@ -34,6 +34,8 @@
     "clickToPreview": "पूर्वावलोकन के लिए क्लिक करें",
     "userUploadedImage": "उपयोगकर्ता द्वारा अपलोड की गई छवि",
     "inputPlaceholder": "@फाइल संदर्भ, shift + enter नई लाइन",
+    "inputPlaceholderEnter": "@फाइल संदर्भ, Shift+Enter नई लाइन",
+    "inputPlaceholderCmdEnter": "@फाइल संदर्भ, Enter नई लाइन",
     "sendMessageEnter": "संदेश भेजें (Enter)",
     "currentMode": "वर्तमान मोड: {{mode}}",
     "currentModel": "वर्तमान मॉडल: {{model}}",
@@ -559,6 +561,10 @@
     "lineRange": "पंक्तियाँ {{start}}-{{end}}",
     "filePath": "फ़ाइल पथ:",
     "unknownTool": "अज्ञात टूल"
+  },
+  "todo": {
+    "inProgress": "{{completed}}/{{total}} कार्य प्रगति में",
+    "allCompleted": "{{completed}}/{{total}} कार्य पूर्ण"
   },
   "skills": {
     "title": "Skills",

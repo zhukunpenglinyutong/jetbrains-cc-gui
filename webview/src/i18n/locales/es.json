@@ -34,6 +34,8 @@
     "clickToPreview": "Haz clic para previsualizar",
     "userUploadedImage": "Imagen subida por el usuario",
     "inputPlaceholder": "@referenciar archivos, shift + enter para nueva línea",
+    "inputPlaceholderEnter": "@referenciar archivos, Shift+Enter para nueva línea",
+    "inputPlaceholderCmdEnter": "@referenciar archivos, Enter para nueva línea",
     "sendMessageEnter": "Enviar mensaje (Enter)",
     "currentMode": "Modo actual: {{mode}}",
     "currentModel": "Modelo actual: {{model}}",
@@ -559,6 +561,9 @@
     "lineRange": "Líneas {{start}}-{{end}}",
     "filePath": "Ruta del archivo:",
     "unknownTool": "Herramienta desconocida"
+  },
+  "todo": {
+    "progress": "{{completed}} de {{total}} tareas completadas"
   },
   "skills": {
     "title": "Skills",

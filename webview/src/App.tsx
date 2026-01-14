@@ -23,8 +23,8 @@ import {
   GenericToolBlock,
   ReadToolBlock,
   TaskExecutionBlock,
-  TodoListBlock,
 } from './components/toolBlocks';
+import { TodoPanel } from './components/TodoPanel';
 import { BackIcon } from './components/Icons';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
@@ -178,8 +178,6 @@ const App = () => {
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
   // 追踪用户是否在底部（用于判断是否需要自动滚动）
   const isUserAtBottomRef = useRef(true);
-  // 追踪上次按下 ESC 的时间（用于双击 ESC 快捷键）
-  const lastEscPressTimeRef = useRef<number>(0);
 
   // 🔧 流式传输状态
   // 使用 useRef 累积流式内容，避免频繁状态更新
@@ -1533,38 +1531,6 @@ const App = () => {
     }
   }, [currentView, scrollToBottom]);
 
-  // 双击 ESC 快捷键打开回滚弹窗
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-
-      // 如果有其他弹窗打开，不处理双击 ESC
-      if (permissionDialogOpen || askUserQuestionDialogOpen || rewindDialogOpen || rewindSelectDialogOpen) {
-        return;
-      }
-
-      // 只在 claude provider 且有消息时才触发
-      if (currentProvider !== 'claude' || messages.length === 0) {
-        return;
-      }
-
-      const now = Date.now();
-      const timeSinceLastEsc = now - lastEscPressTimeRef.current;
-
-      // 如果两次 ESC 间隔小于 400ms，触发回滚弹窗
-      if (timeSinceLastEsc < 400) {
-        e.preventDefault();
-        setRewindSelectDialogOpen(true);
-        lastEscPressTimeRef.current = 0; // 重置，避免连续触发
-      } else {
-        lastEscPressTimeRef.current = now;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentProvider, messages.length, permissionDialogOpen, askUserQuestionDialogOpen, rewindDialogOpen, rewindSelectDialogOpen]);
-
   /**
    * 处理消息发送（来自 ChatInputBox）
    */
@@ -2452,6 +2418,29 @@ const App = () => {
     return result;
   }, [messages]);
 
+  // 从消息中提取最新的 todos 用于全局 TodoPanel 显示
+  const globalTodos = useMemo(() => {
+    // 从后往前遍历，找到最新的 todowrite 工具调用
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type !== 'assistant') continue;
+
+      const blocks = getContentBlocks(msg);
+      // 从后往前遍历 blocks，找到最新的 todowrite
+      for (let j = blocks.length - 1; j >= 0; j--) {
+        const block = blocks[j];
+        if (
+          block.type === 'tool_use' &&
+          block.name?.toLowerCase() === 'todowrite' &&
+          Array.isArray((block.input as { todos?: TodoItem[] })?.todos)
+        ) {
+          return (block.input as { todos: TodoItem[] }).todos;
+        }
+      }
+    }
+    return [];
+  }, [messages]);
+
 // Claude 流式：思考块在输出中自动展开，输出结束自动折叠（见 onStreamEnd）
   useEffect(() => {
     if (currentProvider !== 'claude') return;
@@ -2848,11 +2837,9 @@ const App = () => {
 
                         {block.type === 'tool_use' && (
                           <>
-                            {block.name?.toLowerCase() === 'todowrite' &&
-                            Array.isArray((block.input as { todos?: TodoItem[] })?.todos) ? (
-                              <TodoListBlock
-                                todos={(block.input as { todos?: TodoItem[] })?.todos ?? []}
-                              />
+                            {block.name?.toLowerCase() === 'todowrite' ? (
+                              // TodoList 已移至输入框上方的固定 TodoPanel，历史消息中不再显示
+                              null
                             ) : block.name?.toLowerCase() === 'task' ? (
                               <TaskExecutionBlock input={block.input} />
                             ) : block.name &&
@@ -2916,7 +2903,9 @@ const App = () => {
       )}
 
       {currentView === 'chat' && (
-        <div className="input-area" ref={inputAreaRef}>
+        <>
+          {globalTodos.length > 0 && <TodoPanel todos={globalTodos} />}
+          <div className="input-area" ref={inputAreaRef}>
           <ChatInputBox
             ref={chatInputRef}
             isLoading={loading}
@@ -2928,7 +2917,7 @@ const App = () => {
             usageMaxTokens={usageMaxTokens}
             showUsage={true}
             alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
-            placeholder={t('chat.inputPlaceholder')}
+            placeholder={sendShortcut === 'cmdEnter' ? t('chat.inputPlaceholderCmdEnter') : t('chat.inputPlaceholderEnter')}
             sdkInstalled={currentSdkInstalled}
             sdkStatusLoading={!sdkStatusLoaded}
             onInstallSdk={() => {
@@ -2967,6 +2956,7 @@ const App = () => {
             addToast={addToast}
           />
         </div>
+        </>
       )}
 
       <div id="image-preview-root" />
