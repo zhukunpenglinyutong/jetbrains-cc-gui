@@ -352,22 +352,22 @@ public class ClaudeSession {
                 }
             }
 
-            // 处理终端引用
             // Handle terminal references
-            StringBuilder processedText = new StringBuilder(normalizedInput);
-            java.util.regex.Pattern termPattern = java.util.regex.Pattern.compile("@terminal://([a-zA-Z0-9_]+)");
+            // Uses length limit {1,100} in regex to prevent ReDoS attacks
+            StringBuilder terminalAppendix = new StringBuilder();
+            java.util.regex.Pattern termPattern = java.util.regex.Pattern.compile("@terminal://([a-zA-Z0-9_]{1,100})");
             java.util.regex.Matcher termMatcher = termPattern.matcher(normalizedInput);
             int matchCount = 0;
             while (termMatcher.find()) {
                  matchCount++;
                  String safeName = termMatcher.group(1);
-                 LOG.info("[Terminal] Found mention in message: @terminal://" + safeName);
+                 LOG.debug("[Terminal] Found mention in message: @terminal://" + safeName);
                  String content = resolveTerminalContent(safeName);
                  if (content != null && !content.isEmpty()) {
                      String terminalBlock = "\n\nTerminal Output (" + safeName + "):\n```\n" + content + "\n```";
                      contentArr.add(createTextBlock(terminalBlock));
-                     processedText.append(terminalBlock);
-                     LOG.info("[Terminal] Successfully added content block for: " + safeName);
+                     terminalAppendix.append(terminalBlock);
+                     LOG.debug("[Terminal] Successfully added content block for: " + safeName);
                  } else {
                      LOG.warn("[Terminal] Content was empty or null for: " + safeName);
                  }
@@ -376,7 +376,10 @@ public class ClaudeSession {
                 LOG.warn("[Terminal] Message contains '@terminal://' but regex did not match correctly.");
             }
 
-            userDisplayText = processedText.toString();
+            // Append terminal content to display text if any terminals were referenced
+            if (terminalAppendix.length() > 0) {
+                userDisplayText = normalizedInput + terminalAppendix.toString();
+            }
 
             // 添加文本块（始终添加）
             // Always add text block
