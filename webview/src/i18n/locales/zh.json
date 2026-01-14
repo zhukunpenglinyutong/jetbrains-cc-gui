@@ -146,7 +146,7 @@
     "dependency": {
       "title": "SDK 依赖管理",
       "description": "管理 AI SDK 依赖包。首次使用时需要安装对应的 SDK。",
-      "installPolicyTip": "为了减少包体积，SDK现在将需要主动安装",
+      "installPolicyTip": "为了减少包体积，SDK现在需要主动安装",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相关依赖。",
       "codexSdkName": "Codex SDK",
@@ -776,6 +776,9 @@
     },
     "gemini": {
       "label": "Gemini Cli"
+    },
+    "opencode": {
+      "label": "OpenCode"
     }
   },
   "promptEnhancer": {

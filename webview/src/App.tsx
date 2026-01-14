@@ -15,7 +15,7 @@ import RewindSelectDialog, { type RewindableMessage } from './components/RewindS
 import { rewindFiles } from './utils/bridge';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode, ReasoningEffort, SelectedAgent } from './components/ChatInputBox/types';
+import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent } from './components/ChatInputBox/types';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from './components/ChatInputBox/providers';
 import {
   BashToolBlock,
@@ -87,7 +87,13 @@ const App = () => {
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  // 输入框草稿内容（页面切换时保持）
+  // ============================================================
+  // Performance optimization: Use ref for ChatInputBox instead of controlled mode
+  // This eliminates re-render loops caused by value/onInput sync
+  // ============================================================
+  const chatInputRef = useRef<ChatInputBoxHandle>(null);
+  // Keep draftInput for backward compatibility (still used in some places)
+  // but now it's updated via debounced callback, not on every keystroke
   const [draftInput, setDraftInput] = useState('');
   // 标志位：是否抑制下一次 updateStatus 触发的 toast（用于删除当前会话后自动创建新会话的场景）
   const suppressNextStatusToastRef = useRef(false);
@@ -2912,6 +2918,7 @@ const App = () => {
       {currentView === 'chat' && (
         <div className="input-area" ref={inputAreaRef}>
           <ChatInputBox
+            ref={chatInputRef}
             isLoading={loading}
             selectedModel={selectedModel}
             permissionMode={permissionMode}
@@ -2928,6 +2935,7 @@ const App = () => {
               setSettingsInitialTab('dependencies');
               setCurrentView('settings');
             }}
+            // Performance optimization: Keep value for initial sync, but onInput is now debounced
             value={draftInput}
             onInput={setDraftInput}
             onSubmit={handleSubmit}

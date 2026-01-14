@@ -292,6 +292,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
   { id: 'codex', label: 'Codex Cli', icon: 'codicon-terminal', enabled: true },
   { id: 'gemini', label: 'Gemini Cli', icon: 'codicon-terminal', enabled: false },
+  { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: false },
 ];
 
 /**
@@ -335,6 +336,27 @@ export interface UsageInfo {
   used?: number;
   /** 总量 */
   total?: number;
+}
+
+// ============================================================
+// 组件 Ref Handle 类型
+// ============================================================
+
+/**
+ * ChatInputBox 组件暴露的命令式 API
+ * Used for performance optimization - uncontrolled mode with imperative access
+ */
+export interface ChatInputBoxHandle {
+  /** Get current input text content */
+  getValue: () => string;
+  /** Set input text content */
+  setValue: (value: string) => void;
+  /** Focus the input element */
+  focus: () => void;
+  /** Clear input content */
+  clear: () => void;
+  /** Check if input has content */
+  hasContent: () => boolean;
 }
 
 // ============================================================

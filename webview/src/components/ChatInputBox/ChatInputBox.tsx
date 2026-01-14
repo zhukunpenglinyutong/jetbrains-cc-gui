@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Attachment, ChatInputBoxProps, CommandItem, FileItem, PermissionMode } from './types';
+import type { Attachment, ChatInputBoxHandle, ChatInputBoxProps, CommandItem, FileItem, PermissionMode } from './types';
 import { ButtonArea } from './ButtonArea';
 import { AttachmentList } from './AttachmentList';
 import { ContextBar } from './ContextBar';
@@ -35,8 +35,13 @@ function debounce<T extends (...args: any[]) => void>(
 /**
  * ChatInputBox - 聊天输入框组件
  * 使用 contenteditable div 实现，支持自动高度调整、IME 处理、@ 文件引用、/ 斜杠命令
+ *
+ * Performance optimizations:
+ * - Uses uncontrolled mode with useImperativeHandle for minimal re-renders
+ * - Debounced onInput callback to reduce parent component updates
+ * - Cached getTextContent to avoid repeated DOM traversal
  */
-export const ChatInputBox = ({
+export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(({
   isLoading = false,
   selectedModel = 'claude-sonnet-4-5',
   permissionMode = 'bypassPermissions',
@@ -76,24 +81,40 @@ export const ChatInputBox = ({
   sdkStatusLoading = false, // SDK 状态是否正在加载
   onInstallSdk,
   addToast,
-}: ChatInputBoxProps) => {
+}: ChatInputBoxProps, ref: React.ForwardedRef<ChatInputBoxHandle>) => {
   const { t } = useTranslation();
 
-  // 内部附件状态（如果外部未提供）
+  // Internal attachments state (if not provided externally)
   const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
   const attachments = externalAttachments ?? internalAttachments;
 
-  // 输入框引用和状态
+  // Input element refs and state
   const containerRef = useRef<HTMLDivElement>(null);
   const editableRef = useRef<HTMLDivElement>(null);
   const submittedOnEnterRef = useRef(false);
   const completionSelectedRef = useRef(false);
-  const justRenderedTagRef = useRef(false); // 标记是否刚刚渲染了文件标签 // 标记补全菜单刚选中项目，防止回车同时发送消息
+  const justRenderedTagRef = useRef(false); // Flag for just rendered file tags
   const [isComposing, setIsComposing] = useState(false);
-  const isComposingRef = useRef(false); // 同步的 IME 状态 ref，比 React state 更快响应
+  const isComposingRef = useRef(false); // Sync IME state ref, faster than React state
   const [hasContent, setHasContent] = useState(false);
   const compositionTimeoutRef = useRef<number | null>(null);
   const lastCompositionEndTimeRef = useRef<number>(0);
+
+  // ============================================================
+  // Performance optimization: Text content cache
+  // ============================================================
+  const textCacheRef = useRef<{
+    content: string;
+    htmlLength: number;
+    timestamp: number;
+  }>({
+    content: '',
+    htmlLength: 0,
+    timestamp: 0,
+  });
+
+  // Flag to track if we're updating from external value
+  const isExternalUpdateRef = useRef(false);
 
   // 增强提示词状态
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -233,10 +254,20 @@ export const ChatInputBox = ({
 
   /**
    * 获取输入框纯文本内容（优化版，带缓存）
-   * 保留用户输入的原始格式，包括换行符和空白字符
+   * Performance optimization: Uses cache to avoid repeated DOM traversal
+   * Cache is invalidated when innerHTML length changes
    */
   const getTextContent = useCallback(() => {
     if (!editableRef.current) return '';
+
+    // Performance optimization: Check cache validity
+    const currentHtmlLength = editableRef.current.innerHTML.length;
+    const cache = textCacheRef.current;
+
+    // Return cached content if HTML hasn't changed (simple dirty check)
+    if (currentHtmlLength === cache.htmlLength && cache.content !== '') {
+      return cache.content;
+    }
 
     // 从 DOM 中提取纯文本，包括文件标签的原始引用格式
     let text = '';
@@ -281,6 +312,13 @@ export const ChatInputBox = ({
         text = text.slice(0, -1);
       }
     }
+
+    // Update cache
+    textCacheRef.current = {
+      content: text,
+      htmlLength: currentHtmlLength,
+      timestamp: Date.now(),
+    };
 
     return text;
   }, []);
@@ -675,11 +713,35 @@ export const ChatInputBox = ({
     [detectAndTriggerCompletion]
   );
 
+  // ============================================================
+  // Performance optimization: Debounced onInput callback
+  // Reduces parent component re-renders during rapid typing
+  // ============================================================
+  const debouncedOnInput = useMemo(
+    () => debounce((text: string) => {
+      // Skip if this is an external value update to avoid loops
+      if (isExternalUpdateRef.current) {
+        isExternalUpdateRef.current = false;
+        return;
+      }
+      onInput?.(text);
+    }, 100),
+    [onInput]
+  );
+
+  // Invalidate cache when we need fresh content
+  const invalidateCache = useCallback(() => {
+    textCacheRef.current = { content: '', htmlLength: 0, timestamp: 0 };
+  }, []);
+
   /**
    * 处理输入事件（优化版：使用防抖减少性能开销）
    * @param isComposingFromEvent - 从原生事件中获取的 isComposing 状态（优先级更高）
    */
   const handleInput = useCallback((isComposingFromEvent?: boolean) => {
+    // Invalidate cache since content changed
+    invalidateCache();
+
     // 使用多重检查确保正确检测 IME 状态：
     // 1. 原生事件的 isComposing（最准确，可在 compositionStart 之前检测）
     // 2. isComposingRef（同步的 ref，比 React state 更快）
@@ -690,8 +752,6 @@ export const ChatInputBox = ({
     // 移除零宽字符和其他不可见字符后再检查是否为空，确保在只剩零宽字符时能正确显示 placeholder
     const cleanText = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
     const isEmpty = !cleanText.trim();
-    
-    // setHasContent(!isEmpty); // 移到下方处理，避免 IME 干扰
 
     // 如果内容为空，清空 innerHTML 以确保 :empty 伪类生效（显示 placeholder）
     if (isEmpty && editableRef.current) {
@@ -710,10 +770,10 @@ export const ChatInputBox = ({
       setHasContent(false);
     }
 
-    // 通知父组件
-    // 如果判定为空（只有零宽字符），传递空字符串给父组件，防止父组件回传脏数据导致 DOM 重置从而隐藏 placeholder
-    onInput?.(isEmpty ? '' : text);
-  }, [getTextContent, adjustHeight, debouncedDetectCompletion, onInput, isComposing]);
+    // 通知父组件（使用防抖版本减少重渲染）
+    // 如果判定为空（只有零宽字符），传递空字符串给父组件
+    debouncedOnInput(isEmpty ? '' : text);
+  }, [getTextContent, adjustHeight, debouncedDetectCompletion, debouncedOnInput, isComposing, invalidateCache]);
 
   /**
    * 处理键盘按下事件（用于检测空格触发文件标签渲染）
@@ -1172,32 +1232,46 @@ export const ChatInputBox = ({
     }
   }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion, sendShortcut]);
 
-  // 受控模式：当外部 value 改变时更新输入框内容
+  // ============================================================
+  // Performance optimization: Simplified controlled mode
+  // Only sync external value when it's explicitly different and not from user input
+  // ============================================================
   useEffect(() => {
+    // Skip if value prop is not provided (uncontrolled mode)
     if (value === undefined) return;
     if (!editableRef.current) return;
 
-    // 如果正在组合输入，不要更新 DOM，否则会打断 IME，导致重复输入（如 ni -> nni）
+    // Skip during IME composition to avoid breaking input
     if (isComposingRef.current) return;
 
+    // Invalidate cache before comparing
+    invalidateCache();
     const currentText = getTextContent();
-    // 仅当外部值与当前值不同时更新，避免光标跳动
+
+    // Only update if external value differs from current content
+    // This prevents the update loop: user types -> onInput -> parent sets value -> useEffect
     if (currentText !== value) {
+      // Mark as external update to prevent debounced onInput from firing
+      isExternalUpdateRef.current = true;
+
       editableRef.current.innerText = value;
       setHasContent(!!value.trim());
       adjustHeight();
 
-      // 将光标移到末尾
+      // Move cursor to end
       if (value) {
         const range = document.createRange();
         const selection = window.getSelection();
         range.selectNodeContents(editableRef.current);
-        range.collapse(false); // false = 折叠到末尾
+        range.collapse(false);
         selection?.removeAllRanges();
         selection?.addRange(range);
       }
+
+      // Invalidate cache after update
+      invalidateCache();
     }
-  }, [value, getTextContent, adjustHeight]);
+  }, [value, getTextContent, adjustHeight, invalidateCache]);
 
   // 原生事件捕获，兼容 JCEF/IME 的特殊行为
   useEffect(() => {
@@ -1667,6 +1741,38 @@ export const ChatInputBox = ({
     editableRef.current?.focus();
   }, []);
 
+  // ============================================================
+  // Performance optimization: Imperative handle for uncontrolled mode
+  // Exposes methods for parent to interact without causing re-renders
+  // ============================================================
+  useImperativeHandle(ref, () => ({
+    getValue: () => {
+      invalidateCache(); // Ensure fresh content
+      return getTextContent();
+    },
+    setValue: (newValue: string) => {
+      if (!editableRef.current) return;
+      isExternalUpdateRef.current = true;
+      editableRef.current.innerText = newValue;
+      setHasContent(!!newValue.trim());
+      adjustHeight();
+      invalidateCache();
+
+      // Move cursor to end
+      if (newValue) {
+        const range = document.createRange();
+        const selection = window.getSelection();
+        range.selectNodeContents(editableRef.current);
+        range.collapse(false);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+    },
+    focus: focusInput,
+    clear: clearInput,
+    hasContent: () => hasContent,
+  }), [getTextContent, focusInput, clearInput, adjustHeight, invalidateCache, hasContent]);
+
   // 初始化时聚焦和注册全局函数
   useEffect(() => {
     // 注册全局函数以接收 Java 传递的文件路径
@@ -2003,6 +2109,9 @@ export const ChatInputBox = ({
       />
     </div>
   );
-};
+});
+
+// Display name for React DevTools
+ChatInputBox.displayName = 'ChatInputBox';
 
 export default ChatInputBox;

@@ -12,6 +12,7 @@ export { ModeSelect, ModelSelect } from './selectors';
 // 导出类型
 export type {
   Attachment,
+  ChatInputBoxHandle,
   ChatInputBoxProps,
   ButtonAreaProps,
   TokenIndicatorProps,
