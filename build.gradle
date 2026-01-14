@@ -196,19 +196,130 @@ def aiBridgeHashFile = new File(aiBridgePackDir, 'ai-bridge.hash')
 def webviewDir = file('webview')
 def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() }
 def enableVConsoleInWebview = requestedTasks.any { it.contains('runide') }
+
+/**
+ * 跨平台查找 npm 可执行文件路径
+ * 按优先级尝试多个可能的路径
+ */
+def findNpmPath() {
+    def osName = System.getProperty('os.name').toLowerCase()
+    def isWindows = osName.contains('windows')
+    def isMac = osName.contains('mac')
+    def isLinux = osName.contains('linux')
+
+    // 1. 首先尝试通过 which/where 命令查找（适用于已配置 PATH 的情况）
+    try {
+        def whichCmd = isWindows ? 'where' : 'which'
+        def proc = "${whichCmd} npm".execute()
+        proc.waitFor()
+        if (proc.exitValue() == 0) {
+            def npmPath = proc.text.trim().readLines().first()
+            println "✓ Found npm via ${whichCmd}: ${npmPath}"
+            return isWindows ? ["cmd", "/c", npmPath] : [npmPath]
+        }
+    } catch (Exception e) {
+        println "⚠ Could not find npm using which/where: ${e.message}"
+    }
+
+    // 2. 尝试常见的 nvm 路径（仅 Unix-like 系统）
+    if (!isWindows) {
+        def userHome = System.getProperty('user.home')
+        def nvmBaseDir = new File(userHome, ".nvm/versions/node")
+
+        if (nvmBaseDir.exists()) {
+            // 查找 nvm 管理的所有 Node.js 版本
+            def versionDirs = nvmBaseDir.listFiles()
+            if (versionDirs) {
+                for (File versionDir : versionDirs) {
+                    def npmFile = new File(versionDir, "bin/npm")
+                    if (npmFile.exists() && npmFile.canExecute()) {
+                        println "✓ Found npm via nvm: ${npmFile.absolutePath}"
+                        return [npmFile.absolutePath]
+                    }
+                }
+            }
+        }
+
+        // 3. 尝试系统默认路径
+        def systemPaths = []
+        if (isMac) {
+            systemPaths = [
+                "/usr/local/bin/npm",
+                "/opt/homebrew/bin/npm",
+                "/usr/bin/npm"
+            ]
+        } else if (isLinux) {
+            systemPaths = [
+                "/usr/local/bin/npm",
+                "/usr/bin/npm",
+                "/snap/bin/npm"
+            ]
+        }
+
+        for (def path : systemPaths) {
+            def npmFile = file(path)
+            if (npmFile.exists() && npmFile.canExecute()) {
+                println "✓ Found npm at: ${npmFile.absolutePath}"
+                return [npmFile.absolutePath]
+            }
+        }
+    }
+
+    // 4. Windows: 尝试 nvm-windows 路径
+    if (isWindows) {
+        def userHome = System.getProperty('user.home')
+        def nvmWindowsDir = new File(userHome, "AppData/Roaming/nvm")
+
+        if (nvmWindowsDir.exists()) {
+            // 查找 nvm-windows 管理的 Node.js 版本
+            def versionDirs = nvmWindowsDir.listFiles()
+            if (versionDirs) {
+                for (File versionDir : versionDirs) {
+                    if (versionDir.name.startsWith("v")) {
+                        def npmFile = new File(versionDir, "npm.cmd")
+                        if (npmFile.exists()) {
+                            println "✓ Found npm (nvm-windows): ${npmFile.absolutePath}"
+                            return ["cmd", "/c", npmFile.absolutePath]
+                        }
+                    }
+                }
+            }
+        }
+
+        // 尝试系统默认路径
+        def systemPaths = [
+            "C:/Program Files/nodejs/npm.cmd",
+            "${userHome}/AppData/Local/npm/npm.cmd"
+        ]
+
+        for (def path : systemPaths) {
+            def npmFile = file(path)
+            if (npmFile.exists()) {
+                println "✓ Found npm at: ${npmFile.absolutePath}"
+                return ["cmd", "/c", npmFile.absolutePath]
+            }
+        }
+    }
+
+    // 5. 最后尝试直接使用 'npm'（依赖系统 PATH）
+    println "⚠ Could not locate npm automatically, using system PATH"
+    return isWindows ? ["cmd", "/c", "npm"] : ["npm"]
+}
+
 tasks.register('buildWebview', Exec) {
     workingDir webviewDir
     environment 'VITE_ENABLE_VCONSOLE', enableVConsoleInWebview ? 'true' : 'false'
 
-    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        commandLine 'cmd', '/c', 'npm', 'run', 'build'
-    } else {
-        commandLine 'npm', 'run', 'build'
-    }
+    // 使用跨平台的 npm 查找方法
+    def npmCommand = findNpmPath()
+    commandLine npmCommand + ['run', 'build']
 
     onlyIf { webviewDir.exists() }
-    doFirst { println "Building webview..." }
-    doLast { println "Webview build completed." }
+    doFirst {
+        println "Building webview..."
+        println "Using npm: ${npmCommand.join(' ')}"
+    }
+    doLast { println "✓ Webview build completed." }
 }
 
 // 确保 processResources 在 buildWebview 之后执行

@@ -69,3 +69,7 @@ logs/*.log
 /.idea/
 .ace-tool/
 .workflow
+.gemini/
+gha-creds-*.json
+.github
+GEMINI.md
