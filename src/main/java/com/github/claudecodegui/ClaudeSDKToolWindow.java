@@ -654,8 +654,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             if (!claudeSDKBridge.checkEnvironment()) {
-                // Check if bridge extraction is still in progress
-                // If so, show loading panel instead of error panel
+                // Check if bridge extraction is still in progress or just completed
                 if (sharedResolver.isExtractionInProgress()) {
                     LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction in progress, showing loading panel...");
                     showLoadingPanel();
@@ -668,6 +667,19 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     });
                     return;
                 }
+
+                // Additional check: extraction completed but not yet effective (race condition)
+                // This can happen when extraction just finished on another thread but checkEnvironment
+                // was called before the directory became available
+                if (sharedResolver.isExtractionComplete()) {
+                    LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction just completed, retrying initialization with exponential backoff...");
+                    // Use exponential backoff retry strategy for more robust handling
+                    retryCheckEnvironmentWithBackoff(0);
+                    // Show loading panel while waiting for retry
+                    showLoadingPanel();
+                    return;
+                }
+
                 showErrorPanel();
                 return;
             }
@@ -1011,6 +1023,45 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 createUIComponents();
                 mainPanel.revalidate();
                 mainPanel.repaint();
+            });
+        }
+
+        /**
+         * Retry environment check with exponential backoff strategy.
+         * Delays: 100ms, 200ms, 400ms (max 3 retries)
+         * This handles race conditions where extraction just completed but environment isn't ready yet.
+         *
+         * @param attempt current retry attempt (0-based)
+         */
+        private void retryCheckEnvironmentWithBackoff(int attempt) {
+            final int MAX_RETRIES = 3;
+            final int[] BACKOFF_DELAYS_MS = {100, 200, 400};
+
+            if (attempt >= MAX_RETRIES) {
+                LOG.warn("[ClaudeSDKToolWindow] All " + MAX_RETRIES + " retry attempts failed after extraction completion");
+                ApplicationManager.getApplication().invokeLater(this::showErrorPanel);
+                return;
+            }
+
+            int delayMs = BACKOFF_DELAYS_MS[attempt];
+            LOG.info("[ClaudeSDKToolWindow] Retry attempt " + (attempt + 1) + "/" + MAX_RETRIES + ", waiting " + delayMs + "ms...");
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).thenRun(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (claudeSDKBridge.checkEnvironment()) {
+                        LOG.info("[ClaudeSDKToolWindow] Retry attempt " + (attempt + 1) + " succeeded after extraction completion");
+                        reinitializeAfterExtraction();
+                    } else {
+                        // Try next attempt with longer delay
+                        retryCheckEnvironmentWithBackoff(attempt + 1);
+                    }
+                });
             });
         }
 
