@@ -257,8 +257,8 @@ public class FileHandler extends BaseMessageHandler {
                         files.add(term);
                     }
                 }
-            } catch (Exception e) {
-                LOG.warn("[FileHandler] Failed to collect terminals: " + e.getMessage());
+            } catch (Throwable t) {
+                LOG.warn("[FileHandler] Failed to collect terminals: " + t.getMessage());
             }
         });
     }
