@@ -294,6 +294,33 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'gemini', label: 'Gemini Cli', icon: 'codicon-terminal', enabled: false },
 ];
 
+/**
+ * Codex Reasoning Effort (思考深度)
+ * Controls the depth of reasoning for Codex models
+ * Valid values: low, medium, high, xhigh
+ */
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+
+/**
+ * Reasoning level information
+ */
+export interface ReasoningInfo {
+  id: ReasoningEffort;
+  label: string;
+  icon: string;
+  description?: string;
+}
+
+/**
+ * Available reasoning levels for Codex
+ */
+export const REASONING_LEVELS: ReasoningInfo[] = [
+  { id: 'low', label: 'Low', icon: 'codicon-circle-small', description: 'Quick responses with basic reasoning' },
+  { id: 'medium', label: 'Medium', icon: 'codicon-circle-filled', description: 'Balanced thinking (default)' },
+  { id: 'high', label: 'High', icon: 'codicon-circle-large-filled', description: 'Deep reasoning for complex tasks' },
+  { id: 'xhigh', label: 'Max', icon: 'codicon-flame', description: 'Maximum reasoning depth' },
+];
+
 // ============================================================
 // 使用量类型
 // ============================================================
@@ -372,12 +399,19 @@ export interface ChatInputBoxProps {
   onModelSelect?: (modelId: string) => void;
   /** 切换提供商 */
   onProviderSelect?: (providerId: string) => void;
+  /** 当前思考深度 (Codex only) */
+  reasoningEffort?: ReasoningEffort;
+  /** 切换思考深度回调 (Codex only) */
+  onReasoningChange?: (effort: ReasoningEffort) => void;
   /** 切换思考模式 */
   onToggleThinking?: (enabled: boolean) => void;
   /** 是否开启流式传输 */
   streamingEnabled?: boolean;
   /** 切换流式传输 */
   onStreamingEnabledChange?: (enabled: boolean) => void;
+
+  /** 发送快捷键设置: 'enter' = Enter发送 | 'cmdEnter' = Cmd/Ctrl+Enter发送 */
+  sendShortcut?: 'enter' | 'cmdEnter';
 
   /** 当前选中的智能体 */
   selectedAgent?: SelectedAgent | null;
@@ -421,6 +455,8 @@ export interface ButtonAreaProps {
   permissionMode?: PermissionMode;
   /** 当前提供商 */
   currentProvider?: string;
+  /** 当前思考深度 (Codex only) */
+  reasoningEffort?: ReasoningEffort;
 
   // 事件回调
   onSubmit?: () => void;
@@ -428,6 +464,8 @@ export interface ButtonAreaProps {
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;
+  /** 切换思考深度回调 (Codex only) */
+  onReasoningChange?: (effort: ReasoningEffort) => void;
   /** 增强提示词回调 */
   onEnhancePrompt?: () => void;
   /** 是否开启始终思考 */

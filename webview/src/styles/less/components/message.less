@@ -70,6 +70,89 @@
     display: none; /* Hide label for assistant */
 }
 
+/* Message Copy Button - appears on hover for assistant messages */
+.message-copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    z-index: 10;
+    opacity: 0;
+    visibility: hidden;
+
+    &:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+        border-color: var(--border-hover);
+    }
+
+    .copy-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .copy-tooltip {
+        position: absolute;
+        top: -30px;
+        right: 0;
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        border: 1px solid var(--border-secondary);
+        box-shadow: var(--shadow-sm);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.2s;
+        pointer-events: none;
+        white-space: nowrap;
+        z-index: 20;
+
+        &::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            right: 10px;
+            border-width: 4px 4px 0;
+            border-style: solid;
+            border-color: var(--border-secondary) transparent transparent transparent;
+        }
+    }
+
+    &.copied .copy-tooltip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-2px);
+    }
+}
+
+/* Show copy button on message hover */
+.message.assistant {
+    position: relative;
+
+    &:hover .message-copy-btn {
+        opacity: 0.7;
+        visibility: visible;
+    }
+
+    &:hover .message-copy-btn:hover {
+        opacity: 1;
+    }
+}
+
 .message.error {
     background: rgba(90, 29, 29, 0.1);
     border-left: 2px solid var(--color-message-error-border);

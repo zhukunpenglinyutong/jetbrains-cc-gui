@@ -1,6 +1,6 @@
 /**
- * 附件处理服务模块
- * 负责附件的加载和处理
+ * Attachment handling service module.
+ * Responsible for loading and processing attachments.
  */
 
 import fs from 'fs';
@@ -118,8 +118,8 @@ export function buildContentBlocks(attachments, message) {
       });
     } else {
       // 非图片附件作为文本提示
-      const name = a.fileName || '附件';
-      contentBlocks.push({ type: 'text', text: `[附件: ${name}]` });
+      const name = a.fileName || 'Attachment';
+      contentBlocks.push({ type: 'text', text: `[Attachment: ${name}]` });
     }
   }
 
@@ -129,11 +129,11 @@ export function buildContentBlocks(attachments, message) {
     const imageCount = contentBlocks.filter(b => b.type === 'image').length;
     const textCount = contentBlocks.filter(b => b.type === 'text').length;
     if (imageCount > 0) {
-      userText = `[已上传 ${imageCount} 张图片]`;
+      userText = `[Uploaded ${imageCount} image(s)]`;
     } else if (textCount > 0) {
-      userText = `[已上传附件]`;
+      userText = `[Uploaded attachment(s)]`;
     } else {
-      userText = '[空消息]';
+      userText = '[Empty message]';
     }
   }
 

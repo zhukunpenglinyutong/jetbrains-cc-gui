@@ -51,9 +51,6 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
     // 初始加载
     loadStatistics();
 
-    return () => {
-      window.updateUsageStatistics = undefined;
-    };
   }, [projectScope]);
 
   const loadStatistics = () => {

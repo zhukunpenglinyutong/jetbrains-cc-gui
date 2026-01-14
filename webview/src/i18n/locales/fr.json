@@ -118,6 +118,13 @@
       "editorFont": {
         "label": "Police (suit la police de l'éditeur)",
         "hint": "Non modifiable ici. Pour modifier, allez dans Paramètres IDEA → Éditeur → Police (redémarrez IDEA pour que la police du plugin prenne effet)"
+      },
+      "sendShortcut": {
+        "label": "Raccourci d'envoi",
+        "enter": "Entrée pour envoyer",
+        "enterDesc": "Appuyez sur Entrée pour envoyer le message, Shift+Entrée pour nouvelle ligne",
+        "cmdEnter": "⌘/Ctrl+Entrée pour envoyer",
+        "cmdEnterDesc": "Appuyez sur ⌘/Ctrl+Entrée pour envoyer le message, Entrée pour nouvelle ligne"
       }
     },
     "providers": "Gestion des fournisseurs",
@@ -381,6 +388,7 @@
   },
   "markdown": {
     "copyCode": "Copier le code",
+    "copyMessage": "Copier le message",
     "copySuccess": "Copié !"
   },
   "usage": {
@@ -685,5 +693,59 @@
     "failed": "Échec de la restauration des fichiers",
     "notAvailable": "Restauration non disponible pour cette session",
     "parseError": "Échec de l'analyse du résultat"
+  },
+  "reasoning": {
+    "title": "Sélectionner la profondeur de raisonnement",
+    "low": {
+      "label": "Faible",
+      "description": "Réponses rapides avec raisonnement de base"
+    },
+    "medium": {
+      "label": "Moyen",
+      "description": "Réflexion équilibrée (par défaut)"
+    },
+    "high": {
+      "label": "Élevé",
+      "description": "Raisonnement approfondi pour tâches complexes"
+    },
+    "xhigh": {
+      "label": "Maximum",
+      "description": "Profondeur de raisonnement maximale"
+    }
+  },
+  "aiBridge": {
+    "claudeCodeInterrupted": "Claude Code a été interrompu (possiblement délai de réponse dépassé ou annulation par l'utilisateur) :",
+    "claudeCodeError": "Erreur Claude Code :",
+    "errorMessage": "Message d'erreur",
+    "currentApiKeySource": "Source actuelle de la clé API",
+    "currentApiKeyPreview": "Aperçu de la clé API actuelle",
+    "currentBaseUrl": "URL de base actuelle",
+    "source": "source",
+    "notConfigured": "Non configuré",
+    "notConfiguredEmpty": "Non configuré (valeur vide ou manquante)",
+    "defaultBaseUrl": "Par défaut (https://api.anthropic.com)",
+    "configTip": "Conseil : CLI peut lire les variables d'environnement ou settings.json ; ce plugin ne prend en charge que la lecture de settings.json pour éviter les problèmes. Vous pouvez le configurer dans Paramètres > Gestion des fournisseurs en haut à droite du plugin",
+    "apiError": "Erreur API",
+    "apiErrorCauses": "Causes possibles :\n1. La clé API n'est pas configurée correctement\n2. Problème de configuration du service proxy tiers\n3. Veuillez vérifier la configuration dans ~/.claude/settings.json",
+    "codexAuthError": "Erreur d'authentification Codex :",
+    "codexAuthErrorChecks": "Veuillez vérifier les points suivants :\n1. La clé API Codex dans les paramètres du plugin est-elle correcte ?\n2. La clé API a-t-elle des permissions suffisantes ?\n3. Si vous utilisez une URL de base personnalisée, veuillez confirmer que l'adresse est correcte",
+    "codexAuthTip": "Conseil : Codex nécessite une clé API OpenAI valide",
+    "codexNetworkError": "Erreur réseau Codex :",
+    "codexNetworkErrorChecks": "Veuillez vérifier :\n1. La connexion réseau fonctionne-t-elle ?\n2. Si vous utilisez un proxy, veuillez confirmer la configuration du proxy\n3. Le pare-feu bloque-t-il la connexion ?",
+    "codexError": "Erreur Codex :",
+    "codexErrorCheck": "Veuillez vérifier la connexion réseau et la configuration Codex",
+    "codexThinkingHint": "Codex n'a pas retourné d'éléments de raisonnement. Si vous ne pouvez toujours pas voir le processus de réflexion, veuillez consulter docs/codex/docs/config.md pour les paramètres hide_agent_reasoning/show_raw_agent_reasoning, et assurez-vous que votre compte OpenAI a été vérifié.",
+    "userDeniedPermission": "L'utilisateur a refusé la permission pour l'outil {{toolName}}",
+    "userDidNotProvideAnswers": "L'utilisateur n'a pas fourni de réponses",
+    "dbMissingPath": "Argument de chemin de fichier de base de données manquant",
+    "dbFileNotExist": "Le fichier de base de données n'existe pas",
+    "dbReadFailed": "Échec de la lecture de la base de données",
+    "dbParseProviderFailed": "Échec de l'analyse de la configuration du fournisseur",
+    "aiResponseEmpty": "La réponse de l'IA est vide",
+    "enhancementFailed": "Échec de l'amélioration",
+    "uploadedImages": "{{count}} image(s) téléchargée(s)",
+    "uploadedAttachments": "Pièce(s) jointe(s) téléchargée(s)",
+    "emptyMessage": "Message vide",
+    "attachment": "Pièce jointe"
   }
 }

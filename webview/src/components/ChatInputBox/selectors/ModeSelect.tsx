@@ -98,7 +98,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
         title={getModeText(currentMode.id, 'tooltip') || `${t('chat.currentMode', { mode: getModeText(currentMode.id, 'label') })}`}
       >
         <span className={`codicon ${currentMode.icon}`} />
-        <span>{getModeText(currentMode.id, 'label')}</span>
+        <span className="selector-button-text">{getModeText(currentMode.id, 'label')}</span>
         <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
       </button>
 

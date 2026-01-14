@@ -57,6 +57,8 @@ export const ChatInputBox = ({
   onModeSelect,
   onModelSelect,
   onProviderSelect,
+  reasoningEffort = 'medium',
+  onReasoningChange,
   activeFile,
   selectedLines,
   onClearContext,
@@ -64,6 +66,7 @@ export const ChatInputBox = ({
   onToggleThinking,
   streamingEnabled,
   onStreamingEnabledChange,
+  sendShortcut = 'enter',
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
@@ -1118,8 +1121,14 @@ export const ChatInputBox = ({
     // 如果 compositionend 和 keydown 间隔很短，说明这个 keydown 可能是 IME 确认的回车
     const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
 
-    // Enter 发送（非 Shift 组合，非 IME 组合）
-    if (isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing) {
+    // 根据 sendShortcut 设置决定发送行为
+    // sendShortcut === 'enter': Enter 发送，Shift+Enter 换行
+    // sendShortcut === 'cmdEnter': Cmd/Ctrl+Enter 发送，Enter 换行
+    const isSendKey = sendShortcut === 'cmdEnter'
+      ? (isEnterKey && (e.metaKey || e.ctrlKey) && !isIMEComposing)
+      : (isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing);
+
+    if (isSendKey) {
       e.preventDefault();
       if (sdkStatusLoading || !sdkInstalled) {
         // SDK 状态加载中或未安装时，回车不发送
@@ -1130,8 +1139,9 @@ export const ChatInputBox = ({
       return;
     }
 
-    // Shift+Enter 允许换行（默认行为）
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion, sdkStatusLoading, sdkInstalled]);
+    // 对于 cmdEnter 模式，允许普通 Enter 换行（默认行为）
+    // 对于 enter 模式，Shift+Enter 允许换行（默认行为）
+  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion, sdkStatusLoading, sdkInstalled, sendShortcut]);
 
   const handleKeyUp = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     const isEnterKey =
@@ -1140,7 +1150,12 @@ export const ChatInputBox = ({
       (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
       (e as unknown as { which?: number }).which === 13;
 
-    if (isEnterKey && !e.shiftKey) {
+    // 根据 sendShortcut 设置判断是否是发送按键
+    const isSendKey = sendShortcut === 'cmdEnter'
+      ? (isEnterKey && (e.metaKey || e.ctrlKey))
+      : (isEnterKey && !e.shiftKey);
+
+    if (isSendKey) {
       e.preventDefault();
       // 如果刚刚在补全菜单中选中了项目，不发送消息
       if (completionSelectedRef.current) {
@@ -1155,7 +1170,7 @@ export const ChatInputBox = ({
         // 不在 keyup 中处理发送逻辑，统一由 keydown 处理，避免 IME 状态下的误发送
       }
     }
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion]);
+  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion, sendShortcut]);
 
   // 受控模式：当外部 value 改变时更新输入框内容
   useEffect(() => {
@@ -1202,8 +1217,6 @@ export const ChatInputBox = ({
         (ev as unknown as { keyCode?: number }).keyCode === 13 ||
         (ev as unknown as { which?: number }).which === 13;
 
-      const shift = (ev as KeyboardEvent).shiftKey === true;
-
       // ⌘/ 快捷键：增强提示词
       if (ev.key === '/' && ev.metaKey && !ev.shiftKey && !ev.altKey) {
         ev.preventDefault();
@@ -1245,8 +1258,15 @@ export const ChatInputBox = ({
       // 检查是否刚刚结束组合输入
       const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
 
+      // 根据 sendShortcut 设置决定发送行为
+      const shift = (ev as KeyboardEvent).shiftKey === true;
+      const metaOrCtrl = ev.metaKey || ev.ctrlKey;
+      const isSendKey = sendShortcut === 'cmdEnter'
+        ? (isEnterKey && metaOrCtrl && !isComposingRef.current && !isComposing)
+        : (isEnterKey && !shift && !isComposingRef.current && !isComposing && !isRecentlyComposing);
+
       // 使用 ref 而不是 state 来检查 composing 状态，因为 ref 是同步的
-      if (isEnterKey && !shift && !isComposingRef.current && !isComposing && !isRecentlyComposing) {
+      if (isSendKey) {
         ev.preventDefault();
         submittedOnEnterRef.current = true;
         handleSubmit();
@@ -1259,7 +1279,14 @@ export const ChatInputBox = ({
         (ev as unknown as { keyCode?: number }).keyCode === 13 ||
         (ev as unknown as { which?: number }).which === 13;
       const shift = (ev as KeyboardEvent).shiftKey === true;
-      if (isEnterKey && !shift) {
+      const metaOrCtrl = ev.metaKey || ev.ctrlKey;
+
+      // 根据 sendShortcut 设置判断是否是发送按键
+      const isSendKey = sendShortcut === 'cmdEnter'
+        ? (isEnterKey && metaOrCtrl)
+        : (isEnterKey && !shift);
+
+      if (isSendKey) {
         ev.preventDefault();
         // 如果刚刚在补全菜单中选中了项目，不发送消息
         if (completionSelectedRef.current) {
@@ -1279,6 +1306,12 @@ export const ChatInputBox = ({
     const nativeBeforeInput = (ev: InputEvent) => {
       const type = (ev as InputEvent).inputType;
       if (type === 'insertParagraph') {
+        // 对于 cmdEnter 模式，普通 Enter 应该允许换行
+        if (sendShortcut === 'cmdEnter') {
+          // 允许默认的换行行为
+          return;
+        }
+
         ev.preventDefault();
         // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
         if (completionSelectedRef.current) {
@@ -1302,7 +1335,7 @@ export const ChatInputBox = ({
       el.removeEventListener('keyup', nativeKeyUp, { capture: true } as any);
       el.removeEventListener('beforeinput', nativeBeforeInput as EventListener, { capture: true } as any);
     };
-  }, [isComposing, handleSubmit, handleEnhancePrompt, fileCompletion, commandCompletion, agentCompletion]);
+  }, [isComposing, handleSubmit, handleEnhancePrompt, fileCompletion, commandCompletion, agentCompletion, sendShortcut]);
 
   /**
    * 处理 IME 组合开始
@@ -1881,11 +1914,13 @@ export const ChatInputBox = ({
         selectedModel={selectedModel}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
+        reasoningEffort={reasoningEffort}
         onSubmit={handleSubmit}
         onStop={onStop}
         onModeSelect={handleModeSelect}
         onModelSelect={handleModelSelect}
         onProviderSelect={onProviderSelect}
+        onReasoningChange={onReasoningChange}
         onEnhancePrompt={handleEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}

@@ -15,7 +15,7 @@ import RewindSelectDialog, { type RewindableMessage } from './components/RewindS
 import { rewindFiles } from './utils/bridge';
 import { ChatInputBox } from './components/ChatInputBox';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
-import type { Attachment, PermissionMode, SelectedAgent } from './components/ChatInputBox/types';
+import type { Attachment, PermissionMode, ReasoningEffort, SelectedAgent } from './components/ChatInputBox/types';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from './components/ChatInputBox/providers';
 import {
   BashToolBlock,
@@ -30,6 +30,7 @@ import { ToastContainer, type ToastMessage } from './components/Toast';
 import WaitingIndicator from './components/WaitingIndicator';
 import { ScrollControl } from './components/ScrollControl';
 import { APP_VERSION } from './version/version';
+import { extractMarkdownContent, copyToClipboard } from './utils/copyUtils';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -77,6 +78,7 @@ const App = () => {
   const [loadingStartTime, setLoadingStartTime] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [streamingActive, setStreamingActive] = useState(false);
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
@@ -117,6 +119,8 @@ const App = () => {
   const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
   const [claudePermissionMode, setClaudePermissionMode] = useState<PermissionMode>('bypassPermissions');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
+  // Codex reasoning effort (thinking depth)
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
@@ -126,6 +130,8 @@ const App = () => {
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
   // 🔧 流式传输开关状态（同步设置页面）
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(false);
+  // 发送快捷键设置
+  const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
 
   // 🔧 SDK 安装状态（用于在未安装时禁止提问）
   const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
@@ -1161,6 +1167,16 @@ const App = () => {
       }
     };
 
+    // 发送快捷键设置同步回调
+    window.updateSendShortcut = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setSendShortcut(data.sendShortcut ?? 'enter');
+      } catch (error) {
+        console.error('[Frontend] Failed to parse send shortcut config:', error);
+      }
+    };
+
     // Retry getting active provider
     let retryCount = 0;
     const MAX_RETRIES = 30;
@@ -1206,6 +1222,21 @@ const App = () => {
       }
     };
     setTimeout(requestStreamingEnabled, 200);
+
+    // 请求发送快捷键初始状态
+    let sendShortcutRetryCount = 0;
+    const MAX_SEND_SHORTCUT_RETRIES = 30;
+    const requestSendShortcut = () => {
+      if (window.sendToJava) {
+        sendBridgeMessage('get_send_shortcut');
+      } else {
+        sendShortcutRetryCount++;
+        if (sendShortcutRetryCount < MAX_SEND_SHORTCUT_RETRIES) {
+          setTimeout(requestSendShortcut, 100);
+        }
+      }
+    };
+    setTimeout(requestSendShortcut, 200);
 
     // 权限弹窗回调
     window.showPermissionDialog = (json) => {
@@ -1694,6 +1725,14 @@ const App = () => {
   };
 
   /**
+   * 处理思考深度选择 (Codex only)
+   */
+  const handleReasoningChange = (effort: ReasoningEffort) => {
+    setReasoningEffort(effort);
+    sendBridgeMessage('set_reasoning_effort', effort);
+  };
+
+  /**
    * 处理智能体选择
    */
   const handleAgentSelect = (agent: SelectedAgent | null) => {
@@ -1752,6 +1791,15 @@ const App = () => {
     sendBridgeMessage('set_streaming_enabled', JSON.stringify(payload));
     addToast(enabled ? t('settings.basic.streaming.enabled') : t('settings.basic.streaming.disabled'), 'success');
   }, [t, addToast]);
+
+  /**
+   * 处理发送快捷键变更
+   */
+  const handleSendShortcutChange = useCallback((shortcut: 'enter' | 'cmdEnter') => {
+    setSendShortcut(shortcut);
+    const payload = { sendShortcut: shortcut };
+    sendBridgeMessage('set_send_shortcut', JSON.stringify(payload));
+  }, []);
 
   const interruptSession = () => {
     sendBridgeMessage('interrupt_session');
@@ -2039,23 +2087,100 @@ const App = () => {
 
   // 文案本地化映射
   const localizeMessage = (text: string): string => {
-    const messageMap: Record<string, string> = {
-      'Request interrupted by user': '请求已被用户中断',
+    // ai-bridge 错误消息的英文到 i18n 键的映射
+    const aiBridgeMessageMap: Record<string, string> = {
+      // Claude Code 错误消息
+      'Claude Code was interrupted (possibly response timeout or user cancellation):': t('aiBridge.claudeCodeInterrupted'),
+      'Claude Code error:': t('aiBridge.claudeCodeError'),
+      'Not configured': t('aiBridge.notConfigured'),
+      'Not configured (value is empty or missing)': t('aiBridge.notConfiguredEmpty'),
+      'Default (https://api.anthropic.com)': t('aiBridge.defaultBaseUrl'),
+      // Codex 错误消息
+      'Codex authentication error:': t('aiBridge.codexAuthError'),
+      'Codex network error:': t('aiBridge.codexNetworkError'),
+      'Codex error:': t('aiBridge.codexError'),
+      // 权限相关
+      'User did not provide answers': t('aiBridge.userDidNotProvideAnswers'),
+      // 数据库相关
+      'Missing database file path argument': t('aiBridge.dbMissingPath'),
+      'Database file does not exist': t('aiBridge.dbFileNotExist'),
+      'Failed to read database': t('aiBridge.dbReadFailed'),
+      'Failed to parse provider config': t('aiBridge.dbParseProviderFailed'),
+      // 其他
+      'AI response is empty': t('aiBridge.aiResponseEmpty'),
+      'Enhancement failed': t('aiBridge.enhancementFailed'),
+      'Request interrupted by user': t('chat.requestInterrupted'),
+      '[Empty message]': t('aiBridge.emptyMessage'),
+      '[Uploaded attachment(s)]': t('aiBridge.uploadedAttachments'),
     };
 
     // 检查是否有完全匹配的映射
-    if (messageMap[text]) {
-      return messageMap[text];
+    if (aiBridgeMessageMap[text]) {
+      return aiBridgeMessageMap[text];
     }
 
-    // 检查是否包含需要映射的关键词
-    for (const [key, value] of Object.entries(messageMap)) {
-      if (text.includes(key)) {
-        return text.replace(key, value);
+    // 检查是否包含需要映射的关键词并替换
+    let result = text;
+    for (const [key, value] of Object.entries(aiBridgeMessageMap)) {
+      if (result.includes(key)) {
+        result = result.replace(key, value);
       }
     }
 
-    return text;
+    // 处理带参数的消息
+    // 匹配 "User denied permission for XXX tool"
+    const permissionDeniedMatch = result.match(/User denied permission for (.+) tool/);
+    if (permissionDeniedMatch) {
+      result = result.replace(
+        permissionDeniedMatch[0],
+        t('aiBridge.userDeniedPermission', { toolName: permissionDeniedMatch[1] })
+      );
+    }
+
+    // 匹配 "[Uploaded X image(s)]"
+    const uploadedImagesMatch = result.match(/\[Uploaded (\d+) image\(s\)\]/);
+    if (uploadedImagesMatch) {
+      result = result.replace(
+        uploadedImagesMatch[0],
+        t('aiBridge.uploadedImages', { count: parseInt(uploadedImagesMatch[1], 10) })
+      );
+    }
+
+    // 匹配 "[Attachment: XXX]"
+    const attachmentMatch = result.match(/\[Attachment: (.+)\]/);
+    if (attachmentMatch) {
+      result = result.replace(
+        attachmentMatch[0],
+        `[${t('aiBridge.attachment')}: ${attachmentMatch[1]}]`
+      );
+    }
+
+    // 处理多行错误消息中的标签
+    result = result
+      .replace(/- Error message:/g, `- ${t('aiBridge.errorMessage')}:`)
+      .replace(/- Current API Key source:/g, `- ${t('aiBridge.currentApiKeySource')}:`)
+      .replace(/- Current API Key preview:/g, `- ${t('aiBridge.currentApiKeyPreview')}:`)
+      .replace(/- Current Base URL:/g, `- ${t('aiBridge.currentBaseUrl')}:`)
+      .replace(/\(source:/g, `(${t('aiBridge.source')}:`)
+      .replace(/- Tip: CLI can read from environment variables or settings\.json; this plugin only supports reading from settings\.json to avoid issues\. You can configure it in the plugin's top-right Settings > Provider Management/g,
+        `- ${t('aiBridge.configTip')}`);
+
+    // 处理 Codex 错误消息的详细内容
+    result = result
+      .replace(/Please check the following:\n1\. Is the Codex API Key in plugin settings correct\n2\. Does the API Key have sufficient permissions\n3\. If using a custom Base URL, please confirm the address is correct/g,
+        t('aiBridge.codexAuthErrorChecks'))
+      .replace(/Tip: Codex requires a valid OpenAI API Key/g, t('aiBridge.codexAuthTip'))
+      .replace(/Please check:\n1\. Is the network connection working\n2\. If using a proxy, please confirm proxy configuration\n3\. Is the firewall blocking the connection/g,
+        t('aiBridge.codexNetworkErrorChecks'))
+      .replace(/Please check network connection and Codex configuration/g, t('aiBridge.codexErrorCheck'));
+
+    // 处理 API 错误消息
+    result = result
+      .replace(/API error:/g, `${t('aiBridge.apiError')}:`)
+      .replace(/Possible causes:\n1\. API Key is not configured correctly\n2\. Third-party proxy service configuration issue\n3\. Please check the configuration in ~\/\.claude\/settings\.json/g,
+        t('aiBridge.apiErrorCauses'));
+
+    return result;
   };
 
   const getMessageText = (message: ClaudeMessage) => {
@@ -2565,6 +2690,8 @@ const App = () => {
           currentProvider={currentProvider}
           streamingEnabled={streamingEnabledSetting}
           onStreamingEnabledChange={handleStreamingEnabledChange}
+          sendShortcut={sendShortcut}
+          onSendShortcutChange={handleSendShortcutChange}
         />
       ) : currentView === 'chat' ? (
         <>
@@ -2595,9 +2722,39 @@ const App = () => {
 
           {mergedMessages.map((message, messageIndex) => {
             // mergedMessages 已经过滤了不显示的消息
+            const isLastAssistantMessage = message.type === 'assistant' && messageIndex === mergedMessages.length - 1;
+            const isMessageStreaming = streamingActive && isLastAssistantMessage;
+
+            const handleCopyMessage = async () => {
+              const content = extractMarkdownContent(message);
+              if (!content.trim()) return;
+
+              const success = await copyToClipboard(content);
+              if (success) {
+                setCopiedMessageIndex(messageIndex);
+                setTimeout(() => setCopiedMessageIndex(null), 1500);
+              }
+            };
 
             return (
               <div key={messageIndex} className={`message ${message.type}`}>
+                {/* Copy button for assistant messages - floating position */}
+                {message.type === 'assistant' && !isMessageStreaming && (
+                  <button
+                    className={`message-copy-btn ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
+                    onClick={handleCopyMessage}
+                    title={t('markdown.copyMessage')}
+                    aria-label={t('markdown.copyMessage')}
+                  >
+                    <span className="copy-icon">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
+                        <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
+                      </svg>
+                    </span>
+                    <span className="copy-tooltip">{t('markdown.copySuccess')}</span>
+                  </button>
+                )}
                 {message.type === 'user' && message.timestamp && (
                   <div className="message-header-row">
                     <div className="message-timestamp-header">
@@ -2778,9 +2935,12 @@ const App = () => {
             onModeSelect={handleModeSelect}
             onModelSelect={handleModelSelect}
             onProviderSelect={handleProviderSelect}
+            reasoningEffort={reasoningEffort}
+            onReasoningChange={handleReasoningChange}
             onToggleThinking={handleToggleThinking}
             streamingEnabled={streamingEnabledSetting}
             onStreamingEnabledChange={handleStreamingEnabledChange}
+            sendShortcut={sendShortcut}
             selectedAgent={selectedAgent}
             onAgentSelect={handleAgentSelect}
             activeFile={contextInfo?.file}
