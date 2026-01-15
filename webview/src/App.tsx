@@ -713,10 +713,14 @@ const App = () => {
 
   // Cache for normalizeBlocks to avoid re-parsing unchanged messages
   const normalizeBlocksCache = useRef(new WeakMap<object, ClaudeContentBlock[]>());
+  const shouldShowMessageCache = useRef(new WeakMap<object, boolean>());
+  const mergedAssistantMessageCache = useRef(new Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>());
   // Clear cache when dependencies change
   useEffect(() => {
     normalizeBlocksCache.current = new WeakMap();
-  }, [localizeMessage, t]);
+    shouldShowMessageCache.current = new WeakMap();
+    mergedAssistantMessageCache.current = new Map();
+  }, [localizeMessage, t, currentSessionId]);
 
   const normalizeBlocks = useCallback(
     (raw?: ClaudeRawMessage | string) => {
@@ -747,6 +751,19 @@ const App = () => {
     [getMessageText, normalizeBlocks, t]
   );
 
+  const shouldShowMessageCached = useCallback(
+    (message: ClaudeMessage) => {
+      const cache = shouldShowMessageCache.current;
+      if (cache.has(message)) {
+        return cache.get(message)!;
+      }
+      const result = shouldShowMessage(message);
+      cache.set(message, result);
+      return result;
+    },
+    [shouldShowMessage]
+  );
+
   const getContentBlocks = useCallback(
     (message: ClaudeMessage) => getContentBlocksUtil(message, normalizeBlocks, localizeMessage),
     [normalizeBlocks, localizeMessage]
@@ -755,11 +772,16 @@ const App = () => {
   // Merge consecutive assistant messages to fix style inconsistencies in history
   const mergedMessages = useMemo(() => {
     console.time('App.mergedMessages');
-    const visible = messages.filter(shouldShowMessage);
-    const result = mergeConsecutiveAssistantMessages(visible, normalizeBlocks);
+    const visible: ClaudeMessage[] = [];
+    for (const message of messages) {
+      if (shouldShowMessageCached(message)) {
+        visible.push(message);
+      }
+    }
+    const result = mergeConsecutiveAssistantMessages(visible, normalizeBlocks, mergedAssistantMessageCache.current);
     console.timeEnd('App.mergedMessages');
     return result;
-  }, [messages, shouldShowMessage, normalizeBlocks]);
+  }, [messages, shouldShowMessageCached, normalizeBlocks]);
 
   // Rewind handlers
   const {

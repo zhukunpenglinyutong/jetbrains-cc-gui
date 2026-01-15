@@ -139,6 +139,10 @@ export const MessageItem = memo(function MessageItem({
   // Memoize blocks and grouped blocks to avoid recalculation on every render
   const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
   const groupedBlocks = useMemo(() => groupBlocks(blocks), [blocks]);
+  const messageStyle = useMemo(
+    () => ({ contentVisibility: 'auto', containIntrinsicSize: '0 320px' } as const),
+    []
+  );
 
   const renderGroupedBlocks = () => {
     if (message.type === 'error') {
@@ -222,7 +226,7 @@ export const MessageItem = memo(function MessageItem({
   };
 
   return (
-    <div className={`message ${message.type}`}>
+    <div className={`message ${message.type}`} style={messageStyle}>
       {/* Copy button for assistant messages */}
       {message.type === 'assistant' && !isMessageStreaming && (
         <button
