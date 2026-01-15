@@ -3,10 +3,10 @@ import type { ClaudeMessage } from '../types';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
-interface UseScrollBehaviorOptions {
+export interface UseScrollBehaviorOptions {
   currentView: ViewMode;
   messages: ClaudeMessage[];
-  expandedThinking: Record<string, boolean>;
+  expandedThinking?: Record<string, boolean>;
   loading: boolean;
   streamingActive: boolean;
 }

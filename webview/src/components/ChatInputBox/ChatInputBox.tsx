@@ -538,15 +538,23 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       commandCompletion.close();
       agentCompletion.close();
 
-      onSubmit?.(content, attachments.length > 0 ? attachments : undefined);
+      // Capture attachments before clearing
+      const attachmentsToSend = attachments.length > 0 ? [...attachments] : undefined;
 
-      // Clear input box
+      // Clear input box immediately for responsiveness
       clearInput();
 
       // If using internal attachments state, also clear attachments
       if (externalAttachments === undefined) {
         setInternalAttachments([]);
       }
+
+      // Defer the heavy submission logic to allow UI update
+      setTimeout(() => {
+        console.time('ChatInputBox.onSubmit');
+        onSubmit?.(content, attachmentsToSend);
+        console.timeEnd('ChatInputBox.onSubmit');
+      }, 10);
     }, [
       getTextContent,
       attachments,
