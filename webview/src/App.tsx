@@ -34,12 +34,11 @@ import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
 import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent } from './components/ChatInputBox/types';
 import { TodoPanel } from './components/TodoPanel';
 import { ToastContainer, type ToastMessage } from './components/Toast';
-import WaitingIndicator from './components/WaitingIndicator';
 import { ScrollControl } from './components/ScrollControl';
 import { extractMarkdownContent } from './utils/copyUtils';
 import { ChatHeader } from './components/ChatHeader';
 import { WelcomeScreen } from './components/WelcomeScreen';
-import { MessageItem } from './components/MessageItem';
+import { MessageList } from './components/MessageList';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
 import type {
   ClaudeContentBlock,
@@ -87,7 +86,6 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [loadingStartTime, setLoadingStartTime] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
-  const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [streamingActive, setStreamingActive] = useState(false);
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
@@ -104,7 +102,6 @@ const App = () => {
   } = useScrollBehavior({
     currentView,
     messages,
-    expandedThinking,
     loading,
     streamingActive,
   });
@@ -413,7 +410,6 @@ const App = () => {
     setLoading,
     setLoadingStartTime,
     setIsThinking,
-    setExpandedThinking,
     setStreamingActive,
     setHistoryData,
     setCurrentSessionId,
@@ -529,6 +525,7 @@ const App = () => {
       type: 'user',
       content: text || (hasAttachments ? '[已上传附件]' : ''),
       timestamp: new Date().toISOString(),
+      isOptimistic: true, // 标记为乐观更新消息
       raw: {
         message: {
           content: userContentBlocks,
@@ -711,22 +708,36 @@ const App = () => {
     // 移除通知：已发送中断请求
   };
 
-  const toggleThinking = (messageIndex: number, blockIndex: number) => {
-    const key = `${messageIndex}_${blockIndex}`;
-    setExpandedThinking((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
-
-  const isThinkingExpanded = (messageIndex: number, blockIndex: number) =>
-    Boolean(expandedThinking[`${messageIndex}_${blockIndex}`]);
-
   // Message utility functions (use imported utilities with bound dependencies)
   const localizeMessage = useMemo(() => createLocalizeMessage(t), [t]);
 
+  // Cache for normalizeBlocks to avoid re-parsing unchanged messages
+  const normalizeBlocksCache = useRef(new WeakMap<object, ClaudeContentBlock[]>());
+  const shouldShowMessageCache = useRef(new WeakMap<object, boolean>());
+  const mergedAssistantMessageCache = useRef(new Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>());
+  // Clear cache when dependencies change
+  useEffect(() => {
+    normalizeBlocksCache.current = new WeakMap();
+    shouldShowMessageCache.current = new WeakMap();
+    mergedAssistantMessageCache.current = new Map();
+  }, [localizeMessage, t, currentSessionId]);
+
   const normalizeBlocks = useCallback(
-    (raw?: ClaudeRawMessage | string) => normalizeBlocksUtil(raw, localizeMessage, t),
+    (raw?: ClaudeRawMessage | string) => {
+      if (!raw) return null;
+      if (typeof raw === 'object') {
+        const cache = normalizeBlocksCache.current;
+        if (cache.has(raw)) {
+          return cache.get(raw)!;
+        }
+        const result = normalizeBlocksUtil(raw, localizeMessage, t);
+        if (result) {
+          cache.set(raw, result);
+        }
+        return result;
+      }
+      return normalizeBlocksUtil(raw, localizeMessage, t);
+    },
     [localizeMessage, t]
   );
 
@@ -740,6 +751,19 @@ const App = () => {
     [getMessageText, normalizeBlocks, t]
   );
 
+  const shouldShowMessageCached = useCallback(
+    (message: ClaudeMessage) => {
+      const cache = shouldShowMessageCache.current;
+      if (cache.has(message)) {
+        return cache.get(message)!;
+      }
+      const result = shouldShowMessage(message);
+      cache.set(message, result);
+      return result;
+    },
+    [shouldShowMessage]
+  );
+
   const getContentBlocks = useCallback(
     (message: ClaudeMessage) => getContentBlocksUtil(message, normalizeBlocks, localizeMessage),
     [normalizeBlocks, localizeMessage]
@@ -747,9 +771,15 @@ const App = () => {
 
   // Merge consecutive assistant messages to fix style inconsistencies in history
   const mergedMessages = useMemo(() => {
-    const visible = messages.filter(shouldShowMessage);
-    return mergeConsecutiveAssistantMessages(visible, normalizeBlocks);
-  }, [messages, shouldShowMessage, normalizeBlocks]);
+    const visible: ClaudeMessage[] = [];
+    for (const message of messages) {
+      if (shouldShowMessageCached(message)) {
+        visible.push(message);
+      }
+    }
+    const result = mergeConsecutiveAssistantMessages(visible, normalizeBlocks, mergedAssistantMessageCache.current);
+    return result;
+  }, [messages, shouldShowMessageCached, normalizeBlocks]);
 
   // Rewind handlers
   const {
@@ -793,45 +823,6 @@ const App = () => {
     }
     return [];
   }, [messages]);
-
-// Claude 流式：思考块在输出中自动展开，输出结束自动折叠（见 onStreamEnd）
-  useEffect(() => {
-    if (currentProvider !== 'claude') return;
-    if (!streamingActive) return;
-
-    let lastAssistantIdx = -1;
-    for (let i = mergedMessages.length - 1; i >= 0; i -= 1) {
-      if (mergedMessages[i]?.type === 'assistant') {
-        lastAssistantIdx = i;
-        break;
-      }
-    }
-    if (lastAssistantIdx < 0) return;
-
-    const blocks = getContentBlocks(mergedMessages[lastAssistantIdx]);
-    if (!Array.isArray(blocks) || blocks.length === 0) return;
-
-    const keysToOpen: string[] = [];
-    for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
-      if (blocks[blockIndex]?.type === 'thinking') {
-        keysToOpen.push(`${lastAssistantIdx}_${blockIndex}`);
-      }
-    }
-    if (keysToOpen.length === 0) return;
-
-    setExpandedThinking((prevExpanded) => {
-      let changed = false;
-      const next = { ...prevExpanded };
-      for (const key of keysToOpen) {
-        if (!next[key]) {
-          next[key] = true;
-          autoExpandedThinkingKeysRef.current.add(key);
-          changed = true;
-        }
-      }
-      return changed ? next : prevExpanded;
-    });
-  }, [currentProvider, mergedMessages, streamingActive]);
 
   const canRewindFromMessageIndex = (userMessageIndex: number) => {
     if (userMessageIndex < 0 || userMessageIndex >= mergedMessages.length) {
@@ -899,15 +890,20 @@ const App = () => {
     return result;
   }, [mergedMessages, currentProvider]);
 
+  // 使用 useRef 存储最新的 messages，避免 findToolResult 依赖变化导致子组件重渲染
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') {
       return null;
     }
 
+    const currentMessages = messagesRef.current;
     // 注意：在原始 messages 数组中查找，而不是 mergedMessages
     // 因为 tool_result 可能在被过滤掉的消息中
-    for (let i = 0; i < messages.length; i += 1) {
-      const candidate = messages[i];
+    for (let i = 0; i < currentMessages.length; i += 1) {
+      const candidate = currentMessages[i];
       const raw = candidate.raw;
 
       if (!raw || typeof raw === 'string') {
@@ -930,7 +926,7 @@ const App = () => {
     }
 
     return null;
-  }, [messages]);
+  }, []);
 
   const sessionTitle = useMemo(() => {
     if (messages.length === 0) {
@@ -1009,27 +1005,19 @@ const App = () => {
             />
           )}
 
-          {mergedMessages.map((message, messageIndex) => (
-            <MessageItem
-              key={messageIndex}
-              message={message}
-              messageIndex={messageIndex}
-              totalMessages={mergedMessages.length}
-              streamingActive={streamingActive}
-              isThinking={isThinking}
-              t={t}
-              getMessageText={getMessageText}
-              getContentBlocks={getContentBlocks}
-              isThinkingExpanded={isThinkingExpanded}
-              toggleThinking={toggleThinking}
-              findToolResult={findToolResult}
-              extractMarkdownContent={extractMarkdownContent}
-            />
-          ))}
-
-          {/* Loading indicator */}
-          {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
-          <div ref={messagesEndRef} />
+          <MessageList
+            messages={mergedMessages}
+            streamingActive={streamingActive}
+            isThinking={isThinking}
+            loading={loading}
+            loadingStartTime={loadingStartTime}
+            t={t}
+            getMessageText={getMessageText}
+            getContentBlocks={getContentBlocks}
+            findToolResult={findToolResult}
+            extractMarkdownContent={extractMarkdownContent}
+            messagesEndRef={messagesEndRef}
+          />
         </div>
 
         {/* 滚动控制按钮 */}

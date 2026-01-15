@@ -1,6 +1,13 @@
 import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
 
+// Performance optimization constants
+/**
+ * Maximum number of merged message groups to cache before clearing.
+ * This prevents unbounded memory growth while maintaining cache benefits.
+ */
+const MESSAGE_MERGE_CACHE_LIMIT = 3000;
+
 export type LocalizeMessageFn = (text: string) => string;
 
 /**
@@ -252,50 +259,104 @@ export function getContentBlocks(
  */
 export function mergeConsecutiveAssistantMessages(
   messages: ClaudeMessage[],
-  normalizeBlocksFn: (raw?: ClaudeRawMessage | string) => ClaudeContentBlock[] | null
+  normalizeBlocksFn: (raw?: ClaudeRawMessage | string) => ClaudeContentBlock[] | null,
+  cache?: Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>
 ): ClaudeMessage[] {
   if (messages.length === 0) return [];
 
-  const result: ClaudeMessage[] = [];
-  let current: ClaudeMessage | null = null;
+  const getStableId = (message: ClaudeMessage, index: number): string => {
+    const rawObj = typeof message.raw === 'object' ? (message.raw as Record<string, unknown> | null) : null;
+    const uuid = rawObj?.uuid;
+    if (typeof uuid === 'string' && uuid) return uuid;
+    if (message.timestamp) return `${message.type}-${message.timestamp}`;
+    return `${message.type}-${index}`;
+  };
 
-  for (const msg of messages) {
-    if (!current) {
-      current = msg;
+  const buildMergedAssistantMessage = (group: ClaudeMessage[]): ClaudeMessage => {
+    const first = group[0];
+
+    const combinedBlocks: ClaudeContentBlock[] = [];
+    const contentParts: string[] = [];
+
+    for (const msg of group) {
+      const blocks = normalizeBlocksFn(msg.raw) || [];
+      if (blocks.length > 0) {
+        combinedBlocks.push(...blocks);
+      }
+      if (msg.content) {
+        const trimmed = msg.content.trim();
+        if (trimmed) {
+          contentParts.push(msg.content);
+        }
+      }
+    }
+
+    const rawBase: ClaudeRawMessage =
+      (typeof first.raw === 'object' && first.raw ? { ...(first.raw as ClaudeRawMessage) } : ({} as ClaudeRawMessage));
+
+    const nextRaw: ClaudeRawMessage = {
+      ...rawBase,
+      content: combinedBlocks,
+      message: rawBase.message ? { ...rawBase.message, content: combinedBlocks } : rawBase.message,
+    };
+
+    const mergedContent = contentParts.join('\n');
+
+    return {
+      ...first,
+      content: mergedContent,
+      raw: nextRaw,
+    };
+  };
+
+  const result: ClaudeMessage[] = [];
+  let i = 0;
+  while (i < messages.length) {
+    const msg = messages[i];
+    if (msg.type !== 'assistant') {
+      result.push(msg);
+      i += 1;
       continue;
     }
 
-    if (current.type === 'assistant' && msg.type === 'assistant') {
-      // Merge logic
-      const blocks1 = normalizeBlocksFn(current.raw) || [];
-      const blocks2 = normalizeBlocksFn(msg.raw) || [];
-      const combinedBlocks = [...blocks1, ...blocks2];
-
-      // Build new raw object
-      const newRaw: ClaudeRawMessage = {
-        ...(typeof current.raw === 'object' ? current.raw : {}),
-        content: combinedBlocks
-      };
-
-      // If original message has message.content, also need to update it for consistency
-      if (newRaw.message && newRaw.message.content) {
-        newRaw.message.content = combinedBlocks;
-      }
-
-      const content1: string = current.content || '';
-      const content2: string = msg.content || '';
-      const newContent: string = (content1 && content2) ? `${content1}\n${content2}` : (content1 || content2);
-
-      current = {
-        ...current,
-        content: newContent,
-        raw: newRaw,
-      };
-    } else {
-      result.push(current);
-      current = msg;
+    let j = i + 1;
+    while (j < messages.length && messages[j].type === 'assistant') {
+      j += 1;
     }
+
+    const groupLength = j - i;
+    if (groupLength <= 1) {
+      result.push(msg);
+      i = j;
+      continue;
+    }
+
+    const group = messages.slice(i, j);
+    const groupKey = `${getStableId(group[0], i)}..${getStableId(group[group.length - 1], j - 1)}#${group.length}`;
+
+    if (cache) {
+      const cached = cache.get(groupKey);
+      if (
+        cached &&
+        cached.source.length === group.length &&
+        cached.source.every((m, idx) => m === group[idx])
+      ) {
+        result.push(cached.merged);
+        i = j;
+        continue;
+      }
+    }
+
+    const merged = buildMergedAssistantMessage(group);
+    if (cache) {
+      cache.set(groupKey, { source: group, merged });
+      if (cache.size > MESSAGE_MERGE_CACHE_LIMIT) {
+        cache.clear();
+      }
+    }
+    result.push(merged);
+    i = j;
   }
-  if (current) result.push(current);
+
   return result;
 }

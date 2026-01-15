@@ -11,6 +11,14 @@ import { THROTTLE_INTERVAL } from './useStreamingMessages';
 import { sendBridgeEvent } from '../utils/bridge';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from '../components/ChatInputBox/providers';
 
+// Performance optimization constants
+/**
+ * Time window (in milliseconds) for matching optimistic messages with backend messages.
+ * If a user message arrives from backend within this window after an optimistic message,
+ * they are considered the same message.
+ */
+const OPTIMISTIC_MESSAGE_TIME_WINDOW = 5000;
+
 const isTruthy = (value: unknown) => value === true || value === 'true';
 
 export interface ContextInfo {
@@ -30,7 +38,7 @@ export interface UseWindowCallbacksOptions {
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   setLoadingStartTime: React.Dispatch<React.SetStateAction<number | null>>;
   setIsThinking: React.Dispatch<React.SetStateAction<boolean>>;
-  setExpandedThinking: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  setExpandedThinking?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setStreamingActive: React.Dispatch<React.SetStateAction<boolean>>;
   setHistoryData: React.Dispatch<React.SetStateAction<HistoryData | null>>;
   setCurrentSessionId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -162,10 +170,68 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         const parsed = JSON.parse(json) as ClaudeMessage[];
 
         setMessages((prev) => {
-          if (!isStreamingRef.current) {
-            return parsed;
+          // 如果正在流式传输，交给流式逻辑处理
+          if (isStreamingRef.current) {
+            if (useBackendStreamingRenderRef.current) {
+              return parsed;
+            }
+
+            const lastAssistantIdx = findLastAssistantIndex(parsed);
+            if (lastAssistantIdx < 0) {
+              return parsed;
+            }
+            // ... (rest of streaming logic)
+            // 由于代码结构原因，这里简化处理，流式传输时直接复用原有逻辑
+            // 为了避免重复代码，这里我们只处理非流式的情况
           }
 
+          // 非流式传输情况（或流式还没开始）
+          if (!isStreamingRef.current) {
+            // 智能合并：复用旧消息对象以优化性能（配合 App.tsx 中的 WeakMap 缓存）
+            // 如果不是最后一条消息，且 timestamp/type/content 相同，则认为消息未变，复用引用
+            const smartMerged = parsed.map((newMsg, i) => {
+              // 总是更新最后一条消息（可能在流式生成中，或者状态在变）
+              if (i === parsed.length - 1) return newMsg;
+              
+              if (i < prev.length) {
+                const oldMsg = prev[i];
+                if (
+                  oldMsg.timestamp === newMsg.timestamp &&
+                  oldMsg.type === newMsg.type &&
+                  oldMsg.content === newMsg.content
+                ) {
+                  return oldMsg;
+                }
+              }
+              return newMsg;
+            });
+
+            // 检查 prev 中是否有乐观消息
+            const lastMsg = prev[prev.length - 1];
+            const hasOptimisticMsg = lastMsg && lastMsg.isOptimistic;
+
+            if (hasOptimisticMsg) {
+              // 检查 smartMerged 是否包含我们的 optimistic message
+              const optimisticMsg = lastMsg;
+              const isIncluded = smartMerged.some((m) =>
+                m.type === 'user' &&
+                (m.content === optimisticMsg.content || m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
+                m.timestamp && optimisticMsg.timestamp &&
+                Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < OPTIMISTIC_MESSAGE_TIME_WINDOW
+              );
+
+              if (!isIncluded) {
+                // 如果后端返回的列表不包含我们的乐观消息，把它拼回去
+                return [...smartMerged, optimisticMsg];
+              }
+            }
+            return smartMerged;
+          }
+
+          // 下面是原有的流式处理逻辑，我们需要保留它
+          // 因为不能在 if (!isStreamingRef.current) 里 return，所以这里需要重复一下或者重构
+          // 为了最小化改动，我将把流式逻辑复制在这里（或者保持原样）
+          
           if (useBackendStreamingRenderRef.current) {
             return parsed;
           }
@@ -413,15 +479,17 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         return newMessages;
       });
 
-      setExpandedThinking((prev) => {
-        const keys = autoExpandedThinkingKeysRef.current;
-        if (keys.size === 0) return prev;
-        const next = { ...prev };
-        keys.forEach((key) => {
-          next[key] = false;
+      if (setExpandedThinking) {
+        setExpandedThinking((prev) => {
+          const keys = autoExpandedThinkingKeysRef.current;
+          if (keys.size === 0) return prev;
+          const next = { ...prev };
+          keys.forEach((key) => {
+            next[key] = false;
+          });
+          return next;
         });
-        return next;
-      });
+      }
 
       streamingMessageIndexRef.current = -1;
       streamingContentRef.current = '';

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, memo } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../../types';
 
@@ -17,14 +17,12 @@ import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, isToolName } from '../../utils/toolCo
 export interface MessageItemProps {
   message: ClaudeMessage;
   messageIndex: number;
-  totalMessages: number;
+  isLast: boolean;
   streamingActive: boolean;
   isThinking: boolean;
   t: TFunction;
   getMessageText: (message: ClaudeMessage) => string;
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
-  isThinkingExpanded: (messageIndex: number, blockIndex: number) => boolean;
-  toggleThinking: (messageIndex: number, blockIndex: number) => void;
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
   extractMarkdownContent: (message: ClaudeMessage) => string;
 }
@@ -95,23 +93,36 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   return groupedBlocks;
 }
 
-export function MessageItem({
+export const MessageItem = memo(function MessageItem({
   message,
   messageIndex,
-  totalMessages,
+  isLast,
   streamingActive,
   isThinking,
   t,
   getMessageText,
   getContentBlocks,
-  isThinkingExpanded,
-  toggleThinking,
   findToolResult,
   extractMarkdownContent,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
 
-  const isLastAssistantMessage = message.type === 'assistant' && messageIndex === totalMessages - 1;
+  // Manage thinking expansion state locally to avoid prop drilling and unnecessary re-renders
+  const [expandedThinking, setExpandedThinking] = useState<Record<number, boolean>>({});
+
+  const toggleThinking = useCallback((blockIndex: number) => {
+    setExpandedThinking((prev) => ({
+      ...prev,
+      [blockIndex]: !prev[blockIndex],
+    }));
+  }, []);
+
+  const isThinkingExpanded = useCallback(
+    (blockIndex: number) => Boolean(expandedThinking[blockIndex]),
+    [expandedThinking]
+  );
+
+  const isLastAssistantMessage = message.type === 'assistant' && isLast;
   const isMessageStreaming = streamingActive && isLastAssistantMessage;
 
   const handleCopyMessage = useCallback(async () => {
@@ -125,13 +136,18 @@ export function MessageItem({
     }
   }, [message, messageIndex, extractMarkdownContent]);
 
+  // Memoize blocks and grouped blocks to avoid recalculation on every render
+  const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
+  const groupedBlocks = useMemo(() => groupBlocks(blocks), [blocks]);
+  const messageStyle = useMemo(
+    () => ({ contentVisibility: 'auto', containIntrinsicSize: '0 320px' } as const),
+    []
+  );
+
   const renderGroupedBlocks = () => {
     if (message.type === 'error') {
       return <MarkdownBlock content={getMessageText(message)} />;
     }
-
-    const blocks = getContentBlocks(message);
-    const groupedBlocks = groupBlocks(blocks);
 
     return groupedBlocks.map((grouped) => {
       if (grouped.type === 'read_group') {
@@ -197,11 +213,11 @@ export function MessageItem({
             messageIndex={messageIndex}
             messageType={message.type}
             isStreaming={isMessageStreaming}
-            isThinkingExpanded={isThinkingExpanded(messageIndex, blockIndex)}
+            isThinkingExpanded={isThinkingExpanded(blockIndex)}
             isThinking={isThinking}
-            isLastMessage={messageIndex === totalMessages - 1}
+            isLastMessage={isLast}
             t={t}
-            onToggleThinking={() => toggleThinking(messageIndex, blockIndex)}
+            onToggleThinking={() => toggleThinking(blockIndex)}
             findToolResult={findToolResult}
           />
         </div>
@@ -210,7 +226,7 @@ export function MessageItem({
   };
 
   return (
-    <div className={`message ${message.type}`}>
+    <div className={`message ${message.type}`} style={messageStyle}>
       {/* Copy button for assistant messages */}
       {message.type === 'assistant' && !isMessageStreaming && (
         <button
@@ -250,4 +266,4 @@ export function MessageItem({
       </div>
     </div>
   );
-}
+});

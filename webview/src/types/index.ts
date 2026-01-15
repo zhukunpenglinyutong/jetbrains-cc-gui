@@ -31,6 +31,7 @@ export interface ClaudeMessage {
   raw?: ClaudeRawMessage | string;
   timestamp?: string;
   isStreaming?: boolean; // 🔧 流式传输：标记消息是否正在流式接收中
+  isOptimistic?: boolean; // 🔧 乐观更新：标记消息是否为客户端乐观添加的消息（等待后端确认）
   [key: string]: unknown;
 }
 
