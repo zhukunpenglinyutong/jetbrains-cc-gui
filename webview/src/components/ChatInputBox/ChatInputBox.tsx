@@ -551,9 +551,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
       // Defer the heavy submission logic to allow UI update
       setTimeout(() => {
-        console.time('ChatInputBox.onSubmit');
         onSubmit?.(content, attachmentsToSend);
-        console.timeEnd('ChatInputBox.onSubmit');
       }, 10);
     }, [
       getTextContent,

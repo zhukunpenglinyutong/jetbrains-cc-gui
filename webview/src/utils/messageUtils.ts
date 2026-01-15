@@ -1,6 +1,13 @@
 import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
 
+// Performance optimization constants
+/**
+ * Maximum number of merged message groups to cache before clearing.
+ * This prevents unbounded memory growth while maintaining cache benefits.
+ */
+const MESSAGE_MERGE_CACHE_LIMIT = 3000;
+
 export type LocalizeMessageFn = (text: string) => string;
 
 /**
@@ -343,7 +350,7 @@ export function mergeConsecutiveAssistantMessages(
     const merged = buildMergedAssistantMessage(group);
     if (cache) {
       cache.set(groupKey, { source: group, merged });
-      if (cache.size > 3000) {
+      if (cache.size > MESSAGE_MERGE_CACHE_LIMIT) {
         cache.clear();
       }
     }

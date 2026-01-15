@@ -771,7 +771,6 @@ const App = () => {
 
   // Merge consecutive assistant messages to fix style inconsistencies in history
   const mergedMessages = useMemo(() => {
-    console.time('App.mergedMessages');
     const visible: ClaudeMessage[] = [];
     for (const message of messages) {
       if (shouldShowMessageCached(message)) {
@@ -779,7 +778,6 @@ const App = () => {
       }
     }
     const result = mergeConsecutiveAssistantMessages(visible, normalizeBlocks, mergedAssistantMessageCache.current);
-    console.timeEnd('App.mergedMessages');
     return result;
   }, [messages, shouldShowMessageCached, normalizeBlocks]);
 

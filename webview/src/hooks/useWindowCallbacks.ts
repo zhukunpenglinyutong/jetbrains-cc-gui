@@ -11,6 +11,14 @@ import { THROTTLE_INTERVAL } from './useStreamingMessages';
 import { sendBridgeEvent } from '../utils/bridge';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from '../components/ChatInputBox/providers';
 
+// Performance optimization constants
+/**
+ * Time window (in milliseconds) for matching optimistic messages with backend messages.
+ * If a user message arrives from backend within this window after an optimistic message,
+ * they are considered the same message.
+ */
+const OPTIMISTIC_MESSAGE_TIME_WINDOW = 5000;
+
 const isTruthy = (value: unknown) => value === true || value === 'true';
 
 export interface ContextInfo {
@@ -200,7 +208,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
             // 检查 prev 中是否有乐观消息
             const lastMsg = prev[prev.length - 1];
-            // @ts-ignore - isOptimistic is a custom property
             const hasOptimisticMsg = lastMsg && lastMsg.isOptimistic;
 
             if (hasOptimisticMsg) {
@@ -210,7 +217,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
                 m.type === 'user' &&
                 (m.content === optimisticMsg.content || m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
                 m.timestamp && optimisticMsg.timestamp &&
-                Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < 5000
+                Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < OPTIMISTIC_MESSAGE_TIME_WINDOW
               );
 
               if (!isIncluded) {
