@@ -651,7 +651,154 @@ public class ClaudeSession {
             agentPrompt,
             streaming,
             handler
-        ).thenApply(result -> null);
+        ).thenApply(result -> null)
+        .thenCompose(v -> {
+            // Add a small delay to ensure JSONL file is written and flushed
+            // Non-streaming responses return very fast, and filesystem I/O may not be complete yet
+            return CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(100); // 100ms delay to allow file system flush
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                updateUserMessageUuids();
+            });
+        });
+    }
+
+    /**
+     * Update user message UUIDs from session history
+     * This is needed because SDK streaming does not include UUID,
+     * but persisted messages in JSONL files do have UUID.
+     */
+    private void updateUserMessageUuids() {
+        String sessionId = state.getSessionId();
+        String cwd = state.getCwd();
+
+        if (sessionId == null || sessionId.isEmpty()) {
+            return;
+        }
+
+        // Retry logic to handle filesystem I/O delay
+        int maxRetries = 3;
+        int retryDelayMs = 50;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                List<JsonObject> historyMessages = claudeSDKBridge.getSessionMessages(sessionId, cwd);
+                if (historyMessages == null || historyMessages.isEmpty()) {
+                    if (attempt < maxRetries) {
+                        Thread.sleep(retryDelayMs);
+                        continue;
+                    }
+                    return;
+                }
+
+                List<Message> localMessages = state.getMessages();
+                boolean updated = false;
+
+                // Find user messages in history that have UUID
+                for (JsonObject historyMsg : historyMessages) {
+                    if (!historyMsg.has("type") || !"user".equals(historyMsg.get("type").getAsString())) {
+                        continue;
+                    }
+                    if (!historyMsg.has("uuid") || historyMsg.get("uuid").isJsonNull()) {
+                        continue;
+                    }
+
+                    String uuid = historyMsg.get("uuid").getAsString();
+
+                    // Extract content from history message for matching
+                    String historyContent = extractMessageContentForMatching(historyMsg);
+                    if (historyContent == null || historyContent.isEmpty()) {
+                        continue;
+                    }
+
+                    // Find matching local user message and update its UUID
+                    for (Message localMsg : localMessages) {
+                        if (localMsg.type != Message.Type.USER || localMsg.raw == null) {
+                            continue;
+                        }
+                        // Skip if already has UUID
+                        if (localMsg.raw.has("uuid") && !localMsg.raw.get("uuid").isJsonNull()) {
+                            continue;
+                        }
+
+                        String localContent = localMsg.content;
+                        if (localContent != null && localContent.equals(historyContent)) {
+                            localMsg.raw.addProperty("uuid", uuid);
+                            updated = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (updated) {
+                    callbackHandler.notifyMessageUpdate(localMessages);
+                    return; // Success, no need to retry
+                }
+
+                // If no update but found history messages, likely UUID already present
+                if (!historyMessages.isEmpty()) {
+                    return;
+                }
+
+                // Retry if no history messages found yet
+                if (attempt < maxRetries) {
+                    Thread.sleep(retryDelayMs);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (Exception e) {
+                LOG.warn("[Rewind] Failed to update user message UUIDs (attempt " + attempt + "): " + e.getMessage());
+                if (attempt >= maxRetries) {
+                    break;
+                }
+                try {
+                    Thread.sleep(retryDelayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Extract message content for matching
+     */
+    private String extractMessageContentForMatching(JsonObject msg) {
+        if (!msg.has("message") || !msg.get("message").isJsonObject()) {
+            return null;
+        }
+        JsonObject message = msg.getAsJsonObject("message");
+        if (!message.has("content")) {
+            return null;
+        }
+
+        JsonElement contentElement = message.get("content");
+        if (contentElement.isJsonPrimitive()) {
+            return contentElement.getAsString();
+        }
+
+        if (contentElement.isJsonArray()) {
+            JsonArray contentArray = contentElement.getAsJsonArray();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < contentArray.size(); i++) {
+                JsonElement element = contentArray.get(i);
+                if (element.isJsonObject()) {
+                    JsonObject block = element.getAsJsonObject();
+                    if (block.has("type") && "text".equals(block.get("type").getAsString()) && block.has("text")) {
+                        if (sb.length() > 0) sb.append("\n");
+                        sb.append(block.get("text").getAsString());
+                    }
+                }
+            }
+            return sb.toString();
+        }
+
+        return null;
     }
 
     /**
