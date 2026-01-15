@@ -81,6 +81,44 @@ const ACCEPT_EDITS_AUTO_APPROVE_TOOLS = new Set([
   'Rename'
 ]);
 
+// ========== Auto-retry configuration for transient API errors ==========
+const AUTO_RETRY_CONFIG = {
+  maxRetries: 2,           // Maximum retry attempts
+  retryDelayMs: 1500,      // Delay between retries (ms)
+  maxMessagesForRetry: 3   // Only retry if fewer messages were processed (early failure)
+};
+
+/**
+ * Determine if an error is retryable (transient network/API issues)
+ * @param {Error|string} error - The error to check
+ * @returns {boolean} - True if the error is likely transient and retryable
+ */
+function isRetryableError(error) {
+  const msg = error?.message || String(error);
+  const retryablePatterns = [
+    'API request failed',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'ENOTFOUND',
+    'network',
+    'fetch failed',
+    'socket hang up',
+    'getaddrinfo',
+    'connect EHOSTUNREACH'
+  ];
+  return retryablePatterns.some(pattern => msg.toLowerCase().includes(pattern.toLowerCase()));
+}
+
+/**
+ * Sleep utility for retry delays
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise<void>}
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Tools that require user interaction even in bypassPermissions mode
 const INTERACTIVE_TOOLS = new Set(['AskUserQuestion']);
 
@@ -433,6 +471,24 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    }
 	    console.log('[DIAG] query function available, calling...');
 
+    // ========== Auto-retry loop for transient API errors ==========
+    let retryAttempt = 0;
+    let lastRetryError = null;
+
+    retryLoop: while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
+      // Reset state for each attempt (important for retry)
+      let currentSessionId = resumeSessionId;
+      let messageCount = 0;
+      let hasStreamEvents = false;
+      let lastAssistantContent = '';
+      let lastThinkingContent = '';
+
+      // Only log retry attempts (not the first attempt)
+      if (retryAttempt > 0) {
+        console.log(`[RETRY] Attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries} after error: ${lastRetryError?.message || 'unknown'}`);
+      }
+
+      try {
 	    // 调用 query 函数
 	    const result = query({
 	      prompt: message,
@@ -448,16 +504,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
 	    console.log('[DEBUG] Starting message loop...');
 
-    let currentSessionId = resumeSessionId;
-
     // 流式输出
-    let messageCount = 0;
     // 🔧 流式传输状态追踪（已在函数开头声明 streamingEnabled, streamStarted, streamEnded）
     // 🔧 标记是否收到了 stream_event（用于避免 fallback diff 重复输出）
-    let hasStreamEvents = false;
     // 🔧 diff fallback: 追踪上次的 assistant 内容，用于计算增量
-    let lastAssistantContent = '';
-    let lastThinkingContent = '';
 
     try {
     for await (const msg of result) {
@@ -640,10 +690,42 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       if (loopError.spawnargs) {
         console.error('[DEBUG] Error spawnargs:', JSON.stringify(loopError.spawnargs));
       }
-      throw loopError; // 重新抛出让外层 catch 处理
+
+      // ========== Auto-retry logic for transient API errors ==========
+      // Only retry if:
+      // 1. Error is retryable (transient network/API issue)
+      // 2. Haven't exceeded max retries
+      // 3. Few messages were processed (early failure, not mid-stream)
+      const canRetry = isRetryableError(loopError) &&
+                       retryAttempt < AUTO_RETRY_CONFIG.maxRetries &&
+                       messageCount <= AUTO_RETRY_CONFIG.maxMessagesForRetry;
+
+      if (canRetry) {
+        lastRetryError = loopError;
+        retryAttempt++;
+        console.log(`[RETRY] Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${AUTO_RETRY_CONFIG.retryDelayMs}ms delay`);
+        console.log(`[RETRY] Reason: ${loopError.message}, messageCount: ${messageCount}`);
+
+        // Reset streaming state for retry
+        if (streamingEnabled && streamStarted && !streamEnded) {
+          // Don't output STREAM_END here - we'll start fresh on retry
+          streamStarted = false;
+        }
+
+        // Wait before retry
+        await sleep(AUTO_RETRY_CONFIG.retryDelayMs);
+        continue retryLoop; // Go to next retry attempt
+      }
+
+      // Not retryable or max retries exceeded - throw to outer catch
+      throw loopError;
     }
 
+    // ========== Success - break out of retry loop ==========
     console.log(`[DEBUG] Message loop completed. Total messages: ${messageCount}`);
+    if (retryAttempt > 0) {
+      console.log(`[RETRY] Success after ${retryAttempt} retry attempt(s)`);
+    }
 
     // 🔧 流式传输：输出流式结束标记
     if (streamingEnabled && streamStarted) {
@@ -656,6 +738,16 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      success: true,
 	      sessionId: currentSessionId
 	    }));
+
+    // Success - exit retry loop
+    break retryLoop;
+
+      } catch (retryError) {
+        // Catch errors from within the retry attempt (outer try of retryLoop)
+        // This handles errors thrown by the inner catch when not retryable
+        throw retryError;
+      }
+    } // end retryLoop
 
 	  } catch (error) {
 	    // 🔧 流式传输：异常时也要结束流式，避免前端卡在 streaming 状态
@@ -941,10 +1033,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     // 不再查找系统 CLI，使用 SDK 内置 cli.js
     console.log('[DEBUG] (withAttachments) Using SDK built-in Claude CLI (cli.js)');
 
-    // 创建输入流并放入用户消息
-    const inputStream = new AsyncStream();
-    inputStream.enqueue(userMessage);
-    inputStream.done();
+    // 注意：inputStream 在重试循环内创建，因为 AsyncStream 只能被消费一次
 
     // 规范化 permissionMode：空字符串或 null 都视为 'default'
     // 参见 docs/multimodal-permission-bug.md
@@ -1055,6 +1144,30 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
               throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
             }
 
+    // ========== Auto-retry loop for transient API errors ==========
+    let retryAttempt = 0;
+    let lastRetryError = null;
+    let messageCount = 0;  // Track messages for retry decision
+
+    retryLoop: while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
+      // Reset state for each attempt (important for retry)
+      let currentSessionId = resumeSessionId;
+      messageCount = 0;
+      let hasStreamEvents = false;
+      let lastAssistantContent = '';
+      let lastThinkingContent = '';
+
+      // Only log retry attempts (not the first attempt)
+      if (retryAttempt > 0) {
+        console.log(`[RETRY] (withAttachments) Attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries} after error: ${lastRetryError?.message || 'unknown'}`);
+      }
+
+      try {
+        // Recreate inputStream for each retry (AsyncStream can only be consumed once)
+        const inputStream = new AsyncStream();
+        inputStream.enqueue(userMessage);
+        inputStream.done();
+
 		    const result = queryFn({
 		      prompt: inputStream,
 		      options
@@ -1066,15 +1179,12 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    //   abortController.abort();
 	    // }, 30000);
 
-		    let currentSessionId = resumeSessionId;
 		    // 🔧 流式传输状态追踪（已在函数开头声明 streamingEnabled, streamStarted, streamEnded）
-		    let hasStreamEvents = false;
 		    // 🔧 diff fallback: 追踪上次的 assistant 内容，用于计算增量
-		    let lastAssistantContent = '';
-		    let lastThinkingContent = '';
 
 		    try {
 		    for await (const msg of result) {
+		      messageCount++;
 		      // 🔧 流式传输：输出流式开始标记（仅首次）
 		      if (streamingEnabled && !streamStarted) {
 		        console.log('[STREAM_START]');
@@ -1225,8 +1335,40 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	      if (loopError.syscall) console.error('[DEBUG] Error syscall:', loopError.syscall);
 	    	      if (loopError.path) console.error('[DEBUG] Error path:', loopError.path);
 	    	      if (loopError.spawnargs) console.error('[DEBUG] Error spawnargs:', JSON.stringify(loopError.spawnargs));
+
+          // ========== Auto-retry logic for transient API errors ==========
+          // Only retry if:
+          // 1. Error is retryable (transient network/API issue)
+          // 2. Haven't exceeded max retries
+          // 3. Few messages were processed (early failure, not mid-stream)
+          const canRetry = isRetryableError(loopError) &&
+                           retryAttempt < AUTO_RETRY_CONFIG.maxRetries &&
+                           messageCount <= AUTO_RETRY_CONFIG.maxMessagesForRetry;
+
+          if (canRetry) {
+            lastRetryError = loopError;
+            retryAttempt++;
+            console.log(`[RETRY] (withAttachments) Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${AUTO_RETRY_CONFIG.retryDelayMs}ms delay`);
+            console.log(`[RETRY] Reason: ${loopError.message}, messageCount: ${messageCount}`);
+
+            // Reset streaming state for retry
+            if (streamingEnabled && streamStarted && !streamEnded) {
+              streamStarted = false;
+            }
+
+            // Wait before retry
+            await sleep(AUTO_RETRY_CONFIG.retryDelayMs);
+            continue retryLoop; // Go to next retry attempt
+          }
+
+          // Not retryable or max retries exceeded - throw to outer catch
 	    	      throw loopError;
 	    	    }
+
+    // ========== Success - break out of retry loop ==========
+    if (retryAttempt > 0) {
+      console.log(`[RETRY] (withAttachments) Success after ${retryAttempt} retry attempt(s)`);
+    }
 
 	    // 🔧 流式传输：输出流式结束标记
 	    if (streamingEnabled && streamStarted) {
@@ -1239,6 +1381,16 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	      success: true,
 	      sessionId: currentSessionId
 	    }));
+
+    // Success - exit retry loop
+    break retryLoop;
+
+      } catch (retryError) {
+        // Catch errors from within the retry attempt (outer try of retryLoop)
+        // This handles errors thrown by the inner catch when not retryable
+        throw retryError;
+      }
+    } // end retryLoop
 
 	  } catch (error) {
 	    // 🔧 流式传输：异常时也要结束流式，避免前端卡在 streaming 状态
