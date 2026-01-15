@@ -345,6 +345,7 @@
       "Write": "寫入檔案",
       "Edit": "編輯檔案",
       "Read": "讀取檔案",
+      "ReadBatch": "批量讀取檔案",
       "Bash": "執行命令",
       "TodoWrite": "寫入待辦",
       "TodoRead": "讀取待辦",
@@ -557,6 +558,7 @@
     "refreshFileInIdeaSuccess": "已手動重新整理本檔案在 IDEA 中的內容",
     "showDiffInIdea": "在 IDEA 中顯示變更",
     "diffButton": "Diff",
+    "editBatchTitle": "批量編輯檔案",
     "editPrefix": "編輯: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
     "filePath": "檔案路徑：",
@@ -681,7 +683,6 @@
   "rewind": {
     "title": "回溯檔案到之前的狀態",
     "tooltip": "將檔案恢復到此訊息時的狀態",
-    "shortcut": "ESC ESC",
     "selectTitle": "選擇回溯點",
     "noRewindableMessages": "目前會話中沒有可回溯的訊息",
     "rewindTo": "回溯到",

@@ -174,7 +174,7 @@ export const ContextBar: React.FC<ContextBarProps> = ({
             className="context-tool-btn has-tooltip"
             onClick={onRewind}
             disabled={!hasMessages}
-            data-tooltip={`${t('rewind.tooltip')} (${t('rewind.shortcut')})`}
+            data-tooltip={t('rewind.tooltip')}
           >
             <span className="codicon codicon-discard" />
           </button>

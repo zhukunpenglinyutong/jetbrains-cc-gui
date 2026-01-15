@@ -20,8 +20,10 @@ import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReference
 import {
   BashToolBlock,
   EditToolBlock,
+  EditToolGroupBlock,
   GenericToolBlock,
   ReadToolBlock,
+  ReadToolGroupBlock,
   TaskExecutionBlock,
 } from './components/toolBlocks';
 import { TodoPanel } from './components/TodoPanel';
@@ -2766,106 +2768,229 @@ const App = () => {
                   {message.type === 'error' ? (
                     <MarkdownBlock content={getMessageText(message)} />
                   ) : (
-                    getContentBlocks(message).map((block, blockIndex) => (
-                      <div key={`${messageIndex}-${blockIndex}`} className="content-block">
-                         {block.type === 'text' && (
-                           message.type === 'user' ? (
-                             <CollapsibleTextBlock content={block.text ?? ''} />
-                           ) : (
-                            <MarkdownBlock
-                              content={block.text ?? ''}
-                              isStreaming={streamingActive && message.type === 'assistant' && messageIndex === mergedMessages.length - 1}
-                            />
-                           )
-                         )}
-                        {block.type === 'image' && block.src && (
-                          <div
-                            className={`message-image-block ${message.type === 'user' ? 'user-image' : ''}`}
-                            onClick={() => {
-                              // 打开图片预览
-                              const previewRoot = document.getElementById('image-preview-root');
-                              if (previewRoot && block.src) {
-                                previewRoot.innerHTML = `
-                                  <div class="image-preview-overlay" onclick="this.remove()">
-                                    <img src="${block.src}" alt={t('chat.imagePreview')} class="image-preview-content" onclick="event.stopPropagation()" />
-                                    <div class="image-preview-close" onclick="this.parentElement.remove()">×</div>
-                                  </div>
-                                `;
-                              }
-                            }}
-                            style={{ cursor: 'pointer' }}
-                            title={t('chat.clickToPreview')}
-                          >
-                            <img
-                              src={block.src}
-                              alt={t('chat.userUploadedImage')}
-                              style={{
-                                maxWidth: message.type === 'user' ? '200px' : '100%',
-                                maxHeight: message.type === 'user' ? '150px' : 'auto',
-                                borderRadius: '8px',
-                                objectFit: 'contain',
-                              }}
-                            />
-                          </div>
-                        )}
+                    (() => {
+                      const blocks = getContentBlocks(message);
+                      // Group consecutive Read and Edit tool blocks
+                      type GroupedBlock =
+                        | { type: 'single'; block: ClaudeContentBlock; originalIndex: number }
+                        | { type: 'read_group'; blocks: ClaudeContentBlock[]; startIndex: number }
+                        | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number };
 
-                        {block.type === 'thinking' && (
-                          <div className="thinking-block">
-                            <div
-                              className="thinking-header"
-                              onClick={() => toggleThinking(messageIndex, blockIndex)}
-                            >
-                              <span className="thinking-title">
-                                {isThinking && messageIndex === mergedMessages.length - 1
-                                  ? t('common.thinking')
-                                  : t('common.thinkingProcess')}
-                              </span>
-                              <span className="thinking-icon">
-                                {isThinkingExpanded(messageIndex, blockIndex) ? '▼' : '▶'}
-                              </span>
+                      const groupedBlocks: GroupedBlock[] = [];
+                      let currentReadGroup: ClaudeContentBlock[] = [];
+                      let readGroupStartIndex = -1;
+                      let currentEditGroup: ClaudeContentBlock[] = [];
+                      let editGroupStartIndex = -1;
+
+                      const isReadToolBlock = (block: ClaudeContentBlock) =>
+                        block.type === 'tool_use' &&
+                        block.name &&
+                        ['read', 'read_file'].includes(block.name.toLowerCase());
+
+                      const isEditToolBlock = (block: ClaudeContentBlock) =>
+                        block.type === 'tool_use' &&
+                        block.name &&
+                        ['edit', 'edit_file', 'replace_string', 'write_to_file'].includes(block.name.toLowerCase());
+
+                      const flushReadGroup = () => {
+                        if (currentReadGroup.length > 0) {
+                          groupedBlocks.push({
+                            type: 'read_group',
+                            blocks: [...currentReadGroup],
+                            startIndex: readGroupStartIndex,
+                          });
+                          currentReadGroup = [];
+                          readGroupStartIndex = -1;
+                        }
+                      };
+
+                      const flushEditGroup = () => {
+                        if (currentEditGroup.length > 0) {
+                          groupedBlocks.push({
+                            type: 'edit_group',
+                            blocks: [...currentEditGroup],
+                            startIndex: editGroupStartIndex,
+                          });
+                          currentEditGroup = [];
+                          editGroupStartIndex = -1;
+                        }
+                      };
+
+                      blocks.forEach((block, idx) => {
+                        if (isReadToolBlock(block)) {
+                          flushEditGroup(); // Flush edit group when read starts
+                          if (currentReadGroup.length === 0) {
+                            readGroupStartIndex = idx;
+                          }
+                          currentReadGroup.push(block);
+                        } else if (isEditToolBlock(block)) {
+                          flushReadGroup(); // Flush read group when edit starts
+                          if (currentEditGroup.length === 0) {
+                            editGroupStartIndex = idx;
+                          }
+                          currentEditGroup.push(block);
+                        } else {
+                          flushReadGroup();
+                          flushEditGroup();
+                          groupedBlocks.push({ type: 'single', block, originalIndex: idx });
+                        }
+                      });
+                      flushReadGroup();
+                      flushEditGroup();
+
+                      return groupedBlocks.map((grouped) => {
+                        if (grouped.type === 'read_group') {
+                          const readItems = grouped.blocks.map(b => {
+                            const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
+                            return {
+                              name: block.name,
+                              input: block.input,
+                              result: findToolResult(block.id, messageIndex),
+                            };
+                          });
+                          // If only one file, use single ReadToolBlock display
+                          if (readItems.length === 1) {
+                            return (
+                              <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
+                                <ReadToolBlock input={readItems[0].input} />
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
+                              <ReadToolGroupBlock items={readItems} />
                             </div>
-                            {isThinkingExpanded(messageIndex, blockIndex) && (
-                              <div className="thinking-content">
+                          );
+                        }
+
+                        if (grouped.type === 'edit_group') {
+                          const editItems = grouped.blocks.map(b => {
+                            const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
+                            return {
+                              name: block.name,
+                              input: block.input,
+                              result: findToolResult(block.id, messageIndex),
+                            };
+                          });
+                          // If only one file, use single EditToolBlock display
+                          if (editItems.length === 1) {
+                            return (
+                              <div key={`${messageIndex}-editgroup-${grouped.startIndex}`} className="content-block">
+                                <EditToolBlock
+                                  name={editItems[0].name}
+                                  input={editItems[0].input}
+                                  result={editItems[0].result}
+                                />
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={`${messageIndex}-editgroup-${grouped.startIndex}`} className="content-block">
+                              <EditToolGroupBlock items={editItems} />
+                            </div>
+                          );
+                        }
+
+                        const block = grouped.block;
+                        const blockIndex = grouped.originalIndex;
+
+                        return (
+                          <div key={`${messageIndex}-${blockIndex}`} className="content-block">
+                            {block.type === 'text' && (
+                              message.type === 'user' ? (
+                                <CollapsibleTextBlock content={block.text ?? ''} />
+                              ) : (
                                 <MarkdownBlock
-                                  content={block.thinking ?? block.text ?? t('chat.noThinkingContent')}
+                                  content={block.text ?? ''}
                                   isStreaming={streamingActive && message.type === 'assistant' && messageIndex === mergedMessages.length - 1}
+                                />
+                              )
+                            )}
+                            {block.type === 'image' && block.src && (
+                              <div
+                                className={`message-image-block ${message.type === 'user' ? 'user-image' : ''}`}
+                                onClick={() => {
+                                  const previewRoot = document.getElementById('image-preview-root');
+                                  if (previewRoot && block.src) {
+                                    previewRoot.innerHTML = `
+                                      <div class="image-preview-overlay" onclick="this.remove()">
+                                        <img src="${block.src}" alt={t('chat.imagePreview')} class="image-preview-content" onclick="event.stopPropagation()" />
+                                        <div class="image-preview-close" onclick="this.parentElement.remove()">×</div>
+                                      </div>
+                                    `;
+                                  }
+                                }}
+                                style={{ cursor: 'pointer' }}
+                                title={t('chat.clickToPreview')}
+                              >
+                                <img
+                                  src={block.src}
+                                  alt={t('chat.userUploadedImage')}
+                                  style={{
+                                    maxWidth: message.type === 'user' ? '200px' : '100%',
+                                    maxHeight: message.type === 'user' ? '150px' : 'auto',
+                                    borderRadius: '8px',
+                                    objectFit: 'contain',
+                                  }}
                                 />
                               </div>
                             )}
-                          </div>
-                        )}
 
-                        {block.type === 'tool_use' && (
-                          <>
-                            {block.name?.toLowerCase() === 'todowrite' ? (
-                              // TodoList 已移至输入框上方的固定 TodoPanel，历史消息中不再显示
-                              null
-                            ) : block.name?.toLowerCase() === 'task' ? (
-                              <TaskExecutionBlock input={block.input} />
-                            ) : block.name &&
-                              ['read', 'read_file'].includes(block.name.toLowerCase()) ? (
-                              <ReadToolBlock input={block.input} />
-                            ) : block.name &&
-                              ['edit', 'edit_file', 'replace_string', 'write_to_file'].includes(
-                                block.name.toLowerCase(),
-                              ) ? (
-                              <EditToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
-                            ) : block.name &&
-                              ['bash', 'run_terminal_cmd', 'execute_command', 'shell_command'].includes(
-                                block.name.toLowerCase(),
-                              ) ? (
-                              <BashToolBlock
-                                name={block.name}
-                                input={block.input}
-                                result={findToolResult(block.id, messageIndex)}
-                              />
-                            ) : (
-                              <GenericToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
+                            {block.type === 'thinking' && (
+                              <div className="thinking-block">
+                                <div
+                                  className="thinking-header"
+                                  onClick={() => toggleThinking(messageIndex, blockIndex)}
+                                >
+                                  <span className="thinking-title">
+                                    {isThinking && messageIndex === mergedMessages.length - 1
+                                      ? t('common.thinking')
+                                      : t('common.thinkingProcess')}
+                                  </span>
+                                  <span className="thinking-icon">
+                                    {isThinkingExpanded(messageIndex, blockIndex) ? '▼' : '▶'}
+                                  </span>
+                                </div>
+                                {isThinkingExpanded(messageIndex, blockIndex) && (
+                                  <div className="thinking-content">
+                                    <MarkdownBlock
+                                      content={block.thinking ?? block.text ?? t('chat.noThinkingContent')}
+                                      isStreaming={streamingActive && message.type === 'assistant' && messageIndex === mergedMessages.length - 1}
+                                    />
+                                  </div>
+                                )}
+                              </div>
                             )}
-                          </>
-                        )}
-                      </div>
-                    ))
+
+                            {block.type === 'tool_use' && (
+                              <>
+                                {block.name?.toLowerCase() === 'todowrite' ? (
+                                  null
+                                ) : block.name?.toLowerCase() === 'task' ? (
+                                  <TaskExecutionBlock input={block.input} />
+                                ) : block.name &&
+                                  ['edit', 'edit_file', 'replace_string', 'write_to_file'].includes(
+                                    block.name.toLowerCase(),
+                                  ) ? (
+                                  <EditToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
+                                ) : block.name &&
+                                  ['bash', 'run_terminal_cmd', 'execute_command', 'shell_command'].includes(
+                                    block.name.toLowerCase(),
+                                  ) ? (
+                                  <BashToolBlock
+                                    name={block.name}
+                                    input={block.input}
+                                    result={findToolResult(block.id, messageIndex)}
+                                  />
+                                ) : (
+                                  <GenericToolBlock name={block.name} input={block.input} result={findToolResult(block.id, messageIndex)} />
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()
                   )}
                 </div>
               </div>
