@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TodoItem } from '../../types';
 import './TodoPanel.less';
@@ -19,10 +19,19 @@ const statusIconMap: Record<TodoItem['status'], string> = {
   completed: 'codicon-check',
 };
 
+/**
+ * Generate a fingerprint for todos to detect content changes.
+ * Only considers task count and content text (not status changes).
+ */
+const getTodosFingerprint = (todos: TodoItem[]): string => {
+  return todos.map((t) => t.content).join('|');
+};
+
 const TodoPanel = ({ todos }: TodoPanelProps) => {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
+  const prevFingerprintRef = useRef<string>('');
 
   const { completedCount, totalCount, isAllCompleted } = useMemo(() => {
     const completed = todos.filter((todo) => todo.status === 'completed').length;
@@ -33,9 +42,18 @@ const TodoPanel = ({ todos }: TodoPanelProps) => {
     };
   }, [todos]);
 
-  // 当 todos 变化时（新任务列表），重置 dismissed 状态
+  // Only reset dismissed state when todos content actually changes (new task list)
+  // Status changes (pending -> completed) should NOT reset dismissed state
   useEffect(() => {
-    setIsDismissed(false);
+    const currentFingerprint = getTodosFingerprint(todos);
+    if (prevFingerprintRef.current !== currentFingerprint) {
+      // Content changed - this is a new task list
+      if (prevFingerprintRef.current !== '') {
+        // Only reset if we had a previous list (not initial mount with same dismissed list)
+        setIsDismissed(false);
+      }
+      prevFingerprintRef.current = currentFingerprint;
+    }
   }, [todos]);
 
   if (!todos.length || isDismissed) {

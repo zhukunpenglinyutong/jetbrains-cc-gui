@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { copyToClipboard } from '../../utils/helpers';
+import { copyToClipboard } from '../../utils/copyUtils';
 
 interface SkillHelpDialogProps {
   onClose: () => void;

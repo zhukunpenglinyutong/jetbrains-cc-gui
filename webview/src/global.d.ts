@@ -293,6 +293,11 @@ interface Window {
   updateEnhancedPrompt?: (result: string) => void;
 
   /**
+   * Update session title (called when session title changes)
+   */
+  updateSessionTitle?: (title: string) => void;
+
+  /**
    * Editor font config received callback - 接收 IDEA 编辑器字体配置
    */
   onEditorFontConfigReceived?: (json: string) => void;
