@@ -409,6 +409,17 @@
     "next": "下一步",
     "submit": "提交"
   },
+  "planApproval": {
+    "title": "计划已准备就绪",
+    "subtitle": "Claude 已完成规划，准备执行。",
+    "requestedPermissions": "请求的权限",
+    "executionMode": "执行模式",
+    "executionModeDescription": "选择 Claude 执行计划的方式：",
+    "approve": "批准并执行",
+    "reject": "拒绝",
+    "toApprove": "批准",
+    "toReject": "拒绝"
+  },
   "toast": {
     "switchSuccess": "切换成功",
     "thinkingEnabled": "思考已开启",
@@ -744,8 +755,8 @@
     },
     "plan": {
       "label": "规划模式",
-      "tooltip": "规划模式——无执行（暂不支持）",
-      "description": "仅规划不执行，暂不支持"
+      "tooltip": "规划模式——只读分析",
+      "description": "仅使用只读工具，生成计划供用户审批后执行"
     },
     "acceptEdits": {
       "label": "代理模式",
@@ -763,6 +774,11 @@
       "label": "建议模式",
       "tooltip": "Codex approval_policy=untrusted：执行命令或写文件前都会弹窗确认。",
       "description": "最安全的选择，每一步都需要你亲自批准。"
+    },
+    "plan": {
+      "label": "规划模式",
+      "tooltip": "规划模式——只读分析",
+      "description": "仅使用只读工具，生成计划供用户审批后执行"
     },
     "acceptEdits": {
       "label": "自动编辑",

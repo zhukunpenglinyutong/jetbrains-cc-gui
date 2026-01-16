@@ -6,6 +6,7 @@ import type { SettingsTab } from './components/settings/SettingsSidebar';
 import ConfirmDialog from './components/ConfirmDialog';
 import PermissionDialog from './components/PermissionDialog';
 import AskUserQuestionDialog from './components/AskUserQuestionDialog';
+import PlanApprovalDialog from './components/PlanApprovalDialog';
 import RewindDialog from './components/RewindDialog';
 import RewindSelectDialog, { type RewindableMessage } from './components/RewindSelectDialog';
 import { sendBridgeEvent } from './utils/bridge';
@@ -58,7 +59,7 @@ const DEFAULT_STATUS = 'ready';
 const App = () => {
   const { t } = useTranslation();
 
-  // Dialog management (permission, ask user question, rewind)
+  // Dialog management (permission, ask user question, plan approval, rewind)
   const {
     permissionDialogOpen,
     currentPermissionRequest,
@@ -71,6 +72,11 @@ const App = () => {
     openAskUserQuestionDialog,
     handleAskUserQuestionSubmit,
     handleAskUserQuestionCancel,
+    planApprovalDialogOpen,
+    currentPlanApprovalRequest,
+    openPlanApprovalDialog,
+    handlePlanApprovalApprove,
+    handlePlanApprovalReject,
     rewindDialogOpen,
     setRewindDialogOpen,
     currentRewindRequest,
@@ -457,6 +463,7 @@ const App = () => {
     syncActiveProviderModelMapping,
     openPermissionDialog,
     openAskUserQuestionDialog,
+    openPlanApprovalDialog,
   });
 
 
@@ -1127,6 +1134,13 @@ const App = () => {
         request={currentAskUserQuestionRequest}
         onSubmit={handleAskUserQuestionSubmit}
         onCancel={handleAskUserQuestionCancel}
+      />
+
+      <PlanApprovalDialog
+        isOpen={planApprovalDialogOpen}
+        request={currentPlanApprovalRequest}
+        onApprove={handlePlanApprovalApprove}
+        onReject={handlePlanApprovalReject}
       />
 
       <RewindSelectDialog

@@ -6,6 +6,7 @@ import type { PermissionMode, SelectedAgent } from '../components/ChatInputBox/t
 import type { ProviderConfig } from '../types/provider';
 import type { PermissionRequest } from '../components/PermissionDialog';
 import type { AskUserQuestionRequest } from '../components/AskUserQuestionDialog';
+import type { PlanApprovalRequest } from '../components/PlanApprovalDialog';
 import type { RewindRequest } from '../components/RewindDialog';
 import { THROTTLE_INTERVAL } from './useStreamingMessages';
 import { sendBridgeEvent } from '../utils/bridge';
@@ -96,6 +97,7 @@ export interface UseWindowCallbacksOptions {
   // Permission dialog handlers from useDialogManagement
   openPermissionDialog: (request: PermissionRequest) => void;
   openAskUserQuestionDialog: (request: AskUserQuestionRequest) => void;
+  openPlanApprovalDialog: (request: PlanApprovalRequest) => void;
 }
 
 export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
@@ -155,6 +157,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     syncActiveProviderModelMapping,
     openPermissionDialog,
     openAskUserQuestionDialog,
+    openPlanApprovalDialog,
   } = options;
 
   // Store t in ref to avoid stale closures
@@ -683,6 +686,15 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         openAskUserQuestionDialog(request);
       } catch (error) {
         console.error('[Frontend] Failed to parse ask user question request:', error);
+      }
+    };
+
+    window.showPlanApprovalDialog = (json) => {
+      try {
+        const request = JSON.parse(json);
+        openPlanApprovalDialog(request);
+      } catch (error) {
+        console.error('[Frontend] Failed to parse plan approval request:', error);
       }
     };
 

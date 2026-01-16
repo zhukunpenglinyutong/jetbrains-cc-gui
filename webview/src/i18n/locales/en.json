@@ -409,6 +409,17 @@
     "next": "Next",
     "submit": "Submit"
   },
+  "planApproval": {
+    "title": "Plan Ready for Approval",
+    "subtitle": "Claude has finished planning and is ready to execute.",
+    "requestedPermissions": "Requested Permissions",
+    "executionMode": "Execution Mode",
+    "executionModeDescription": "Select how Claude should execute the plan:",
+    "approve": "Approve & Execute",
+    "reject": "Reject",
+    "toApprove": "to approve",
+    "toReject": "to reject"
+  },
   "toast": {
     "switchSuccess": "Switched successfully",
     "thinkingEnabled": "Thinking enabled",
@@ -743,8 +754,8 @@
     },
     "plan": {
       "label": "Plan Mode",
-      "tooltip": "Plan mode - No execution (not supported yet)",
-      "description": "Planning only without execution, not supported yet"
+      "tooltip": "Plan mode - read-only analysis",
+      "description": "Uses only read-only tools, generates plan for user approval"
     },
     "acceptEdits": {
       "label": "Agent Mode",
@@ -765,8 +776,8 @@
     },
     "plan": {
       "label": "Plan Mode",
-      "tooltip": "Planning only (not supported yet)",
-      "description": "Outlines steps without executing (coming soon)"
+      "tooltip": "Plan mode - read-only analysis",
+      "description": "Uses only read-only tools, generates plan for user approval"
     },
     "acceptEdits": {
       "label": "Auto Edit",

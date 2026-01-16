@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import type { PermissionRequest } from '../components/PermissionDialog';
 import type { AskUserQuestionRequest } from '../components/AskUserQuestionDialog';
+import type { PlanApprovalRequest } from '../components/PlanApprovalDialog';
 import type { RewindRequest } from '../components/RewindDialog';
 import { sendBridgeEvent } from '../utils/bridge';
 
@@ -22,8 +23,15 @@ interface UseDialogManagementReturn {
   askUserQuestionDialogOpen: boolean;
   currentAskUserQuestionRequest: AskUserQuestionRequest | null;
   openAskUserQuestionDialog: (request: AskUserQuestionRequest) => void;
-  handleAskUserQuestionSubmit: (requestId: string, answers: Record<string, string>) => void;
+  handleAskUserQuestionSubmit: (requestId: string, answers: Record<string, string | string[]>) => void;
   handleAskUserQuestionCancel: (requestId: string) => void;
+
+  // PlanApproval dialog
+  planApprovalDialogOpen: boolean;
+  currentPlanApprovalRequest: PlanApprovalRequest | null;
+  openPlanApprovalDialog: (request: PlanApprovalRequest) => void;
+  handlePlanApprovalApprove: (requestId: string, targetMode: string) => void;
+  handlePlanApprovalReject: (requestId: string) => void;
 
   // Rewind dialog
   rewindDialogOpen: boolean;
@@ -56,6 +64,13 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
   const currentAskUserQuestionRequestRef = useRef<AskUserQuestionRequest | null>(null);
   const pendingAskUserQuestionRequestsRef = useRef<AskUserQuestionRequest[]>([]);
 
+  // PlanApproval dialog state
+  const [planApprovalDialogOpen, setPlanApprovalDialogOpen] = useState(false);
+  const [currentPlanApprovalRequest, setCurrentPlanApprovalRequest] = useState<PlanApprovalRequest | null>(null);
+  const planApprovalDialogOpenRef = useRef(false);
+  const currentPlanApprovalRequestRef = useRef<PlanApprovalRequest | null>(null);
+  const pendingPlanApprovalRequestsRef = useRef<PlanApprovalRequest[]>([]);
+
   // Rewind dialog state
   const [rewindDialogOpen, setRewindDialogOpen] = useState(false);
   const [currentRewindRequest, setCurrentRewindRequest] = useState<RewindRequest | null>(null);
@@ -75,6 +90,11 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     currentAskUserQuestionRequestRef.current = currentAskUserQuestionRequest;
   }, [askUserQuestionDialogOpen, currentAskUserQuestionRequest]);
 
+  useEffect(() => {
+    planApprovalDialogOpenRef.current = planApprovalDialogOpen;
+    currentPlanApprovalRequestRef.current = currentPlanApprovalRequest;
+  }, [planApprovalDialogOpen, currentPlanApprovalRequest]);
+
   // Open permission dialog
   const openPermissionDialog = useCallback((request: PermissionRequest) => {
     currentPermissionRequestRef.current = request;
@@ -89,6 +109,14 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     askUserQuestionDialogOpenRef.current = true;
     setCurrentAskUserQuestionRequest(request);
     setAskUserQuestionDialogOpen(true);
+  }, []);
+
+  // Open plan approval dialog
+  const openPlanApprovalDialog = useCallback((request: PlanApprovalRequest) => {
+    currentPlanApprovalRequestRef.current = request;
+    planApprovalDialogOpenRef.current = true;
+    setCurrentPlanApprovalRequest(request);
+    setPlanApprovalDialogOpen(true);
   }, []);
 
   // Process pending permission requests queue
@@ -110,6 +138,16 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
       openAskUserQuestionDialog(next);
     }
   }, [askUserQuestionDialogOpen, currentAskUserQuestionRequest, openAskUserQuestionDialog]);
+
+  // Process pending plan approval requests queue
+  useEffect(() => {
+    if (planApprovalDialogOpen) return;
+    if (currentPlanApprovalRequest) return;
+    const next = pendingPlanApprovalRequestsRef.current.shift();
+    if (next) {
+      openPlanApprovalDialog(next);
+    }
+  }, [planApprovalDialogOpen, currentPlanApprovalRequest, openPlanApprovalDialog]);
 
   // Permission handlers
   const handlePermissionApprove = useCallback((channelId: string) => {
@@ -155,7 +193,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
   }, [t]);
 
   // AskUserQuestion handlers
-  const handleAskUserQuestionSubmit = useCallback((requestId: string, answers: Record<string, string>) => {
+  const handleAskUserQuestionSubmit = useCallback((requestId: string, answers: Record<string, string | string[]>) => {
     const payload = JSON.stringify({
       requestId,
       answers,
@@ -179,6 +217,33 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     setCurrentAskUserQuestionRequest(null);
   }, []);
 
+  // PlanApproval handlers
+  const handlePlanApprovalApprove = useCallback((requestId: string, targetMode: string) => {
+    const payload = JSON.stringify({
+      requestId,
+      approved: true,
+      targetMode,
+    });
+    sendBridgeEvent('plan_approval_response', payload);
+    planApprovalDialogOpenRef.current = false;
+    currentPlanApprovalRequestRef.current = null;
+    setPlanApprovalDialogOpen(false);
+    setCurrentPlanApprovalRequest(null);
+  }, []);
+
+  const handlePlanApprovalReject = useCallback((requestId: string) => {
+    const payload = JSON.stringify({
+      requestId,
+      approved: false,
+      targetMode: 'default',
+    });
+    sendBridgeEvent('plan_approval_response', payload);
+    planApprovalDialogOpenRef.current = false;
+    currentPlanApprovalRequestRef.current = null;
+    setPlanApprovalDialogOpen(false);
+    setCurrentPlanApprovalRequest(null);
+  }, []);
+
   return {
     // Permission dialog
     permissionDialogOpen,
@@ -194,6 +259,13 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     openAskUserQuestionDialog,
     handleAskUserQuestionSubmit,
     handleAskUserQuestionCancel,
+
+    // PlanApproval dialog
+    planApprovalDialogOpen,
+    currentPlanApprovalRequest,
+    openPlanApprovalDialog,
+    handlePlanApprovalApprove,
+    handlePlanApprovalReject,
 
     // Rewind dialog
     rewindDialogOpen,

@@ -1,0 +1,204 @@
+/* PlanApproval Dialog Styles */
+
+.plan-approval-dialog {
+  position: relative;
+  background: var(--vscode-editor-background, #1e1e1e);
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 550px;
+  width: 80%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.plan-approval-dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--vscode-foreground, #cccccc);
+  margin: 0;
+}
+
+.plan-approval-dialog-subtitle {
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #999999);
+  margin: -8px 0 0 0;
+  line-height: 1.4;
+}
+
+/* Allowed Prompts Section */
+.plan-approval-prompts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--vscode-input-background, #3c3c3c);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.prompts-header {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
+  margin: 0;
+}
+
+.prompts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.prompt-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.prompt-tool {
+  color: var(--vscode-textLink-foreground, #4daafc);
+  background: var(--vscode-textLink-foreground, #4daafc)15;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.prompt-text {
+  color: var(--vscode-descriptionForeground, #999999);
+}
+
+/* Execution Mode Section */
+.plan-approval-mode-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mode-header {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
+  margin: 0;
+}
+
+.mode-description {
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #999999);
+  margin: -4px 0 0 0;
+}
+
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 6px;
+  background: var(--vscode-input-background, #3c3c3c);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  width: 100%;
+}
+
+.mode-option:hover {
+  background: var(--vscode-list-hoverBackground, #2a2d2e);
+  border-color: var(--vscode-focusBorder, #007acc);
+}
+
+.mode-option.selected {
+  background: var(--vscode-list-activeSelectionBackground, #094771);
+  border-color: var(--vscode-focusBorder, #007acc);
+}
+
+.mode-radio {
+  flex-shrink: 0;
+  font-size: 16px;
+  color: var(--vscode-textLink-foreground, #4daafc);
+  margin-top: 2px;
+}
+
+.mode-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mode-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.mode-option-description {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #999999);
+  line-height: 1.4;
+}
+
+/* Actions */
+.plan-approval-dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Keyboard hints */
+.plan-approval-hints {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-widget-border, #454545);
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #999999);
+}
+
+.hint kbd {
+  background: var(--vscode-input-background, #3c3c3c);
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .plan-approval-dialog {
+    padding: 16px;
+    width: 95%;
+  }
+
+  .plan-approval-dialog-title {
+    font-size: 16px;
+  }
+
+  .mode-option {
+    padding: 10px;
+  }
+}

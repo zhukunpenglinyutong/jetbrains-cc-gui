@@ -466,7 +466,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 注册 AskUserQuestion 对话框显示器
             permissionService.registerAskUserQuestionDialogShower(project, (requestId, questionsData) ->
                 permissionHandler.showAskUserQuestionDialog(requestId, questionsData));
-            LOG.info("Started permission service with frontend dialog and AskUserQuestion dialog for project: " + project.getName());
+            // 注册 PlanApproval 对话框显示器
+            permissionService.registerPlanApprovalDialogShower(project, (requestId, planData) ->
+                permissionHandler.showPlanApprovalDialog(requestId, planData));
+            LOG.info("Started permission service with frontend dialog, AskUserQuestion dialog, and PlanApproval dialog for project: " + project.getName());
         }
 
         private void initializeHandlers() {
@@ -2131,11 +2134,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 slashCommandCache = null;
             }
 
-            // 注销权限服务的 dialogShower 和 askUserQuestionDialogShower，防止内存泄漏
+            // 注销权限服务的 dialogShower、askUserQuestionDialogShower 和 planApprovalDialogShower，防止内存泄漏
             try {
                 PermissionService permissionService = PermissionService.getInstance(project);
                 permissionService.unregisterDialogShower(project);
                 permissionService.unregisterAskUserQuestionDialogShower(project);
+                permissionService.unregisterPlanApprovalDialogShower(project);
             } catch (Exception e) {
                 LOG.warn("Failed to unregister dialog showers: " + e.getMessage());
             }

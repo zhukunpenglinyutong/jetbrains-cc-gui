@@ -61,7 +61,7 @@ import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/a
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { mapModelIdToSdkName } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
-import { canUseTool } from '../../permission-handler.js';
+import { canUseTool, requestPlanApproval } from '../../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
@@ -79,6 +79,33 @@ const ACCEPT_EDITS_AUTO_APPROVE_TOOLS = new Set([
   'MoveFile',
   'CopyFile',
   'Rename'
+]);
+
+// Tools allowed in plan mode (read-only tools + planning tools + ExitPlanMode)
+const PLAN_MODE_ALLOWED_TOOLS = new Set([
+  // Read-only tools
+  'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
+  'ListMcpResources', 'ListMcpResourcesTool',
+  'ReadMcpResource', 'ReadMcpResourceTool',
+  // Planning tools
+  'TodoWrite', 'Skill', 'TaskOutput',
+  'Task', // Allow Task for exploration agents
+  'Write', // Allow Write for writing plan files
+  'Edit', // Allow Edit in plan mode (still gated by permission prompt)
+  'Bash', // Allow Bash in plan mode (still gated by permission prompt)
+  'AskUserQuestion', // Allow AskUserQuestion for asking user during planning
+  'EnterPlanMode', // Allow EnterPlanMode
+  'ExitPlanMode', // Allow ExitPlanMode to exit plan mode
+  // MCP tools
+  'mcp__ace-tool__search_context',
+  'mcp__context7__resolve-library-id',
+  'mcp__context7__query-docs',
+  'mcp__conductor__GetWorkspaceDiff',
+  'mcp__conductor__GetTerminalOutput',
+  'mcp__conductor__AskUserQuestion',
+  'mcp__conductor__DiffComment',
+  'mcp__time__get_current_time',
+  'mcp__time__convert_time'
 ]);
 
 // ========== Auto-retry configuration for transient API errors ==========
@@ -105,9 +132,16 @@ function isRetryableError(error) {
     'fetch failed',
     'socket hang up',
     'getaddrinfo',
-    'connect EHOSTUNREACH'
+    'connect EHOSTUNREACH',
+    'No conversation found with session ID',
+    'conversation not found'
   ];
   return retryablePatterns.some(pattern => msg.toLowerCase().includes(pattern.toLowerCase()));
+}
+
+function isNoConversationFoundError(error) {
+  const msg = error?.message || String(error);
+  return msg.includes('No conversation found with session ID');
 }
 
 /**
@@ -117,6 +151,38 @@ function isRetryableError(error) {
  */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(error) {
+  if (isNoConversationFoundError(error)) return 250;
+  return AUTO_RETRY_CONFIG.retryDelayMs;
+}
+
+function getClaudeProjectSessionFilePath(sessionId, cwd) {
+  const projectsDir = join(homedir(), '.claude', 'projects');
+  const sanitizedCwd = String(cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
+  return join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
+}
+
+function hasClaudeProjectSessionFile(sessionId, cwd) {
+  try {
+    if (!sessionId || typeof sessionId !== 'string') return false;
+    if (sessionId.includes('/') || sessionId.includes('\\')) return false;
+    const sessionFile = getClaudeProjectSessionFilePath(sessionId, cwd);
+    return existsSync(sessionFile);
+  } catch {
+    return false;
+  }
+}
+
+async function waitForClaudeProjectSessionFile(sessionId, cwd, timeoutMs = 1500, intervalMs = 100) {
+  if (hasClaudeProjectSessionFile(sessionId, cwd)) return true;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await sleep(intervalMs);
+    if (hasClaudeProjectSessionFile(sessionId, cwd)) return true;
+  }
+  return false;
 }
 
 // Tools that require user interaction even in bypassPermissions mode
@@ -132,26 +198,115 @@ function shouldAutoApproveTool(permissionMode, toolName) {
 }
 
 function createPreToolUseHook(permissionMode) {
-  const normalizedPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
+  let currentPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
 
   return async (input) => {
-    console.log('[PERM_DEBUG] PreToolUse hook called:', input?.tool_name);
+    const toolName = input?.tool_name;
+    console.log('[PERM_DEBUG] PreToolUse hook called:', toolName, 'mode:', currentPermissionMode);
 
-    if (normalizedPermissionMode === 'plan') {
+    // Handle plan mode: allow read-only tools, special handling for ExitPlanMode
+    if (currentPermissionMode === 'plan') {
+      if (toolName === 'AskUserQuestion') {
+        console.log('[PERM_DEBUG] AskUserQuestion called in plan mode, requesting user answers...');
+        try {
+          const result = await canUseTool(toolName, input?.tool_input);
+          if (result?.behavior === 'allow') {
+            return { decision: 'approve', updatedInput: result.updatedInput ?? input?.tool_input };
+          }
+          return {
+            decision: 'block',
+            reason: result?.message || 'User did not provide answers'
+          };
+        } catch (error) {
+          console.error('[PERM_DEBUG] AskUserQuestion error:', error?.message);
+          return {
+            decision: 'block',
+            reason: 'AskUserQuestion failed: ' + (error?.message || String(error))
+          };
+        }
+      }
+
+      // Edit / Bash: allow in plan mode but still ask user permission (same as default mode behavior)
+      if (toolName === 'Edit' || toolName === 'Bash') {
+        console.log(`[PERM_DEBUG] ${toolName} called in plan mode, requesting permission...`);
+        try {
+          const result = await canUseTool(toolName, input?.tool_input);
+          if (result?.behavior === 'allow') {
+            return { decision: 'approve', updatedInput: result.updatedInput ?? input?.tool_input };
+          }
+          return {
+            decision: 'block',
+            reason: result?.message || 'Permission denied'
+          };
+        } catch (error) {
+          console.error(`[PERM_DEBUG] ${toolName} permission error:`, error?.message);
+          return {
+            decision: 'block',
+            reason: 'Permission check failed: ' + (error?.message || String(error))
+          };
+        }
+      }
+
+      // Special handling for ExitPlanMode: request plan approval from user
+      if (toolName === 'ExitPlanMode') {
+        console.log('[PERM_DEBUG] ExitPlanMode called in plan mode, requesting approval...');
+        try {
+          const result = await requestPlanApproval(input?.tool_input);
+          if (result?.approved) {
+            const nextMode = result.targetMode || 'default';
+            currentPermissionMode = nextMode;
+            console.log('[PERM_DEBUG] Plan approved, switching mode to:', nextMode);
+            return {
+              decision: 'approve',
+              updatedInput: {
+                ...input.tool_input,
+                approved: true,
+                targetMode: nextMode
+              }
+            };
+          }
+          console.log('[PERM_DEBUG] Plan rejected by user');
+          return {
+            decision: 'block',
+            reason: result?.message || 'Plan was rejected by user'
+          };
+        } catch (error) {
+          console.error('[PERM_DEBUG] Plan approval error:', error?.message);
+          return {
+            decision: 'block',
+            reason: 'Plan approval failed: ' + (error?.message || String(error))
+          };
+        }
+      }
+
+      // Allow read-only tools in plan mode
+      if (PLAN_MODE_ALLOWED_TOOLS.has(toolName)) {
+        console.log('[PERM_DEBUG] Allowing read-only tool in plan mode:', toolName);
+        return { decision: 'approve' };
+      }
+
+      // Also allow MCP tools that start with 'mcp__' and are read-only
+      if (toolName?.startsWith('mcp__') && !toolName.includes('Write') && !toolName.includes('Edit')) {
+        console.log('[PERM_DEBUG] Allowing MCP read tool in plan mode:', toolName);
+        return { decision: 'approve' };
+      }
+
+      // Block all other tools in plan mode
+      console.log('[PERM_DEBUG] Blocking tool in plan mode:', toolName);
       return {
         decision: 'block',
-        reason: 'Permission mode is plan (no execution)'
+        reason: `Tool "${toolName}" is not allowed in plan mode. Only read-only tools are permitted. Use ExitPlanMode to exit plan mode.`
       };
     }
 
-    if (shouldAutoApproveTool(normalizedPermissionMode, input?.tool_name)) {
-      console.log('[PERM_DEBUG] Auto-approve tool:', input?.tool_name, 'mode:', normalizedPermissionMode);
+    if (shouldAutoApproveTool(currentPermissionMode, toolName)) {
+      console.log('[PERM_DEBUG] Auto-approve tool:', toolName, 'mode:', currentPermissionMode);
       return { decision: 'approve' };
     }
 
     console.log('[PERM_DEBUG] Calling canUseTool...');
     try {
-      const result = await canUseTool(input?.tool_name, input?.tool_input);
+      const result = await canUseTool(toolName, input?.tool_input);
       console.log('[PERM_DEBUG] canUseTool returned:', result?.behavior);
 
       if (result?.behavior === 'allow') {
@@ -366,7 +521,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    // 注意：不再传递 pathToClaudeCodeExecutable，让 SDK 自动使用内置 cli.js
 	    // 这样可以避免 Windows 下系统 CLI 路径问题（ENOENT 错误）
 	    const effectivePermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
-	    const shouldUseCanUseTool = effectivePermissionMode === 'default';
+	    // 始终提供 canUseTool，以确保 AskUserQuestion 等交互工具能够获取用户输入
+	    const shouldUseCanUseTool = true;
 	    console.log('[PERM_DEBUG] permissionMode:', permissionMode);
 	    console.log('[PERM_DEBUG] effectivePermissionMode:', effectivePermissionMode);
 	    console.log('[PERM_DEBUG] shouldUseCanUseTool:', shouldUseCanUseTool);
@@ -457,6 +613,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     if (resumeSessionId && resumeSessionId !== '') {
       options.resume = resumeSessionId;
       console.log('[RESUMING]', resumeSessionId);
+      if (!hasClaudeProjectSessionFile(resumeSessionId, workingDirectory)) {
+        console.log('[RESUME_WAIT] Waiting for session file to appear before resuming...');
+        await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+      }
     }
 
 	    console.log('[DEBUG] Query started, waiting for messages...');
@@ -490,10 +650,30 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
       try {
 	    // 调用 query 函数
-	    const result = query({
-	      prompt: message,
-	      options
-	    });
+        let result;
+        try {
+	        result = query({
+	          prompt: message,
+	          options
+	        });
+        } catch (queryError) {
+          const canRetry = isRetryableError(queryError) &&
+                           retryAttempt < AUTO_RETRY_CONFIG.maxRetries &&
+                           messageCount <= AUTO_RETRY_CONFIG.maxMessagesForRetry;
+          if (canRetry) {
+            lastRetryError = queryError;
+            retryAttempt++;
+            const retryDelayMs = getRetryDelayMs(queryError);
+            if (isNoConversationFoundError(queryError) && resumeSessionId && resumeSessionId !== '') {
+              await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+            }
+            console.log(`[RETRY] Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
+            console.log(`[RETRY] Reason: ${queryError.message || String(queryError)}, messageCount: ${messageCount}`);
+            await sleep(retryDelayMs);
+            continue retryLoop;
+          }
+          throw queryError;
+        }
 	    console.log('[DIAG] query() returned, starting message loop...');
 
 		// 设置 60 秒超时，超时后通过 AbortController 取消查询（已发现严重问题，暂时注释掉自动超时逻辑）
@@ -703,7 +883,11 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       if (canRetry) {
         lastRetryError = loopError;
         retryAttempt++;
-        console.log(`[RETRY] Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${AUTO_RETRY_CONFIG.retryDelayMs}ms delay`);
+        const retryDelayMs = getRetryDelayMs(loopError);
+        if (isNoConversationFoundError(loopError) && resumeSessionId && resumeSessionId !== '') {
+          await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+        }
+        console.log(`[RETRY] Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
         console.log(`[RETRY] Reason: ${loopError.message}, messageCount: ${messageCount}`);
 
         // Reset streaming state for retry
@@ -713,7 +897,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
         }
 
         // Wait before retry
-        await sleep(AUTO_RETRY_CONFIG.retryDelayMs);
+        await sleep(retryDelayMs);
         continue retryLoop; // Go to next retry attempt
       }
 
@@ -1135,6 +1319,10 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    if (resumeSessionId && resumeSessionId !== '') {
 	      options.resume = resumeSessionId;
 	      console.log('[RESUMING]', resumeSessionId);
+	      if (!hasClaudeProjectSessionFile(resumeSessionId, workingDirectory)) {
+	        console.log('[RESUME_WAIT] Waiting for session file to appear before resuming...');
+	        await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+	      }
 	    }
 
 		    // 动态加载 Claude SDK
@@ -1168,10 +1356,33 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
         inputStream.enqueue(userMessage);
         inputStream.done();
 
-		    const result = queryFn({
+        let result;
+        try {
+		    result = queryFn({
 		      prompt: inputStream,
 		      options
 		    });
+        } catch (queryError) {
+          const canRetry = isRetryableError(queryError) &&
+                           retryAttempt < AUTO_RETRY_CONFIG.maxRetries &&
+                           messageCount <= AUTO_RETRY_CONFIG.maxMessagesForRetry;
+          if (canRetry) {
+            lastRetryError = queryError;
+            retryAttempt++;
+            const retryDelayMs = getRetryDelayMs(queryError);
+            if (isNoConversationFoundError(queryError) && resumeSessionId && resumeSessionId !== '') {
+              await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+            }
+            console.log(`[RETRY] (withAttachments) Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
+            console.log(`[RETRY] Reason: ${queryError.message || String(queryError)}, messageCount: ${messageCount}`);
+            if (streamingEnabled && streamStarted && !streamEnded) {
+              streamStarted = false;
+            }
+            await sleep(retryDelayMs);
+            continue retryLoop;
+          }
+          throw queryError;
+        }
 
 	    // 如需再次启用自动超时，可在此处通过 AbortController 实现，并确保给出清晰的"响应超时"提示
 	    // timeoutId = setTimeout(() => {
@@ -1348,7 +1559,11 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
           if (canRetry) {
             lastRetryError = loopError;
             retryAttempt++;
-            console.log(`[RETRY] (withAttachments) Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${AUTO_RETRY_CONFIG.retryDelayMs}ms delay`);
+            const retryDelayMs = getRetryDelayMs(loopError);
+            if (isNoConversationFoundError(loopError) && resumeSessionId && resumeSessionId !== '') {
+              await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+            }
+            console.log(`[RETRY] (withAttachments) Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
             console.log(`[RETRY] Reason: ${loopError.message}, messageCount: ${messageCount}`);
 
             // Reset streaming state for retry
@@ -1357,7 +1572,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
             }
 
             // Wait before retry
-            await sleep(AUTO_RETRY_CONFIG.retryDelayMs);
+            await sleep(retryDelayMs);
             continue retryLoop; // Go to next retry attempt
           }
 
@@ -1625,6 +1840,11 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
         }
 
+        if (!hasClaudeProjectSessionFile(sessionId, workingDirectory)) {
+          console.log('[RESUME_WAIT] Waiting for session file to appear before resuming...');
+          await waitForClaudeProjectSessionFile(sessionId, workingDirectory, 2500, 100);
+        }
+
         const options = {
           resume: sessionId,
           cwd: workingDirectory,
@@ -1658,7 +1878,16 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
         }
 
-        result = query({ prompt: '', options });
+        try {
+          result = query({ prompt: '', options });
+        } catch (queryError) {
+          if (isNoConversationFoundError(queryError)) {
+            await waitForClaudeProjectSessionFile(sessionId, workingDirectory, 2500, 100);
+            result = query({ prompt: '', options });
+          } else {
+            throw queryError;
+          }
+        }
 
       } catch (resumeError) {
         const errorMsg = `Failed to resume session ${sessionId}: ${resumeError.message}`;

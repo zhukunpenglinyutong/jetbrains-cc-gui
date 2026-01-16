@@ -116,6 +116,11 @@ interface Window {
   showAskUserQuestionDialog?: (json: string) => void;
 
   /**
+   * Show PlanApproval dialog
+   */
+  showPlanApprovalDialog?: (json: string) => void;
+
+  /**
    * Add selection info (file and line numbers) - 自动监听，只更新 ContextBar
    */
   addSelectionInfo?: (selectionInfo: string) => void;

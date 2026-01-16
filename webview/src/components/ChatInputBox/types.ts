@@ -194,9 +194,8 @@ export const AVAILABLE_MODES: ModeInfo[] = [
     id: 'plan',
     label: 'Plan Mode',
     icon: 'codicon-tasklist',
-    disabled: true,
-    tooltip: 'Plan mode - no execution (not supported yet)',
-    description: 'Plan only without execution, not supported yet',
+    tooltip: 'Plan mode - read-only analysis',
+    description: 'Read-only tools only, generates plan for user approval',
   },
   {
     id: 'acceptEdits',
