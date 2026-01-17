@@ -880,6 +880,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     LOG.error("Failed to create UI components: " + e.getMessage(), e);
                     showErrorPanel();
                 }
+            } catch (NullPointerException e) {
+                // JCEF remote mode causes NPE when creating JBCefJSQuery
+                // Error message: "Cannot read field \"isNull\" because \"robj\" is null"
+                String msg = e.getMessage();
+                if (msg != null && msg.contains("isNull") && msg.contains("robj")) {
+                    LOG.error("JCEF remote mode incompatibility: " + e.getMessage(), e);
+                    showJcefRemoteModeErrorPanel();
+                } else {
+                    LOG.error("Failed to create UI components (NPE): " + e.getMessage(), e);
+                    showErrorPanel();
+                }
             } catch (Exception e) {
                 LOG.error("Failed to create UI components: " + e.getMessage(), e);
                 showErrorPanel();
@@ -966,6 +977,56 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 "   确保 ide.browser.jcef.enabled 为 true\n" +
                 "3. 尝试重启 IDE\n" +
                 "4. 如果使用 JetBrains Runtime，确保版本支持 JCEF"
+            );
+            messageArea.setEditable(false);
+            messageArea.setBackground(new Color(45, 45, 45));
+            messageArea.setForeground(new Color(200, 200, 200));
+            messageArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+            messageArea.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+            messageArea.setAlignmentX(Component.CENTER_ALIGNMENT);
+            messageArea.setMaximumSize(new Dimension(500, 300));
+
+            centerPanel.add(iconLabel);
+            centerPanel.add(Box.createVerticalStrut(15));
+            centerPanel.add(titleLabel);
+            centerPanel.add(Box.createVerticalStrut(20));
+            centerPanel.add(messageArea);
+
+            errorPanel.add(centerPanel, BorderLayout.CENTER);
+            mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
+        private void showJcefRemoteModeErrorPanel() {
+            JPanel errorPanel = new JPanel(new BorderLayout());
+            errorPanel.setBackground(new Color(30, 30, 30));
+
+            JPanel centerPanel = new JPanel();
+            centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+            centerPanel.setBackground(new Color(30, 30, 30));
+            centerPanel.setBorder(BorderFactory.createEmptyBorder(50, 50, 50, 50));
+
+            JLabel iconLabel = new JLabel("⚠️");
+            iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 48));
+            iconLabel.setForeground(Color.WHITE);
+            iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel titleLabel = new JLabel("JCEF 远程模式不兼容");
+            titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+            titleLabel.setForeground(Color.WHITE);
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JTextArea messageArea = new JTextArea();
+            messageArea.setText(
+                "当前 IDE 正在使用 JCEF 远程模式，该模式与插件的浏览器组件不兼容。\n\n" +
+                "可能的原因：\n" +
+                "• IDE 配置为使用远程开发模式 (Remote Development)\n" +
+                "• IDE 使用了 JetBrains Client 连接远程后端\n" +
+                "• 某些 IDE 设置启用了远程渲染\n\n" +
+                "解决方案：\n" +
+                "1. 如果使用远程开发，请在本地 IDE 中使用此插件\n" +
+                "2. 尝试在 IDE 设置中禁用远程渲染相关选项\n" +
+                "3. 重启 IDE 后重试\n" +
+                "4. 使用本地安装的 IntelliJ IDEA 打开项目"
             );
             messageArea.setEditable(false);
             messageArea.setBackground(new Color(45, 45, 45));

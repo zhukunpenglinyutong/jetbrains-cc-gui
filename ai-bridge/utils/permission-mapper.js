@@ -10,6 +10,17 @@
  * @author Inspired by Steve Jobs' pursuit of simplicity
  */
 
+import { platform } from 'os';
+
+/**
+ * Check if running on Windows platform
+ * Windows sandbox support is experimental, so we use danger-full-access mode
+ * @returns {boolean}
+ */
+function isWindows() {
+  return platform() === 'win32';
+}
+
 /**
  * Unified Permission Modes
  *
@@ -105,6 +116,9 @@ export class ClaudePermissionMapper {
  * - sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
  *
  * We map these to our unified modes.
+ *
+ * NOTE: Windows sandbox support is experimental, so we use danger-full-access
+ * mode on Windows to ensure write operations work correctly.
  */
 export class CodexPermissionMapper {
   /**
@@ -115,20 +129,25 @@ export class CodexPermissionMapper {
   static toProvider(unifiedMode) {
     const { core, alias } = normalizeUnifiedMode(unifiedMode);
 
+    // Check if running on Windows - sandbox is experimental on Windows
+    const onWindows = isWindows();
+
     // Treat bypassPermissions (Full Auto / trusted) as workspace-write but completely auto-approved.
+    // On Windows, use danger-full-access since sandbox is experimental
     if (alias === 'bypassPermissions') {
       return {
         skipGitRepoCheck: true,
-        sandbox: 'workspace-write',
+        sandbox: onWindows ? 'danger-full-access' : 'workspace-write',
         approvalPolicy: 'never'
       };
     }
 
     // acceptEdits (Agent Mode): 自动应用文件修改，命令仍需确认
+    // On Windows, use danger-full-access since sandbox is experimental
     if (alias === 'acceptEdits') {
       return {
         skipGitRepoCheck: true,
-        sandbox: 'workspace-write',
+        sandbox: onWindows ? 'danger-full-access' : 'workspace-write',
         approvalPolicy: 'auto-edit'  // Codex 的 auto-edit 模式
       };
     }
@@ -153,9 +172,10 @@ export class CodexPermissionMapper {
       case UnifiedPermissionMode.DEFAULT:
       default:
         // Default: Allow workspace writes but still prompt before executing risky actions
+        // On Windows, use danger-full-access since sandbox is experimental
         return {
           skipGitRepoCheck: true,
-          sandbox: 'workspace-write',
+          sandbox: onWindows ? 'danger-full-access' : 'workspace-write',
           approvalPolicy: 'untrusted'
         };
     }
