@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
 import { getFileIcon } from '../../../utils/fileIcons.js';
 import { icon_folder } from '../../../utils/icons.js';
+import type { FileTagInfo } from '../types.js';
 
 interface UseFileTagsOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
@@ -16,6 +17,8 @@ interface UseFileTagsReturn {
   pathMappingRef: React.MutableRefObject<Map<string, string>>;
   /** Flag indicating file tags were just rendered (skip completion detection) */
   justRenderedTagRef: React.MutableRefObject<boolean>;
+  /** Extract all file tags from current input (for sending to backend) */
+  extractFileTags: () => FileTagInfo[];
 }
 
 /**
@@ -103,10 +106,15 @@ export function useFileTags({
 
       // Validate if path is a valid reference (must exist in pathMappingRef)
       // Only files selected from dropdown list are recorded in pathMappingRef
+      // Also allow paths with line numbers (e.g. #L10-20) or absolute paths
+      const hasLineNumber = /#L\d+/.test(filePath);
+      const isAbsolutePath = /^[a-zA-Z]:[/\\]/.test(filePath) || filePath.startsWith('/');
       const isValidReference =
         pathMappingRef.current.has(pureFilePath) ||
         pathMappingRef.current.has(pureFileName) ||
-        pathMappingRef.current.has(filePath);
+        pathMappingRef.current.has(filePath) ||
+        hasLineNumber ||
+        isAbsolutePath;
 
       // If not a valid reference, keep original text, don't render as tag
       if (!isValidReference) {
@@ -202,9 +210,36 @@ export function useFileTags({
     }, 0);
   }, [editableRef, getTextContent, onCloseCompletions]);
 
+  /**
+   * Extract all file tags from current input
+   * Returns array of file tag info with display path and absolute path
+   * Used for sending to backend for context injection (especially for Codex)
+   */
+  const extractFileTags = useCallback((): FileTagInfo[] => {
+    if (!editableRef.current) return [];
+
+    const fileTags: FileTagInfo[] = [];
+    const fileTagElements = editableRef.current.querySelectorAll('.file-tag');
+
+    fileTagElements.forEach((element) => {
+      const displayPath = element.getAttribute('data-file-path') || '';
+      const absolutePath = element.getAttribute('data-tooltip') || displayPath;
+
+      if (displayPath) {
+        fileTags.push({
+          displayPath,
+          absolutePath,
+        });
+      }
+    });
+
+    return fileTags;
+  }, [editableRef]);
+
   return {
     renderFileTags,
     pathMappingRef,
     justRenderedTagRef,
+    extractFileTags,
   };
 }

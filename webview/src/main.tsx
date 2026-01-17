@@ -145,6 +145,51 @@ if (typeof window !== 'undefined' && !window.dependencyUpdateAvailable) {
   };
 }
 
+// 预注册 updateStreamingEnabled，避免后端返回状态早于 React 初始化
+if (typeof window !== 'undefined' && !window.updateStreamingEnabled) {
+  console.log('[Main] Pre-registering updateStreamingEnabled placeholder');
+  window.updateStreamingEnabled = (json: string) => {
+    console.log('[Main] Storing pending streaming enabled status, length=' + (json ? json.length : 0));
+    window.__pendingStreamingEnabled = json;
+  };
+}
+
+// 预注册 updateSendShortcut，避免后端返回状态早于 React 初始化
+if (typeof window !== 'undefined' && !window.updateSendShortcut) {
+  console.log('[Main] Pre-registering updateSendShortcut placeholder');
+  window.updateSendShortcut = (json: string) => {
+    console.log('[Main] Storing pending send shortcut status, length=' + (json ? json.length : 0));
+    window.__pendingSendShortcut = json;
+  };
+}
+
+if (typeof window !== 'undefined' && !window.showPermissionDialog) {
+  console.log('[Main] Pre-registering showPermissionDialog placeholder');
+  window.showPermissionDialog = (json: string) => {
+    const pending = window.__pendingPermissionDialogRequests || [];
+    pending.push(json);
+    window.__pendingPermissionDialogRequests = pending;
+  };
+}
+
+if (typeof window !== 'undefined' && !window.showAskUserQuestionDialog) {
+  console.log('[Main] Pre-registering showAskUserQuestionDialog placeholder');
+  window.showAskUserQuestionDialog = (json: string) => {
+    const pending = window.__pendingAskUserQuestionDialogRequests || [];
+    pending.push(json);
+    window.__pendingAskUserQuestionDialogRequests = pending;
+  };
+}
+
+if (typeof window !== 'undefined' && !window.showPlanApprovalDialog) {
+  console.log('[Main] Pre-registering showPlanApprovalDialog placeholder');
+  window.showPlanApprovalDialog = (json: string) => {
+    const pending = window.__pendingPlanApprovalDialogRequests || [];
+    pending.push(json);
+    window.__pendingPlanApprovalDialogRequests = pending;
+  };
+}
+
 // 渲染 React 应用
 ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
   <ErrorBoundary>

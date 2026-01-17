@@ -224,7 +224,7 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
   // Tools that should be collapsible (Grep, Glob, Write, Update Plan, Shell Command and MCP tools)
   const lowerName = (name ?? '').toLowerCase();
   const isMcpTool = lowerName.startsWith('mcp__');
-  const isCollapsible = ['grep', 'glob', 'write', 'save-file', 'askuserquestion', 'update_plan', 'shell_command', 'exitplanmode'].includes(lowerName) || isMcpTool;
+  const isCollapsible = ['grep', 'glob', 'write', 'save-file', 'askuserquestion', 'update_plan', 'shell_command', 'exitplanmode', 'websearch'].includes(lowerName) || isMcpTool;
   const [expanded, setExpanded] = useState(false);
 
   const filePath = input ? pickFilePath(input, name) : undefined;

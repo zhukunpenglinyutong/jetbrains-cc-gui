@@ -66,7 +66,7 @@ public class SessionHandler extends BaseMessageHandler {
 
     /**
      * Send message to Claude
-     * 【FIX】Now parses JSON format to extract text and agent info
+     * 【FIX】Now parses JSON format to extract text, agent info and file tags
      */
     private void handleSendMessage(String content) {
         String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
@@ -85,9 +85,10 @@ public class SessionHandler extends BaseMessageHandler {
             return;
         }
 
-        // 【FIX】Parse JSON format to extract text and agent info for per-tab agent selection
+        // 【FIX】Parse JSON format to extract text, agent info and file tags
         String prompt;
         String agentPrompt = null;
+        java.util.List<String> fileTagPaths = null;
         try {
             Gson gson = new Gson();
             JsonObject payload = gson.fromJson(content, JsonObject.class);
@@ -104,6 +105,21 @@ public class SessionHandler extends BaseMessageHandler {
                     LOG.info("[SessionHandler] Using agent from message: " + agentName);
                 }
             }
+
+            // 【FIX】Extract file tags from the message (for Codex context injection)
+            if (payload != null && payload.has("fileTags") && payload.get("fileTags").isJsonArray()) {
+                JsonArray fileTagsArray = payload.getAsJsonArray("fileTags");
+                fileTagPaths = new java.util.ArrayList<>();
+                for (int i = 0; i < fileTagsArray.size(); i++) {
+                    JsonObject fileTag = fileTagsArray.get(i).getAsJsonObject();
+                    if (fileTag.has("absolutePath") && !fileTag.get("absolutePath").isJsonNull()) {
+                        fileTagPaths.add(fileTag.get("absolutePath").getAsString());
+                    }
+                }
+                if (!fileTagPaths.isEmpty()) {
+                    LOG.info("[SessionHandler] Extracted " + fileTagPaths.size() + " file tags for context injection");
+                }
+            }
         } catch (Exception e) {
             // If parsing fails, treat content as plain text (backward compatibility)
             LOG.debug("[SessionHandler] Message is plain text, not JSON: " + e.getMessage());
@@ -112,6 +128,7 @@ public class SessionHandler extends BaseMessageHandler {
 
         final String finalPrompt = prompt;
         final String finalAgentPrompt = agentPrompt;
+        final java.util.List<String> finalFileTagPaths = fileTagPaths;
 
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
@@ -128,8 +145,8 @@ public class SessionHandler extends BaseMessageHandler {
                 ClaudeNotifier.setWaiting(project);
             }
 
-            // 【FIX】Pass agent prompt directly to session instead of relying on global setting
-            context.getSession().send(finalPrompt, finalAgentPrompt)
+            // 【FIX】Pass agent prompt and file tags directly to session
+            context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths)
                 .thenRun(() -> {
                     if (project != null) {
                         ClaudeNotifier.showSuccess(project, "Task completed");
@@ -150,7 +167,7 @@ public class SessionHandler extends BaseMessageHandler {
 
     /**
      * 发送带附件的消息
-     * 【FIX】Now extracts agent info from payload for per-tab agent selection
+     * 【FIX】Now extracts agent info and file tags from payload
      */
     private void handleSendMessageWithAttachments(String content) {
         try {
@@ -189,7 +206,23 @@ public class SessionHandler extends BaseMessageHandler {
                 }
             }
 
-            sendMessageWithAttachments(text, atts, agentPrompt);
+            // 【FIX】Extract file tags from the payload (for Codex context injection)
+            java.util.List<String> fileTagPaths = null;
+            if (payload != null && payload.has("fileTags") && payload.get("fileTags").isJsonArray()) {
+                JsonArray fileTagsArray = payload.getAsJsonArray("fileTags");
+                fileTagPaths = new java.util.ArrayList<>();
+                for (int i = 0; i < fileTagsArray.size(); i++) {
+                    JsonObject fileTag = fileTagsArray.get(i).getAsJsonObject();
+                    if (fileTag.has("absolutePath") && !fileTag.get("absolutePath").isJsonNull()) {
+                        fileTagPaths.add(fileTag.get("absolutePath").getAsString());
+                    }
+                }
+                if (!fileTagPaths.isEmpty()) {
+                    LOG.info("[SessionHandler] Extracted " + fileTagPaths.size() + " file tags for attachment message");
+                }
+            }
+
+            sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
@@ -198,9 +231,9 @@ public class SessionHandler extends BaseMessageHandler {
 
     /**
      * Send message with attachments to Claude
-     * 【FIX】Now accepts agent prompt parameter for per-tab agent selection
+     * 【FIX】Now accepts agent prompt and file tags parameters
      */
-    private void sendMessageWithAttachments(String prompt, List<ClaudeSession.Attachment> attachments, String agentPrompt) {
+    private void sendMessageWithAttachments(String prompt, List<ClaudeSession.Attachment> attachments, String agentPrompt, java.util.List<String> fileTagPaths) {
         // Version check (consistent with handleSendMessage)
         String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
         if (nodeVersion == null) {
@@ -219,6 +252,7 @@ public class SessionHandler extends BaseMessageHandler {
         }
 
         final String finalAgentPrompt = agentPrompt;
+        final java.util.List<String> finalFileTagPaths = fileTagPaths;
 
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
@@ -234,8 +268,8 @@ public class SessionHandler extends BaseMessageHandler {
                 ClaudeNotifier.setWaiting(project);
             }
 
-            // 【FIX】Pass agent prompt directly to session instead of relying on global setting
-            context.getSession().send(prompt, attachments, finalAgentPrompt)
+            // 【FIX】Pass agent prompt and file tags directly to session
+            context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths)
                 .thenRun(() -> {
                     if (project != null) {
                         ClaudeNotifier.showSuccess(project, "Task completed");

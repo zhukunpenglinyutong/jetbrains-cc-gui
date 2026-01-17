@@ -566,6 +566,14 @@ const App = () => {
       prompt: selectedAgent.prompt,
     } : null;
 
+    // 【FIX】提取文件标签信息，用于 Codex 上下文注入
+    // Extract file tags for Codex context injection
+    const fileTags = chatInputRef.current?.getFileTags() ?? [];
+    const fileTagsInfo = fileTags.length > 0 ? fileTags.map(tag => ({
+      displayPath: tag.displayPath,
+      absolutePath: tag.absolutePath,
+    })) : null;
+
     // 发送消息（智能体提示词由前端传递，不依赖后端全局设置）
     if (hasAttachments) {
       try {
@@ -577,17 +585,18 @@ const App = () => {
             data: a.data,
           })),
           agent: agentInfo,
+          fileTags: fileTagsInfo,
         });
         sendBridgeEvent('send_message_with_attachments', payload);
       } catch (error) {
         console.error('[Frontend] Failed to serialize attachments payload', error);
-        // Fallback: send message with agent info
-        const fallbackPayload = JSON.stringify({ text, agent: agentInfo });
+        // Fallback: send message with agent info and file tags
+        const fallbackPayload = JSON.stringify({ text, agent: agentInfo, fileTags: fileTagsInfo });
         sendBridgeEvent('send_message', fallbackPayload);
       }
     } else {
-      // 【FIX】将消息和智能体信息打包成 JSON 发送
-      const payload = JSON.stringify({ text, agent: agentInfo });
+      // 【FIX】将消息、智能体信息和文件标签打包成 JSON 发送
+      const payload = JSON.stringify({ text, agent: agentInfo, fileTags: fileTagsInfo });
       sendBridgeEvent('send_message', payload);
     }
   };
@@ -1044,7 +1053,7 @@ const App = () => {
 
       {currentView === 'chat' && (
         <>
-          {globalTodos.length > 0 && <TodoPanel todos={globalTodos} />}
+          {globalTodos.length > 0 && <TodoPanel todos={globalTodos} isStreaming={streamingActive || loading} />}
           <div className="input-area" ref={inputAreaRef}>
           <ChatInputBox
             ref={chatInputRef}

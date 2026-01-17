@@ -33,9 +33,9 @@
     "emptyMessage": "空消息",
     "clickToPreview": "点击预览大图",
     "userUploadedImage": "用户上传的图片",
-    "inputPlaceholder": "@引用文件，#唤起智能体，shift + enter 换行",
-    "inputPlaceholderEnter": "@引用文件，#唤起智能体，Shift+Enter 换行",
-    "inputPlaceholderCmdEnter": "@引用文件，#唤起智能体，Enter 换行",
+    "inputPlaceholder": "@引用文件，#唤起智能体，Enter 发送",
+    "inputPlaceholderEnter": "@引用文件，#唤起智能体，Enter 发送",
+    "inputPlaceholderCmdEnter": "@引用文件，#唤起智能体，⌘Enter 发送",
     "noThinkingContent": "无思考内容",
     "parseError": "无法解析内容",
     "sendMessageEnter": "发送消息 (Enter)",
@@ -632,7 +632,8 @@
   },
   "todo": {
     "inProgress": "进行中 {{completed}}/{{total}} 个任务",
-    "allCompleted": "已完成 {{completed}}/{{total}} 个任务"
+    "allCompleted": "已完成 {{completed}}/{{total}} 个任务",
+    "stopped": "已停止"
   },
   "skills": {
     "title": "Skills",

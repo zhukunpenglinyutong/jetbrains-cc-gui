@@ -41,6 +41,16 @@ export function useScrollBehavior({
 
   // Scroll to bottom function
   const scrollToBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (container) {
+      isAutoScrollingRef.current = true;
+      container.scrollTop = container.scrollHeight;
+      requestAnimationFrame(() => {
+        isAutoScrollingRef.current = false;
+      });
+      return;
+    }
+
     const endElement = messagesEndRef.current;
     if (endElement) {
       isAutoScrollingRef.current = true;
@@ -54,15 +64,6 @@ export function useScrollBehavior({
       });
       return;
     }
-
-    const container = messagesContainerRef.current;
-    if (!container) return;
-
-    isAutoScrollingRef.current = true;
-    container.scrollTop = container.scrollHeight;
-    requestAnimationFrame(() => {
-      isAutoScrollingRef.current = false;
-    });
   }, []);
 
   // Listen to scroll events to detect if user is at bottom

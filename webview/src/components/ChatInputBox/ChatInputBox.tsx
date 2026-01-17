@@ -130,7 +130,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
     }, []);
 
     // File tags hook
-    const { renderFileTags, pathMappingRef, justRenderedTagRef } = useFileTags({
+    const { renderFileTags, pathMappingRef, justRenderedTagRef, extractFileTags } = useFileTags({
       editableRef,
       getTextContent,
       onCloseCompletions: closeAllCompletions,
@@ -1039,8 +1039,9 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         focus: focusInput,
         clear: clearInput,
         hasContent: () => hasContent,
+        getFileTags: extractFileTags,
       }),
-      [getTextContent, focusInput, clearInput, adjustHeight, invalidateCache, hasContent]
+      [getTextContent, focusInput, clearInput, adjustHeight, invalidateCache, hasContent, extractFileTags]
     );
 
     // Global callbacks hook

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo } from 'react';
+import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../../types';
 
@@ -138,6 +138,37 @@ export const MessageItem = memo(function MessageItem({
 
   // Memoize blocks and grouped blocks to avoid recalculation on every render
   const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
+
+  // Ref to track the last auto-expanded thinking block index to avoid overriding user interaction
+  const lastAutoExpandedIndexRef = useRef<number>(-1);
+
+  // Auto-expand the latest thinking block during streaming
+  useEffect(() => {
+    if (!isMessageStreaming) return;
+
+    const thinkingIndices = blocks
+      .map((block, index) => (block.type === 'thinking' ? index : -1))
+      .filter((index) => index !== -1);
+
+    if (thinkingIndices.length === 0) return;
+
+    const lastThinkingIndex = thinkingIndices[thinkingIndices.length - 1];
+
+    if (lastThinkingIndex !== lastAutoExpandedIndexRef.current) {
+      setExpandedThinking((prev) => {
+        const newState = { ...prev };
+        // Collapse all thinking blocks
+        thinkingIndices.forEach((idx) => {
+          newState[idx] = false;
+        });
+        // Expand the latest one
+        newState[lastThinkingIndex] = true;
+        return newState;
+      });
+      lastAutoExpandedIndexRef.current = lastThinkingIndex;
+    }
+  }, [blocks, isMessageStreaming]);
+
   const groupedBlocks = useMemo(() => groupBlocks(blocks), [blocks]);
   const messageStyle = useMemo(
     () => ({ contentVisibility: 'auto', containIntrinsicSize: '0 320px' } as const),

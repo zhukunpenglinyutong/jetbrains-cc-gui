@@ -207,23 +207,8 @@ function createPreToolUseHook(permissionMode) {
     // Handle plan mode: allow read-only tools, special handling for ExitPlanMode
     if (currentPermissionMode === 'plan') {
       if (toolName === 'AskUserQuestion') {
-        console.log('[PERM_DEBUG] AskUserQuestion called in plan mode, requesting user answers...');
-        try {
-          const result = await canUseTool(toolName, input?.tool_input);
-          if (result?.behavior === 'allow') {
-            return { decision: 'approve', updatedInput: result.updatedInput ?? input?.tool_input };
-          }
-          return {
-            decision: 'block',
-            reason: result?.message || 'User did not provide answers'
-          };
-        } catch (error) {
-          console.error('[PERM_DEBUG] AskUserQuestion error:', error?.message);
-          return {
-            decision: 'block',
-            reason: 'AskUserQuestion failed: ' + (error?.message || String(error))
-          };
-        }
+        console.log('[PERM_DEBUG] AskUserQuestion called in plan mode, deferring to canUseTool for answers...');
+        return { decision: 'approve' };
       }
 
       // Edit / Bash: allow in plan mode but still ask user permission (same as default mode behavior)
@@ -297,6 +282,11 @@ function createPreToolUseHook(permissionMode) {
         decision: 'block',
         reason: `Tool "${toolName}" is not allowed in plan mode. Only read-only tools are permitted. Use ExitPlanMode to exit plan mode.`
       };
+    }
+
+    if (toolName === 'AskUserQuestion') {
+      console.log('[PERM_DEBUG] AskUserQuestion encountered in PreToolUse, deferring to canUseTool for answers...');
+      return { decision: 'approve' };
     }
 
     if (shouldAutoApproveTool(currentPermissionMode, toolName)) {
@@ -1275,9 +1265,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
           [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
         )
       ),
-      // 同时设置 canUseTool 和 hooks，确保至少一个生效
-      // 在 AsyncIterable 模式下 canUseTool 可能不被调用，所以必须配置 PreToolUse hook
-      canUseTool: normalizedPermissionMode === 'default' ? canUseTool : undefined,
+      // AskUserQuestion 依赖 canUseTool 返回 answers，因此所有模式都必须提供 canUseTool
+      canUseTool,
       hooks: {
         PreToolUse: [{
           hooks: [preToolUseHook]

@@ -291,6 +291,33 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     env.put("CODEX_MODEL", model);
                 }
 
+                // 【关键修复】通过环境变量覆盖用户配置文件中的 sandbox 和 approval 设置
+                // Override user's ~/.codex/config.toml settings via environment variables
+                if (permissionMode != null && !permissionMode.isEmpty()) {
+                    switch (permissionMode) {
+                        case "bypassPermissions":
+                            env.put("CODEX_SANDBOX_MODE", "workspace-write");
+                            env.put("CODEX_APPROVAL_POLICY", "never");
+                            break;
+                        case "acceptEdits":
+                            env.put("CODEX_SANDBOX_MODE", "workspace-write");
+                            env.put("CODEX_APPROVAL_POLICY", "auto-edit");
+                            break;
+                        case "plan":
+                            env.put("CODEX_SANDBOX_MODE", "read-only");
+                            env.put("CODEX_APPROVAL_POLICY", "untrusted");
+                            break;
+                        default:
+                            // Default mode: workspace-write with confirmation
+                            env.put("CODEX_SANDBOX_MODE", "workspace-write");
+                            env.put("CODEX_APPROVAL_POLICY", "untrusted");
+                            break;
+                    }
+                    LOG.info("[Codex] Permission env override: SANDBOX_MODE=" +
+                             env.get("CODEX_SANDBOX_MODE") + ", APPROVAL_POLICY=" +
+                             env.get("CODEX_APPROVAL_POLICY") + " (from permissionMode=" + permissionMode + ")");
+                }
+
                 pb.redirectErrorStream(true);
                 envConfigurator.updateProcessEnvironment(pb, node);
 

@@ -5,6 +5,7 @@ import './TodoPanel.less';
 
 interface TodoPanelProps {
   todos: TodoItem[];
+  isStreaming?: boolean;
 }
 
 const statusClassMap: Record<TodoItem['status'], string> = {
@@ -21,35 +22,38 @@ const statusIconMap: Record<TodoItem['status'], string> = {
 
 /**
  * Generate a fingerprint for todos to detect content changes.
- * Only considers task count and content text (not status changes).
+ * Considers task count, content text, and status.
  */
 const getTodosFingerprint = (todos: TodoItem[]): string => {
-  return todos.map((t) => t.content).join('|');
+  return todos.map((t) => `${t.content}|${t.status}`).join('|');
 };
 
-const TodoPanel = ({ todos }: TodoPanelProps) => {
+const TodoPanel = ({ todos, isStreaming = false }: TodoPanelProps) => {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
   const prevFingerprintRef = useRef<string>('');
 
-  const { completedCount, totalCount, isAllCompleted } = useMemo(() => {
+  const { completedCount, totalCount, isAllCompleted, currentTask } = useMemo(() => {
     const completed = todos.filter((todo) => todo.status === 'completed').length;
+    // Find the current task: first in_progress, or first pending
+    const current = todos.find((todo) => todo.status === 'in_progress') || 
+                   todos.find((todo) => todo.status === 'pending');
+
     return {
       completedCount: completed,
       totalCount: todos.length,
       isAllCompleted: todos.length > 0 && completed === todos.length,
+      currentTask: current,
     };
   }, [todos]);
 
-  // Only reset dismissed state when todos content actually changes (new task list)
-  // Status changes (pending -> completed) should NOT reset dismissed state
+  // Reset dismissed state when todos content or status changes
   useEffect(() => {
     const currentFingerprint = getTodosFingerprint(todos);
     if (prevFingerprintRef.current !== currentFingerprint) {
-      // Content changed - this is a new task list
       if (prevFingerprintRef.current !== '') {
-        // Only reset if we had a previous list (not initial mount with same dismissed list)
+        // Reset if we had a previous list (not initial mount with same dismissed list)
         setIsDismissed(false);
       }
       prevFingerprintRef.current = currentFingerprint;
@@ -69,6 +73,38 @@ const TodoPanel = ({ todos }: TodoPanelProps) => {
     setIsDismissed(true);
   };
 
+  const renderHeaderContent = () => {
+    if (isAllCompleted) {
+      return t('todo.allCompleted', { completed: completedCount, total: totalCount });
+    }
+
+    const countInfo = `${completedCount}/${totalCount}`;
+    let title = '';
+    
+    if (currentTask?.content) {
+      title = currentTask.content;
+      if (title.length > 20) {
+        title = title.substring(0, 20) + '...';
+      }
+    }
+
+    // If we have a title, show it. Otherwise fall back to generic "In Progress" text
+    if (title) {
+      if (isStreaming) {
+        return `${countInfo} ${title}`;
+      } else {
+        return `${t('todo.stopped')} - ${countInfo} ${title}`;
+      }
+    } else {
+      // Fallback
+      if (isStreaming) {
+        return t('todo.inProgress', { completed: completedCount, total: totalCount });
+      } else {
+        return `${t('todo.stopped')} - ${t('todo.inProgress', { completed: completedCount, total: totalCount })}`;
+      }
+    }
+  };
+
   return (
     <div className="todo-panel">
       <div className="todo-panel-header" onClick={toggleExpanded}>
@@ -76,18 +112,14 @@ const TodoPanel = ({ todos }: TodoPanelProps) => {
           className={`codicon ${isExpanded ? 'codicon-chevron-up' : 'codicon-chevron-down'} todo-panel-toggle`}
         />
         <span className="todo-panel-progress">
-          {!isAllCompleted && (
+          {!isAllCompleted && isStreaming && (
             <span className="codicon codicon-loading todo-panel-loading" />
           )}
-          {isAllCompleted
-            ? t('todo.allCompleted', { completed: completedCount, total: totalCount })
-            : t('todo.inProgress', { completed: completedCount, total: totalCount })}
+          {renderHeaderContent()}
         </span>
-        {isAllCompleted && (
-          <div className="todo-panel-close" onClick={handleClose} title={t('common.close')}>
-            <span className="codicon codicon-close" />
-          </div>
-        )}
+        <div className="todo-panel-close" onClick={handleClose} title={t('common.close')}>
+          <span className="codicon codicon-close" />
+        </div>
       </div>
 
       {isExpanded && (

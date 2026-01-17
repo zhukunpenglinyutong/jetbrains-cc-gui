@@ -45,6 +45,11 @@ function normalizeUnifiedMode(mode) {
     return { core: UnifiedPermissionMode.YOLO, alias: 'bypassPermissions' };
   }
 
+  // acceptEdits (Agent Mode): 自动应用文件修改，命令仍需确认
+  if (normalized === 'acceptedits') {
+    return { core: UnifiedPermissionMode.DEFAULT, alias: 'acceptEdits' };
+  }
+
   if (normalized === 'plan' || normalized === UnifiedPermissionMode.SANDBOX) {
     return { core: UnifiedPermissionMode.SANDBOX };
   }
@@ -116,6 +121,15 @@ export class CodexPermissionMapper {
         skipGitRepoCheck: true,
         sandbox: 'workspace-write',
         approvalPolicy: 'never'
+      };
+    }
+
+    // acceptEdits (Agent Mode): 自动应用文件修改，命令仍需确认
+    if (alias === 'acceptEdits') {
+      return {
+        skipGitRepoCheck: true,
+        sandbox: 'workspace-write',
+        approvalPolicy: 'auto-edit'  // Codex 的 auto-edit 模式
       };
     }
 

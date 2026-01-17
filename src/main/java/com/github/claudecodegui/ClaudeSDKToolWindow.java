@@ -76,6 +76,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     private static final Logger LOG = Logger.getInstance(ClaudeSDKToolWindow.class);
     private static final Map<Project, ClaudeChatWindow> instances = new ConcurrentHashMap<>();
+    // Map to store Content -> ClaudeChatWindow mapping for multi-tab support
+    // This allows sending code snippets to the currently selected tab instead of always the first tab
+    private static final Map<Content, ClaudeChatWindow> contentToWindowMap = new ConcurrentHashMap<>();
     private static volatile boolean shutdownHookRegistered = false;
     private static final String TAB_NAME_PREFIX = "AI";
 
@@ -131,6 +134,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         ContentFactory contentFactory = ContentFactory.getInstance();
         // Set the initial tab name to "AI1"
         Content content = contentFactory.createContent(chatWindow.getContent(), TAB_NAME_PREFIX + "1", false);
+
+        // Set parent content for the first tab (important for multi-tab code snippet support)
+        chatWindow.setParentContent(content);
 
         ContentManager contentManager = toolWindow.getContentManager();
         contentManager.addContent(content);
@@ -317,6 +323,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         public void setParentContent(Content content) {
             this.parentContent = content;
+            // Register this window in the contentToWindowMap for multi-tab support
+            if (content != null) {
+                contentToWindowMap.put(content, this);
+                LOG.debug("[MultiTab] Registered Content -> ClaudeChatWindow mapping for: " + content.getDisplayName());
+            }
         }
 
         /**
@@ -1968,6 +1979,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         /**
          * 从外部（右键菜单）添加代码片段
          * 调用 addCodeSnippet 而不是 addSelectionInfo
+         *
+         * [FIX] Now sends code to the currently selected tab instead of always the first tab
          */
         static void addSelectionFromExternalInternal(Project project, String selectionInfo) {
             if (project == null) {
@@ -1975,7 +1988,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
 
-            ClaudeChatWindow window = instances.get(project);
+            // [FIX] Try to get the currently selected tab's window first
+            ClaudeChatWindow window = getSelectedTabWindow(project);
+
+            // Fallback to instances map if no selected tab window found
+            if (window == null) {
+                window = instances.get(project);
+            }
+
             if (window == null) {
                 // 如果窗口不存在，自动打开工具窗口
                 LOG.info("窗口实例不存在，自动打开工具窗口: " + project.getName());
@@ -1997,6 +2017,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             if (window.disposed) {
+                // Clean up from contentToWindowMap as well
+                if (window.parentContent != null) {
+                    contentToWindowMap.remove(window.parentContent);
+                }
                 instances.remove(project);
                 return;
             }
@@ -2012,8 +2036,42 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
+         * Get the ClaudeChatWindow for the currently selected tab
+         * Returns null if no selected tab or mapping not found
+         */
+        private static ClaudeChatWindow getSelectedTabWindow(Project project) {
+            if (project == null || project.isDisposed()) {
+                return null;
+            }
+
+            try {
+                ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
+                if (toolWindow == null) {
+                    return null;
+                }
+
+                ContentManager contentManager = toolWindow.getContentManager();
+                Content selectedContent = contentManager.getSelectedContent();
+
+                if (selectedContent != null) {
+                    ClaudeChatWindow window = contentToWindowMap.get(selectedContent);
+                    if (window != null) {
+                        LOG.debug("[MultiTab] Found window for selected tab: " + selectedContent.getDisplayName());
+                        return window;
+                    }
+                }
+            } catch (Exception e) {
+                LOG.debug("[MultiTab] Failed to get selected tab window: " + e.getMessage());
+            }
+
+            return null;
+        }
+
+        /**
          * Schedule code snippet addition with retry mechanism using ScheduledExecutorService.
          * Uses exponential backoff (200ms, 400ms, 800ms) to avoid resource waste.
+         *
+         * [FIX] Now uses getSelectedTabWindow to send to the currently selected tab
          */
         private static void scheduleCodeSnippetRetry(Project project, String selectionInfo, int retriesLeft) {
             if (retriesLeft <= 0) {
@@ -2029,7 +2087,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     if (project.isDisposed()) {
                         return;
                     }
-                    ClaudeChatWindow retryWindow = instances.get(project);
+
+                    // [FIX] Try to get the currently selected tab's window first
+                    ClaudeChatWindow retryWindow = getSelectedTabWindow(project);
+
+                    // Fallback to instances map if no selected tab window found
+                    if (retryWindow == null) {
+                        retryWindow = instances.get(project);
+                    }
+
                     if (retryWindow != null && retryWindow.initialized && !retryWindow.disposed) {
                         retryWindow.addCodeSnippet(selectionInfo);
                     } else {
@@ -2148,6 +2214,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             disposed = true;
             handlerContext.setDisposed(true);
+
+            // [FIX] Clean up contentToWindowMap for multi-tab support
+            if (parentContent != null) {
+                contentToWindowMap.remove(parentContent);
+                LOG.debug("[MultiTab] Removed Content -> ClaudeChatWindow mapping during dispose");
+            }
 
             synchronized (instances) {
                 if (instances.get(project) == this) {

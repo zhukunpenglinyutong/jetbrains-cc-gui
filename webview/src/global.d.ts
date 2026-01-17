@@ -423,6 +423,22 @@ interface Window {
   __pendingDependencyStatus?: string;
 
   /**
+   * Pending streaming enabled status before React initialization
+   */
+  __pendingStreamingEnabled?: string;
+
+  /**
+   * Pending send shortcut status before React initialization
+   */
+  __pendingSendShortcut?: string;
+
+  __pendingPermissionDialogRequests?: string[];
+
+  __pendingAskUserQuestionDialogRequests?: string[];
+
+  __pendingPlanApprovalDialogRequests?: string[];
+
+  /**
    * Pending user message before addUserMessage is registered (for Quick Fix feature)
    */
   __pendingUserMessage?: string;

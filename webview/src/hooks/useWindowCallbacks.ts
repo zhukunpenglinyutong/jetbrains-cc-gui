@@ -167,6 +167,68 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
   }, [t]);
 
   useEffect(() => {
+    const getRawUuid = (msg: ClaudeMessage | undefined): string | undefined => {
+      const raw = msg?.raw;
+      if (!raw || typeof raw !== 'object') return undefined;
+      return (raw as any).uuid as string | undefined;
+    };
+
+    const stripUuidFromRaw = (raw: unknown): unknown => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const rawObj = raw as any;
+      if (!('uuid' in rawObj)) return raw;
+      const { uuid: _uuid, ...rest } = rawObj;
+      return rest;
+    };
+
+    const preserveMessageIdentity = (prevMsg: ClaudeMessage | undefined, nextMsg: ClaudeMessage): ClaudeMessage => {
+      if (!prevMsg?.timestamp) return nextMsg;
+      if (prevMsg.type !== nextMsg.type) return nextMsg;
+
+      const prevUuid = getRawUuid(prevMsg);
+      const nextUuid = getRawUuid(nextMsg);
+
+      const nextWithStableTimestamp =
+        nextMsg.timestamp === prevMsg.timestamp ? nextMsg : { ...nextMsg, timestamp: prevMsg.timestamp };
+
+      if (!prevUuid && nextUuid) {
+        return { ...nextWithStableTimestamp, raw: stripUuidFromRaw(nextWithStableTimestamp.raw) as any };
+      }
+
+      return nextWithStableTimestamp;
+    };
+
+    const appendOptimisticMessageIfMissing = (prevList: ClaudeMessage[], nextList: ClaudeMessage[]): ClaudeMessage[] => {
+      const lastPrev = prevList[prevList.length - 1];
+      if (!lastPrev?.isOptimistic) return nextList;
+
+      const optimisticMsg = lastPrev;
+      const isIncluded = nextList.some((m) =>
+        m.type === 'user' &&
+        (m.content === optimisticMsg.content || m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
+        m.timestamp && optimisticMsg.timestamp &&
+        Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < OPTIMISTIC_MESSAGE_TIME_WINDOW
+      );
+
+      if (isIncluded) return nextList;
+      return [...nextList, optimisticMsg];
+    };
+
+    const preserveLastAssistantIdentity = (prevList: ClaudeMessage[], nextList: ClaudeMessage[]): ClaudeMessage[] => {
+      const prevAssistantIdx = findLastAssistantIndex(prevList);
+      const nextAssistantIdx = findLastAssistantIndex(nextList);
+      if (prevAssistantIdx < 0 || nextAssistantIdx < 0) return nextList;
+
+      const prevAssistant = prevList[prevAssistantIdx];
+      const nextAssistant = nextList[nextAssistantIdx];
+      const stabilized = preserveMessageIdentity(prevAssistant, nextAssistant);
+      if (stabilized === nextAssistant) return nextList;
+
+      const copy = [...nextList];
+      copy[nextAssistantIdx] = stabilized;
+      return copy;
+    };
+
     // ========== Message Callbacks ==========
     window.updateMessages = (json) => {
       try {
@@ -176,12 +238,28 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           // 如果正在流式传输，交给流式逻辑处理
           if (isStreamingRef.current) {
             if (useBackendStreamingRenderRef.current) {
-              return parsed;
+              let smartMerged = parsed.map((newMsg, i) => {
+                if (i === parsed.length - 1) return newMsg;
+                if (i < prev.length) {
+                  const oldMsg = prev[i];
+                  if (
+                    oldMsg.timestamp === newMsg.timestamp &&
+                    oldMsg.type === newMsg.type &&
+                    oldMsg.content === newMsg.content
+                  ) {
+                    return oldMsg;
+                  }
+                }
+                return newMsg;
+              });
+
+              smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
+              return appendOptimisticMessageIfMissing(prev, smartMerged);
             }
 
             const lastAssistantIdx = findLastAssistantIndex(parsed);
             if (lastAssistantIdx < 0) {
-              return parsed;
+              return appendOptimisticMessageIfMissing(prev, parsed);
             }
             // ... (rest of streaming logic)
             // 由于代码结构原因，这里简化处理，流式传输时直接复用原有逻辑
@@ -192,7 +270,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           if (!isStreamingRef.current) {
             // 智能合并：复用旧消息对象以优化性能（配合 App.tsx 中的 WeakMap 缓存）
             // 如果不是最后一条消息，且 timestamp/type/content 相同，则认为消息未变，复用引用
-            const smartMerged = parsed.map((newMsg, i) => {
+            let smartMerged = parsed.map((newMsg, i) => {
               // 总是更新最后一条消息（可能在流式生成中，或者状态在变）
               if (i === parsed.length - 1) return newMsg;
               
@@ -209,26 +287,8 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
               return newMsg;
             });
 
-            // 检查 prev 中是否有乐观消息
-            const lastMsg = prev[prev.length - 1];
-            const hasOptimisticMsg = lastMsg && lastMsg.isOptimistic;
-
-            if (hasOptimisticMsg) {
-              // 检查 smartMerged 是否包含我们的 optimistic message
-              const optimisticMsg = lastMsg;
-              const isIncluded = smartMerged.some((m) =>
-                m.type === 'user' &&
-                (m.content === optimisticMsg.content || m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
-                m.timestamp && optimisticMsg.timestamp &&
-                Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < OPTIMISTIC_MESSAGE_TIME_WINDOW
-              );
-
-              if (!isIncluded) {
-                // 如果后端返回的列表不包含我们的乐观消息，把它拼回去
-                return [...smartMerged, optimisticMsg];
-              }
-            }
-            return smartMerged;
+            smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
+            return appendOptimisticMessageIfMissing(prev, smartMerged);
           }
 
           // 下面是原有的流式处理逻辑，我们需要保留它
@@ -236,7 +296,23 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           // 为了最小化改动，我将把流式逻辑复制在这里（或者保持原样）
           
           if (useBackendStreamingRenderRef.current) {
-            return parsed;
+            let smartMerged = parsed.map((newMsg, i) => {
+              if (i === parsed.length - 1) return newMsg;
+              if (i < prev.length) {
+                const oldMsg = prev[i];
+                if (
+                  oldMsg.timestamp === newMsg.timestamp &&
+                  oldMsg.type === newMsg.type &&
+                  oldMsg.content === newMsg.content
+                ) {
+                  return oldMsg;
+                }
+              }
+              return newMsg;
+            });
+
+            smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
+            return appendOptimisticMessageIfMissing(prev, smartMerged);
           }
 
           const lastAssistantIdx = findLastAssistantIndex(parsed);
@@ -263,11 +339,16 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
             activeThinkingSegmentIndexRef.current = -1;
           }
 
-          const patched = [...parsed];
-          const targetIdx = streamingMessageIndexRef.current >= 0 ? streamingMessageIndexRef.current : lastAssistantIdx;
-          if (targetIdx >= 0 && patched[targetIdx]?.type === 'assistant') {
-            patched[targetIdx] = patchAssistantForStreaming(patched[targetIdx]);
+          let patched = [...parsed];
+          patched = appendOptimisticMessageIfMissing(prev, patched);
+          patched = preserveLastAssistantIdentity(prev, patched);
+
+          const patchedAssistantIdx = findLastAssistantIndex(patched);
+          if (patchedAssistantIdx >= 0 && patched[patchedAssistantIdx]?.type === 'assistant') {
+            streamingMessageIndexRef.current = patchedAssistantIdx;
+            patched[patchedAssistantIdx] = patchAssistantForStreaming(patched[patchedAssistantIdx]);
           }
+
           return patched;
         });
       } catch (error) {
@@ -653,6 +734,13 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       }
     };
 
+    // Handle pending streaming enabled data (from main.tsx pre-registration)
+    if ((window as unknown as Record<string, unknown>).__pendingStreamingEnabled) {
+      const pending = (window as unknown as Record<string, unknown>).__pendingStreamingEnabled as string;
+      delete (window as unknown as Record<string, unknown>).__pendingStreamingEnabled;
+      window.updateStreamingEnabled?.(pending);
+    }
+
     window.updateSendShortcut = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
@@ -664,11 +752,27 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       }
     };
 
-    // Request initial settings
-    if (window.sendToJava) {
-      window.sendToJava('get_streaming_enabled:');
-      window.sendToJava('get_send_shortcut:');
+    // Handle pending send shortcut data (from main.tsx pre-registration)
+    if ((window as unknown as Record<string, unknown>).__pendingSendShortcut) {
+      const pending = (window as unknown as Record<string, unknown>).__pendingSendShortcut as string;
+      delete (window as unknown as Record<string, unknown>).__pendingSendShortcut;
+      window.updateSendShortcut?.(pending);
     }
+
+    // Request initial settings with retry mechanism
+    let settingsRetryCount = 0;
+    const requestInitialSettings = () => {
+      if (window.sendToJava) {
+        window.sendToJava('get_streaming_enabled:');
+        window.sendToJava('get_send_shortcut:');
+      } else {
+        settingsRetryCount++;
+        if (settingsRetryCount < MAX_RETRIES) {
+          setTimeout(requestInitialSettings, 100);
+        }
+      }
+    };
+    setTimeout(requestInitialSettings, 200);
 
     // ========== Permission Dialog Callbacks ==========
     window.showPermissionDialog = (json) => {
@@ -680,6 +784,14 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       }
     };
 
+    if (Array.isArray(window.__pendingPermissionDialogRequests) && window.__pendingPermissionDialogRequests.length > 0) {
+      const pending = window.__pendingPermissionDialogRequests.slice();
+      window.__pendingPermissionDialogRequests = [];
+      for (const payload of pending) {
+        window.showPermissionDialog?.(payload);
+      }
+    }
+
     window.showAskUserQuestionDialog = (json) => {
       try {
         const request = JSON.parse(json);
@@ -689,6 +801,14 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       }
     };
 
+    if (Array.isArray(window.__pendingAskUserQuestionDialogRequests) && window.__pendingAskUserQuestionDialogRequests.length > 0) {
+      const pending = window.__pendingAskUserQuestionDialogRequests.slice();
+      window.__pendingAskUserQuestionDialogRequests = [];
+      for (const payload of pending) {
+        window.showAskUserQuestionDialog?.(payload);
+      }
+    }
+
     window.showPlanApprovalDialog = (json) => {
       try {
         const request = JSON.parse(json);
@@ -697,6 +817,14 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         console.error('[Frontend] Failed to parse plan approval request:', error);
       }
     };
+
+    if (Array.isArray(window.__pendingPlanApprovalDialogRequests) && window.__pendingPlanApprovalDialogRequests.length > 0) {
+      const pending = window.__pendingPlanApprovalDialogRequests.slice();
+      window.__pendingPlanApprovalDialogRequests = [];
+      for (const payload of pending) {
+        window.showPlanApprovalDialog?.(payload);
+      }
+    }
 
     // ========== Rewind Result Callback ==========
     window.onRewindResult = (json: string) => {

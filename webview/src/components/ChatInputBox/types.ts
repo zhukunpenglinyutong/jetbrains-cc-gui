@@ -8,6 +8,16 @@
 // ============================================================
 
 /**
+ * File tag information for backend context injection (Codex mode)
+ */
+export interface FileTagInfo {
+  /** Display path (as shown in tag) */
+  displayPath: string;
+  /** Absolute path (for file reading) */
+  absolutePath: string;
+}
+
+/**
  * File attachment
  */
 export interface Attachment {
@@ -376,6 +386,8 @@ export interface ChatInputBoxHandle {
   clear: () => void;
   /** Check if input has content */
   hasContent: () => boolean;
+  /** Get file tags from input (for Codex context injection) */
+  getFileTags: () => FileTagInfo[];
 }
 
 // ============================================================

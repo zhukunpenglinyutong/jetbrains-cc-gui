@@ -82,7 +82,7 @@ const PlanApprovalDialog = ({
         </p>
 
         {/* Allowed Prompts Section */}
-        {request.allowedPrompts && request.allowedPrompts.length > 0 && (
+        {/* {request.allowedPrompts && request.allowedPrompts.length > 0 && (
           <div className="plan-approval-prompts">
             <h4 className="prompts-header">
               {t('planApproval.requestedPermissions', 'Requested Permissions')}
@@ -96,7 +96,7 @@ const PlanApprovalDialog = ({
               ))}
             </div>
           </div>
-        )}
+        )} */}
 
         {/* Execution Mode Selection */}
         <div className="plan-approval-mode-section">
