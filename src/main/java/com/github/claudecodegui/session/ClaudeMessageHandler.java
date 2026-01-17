@@ -307,6 +307,9 @@ public class ClaudeMessageHandler implements MessageCallback {
      * 解释：AI正在一字一字地说话
      */
     private void handleContentDelta(String content) {
+        if (content == null || content.isEmpty()) {
+            return;
+        }
         // 如果之前在思考，现在开始输出内容，说明思考完成
         if (isThinking) {
             isThinking = false;
@@ -327,8 +330,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         applyTextDeltaToRaw(content);
         textSegmentActive = true;
 
-        // 🔧 流式渲染：通过 updateMessages 实时刷新（与 stream 分支一致）
-        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyContentDelta(content);
+        if (!isStreaming) {
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+        }
     }
 
     /**
@@ -596,6 +601,9 @@ public class ClaudeMessageHandler implements MessageCallback {
      * 解释：收到思考内容的增量，转发给前端实时显示
      */
     private void handleThinkingDelta(String content) {
+        if (content == null || content.isEmpty()) {
+            return;
+        }
         // 确保思考状态已开启
         if (!isThinking) {
             isThinking = true;
@@ -605,7 +613,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         ensureCurrentAssistantMessageExists();
         applyThinkingDeltaToRaw(content);
         thinkingSegmentActive = true;
-        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyThinkingDelta(content);
+        if (!isStreaming) {
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+        }
     }
 
     private void ensureCurrentAssistantMessageExists() {

@@ -1,3 +1,63 @@
+##### **2026年1月17日（v0.1.5）**
+
+English:
+- [x] Add batch grouping for consecutive Read and Edit tool blocks
+- [x] Add status message notifications for reconnection and other status info
+- [x] Add automatic retries mechanism
+- [x] Add Codex MCP server management (CRUD operations)
+- [x] Enhance Codex integration with file context injection (@ references)
+- [x] Support active file content auto-injection for Codex
+- [x] Add AGENTS.md instruction collection support for Codex
+- [x] Filter Codex session history by current project path
+- [x] Add acceptEdits permission mode for Codex auto-edit approval
+- [x] Auto-expand latest thinking block during streaming
+- [x] Enhance TodoPanel with current task title and stopped state display
+- [x] Add WebSearch to collapsible tool blocks
+- [x] Fix MCP popups display issue
+- [x] Fix AskUserQuestion tool result handling
+- [x] Fix UUID sync for user messages and filesystem I/O timing issue
+- [x] Resolve race condition in bridge extraction and improve path handling
+- [x] Improve Windows sandbox compatibility (use danger-full-access on Windows)
+- [x] Handle JCEF remote mode NPE with dedicated error panel
+- [x] Unify tool status indicator styles and layout adjustments
+- [x] Support local.properties to specify JDK and Node paths
+- [x] Decompose App.tsx into modular components and hooks (2652 → 306 lines)
+- [x] Decompose ChatInputBox into modular hooks architecture (8 custom hooks)
+- [x] Replace deprecated execCommand with modern Selection API
+- [x] Optimize chat interface performance with smart object reuse
+- [x] Add multi-level caching and content-visibility optimization
+- [x] Add OpenCode provider option
+- [x] Improve UI/UX and enhance i18n support
+
+中文:
+- [x] 新增连续Read和Edit工具块的批量分组显示
+- [x] 新增状态消息通知（重连等状态信息）
+- [x] 新增自动重试机制
+- [x] 新增Codex MCP服务器管理（增删改查）
+- [x] 增强Codex文件上下文注入（支持@引用）
+- [x] 支持Codex自动注入当前活动文件内容
+- [x] 支持Codex的AGENTS.md指令集合
+- [x] 按当前项目路径过滤Codex会话历史
+- [x] 新增Codex自动编辑审批的acceptEdits权限模式
+- [x] 流式输出时自动展开最新的思考块
+- [x] 增强TodoPanel显示当前任务标题和停止状态
+- [x] WebSearch加入可折叠工具块
+- [x] 修复MCP弹窗显示问题
+- [x] 修复AskUserQuestion工具结果处理
+- [x] 修复用户消息UUID同步和文件系统I/O时序问题
+- [x] 解决bridge解压竞态条件并改进路径处理
+- [x] 改进Windows沙箱兼容性（Windows使用danger-full-access模式）
+- [x] 处理JCEF远程模式空指针，提供专用错误面板和引导
+- [x] 统一工具状态指示器样式和布局调整
+- [x] 支持local.properties指定JDK和Node路径
+- [x] 重构App.tsx为模块化组件和hooks（2652行→306行）
+- [x] 重构ChatInputBox为模块化hooks架构（8个自定义hooks）
+- [x] 用现代Selection API替换已废弃的execCommand
+- [x] 优化聊天界面性能（智能对象复用）
+- [x] 添加多级缓存和content-visibility优化
+- [x] 新增OpenCode供应商选项
+- [x] 改进UI/UX并增强国际化支持
+
 ##### **2026年1月13日（v0.1.5-beta4）**
 
 English:
