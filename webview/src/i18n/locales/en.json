@@ -77,7 +77,10 @@
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
     "sdkStatusLoading": "Checking SDK status...",
-    "goInstallSdk": "Go to Install"
+    "goInstallSdk": "Go to Install",
+    "commandNotImplemented": "`{{command}}` feature is not yet implemented.",
+    "attachmentFile": "[Attachment: {{fileName}}]",
+    "attachmentsUploaded": "[Attachments Uploaded]"
   },
   "settings": {
     "title": "Settings",

@@ -76,7 +76,10 @@
     "localProject": "Local",
     "disabled": "Désactivé",
     "sdkNotInstalled": "{{provider}} SDK n'est pas installé. Veuillez installer le SDK pour commencer à discuter.",
-    "goInstallSdk": "Aller installer"
+    "goInstallSdk": "Aller installer",
+    "commandNotImplemented": "La fonctionnalité `{{command}}` n'est pas encore implémentée.",
+    "attachmentFile": "[Pièce jointe: {{fileName}}]",
+    "attachmentsUploaded": "[Pièces jointes téléchargées]"
   },
   "settings": {
     "title": "Paramètres",

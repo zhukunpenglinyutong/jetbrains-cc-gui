@@ -76,7 +76,10 @@
     "localProject": "本地專案",
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安裝，請先安裝 SDK 才能開始對話",
-    "goInstallSdk": "前往安裝"
+    "goInstallSdk": "前往安裝",
+    "commandNotImplemented": "`{{command}}` 功能尚未實現。",
+    "attachmentFile": "[附件: {{fileName}}]",
+    "attachmentsUploaded": "[已上傳附件]"
   },
   "settings": {
     "title": "設定",

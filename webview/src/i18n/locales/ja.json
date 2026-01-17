@@ -76,7 +76,10 @@
     "localProject": "ローカル",
     "disabled": "無効",
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
-    "goInstallSdk": "インストールへ"
+    "goInstallSdk": "インストールへ",
+    "commandNotImplemented": "`{{command}}` 機能はまだ実装されていません。",
+    "attachmentFile": "[添付ファイル: {{fileName}}]",
+    "attachmentsUploaded": "[添付ファイルがアップロードされました]"
   },
   "settings": {
     "title": "設定",

@@ -317,7 +317,7 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
         }}
       >
         <div className="task-title-section">
-          {isCollapsible && (
+          {isCollapsible && lowerName !== 'grep' && (
             <span
               className="codicon codicon-chevron-right"
               style={{

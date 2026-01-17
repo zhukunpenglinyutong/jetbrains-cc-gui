@@ -497,6 +497,29 @@ const App = () => {
       return;
     }
 
+    // 🔧 检查未实现的斜杠命令
+    // Check for unimplemented slash commands
+    if (text.startsWith('/')) {
+      const command = text.split(/\s+/)[0].toLowerCase();
+      const unimplementedCommands = ['/plugin', '/plugins'];
+      if (unimplementedCommands.includes(command)) {
+        // 添加用户消息
+        const userMessage: ClaudeMessage = {
+          type: 'user',
+          content: text,
+          timestamp: new Date().toISOString(),
+        };
+        // 添加提示消息
+        const assistantMessage: ClaudeMessage = {
+          type: 'assistant',
+          content: t('chat.commandNotImplemented', { command }),
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, userMessage, assistantMessage]);
+        return;
+      }
+    }
+
     // 构建用户消息的内容块（用于前端显示）
     const userContentBlocks: ClaudeContentBlock[] = [];
 
@@ -510,10 +533,10 @@ const App = () => {
             mediaType: att.mediaType,
           });
         } else {
-          // 非图片附件显示文件名
+          // Non-image attachment - display file name
           userContentBlocks.push({
             type: 'text',
-            text: `[附件: ${att.fileName}]`,
+            text: t('chat.attachmentFile', { fileName: att.fileName }),
           });
         }
       }
@@ -527,10 +550,10 @@ const App = () => {
       return;
     }
 
-    // 立即在前端添加用户消息（包含图片预览）
+    // Add user message immediately on frontend (includes image preview)
     const userMessage: ClaudeMessage = {
       type: 'user',
-      content: text || (hasAttachments ? '[已上传附件]' : ''),
+      content: text || (hasAttachments ? t('chat.attachmentsUploaded') : ''),
       timestamp: new Date().toISOString(),
       isOptimistic: true, // 标记为乐观更新消息
       raw: {
@@ -629,8 +652,14 @@ const App = () => {
 
   /**
    * 处理提供商选择
+   * 切换 provider 时清空消息和输入框（类似新建会话）
    */
   const handleProviderSelect = (providerId: string) => {
+    // 清空消息列表（类似新建会话）
+    setMessages([]);
+    // 清空输入框
+    chatInputRef.current?.clear();
+
     setCurrentProvider(providerId);
     sendBridgeEvent('set_provider', providerId);
     const modeToSet = providerId === 'codex' ? 'bypassPermissions' : claudePermissionMode;
@@ -958,33 +987,6 @@ const App = () => {
 
   return (
     <>
-      <style>{`
-        .version-tag {
-          position: absolute;
-          top: -2px;
-          left: 100%;
-          margin-left: 10px;
-          background: rgba(139, 92, 246, 0.1);
-          border: 1px solid rgba(139, 92, 246, 0.5);
-          color: #ddd6fe;
-          font-size: 10px;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-weight: 500;
-          white-space: nowrap;
-          box-shadow: 0 0 10px rgba(139, 92, 246, 0.15);
-          backdrop-filter: blur(4px);
-          z-index: 10;
-        }
-        
-        [data-theme="light"] .version-tag {
-          background: rgba(139, 92, 246, 0.1);
-          border: 1px solid rgba(139, 92, 246, 0.3);
-          color: #6d28d9;
-          box-shadow: none;
-          backdrop-filter: none;
-        }
-      `}</style>
       <ToastContainer messages={toasts} onDismiss={dismissToast} />
       <ChatHeader
         currentView={currentView}

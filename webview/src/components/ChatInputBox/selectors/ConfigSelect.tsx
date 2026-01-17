@@ -319,43 +319,6 @@ export const ConfigSelect = ({
             {activeSubmenu === 'provider' && renderProviderSubmenu()}
           </div>
 
-          {/* Divider */}
-          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
-
-          {/* Provider Item (Disabled) */}
-          <div
-            className="selector-option disabled"
-            style={{ position: 'relative', opacity: 0.5, cursor: 'not-allowed' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              showToastMessage(t('settings.provider.featureComingSoon'));
-            }}
-          >
-            <span className="codicon codicon-vm-connect" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span>{t('settings.provider.provider')}</span>
-            </div>
-            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
-          </div>
-
-          {/* Divider */}
-          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
-
-          {/* MCP Item (Disabled) */}
-          <div
-            className="selector-option disabled"
-            style={{ position: 'relative', opacity: 0.5, cursor: 'not-allowed' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              showToastMessage(t('settings.provider.featureComingSoon'));
-            }}
-          >
-            <span className="codicon codicon-server" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span>MCP</span>
-            </div>
-            <span className="codicon codicon-chevron-right" style={{ marginLeft: 'auto', fontSize: '12px' }} />
-          </div>
 
           {/* Divider */}
           <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />

@@ -77,7 +77,10 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
     "sdkStatusLoading": "正在检查 SDK 状态...",
-    "goInstallSdk": "前往安装"
+    "goInstallSdk": "前往安装",
+    "commandNotImplemented": "`{{command}}` 功能暂未实现。",
+    "attachmentFile": "[附件: {{fileName}}]",
+    "attachmentsUploaded": "[已上传附件]"
   },
   "settings": {
     "title": "设置",

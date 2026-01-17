@@ -76,7 +76,10 @@
     "localProject": "Local",
     "disabled": "Deshabilitado",
     "sdkNotInstalled": "{{provider}} SDK no está instalado. Instala el SDK para comenzar a chatear.",
-    "goInstallSdk": "Ir a instalar"
+    "goInstallSdk": "Ir a instalar",
+    "commandNotImplemented": "La función `{{command}}` aún no está implementada.",
+    "attachmentFile": "[Adjunto: {{fileName}}]",
+    "attachmentsUploaded": "[Archivos adjuntos cargados]"
   },
   "settings": {
     "title": "Configuración",

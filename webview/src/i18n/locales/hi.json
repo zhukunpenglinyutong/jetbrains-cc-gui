@@ -76,7 +76,10 @@
     "localProject": "स्थानीय",
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
-    "goInstallSdk": "इंस्टॉल करने जाएं"
+    "goInstallSdk": "इंस्टॉल करने जाएं",
+    "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
+    "attachmentFile": "[अटैचमेंट: {{fileName}}]",
+    "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]"
   },
   "settings": {
     "title": "सेटिंग्स",
