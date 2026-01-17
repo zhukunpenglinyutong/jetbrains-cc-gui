@@ -503,6 +503,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 注册所有 Handler
             messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
             messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
+            messageDispatcher.registerHandler(new CodexMcpServerHandler(handlerContext, settingsService.getCodexMcpServerManager()));
             messageDispatcher.registerHandler(new SkillHandler(handlerContext, mainPanel));
             messageDispatcher.registerHandler(new FileHandler(handlerContext));
             messageDispatcher.registerHandler(new SettingsHandler(handlerContext));

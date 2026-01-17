@@ -83,9 +83,6 @@ const TodoPanel = ({ todos, isStreaming = false }: TodoPanelProps) => {
     
     if (currentTask?.content) {
       title = currentTask.content;
-      if (title.length > 20) {
-        title = title.substring(0, 20) + '...';
-      }
     }
 
     // If we have a title, show it. Otherwise fall back to generic "In Progress" text
@@ -105,6 +102,8 @@ const TodoPanel = ({ todos, isStreaming = false }: TodoPanelProps) => {
     }
   };
 
+  const headerContent = renderHeaderContent();
+
   return (
     <div className="todo-panel">
       <div className="todo-panel-header" onClick={toggleExpanded}>
@@ -115,7 +114,9 @@ const TodoPanel = ({ todos, isStreaming = false }: TodoPanelProps) => {
           {!isAllCompleted && isStreaming && (
             <span className="codicon codicon-loading todo-panel-loading" />
           )}
-          {renderHeaderContent()}
+          <span className="todo-panel-text" title={headerContent}>
+            {headerContent}
+          </span>
         </span>
         <div className="todo-panel-close" onClick={handleClose} title={t('common.close')}>
           <span className="codicon codicon-close" />

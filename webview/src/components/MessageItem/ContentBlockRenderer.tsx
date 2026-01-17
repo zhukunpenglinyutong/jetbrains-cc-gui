@@ -19,6 +19,7 @@ export interface ContentBlockRendererProps {
   isThinkingExpanded: boolean;
   isThinking: boolean;
   isLastMessage: boolean;
+  isLastBlock?: boolean;
   t: TFunction;
   onToggleThinking: () => void;
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
@@ -32,6 +33,7 @@ export function ContentBlockRenderer({
   isThinkingExpanded,
   isThinking,
   isLastMessage,
+  isLastBlock = false,
   t,
   onToggleThinking,
   findToolResult,
@@ -110,22 +112,23 @@ export function ContentBlockRenderer({
           onClick={onToggleThinking}
         >
           <span className="thinking-title">
-            {isThinking && isLastMessage
-              ? t('common.thinking')
-              : t('common.thinkingProcess')}
+            {isThinking && isLastMessage && isLastBlock
+              ? t('common.thinkingProcess')
+              : t('common.thinking')}
           </span>
           <span className="thinking-icon">
             {isThinkingExpanded ? '▼' : '▶'}
           </span>
         </div>
-        {isThinkingExpanded && (
-          <div className="thinking-content">
-            <MarkdownBlock
-              content={block.thinking ?? block.text ?? t('chat.noThinkingContent')}
-              isStreaming={isStreaming}
-            />
-          </div>
-        )}
+        <div 
+          className="thinking-content"
+          style={{ display: isThinkingExpanded ? 'block' : 'none' }}
+        >
+          <MarkdownBlock
+            content={block.thinking ?? block.text ?? t('chat.noThinkingContent')}
+            isStreaming={isStreaming}
+          />
+        </div>
       </div>
     );
   }

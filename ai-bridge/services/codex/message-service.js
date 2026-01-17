@@ -24,6 +24,29 @@ import { homedir } from 'os';
 // SDK 缓存
 let codexSdk = null;
 
+// ========== Debug Logging Configuration ==========
+// Log levels: 0 = off, 1 = errors only, 2 = warnings, 3 = info, 4 = debug, 5 = verbose
+const DEBUG_LEVEL = process.env.CODEX_DEBUG_LEVEL ? parseInt(process.env.CODEX_DEBUG_LEVEL, 10) : 3;
+
+/**
+ * Conditional logging utility based on DEBUG_LEVEL
+ * @param {number} level - Log level (1-5)
+ * @param {string} tag - Log tag
+ * @param  {...any} args - Log arguments
+ */
+function debugLog(level, tag, ...args) {
+  if (DEBUG_LEVEL >= level) {
+    console.log(`[${tag}]`, ...args);
+  }
+}
+
+// Convenience functions for different log levels
+const logError = (tag, ...args) => debugLog(1, tag, ...args);
+const logWarn = (tag, ...args) => debugLog(2, tag, ...args);
+const logInfo = (tag, ...args) => debugLog(3, tag, ...args);
+const logDebug = (tag, ...args) => debugLog(4, tag, ...args);
+const logVerbose = (tag, ...args) => debugLog(5, tag, ...args);
+
 const isReconnectNotice = (message) =>
   typeof message === 'string' && /Reconnecting\.\.\./i.test(message);
 
@@ -119,12 +142,12 @@ function readAgentsFile(filePath) {
     const stats = statSync(filePath);
     const content = readFileSync(filePath, 'utf8');
     if (content.length > MAX_AGENTS_MD_BYTES) {
-      console.log(`[AGENTS.md] File truncated from ${content.length} to ${MAX_AGENTS_MD_BYTES} bytes: ${filePath}`);
+      logInfo('AGENTS.md', `File truncated from ${content.length} to ${MAX_AGENTS_MD_BYTES} bytes: ${filePath}`);
       return content.slice(0, MAX_AGENTS_MD_BYTES);
     }
     return content;
   } catch (e) {
-    console.warn(`[AGENTS.md] Failed to read file: ${filePath}`, e.message);
+    logWarn('AGENTS.md', `Failed to read file: ${filePath}`, e.message);
     return '';
   }
 }
@@ -153,7 +176,7 @@ function collectAgentsInstructions(cwd) {
   if (globalFile) {
     const content = readAgentsFile(globalFile);
     if (content.trim()) {
-      console.log(`[AGENTS.md] Loaded global instructions: ${globalFile}`);
+      logInfo('AGENTS.md', `Loaded global instructions: ${globalFile}`);
       instructions.push(`# Global Instructions (${globalFile})\n\n${content}`);
       totalBytes += content.length;
     }
@@ -181,7 +204,7 @@ function collectAgentsInstructions(cwd) {
   // 按顺序读取每个目录的 AGENTS.md
   for (const dir of directories) {
     if (totalBytes >= MAX_AGENTS_MD_BYTES) {
-      console.log(`[AGENTS.md] Reached max bytes limit (${MAX_AGENTS_MD_BYTES}), stopping collection`);
+      logInfo('AGENTS.md', `Reached max bytes limit (${MAX_AGENTS_MD_BYTES}), stopping collection`);
       break;
     }
 
@@ -190,7 +213,7 @@ function collectAgentsInstructions(cwd) {
       const content = readAgentsFile(file);
       if (content.trim()) {
         const relativePath = dir === searchRoot ? '(root)' : dir.replace(searchRoot, '.');
-        console.log(`[AGENTS.md] Loaded project instructions: ${file}`);
+        logInfo('AGENTS.md', `Loaded project instructions: ${file}`);
         instructions.push(`# Project Instructions ${relativePath}\n\n${content}`);
         totalBytes += content.length;
       }
@@ -198,11 +221,11 @@ function collectAgentsInstructions(cwd) {
   }
 
   if (instructions.length === 0) {
-    console.log('[AGENTS.md] No AGENTS.md files found');
+    logDebug('AGENTS.md', 'No AGENTS.md files found');
     return '';
   }
 
-  console.log(`[AGENTS.md] Collected ${instructions.length} instruction files, total ${totalBytes} bytes`);
+  logInfo('AGENTS.md', `Collected ${instructions.length} instruction files, total ${totalBytes} bytes`);
   return instructions.join('\n\n---\n\n');
 }
 
@@ -349,7 +372,7 @@ export async function sendMessage(
       if (agentsInstructions) {
         // 将 AGENTS.md 指令作为系统指令附加到消息前面
         finalMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${message}`;
-        console.log(`[AGENTS.md] Prepended ${agentsInstructions.length} chars of instructions to message`);
+        logDebug('AGENTS.md', `Prepended ${agentsInstructions.length} chars of instructions to message`);
       }
     }
 
@@ -616,6 +639,30 @@ export async function sendMessage(
             });
             emittedToolUseIds.add(toolUseId);
           }
+          // Handle MCP tool call started
+          else if (event.item && event.item.type === 'mcp_tool_call') {
+            const toolUseId = event.item.id || randomUUID();
+            // Build tool name: mcp__{server}__{tool}
+            const toolName = `mcp__${event.item.server}__${event.item.tool}`;
+
+            console.log('[DEBUG] MCP tool call started:', toolName, 'id:', toolUseId);
+
+            emitMessage({
+              type: 'assistant',
+              message: {
+                role: 'assistant',
+                content: [
+                  {
+                    type: 'tool_use',
+                    id: toolUseId,
+                    name: toolName,
+                    input: event.item.arguments || {}
+                  }
+                ]
+              }
+            });
+            emittedToolUseIds.add(toolUseId);
+          }
           break;
         }
 
@@ -709,6 +756,71 @@ export async function sendMessage(
                 ]
               }
             });
+          }
+          // Handle MCP tool call completed
+          else if (event.item.type === 'mcp_tool_call') {
+            const toolUseId = event.item.id || randomUUID();
+            const toolName = `mcp__${event.item.server}__${event.item.tool}`;
+            const isError = event.item.status === 'failed' || !!event.item.error;
+
+            console.log('[DEBUG] MCP tool call completed:', toolName, 'id:', toolUseId, 'error:', isError);
+
+            // Emit tool_use if not already emitted
+            if (!emittedToolUseIds.has(toolUseId)) {
+              emitMessage({
+                type: 'assistant',
+                message: {
+                  role: 'assistant',
+                  content: [
+                    {
+                      type: 'tool_use',
+                      id: toolUseId,
+                      name: toolName,
+                      input: event.item.arguments || {}
+                    }
+                  ]
+                }
+              });
+              emittedToolUseIds.add(toolUseId);
+            }
+
+            // Extract result content
+            let resultContent = '(no output)';
+            if (event.item.error) {
+              resultContent = event.item.error.message || 'MCP tool call failed';
+            } else if (event.item.result) {
+              // result: { content: ContentBlock[], structured_content: unknown }
+              if (event.item.result.content && Array.isArray(event.item.result.content)) {
+                // Extract text from content blocks
+                const textParts = event.item.result.content
+                  .filter(block => block.type === 'text')
+                  .map(block => block.text);
+                resultContent = textParts.length > 0 ? textParts.join('\n') : JSON.stringify(event.item.result);
+              } else if (event.item.result.structured_content) {
+                resultContent = JSON.stringify(event.item.result.structured_content);
+              } else {
+                resultContent = JSON.stringify(event.item.result);
+              }
+            }
+
+            // Truncate if needed
+            const truncatedResult = truncateForDisplay(resultContent, MAX_TOOL_RESULT_CHARS);
+
+            // Emit tool_result
+            emitMessage({
+              type: 'user',
+              message: {
+                role: 'user',
+                content: [
+                  {
+                    type: 'tool_result',
+                    tool_use_id: toolUseId,
+                    is_error: isError,
+                    content: truncatedResult && truncatedResult.trim() ? truncatedResult : '(no output)'
+                  }
+                ]
+              }
+            });
           } else {
             console.log('[DEBUG] Unhandled item.completed item type:', event.item.type);
           }
@@ -770,7 +882,12 @@ export async function sendMessage(
         }
 
         default: {
-          console.log('[DEBUG] Unknown event type:', event.type);
+          // Log unknown events with more details to help diagnose MCP tool issues
+          const payloadType = event.payload?.type;
+          console.log('[DEBUG] Unknown event type:', event.type, 'payload.type:', payloadType);
+          if (event.type === 'event_msg' || payloadType === 'function_call' || payloadType === 'function_call_output') {
+            console.log('[DEBUG] Full event:', JSON.stringify(event).substring(0, 500));
+          }
         }
       }
     }

@@ -491,16 +491,18 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       if (!isStreamingRef.current) return;
       activeTextSegmentIndexRef.current = -1;
 
+      let forceUpdate = false;
       if (activeThinkingSegmentIndexRef.current < 0) {
         activeThinkingSegmentIndexRef.current = streamingThinkingSegmentsRef.current.length;
         streamingThinkingSegmentsRef.current.push('');
+        forceUpdate = true;
       }
       streamingThinkingSegmentsRef.current[activeThinkingSegmentIndexRef.current] += delta;
 
       const now = Date.now();
       const timeSinceLastUpdate = now - lastThinkingUpdateRef.current;
 
-      if (timeSinceLastUpdate >= THROTTLE_INTERVAL) {
+      if (forceUpdate || timeSinceLastUpdate >= THROTTLE_INTERVAL) {
         lastThinkingUpdateRef.current = now;
         setMessages((prev) => {
           const newMessages = [...prev];
@@ -582,6 +584,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       streamingThinkingSegmentsRef.current = [];
       activeThinkingSegmentIndexRef.current = -1;
       seenToolUseCountRef.current = 0;
+      autoExpandedThinkingKeysRef.current.clear();
       setStreamingActive(false);
     };
 

@@ -31,6 +31,10 @@ import java.util.concurrent.CompletableFuture;
 public class ClaudeSession {
 
     private static final Logger LOG = Logger.getInstance(ClaudeSession.class);
+
+    /** Maximum file size for Codex context injection (100KB) */
+    private static final int MAX_FILE_SIZE_BYTES = 100 * 1024;
+
     private final Gson gson = new Gson();
     private final Project project;
 
@@ -697,10 +701,10 @@ public class ClaudeSession {
 
             long fileSize = file.length();
             // 限制文件大小（最大 100KB）
-            if (fileSize > 100 * 1024) {
+            if (fileSize > MAX_FILE_SIZE_BYTES) {
                 LOG.info("[Codex Context] File too large, reading first 100KB: " + filePath + " (" + fileSize + " bytes)");
                 try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
-                    byte[] buffer = new byte[100 * 1024];
+                    byte[] buffer = new byte[MAX_FILE_SIZE_BYTES];
                     int bytesRead = fis.read(buffer);
                     if (bytesRead > 0) {
                         return new String(buffer, 0, bytesRead, java.nio.charset.StandardCharsets.UTF_8)

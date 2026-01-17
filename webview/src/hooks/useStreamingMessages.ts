@@ -96,9 +96,19 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
 
     const textSegments = streamingTextSegmentsRef.current;
     const thinkingSegments = streamingThinkingSegmentsRef.current;
-    const phasesCount = Math.max(textSegments.length, thinkingSegments.length, toolUseBlocks.length + 1);
+
+    // Calculate phases count, ensure at least 1 phase even when all arrays are empty
+    // This ensures tool_use blocks are processed even without text/thinking content
+    const phasesCount = Math.max(
+      textSegments.length,
+      thinkingSegments.length,
+      toolUseBlocks.length,
+      1
+    );
 
     const blocks: any[] = [];
+    const addedToolUseIds = new Set<string>();
+
     for (let phase = 0; phase < phasesCount; phase += 1) {
       const thinking = thinkingSegments[phase];
       if (typeof thinking === 'string' && thinking.length > 0) {
@@ -117,7 +127,21 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
         blocks.push({ type: 'text', text });
       }
       if (phase < toolUseBlocks.length) {
-        blocks.push(toolUseBlocks[phase]);
+        const toolBlock = toolUseBlocks[phase];
+        blocks.push(toolBlock);
+        if (toolBlock?.id) {
+          addedToolUseIds.add(toolBlock.id);
+        }
+      }
+    }
+
+    // Ensure all tool_use blocks are included (in case any were missed due to phase calculation)
+    for (const toolBlock of toolUseBlocks) {
+      if (toolBlock?.id && !addedToolUseIds.has(toolBlock.id)) {
+        blocks.push(toolBlock);
+      } else if (!toolBlock?.id && !blocks.includes(toolBlock)) {
+        // For blocks without id, use reference equality check
+        blocks.push(toolBlock);
       }
     }
 
@@ -183,6 +207,9 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     activeTextSegmentIndexRef.current = -1;
     activeThinkingSegmentIndexRef.current = -1;
     seenToolUseCountRef.current = 0;
+    lastContentUpdateRef.current = 0;
+    lastThinkingUpdateRef.current = 0;
+    autoExpandedThinkingKeysRef.current.clear();
 
     if (contentUpdateTimeoutRef.current) {
       clearTimeout(contentUpdateTimeoutRef.current);

@@ -42,6 +42,13 @@ public class PermissionService {
     // 多项目支持：按项目注册的 PlanApproval 对话框显示器
     private final Map<Project, PlanApprovalDialogShower> planApprovalDialogShowers = new ConcurrentHashMap<>();
 
+    // 最近活动的项目（用于无文件上下文的对话框选择）
+    private volatile Project lastActiveProject = null;
+
+    // 文件等待配置
+    private static final int FILE_WAIT_INITIAL_DELAY_MS = 50;
+    private static final int FILE_WAIT_MAX_RETRIES = 3;
+
     // 调试日志辅助方法
     private void debugLog(String tag, String message) {
         LOG.debug(String.format("[%s] %s", tag, message));
@@ -202,6 +209,7 @@ public class PermissionService {
     public void registerDialogShower(Project project, PermissionDialogShower shower) {
         if (project != null && shower != null) {
             dialogShowers.put(project, shower);
+            lastActiveProject = project; // Track most recent active project
             debugLog("CONFIG", "Dialog shower registered for project: " + project.getName() +
                 ", total registered: " + dialogShowers.size());
         }
@@ -231,6 +239,7 @@ public class PermissionService {
     public void registerAskUserQuestionDialogShower(Project project, AskUserQuestionDialogShower shower) {
         if (project != null && shower != null) {
             askUserQuestionDialogShowers.put(project, shower);
+            lastActiveProject = project; // Track most recent active project
             debugLog("CONFIG", "AskUserQuestion dialog shower registered for project: " + project.getName() +
                 ", total registered: " + askUserQuestionDialogShowers.size());
         }
@@ -260,9 +269,60 @@ public class PermissionService {
     public void registerPlanApprovalDialogShower(Project project, PlanApprovalDialogShower shower) {
         if (project != null && shower != null) {
             planApprovalDialogShowers.put(project, shower);
+            lastActiveProject = project; // Track most recent active project
             debugLog("CONFIG", "PlanApproval dialog shower registered for project: " + project.getName() +
                 ", total registered: " + planApprovalDialogShowers.size());
         }
+    }
+
+    /**
+     * Update the last active project (called when user interacts with a project)
+     * @param project The project that became active
+     */
+    public void setLastActiveProject(Project project) {
+        if (project != null) {
+            this.lastActiveProject = project;
+            debugLog("CONFIG", "Last active project updated: " + project.getName());
+        }
+    }
+
+    /**
+     * Get dialog shower with preference for last active project
+     * Falls back to first registered shower if last active project has no shower
+     */
+    private <T> T getPreferredDialogShower(Map<Project, T> showers) {
+        if (showers.isEmpty()) {
+            return null;
+        }
+        // Prefer the last active project's shower
+        if (lastActiveProject != null && showers.containsKey(lastActiveProject)) {
+            return showers.get(lastActiveProject);
+        }
+        // Fallback to first registered shower
+        return showers.values().iterator().next();
+    }
+
+    /**
+     * Wait for file to be ready with retry mechanism
+     * Uses exponential backoff for more reliable file system synchronization
+     */
+    private boolean waitForFileReady(Path file) {
+        int delay = FILE_WAIT_INITIAL_DELAY_MS;
+        for (int i = 0; i < FILE_WAIT_MAX_RETRIES; i++) {
+            try {
+                Thread.sleep(delay);
+                if (Files.exists(file) && Files.size(file) > 0) {
+                    return true;
+                }
+                delay *= 2; // Exponential backoff
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (IOException e) {
+                debugLog("FILE_WAIT", "Error checking file: " + e.getMessage());
+            }
+        }
+        return Files.exists(file);
     }
 
     /**
@@ -985,11 +1045,8 @@ public class PermissionService {
 
         debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
 
-        // 获取 AskUserQuestion 对话框显示器
-        AskUserQuestionDialogShower dialogShower = null;
-        if (!askUserQuestionDialogShowers.isEmpty()) {
-            dialogShower = askUserQuestionDialogShowers.values().iterator().next();
-        }
+        // 获取 AskUserQuestion 对话框显示器（优先使用最近活动的项目）
+        AskUserQuestionDialogShower dialogShower = getPreferredDialogShower(askUserQuestionDialogShowers);
 
         if (dialogShower != null) {
             debugLog("ASK_DIALOG_SHOWER", "Using AskUserQuestion dialog shower");
@@ -1116,11 +1173,8 @@ public class PermissionService {
                 debugLog("PLAN_FILE_DELETE_ERROR", "Failed to delete PlanApproval request file: " + e.getMessage());
             }
 
-            // 找到对应的对话框显示器（使用第一个可用的）
-            PlanApprovalDialogShower dialogShower = null;
-            if (!planApprovalDialogShowers.isEmpty()) {
-                dialogShower = planApprovalDialogShowers.values().iterator().next();
-            }
+            // 找到对应的对话框显示器（优先使用最近活动的项目）
+            PlanApprovalDialogShower dialogShower = getPreferredDialogShower(planApprovalDialogShowers);
 
             if (dialogShower != null) {
                 debugLog("PLAN_DIALOG_SHOWER", "Using frontend dialog for PlanApproval");

@@ -109,6 +109,9 @@ const PLAN_MODE_ALLOWED_TOOLS = new Set([
 ]);
 
 // ========== Auto-retry configuration for transient API errors ==========
+// NOTE: Retry logic is duplicated in sendMessage and sendMessageWithAttachments.
+// TODO: Consider extracting a generic withRetry(asyncFn, config) utility function
+//       to reduce duplication. Deferred due to complex state management within retry loops.
 const AUTO_RETRY_CONFIG = {
   maxRetries: 2,           // Maximum retry attempts
   retryDelayMs: 1500,      // Delay between retries (ms)

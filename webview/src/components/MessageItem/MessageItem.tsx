@@ -247,6 +247,7 @@ export const MessageItem = memo(function MessageItem({
             isThinkingExpanded={isThinkingExpanded(blockIndex)}
             isThinking={isThinking}
             isLastMessage={isLast}
+            isLastBlock={blockIndex === blocks.length - 1}
             t={t}
             onToggleThinking={() => toggleThinking(blockIndex)}
             findToolResult={findToolResult}

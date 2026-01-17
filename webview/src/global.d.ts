@@ -163,6 +163,31 @@ interface Window {
   mcpServerToggled?: (json: string) => void;
 
   /**
+   * Update Codex MCP servers list (from ~/.codex/config.toml)
+   */
+  updateCodexMcpServers?: (json: string) => void;
+
+  /**
+   * Codex MCP server toggled callback
+   */
+  codexMcpServerToggled?: (json: string) => void;
+
+  /**
+   * Codex MCP server added callback
+   */
+  codexMcpServerAdded?: (json: string) => void;
+
+  /**
+   * Codex MCP server updated callback
+   */
+  codexMcpServerUpdated?: (json: string) => void;
+
+  /**
+   * Codex MCP server deleted callback
+   */
+  codexMcpServerDeleted?: (json: string) => void;
+
+  /**
    * Update providers list
    */
   updateProviders?: (json: string) => void;
