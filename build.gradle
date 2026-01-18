@@ -48,15 +48,18 @@ if (localJavaHome) {
     if (javaHomeDir.exists()) {
         println "Using custom Java home: ${localJavaHome}"
 
-        // Set the Java launcher for all JavaExec and Test tasks
+        // Set the Java launcher for all JavaExec and Test tasks (except runIde)
         tasks.withType(JavaCompile).configureEach {
             options.fork = true
             options.forkOptions.javaHome = javaHomeDir
         }
 
         tasks.withType(JavaExec).configureEach {
-            javaLauncher = javaToolchains.launcherFor {
-                languageVersion = JavaLanguageVersion.of(17)
+            // Skip runIde task to use JBR for JCEF support
+            if (it.name != 'runIde') {
+                javaLauncher = javaToolchains.launcherFor {
+                    languageVersion = JavaLanguageVersion.of(17)
+                }
             }
         }
     } else {
