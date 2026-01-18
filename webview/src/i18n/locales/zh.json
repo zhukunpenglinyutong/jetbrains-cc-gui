@@ -80,7 +80,8 @@
     "goInstallSdk": "前往安装",
     "commandNotImplemented": "`{{command}}` 功能暂未实现。",
     "attachmentFile": "[附件: {{fileName}}]",
-    "attachmentsUploaded": "[已上传附件]"
+    "attachmentsUploaded": "[已上传附件]",
+    "streamingConnected": "Claude 已成功连接，正在等待回复"
   },
   "settings": {
     "title": "设置",

@@ -80,7 +80,8 @@
     "goInstallSdk": "Go to Install",
     "commandNotImplemented": "`{{command}}` feature is not yet implemented.",
     "attachmentFile": "[Attachment: {{fileName}}]",
-    "attachmentsUploaded": "[Attachments Uploaded]"
+    "attachmentsUploaded": "[Attachments Uploaded]",
+    "streamingConnected": "Claude connected, waiting for response"
   },
   "settings": {
     "title": "Settings",

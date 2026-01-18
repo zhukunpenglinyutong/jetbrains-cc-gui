@@ -79,7 +79,8 @@
     "goInstallSdk": "インストールへ",
     "commandNotImplemented": "`{{command}}` 機能はまだ実装されていません。",
     "attachmentFile": "[添付ファイル: {{fileName}}]",
-    "attachmentsUploaded": "[添付ファイルがアップロードされました]"
+    "attachmentsUploaded": "[添付ファイルがアップロードされました]",
+    "streamingConnected": "Claudeに接続しました、応答を待っています"
   },
   "settings": {
     "title": "設定",

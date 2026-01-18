@@ -198,7 +198,7 @@ export const MessageItem = memo(function MessageItem({
     if (isEmptyStreamingPlaceholder) {
       return (
         <div className="streaming-connect-status">
-          <span className="streaming-connect-text">Claude 已成功连接，正在准备回复</span>
+          <span className="streaming-connect-text">{t('chat.streamingConnected')}</span>
         </div>
       );
     }

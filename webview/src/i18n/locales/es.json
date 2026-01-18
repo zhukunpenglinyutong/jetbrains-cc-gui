@@ -79,7 +79,8 @@
     "goInstallSdk": "Ir a instalar",
     "commandNotImplemented": "La función `{{command}}` aún no está implementada.",
     "attachmentFile": "[Adjunto: {{fileName}}]",
-    "attachmentsUploaded": "[Archivos adjuntos cargados]"
+    "attachmentsUploaded": "[Archivos adjuntos cargados]",
+    "streamingConnected": "Claude conectado, esperando respuesta"
   },
   "settings": {
     "title": "Configuración",

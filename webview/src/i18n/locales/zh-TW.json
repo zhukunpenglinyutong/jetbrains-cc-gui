@@ -79,7 +79,8 @@
     "goInstallSdk": "前往安裝",
     "commandNotImplemented": "`{{command}}` 功能尚未實現。",
     "attachmentFile": "[附件: {{fileName}}]",
-    "attachmentsUploaded": "[已上傳附件]"
+    "attachmentsUploaded": "[已上傳附件]",
+    "streamingConnected": "Claude 已成功連接，正在等待回覆"
   },
   "settings": {
     "title": "設定",

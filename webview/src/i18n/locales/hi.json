@@ -79,7 +79,8 @@
     "goInstallSdk": "इंस्टॉल करने जाएं",
     "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
     "attachmentFile": "[अटैचमेंट: {{fileName}}]",
-    "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]"
+    "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
+    "streamingConnected": "Claude कनेक्ट हो गया, प्रतिक्रिया की प्रतीक्षा कर रहा है"
   },
   "settings": {
     "title": "सेटिंग्स",

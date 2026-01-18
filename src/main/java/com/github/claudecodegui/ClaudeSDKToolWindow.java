@@ -1471,13 +1471,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     synchronized (streamMessageUpdateLock) {
                         streamActive = false;
                     }
-                    flushStreamMessageUpdates(() -> {
-                        // FIX: 流式结束时显式设置 loading=false
-                        // 确保状态清理的一致性
-                        callJavaScript("showLoading", "false");
+                    ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("onStreamEnd");
-                        LOG.debug("Stream ended - notified frontend with loading=false");
+                        callJavaScript("showLoading", "false");
+                        LOG.debug("Stream ended - notified frontend with onStreamEnd then loading=false");
                     });
+                    flushStreamMessageUpdates(null);
                 }
 
                 @Override

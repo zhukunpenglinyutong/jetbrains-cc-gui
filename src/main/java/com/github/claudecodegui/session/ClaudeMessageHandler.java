@@ -51,6 +51,8 @@ public class ClaudeMessageHandler implements MessageCallback {
     // 解释：是否正在接收流式内容
     private boolean isStreaming = false;
 
+    private boolean streamEndedThisTurn = false;
+
     // 🔧 流式分段状态（用于在工具调用前/后切分 text/thinking）
     private boolean textSegmentActive = false;
     private boolean thinkingSegmentActive = false;
@@ -147,6 +149,7 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onError(String error) {
+        streamEndedThisTurn = false;
         state.setError(error);
         state.setBusy(false);
         state.setLoading(false);
@@ -167,6 +170,10 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onComplete(SDKResult result) {
+        if (streamEndedThisTurn) {
+            streamEndedThisTurn = false;
+            return;
+        }
         state.setBusy(false);
         state.setLoading(false);
         state.updateLastModifiedTime();
@@ -579,6 +586,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     private void handleStreamStart() {
         LOG.debug("Stream started");
         isStreaming = true;  // 🔧 标记流式传输开始
+        streamEndedThisTurn = false;
         textSegmentActive = false;
         thinkingSegmentActive = false;
         callbackHandler.notifyStreamStart();
@@ -592,11 +600,16 @@ public class ClaudeMessageHandler implements MessageCallback {
     private void handleStreamEnd() {
         LOG.debug("Stream ended");
         isStreaming = false;  // 🔧 标记流式传输结束
+        streamEndedThisTurn = true;
         textSegmentActive = false;
         thinkingSegmentActive = false;
         // 流式结束后，发送最终的消息更新，确保消息列表同步
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStreamEnd();
+        state.setBusy(false);
+        state.setLoading(false);
+        state.updateLastModifiedTime();
+        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
     /**

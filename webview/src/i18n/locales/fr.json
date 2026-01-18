@@ -79,7 +79,8 @@
     "goInstallSdk": "Aller installer",
     "commandNotImplemented": "La fonctionnalité `{{command}}` n'est pas encore implémentée.",
     "attachmentFile": "[Pièce jointe: {{fileName}}]",
-    "attachmentsUploaded": "[Pièces jointes téléchargées]"
+    "attachmentsUploaded": "[Pièces jointes téléchargées]",
+    "streamingConnected": "Claude connecté, en attente de réponse"
   },
   "settings": {
     "title": "Paramètres",
