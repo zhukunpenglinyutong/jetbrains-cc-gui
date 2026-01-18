@@ -116,6 +116,11 @@ interface Window {
   showAskUserQuestionDialog?: (json: string) => void;
 
   /**
+   * Show PlanApproval dialog
+   */
+  showPlanApprovalDialog?: (json: string) => void;
+
+  /**
    * Add selection info (file and line numbers) - 自动监听，只更新 ContextBar
    */
   addSelectionInfo?: (selectionInfo: string) => void;
@@ -156,6 +161,31 @@ interface Window {
   updateMcpServerStatus?: (json: string) => void;
 
   mcpServerToggled?: (json: string) => void;
+
+  /**
+   * Update Codex MCP servers list (from ~/.codex/config.toml)
+   */
+  updateCodexMcpServers?: (json: string) => void;
+
+  /**
+   * Codex MCP server toggled callback
+   */
+  codexMcpServerToggled?: (json: string) => void;
+
+  /**
+   * Codex MCP server added callback
+   */
+  codexMcpServerAdded?: (json: string) => void;
+
+  /**
+   * Codex MCP server updated callback
+   */
+  codexMcpServerUpdated?: (json: string) => void;
+
+  /**
+   * Codex MCP server deleted callback
+   */
+  codexMcpServerDeleted?: (json: string) => void;
 
   /**
    * Update providers list
@@ -293,6 +323,11 @@ interface Window {
   updateEnhancedPrompt?: (result: string) => void;
 
   /**
+   * Update session title (called when session title changes)
+   */
+  updateSessionTitle?: (title: string) => void;
+
+  /**
    * Editor font config received callback - 接收 IDEA 编辑器字体配置
    */
   onEditorFontConfigReceived?: (json: string) => void;
@@ -411,6 +446,22 @@ interface Window {
    * Pending dependency status payload before React initialization
    */
   __pendingDependencyStatus?: string;
+
+  /**
+   * Pending streaming enabled status before React initialization
+   */
+  __pendingStreamingEnabled?: string;
+
+  /**
+   * Pending send shortcut status before React initialization
+   */
+  __pendingSendShortcut?: string;
+
+  __pendingPermissionDialogRequests?: string[];
+
+  __pendingAskUserQuestionDialogRequests?: string[];
+
+  __pendingPlanApprovalDialogRequests?: string[];
 
   /**
    * Pending user message before addUserMessage is registered (for Quick Fix feature)

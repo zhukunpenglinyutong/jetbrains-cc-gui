@@ -1,0 +1,157 @@
+/* TodoPanel Styles */
+.todo-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  margin: 0 20px 8px 20px;
+  overflow: hidden;
+}
+
+.todo-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.todo-panel-toggle {
+  color: var(--color-todo-panel-progress);
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.todo-panel-progress {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-todo-panel-progress);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.todo-panel-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-panel-loading {
+  font-size: 14px;
+  animation: todo-spin 1s linear infinite;
+}
+
+.todo-panel-close {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
+.todo-panel-list {
+  border-top: 1px solid var(--border-primary);
+  padding: 4px 12px;
+  /* 限制高度约 3.5 行，支持滚动 */
+  max-height: 126px;
+  overflow-y: auto;
+
+  /* 自定义滚动条样式 */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+
+    &:hover {
+      background: var(--scrollbar-thumb-hover);
+    }
+  }
+}
+
+.todo-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-todo-text);
+  padding: 6px 0;
+
+  &.status-completed {
+    .todo-panel-content {
+      color: var(--text-muted);
+      text-decoration: line-through;
+    }
+  }
+}
+
+.todo-panel-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .codicon {
+    font-size: 14px;
+  }
+
+  &.status-pending .codicon {
+    color: var(--color-todo-status-pending);
+  }
+
+  &.status-in-progress .codicon {
+    color: var(--color-todo-panel-progress);
+    animation: todo-spin 1s linear infinite;
+  }
+
+  &.status-completed .codicon {
+    color: var(--color-todo-status-completed);
+  }
+}
+
+.todo-panel-content {
+  flex: 1;
+  word-break: break-word;
+}
+
+/* Spin animation for in-progress icon */
+@keyframes todo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

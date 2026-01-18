@@ -25,7 +25,8 @@ public class PermissionHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
         "permission_decision",
-        "ask_user_question_response"
+        "ask_user_question_response",
+        "plan_approval_response"
     };
 
     // 权限请求映射
@@ -33,6 +34,9 @@ public class PermissionHandler extends BaseMessageHandler {
 
     // AskUserQuestion 请求映射 (requestId -> CompletableFuture<JsonObject>)
     private final Map<String, CompletableFuture<JsonObject>> pendingAskUserQuestionRequests = new ConcurrentHashMap<>();
+
+    // PlanApproval 请求映射 (requestId -> CompletableFuture<JsonObject>)
+    private final Map<String, CompletableFuture<JsonObject>> pendingPlanApprovalRequests = new ConcurrentHashMap<>();
 
     // 权限拒绝回调
     public interface PermissionDeniedCallback {
@@ -65,6 +69,11 @@ public class PermissionHandler extends BaseMessageHandler {
             LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] Received ask_user_question_response from JS");
             LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] Content: " + content);
             handleAskUserQuestionResponse(content);
+            return true;
+        } else if ("plan_approval_response".equals(type)) {
+            LOG.debug("[PLAN_APPROVAL][BRIDGE_RECV] Received plan_approval_response from JS");
+            LOG.debug("[PLAN_APPROVAL][BRIDGE_RECV] Content: " + content);
+            handlePlanApprovalResponse(content);
             return true;
         }
         return false;
@@ -319,6 +328,92 @@ public class PermissionHandler extends BaseMessageHandler {
             }
         } catch (Exception e) {
             LOG.error("[ASK_USER_QUESTION][HANDLE_RESPONSE] ERROR: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 显示 PlanApproval 对话框（实现 PermissionService.PlanApprovalDialogShower 接口）
+     */
+    public CompletableFuture<JsonObject> showPlanApprovalDialog(String requestId, JsonObject planData) {
+        CompletableFuture<JsonObject> future = new CompletableFuture<>();
+
+        LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] Starting showPlanApprovalDialog");
+        LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] requestId=" + requestId);
+        LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] planData=" + planData.toString());
+
+        pendingPlanApprovalRequests.put(requestId, future);
+
+        try {
+            Gson gson = new Gson();
+            String requestJson = gson.toJson(planData);
+            String escapedJson = escapeJs(requestJson);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                String jsCode = "(function retryShowPlanApproval(retries) { " +
+                    "  if (window.showPlanApprovalDialog) { " +
+                    "    window.showPlanApprovalDialog('" + escapedJson + "'); " +
+                    "  } else if (retries > 0) { " +
+                    "    setTimeout(function() { retryShowPlanApproval(retries - 1); }, 200); " +
+                    "  } else { " +
+                    "    console.error('[PLAN_APPROVAL][JS] FAILED: showPlanApprovalDialog not available!'); " +
+                    "  } " +
+                    "})(30);";
+
+                context.executeJavaScriptOnEDT(jsCode);
+            });
+
+            // 超时处理（300秒，因为计划审核可能需要更长时间）
+            CompletableFuture.delayedExecutor(300, TimeUnit.SECONDS).execute(() -> {
+                if (!future.isDone()) {
+                    pendingPlanApprovalRequests.remove(requestId);
+                    // 超时返回拒绝
+                    JsonObject timeoutResponse = new JsonObject();
+                    timeoutResponse.addProperty("approved", false);
+                    timeoutResponse.addProperty("targetMode", "default");
+                    timeoutResponse.addProperty("message", "Plan approval timed out");
+                    future.complete(timeoutResponse);
+                }
+            });
+
+        } catch (Exception e) {
+            LOG.error("[PLAN_APPROVAL][SHOW_DIALOG] ERROR: " + e.getMessage(), e);
+            pendingPlanApprovalRequests.remove(requestId);
+            JsonObject errorResponse = new JsonObject();
+            errorResponse.addProperty("approved", false);
+            errorResponse.addProperty("targetMode", "default");
+            errorResponse.addProperty("message", "Error showing plan approval dialog");
+            future.complete(errorResponse);
+        }
+
+        return future;
+    }
+
+    /**
+     * 处理来自 JavaScript 的 PlanApproval 响应消息
+     */
+    private void handlePlanApprovalResponse(String jsonContent) {
+        LOG.debug("[PLAN_APPROVAL][HANDLE_RESPONSE] Received response from JS: " + jsonContent);
+        try {
+            Gson gson = new Gson();
+            JsonObject response = gson.fromJson(jsonContent, JsonObject.class);
+
+            String requestId = response.get("requestId").getAsString();
+            boolean approved = response.has("approved") && response.get("approved").getAsBoolean();
+            String targetMode = response.has("targetMode") ? response.get("targetMode").getAsString() : "default";
+
+            CompletableFuture<JsonObject> pendingFuture = pendingPlanApprovalRequests.remove(requestId);
+
+            if (pendingFuture != null) {
+                JsonObject result = new JsonObject();
+                result.addProperty("approved", approved);
+                result.addProperty("targetMode", targetMode);
+                LOG.debug("[PLAN_APPROVAL][HANDLE_RESPONSE] Completing future: approved=" + approved + ", targetMode=" + targetMode);
+                pendingFuture.complete(result);
+            } else {
+                LOG.warn("[PLAN_APPROVAL][HANDLE_RESPONSE] No pending request found for requestId: " + requestId);
+            }
+        } catch (Exception e) {
+            LOG.error("[PLAN_APPROVAL][HANDLE_RESPONSE] ERROR: " + e.getMessage(), e);
         }
     }
 }

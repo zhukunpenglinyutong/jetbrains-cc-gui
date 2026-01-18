@@ -11,6 +11,11 @@ import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.SelectionModel;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.HashMap;
 import java.util.List;
@@ -371,9 +376,58 @@ public class SettingsHandler extends BaseMessageHandler {
             if (context.getSession() != null) {
                 context.getSession().setProvider(provider);
             }
+
+            refreshContextBar();
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set provider: " + e.getMessage(), e);
         }
+    }
+
+    private void refreshContextBar() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                if (context.getProject() == null) {
+                    return;
+                }
+
+                FileEditorManager editorManager = FileEditorManager.getInstance(context.getProject());
+                Editor editor = editorManager.getSelectedTextEditor();
+                String selectionInfo = null;
+
+                if (editor != null) {
+                    VirtualFile file = FileDocumentManager.getInstance().getFile(editor.getDocument());
+                    if (file != null) {
+                        String path = file.getPath();
+                        selectionInfo = "@" + path;
+
+                        SelectionModel selectionModel = editor.getSelectionModel();
+                        if (selectionModel.hasSelection()) {
+                            int startLine = editor.getDocument().getLineNumber(selectionModel.getSelectionStart()) + 1;
+                            int endLine = editor.getDocument().getLineNumber(selectionModel.getSelectionEnd()) + 1;
+
+                            if (endLine > startLine
+                                    && editor.offsetToLogicalPosition(selectionModel.getSelectionEnd()).column == 0) {
+                                endLine--;
+                            }
+                            selectionInfo += "#L" + startLine + "-" + endLine;
+                        }
+                    }
+                } else {
+                    VirtualFile[] files = editorManager.getSelectedFiles();
+                    if (files.length > 0 && files[0] != null) {
+                        selectionInfo = "@" + files[0].getPath();
+                    }
+                }
+
+                if (selectionInfo != null && !selectionInfo.isEmpty()) {
+                    callJavaScript("addSelectionInfo", escapeJs(selectionInfo));
+                } else {
+                    callJavaScript("clearSelectionInfo");
+                }
+            } catch (Exception e) {
+                LOG.warn("[SettingsHandler] Failed to refresh context bar: " + e.getMessage());
+            }
+        });
     }
 
     /**
@@ -514,7 +568,11 @@ public class SettingsHandler extends BaseMessageHandler {
                 callJavaScript("window.updateNodePath", escapeJs(gson.toJson(response)));
 
                 if (successFlag) {
-                    callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存。\n\n如果环境检查仍然失败，请关闭并重新打开工具窗口后重试。"));
+                    // 🔧 触发环境重新检查,无需重启IDE
+                    callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存并生效,无需重启IDE"));
+
+                    // 通知 DependencySection 重新检查 Node.js 环境
+                    callJavaScript("window.checkNodeEnvironment");
                 } else {
                     String msg = failureMsgFinal != null ? failureMsgFinal : "无法验证指定的 Node.js 路径";
                     callJavaScript("window.showError", escapeJs("保存的 Node.js 路径无效: " + msg));

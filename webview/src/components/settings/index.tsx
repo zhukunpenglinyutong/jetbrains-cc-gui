@@ -51,10 +51,10 @@ const AUTO_COLLAPSE_THRESHOLD = 900;
 const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: streamingEnabledProp, onStreamingEnabledChange: onStreamingEnabledChangeProp, sendShortcut: sendShortcutProp, onSendShortcutChange: onSendShortcutChangeProp }: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
-  // Codex mode: allow providers and usage tabs, disable other features
-  // Note: 'usage' is now enabled for Codex as it supports usage statistics
+  // Codex mode: allow providers, usage, and mcp tabs, disable other features
+  // Note: 'mcp' is now enabled for Codex as it supports MCP via ~/.codex/config.toml
   const disabledTabs = useMemo<SettingsTab[]>(
-    () => (isCodexMode ? ['mcp', 'permissions', 'agents', 'skills'] : []),
+    () => (isCodexMode ? ['permissions', 'agents', 'skills'] : []),
     [isCodexMode]
   );
   const [currentTab, setCurrentTab] = useState<SettingsTab>(() => {
@@ -1024,7 +1024,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
           {currentTab === 'usage' && <UsageSection currentProvider={currentProvider} />}
 
           {/* MCP服务器 */}
-          {currentTab === 'mcp' && <PlaceholderSection type="mcp" />}
+          {currentTab === 'mcp' && <PlaceholderSection type="mcp" currentProvider={currentProvider} />}
 
           {/* 权限配置 */}
           {currentTab === 'permissions' && <PlaceholderSection type="permissions" />}

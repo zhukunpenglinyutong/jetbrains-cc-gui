@@ -1,12 +1,38 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Attachment, ChatInputBoxProps, CommandItem, FileItem, PermissionMode } from './types';
-import { ButtonArea } from './ButtonArea';
-import { AttachmentList } from './AttachmentList';
-import { ContextBar } from './ContextBar';
-import { CompletionDropdown } from './Dropdown';
-import { PromptEnhancerDialog } from './PromptEnhancerDialog';
-import { useCompletionDropdown, useTriggerDetection } from './hooks';
+import type {
+  Attachment,
+  ChatInputBoxHandle,
+  ChatInputBoxProps,
+  CommandItem,
+  FileItem,
+  PermissionMode,
+} from './types.js';
+import { ButtonArea } from './ButtonArea.js';
+import { AttachmentList } from './AttachmentList.js';
+import { ContextBar } from './ContextBar.js';
+import { CompletionDropdown } from './Dropdown/index.js';
+import { PromptEnhancerDialog } from './PromptEnhancerDialog.js';
+import {
+  useCompletionDropdown,
+  useTriggerDetection,
+  useTextContent,
+  useFileTags,
+  useTooltip,
+  useKeyboardNavigation,
+  useIMEComposition,
+  usePasteAndDrop,
+  usePromptEnhancer,
+  useGlobalCallbacks,
+} from './hooks/index.js';
 import {
   commandToDropdownItem,
   fileReferenceProvider,
@@ -15,210 +41,128 @@ import {
   agentProvider,
   agentToDropdownItem,
   type AgentItem,
-} from './providers';
-import { getFileIcon } from '../../utils/fileIcons';
-import { icon_folder } from '../../utils/icons';
+} from './providers/index.js';
+import { debounce } from './utils/debounce.js';
+import { generateId } from './utils/generateId.js';
 import './styles.css';
 
-// 防抖函数工具
-function debounce<T extends (...args: any[]) => void>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-  return function (this: any, ...args: Parameters<T>) {
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), wait);
-  };
-}
-
 /**
- * ChatInputBox - 聊天输入框组件
- * 使用 contenteditable div 实现，支持自动高度调整、IME 处理、@ 文件引用、/ 斜杠命令
+ * ChatInputBox - Chat input component
+ * Uses contenteditable div with auto height adjustment, IME handling, @ file references, / slash commands
+ *
+ * Performance optimizations:
+ * - Uses uncontrolled mode with useImperativeHandle for minimal re-renders
+ * - Debounced onInput callback to reduce parent component updates
+ * - Cached getTextContent to avoid repeated DOM traversal
  */
-export const ChatInputBox = ({
-  isLoading = false,
-  selectedModel = 'claude-sonnet-4-5',
-  permissionMode = 'bypassPermissions',
-  currentProvider = 'claude',
-  usagePercentage = 0,
-  usageUsedTokens,
-  usageMaxTokens,
-  showUsage = true,
-  attachments: externalAttachments,
-  placeholder = '',  // Will be passed from parent via t('chat.inputPlaceholder')
-  disabled = false,
-  value,
-  onSubmit,
-  onStop,
-  onInput,
-  onAddAttachment,
-  onRemoveAttachment,
-  onModeSelect,
-  onModelSelect,
-  onProviderSelect,
-  reasoningEffort = 'medium',
-  onReasoningChange,
-  activeFile,
-  selectedLines,
-  onClearContext,
-  alwaysThinkingEnabled,
-  onToggleThinking,
-  streamingEnabled,
-  onStreamingEnabledChange,
-  sendShortcut = 'enter',
-  selectedAgent,
-  onAgentSelect,
-  onOpenAgentSettings,
-  hasMessages,
-  onRewind,
-  sdkInstalled = true, // 默认为 true，避免初始状态时禁用输入框
-  sdkStatusLoading = false, // SDK 状态是否正在加载
-  onInstallSdk,
-  addToast,
-}: ChatInputBoxProps) => {
-  const { t } = useTranslation();
+export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
+  (
+    {
+      isLoading = false,
+      selectedModel = 'claude-sonnet-4-5',
+      permissionMode = 'bypassPermissions',
+      currentProvider = 'claude',
+      usagePercentage = 0,
+      usageUsedTokens,
+      usageMaxTokens,
+      showUsage = true,
+      attachments: externalAttachments,
+      placeholder = '', // Will be passed from parent via t('chat.inputPlaceholder')
+      disabled = false,
+      value,
+      onSubmit,
+      onStop,
+      onInput,
+      onAddAttachment,
+      onRemoveAttachment,
+      onModeSelect,
+      onModelSelect,
+      onProviderSelect,
+      reasoningEffort = 'medium',
+      onReasoningChange,
+      activeFile,
+      selectedLines,
+      onClearContext,
+      alwaysThinkingEnabled,
+      onToggleThinking,
+      streamingEnabled,
+      onStreamingEnabledChange,
+      sendShortcut = 'enter',
+      selectedAgent,
+      onAgentSelect,
+      onOpenAgentSettings,
+      hasMessages,
+      onRewind,
+      sdkInstalled = true, // Default to true to avoid disabling input box on initial state
+      sdkStatusLoading = false, // SDK status loading state
+      onInstallSdk,
+      addToast,
+    }: ChatInputBoxProps,
+    ref: React.ForwardedRef<ChatInputBoxHandle>
+  ) => {
+    const { t } = useTranslation();
 
-  // 内部附件状态（如果外部未提供）
-  const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
-  const attachments = externalAttachments ?? internalAttachments;
+    // Internal attachments state (if not provided externally)
+    const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
+    const attachments = externalAttachments ?? internalAttachments;
 
-  // 输入框引用和状态
-  const containerRef = useRef<HTMLDivElement>(null);
-  const editableRef = useRef<HTMLDivElement>(null);
-  const submittedOnEnterRef = useRef(false);
-  const completionSelectedRef = useRef(false);
-  const justRenderedTagRef = useRef(false); // 标记是否刚刚渲染了文件标签 // 标记补全菜单刚选中项目，防止回车同时发送消息
-  const [isComposing, setIsComposing] = useState(false);
-  const isComposingRef = useRef(false); // 同步的 IME 状态 ref，比 React state 更快响应
-  const [hasContent, setHasContent] = useState(false);
-  const compositionTimeoutRef = useRef<number | null>(null);
-  const lastCompositionEndTimeRef = useRef<number>(0);
+    // Input element refs and state
+    const containerRef = useRef<HTMLDivElement>(null);
+    const editableRef = useRef<HTMLDivElement>(null);
+    const submittedOnEnterRef = useRef(false);
+    const completionSelectedRef = useRef(false);
+    const [hasContent, setHasContent] = useState(false);
 
-  // 增强提示词状态
-  const [isEnhancing, setIsEnhancing] = useState(false);
-  const [showEnhancerDialog, setShowEnhancerDialog] = useState(false);
-  const [originalPrompt, setOriginalPrompt] = useState('');
-  const [enhancedPrompt, setEnhancedPrompt] = useState('');
+    // Flag to track if we're updating from external value
+    const isExternalUpdateRef = useRef(false);
 
-  // 路径映射：存储文件名/相对路径 -> 完整绝对路径的映射
-  // 用于在 tooltip 中显示完整路径
-  const pathMappingRef = useRef<Map<string, string>>(new Map());
+    // Text content hook
+    const { getTextContent, invalidateCache } = useTextContent({ editableRef });
 
-  // 触发检测 Hook
-  const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
+    // Trigger detection hook
+    const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
 
-  // 文件引用补全 Hook
-  const fileCompletion = useCompletionDropdown<FileItem>({
-    trigger: '@',
-    provider: fileReferenceProvider,
-    toDropdownItem: fileToDropdownItem,
-    onSelect: (file, query) => {
-      if (!editableRef.current || !query) return;
+    // Close all completions helper
+    const closeAllCompletions = useCallback(() => {
+      fileCompletion.close();
+      commandCompletion.close();
+      agentCompletion.close();
+    }, []);
 
-      const text = getTextContent();
-      // 优先使用绝对路径，如果没有则使用相对路径
-      const path = file.absolutePath || file.path;
-      // 文件夹不加空格（方便继续输入路径），文件加空格
-      const replacement = file.type === 'directory' ? `@${path}` : `@${path} `;
-      const newText = fileCompletion.replaceText(text, replacement, query);
+    // File tags hook
+    const { renderFileTags, pathMappingRef, justRenderedTagRef, extractFileTags } = useFileTags({
+      editableRef,
+      getTextContent,
+      onCloseCompletions: closeAllCompletions,
+    });
 
-      // 记录路径映射：文件名 -> 完整路径，用于 tooltip 显示
-      if (file.absolutePath) {
-        // 记录多个可能的 key：文件名、相对路径、绝对路径
-        pathMappingRef.current.set(file.name, file.absolutePath);
-        pathMappingRef.current.set(file.path, file.absolutePath);
-        pathMappingRef.current.set(file.absolutePath, file.absolutePath);
-      }
+    // File reference completion hook
+    const fileCompletion = useCompletionDropdown<FileItem>({
+      trigger: '@',
+      provider: fileReferenceProvider,
+      toDropdownItem: fileToDropdownItem,
+      onSelect: (file, query) => {
+        if (!editableRef.current || !query) return;
 
-      // 更新输入框内容
-      editableRef.current.innerText = newText;
-
-      // 设置光标到插入文本末尾
-      const range = document.createRange();
-      const selection = window.getSelection();
-      range.selectNodeContents(editableRef.current);
-      range.collapse(false);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-
-      handleInput();
-
-      // 立即尝试渲染文件标签（不需要用户手动输入空格）
-      // 使用 setTimeout 确保 DOM 更新和光标位置已就绪
-      setTimeout(() => {
-        renderFileTags();
-      }, 0);
-    },
-  });
-
-  // 斜杠命令补全 Hook
-  const commandCompletion = useCompletionDropdown<CommandItem>({
-    trigger: '/',
-    provider: slashCommandProvider,
-    toDropdownItem: commandToDropdownItem,
-    onSelect: (command, query) => {
-      if (!editableRef.current || !query) return;
-
-      const text = getTextContent();
-      const replacement = `${command.label} `;
-      const newText = commandCompletion.replaceText(text, replacement, query);
-
-      // 更新输入框内容
-      editableRef.current.innerText = newText;
-
-      // 设置光标到插入文本末尾
-      const range = document.createRange();
-      const selection = window.getSelection();
-      range.selectNodeContents(editableRef.current);
-      range.collapse(false);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-
-      handleInput();
-    },
-  });
-
-  // 智能体选择补全 Hook (行首 # 触发)
-  const agentCompletion = useCompletionDropdown<AgentItem>({
-    trigger: '#',
-    provider: agentProvider,
-    toDropdownItem: agentToDropdownItem,
-    onSelect: (agent, query) => {
-      // 跳过加载中和空状态的特殊项
-      if (agent.id === '__loading__' || agent.id === '__empty__' || agent.id === '__empty_state__') return;
-
-      // 处理创建智能体
-      if (agent.id === '__create_new__') {
-        onOpenAgentSettings?.();
-        // 清除输入框中的 # 触发文本
-        if (editableRef.current && query) {
-          const text = getTextContent();
-          const newText = agentCompletion.replaceText(text, '', query);
-          editableRef.current.innerText = newText;
-          
-          const range = document.createRange();
-          const selection = window.getSelection();
-          range.selectNodeContents(editableRef.current);
-          range.collapse(false);
-          selection?.removeAllRanges();
-          selection?.addRange(range);
-          
-          handleInput();
-        }
-        return;
-      }
-
-      // 选择智能体：不插入文本，而是调用 onAgentSelect 回调
-      onAgentSelect?.({ id: agent.id, name: agent.name, prompt: agent.prompt });
-
-      // 清除输入框中的 # 触发文本
-      if (editableRef.current && query) {
         const text = getTextContent();
-        const newText = agentCompletion.replaceText(text, '', query);
+        // Prefer absolute path, fallback to relative path
+        const path = file.absolutePath || file.path;
+        // Directories don't add space (to continue path input), files add space
+        const replacement = file.type === 'directory' ? `@${path}` : `@${path} `;
+        const newText = fileCompletion.replaceText(text, replacement, query);
+
+        // Record path mapping: filename -> full path, for tooltip display
+        if (file.absolutePath) {
+          // Record multiple possible keys: filename, relative path, absolute path
+          pathMappingRef.current.set(file.name, file.absolutePath);
+          pathMappingRef.current.set(file.path, file.absolutePath);
+          pathMappingRef.current.set(file.absolutePath, file.absolutePath);
+        }
+
+        // Update input box content
         editableRef.current.innerText = newText;
 
-        // 设置光标位置
+        // Set cursor to end of inserted text
         const range = document.createRange();
         const selection = window.getSelection();
         range.selectNodeContents(editableRef.current);
@@ -227,1782 +171,1114 @@ export const ChatInputBox = ({
         selection?.addRange(range);
 
         handleInput();
-      }
-    },
-  });
 
-  /**
-   * 获取输入框纯文本内容（优化版，带缓存）
-   * 保留用户输入的原始格式，包括换行符和空白字符
-   */
-  const getTextContent = useCallback(() => {
-    if (!editableRef.current) return '';
-
-    // 从 DOM 中提取纯文本，包括文件标签的原始引用格式
-    let text = '';
-
-    // 使用递归遍历，但遇到 file-tag 时只读取 data-file-path 并不再深入
-    const walk = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        text += node.textContent || '';
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const element = node as HTMLElement;
-        const tagName = element.tagName.toLowerCase();
-
-        // 处理换行元素
-        if (tagName === 'br') {
-          text += '\n';
-        } else if (tagName === 'div' || tagName === 'p') {
-          // div 和 p 元素前添加换行（如果不是第一个元素）
-          if (text.length > 0 && !text.endsWith('\n')) {
-            text += '\n';
-          }
-          node.childNodes.forEach(walk);
-        } else if (element.classList.contains('file-tag')) {
-          const filePath = element.getAttribute('data-file-path') || '';
-          text += `@${filePath}`;
-          // 不遍历 file-tag 的子节点，避免重复读取文件名和关闭按钮文本
-        } else {
-          // 继续遍历子节点
-          node.childNodes.forEach(walk);
-        }
-      }
-    };
-
-    editableRef.current.childNodes.forEach(walk);
-
-    // 只移除 JCEF 环境可能添加的末尾单个换行符（不影响用户输入的换行）
-    // 如果末尾有多个换行，只移除最后一个（JCEF 添加的）
-    if (text.endsWith('\n') && editableRef.current.childNodes.length > 0) {
-      const lastChild = editableRef.current.lastChild;
-      // 只有当最后一个节点不是 br 标签时，才移除末尾换行（说明是 JCEF 添加的）
-      if (lastChild?.nodeType !== Node.ELEMENT_NODE ||
-          (lastChild as HTMLElement).tagName?.toLowerCase() !== 'br') {
-        text = text.slice(0, -1);
-      }
-    }
-
-    return text;
-  }, []);
-
-  /**
-   * 转义 HTML 属性值
-   * 确保特殊字符（包括引号、<、>、&等）被正确处理
-   * 注意：反斜杠不需要转义，因为它在 HTML 属性中是合法字符
-   */
-  const escapeHtmlAttr = useCallback((str: string): string => {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }, []);
-
-  /**
-   * 渲染文件标签
-   * 将输入框中的 @文件路径 格式文本转换为文件标签
-   */
-  const renderFileTags = useCallback(() => {
-    if (!editableRef.current) return;
-
-    // 正则：匹配 @文件路径 (以空格结束或字符串结束)
-    // 支持文件和目录：扩展名可选
-    // 支持 Windows 路径 (反斜杠) 和 Unix 路径 (正斜杠)
-    // 匹配除空格和@之外的所有字符（包括反斜杠、正斜杠、冒号等）
-    const fileRefRegex = /@([^\s@]+?)(\s|$)/g;
-
-    const currentText = getTextContent();
-    const matches = Array.from(currentText.matchAll(fileRefRegex));
-
-    if (matches.length === 0) {
-      // 没有文件引用，保持原样
-      return;
-    }
-
-    // 检查DOM中是否有纯文本的 @文件路径 需要转换
-    // 遍历所有文本节点，查找包含 @ 的文本
-    let hasUnrenderedReferences = false;
-    const walk = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent || '';
-        if (text.includes('@')) {
-          hasUnrenderedReferences = true;
-        }
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const element = node as HTMLElement;
-        // 跳过已渲染的文件标签
-        if (!element.classList.contains('file-tag')) {
-          node.childNodes.forEach(walk);
-        }
-      }
-    };
-    editableRef.current.childNodes.forEach(walk);
-
-    // 如果没有未渲染的引用，不需要重新渲染
-    if (!hasUnrenderedReferences) {
-      return;
-    }
-
-    // 构建新的 HTML 内容
-    let newHTML = '';
-    let lastIndex = 0;
-
-    matches.forEach((match) => {
-      const fullMatch = match[0];
-      const filePath = match[1];
-      const matchIndex = match.index || 0;
-
-      // 添加匹配前的文本
-      if (matchIndex > lastIndex) {
-        const textBefore = currentText.substring(lastIndex, matchIndex);
-        newHTML += textBefore;
-      }
-
-      // 分离路径和行号部分（例如：src/file.ts#L10-20 -> src/file.ts）
-      const hashIndex = filePath.indexOf('#');
-      const pureFilePath = hashIndex !== -1 ? filePath.substring(0, hashIndex) : filePath;
-
-      // 获取纯文件名（不含行号，用于获取 ICON）
-      const pureFileName = pureFilePath.split(/[/\\]/).pop() || pureFilePath;
-
-      // 验证路径是否为有效引用（必须在 pathMappingRef 中存在）
-      // 只有用户从下拉列表中选择的文件才会被记录到 pathMappingRef
-      const isValidReference =
-        pathMappingRef.current.has(pureFilePath) ||
-        pathMappingRef.current.has(pureFileName) ||
-        pathMappingRef.current.has(filePath);
-
-      // 如果不是有效引用，保留原始文本，不渲染为标签
-      if (!isValidReference) {
-        newHTML += fullMatch;
-        lastIndex = matchIndex + fullMatch.length;
-        return;
-      }
-
-      // 获取显示文件名（包含行号，用于显示）
-      const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
-
-      // 判断是文件还是目录（使用纯文件名）
-      const isDirectory = !pureFileName.includes('.');
-
-      let iconSvg = '';
-      if (isDirectory) {
-        iconSvg = icon_folder;
-      } else {
-        const extension = pureFileName.indexOf('.') !== -1 ? pureFileName.split('.').pop() : '';
-        iconSvg = getFileIcon(extension, pureFileName);
-      }
-
-      // 转义文件路径以安全地放入 HTML 属性
-      const escapedPath = escapeHtmlAttr(filePath);
-
-      // 尝试从路径映射中获取完整路径（用于 tooltip 显示）
-      const fullPath =
-        pathMappingRef.current.get(pureFilePath) ||
-        pathMappingRef.current.get(pureFileName) ||
-        filePath;
-      const escapedFullPath = escapeHtmlAttr(fullPath);
-
-      // 创建文件标签 HTML
-      newHTML += `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`;
-      newHTML += `<span class="file-tag-icon">${iconSvg}</span>`;
-      newHTML += `<span class="file-tag-text">${displayFileName}</span>`;
-      newHTML += `<span class="file-tag-close">×</span>`;
-      newHTML += `</span>`;
-
-      // 添加空格
-      newHTML += ' ';
-
-      lastIndex = matchIndex + fullMatch.length;
+        // Immediately try to render file tags (no need for user to manually input space)
+        // Use setTimeout to ensure DOM update and cursor position are ready
+        setTimeout(() => {
+          renderFileTags();
+        }, 0);
+      },
     });
 
-    // 添加剩余文本
-    if (lastIndex < currentText.length) {
-      newHTML += currentText.substring(lastIndex);
-    }
-
-    // 在更新 innerHTML 之前设置标志，防止触发补全检测
-    justRenderedTagRef.current = true;
-    fileCompletion.close();
-    commandCompletion.close();
-
-    // 更新内容
-    editableRef.current.innerHTML = newHTML;
-
-    // 为文件标签的删除按钮添加事件监听
-    const tags = editableRef.current.querySelectorAll('.file-tag-close');
-    tags.forEach((closeBtn) => {
-      closeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const tag = (e.target as HTMLElement).closest('.file-tag');
-        if (tag) {
-          tag.remove();
-          // 不要在这里调用 handleInput，避免循环
-        }
-      });
-    });
-
-    // 恢复光标位置到末尾
-    const selection = window.getSelection();
-    if (selection && editableRef.current.childNodes.length > 0) {
-      try {
-        const range = document.createRange();
-        const lastChild = editableRef.current.lastChild;
-        if (lastChild) {
-          range.setStartAfter(lastChild);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-      } catch (e) {
-        // 忽略光标恢复错误
-      }
-    }
-
-    // 渲染完成后，立即重置标志，允许后续的补全检测
-    // 使用 setTimeout 0 确保在当前事件循环后重置
-    setTimeout(() => {
-      justRenderedTagRef.current = false;
-    }, 0);
-  }, [fileCompletion, commandCompletion, escapeHtmlAttr, getTextContent]);
-
-  // Tooltip 状态
-  const [tooltip, setTooltip] = useState<{
-    visible: boolean;
-    text: string;
-    top: number;
-    left: number;
-    tx?: string; // transform-x value
-    arrowLeft?: string; // arrow left position
-    width?: number; // width of the tooltip
-    isBar?: boolean; // whether to show as a bar
-  } | null>(null);
-
-  /**
-   * 处理鼠标悬停显示 Tooltip（小浮动弹窗样式，和上面 context-item 一致）
-   */
-  const handleMouseOver = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const fileTag = target.closest('.file-tag.has-tooltip');
-
-    if (fileTag) {
-      const text = fileTag.getAttribute('data-tooltip');
-      if (text) {
-        // 使用小浮动 tooltip（和 context-item 一样的效果）
-        const rect = fileTag.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
-        const tagCenterX = rect.left + rect.width / 2; // 文件标签的中心X坐标
-
-        // 估算 tooltip 的宽度（根据文本长度）
-        const estimatedTooltipWidth = Math.min(text.length * 7 + 24, 400);
-        const tooltipHalfWidth = estimatedTooltipWidth / 2;
-
-        let tooltipLeft = tagCenterX; // tooltip 的基准点（默认居中）
-        let tx = '-50%'; // tooltip 的水平偏移（默认居中）
-        let arrowLeft = '50%'; // 箭头的位置（相对于 tooltip，默认在中间）
-
-        // 边界检测：防止 tooltip 左侧溢出
-        if (tagCenterX - tooltipHalfWidth < 10) {
-          // 靠左边界：tooltip 左对齐
-          tooltipLeft = 10; // tooltip 左边距离视口 10px
-          tx = '0'; // tooltip 不偏移
-          arrowLeft = `${tagCenterX - 10}px`; // 箭头指向文件标签中心
-        }
-        // 边界检测：防止 tooltip 右侧溢出
-        else if (tagCenterX + tooltipHalfWidth > viewportWidth - 10) {
-          // 靠右边界：tooltip 右对齐
-          tooltipLeft = viewportWidth - 10; // tooltip 右边距离视口 10px
-          tx = '-100%'; // tooltip 向左偏移整个宽度
-          arrowLeft = `${tagCenterX - (viewportWidth - 10) + estimatedTooltipWidth}px`; // 箭头指向文件标签中心
-        }
-        // 正常情况：tooltip 居中
-        else {
-          arrowLeft = '50%'; // 箭头在 tooltip 中间
-        }
-
-        setTooltip({
-          visible: true,
-          text,
-          top: rect.top,
-          left: tooltipLeft,
-          tx,
-          arrowLeft,
-          isBar: false
-        });
-      }
-    } else {
-      setTooltip(null);
-    }
-  }, []);
-
-  /**
-   * 处理鼠标离开隐藏 Tooltip
-   */
-  const handleMouseLeave = useCallback(() => {
-    setTooltip(null);
-  }, []);
-
-  /**
-   * 清空输入框
-   */
-  const clearInput = useCallback(() => {
-    if (editableRef.current) {
-      editableRef.current.innerHTML = '';
-      editableRef.current.style.height = 'auto';
-      setHasContent(false);
-      // Notify parent component that input is cleared
-      onInput?.('');
-    }
-  }, [onInput]);
-
-  /**
-   * 调整输入框高度
-   * 改动说明：不再手动计算和限制高度，而是让 contenteditable 元素自然撑开（height: auto），
-   * 并由外层容器 (.input-editable-wrapper) 通过 max-height 和 overflow-y 来控制滚动。
-   * 这样可以避免"外层容器滚动 + 内层元素滚动"导致的双滚动条问题。
-   */
-  const adjustHeight = useCallback(() => {
-    const el = editableRef.current;
-    if (!el) return;
-
-    // 确保高度为自动，由内容撑开
-    el.style.height = 'auto';
-    // 隐藏内层滚动条，完全依赖外层容器滚动
-    el.style.overflowY = 'hidden';
-  }, []);
-
-  /**
-   * 检测并处理补全触发（优化：只在输入 @ 或 / 或 # 时才启动检测）
-   */
-  const detectAndTriggerCompletion = useCallback(() => {
-    if (!editableRef.current) return;
-
-    // 组合输入期间不进行补全检测，避免干扰 IME 上屏和下划线状态
-    if (isComposing) {
-      return;
-    }
-
-    // 如果刚刚渲染了文件标签,跳过这次补全检测
-    if (justRenderedTagRef.current) {
-      justRenderedTagRef.current = false;
-      fileCompletion.close();
-      commandCompletion.close();
-      agentCompletion.close();
-      return;
-    }
-
-    const text = getTextContent();
-    const cursorPos = getCursorPosition(editableRef.current);
-
-    // 优化：快速检查文本中是否包含触发字符，如果没有则直接返回
-    const hasAtSymbol = text.includes('@');
-    const hasSlashSymbol = text.includes('/');
-    const hasHashSymbol = text.includes('#');
-
-    if (!hasAtSymbol && !hasSlashSymbol && !hasHashSymbol) {
-      fileCompletion.close();
-      commandCompletion.close();
-      agentCompletion.close();
-      return;
-    }
-
-    // 传递 element 参数以便 detectTrigger 可以跳过文件标签
-    const trigger = detectTrigger(text, cursorPos, editableRef.current);
-
-    // 关闭当前打开的补全
-    if (!trigger) {
-      fileCompletion.close();
-      commandCompletion.close();
-      agentCompletion.close();
-      return;
-    }
-
-    // 获取触发位置
-    const position = getTriggerPosition(editableRef.current, trigger.start);
-    if (!position) return;
-
-    // 根据触发符号打开对应的补全
-    if (trigger.trigger === '@') {
-      commandCompletion.close();
-      agentCompletion.close();
-      if (!fileCompletion.isOpen) {
-        fileCompletion.open(position, trigger);
-        fileCompletion.updateQuery(trigger);
-      } else {
-        fileCompletion.updateQuery(trigger);
-      }
-    } else if (trigger.trigger === '/') {
-      fileCompletion.close();
-      agentCompletion.close();
-      if (!commandCompletion.isOpen) {
-        commandCompletion.open(position, trigger);
-        commandCompletion.updateQuery(trigger);
-      } else {
-        commandCompletion.updateQuery(trigger);
-      }
-    } else if (trigger.trigger === '#') {
-      fileCompletion.close();
-      commandCompletion.close();
-      if (!agentCompletion.isOpen) {
-        agentCompletion.open(position, trigger);
-        agentCompletion.updateQuery(trigger);
-      } else {
-        agentCompletion.updateQuery(trigger);
-      }
-    }
-  }, [
-    getTextContent,
-    getCursorPosition,
-    detectTrigger,
-    getTriggerPosition,
-    fileCompletion,
-    commandCompletion,
-    agentCompletion,
-    isComposing,
-  ]);
-
-  // 创建防抖版本的 renderFileTags（延迟 300ms）
-  const debouncedRenderFileTags = useMemo(
-    () => debounce(renderFileTags, 300),
-    [renderFileTags]
-  );
-
-  // 创建防抖版本的 detectAndTriggerCompletion（延迟 150ms）
-  const debouncedDetectCompletion = useMemo(
-    () => debounce(detectAndTriggerCompletion, 150),
-    [detectAndTriggerCompletion]
-  );
-
-  /**
-   * 处理输入事件（优化版：使用防抖减少性能开销）
-   * @param isComposingFromEvent - 从原生事件中获取的 isComposing 状态（优先级更高）
-   */
-  const handleInput = useCallback((isComposingFromEvent?: boolean) => {
-    // 使用多重检查确保正确检测 IME 状态：
-    // 1. 原生事件的 isComposing（最准确，可在 compositionStart 之前检测）
-    // 2. isComposingRef（同步的 ref，比 React state 更快）
-    // 3. React state isComposing（作为后备）
-    const isCurrentlyComposing = isComposingFromEvent ?? isComposingRef.current ?? isComposing;
-
-    const text = getTextContent();
-    // 移除零宽字符和其他不可见字符后再检查是否为空，确保在只剩零宽字符时能正确显示 placeholder
-    const cleanText = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
-    const isEmpty = !cleanText.trim();
-    
-    // setHasContent(!isEmpty); // 移到下方处理，避免 IME 干扰
-
-    // 如果内容为空，清空 innerHTML 以确保 :empty 伪类生效（显示 placeholder）
-    if (isEmpty && editableRef.current) {
-      editableRef.current.innerHTML = '';
-    }
-
-    // 调整高度
-    adjustHeight();
-
-    // 组合输入期间不触发补全检测，待组合结束后统一处理
-    // 同时也控制 hasContent 状态更新，避免在 IME 开始时(false->true)触发重渲染
-    if (!isCurrentlyComposing) {
-      debouncedDetectCompletion();
-      setHasContent(!isEmpty);
-    } else if (isEmpty) {
-      setHasContent(false);
-    }
-
-    // 通知父组件
-    // 如果判定为空（只有零宽字符），传递空字符串给父组件，防止父组件回传脏数据导致 DOM 重置从而隐藏 placeholder
-    onInput?.(isEmpty ? '' : text);
-  }, [getTextContent, adjustHeight, debouncedDetectCompletion, onInput, isComposing]);
-
-  /**
-   * 处理键盘按下事件（用于检测空格触发文件标签渲染）
-   * 优化：使用防抖延迟渲染
-   */
-  const handleKeyDownForTagRendering = useCallback((e: KeyboardEvent) => {
-    // 如果按下空格键，使用防抖延迟渲染文件标签
-    if (e.key === ' ') {
-      debouncedRenderFileTags();
-    }
-  }, [debouncedRenderFileTags]);
-
-  /**
-   * 处理提交
-   * 保留用户输入的原始格式（空格、换行、缩进等）
-   */
-  const handleSubmit = useCallback(() => {
-    const content = getTextContent();
-    // Remove zero-width spaces and other invisible characters
-    const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-
-    if (sdkStatusLoading) {
-      // SDK 状态加载中，不允许发送
-      addToast?.(t('chat.sdkStatusLoading'), 'info');
-      return;
-    }
-
-    if (!sdkInstalled) {
-      // 提示用户去下载依赖包
-      addToast?.(t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' }) + ' ' + t('chat.goInstallSdk'), 'warning');
-      onInstallSdk?.();
-      return;
-    }
-
-    // 只在判断是否为空时使用 trim，不修改实际发送的内容
-    if (!cleanContent && attachments.length === 0) {
-      return;
-    }
-    if (isLoading) {
-      return;
-    }
-
-    // 关闭补全菜单
-    fileCompletion.close();
-    commandCompletion.close();
-    agentCompletion.close();
-
-    onSubmit?.(content, attachments.length > 0 ? attachments : undefined);
-
-    // 清空输入框
-    clearInput();
-
-    // 如果使用内部附件状态，也清空附件
-    if (externalAttachments === undefined) {
-      setInternalAttachments([]);
-    }
-  }, [
-    getTextContent,
-    attachments,
-    isLoading,
-    onSubmit,
-    clearInput,
-    externalAttachments,
-    fileCompletion,
-    commandCompletion,
-    agentCompletion,
-    sdkStatusLoading,
-    sdkInstalled,
-    onInstallSdk,
-    addToast,
-    t,
-    currentProvider,
-  ]);
-
-  /**
-   * 处理增强提示词
-   */
-  const handleEnhancePrompt = useCallback(() => {
-    const content = getTextContent().trim();
-    if (!content) {
-      return;
-    }
-
-    // 设置原始提示词并打开对话框
-    setOriginalPrompt(content);
-    setEnhancedPrompt('');
-    setShowEnhancerDialog(true);
-    setIsEnhancing(true);
-
-    // 调用后端进行提示词增强，传递当前选择的模型
-    if (window.sendToJava) {
-      window.sendToJava(`enhance_prompt:${JSON.stringify({ prompt: content, model: selectedModel })}`);
-    }
-  }, [getTextContent, selectedModel]);
-
-  /**
-   * 处理使用增强后的提示词
-   */
-  const handleUseEnhancedPrompt = useCallback(() => {
-    if (enhancedPrompt && editableRef.current) {
-      // 用增强后的提示词替换输入框内容
-      editableRef.current.innerText = enhancedPrompt;
-      setHasContent(true);
-      onInput?.(enhancedPrompt);
-    }
-    setShowEnhancerDialog(false);
-    setIsEnhancing(false);
-  }, [enhancedPrompt, onInput]);
-
-  /**
-   * 处理保留原始提示词
-   */
-  const handleKeepOriginalPrompt = useCallback(() => {
-    setShowEnhancerDialog(false);
-    setIsEnhancing(false);
-  }, []);
-
-  /**
-   * 关闭增强提示词对话框
-   */
-  const handleCloseEnhancerDialog = useCallback(() => {
-    setShowEnhancerDialog(false);
-    setIsEnhancing(false);
-  }, []);
-
-  // 注册增强提示词结果回调
-  useEffect(() => {
-    // 接收增强后的提示词
-    window.updateEnhancedPrompt = (result: string) => {
-      try {
-        const data = JSON.parse(result);
-        if (data.success && data.enhancedPrompt) {
-          setEnhancedPrompt(data.enhancedPrompt);
-        } else {
-          setEnhancedPrompt(data.error || '增强失败');
-        }
-      } catch {
-        setEnhancedPrompt(result);
-      }
-      setIsEnhancing(false);
-    };
-
-    return () => {
-      delete window.updateEnhancedPrompt;
-    };
-  }, []);
-
-  /**
-   * 处理 Mac 风格的光标移动、文本选择和删除操作
-   */
-  const handleMacCursorMovement = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!editableRef.current) return false;
-
-    const selection = window.getSelection();
-    if (!selection || !selection.rangeCount) return false;
-
-    const range = selection.getRangeAt(0);
-    const isShift = e.shiftKey;
-
-    // Cmd + Backspace：删除从光标到行首的内容
-    if (e.key === 'Backspace' && e.metaKey) {
-      e.preventDefault();
-
-      const node = range.startContainer;
-      const offset = range.startOffset;
-
-      // 如果有选中内容，直接使用 execCommand 删除（支持撤销）
-      if (!range.collapsed) {
-        document.execCommand('delete', false);
-        handleInput();
-        return true;
-      }
-
-      // 没有选中内容，先选择从光标到行首的内容，再删除
-      // 找到当前行的开始位置
-      let lineStartOffset = 0;
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent || '';
-        // 从当前位置向前查找换行符
-        for (let i = offset - 1; i >= 0; i--) {
-          if (text[i] === '\n') {
-            lineStartOffset = i + 1;
-            break;
-          }
-        }
-      }
-
-      // 如果光标已经在行首，不做任何操作
-      if (lineStartOffset === offset) {
-        return true;
-      }
-
-      // 选择从行首到当前光标的内容
-      const newRange = document.createRange();
-      newRange.setStart(node, lineStartOffset);
-      newRange.setEnd(node, offset);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-
-      // 使用 execCommand 删除选中内容（支持撤销）
-      document.execCommand('delete', false);
-
-      // 触发 input 事件以更新状态
-      handleInput();
-      return true;
-    }
-
-    // Cmd + 左箭头：移动到行首（或选择到行首）
-    if (e.key === 'ArrowLeft' && e.metaKey) {
-      e.preventDefault();
-
-      const node = range.startContainer;
-      const offset = range.startOffset;
-
-      // 找到当前行的开始位置
-      let lineStartOffset = 0;
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent || '';
-        // 从当前位置向前查找换行符
-        for (let i = offset - 1; i >= 0; i--) {
-          if (text[i] === '\n') {
-            lineStartOffset = i + 1;
-            break;
-          }
-        }
-      }
-
-      const newRange = document.createRange();
-      newRange.setStart(node, lineStartOffset);
-
-      if (isShift) {
-        // Shift: 选择到行首
-        newRange.setEnd(range.endContainer, range.endOffset);
-      } else {
-        // 无 Shift: 移动光标到行首
-        newRange.collapse(true);
-      }
-
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-      return true;
-    }
-
-    // Cmd + 右箭头：移动到行尾（或选择到行尾）
-    if (e.key === 'ArrowRight' && e.metaKey) {
-      e.preventDefault();
-
-      const node = range.endContainer;
-      const offset = range.endOffset;
-
-      // 找到当前行的结束位置
-      let lineEndOffset = node.textContent?.length || 0;
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent || '';
-        // 从当前位置向后查找换行符
-        for (let i = offset; i < text.length; i++) {
-          if (text[i] === '\n') {
-            lineEndOffset = i;
-            break;
-          }
-        }
-      }
-
-      const newRange = document.createRange();
-
-      if (isShift) {
-        // Shift: 选择到行尾
-        newRange.setStart(range.startContainer, range.startOffset);
-        newRange.setEnd(node, lineEndOffset);
-      } else {
-        // 无 Shift: 移动光标到行尾
-        newRange.setStart(node, lineEndOffset);
-        newRange.collapse(true);
-      }
-
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-      return true;
-    }
-
-    // Cmd + 上箭头：移动到文本开头（或选择到开头）
-    if (e.key === 'ArrowUp' && e.metaKey) {
-      e.preventDefault();
-
-      const firstNode = editableRef.current.firstChild || editableRef.current;
-      const newRange = document.createRange();
-
-      if (isShift) {
-        // Shift: 选择到开头
-        newRange.setStart(firstNode, 0);
-        newRange.setEnd(range.endContainer, range.endOffset);
-      } else {
-        // 无 Shift: 移动光标到开头
-        newRange.setStart(firstNode, 0);
-        newRange.collapse(true);
-      }
-
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-      return true;
-    }
-
-    // Cmd + 下箭头：移动到文本末尾（或选择到末尾）
-    if (e.key === 'ArrowDown' && e.metaKey) {
-      e.preventDefault();
-
-      const lastNode = editableRef.current.lastChild || editableRef.current;
-      const lastOffset = lastNode.nodeType === Node.TEXT_NODE
-        ? (lastNode.textContent?.length || 0)
-        : lastNode.childNodes.length;
-
-      const newRange = document.createRange();
-
-      if (isShift) {
-        // Shift: 选择到末尾
-        newRange.setStart(range.startContainer, range.startOffset);
-        newRange.setEnd(lastNode, lastOffset);
-      } else {
-        // 无 Shift: 移动光标到末尾
-        newRange.setStart(lastNode, lastOffset);
-        newRange.collapse(true);
-      }
-
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-      return true;
-    }
-
-    return false;
-  }, []);
-
-  /**
-   * 处理键盘事件
-   */
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    // 检测 IME 组合状态（多种方式）
-    // keyCode 229 是 IME 输入时的特殊代码
-    // nativeEvent.isComposing 是原生事件的组合状态
-    const isIMEComposing = isComposing || e.nativeEvent.isComposing;
-
-    const isEnterKey =
-      e.key === 'Enter' ||
-      (e as unknown as { keyCode?: number }).keyCode === 13 ||
-      (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
-      (e as unknown as { which?: number }).which === 13;
-
-    // 优先处理 Mac 风格的光标移动和文本选择
-    if (handleMacCursorMovement(e)) {
-      return;
-    }
-
-    // 允许其他光标移动快捷键（Home/End/Ctrl+A/Ctrl+E）
-    const isCursorMovementKey =
-      e.key === 'Home' ||
-      e.key === 'End' ||
-      ((e.key === 'a' || e.key === 'A') && e.ctrlKey && !e.metaKey) || // Ctrl+A (Linux/Windows)
-      ((e.key === 'e' || e.key === 'E') && e.ctrlKey && !e.metaKey);   // Ctrl+E (Linux/Windows)
-
-    if (isCursorMovementKey) {
-      // 允许默认的光标移动行为
-      return;
-    }
-
-    // 优先处理补全菜单的键盘事件
-    if (fileCompletion.isOpen) {
-      const handled = fileCompletion.handleKeyDown(e.nativeEvent);
-      if (handled) {
-        e.preventDefault();
-        e.stopPropagation();
-        // 如果是回车键选中，标记防止后续发送消息
-        if (e.key === 'Enter') {
-          completionSelectedRef.current = true;
-        }
-        return;
-      }
-    }
-
-    if (commandCompletion.isOpen) {
-      const handled = commandCompletion.handleKeyDown(e.nativeEvent);
-      if (handled) {
-        e.preventDefault();
-        e.stopPropagation();
-        // 如果是回车键选中，标记防止后续发送消息
-        if (e.key === 'Enter') {
-          completionSelectedRef.current = true;
-        }
-        return;
-      }
-    }
-
-    if (agentCompletion.isOpen) {
-      const handled = agentCompletion.handleKeyDown(e.nativeEvent);
-      if (handled) {
-        e.preventDefault();
-        e.stopPropagation();
-        // 如果是回车键选中，标记防止后续发送消息
-        if (e.key === 'Enter') {
-          completionSelectedRef.current = true;
-        }
-        return;
-      }
-    }
-
-    // 检查是否刚刚结束组合输入（防止 IME 确认时的回车误触）
-    // 如果 compositionend 和 keydown 间隔很短，说明这个 keydown 可能是 IME 确认的回车
-    const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
-
-    // 根据 sendShortcut 设置决定发送行为
-    // sendShortcut === 'enter': Enter 发送，Shift+Enter 换行
-    // sendShortcut === 'cmdEnter': Cmd/Ctrl+Enter 发送，Enter 换行
-    const isSendKey = sendShortcut === 'cmdEnter'
-      ? (isEnterKey && (e.metaKey || e.ctrlKey) && !isIMEComposing)
-      : (isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing);
-
-    if (isSendKey) {
-      e.preventDefault();
-      if (sdkStatusLoading || !sdkInstalled) {
-        // SDK 状态加载中或未安装时，回车不发送
-        return;
-      }
-      submittedOnEnterRef.current = true;
-      handleSubmit();
-      return;
-    }
-
-    // 对于 cmdEnter 模式，允许普通 Enter 换行（默认行为）
-    // 对于 enter 模式，Shift+Enter 允许换行（默认行为）
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion, sdkStatusLoading, sdkInstalled, sendShortcut]);
-
-  const handleKeyUp = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    const isEnterKey =
-      e.key === 'Enter' ||
-      (e as unknown as { keyCode?: number }).keyCode === 13 ||
-      (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
-      (e as unknown as { which?: number }).which === 13;
-
-    // 根据 sendShortcut 设置判断是否是发送按键
-    const isSendKey = sendShortcut === 'cmdEnter'
-      ? (isEnterKey && (e.metaKey || e.ctrlKey))
-      : (isEnterKey && !e.shiftKey);
-
-    if (isSendKey) {
-      e.preventDefault();
-      // 如果刚刚在补全菜单中选中了项目，不发送消息
-      if (completionSelectedRef.current) {
-        completionSelectedRef.current = false;
-        return;
-      }
-      if (submittedOnEnterRef.current) {
-        submittedOnEnterRef.current = false;
-        return;
-      }
-      if (!fileCompletion.isOpen && !commandCompletion.isOpen && !agentCompletion.isOpen) {
-        // 不在 keyup 中处理发送逻辑，统一由 keydown 处理，避免 IME 状态下的误发送
-      }
-    }
-  }, [isComposing, handleSubmit, fileCompletion, commandCompletion, agentCompletion, sendShortcut]);
-
-  // 受控模式：当外部 value 改变时更新输入框内容
-  useEffect(() => {
-    if (value === undefined) return;
-    if (!editableRef.current) return;
-
-    // 如果正在组合输入，不要更新 DOM，否则会打断 IME，导致重复输入（如 ni -> nni）
-    if (isComposingRef.current) return;
-
-    const currentText = getTextContent();
-    // 仅当外部值与当前值不同时更新，避免光标跳动
-    if (currentText !== value) {
-      editableRef.current.innerText = value;
-      setHasContent(!!value.trim());
-      adjustHeight();
-
-      // 将光标移到末尾
-      if (value) {
+    // Slash command completion hook
+    const commandCompletion = useCompletionDropdown<CommandItem>({
+      trigger: '/',
+      provider: slashCommandProvider,
+      toDropdownItem: commandToDropdownItem,
+      onSelect: (command, query) => {
+        if (!editableRef.current || !query) return;
+
+        const text = getTextContent();
+        const replacement = `${command.label} `;
+        const newText = commandCompletion.replaceText(text, replacement, query);
+
+        // Update input box content
+        editableRef.current.innerText = newText;
+
+        // Set cursor to end of inserted text
         const range = document.createRange();
         const selection = window.getSelection();
         range.selectNodeContents(editableRef.current);
-        range.collapse(false); // false = 折叠到末尾
+        range.collapse(false);
         selection?.removeAllRanges();
         selection?.addRange(range);
+
+        handleInput();
+      },
+    });
+
+    // Agent selection completion hook (# trigger at line start)
+    const agentCompletion = useCompletionDropdown<AgentItem>({
+      trigger: '#',
+      provider: agentProvider,
+      toDropdownItem: agentToDropdownItem,
+      onSelect: (agent, query) => {
+        // Skip loading and empty state special items
+        if (
+          agent.id === '__loading__' ||
+          agent.id === '__empty__' ||
+          agent.id === '__empty_state__'
+        )
+          return;
+
+        // Handle create agent
+        if (agent.id === '__create_new__') {
+          onOpenAgentSettings?.();
+          // Clear # trigger text from input box
+          if (editableRef.current && query) {
+            const text = getTextContent();
+            const newText = agentCompletion.replaceText(text, '', query);
+            editableRef.current.innerText = newText;
+
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.selectNodeContents(editableRef.current);
+            range.collapse(false);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+
+            handleInput();
+          }
+          return;
+        }
+
+        // Select agent: don't insert text, call onAgentSelect callback
+        onAgentSelect?.({ id: agent.id, name: agent.name, prompt: agent.prompt });
+
+        // Clear # trigger text from input box
+        if (editableRef.current && query) {
+          const text = getTextContent();
+          const newText = agentCompletion.replaceText(text, '', query);
+          editableRef.current.innerText = newText;
+
+          // Set cursor position
+          const range = document.createRange();
+          const selection = window.getSelection();
+          range.selectNodeContents(editableRef.current);
+          range.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+
+          handleInput();
+        }
+      },
+    });
+
+    // Tooltip hook
+    const { tooltip, handleMouseOver, handleMouseLeave } = useTooltip();
+
+    /**
+     * Clear input box
+     */
+    const clearInput = useCallback(() => {
+      if (editableRef.current) {
+        editableRef.current.innerHTML = '';
+        editableRef.current.style.height = 'auto';
+        setHasContent(false);
+        // Notify parent component that input is cleared
+        onInput?.('');
       }
-    }
-  }, [value, getTextContent, adjustHeight]);
+    }, [onInput]);
 
-  // 原生事件捕获，兼容 JCEF/IME 的特殊行为
-  useEffect(() => {
-    const el = editableRef.current;
-    if (!el) return;
+    /**
+     * Adjust input box height
+     * Let contenteditable element expand naturally (height: auto),
+     * outer container (.input-editable-wrapper) controls scrolling via max-height and overflow-y.
+     * This avoids double scrollbar issue from outer + inner element scrolling.
+     */
+    const adjustHeight = useCallback(() => {
+      const el = editableRef.current;
+      if (!el) return;
 
-    const nativeKeyDown = (ev: KeyboardEvent) => {
-      // 检测 IME 输入：keyCode 229 表示 IME 正在处理按键
-      // 这比 compositionStart 事件更早，可以更早地设置 composing 状态
-      const isIMEProcessing = (ev as unknown as { keyCode?: number }).keyCode === 229 || ev.isComposing;
-      if (isIMEProcessing) {
-        isComposingRef.current = true;
-      }
+      // Ensure height is auto, expanded by content
+      el.style.height = 'auto';
+      // Hide inner scrollbar, completely rely on outer container scrolling
+      el.style.overflowY = 'hidden';
+    }, []);
 
-      const isEnterKey =
-        ev.key === 'Enter' ||
-        (ev as unknown as { keyCode?: number }).keyCode === 13 ||
-        (ev as unknown as { which?: number }).which === 13;
+    /**
+     * Detect and handle completion triggers (optimized: only start detection when @ or / or # is input)
+     */
+    const detectAndTriggerCompletion = useCallback(() => {
+      if (!editableRef.current) return;
 
-      // ⌘/ 快捷键：增强提示词
-      if (ev.key === '/' && ev.metaKey && !ev.shiftKey && !ev.altKey) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        handleEnhancePrompt();
+      // Don't detect completion during IME composition to avoid interfering with composition
+      if (isComposing) {
         return;
       }
 
-      // Mac 风格的光标移动快捷键和删除操作（已在 React 事件中处理，这里不需要处理）
-      const isMacCursorMovementOrDelete =
-        (ev.key === 'ArrowLeft' && ev.metaKey) ||
-        (ev.key === 'ArrowRight' && ev.metaKey) ||
-        (ev.key === 'ArrowUp' && ev.metaKey) ||
-        (ev.key === 'ArrowDown' && ev.metaKey) ||
-        (ev.key === 'Backspace' && ev.metaKey);
-
-      if (isMacCursorMovementOrDelete) {
-        // Mac 快捷键已在 React 事件中处理
+      // If file tags were just rendered, skip this completion detection
+      if (justRenderedTagRef.current) {
+        justRenderedTagRef.current = false;
+        fileCompletion.close();
+        commandCompletion.close();
+        agentCompletion.close();
         return;
       }
 
-      // 允许其他光标移动快捷键（Home/End/Ctrl+A/Ctrl+E）
-      const isCursorMovementKey =
-        ev.key === 'Home' ||
-        ev.key === 'End' ||
-        ((ev.key === 'a' || ev.key === 'A') && ev.ctrlKey && !ev.metaKey) ||
-        ((ev.key === 'e' || ev.key === 'E') && ev.ctrlKey && !ev.metaKey);
+      const text = getTextContent();
+      const cursorPos = getCursorPosition(editableRef.current);
 
-      if (isCursorMovementKey) {
-        // 允许默认的光标移动行为
+      // Optimization: Quick check if text contains trigger characters, return immediately if not
+      const hasAtSymbol = text.includes('@');
+      const hasSlashSymbol = text.includes('/');
+      const hasHashSymbol = text.includes('#');
+
+      if (!hasAtSymbol && !hasSlashSymbol && !hasHashSymbol) {
+        fileCompletion.close();
+        commandCompletion.close();
+        agentCompletion.close();
         return;
       }
 
-      // 补全菜单打开时，不在原生事件中处理（React onKeyDown 已处理，避免重复）
-      if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
+      // Pass element parameter so detectTrigger can skip file tags
+      const trigger = detectTrigger(text, cursorPos, editableRef.current);
+
+      // Close currently open completion
+      if (!trigger) {
+        fileCompletion.close();
+        commandCompletion.close();
+        agentCompletion.close();
         return;
       }
 
-      // 检查是否刚刚结束组合输入
-      const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
+      // Get trigger position
+      const position = getTriggerPosition(editableRef.current, trigger.start);
+      if (!position) return;
 
-      // 根据 sendShortcut 设置决定发送行为
-      const shift = (ev as KeyboardEvent).shiftKey === true;
-      const metaOrCtrl = ev.metaKey || ev.ctrlKey;
-      const isSendKey = sendShortcut === 'cmdEnter'
-        ? (isEnterKey && metaOrCtrl && !isComposingRef.current && !isComposing)
-        : (isEnterKey && !shift && !isComposingRef.current && !isComposing && !isRecentlyComposing);
-
-      // 使用 ref 而不是 state 来检查 composing 状态，因为 ref 是同步的
-      if (isSendKey) {
-        ev.preventDefault();
-        submittedOnEnterRef.current = true;
-        handleSubmit();
-      }
-    };
-
-    const nativeKeyUp = (ev: KeyboardEvent) => {
-      const isEnterKey =
-        ev.key === 'Enter' ||
-        (ev as unknown as { keyCode?: number }).keyCode === 13 ||
-        (ev as unknown as { which?: number }).which === 13;
-      const shift = (ev as KeyboardEvent).shiftKey === true;
-      const metaOrCtrl = ev.metaKey || ev.ctrlKey;
-
-      // 根据 sendShortcut 设置判断是否是发送按键
-      const isSendKey = sendShortcut === 'cmdEnter'
-        ? (isEnterKey && metaOrCtrl)
-        : (isEnterKey && !shift);
-
-      if (isSendKey) {
-        ev.preventDefault();
-        // 如果刚刚在补全菜单中选中了项目，不发送消息
-        if (completionSelectedRef.current) {
-          completionSelectedRef.current = false;
-          return;
+      // Open corresponding completion based on trigger symbol
+      if (trigger.trigger === '@') {
+        commandCompletion.close();
+        agentCompletion.close();
+        if (!fileCompletion.isOpen) {
+          fileCompletion.open(position, trigger);
+          fileCompletion.updateQuery(trigger);
+        } else {
+          fileCompletion.updateQuery(trigger);
         }
-        if (submittedOnEnterRef.current) {
-          submittedOnEnterRef.current = false;
-          return;
+      } else if (trigger.trigger === '/') {
+        fileCompletion.close();
+        agentCompletion.close();
+        if (!commandCompletion.isOpen) {
+          commandCompletion.open(position, trigger);
+          commandCompletion.updateQuery(trigger);
+        } else {
+          commandCompletion.updateQuery(trigger);
         }
-        if (!fileCompletion.isOpen && !commandCompletion.isOpen && !agentCompletion.isOpen) {
-          // 不在 keyup 中处理发送逻辑，统一由 keydown 处理
+      } else if (trigger.trigger === '#') {
+        fileCompletion.close();
+        commandCompletion.close();
+        if (!agentCompletion.isOpen) {
+          agentCompletion.open(position, trigger);
+          agentCompletion.updateQuery(trigger);
+        } else {
+          agentCompletion.updateQuery(trigger);
         }
       }
-    };
+    }, [
+      getTextContent,
+      getCursorPosition,
+      detectTrigger,
+      getTriggerPosition,
+      fileCompletion,
+      commandCompletion,
+      agentCompletion,
+    ]);
 
-    const nativeBeforeInput = (ev: InputEvent) => {
-      const type = (ev as InputEvent).inputType;
-      if (type === 'insertParagraph') {
-        // 对于 cmdEnter 模式，普通 Enter 应该允许换行
-        if (sendShortcut === 'cmdEnter') {
-          // 允许默认的换行行为
+    // Create debounced version of renderFileTags (300ms delay)
+    const debouncedRenderFileTags = useMemo(
+      () => debounce(renderFileTags, 300),
+      [renderFileTags]
+    );
+
+    // Create debounced version of detectAndTriggerCompletion (150ms delay)
+    const debouncedDetectCompletion = useMemo(
+      () => debounce(detectAndTriggerCompletion, 150),
+      [detectAndTriggerCompletion]
+    );
+
+    // Performance optimization: Debounced onInput callback
+    // Reduces parent component re-renders during rapid typing
+    const debouncedOnInput = useMemo(
+      () =>
+        debounce((text: string) => {
+          // Skip if this is an external value update to avoid loops
+          if (isExternalUpdateRef.current) {
+            isExternalUpdateRef.current = false;
+            return;
+          }
+          onInput?.(text);
+        }, 100),
+      [onInput]
+    );
+
+    /**
+     * Handle input event (optimized: use debounce to reduce performance overhead)
+     * @param isComposingFromEvent - isComposing state from native event (higher priority)
+     */
+    const handleInput = useCallback(
+      (isComposingFromEvent?: boolean) => {
+        // Use multiple checks to correctly detect IME state:
+        // 1. Native event isComposing (most accurate, can detect before compositionStart)
+        // 2. isComposingRef (sync ref, faster than React state)
+        // 3. React state isComposing (as fallback)
+        const isCurrentlyComposing =
+          isComposingFromEvent ?? isComposingRef.current ?? isComposing;
+
+        // Key fix: During IME composition, completely skip all DOM operations and state updates
+        // Avoid interrupting IME normal operation, wait for compositionend to handle uniformly
+        if (isCurrentlyComposing) {
           return;
         }
 
-        ev.preventDefault();
-        // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
-        if (completionSelectedRef.current) {
-          completionSelectedRef.current = false;
-          return;
+        // Invalidate cache since content changed
+        invalidateCache();
+
+        const text = getTextContent();
+        // Remove zero-width and other invisible characters before checking if empty, ensure placeholder shows when only zero-width characters remain
+        const cleanText = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
+        const isEmpty = !cleanText.trim();
+
+        // If content is empty, clear innerHTML to ensure :empty pseudo-class works (show placeholder)
+        if (isEmpty && editableRef.current) {
+          editableRef.current.innerHTML = '';
         }
-        // 补全菜单打开时不发送消息
-        if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
-          return;
+
+        // Adjust height
+        adjustHeight();
+
+        // Trigger completion detection and state update
+        debouncedDetectCompletion();
+        setHasContent(!isEmpty);
+
+        // Notify parent component (use debounced version to reduce re-renders)
+        // If determined empty (only zero-width characters), pass empty string to parent
+        debouncedOnInput(isEmpty ? '' : text);
+      },
+      [
+        getTextContent,
+        adjustHeight,
+        debouncedDetectCompletion,
+        debouncedOnInput,
+        invalidateCache,
+      ]
+    );
+
+    // IME composition hook
+    const {
+      isComposing,
+      isComposingRef,
+      lastCompositionEndTimeRef,
+      handleCompositionStart,
+      handleCompositionEnd,
+    } = useIMEComposition({
+      handleInput,
+      renderFileTags,
+    });
+
+    // Keyboard navigation hook
+    const { handleMacCursorMovement } = useKeyboardNavigation({
+      editableRef,
+      handleInput,
+    });
+
+    /**
+     * Handle keyboard down event (for detecting space to trigger file tag rendering)
+     * Optimized: use debounce for delayed rendering
+     */
+    const handleKeyDownForTagRendering = useCallback(
+      (e: KeyboardEvent) => {
+        // If space key pressed, use debounce for delayed file tag rendering
+        if (e.key === ' ') {
+          debouncedRenderFileTags();
         }
-        handleSubmit();
+      },
+      [debouncedRenderFileTags]
+    );
+
+    /**
+     * Handle submit
+     * Preserve user input original format (spaces, newlines, indentation, etc.)
+     */
+    const handleSubmit = useCallback(() => {
+      const content = getTextContent();
+      // Remove zero-width spaces and other invisible characters
+      const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+
+      if (sdkStatusLoading) {
+        // SDK status loading, don't allow sending
+        addToast?.(t('chat.sdkStatusLoading'), 'info');
+        return;
       }
-    };
 
-    el.addEventListener('keydown', nativeKeyDown, { capture: true });
-    el.addEventListener('keyup', nativeKeyUp, { capture: true });
-    el.addEventListener('beforeinput', nativeBeforeInput as EventListener, { capture: true });
+      if (!sdkInstalled) {
+        // Prompt user to download dependency package
+        addToast?.(
+          t('chat.sdkNotInstalled', {
+            provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
+          }) +
+            ' ' +
+            t('chat.goInstallSdk'),
+          'warning'
+        );
+        onInstallSdk?.();
+        return;
+      }
 
-    return () => {
-      el.removeEventListener('keydown', nativeKeyDown, { capture: true } as any);
-      el.removeEventListener('keyup', nativeKeyUp, { capture: true } as any);
-      el.removeEventListener('beforeinput', nativeBeforeInput as EventListener, { capture: true } as any);
-    };
-  }, [isComposing, handleSubmit, handleEnhancePrompt, fileCompletion, commandCompletion, agentCompletion, sendShortcut]);
+      // Only use trim when checking if empty, don't modify actual sent content
+      if (!cleanContent && attachments.length === 0) {
+        return;
+      }
+      if (isLoading) {
+        return;
+      }
 
-  /**
-   * 处理 IME 组合开始
-   */
-  const handleCompositionStart = useCallback(() => {
-    // 清除之前的超时
-    if (compositionTimeoutRef.current) {
-      clearTimeout(compositionTimeoutRef.current);
-      compositionTimeoutRef.current = null;
-    }
-    // 同时更新 ref 和 state，ref 是同步的，state 是异步的
-    isComposingRef.current = true;
-    setIsComposing(true);
-  }, []);
+      // Close completion menus
+      fileCompletion.close();
+      commandCompletion.close();
+      agentCompletion.close();
 
-  /**
-   * 处理 IME 组合结束
-   */
-  const handleCompositionEnd = useCallback(() => {
-    lastCompositionEndTimeRef.current = Date.now();
-    // 同时更新 ref 和 state
-    isComposingRef.current = false;
-    setIsComposing(false);
-    // 增加稍长的延迟以确保低性能环境下 DOM/IME 状态稳定
-    compositionTimeoutRef.current = window.setTimeout(() => {
-      isComposingRef.current = false;
-      setIsComposing(false);
-      compositionTimeoutRef.current = null;
-      // 组合结束后，强制同步一次输入状态并触发文件标签渲染，清理可能残留的上屏字符/下划线
-      handleInput();
-      // 使用微小延迟确保 DOM 已更新
+      // Capture attachments before clearing
+      const attachmentsToSend = attachments.length > 0 ? [...attachments] : undefined;
+
+      // Clear input box immediately for responsiveness
+      clearInput();
+
+      // If using internal attachments state, also clear attachments
+      if (externalAttachments === undefined) {
+        setInternalAttachments([]);
+      }
+
+      // Defer the heavy submission logic to allow UI update
       setTimeout(() => {
-        renderFileTags();
-      }, 0);
-    }, 40);
-  }, [handleInput, renderFileTags]);
+        onSubmit?.(content, attachmentsToSend);
+      }, 10);
+    }, [
+      getTextContent,
+      attachments,
+      isLoading,
+      onSubmit,
+      clearInput,
+      externalAttachments,
+      fileCompletion,
+      commandCompletion,
+      agentCompletion,
+      sdkStatusLoading,
+      sdkInstalled,
+      onInstallSdk,
+      addToast,
+      t,
+      currentProvider,
+    ]);
 
-  /**
-   * 生成唯一 ID（兼容 JCEF）
-   */
-  const generateId = useCallback(() => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-    // 后备方案：使用时间戳 + 随机数
-    return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-  }, []);
+    // Prompt enhancer hook
+    const {
+      isEnhancing,
+      showEnhancerDialog,
+      originalPrompt,
+      enhancedPrompt,
+      handleEnhancePrompt,
+      handleUseEnhancedPrompt,
+      handleKeepOriginalPrompt,
+      handleCloseEnhancerDialog,
+    } = usePromptEnhancer({
+      editableRef,
+      getTextContent,
+      selectedModel,
+      setHasContent,
+      onInput,
+    });
 
-  /**
-   * 处理粘贴事件 - 检测图片和纯文本
-   */
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
+    /**
+     * Handle keyboard events
+     */
+    const handleKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLDivElement>) => {
+        // Detect IME composition state (multiple methods)
+        // keyCode 229 is special code during IME input
+        // nativeEvent.isComposing is native event composition state
+        const isIMEComposing = isComposing || e.nativeEvent.isComposing;
 
-    if (!items) {
-      return;
-    }
+        const isEnterKey =
+          e.key === 'Enter' ||
+          (e as unknown as { keyCode?: number }).keyCode === 13 ||
+          (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
+          (e as unknown as { which?: number }).which === 13;
 
-    // 检查是否有真正的图片（type 为 image/*）
-    let hasImage = false;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-
-      // 只处理真正的图片类型（type 以 image/ 开头）
-      if (item.type.startsWith('image/')) {
-        hasImage = true;
-        e.preventDefault();
-
-        const blob = item.getAsFile();
-
-        if (blob) {
-          // 读取图片为 Base64
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(',')[1];
-            const mediaType = blob.type || item.type || 'image/png';
-            const ext = (() => {
-              if (mediaType && mediaType.includes('/')) {
-                return mediaType.split('/')[1];
-              }
-              const name = blob.name || '';
-              const m = name.match(/\.([a-zA-Z0-9]+)$/);
-              return m ? m[1] : 'png';
-            })();
-            const attachment: Attachment = {
-              id: generateId(),
-              fileName: `pasted-image-${Date.now()}.${ext}`,
-              mediaType,
-              data: base64,
-            };
-
-            setInternalAttachments(prev => [...prev, attachment]);
-          };
-          reader.readAsDataURL(blob);
+        // First handle Mac-style cursor movement and text selection
+        if (handleMacCursorMovement(e)) {
+          return;
         }
 
-        return;
-      }
-    }
+        // Allow other cursor movement shortcuts (Home/End/Ctrl+A/Ctrl+E)
+        const isCursorMovementKey =
+          e.key === 'Home' ||
+          e.key === 'End' ||
+          ((e.key === 'a' || e.key === 'A') && e.ctrlKey && !e.metaKey) || // Ctrl+A (Linux/Windows)
+          ((e.key === 'e' || e.key === 'E') && e.ctrlKey && !e.metaKey); // Ctrl+E (Linux/Windows)
 
-    // 如果没有图片，尝试获取文本或文件路径
-    if (!hasImage) {
-      e.preventDefault();
+        if (isCursorMovementKey) {
+          // Allow default cursor movement behavior
+          return;
+        }
 
-      // 尝试多种方式获取文本
-      let text = e.clipboardData.getData('text/plain') ||
-        e.clipboardData.getData('text/uri-list') ||
-        e.clipboardData.getData('text/html');
-
-      // 如果还是没有文本，尝试从 file 类型的 item 中获取文件名/路径
-      if (!text) {
-        // 检查是否有文件类型的 item
-        let hasFileItem = false;
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          if (item.kind === 'file') {
-            hasFileItem = true;
-            break;
+        // First handle completion menu keyboard events
+        if (fileCompletion.isOpen) {
+          const handled = fileCompletion.handleKeyDown(e.nativeEvent);
+          if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+            // If enter key selected, mark to prevent subsequent message sending
+            if (e.key === 'Enter') {
+              completionSelectedRef.current = true;
+            }
+            return;
           }
         }
 
-        // 如果有文件类型的 item，尝试通过 Java 端获取完整路径
-        if (hasFileItem && (window as any).getClipboardFilePath) {
-          (window as any).getClipboardFilePath().then((fullPath: string) => {
-            if (fullPath && fullPath.trim()) {
-              // 插入完整路径
-              document.execCommand('insertText', false, fullPath);
-              handleInput();
+        if (commandCompletion.isOpen) {
+          const handled = commandCompletion.handleKeyDown(e.nativeEvent);
+          if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+            // If enter key selected, mark to prevent subsequent message sending
+            if (e.key === 'Enter') {
+              completionSelectedRef.current = true;
             }
-          }).catch(() => {
-            // 忽略错误
-          });
+            return;
+          }
+        }
+
+        if (agentCompletion.isOpen) {
+          const handled = agentCompletion.handleKeyDown(e.nativeEvent);
+          if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+            // If enter key selected, mark to prevent subsequent message sending
+            if (e.key === 'Enter') {
+              completionSelectedRef.current = true;
+            }
+            return;
+          }
+        }
+
+        // Check if composition input just ended (prevent IME confirm enter false trigger)
+        // If compositionend and keydown interval is very short, this keydown might be IME confirm enter
+        const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
+
+        // Determine send behavior based on sendShortcut setting
+        // sendShortcut === 'enter': Enter sends, Shift+Enter newline
+        // sendShortcut === 'cmdEnter': Cmd/Ctrl+Enter sends, Enter newline
+        const isSendKey =
+          sendShortcut === 'cmdEnter'
+            ? isEnterKey && (e.metaKey || e.ctrlKey) && !isIMEComposing
+            : isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing;
+
+        if (isSendKey) {
+          e.preventDefault();
+          if (sdkStatusLoading || !sdkInstalled) {
+            // SDK status loading or not installed, enter doesn't send
+            return;
+          }
+          submittedOnEnterRef.current = true;
+          handleSubmit();
           return;
         }
-      }
 
-      if (text && text.trim()) {
-        // 使用 document.execCommand 插入纯文本（保持光标位置）
-        document.execCommand('insertText', false, text);
+        // For cmdEnter mode, allow normal Enter newline (default behavior)
+        // For enter mode, Shift+Enter allows newline (default behavior)
+      },
+      [
+        isComposing,
+        handleSubmit,
+        fileCompletion,
+        commandCompletion,
+        agentCompletion,
+        sdkStatusLoading,
+        sdkInstalled,
+        sendShortcut,
+        handleMacCursorMovement,
+        lastCompositionEndTimeRef,
+      ]
+    );
 
-        // 触发 input 事件以更新状态
-        handleInput();
-      }
-    }
-  }, [generateId, handleInput]);
+    const handleKeyUp = useCallback(
+      (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const isEnterKey =
+          e.key === 'Enter' ||
+          (e as unknown as { keyCode?: number }).keyCode === 13 ||
+          (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
+          (e as unknown as { which?: number }).which === 13;
 
-  /**
-   * 处理拖拽进入事件
-   */
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // 设置拖拽效果为复制
-    e.dataTransfer.dropEffect = 'copy';
-  }, []);
+        // Determine if send key based on sendShortcut setting
+        const isSendKey =
+          sendShortcut === 'cmdEnter'
+            ? isEnterKey && (e.metaKey || e.ctrlKey)
+            : isEnterKey && !e.shiftKey;
 
-  /**
-   * 处理拖拽释放事件 - 检测图片和文件路径
-   */
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // 先获取文本内容（文件路径）
-    const text = e.dataTransfer?.getData('text/plain');
-
-    // 再检查文件对象
-    const files = e.dataTransfer?.files;
-
-    // 检查是否有实际的图片文件对象
-    let hasImageFile = false;
-    if (files && files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-
-        // 只处理图片文件
-        if (file.type.startsWith('image/')) {
-          hasImageFile = true;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(',')[1];
-            const ext = (() => {
-              if (file.type && file.type.includes('/')) {
-                return file.type.split('/')[1];
-              }
-              const m = file.name.match(/\.([a-zA-Z0-9]+)$/);
-              return m ? m[1] : 'png';
-            })();
-            const attachment: Attachment = {
-              id: generateId(),
-              fileName: file.name || `dropped-image-${Date.now()}.${ext}`,
-              mediaType: file.type || 'image/png',
-              data: base64,
-            };
-
-            setInternalAttachments(prev => [...prev, attachment]);
-          };
-          reader.readAsDataURL(file);
+        if (isSendKey) {
+          e.preventDefault();
+          // If item was just selected in completion menu, don't send message
+          if (completionSelectedRef.current) {
+            completionSelectedRef.current = false;
+            return;
+          }
+          if (submittedOnEnterRef.current) {
+            submittedOnEnterRef.current = false;
+            return;
+          }
         }
-      }
-    }
+      },
+      [sendShortcut]
+    );
 
-    // 如果有图片文件，不处理文本
-    if (hasImageFile) {
-      return;
-    }
+    // Performance optimization: Simplified controlled mode
+    // Only sync external value when it's explicitly different and not from user input
+    useEffect(() => {
+      // Skip if value prop is not provided (uncontrolled mode)
+      if (value === undefined) return;
+      if (!editableRef.current) return;
 
-    // 没有图片文件，处理文本（文件路径或其他文本）
-    if (text && text.trim()) {
-      // 提取文件路径并添加到路径映射中
-      const filePath = text.trim();
-      const fileName = filePath.split(/[/\\]/).pop() || filePath;
+      // Skip during IME composition to avoid breaking input
+      if (isComposingRef.current) return;
 
-      // 将路径添加到 pathMappingRef，使其成为"有效引用"
-      pathMappingRef.current.set(fileName, filePath);
-      pathMappingRef.current.set(filePath, filePath);
+      // Invalidate cache before comparing
+      invalidateCache();
+      const currentText = getTextContent();
 
-      // 自动添加 @ 前缀（如果还没有），并添加空格以触发渲染
-      const textToInsert = (text.startsWith('@') ? text : `@${text}`) + ' ';
+      // Only update if external value differs from current content
+      // This prevents the update loop: user types -> onInput -> parent sets value -> useEffect
+      if (currentText !== value) {
+        // Mark as external update to prevent debounced onInput from firing
+        isExternalUpdateRef.current = true;
 
-      // 获取当前光标位置
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0 && editableRef.current) {
-        // 确保光标在输入框内
-        if (editableRef.current.contains(selection.anchorNode)) {
-          // 使用现代 API 插入文本
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const textNode = document.createTextNode(textToInsert);
-          range.insertNode(textNode);
+        editableRef.current.innerText = value;
+        setHasContent(!!value.trim());
+        adjustHeight();
 
-          // 将光标移到插入文本后
-          range.setStartAfter(textNode);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        } else {
-          // 光标不在输入框内，追加到末尾
-          // 使用 appendChild 而不是 innerText，避免破坏已有的文件标签
-          const textNode = document.createTextNode(textToInsert);
-          editableRef.current.appendChild(textNode);
-
-          // 将光标移到末尾
+        // Move cursor to end
+        if (value) {
           const range = document.createRange();
-          range.setStartAfter(textNode);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
+          const selection = window.getSelection();
+          range.selectNodeContents(editableRef.current);
+          range.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
         }
-      } else {
-        // 没有选区，追加到末尾
-        if (editableRef.current) {
-          const textNode = document.createTextNode(textToInsert);
-          editableRef.current.appendChild(textNode);
-        }
+
+        // Invalidate cache after update
+        invalidateCache();
       }
+    }, [value, getTextContent, adjustHeight, invalidateCache, isComposingRef]);
 
-      // 关闭补全菜单
-      fileCompletion.close();
-      commandCompletion.close();
+    // Native event capture, compatible with JCEF/IME special behavior
+    useEffect(() => {
+      const el = editableRef.current;
+      if (!el) return;
 
-      // 直接触发状态更新，不调用 handleInput（避免重新检测补全）
-      const newText = getTextContent();
-      setHasContent(!!newText.trim());
-      adjustHeight();
-      onInput?.(newText);
+      const nativeKeyDown = (ev: KeyboardEvent) => {
+        // Detect IME input: keyCode 229 means IME is processing key
+        // This is earlier than compositionStart event, can set composing state earlier
+        const isIMEProcessing =
+          (ev as unknown as { keyCode?: number }).keyCode === 229 || ev.isComposing;
+        if (isIMEProcessing) {
+          isComposingRef.current = true;
+        }
 
-      // 立即渲染文件标签（不需要等待空格）
-      setTimeout(() => {
-        renderFileTags();
-      }, 50);
-    }
-  }, [generateId, getTextContent, renderFileTags, fileCompletion, commandCompletion, adjustHeight, onInput]);
+        const isEnterKey =
+          ev.key === 'Enter' ||
+          (ev as unknown as { keyCode?: number }).keyCode === 13 ||
+          (ev as unknown as { which?: number }).which === 13;
 
-  /**
-   * 处理添加附件
-   */
-  const handleAddAttachment = useCallback((files: FileList) => {
-    if (externalAttachments !== undefined) {
-      onAddAttachment?.(files);
-    } else {
-      // 使用内部状态
-      Array.from(files).forEach(file => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = (reader.result as string).split(',')[1];
-          const attachment: Attachment = {
-            id: generateId(),
-            fileName: file.name,
-            mediaType: file.type || 'application/octet-stream',
-            data: base64,
-          };
-          setInternalAttachments(prev => [...prev, attachment]);
-        };
-        reader.readAsDataURL(file);
+        // ⌘/ shortcut: enhance prompt
+        if (ev.key === '/' && ev.metaKey && !ev.shiftKey && !ev.altKey) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          handleEnhancePrompt();
+          return;
+        }
+
+        // Mac-style cursor movement shortcuts and delete operations (already handled in React event, not needed here)
+        const isMacCursorMovementOrDelete =
+          (ev.key === 'ArrowLeft' && ev.metaKey) ||
+          (ev.key === 'ArrowRight' && ev.metaKey) ||
+          (ev.key === 'ArrowUp' && ev.metaKey) ||
+          (ev.key === 'ArrowDown' && ev.metaKey) ||
+          (ev.key === 'Backspace' && ev.metaKey);
+
+        if (isMacCursorMovementOrDelete) {
+          // Mac shortcuts already handled in React event
+          return;
+        }
+
+        // Allow other cursor movement shortcuts (Home/End/Ctrl+A/Ctrl+E)
+        const isCursorMovementKey =
+          ev.key === 'Home' ||
+          ev.key === 'End' ||
+          ((ev.key === 'a' || ev.key === 'A') && ev.ctrlKey && !ev.metaKey) ||
+          ((ev.key === 'e' || ev.key === 'E') && ev.ctrlKey && !ev.metaKey);
+
+        if (isCursorMovementKey) {
+          // Allow default cursor movement behavior
+          return;
+        }
+
+        // When completion menu is open, don't handle in native event (React onKeyDown already handled, avoid duplication)
+        if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
+          return;
+        }
+
+        // Check if composition input just ended
+        const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
+
+        // Determine send behavior based on sendShortcut setting
+        const shift = (ev as KeyboardEvent).shiftKey === true;
+        const metaOrCtrl = ev.metaKey || ev.ctrlKey;
+        const isSendKey =
+          sendShortcut === 'cmdEnter'
+            ? isEnterKey && metaOrCtrl && !isComposingRef.current && !isComposing
+            : isEnterKey &&
+              !shift &&
+              !isComposingRef.current &&
+              !isComposing &&
+              !isRecentlyComposing;
+
+        // Use ref instead of state to check composing state, because ref is sync
+        if (isSendKey) {
+          ev.preventDefault();
+          submittedOnEnterRef.current = true;
+          handleSubmit();
+        }
+      };
+
+      const nativeKeyUp = (ev: KeyboardEvent) => {
+        const isEnterKey =
+          ev.key === 'Enter' ||
+          (ev as unknown as { keyCode?: number }).keyCode === 13 ||
+          (ev as unknown as { which?: number }).which === 13;
+        const shift = (ev as KeyboardEvent).shiftKey === true;
+        const metaOrCtrl = ev.metaKey || ev.ctrlKey;
+
+        // Determine if send key based on sendShortcut setting
+        const isSendKey =
+          sendShortcut === 'cmdEnter' ? isEnterKey && metaOrCtrl : isEnterKey && !shift;
+
+        if (isSendKey) {
+          ev.preventDefault();
+          // If item was just selected in completion menu, don't send message
+          if (completionSelectedRef.current) {
+            completionSelectedRef.current = false;
+            return;
+          }
+          if (submittedOnEnterRef.current) {
+            submittedOnEnterRef.current = false;
+            return;
+          }
+        }
+      };
+
+      const nativeBeforeInput = (ev: InputEvent) => {
+        const type = (ev as InputEvent).inputType;
+        if (type === 'insertParagraph') {
+          // For cmdEnter mode, normal Enter should allow newline
+          if (sendShortcut === 'cmdEnter') {
+            // Allow default newline behavior
+            return;
+          }
+
+          ev.preventDefault();
+          // If item was just selected in completion menu with enter, don't send message
+          if (completionSelectedRef.current) {
+            completionSelectedRef.current = false;
+            return;
+          }
+          // Don't send message when completion menu is open
+          if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
+            return;
+          }
+          handleSubmit();
+        }
+      };
+
+      el.addEventListener('keydown', nativeKeyDown, { capture: true });
+      el.addEventListener('keyup', nativeKeyUp, { capture: true });
+      el.addEventListener('beforeinput', nativeBeforeInput as EventListener, {
+        capture: true,
       });
-    }
-  }, [externalAttachments, onAddAttachment, generateId]);
 
-  /**
-   * 处理移除附件
-   */
-  const handleRemoveAttachment = useCallback((id: string) => {
-    if (externalAttachments !== undefined) {
-      onRemoveAttachment?.(id);
-    } else {
-      setInternalAttachments(prev => prev.filter(a => a.id !== id));
-    }
-  }, [externalAttachments, onRemoveAttachment]);
+      return () => {
+        el.removeEventListener('keydown', nativeKeyDown, { capture: true });
+        el.removeEventListener('keyup', nativeKeyUp, { capture: true });
+        el.removeEventListener('beforeinput', nativeBeforeInput as EventListener, {
+          capture: true,
+        });
+      };
+    }, [
+      isComposing,
+      isComposingRef,
+      handleSubmit,
+      handleEnhancePrompt,
+      fileCompletion,
+      commandCompletion,
+      agentCompletion,
+      sendShortcut,
+      lastCompositionEndTimeRef,
+    ]);
 
-  /**
-   * 处理模式选择
-   */
-  const handleModeSelect = useCallback((mode: PermissionMode) => {
-    onModeSelect?.(mode);
-  }, [onModeSelect]);
+    // Paste and drop hook
+    const { handlePaste, handleDragOver, handleDrop } = usePasteAndDrop({
+      editableRef,
+      pathMappingRef,
+      getTextContent,
+      adjustHeight,
+      renderFileTags,
+      setHasContent,
+      setInternalAttachments,
+      onInput,
+      fileCompletion,
+      commandCompletion,
+      handleInput,
+    });
 
-  /**
-   * 处理模型选择
-   */
-  const handleModelSelect = useCallback((modelId: string) => {
-    onModelSelect?.(modelId);
-  }, [onModelSelect]);
+    /**
+     * Handle add attachment
+     */
+    const handleAddAttachment = useCallback(
+      (files: FileList) => {
+        if (externalAttachments !== undefined) {
+          onAddAttachment?.(files);
+        } else {
+          // Use internal state
+          Array.from(files).forEach((file) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = (reader.result as string).split(',')[1];
+              const attachment: Attachment = {
+                id: generateId(),
+                fileName: file.name,
+                mediaType: file.type || 'application/octet-stream',
+                data: base64,
+              };
+              setInternalAttachments((prev) => [...prev, attachment]);
+            };
+            reader.readAsDataURL(file);
+          });
+        }
+      },
+      [externalAttachments, onAddAttachment]
+    );
 
-  /**
-   * 聚焦输入框
-   */
-  const focusInput = useCallback(() => {
-    editableRef.current?.focus();
-  }, []);
+    /**
+     * Handle remove attachment
+     */
+    const handleRemoveAttachment = useCallback(
+      (id: string) => {
+        if (externalAttachments !== undefined) {
+          onRemoveAttachment?.(id);
+        } else {
+          setInternalAttachments((prev) => prev.filter((a) => a.id !== id));
+        }
+      },
+      [externalAttachments, onRemoveAttachment]
+    );
 
-  // 初始化时聚焦和注册全局函数
-  useEffect(() => {
-    // 注册全局函数以接收 Java 传递的文件路径
-    (window as any).handleFilePathFromJava = (filePath: string) => {
-      if (!editableRef.current) return;
+    /**
+     * Handle mode select
+     */
+    const handleModeSelect = useCallback(
+      (mode: PermissionMode) => {
+        onModeSelect?.(mode);
+      },
+      [onModeSelect]
+    );
 
-      // 提取文件路径并添加到路径映射中
-      const absolutePath = filePath.trim();
-      const fileName = absolutePath.split(/[/\\]/).pop() || absolutePath;
+    /**
+     * Handle model select
+     */
+    const handleModelSelect = useCallback(
+      (modelId: string) => {
+        onModelSelect?.(modelId);
+      },
+      [onModelSelect]
+    );
 
-      // 将路径添加到 pathMappingRef，使其成为"有效引用"
-      pathMappingRef.current.set(fileName, absolutePath);
-      pathMappingRef.current.set(absolutePath, absolutePath);
+    /**
+     * Focus input box
+     */
+    const focusInput = useCallback(() => {
+      editableRef.current?.focus();
+    }, []);
 
-      // 插入文件路径到输入框（自动添加 @ 前缀），并添加空格以触发渲染
-      const pathToInsert = (filePath.startsWith('@') ? filePath : `@${filePath}`) + ' ';
+    // Performance optimization: Imperative handle for uncontrolled mode
+    // Exposes methods for parent to interact without causing re-renders
+    useImperativeHandle(
+      ref,
+      () => ({
+        getValue: () => {
+          invalidateCache(); // Ensure fresh content
+          return getTextContent();
+        },
+        setValue: (newValue: string) => {
+          if (!editableRef.current) return;
+          isExternalUpdateRef.current = true;
+          editableRef.current.innerText = newValue;
+          setHasContent(!!newValue.trim());
+          adjustHeight();
+          invalidateCache();
 
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
-        // 光标在输入框内，在光标位置插入
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        const textNode = document.createTextNode(pathToInsert);
-        range.insertNode(textNode);
+          // Move cursor to end
+          if (newValue) {
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.selectNodeContents(editableRef.current);
+            range.collapse(false);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }
+        },
+        focus: focusInput,
+        clear: clearInput,
+        hasContent: () => hasContent,
+        getFileTags: extractFileTags,
+      }),
+      [getTextContent, focusInput, clearInput, adjustHeight, invalidateCache, hasContent, extractFileTags]
+    );
 
-        // 将光标移到插入文本后
-        range.setStartAfter(textNode);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      } else {
-        // 光标不在输入框内，追加到末尾
-        // 使用 appendChild 而不是 innerText，避免破坏已有的文件标签
-        const textNode = document.createTextNode(pathToInsert);
-        editableRef.current.appendChild(textNode);
+    // Global callbacks hook
+    useGlobalCallbacks({
+      editableRef,
+      pathMappingRef,
+      getTextContent,
+      adjustHeight,
+      renderFileTags,
+      setHasContent,
+      onInput,
+      fileCompletion,
+      commandCompletion,
+      focusInput,
+    });
 
-        // 将光标移到末尾
-        const range = document.createRange();
-        range.setStartAfter(textNode);
-        range.collapse(true);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-      }
+    // Add space key listener to trigger file tag rendering
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        handleKeyDownForTagRendering(e);
+      };
 
-      // 关闭补全菜单
-      fileCompletion.close();
-      commandCompletion.close();
-
-      // 直接触发状态更新，不调用 handleInput（避免重新检测补全）
-      const newText = getTextContent();
-      setHasContent(!!newText.trim());
-      adjustHeight();
-      onInput?.(newText);
-
-      // 立即渲染文件标签
-      setTimeout(() => {
-        renderFileTags();
-      }, 50);
-    };
-
-    // 添加空格键监听以触发文件标签渲染
-    const handleKeyDown = (e: KeyboardEvent) => {
-      handleKeyDownForTagRendering(e);
-    };
-
-    if (editableRef.current) {
-      editableRef.current.addEventListener('keydown', handleKeyDown);
-    }
-
-    focusInput();
-
-    // 清理函数
-    return () => {
       if (editableRef.current) {
-        editableRef.current.removeEventListener('keydown', handleKeyDown);
-      }
-      delete (window as any).handleFilePathFromJava;
-      delete (window as any).insertCodeSnippetAtCursor;
-    };
-  }, [focusInput, handlePaste, handleDrop, handleDragOver, getTextContent, handleKeyDownForTagRendering, renderFileTags, fileCompletion, commandCompletion, adjustHeight, onInput]);
-
-  // 注册全局方法：在光标位置插入代码片段
-  useEffect(() => {
-    (window as any).insertCodeSnippetAtCursor = (selectionInfo: string) => {
-      if (!editableRef.current) return;
-
-      // 确保输入框有焦点
-      editableRef.current.focus();
-
-      // 在光标位置插入文本
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0 && editableRef.current.contains(selection.anchorNode)) {
-        // 光标在输入框内，在光标位置插入
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        const textNode = document.createTextNode(selectionInfo + ' ');
-        range.insertNode(textNode);
-
-        // 将光标移到插入文本后
-        range.setStartAfter(textNode);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      } else {
-        // 光标不在输入框内，追加到末尾
-        const textNode = document.createTextNode(selectionInfo + ' ');
-        editableRef.current.appendChild(textNode);
-
-        // 将光标移到末尾
-        const range = document.createRange();
-        range.setStartAfter(textNode);
-        range.collapse(true);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
+        editableRef.current.addEventListener('keydown', handleKeyDown);
       }
 
-      // 触发状态更新
-      const newText = getTextContent();
-      setHasContent(!!newText.trim());
-      adjustHeight();
-      onInput?.(newText);
+      return () => {
+        if (editableRef.current) {
+          editableRef.current.removeEventListener('keydown', handleKeyDown);
+        }
+      };
+    }, [handleKeyDownForTagRendering]);
 
-      // 立即渲染文件标签
-      setTimeout(() => {
-        renderFileTags();
-        // 渲染后重新聚焦
-        editableRef.current?.focus();
-      }, 50);
-    };
+    return (
+      <div className="chat-input-box" onClick={focusInput} ref={containerRef}>
+        {/* SDK status loading or not installed warning bar */}
+        {(sdkStatusLoading || !sdkInstalled) && (
+          <div className={`sdk-warning-bar ${sdkStatusLoading ? 'sdk-loading' : ''}`}>
+            <span
+              className={`codicon ${sdkStatusLoading ? 'codicon-loading codicon-modifier-spin' : 'codicon-warning'}`}
+            />
+            <span className="sdk-warning-text">
+              {sdkStatusLoading
+                ? t('chat.sdkStatusLoading')
+                : t('chat.sdkNotInstalled', {
+                    provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
+                  })}
+            </span>
+            {!sdkStatusLoading && (
+              <button
+                className="sdk-install-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInstallSdk?.();
+                }}
+              >
+                {t('chat.goInstallSdk')}
+              </button>
+            )}
+          </div>
+        )}
 
-    return () => {
-      delete (window as any).insertCodeSnippetAtCursor;
-    };
-  }, [getTextContent, renderFileTags, adjustHeight, onInput]);
+        {/* Attachment list */}
+        {attachments.length > 0 && (
+          <AttachmentList attachments={attachments} onRemove={handleRemoveAttachment} />
+        )}
 
-  return (
-    <div className="chat-input-box" onClick={focusInput} ref={containerRef}>
-      {/* 🔧 SDK 状态加载中或未安装时的提示条 */}
-      {(sdkStatusLoading || !sdkInstalled) && (
-        <div className={`sdk-warning-bar ${sdkStatusLoading ? 'sdk-loading' : ''}`}>
-          <span className={`codicon ${sdkStatusLoading ? 'codicon-loading codicon-modifier-spin' : 'codicon-warning'}`} />
-          <span className="sdk-warning-text">
-            {sdkStatusLoading
-              ? t('chat.sdkStatusLoading')
-              : t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' })}
-          </span>
-          {!sdkStatusLoading && (
-            <button className="sdk-install-btn" onClick={(e) => {
-              e.stopPropagation();
-              onInstallSdk?.();
-            }}>
-              {t('chat.goInstallSdk')}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* 附件列表 */}
-      {attachments.length > 0 && (
-        <AttachmentList
-          attachments={attachments}
-          onRemove={handleRemoveAttachment}
+        {/* Context bar (Top Control Bar) */}
+        <ContextBar
+          activeFile={activeFile}
+          selectedLines={selectedLines}
+          percentage={usagePercentage}
+          usedTokens={usageUsedTokens}
+          maxTokens={usageMaxTokens}
+          showUsage={showUsage}
+          onClearFile={onClearContext}
+          onAddAttachment={handleAddAttachment}
+          selectedAgent={selectedAgent}
+          onClearAgent={() => onAgentSelect?.(null)}
+          currentProvider={currentProvider}
+          hasMessages={hasMessages}
+          onRewind={onRewind}
         />
-      )}
 
-      {/* 上下文展示条 (Top Control Bar) */}
-      <ContextBar
-        activeFile={activeFile}
-        selectedLines={selectedLines}
-        percentage={usagePercentage}
-        usedTokens={usageUsedTokens}
-        maxTokens={usageMaxTokens}
-        showUsage={showUsage}
-        onClearFile={onClearContext}
-        onAddAttachment={handleAddAttachment}
-        selectedAgent={selectedAgent}
-        onClearAgent={() => onAgentSelect?.(null)}
-        currentProvider={currentProvider}
-        hasMessages={hasMessages}
-        onRewind={onRewind}
-      />
-
-      {/* 输入区域 */}
-      <div
-        className="input-editable-wrapper"
-        onMouseOver={handleMouseOver}
-        onMouseLeave={handleMouseLeave}
-      >
+        {/* Input area */}
         <div
-          ref={editableRef}
-          className="input-editable"
-          contentEditable={!disabled}
-          data-placeholder={placeholder}
-          onInput={(e) => {
-            // 传递原生事件的 isComposing 状态，这比 React 状态更准确
-            // 可以正确捕获 compositionStart 之前的输入
-            handleInput((e.nativeEvent as InputEvent).isComposing);
-          }}
-          onKeyDown={handleKeyDown}
-          onKeyUp={handleKeyUp}
-          onBeforeInput={(e) => {
-            const inputType = (e.nativeEvent as unknown as { inputType?: string }).inputType;
-            if (inputType === 'insertParagraph') {
-              e.preventDefault();
-              // 如果刚刚在补全菜单中用回车选择了项目，则不发送消息
-              if (completionSelectedRef.current) {
-                completionSelectedRef.current = false;
-                return;
+          className="input-editable-wrapper"
+          onMouseOver={handleMouseOver}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div
+            ref={editableRef}
+            className="input-editable"
+            contentEditable={!disabled}
+            data-placeholder={placeholder}
+            onInput={(e) => {
+              // Pass native event isComposing state, more accurate than React state
+              // Can correctly capture input before compositionStart
+              handleInput((e.nativeEvent as InputEvent).isComposing);
+            }}
+            onKeyDown={handleKeyDown}
+            onKeyUp={handleKeyUp}
+            onBeforeInput={(e) => {
+              const inputType = (e.nativeEvent as unknown as { inputType?: string }).inputType;
+              if (inputType === 'insertParagraph') {
+                e.preventDefault();
+                // If item was just selected in completion menu with enter, don't send message
+                if (completionSelectedRef.current) {
+                  completionSelectedRef.current = false;
+                  return;
+                }
+                // Don't send message when completion menu is open
+                if (
+                  fileCompletion.isOpen ||
+                  commandCompletion.isOpen ||
+                  agentCompletion.isOpen
+                ) {
+                  return;
+                }
+                // Only allow submit when not loading and not in IME composition
+                if (!isLoading && !isComposing) {
+                  handleSubmit();
+                }
               }
-              // 补全菜单打开时不发送消息
-              if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
-                return;
-              }
-              // 只有在非加载状态且非输入法组合状态时才允许提交
-              if (!isLoading && !isComposing) {
-                handleSubmit();
-              }
-            }
-            // 组合输入期间删除按键可能导致最后一个字残留，拦截并在下一周期强制同步
-            if (
-              (inputType === 'deleteContentBackward' || inputType === 'deleteContentForward') &&
-              isComposing
-            ) {
-              // 让浏览器先执行默认删除，再在下一轮事件循环同步内容
-              setTimeout(() => {
-                handleInput();
-              }, 0);
-            }
-          }}
-          onCompositionStart={handleCompositionStart}
-          onCompositionEnd={handleCompositionEnd}
-          onPaste={handlePaste}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          suppressContentEditableWarning
+              // Fix: Remove delete key special handling during IME
+              // Let browser naturally handle delete operations, sync state uniformly after compositionend
+            }}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
+            onPaste={handlePaste}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            suppressContentEditableWarning
+          />
+        </div>
+
+        {/* Bottom button area */}
+        <ButtonArea
+          disabled={disabled || isLoading}
+          hasInputContent={hasContent || attachments.length > 0}
+          isLoading={isLoading}
+          isEnhancing={isEnhancing}
+          selectedModel={selectedModel}
+          permissionMode={permissionMode}
+          currentProvider={currentProvider}
+          reasoningEffort={reasoningEffort}
+          onSubmit={handleSubmit}
+          onStop={onStop}
+          onModeSelect={handleModeSelect}
+          onModelSelect={handleModelSelect}
+          onProviderSelect={onProviderSelect}
+          onReasoningChange={onReasoningChange}
+          onEnhancePrompt={handleEnhancePrompt}
+          alwaysThinkingEnabled={alwaysThinkingEnabled}
+          onToggleThinking={onToggleThinking}
+          streamingEnabled={streamingEnabled}
+          onStreamingEnabledChange={onStreamingEnabledChange}
+          selectedAgent={selectedAgent}
+          onAgentSelect={(agent) => onAgentSelect?.(agent)}
+          onOpenAgentSettings={onOpenAgentSettings}
+          onClearAgent={() => onAgentSelect?.(null)}
+        />
+
+        {/* @ file reference dropdown menu */}
+        <CompletionDropdown
+          isVisible={fileCompletion.isOpen}
+          position={fileCompletion.position}
+          items={fileCompletion.items}
+          selectedIndex={fileCompletion.activeIndex}
+          loading={fileCompletion.loading}
+          emptyText={t('chat.noMatchingFiles')}
+          onClose={fileCompletion.close}
+          onSelect={(_, index) => fileCompletion.selectIndex(index)}
+          onMouseEnter={fileCompletion.handleMouseEnter}
+        />
+
+        {/* / slash command dropdown menu */}
+        <CompletionDropdown
+          isVisible={commandCompletion.isOpen}
+          position={commandCompletion.position}
+          width={450}
+          items={commandCompletion.items}
+          selectedIndex={commandCompletion.activeIndex}
+          loading={commandCompletion.loading}
+          emptyText={t('chat.noMatchingCommands')}
+          onClose={commandCompletion.close}
+          onSelect={(_, index) => commandCompletion.selectIndex(index)}
+          onMouseEnter={commandCompletion.handleMouseEnter}
+        />
+
+        {/* # agent selection dropdown menu */}
+        <CompletionDropdown
+          isVisible={agentCompletion.isOpen}
+          position={agentCompletion.position}
+          width={350}
+          items={agentCompletion.items}
+          selectedIndex={agentCompletion.activeIndex}
+          loading={agentCompletion.loading}
+          emptyText={t('chat.noAvailableAgents')}
+          onClose={agentCompletion.close}
+          onSelect={(_, index) => agentCompletion.selectIndex(index)}
+          onMouseEnter={agentCompletion.handleMouseEnter}
+        />
+
+        {/* Floating Tooltip (uses Portal or Fixed positioning to break overflow limit) */}
+        {tooltip && tooltip.visible && (
+          <div
+            className={`tooltip-popup ${tooltip.isBar ? 'tooltip-bar' : ''}`}
+            style={{
+              top: `${tooltip.top}px`, // Use calculated top directly, no subtraction here
+              left: `${tooltip.left}px`,
+              width: tooltip.width ? `${tooltip.width}px` : undefined,
+              // @ts-expect-error CSS custom properties
+              '--tooltip-tx': tooltip.tx || '-50%',
+              '--arrow-left': tooltip.arrowLeft || '50%',
+            }}
+          >
+            {tooltip.text}
+          </div>
+        )}
+
+        {/* Prompt enhancer dialog */}
+        <PromptEnhancerDialog
+          isOpen={showEnhancerDialog}
+          isLoading={isEnhancing}
+          originalPrompt={originalPrompt}
+          enhancedPrompt={enhancedPrompt}
+          onUseEnhanced={handleUseEnhancedPrompt}
+          onKeepOriginal={handleKeepOriginalPrompt}
+          onClose={handleCloseEnhancerDialog}
         />
       </div>
+    );
+  }
+);
 
-      {/* 底部按钮区域 */}
-      <ButtonArea
-        disabled={disabled || isLoading}
-        hasInputContent={hasContent || attachments.length > 0}
-        isLoading={isLoading}
-        isEnhancing={isEnhancing}
-        selectedModel={selectedModel}
-        permissionMode={permissionMode}
-        currentProvider={currentProvider}
-        reasoningEffort={reasoningEffort}
-        onSubmit={handleSubmit}
-        onStop={onStop}
-        onModeSelect={handleModeSelect}
-        onModelSelect={handleModelSelect}
-        onProviderSelect={onProviderSelect}
-        onReasoningChange={onReasoningChange}
-        onEnhancePrompt={handleEnhancePrompt}
-        alwaysThinkingEnabled={alwaysThinkingEnabled}
-        onToggleThinking={onToggleThinking}
-        streamingEnabled={streamingEnabled}
-        onStreamingEnabledChange={onStreamingEnabledChange}
-        selectedAgent={selectedAgent}
-        onAgentSelect={(agent) => onAgentSelect?.(agent)}
-        onOpenAgentSettings={onOpenAgentSettings}
-        onClearAgent={() => onAgentSelect?.(null)}
-      />
-
-      {/* @ 文件引用下拉菜单 */}
-      <CompletionDropdown
-        isVisible={fileCompletion.isOpen}
-        position={fileCompletion.position}
-        items={fileCompletion.items}
-        selectedIndex={fileCompletion.activeIndex}
-        loading={fileCompletion.loading}
-        emptyText={t('chat.noMatchingFiles')}
-        onClose={fileCompletion.close}
-        onSelect={(_, index) => fileCompletion.selectIndex(index)}
-        onMouseEnter={fileCompletion.handleMouseEnter}
-      />
-
-      {/* / 斜杠命令下拉菜单 */}
-      <CompletionDropdown
-        isVisible={commandCompletion.isOpen}
-        position={commandCompletion.position}
-        width={450}
-        items={commandCompletion.items}
-        selectedIndex={commandCompletion.activeIndex}
-        loading={commandCompletion.loading}
-        emptyText={t('chat.noMatchingCommands')}
-        onClose={commandCompletion.close}
-        onSelect={(_, index) => commandCompletion.selectIndex(index)}
-        onMouseEnter={commandCompletion.handleMouseEnter}
-      />
-
-      {/* # 智能体选择下拉菜单 */}
-      <CompletionDropdown
-        isVisible={agentCompletion.isOpen}
-        position={agentCompletion.position}
-        width={350}
-        items={agentCompletion.items}
-        selectedIndex={agentCompletion.activeIndex}
-        loading={agentCompletion.loading}
-        emptyText={t('chat.noAvailableAgents')}
-        onClose={agentCompletion.close}
-        onSelect={(_, index) => agentCompletion.selectIndex(index)}
-        onMouseEnter={agentCompletion.handleMouseEnter}
-      />
-
-      {/* 悬浮提示 Tooltip (使用 Portal 或 Fixed 定位以突破 overflow 限制) */}
-      {tooltip && tooltip.visible && (
-        <div
-          className={`tooltip-popup ${tooltip.isBar ? 'tooltip-bar' : ''}`}
-          style={{
-            top: `${tooltip.top}px`, // 直接使用计算好的 top，不再在这里减
-            left: `${tooltip.left}px`,
-            width: tooltip.width ? `${tooltip.width}px` : undefined,
-            // @ts-ignore
-            '--tooltip-tx': tooltip.tx || '-50%',
-            // @ts-ignore
-            '--arrow-left': tooltip.arrowLeft || '50%',
-          }}
-        >
-          {tooltip.text}
-        </div>
-      )}
-
-      {/* 增强提示词对话框 */}
-      <PromptEnhancerDialog
-        isOpen={showEnhancerDialog}
-        isLoading={isEnhancing}
-        originalPrompt={originalPrompt}
-        enhancedPrompt={enhancedPrompt}
-        onUseEnhanced={handleUseEnhancedPrompt}
-        onKeepOriginal={handleKeepOriginalPrompt}
-        onClose={handleCloseEnhancerDialog}
-      />
-    </div>
-  );
-};
+// Display name for React DevTools
+ChatInputBox.displayName = 'ChatInputBox';
 
 export default ChatInputBox;

@@ -34,13 +34,7 @@ const TaskExecutionBlock = ({ input }: TaskExecutionBlockProps) => {
           )}
         </div>
 
-        <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--color-success)',
-            marginRight: '4px'
-        }} />
+        <div className="tool-status-indicator completed" />
       </div>
 
       {expanded && (

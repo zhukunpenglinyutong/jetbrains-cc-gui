@@ -224,14 +224,17 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
   // Tools that should be collapsible (Grep, Glob, Write, Update Plan, Shell Command and MCP tools)
   const lowerName = (name ?? '').toLowerCase();
   const isMcpTool = lowerName.startsWith('mcp__');
-  const isCollapsible = ['grep', 'glob', 'write', 'save-file', 'askuserquestion', 'update_plan', 'shell_command'].includes(lowerName) || isMcpTool;
+  const isCollapsible = ['grep', 'glob', 'write', 'save-file', 'askuserquestion', 'update_plan', 'shell_command', 'exitplanmode', 'websearch', 'skill', 'useskill', 'runskill', 'run_skill', 'execute_skill'].includes(lowerName) || isMcpTool;
   const [expanded, setExpanded] = useState(false);
 
   const filePath = input ? pickFilePath(input, name) : undefined;
 
   // Determine tool call status based on result
   const isCompleted = result !== undefined && result !== null;
-  const isError = isCompleted && result?.is_error === true;
+  // AskUserQuestion tool should never show as error - it's a user interaction tool
+  // The is_error field may be set by SDK but it doesn't indicate a real error
+  const isAskUserQuestion = lowerName === 'askuserquestion';
+  const isError = isCompleted && result?.is_error === true && !isAskUserQuestion;
 
   if (!input) {
     return null;
@@ -314,6 +317,18 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
         }}
       >
         <div className="task-title-section">
+          {isCollapsible && lowerName !== 'grep' && (
+            <span
+              className="codicon codicon-chevron-right"
+              style={{
+                marginRight: '4px',
+                transform: expanded ? 'rotate(90deg)' : 'none',
+                transition: 'transform 0.2s',
+                fontSize: '12px',
+                color: 'var(--vscode-descriptionForeground)',
+              }}
+            />
+          )}
           <span className={`codicon ${codicon} tool-title-icon`} />
 
           <span className="tool-title-text">

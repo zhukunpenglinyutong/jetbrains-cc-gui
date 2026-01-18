@@ -33,7 +33,9 @@
     "emptyMessage": "Message vide",
     "clickToPreview": "Cliquer pour prévisualiser",
     "userUploadedImage": "Image téléchargée par l'utilisateur",
-    "inputPlaceholder": "@référencer des fichiers, shift + entrée pour nouvelle ligne",
+    "inputPlaceholder": "@référencer fichiers, #invoquer agents, Entrée pour envoyer",
+    "inputPlaceholderEnter": "@référencer fichiers, #invoquer agents, Entrée pour envoyer",
+    "inputPlaceholderCmdEnter": "@référencer fichiers, #invoquer agents, ⌘Entrée pour envoyer",
     "sendMessageEnter": "Envoyer le message (Entrée)",
     "currentMode": "Mode actuel : {{mode}}",
     "currentModel": "Modèle actuel : {{model}}",
@@ -74,7 +76,11 @@
     "localProject": "Local",
     "disabled": "Désactivé",
     "sdkNotInstalled": "{{provider}} SDK n'est pas installé. Veuillez installer le SDK pour commencer à discuter.",
-    "goInstallSdk": "Aller installer"
+    "goInstallSdk": "Aller installer",
+    "commandNotImplemented": "La fonctionnalité `{{command}}` n'est pas encore implémentée.",
+    "attachmentFile": "[Pièce jointe: {{fileName}}]",
+    "attachmentsUploaded": "[Pièces jointes téléchargées]",
+    "streamingConnected": "Claude connecté, en attente de réponse"
   },
   "settings": {
     "title": "Paramètres",
@@ -343,6 +349,7 @@
       "Write": "Écrire le fichier",
       "Edit": "Modifier le fichier",
       "Read": "Lire le fichier",
+      "ReadBatch": "Lire les fichiers en lot",
       "Bash": "Exécuter la commande",
       "TodoWrite": "Écrire la tâche",
       "TodoRead": "Lire la tâche",
@@ -555,10 +562,14 @@
     "refreshFileInIdeaSuccess": "Contenu de ce fichier actualisé manuellement dans IDEA",
     "showDiffInIdea": "Afficher les modifications dans IDEA",
     "diffButton": "Diff",
+    "editBatchTitle": "Modification de fichiers en masse",
     "editPrefix": "Modifier : {{fileName}}",
     "lineRange": "Lignes {{start}}-{{end}}",
     "filePath": "Chemin du fichier :",
     "unknownTool": "Outil inconnu"
+  },
+  "todo": {
+    "progress": "{{completed}} sur {{total}} tâches terminées"
   },
   "skills": {
     "title": "Skills",
@@ -676,7 +687,6 @@
   "rewind": {
     "title": "Restaurer les fichiers à l'état précédent",
     "tooltip": "Restaurer les fichiers à leur état à ce message",
-    "shortcut": "ESC ESC",
     "selectTitle": "Sélectionner le point de restauration",
     "noRewindableMessages": "Aucun message restaurable dans cette session",
     "rewindTo": "Restaurer à",

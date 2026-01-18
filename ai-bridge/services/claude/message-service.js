@@ -61,7 +61,7 @@ import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/a
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { mapModelIdToSdkName } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
-import { canUseTool } from '../../permission-handler.js';
+import { canUseTool, requestPlanApproval } from '../../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
@@ -81,37 +81,231 @@ const ACCEPT_EDITS_AUTO_APPROVE_TOOLS = new Set([
   'Rename'
 ]);
 
+// Tools allowed in plan mode (read-only tools + planning tools + ExitPlanMode)
+const PLAN_MODE_ALLOWED_TOOLS = new Set([
+  // Read-only tools
+  'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
+  'ListMcpResources', 'ListMcpResourcesTool',
+  'ReadMcpResource', 'ReadMcpResourceTool',
+  // Planning tools
+  'TodoWrite', 'Skill', 'TaskOutput',
+  'Task', // Allow Task for exploration agents
+  'Write', // Allow Write for writing plan files
+  'Edit', // Allow Edit in plan mode (still gated by permission prompt)
+  'Bash', // Allow Bash in plan mode (still gated by permission prompt)
+  'AskUserQuestion', // Allow AskUserQuestion for asking user during planning
+  'EnterPlanMode', // Allow EnterPlanMode
+  'ExitPlanMode', // Allow ExitPlanMode to exit plan mode
+  // MCP tools
+  'mcp__ace-tool__search_context',
+  'mcp__context7__resolve-library-id',
+  'mcp__context7__query-docs',
+  'mcp__conductor__GetWorkspaceDiff',
+  'mcp__conductor__GetTerminalOutput',
+  'mcp__conductor__AskUserQuestion',
+  'mcp__conductor__DiffComment',
+  'mcp__time__get_current_time',
+  'mcp__time__convert_time'
+]);
+
+// ========== Auto-retry configuration for transient API errors ==========
+// NOTE: Retry logic is duplicated in sendMessage and sendMessageWithAttachments.
+// TODO: Consider extracting a generic withRetry(asyncFn, config) utility function
+//       to reduce duplication. Deferred due to complex state management within retry loops.
+const AUTO_RETRY_CONFIG = {
+  maxRetries: 2,           // Maximum retry attempts
+  retryDelayMs: 1500,      // Delay between retries (ms)
+  maxMessagesForRetry: 3   // Only retry if fewer messages were processed (early failure)
+};
+
+/**
+ * Determine if an error is retryable (transient network/API issues)
+ * @param {Error|string} error - The error to check
+ * @returns {boolean} - True if the error is likely transient and retryable
+ */
+function isRetryableError(error) {
+  const msg = error?.message || String(error);
+  const retryablePatterns = [
+    'API request failed',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'ENOTFOUND',
+    'network',
+    'fetch failed',
+    'socket hang up',
+    'getaddrinfo',
+    'connect EHOSTUNREACH',
+    'No conversation found with session ID',
+    'conversation not found'
+  ];
+  return retryablePatterns.some(pattern => msg.toLowerCase().includes(pattern.toLowerCase()));
+}
+
+function isNoConversationFoundError(error) {
+  const msg = error?.message || String(error);
+  return msg.includes('No conversation found with session ID');
+}
+
+/**
+ * Sleep utility for retry delays
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise<void>}
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(error) {
+  if (isNoConversationFoundError(error)) return 250;
+  return AUTO_RETRY_CONFIG.retryDelayMs;
+}
+
+function getClaudeProjectSessionFilePath(sessionId, cwd) {
+  const projectsDir = join(homedir(), '.claude', 'projects');
+  const sanitizedCwd = String(cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
+  return join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
+}
+
+function hasClaudeProjectSessionFile(sessionId, cwd) {
+  try {
+    if (!sessionId || typeof sessionId !== 'string') return false;
+    if (sessionId.includes('/') || sessionId.includes('\\')) return false;
+    const sessionFile = getClaudeProjectSessionFilePath(sessionId, cwd);
+    return existsSync(sessionFile);
+  } catch {
+    return false;
+  }
+}
+
+async function waitForClaudeProjectSessionFile(sessionId, cwd, timeoutMs = 1500, intervalMs = 100) {
+  if (hasClaudeProjectSessionFile(sessionId, cwd)) return true;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await sleep(intervalMs);
+    if (hasClaudeProjectSessionFile(sessionId, cwd)) return true;
+  }
+  return false;
+}
+
+// Tools that require user interaction even in bypassPermissions mode
+const INTERACTIVE_TOOLS = new Set(['AskUserQuestion']);
+
 function shouldAutoApproveTool(permissionMode, toolName) {
   if (!toolName) return false;
+  // Interactive tools always need user input, never auto-approve
+  if (INTERACTIVE_TOOLS.has(toolName)) return false;
   if (permissionMode === 'bypassPermissions') return true;
   if (permissionMode === 'acceptEdits') return ACCEPT_EDITS_AUTO_APPROVE_TOOLS.has(toolName);
   return false;
 }
 
 function createPreToolUseHook(permissionMode) {
-  const normalizedPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
+  let currentPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
 
   return async (input) => {
-    console.log('[PERM_DEBUG] PreToolUse hook called:', input?.tool_name);
+    const toolName = input?.tool_name;
+    console.log('[PERM_DEBUG] PreToolUse hook called:', toolName, 'mode:', currentPermissionMode);
 
-    if (normalizedPermissionMode === 'plan') {
+    // Handle plan mode: allow read-only tools, special handling for ExitPlanMode
+    if (currentPermissionMode === 'plan') {
+      if (toolName === 'AskUserQuestion') {
+        console.log('[PERM_DEBUG] AskUserQuestion called in plan mode, deferring to canUseTool for answers...');
+        return { decision: 'approve' };
+      }
+
+      // Edit / Bash: allow in plan mode but still ask user permission (same as default mode behavior)
+      if (toolName === 'Edit' || toolName === 'Bash') {
+        console.log(`[PERM_DEBUG] ${toolName} called in plan mode, requesting permission...`);
+        try {
+          const result = await canUseTool(toolName, input?.tool_input);
+          if (result?.behavior === 'allow') {
+            return { decision: 'approve', updatedInput: result.updatedInput ?? input?.tool_input };
+          }
+          return {
+            decision: 'block',
+            reason: result?.message || 'Permission denied'
+          };
+        } catch (error) {
+          console.error(`[PERM_DEBUG] ${toolName} permission error:`, error?.message);
+          return {
+            decision: 'block',
+            reason: 'Permission check failed: ' + (error?.message || String(error))
+          };
+        }
+      }
+
+      // Special handling for ExitPlanMode: request plan approval from user
+      if (toolName === 'ExitPlanMode') {
+        console.log('[PERM_DEBUG] ExitPlanMode called in plan mode, requesting approval...');
+        try {
+          const result = await requestPlanApproval(input?.tool_input);
+          if (result?.approved) {
+            const nextMode = result.targetMode || 'default';
+            currentPermissionMode = nextMode;
+            console.log('[PERM_DEBUG] Plan approved, switching mode to:', nextMode);
+            return {
+              decision: 'approve',
+              updatedInput: {
+                ...input.tool_input,
+                approved: true,
+                targetMode: nextMode
+              }
+            };
+          }
+          console.log('[PERM_DEBUG] Plan rejected by user');
+          return {
+            decision: 'block',
+            reason: result?.message || 'Plan was rejected by user'
+          };
+        } catch (error) {
+          console.error('[PERM_DEBUG] Plan approval error:', error?.message);
+          return {
+            decision: 'block',
+            reason: 'Plan approval failed: ' + (error?.message || String(error))
+          };
+        }
+      }
+
+      // Allow read-only tools in plan mode
+      if (PLAN_MODE_ALLOWED_TOOLS.has(toolName)) {
+        console.log('[PERM_DEBUG] Allowing read-only tool in plan mode:', toolName);
+        return { decision: 'approve' };
+      }
+
+      // Also allow MCP tools that start with 'mcp__' and are read-only
+      if (toolName?.startsWith('mcp__') && !toolName.includes('Write') && !toolName.includes('Edit')) {
+        console.log('[PERM_DEBUG] Allowing MCP read tool in plan mode:', toolName);
+        return { decision: 'approve' };
+      }
+
+      // Block all other tools in plan mode
+      console.log('[PERM_DEBUG] Blocking tool in plan mode:', toolName);
       return {
         decision: 'block',
-        reason: 'Permission mode is plan (no execution)'
+        reason: `Tool "${toolName}" is not allowed in plan mode. Only read-only tools are permitted. Use ExitPlanMode to exit plan mode.`
       };
     }
 
-    if (shouldAutoApproveTool(normalizedPermissionMode, input?.tool_name)) {
-      console.log('[PERM_DEBUG] Auto-approve tool:', input?.tool_name, 'mode:', normalizedPermissionMode);
+    if (toolName === 'AskUserQuestion') {
+      console.log('[PERM_DEBUG] AskUserQuestion encountered in PreToolUse, deferring to canUseTool for answers...');
+      return { decision: 'approve' };
+    }
+
+    if (shouldAutoApproveTool(currentPermissionMode, toolName)) {
+      console.log('[PERM_DEBUG] Auto-approve tool:', toolName, 'mode:', currentPermissionMode);
       return { decision: 'approve' };
     }
 
     console.log('[PERM_DEBUG] Calling canUseTool...');
     try {
-      const result = await canUseTool(input?.tool_name, input?.tool_input);
+      const result = await canUseTool(toolName, input?.tool_input);
       console.log('[PERM_DEBUG] canUseTool returned:', result?.behavior);
 
       if (result?.behavior === 'allow') {
+        if (result?.updatedInput !== undefined) {
+          return { decision: 'approve', updatedInput: result.updatedInput };
+        }
         return { decision: 'approve' };
       }
       if (result?.behavior === 'deny') {
@@ -320,7 +514,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    // 注意：不再传递 pathToClaudeCodeExecutable，让 SDK 自动使用内置 cli.js
 	    // 这样可以避免 Windows 下系统 CLI 路径问题（ENOENT 错误）
 	    const effectivePermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
-	    const shouldUseCanUseTool = effectivePermissionMode === 'default';
+	    // 始终提供 canUseTool，以确保 AskUserQuestion 等交互工具能够获取用户输入
+	    const shouldUseCanUseTool = true;
 	    console.log('[PERM_DEBUG] permissionMode:', permissionMode);
 	    console.log('[PERM_DEBUG] effectivePermissionMode:', effectivePermissionMode);
 	    console.log('[PERM_DEBUG] shouldUseCanUseTool:', shouldUseCanUseTool);
@@ -411,6 +606,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     if (resumeSessionId && resumeSessionId !== '') {
       options.resume = resumeSessionId;
       console.log('[RESUMING]', resumeSessionId);
+      if (!hasClaudeProjectSessionFile(resumeSessionId, workingDirectory)) {
+        console.log('[RESUME_WAIT] Waiting for session file to appear before resuming...');
+        await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+      }
     }
 
 	    console.log('[DEBUG] Query started, waiting for messages...');
@@ -425,11 +624,49 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    }
 	    console.log('[DIAG] query function available, calling...');
 
+    // ========== Auto-retry loop for transient API errors ==========
+    let retryAttempt = 0;
+    let lastRetryError = null;
+
+    retryLoop: while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
+      // Reset state for each attempt (important for retry)
+      let currentSessionId = resumeSessionId;
+      let messageCount = 0;
+      let hasStreamEvents = false;
+      let lastAssistantContent = '';
+      let lastThinkingContent = '';
+
+      // Only log retry attempts (not the first attempt)
+      if (retryAttempt > 0) {
+        console.log(`[RETRY] Attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries} after error: ${lastRetryError?.message || 'unknown'}`);
+      }
+
+      try {
 	    // 调用 query 函数
-	    const result = query({
-	      prompt: message,
-	      options
-	    });
+        let result;
+        try {
+	        result = query({
+	          prompt: message,
+	          options
+	        });
+        } catch (queryError) {
+          const canRetry = isRetryableError(queryError) &&
+                           retryAttempt < AUTO_RETRY_CONFIG.maxRetries &&
+                           messageCount <= AUTO_RETRY_CONFIG.maxMessagesForRetry;
+          if (canRetry) {
+            lastRetryError = queryError;
+            retryAttempt++;
+            const retryDelayMs = getRetryDelayMs(queryError);
+            if (isNoConversationFoundError(queryError) && resumeSessionId && resumeSessionId !== '') {
+              await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+            }
+            console.log(`[RETRY] Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
+            console.log(`[RETRY] Reason: ${queryError.message || String(queryError)}, messageCount: ${messageCount}`);
+            await sleep(retryDelayMs);
+            continue retryLoop;
+          }
+          throw queryError;
+        }
 	    console.log('[DIAG] query() returned, starting message loop...');
 
 		// 设置 60 秒超时，超时后通过 AbortController 取消查询（已发现严重问题，暂时注释掉自动超时逻辑）
@@ -440,16 +677,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
 	    console.log('[DEBUG] Starting message loop...');
 
-    let currentSessionId = resumeSessionId;
-
     // 流式输出
-    let messageCount = 0;
     // 🔧 流式传输状态追踪（已在函数开头声明 streamingEnabled, streamStarted, streamEnded）
     // 🔧 标记是否收到了 stream_event（用于避免 fallback diff 重复输出）
-    let hasStreamEvents = false;
     // 🔧 diff fallback: 追踪上次的 assistant 内容，用于计算增量
-    let lastAssistantContent = '';
-    let lastThinkingContent = '';
 
     try {
     for await (const msg of result) {
@@ -556,7 +787,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
                 console.log('[THINKING]', thinkingText);
               }
             } else if (block.type === 'tool_use') {
-              console.log('[DEBUG] Tool use payload:', JSON.stringify(block));
+              console.log('[TOOL_USE]', JSON.stringify({ id: block.id, name: block.name }));
             }
           }
         } else if (typeof content === 'string') {
@@ -579,12 +810,11 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
       // 实时输出工具调用结果（user 消息中的 tool_result）
       if (msg.type === 'user') {
-        const content = msg.message?.content;
+        const content = msg.message?.content ?? msg.content;
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'tool_result') {
-              // 输出工具调用结果，前端可以实时更新工具状态
-              console.log('[TOOL_RESULT]', JSON.stringify(block));
+              console.log('[TOOL_RESULT]', JSON.stringify({ tool_use_id: block.tool_use_id, is_error: block.is_error }));
             }
           }
         }
@@ -633,10 +863,46 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       if (loopError.spawnargs) {
         console.error('[DEBUG] Error spawnargs:', JSON.stringify(loopError.spawnargs));
       }
-      throw loopError; // 重新抛出让外层 catch 处理
+
+      // ========== Auto-retry logic for transient API errors ==========
+      // Only retry if:
+      // 1. Error is retryable (transient network/API issue)
+      // 2. Haven't exceeded max retries
+      // 3. Few messages were processed (early failure, not mid-stream)
+      const canRetry = isRetryableError(loopError) &&
+                       retryAttempt < AUTO_RETRY_CONFIG.maxRetries &&
+                       messageCount <= AUTO_RETRY_CONFIG.maxMessagesForRetry;
+
+      if (canRetry) {
+        lastRetryError = loopError;
+        retryAttempt++;
+        const retryDelayMs = getRetryDelayMs(loopError);
+        if (isNoConversationFoundError(loopError) && resumeSessionId && resumeSessionId !== '') {
+          await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+        }
+        console.log(`[RETRY] Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
+        console.log(`[RETRY] Reason: ${loopError.message}, messageCount: ${messageCount}`);
+
+        // Reset streaming state for retry
+        if (streamingEnabled && streamStarted && !streamEnded) {
+          // Don't output STREAM_END here - we'll start fresh on retry
+          streamStarted = false;
+        }
+
+        // Wait before retry
+        await sleep(retryDelayMs);
+        continue retryLoop; // Go to next retry attempt
+      }
+
+      // Not retryable or max retries exceeded - throw to outer catch
+      throw loopError;
     }
 
+    // ========== Success - break out of retry loop ==========
     console.log(`[DEBUG] Message loop completed. Total messages: ${messageCount}`);
+    if (retryAttempt > 0) {
+      console.log(`[RETRY] Success after ${retryAttempt} retry attempt(s)`);
+    }
 
     // 🔧 流式传输：输出流式结束标记
     if (streamingEnabled && streamStarted) {
@@ -649,6 +915,16 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      success: true,
 	      sessionId: currentSessionId
 	    }));
+
+    // Success - exit retry loop
+    break retryLoop;
+
+      } catch (retryError) {
+        // Catch errors from within the retry attempt (outer try of retryLoop)
+        // This handles errors thrown by the inner catch when not retryable
+        throw retryError;
+      }
+    } // end retryLoop
 
 	  } catch (error) {
 	    // 🔧 流式传输：异常时也要结束流式，避免前端卡在 streaming 状态
@@ -934,10 +1210,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     // 不再查找系统 CLI，使用 SDK 内置 cli.js
     console.log('[DEBUG] (withAttachments) Using SDK built-in Claude CLI (cli.js)');
 
-    // 创建输入流并放入用户消息
-    const inputStream = new AsyncStream();
-    inputStream.enqueue(userMessage);
-    inputStream.done();
+    // 注意：inputStream 在重试循环内创建，因为 AsyncStream 只能被消费一次
 
     // 规范化 permissionMode：空字符串或 null 都视为 'default'
     // 参见 docs/multimodal-permission-bug.md
@@ -995,9 +1268,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
           [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
         )
       ),
-      // 同时设置 canUseTool 和 hooks，确保至少一个生效
-      // 在 AsyncIterable 模式下 canUseTool 可能不被调用，所以必须配置 PreToolUse hook
-      canUseTool: normalizedPermissionMode === 'default' ? canUseTool : undefined,
+      // AskUserQuestion 依赖 canUseTool 返回 answers，因此所有模式都必须提供 canUseTool
+      canUseTool,
       hooks: {
         PreToolUse: [{
           hooks: [preToolUseHook]
@@ -1039,6 +1311,10 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    if (resumeSessionId && resumeSessionId !== '') {
 	      options.resume = resumeSessionId;
 	      console.log('[RESUMING]', resumeSessionId);
+	      if (!hasClaudeProjectSessionFile(resumeSessionId, workingDirectory)) {
+	        console.log('[RESUME_WAIT] Waiting for session file to appear before resuming...');
+	        await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+	      }
 	    }
 
 		    // 动态加载 Claude SDK
@@ -1048,10 +1324,57 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
               throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
             }
 
-		    const result = queryFn({
+    // ========== Auto-retry loop for transient API errors ==========
+    let retryAttempt = 0;
+    let lastRetryError = null;
+    let messageCount = 0;  // Track messages for retry decision
+
+    retryLoop: while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
+      // Reset state for each attempt (important for retry)
+      let currentSessionId = resumeSessionId;
+      messageCount = 0;
+      let hasStreamEvents = false;
+      let lastAssistantContent = '';
+      let lastThinkingContent = '';
+
+      // Only log retry attempts (not the first attempt)
+      if (retryAttempt > 0) {
+        console.log(`[RETRY] (withAttachments) Attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries} after error: ${lastRetryError?.message || 'unknown'}`);
+      }
+
+      try {
+        // Recreate inputStream for each retry (AsyncStream can only be consumed once)
+        const inputStream = new AsyncStream();
+        inputStream.enqueue(userMessage);
+        inputStream.done();
+
+        let result;
+        try {
+		    result = queryFn({
 		      prompt: inputStream,
 		      options
 		    });
+        } catch (queryError) {
+          const canRetry = isRetryableError(queryError) &&
+                           retryAttempt < AUTO_RETRY_CONFIG.maxRetries &&
+                           messageCount <= AUTO_RETRY_CONFIG.maxMessagesForRetry;
+          if (canRetry) {
+            lastRetryError = queryError;
+            retryAttempt++;
+            const retryDelayMs = getRetryDelayMs(queryError);
+            if (isNoConversationFoundError(queryError) && resumeSessionId && resumeSessionId !== '') {
+              await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+            }
+            console.log(`[RETRY] (withAttachments) Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
+            console.log(`[RETRY] Reason: ${queryError.message || String(queryError)}, messageCount: ${messageCount}`);
+            if (streamingEnabled && streamStarted && !streamEnded) {
+              streamStarted = false;
+            }
+            await sleep(retryDelayMs);
+            continue retryLoop;
+          }
+          throw queryError;
+        }
 
 	    // 如需再次启用自动超时，可在此处通过 AbortController 实现，并确保给出清晰的"响应超时"提示
 	    // timeoutId = setTimeout(() => {
@@ -1059,15 +1382,12 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    //   abortController.abort();
 	    // }, 30000);
 
-		    let currentSessionId = resumeSessionId;
 		    // 🔧 流式传输状态追踪（已在函数开头声明 streamingEnabled, streamStarted, streamEnded）
-		    let hasStreamEvents = false;
 		    // 🔧 diff fallback: 追踪上次的 assistant 内容，用于计算增量
-		    let lastAssistantContent = '';
-		    let lastThinkingContent = '';
 
 		    try {
 		    for await (const msg of result) {
+		      messageCount++;
 		      // 🔧 流式传输：输出流式开始标记（仅首次）
 		      if (streamingEnabled && !streamStarted) {
 		        console.log('[STREAM_START]');
@@ -1157,7 +1477,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	                console.log('[THINKING]', thinkingText);
 	    	              }
 	    	            } else if (block.type === 'tool_use') {
-	    	              console.log('[DEBUG] Tool use payload (withAttachments):', JSON.stringify(block));
+	    	              console.log('[TOOL_USE]', JSON.stringify({ id: block.id, name: block.name }));
 	    	            } else if (block.type === 'tool_result') {
 	    	              console.log('[DEBUG] Tool result payload (withAttachments):', JSON.stringify(block));
 	    	            }
@@ -1182,12 +1502,11 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
 	    	      // 实时输出工具调用结果（user 消息中的 tool_result）
 	    	      if (msg.type === 'user') {
-	    	        const content = msg.message?.content;
+	    	        const content = msg.message?.content ?? msg.content;
 	    	        if (Array.isArray(content)) {
 	    	          for (const block of content) {
 	    	            if (block.type === 'tool_result') {
-	    	              // 输出工具调用结果，前端可以实时更新工具状态
-	    	              console.log('[TOOL_RESULT]', JSON.stringify(block));
+	    	              console.log('[TOOL_RESULT]', JSON.stringify({ tool_use_id: block.tool_use_id, is_error: block.is_error }));
 	    	            }
 	    	          }
 	    	        }
@@ -1219,8 +1538,44 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	      if (loopError.syscall) console.error('[DEBUG] Error syscall:', loopError.syscall);
 	    	      if (loopError.path) console.error('[DEBUG] Error path:', loopError.path);
 	    	      if (loopError.spawnargs) console.error('[DEBUG] Error spawnargs:', JSON.stringify(loopError.spawnargs));
+
+          // ========== Auto-retry logic for transient API errors ==========
+          // Only retry if:
+          // 1. Error is retryable (transient network/API issue)
+          // 2. Haven't exceeded max retries
+          // 3. Few messages were processed (early failure, not mid-stream)
+          const canRetry = isRetryableError(loopError) &&
+                           retryAttempt < AUTO_RETRY_CONFIG.maxRetries &&
+                           messageCount <= AUTO_RETRY_CONFIG.maxMessagesForRetry;
+
+          if (canRetry) {
+            lastRetryError = loopError;
+            retryAttempt++;
+            const retryDelayMs = getRetryDelayMs(loopError);
+            if (isNoConversationFoundError(loopError) && resumeSessionId && resumeSessionId !== '') {
+              await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
+            }
+            console.log(`[RETRY] (withAttachments) Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
+            console.log(`[RETRY] Reason: ${loopError.message}, messageCount: ${messageCount}`);
+
+            // Reset streaming state for retry
+            if (streamingEnabled && streamStarted && !streamEnded) {
+              streamStarted = false;
+            }
+
+            // Wait before retry
+            await sleep(retryDelayMs);
+            continue retryLoop; // Go to next retry attempt
+          }
+
+          // Not retryable or max retries exceeded - throw to outer catch
 	    	      throw loopError;
 	    	    }
+
+    // ========== Success - break out of retry loop ==========
+    if (retryAttempt > 0) {
+      console.log(`[RETRY] (withAttachments) Success after ${retryAttempt} retry attempt(s)`);
+    }
 
 	    // 🔧 流式传输：输出流式结束标记
 	    if (streamingEnabled && streamStarted) {
@@ -1233,6 +1588,16 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	      success: true,
 	      sessionId: currentSessionId
 	    }));
+
+    // Success - exit retry loop
+    break retryLoop;
+
+      } catch (retryError) {
+        // Catch errors from within the retry attempt (outer try of retryLoop)
+        // This handles errors thrown by the inner catch when not retryable
+        throw retryError;
+      }
+    } // end retryLoop
 
 	  } catch (error) {
 	    // 🔧 流式传输：异常时也要结束流式，避免前端卡在 streaming 状态
@@ -1467,6 +1832,11 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
         }
 
+        if (!hasClaudeProjectSessionFile(sessionId, workingDirectory)) {
+          console.log('[RESUME_WAIT] Waiting for session file to appear before resuming...');
+          await waitForClaudeProjectSessionFile(sessionId, workingDirectory, 2500, 100);
+        }
+
         const options = {
           resume: sessionId,
           cwd: workingDirectory,
@@ -1500,7 +1870,16 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
         }
 
-        result = query({ prompt: '', options });
+        try {
+          result = query({ prompt: '', options });
+        } catch (queryError) {
+          if (isNoConversationFoundError(queryError)) {
+            await waitForClaudeProjectSessionFile(sessionId, workingDirectory, 2500, 100);
+            result = query({ prompt: '', options });
+          } else {
+            throw queryError;
+          }
+        }
 
       } catch (resumeError) {
         const errorMsg = `Failed to resume session ${sessionId}: ${resumeError.message}`;

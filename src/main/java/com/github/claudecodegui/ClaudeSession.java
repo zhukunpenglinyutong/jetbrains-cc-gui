@@ -31,6 +31,10 @@ import java.util.concurrent.CompletableFuture;
 public class ClaudeSession {
 
     private static final Logger LOG = Logger.getInstance(ClaudeSession.class);
+
+    /** Maximum file size for Codex context injection (100KB) */
+    private static final int MAX_FILE_SIZE_BYTES = 100 * 1024;
+
     private final Gson gson = new Gson();
     private final Project project;
 
@@ -85,6 +89,7 @@ public class ClaudeSession {
     public interface SessionCallback {
         void onMessageUpdate(List<Message> messages);
         void onStateChange(boolean busy, boolean loading, String error);
+        default void onStatusMessage(String message) {}
         void onSessionIdReceived(String sessionId);
         void onPermissionRequested(PermissionRequest request);
         void onThinkingStatusChanged(boolean isThinking);
@@ -267,7 +272,16 @@ public class ClaudeSession {
      * 解释：发送消息给AI，使用指定的智能体提示词（用于多标签页独立智能体选择）
      */
     public CompletableFuture<Void> send(String input, String agentPrompt) {
-        return send(input, null, agentPrompt);
+        return send(input, null, agentPrompt, null);
+    }
+
+    /**
+     * 【FIX】发送消息（指定智能体提示词和文件标签）
+     * 英文：Send message with specific agent prompt and file tags
+     * 解释：发送消息给AI，使用指定的智能体提示词和文件标签（用于 Codex 上下文注入）
+     */
+    public CompletableFuture<Void> send(String input, String agentPrompt, List<String> fileTagPaths) {
+        return send(input, null, agentPrompt, fileTagPaths);
     }
 
     /**
@@ -275,7 +289,7 @@ public class ClaudeSession {
      * 【注意】此方法用于向后兼容，优先使用 send(input, attachments, agentPrompt) 版本
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments) {
-        return send(input, attachments, null);
+        return send(input, attachments, null, null);
     }
 
     /**
@@ -287,6 +301,19 @@ public class ClaudeSession {
      * @param agentPrompt 智能体提示词（如为空则使用全局设置）
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments, String agentPrompt) {
+        return send(input, attachments, agentPrompt, null);
+    }
+
+    /**
+     * 【FIX】发送消息（完整版：支持附件、智能体提示词和文件标签）
+     * 英文：Send message with attachments, agent prompt and file tags
+     * 解释：发送消息给AI，带上图片等附件，使用指定的智能体提示词和文件标签（用于 Codex 上下文注入）
+     * @param input 用户输入的消息文本
+     * @param attachments 附件列表（可为空）
+     * @param agentPrompt 智能体提示词（如为空则使用全局设置）
+     * @param fileTagPaths 文件标签路径列表（用于 Codex 上下文注入）
+     */
+    public CompletableFuture<Void> send(String input, List<Attachment> attachments, String agentPrompt, List<String> fileTagPaths) {
         // 第1步：准备用户消息
         // Step 1: Prepare user message
         // 解释：把用户说的话和图片整理好
@@ -298,8 +325,9 @@ public class ClaudeSession {
         // 解释：把消息存起来，更新状态
         updateSessionStateForSend(userMessage, normalizedInput);
 
-        // 保存 agentPrompt 用于后续发送
+        // 保存 agentPrompt 和 fileTagPaths 用于后续发送
         final String finalAgentPrompt = agentPrompt;
+        final List<String> finalFileTagPaths = fileTagPaths;
 
         // 第3步：启动Claude并发送消息
         // Step 3: Launch Claude and send message
@@ -308,7 +336,7 @@ public class ClaudeSession {
             // 设置是否启用PSI语义上下文收集
             contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
             return contextCollector.collectContext().thenCompose(openedFilesJson ->
-                sendMessageToProvider(chId, normalizedInput, attachments, openedFilesJson, finalAgentPrompt)
+                sendMessageToProvider(chId, normalizedInput, attachments, openedFilesJson, finalAgentPrompt, finalFileTagPaths)
             );
         }).exceptionally(ex -> {
             state.setError(ex.getMessage());
@@ -487,13 +515,15 @@ public class ClaudeSession {
      * @param attachments 附件列表
      * @param openedFilesJson 已打开文件信息
      * @param externalAgentPrompt 外部传入的智能体提示词（如为空则使用全局设置）
+     * @param fileTagPaths 文件标签路径列表（用于 Codex 上下文注入）
      */
     private CompletableFuture<Void> sendMessageToProvider(
         String channelId,
         String input,
         List<Attachment> attachments,
         JsonObject openedFilesJson,
-        String externalAgentPrompt
+        String externalAgentPrompt,
+        List<String> fileTagPaths
     ) {
         // 【FIX】优先使用外部传入的智能体提示词，否则回退到全局设置
         // Use external agent prompt if provided, otherwise fall back to global setting
@@ -512,7 +542,7 @@ public class ClaudeSession {
         String currentProvider = state.getProvider();
 
         if ("codex".equals(currentProvider)) {
-            return sendToCodex(channelId, input, attachments, agentPrompt);
+            return sendToCodex(channelId, input, attachments, openedFilesJson, agentPrompt, fileTagPaths);
         } else {
             return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt);
         }
@@ -522,18 +552,24 @@ public class ClaudeSession {
      * 发送消息到Codex
      * 英文：Send message to Codex
      * 解释：用Codex AI发送消息
+     * @param fileTagPaths 文件标签路径列表（用于上下文注入）
      */
     private CompletableFuture<Void> sendToCodex(
         String channelId,
         String input,
         List<Attachment> attachments,
-        String agentPrompt
+        JsonObject openedFilesJson,
+        String agentPrompt,
+        List<String> fileTagPaths
     ) {
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
 
+        String contextAppend = buildCodexContextAppend(openedFilesJson, fileTagPaths);
+        String finalInput = (input != null ? input : "") + contextAppend;
+
         return codexSDKBridge.sendMessage(
             channelId,
-            input,
+            finalInput,
             state.getSessionId(),
             state.getCwd(),
             attachments,
@@ -543,6 +579,161 @@ public class ClaudeSession {
             state.getReasoningEffort(),
             handler
         ).thenApply(result -> null);
+    }
+
+    /**
+     * 构建 Codex 上下文追加内容
+     * 英文：Build Codex context append content
+     * 解释：处理 IDE 打开的文件、选中代码和用户文件标签，注入到 Codex 消息中
+     * @param openedFilesJson IDE 打开文件信息（含当前文件和选中代码）
+     * @param fileTagPaths 用户在输入框中添加的文件标签路径列表
+     */
+    private String buildCodexContextAppend(JsonObject openedFilesJson, List<String> fileTagPaths) {
+        StringBuilder sb = new StringBuilder();
+        boolean hasContent = false;
+
+        // 【FIX】处理用户通过 @ 引用的文件标签
+        // Process file tags added by user via @
+        if (fileTagPaths != null && !fileTagPaths.isEmpty()) {
+            sb.append("\n\n## Referenced Files\n\n");
+            sb.append("The following files were referenced by the user:\n\n");
+
+            for (String filePath : fileTagPaths) {
+                String fileContent = readFileContent(filePath);
+                if (fileContent != null) {
+                    String extension = getFileExtension(filePath);
+                    sb.append("### `").append(filePath).append("`\n\n");
+                    sb.append("```").append(extension).append("\n");
+                    sb.append(fileContent);
+                    if (!fileContent.endsWith("\n")) {
+                        sb.append("\n");
+                    }
+                    sb.append("```\n\n");
+                    hasContent = true;
+                }
+            }
+        }
+
+        // 【FIX】处理 IDE 当前打开的文件（activeFile）
+        // Process IDE active file - inject full file content for Codex
+        if (openedFilesJson != null && !openedFilesJson.isJsonNull()) {
+            String activeFile = null;
+            if (openedFilesJson.has("active") && !openedFilesJson.get("active").isJsonNull()) {
+                activeFile = openedFilesJson.get("active").getAsString();
+            }
+
+            // 检查是否有选中的代码
+            JsonObject selection = null;
+            String selectedText = null;
+            Integer startLine = null;
+            Integer endLine = null;
+
+            if (openedFilesJson.has("selection") && openedFilesJson.get("selection").isJsonObject()) {
+                selection = openedFilesJson.getAsJsonObject("selection");
+                if (selection.has("selectedText") && !selection.get("selectedText").isJsonNull()) {
+                    selectedText = selection.get("selectedText").getAsString();
+                }
+                if (selection.has("startLine") && selection.get("startLine").isJsonPrimitive()) {
+                    startLine = selection.get("startLine").getAsInt();
+                }
+                if (selection.has("endLine") && selection.get("endLine").isJsonPrimitive()) {
+                    endLine = selection.get("endLine").getAsInt();
+                }
+            }
+
+            // 如果有选中的代码，显示选中的代码
+            if (selectedText != null && !selectedText.trim().isEmpty()) {
+                sb.append("\n\n## IDE Context\n\n");
+                if (activeFile != null && !activeFile.trim().isEmpty()) {
+                    sb.append("Active file: `").append(activeFile);
+                    if (startLine != null && endLine != null) {
+                        if (startLine.equals(endLine)) {
+                            sb.append("#L").append(startLine);
+                        } else {
+                            sb.append("#L").append(startLine).append("-").append(endLine);
+                        }
+                    }
+                    sb.append("`\n\n");
+                }
+                sb.append("Selected code:\n```\n");
+                sb.append(selectedText);
+                sb.append("\n```\n");
+                sb.append("The selected code above is the primary subject of the user's question.\n");
+                hasContent = true;
+            }
+            // 【FIX】如果没有选中代码，但有打开的文件，读取并注入整个文件内容
+            // If no selection but has active file, read and inject full file content
+            else if (activeFile != null && !activeFile.trim().isEmpty()) {
+                String fileContent = readFileContent(activeFile);
+                if (fileContent != null) {
+                    String extension = getFileExtension(activeFile);
+                    sb.append("\n\n## User's Current IDE Context\n\n");
+                    sb.append("The user is viewing this file in their IDE. This is the PRIMARY SUBJECT of the user's question.\n\n");
+                    sb.append("### `").append(activeFile).append("`\n\n");
+                    sb.append("```").append(extension).append("\n");
+                    sb.append(fileContent);
+                    if (!fileContent.endsWith("\n")) {
+                        sb.append("\n");
+                    }
+                    sb.append("```\n\n");
+                    hasContent = true;
+                    LOG.info("[Codex Context] Injected active file content: " + activeFile);
+                }
+            }
+        }
+
+        return hasContent ? sb.toString() : "";
+    }
+
+    /**
+     * 读取文件内容（带大小限制）
+     * 英文：Read file content with size limit
+     * @param filePath 文件路径
+     * @return 文件内容，如果读取失败返回 null
+     */
+    private String readFileContent(String filePath) {
+        try {
+            java.io.File file = new java.io.File(filePath);
+            if (!file.exists() || !file.isFile() || !file.canRead()) {
+                LOG.warn("[Codex Context] File not accessible: " + filePath);
+                return null;
+            }
+
+            long fileSize = file.length();
+            // 限制文件大小（最大 100KB）
+            if (fileSize > MAX_FILE_SIZE_BYTES) {
+                LOG.info("[Codex Context] File too large, reading first 100KB: " + filePath + " (" + fileSize + " bytes)");
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
+                    byte[] buffer = new byte[MAX_FILE_SIZE_BYTES];
+                    int bytesRead = fis.read(buffer);
+                    if (bytesRead > 0) {
+                        return new String(buffer, 0, bytesRead, java.nio.charset.StandardCharsets.UTF_8)
+                            + "\n\n... (file truncated, showing first 100KB of " + (fileSize / 1024) + "KB)";
+                    }
+                }
+                return null;
+            } else {
+                String content = java.nio.file.Files.readString(file.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+                LOG.info("[Codex Context] Read file content: " + filePath + " (" + fileSize + " bytes)");
+                return content;
+            }
+        } catch (Exception e) {
+            LOG.warn("[Codex Context] Failed to read file: " + filePath + ", error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取文件扩展名（用于代码块语法高亮）
+     * 英文：Get file extension for code block syntax highlighting
+     */
+    private String getFileExtension(String filePath) {
+        if (filePath == null) return "";
+        int lastDot = filePath.lastIndexOf('.');
+        if (lastDot > 0 && lastDot < filePath.length() - 1) {
+            return filePath.substring(lastDot + 1).toLowerCase();
+        }
+        return "";
     }
 
     /**
@@ -591,7 +782,154 @@ public class ClaudeSession {
             agentPrompt,
             streaming,
             handler
-        ).thenApply(result -> null);
+        ).thenApply(result -> null)
+        .thenCompose(v -> {
+            // Add a small delay to ensure JSONL file is written and flushed
+            // Non-streaming responses return very fast, and filesystem I/O may not be complete yet
+            return CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(100); // 100ms delay to allow file system flush
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                updateUserMessageUuids();
+            });
+        });
+    }
+
+    /**
+     * Update user message UUIDs from session history
+     * This is needed because SDK streaming does not include UUID,
+     * but persisted messages in JSONL files do have UUID.
+     */
+    private void updateUserMessageUuids() {
+        String sessionId = state.getSessionId();
+        String cwd = state.getCwd();
+
+        if (sessionId == null || sessionId.isEmpty()) {
+            return;
+        }
+
+        // Retry logic to handle filesystem I/O delay
+        int maxRetries = 3;
+        int retryDelayMs = 50;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                List<JsonObject> historyMessages = claudeSDKBridge.getSessionMessages(sessionId, cwd);
+                if (historyMessages == null || historyMessages.isEmpty()) {
+                    if (attempt < maxRetries) {
+                        Thread.sleep(retryDelayMs);
+                        continue;
+                    }
+                    return;
+                }
+
+                List<Message> localMessages = state.getMessages();
+                boolean updated = false;
+
+                // Find user messages in history that have UUID
+                for (JsonObject historyMsg : historyMessages) {
+                    if (!historyMsg.has("type") || !"user".equals(historyMsg.get("type").getAsString())) {
+                        continue;
+                    }
+                    if (!historyMsg.has("uuid") || historyMsg.get("uuid").isJsonNull()) {
+                        continue;
+                    }
+
+                    String uuid = historyMsg.get("uuid").getAsString();
+
+                    // Extract content from history message for matching
+                    String historyContent = extractMessageContentForMatching(historyMsg);
+                    if (historyContent == null || historyContent.isEmpty()) {
+                        continue;
+                    }
+
+                    // Find matching local user message and update its UUID
+                    for (Message localMsg : localMessages) {
+                        if (localMsg.type != Message.Type.USER || localMsg.raw == null) {
+                            continue;
+                        }
+                        // Skip if already has UUID
+                        if (localMsg.raw.has("uuid") && !localMsg.raw.get("uuid").isJsonNull()) {
+                            continue;
+                        }
+
+                        String localContent = localMsg.content;
+                        if (localContent != null && localContent.equals(historyContent)) {
+                            localMsg.raw.addProperty("uuid", uuid);
+                            updated = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (updated) {
+                    callbackHandler.notifyMessageUpdate(localMessages);
+                    return; // Success, no need to retry
+                }
+
+                // If no update but found history messages, likely UUID already present
+                if (!historyMessages.isEmpty()) {
+                    return;
+                }
+
+                // Retry if no history messages found yet
+                if (attempt < maxRetries) {
+                    Thread.sleep(retryDelayMs);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (Exception e) {
+                LOG.warn("[Rewind] Failed to update user message UUIDs (attempt " + attempt + "): " + e.getMessage());
+                if (attempt >= maxRetries) {
+                    break;
+                }
+                try {
+                    Thread.sleep(retryDelayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Extract message content for matching
+     */
+    private String extractMessageContentForMatching(JsonObject msg) {
+        if (!msg.has("message") || !msg.get("message").isJsonObject()) {
+            return null;
+        }
+        JsonObject message = msg.getAsJsonObject("message");
+        if (!message.has("content")) {
+            return null;
+        }
+
+        JsonElement contentElement = message.get("content");
+        if (contentElement.isJsonPrimitive()) {
+            return contentElement.getAsString();
+        }
+
+        if (contentElement.isJsonArray()) {
+            JsonArray contentArray = contentElement.getAsJsonArray();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < contentArray.size(); i++) {
+                JsonElement element = contentArray.get(i);
+                if (element.isJsonObject()) {
+                    JsonObject block = element.getAsJsonObject();
+                    if (block.has("type") && "text".equals(block.get("type").getAsString()) && block.has("text")) {
+                        if (sb.length() > 0) sb.append("\n");
+                        sb.append(block.get("text").getAsString());
+                    }
+                }
+            }
+            return sb.toString();
+        }
+
+        return null;
     }
 
     /**
@@ -645,9 +983,18 @@ public class ClaudeSession {
                 }
                 state.setError(null);  // 清除之前的错误状态
                 state.setBusy(false);
+                state.setLoading(false);  // FIX: 同时重置 loading 状态
+
+                // 注意：这里不调用 notifyStreamEnd()，因为：
+                // 1. 前端的 interruptSession() 已经直接清理了流式状态
+                // 2. 调用 notifyStreamEnd() 会触发 flushStreamMessageUpdates()，
+                //    可能会用 lastMessagesSnapshot 恢复之前的消息，影响 clearMessages 的效果
+                // 3. 状态重置通过 updateState() -> onStateChange() 来通知前端
+
                 updateState();
             } catch (Exception e) {
                 state.setError(e.getMessage());
+                state.setLoading(false);  // FIX: 错误时也重置 loading
                 updateState();
             }
         });

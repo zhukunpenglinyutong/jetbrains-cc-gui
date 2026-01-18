@@ -33,7 +33,9 @@
     "emptyMessage": "Empty message",
     "clickToPreview": "Click to preview",
     "userUploadedImage": "User uploaded image",
-    "inputPlaceholder": "@reference files, shift + enter for new line",
+    "inputPlaceholder": "@reference files, #invoke agents, Enter to send",
+    "inputPlaceholderEnter": "@reference files, #invoke agents, Enter to send",
+    "inputPlaceholderCmdEnter": "@reference files, #invoke agents, ⌘Enter to send",
     "noThinkingContent": "No thinking content",
     "parseError": "Failed to parse content",
     "sendMessageEnter": "Send message (Enter)",
@@ -75,7 +77,11 @@
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
     "sdkStatusLoading": "Checking SDK status...",
-    "goInstallSdk": "Go to Install"
+    "goInstallSdk": "Go to Install",
+    "commandNotImplemented": "`{{command}}` feature is not yet implemented.",
+    "attachmentFile": "[Attachment: {{fileName}}]",
+    "attachmentsUploaded": "[Attachments Uploaded]",
+    "streamingConnected": "Claude connected, waiting for response"
   },
   "settings": {
     "title": "Settings",
@@ -388,6 +394,7 @@
       "Write": "Write File",
       "Edit": "Edit File",
       "Read": "Read File",
+      "ReadBatch": "Batch Read Files",
       "Bash": "Execute Command",
       "TodoWrite": "Write Todo",
       "TodoRead": "Read Todo",
@@ -405,6 +412,17 @@
     "back": "Back",
     "next": "Next",
     "submit": "Submit"
+  },
+  "planApproval": {
+    "title": "Plan Ready for Approval",
+    "subtitle": "Claude has finished planning and is ready to execute.",
+    "requestedPermissions": "Requested Permissions",
+    "executionMode": "Execution Mode",
+    "executionModeDescription": "Select how Claude should execute the plan:",
+    "approve": "Approve & Execute",
+    "reject": "Reject",
+    "toApprove": "to approve",
+    "toReject": "to reject"
   },
   "toast": {
     "switchSuccess": "Switched successfully",
@@ -609,10 +627,16 @@
     "refreshFileInIdeaSuccess": "Manually refreshed this file in IDEA",
     "showDiffInIdea": "Show changes in IDEA",
     "diffButton": "Diff",
+    "editBatchTitle": "Batch Edit Files",
     "editPrefix": "Edit: {{fileName}}",
     "lineRange": "Lines {{start}}-{{end}}",
     "filePath": "File path:",
     "unknownTool": "Unknown tool"
+  },
+  "todo": {
+    "inProgress": "In Progress {{completed}}/{{total}} tasks",
+    "allCompleted": "All Completed {{completed}}/{{total}} tasks",
+    "stopped": "Stopped"
   },
   "skills": {
     "title": "Skills",
@@ -735,8 +759,8 @@
     },
     "plan": {
       "label": "Plan Mode",
-      "tooltip": "Plan mode - No execution (not supported yet)",
-      "description": "Planning only without execution, not supported yet"
+      "tooltip": "Plan mode - read-only analysis",
+      "description": "Uses only read-only tools, generates plan for user approval"
     },
     "acceptEdits": {
       "label": "Agent Mode",
@@ -757,8 +781,8 @@
     },
     "plan": {
       "label": "Plan Mode",
-      "tooltip": "Planning only (not supported yet)",
-      "description": "Outlines steps without executing (coming soon)"
+      "tooltip": "Plan mode - read-only analysis",
+      "description": "Uses only read-only tools, generates plan for user approval"
     },
     "acceptEdits": {
       "label": "Auto Edit",
@@ -780,6 +804,9 @@
     },
     "gemini": {
       "label": "Gemini Cli"
+    },
+    "opencode": {
+      "label": "OpenCode"
     }
   },
   "promptEnhancer": {
@@ -799,7 +826,6 @@
   "rewind": {
     "title": "Rewind Files to Previous State",
     "tooltip": "Rewind",
-    "shortcut": "ESC ESC",
     "tooltipFull": "Restore files to their state at this message",
     "selectTitle": "Select Rewind Point",
     "noRewindableMessages": "No rewindable messages in this session",

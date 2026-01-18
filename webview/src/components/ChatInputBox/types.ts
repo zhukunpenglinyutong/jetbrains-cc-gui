@@ -1,42 +1,52 @@
 /**
- * 输入框组件类型定义
- * 功能: 004-refactor-input-box
+ * Input box component type definitions
+ * Feature: 004-refactor-input-box
  */
 
 // ============================================================
-// 核心实体类型
+// Core Entity Types
 // ============================================================
 
 /**
- * 文件附件
+ * File tag information for backend context injection (Codex mode)
+ */
+export interface FileTagInfo {
+  /** Display path (as shown in tag) */
+  displayPath: string;
+  /** Absolute path (for file reading) */
+  absolutePath: string;
+}
+
+/**
+ * File attachment
  */
 export interface Attachment {
-  /** 唯一标识符 */
+  /** Unique identifier */
   id: string;
-  /** 原始文件名 */
+  /** Original filename */
   fileName: string;
-  /** MIME 类型 */
+  /** MIME type */
   mediaType: string;
-  /** Base64 编码内容 */
+  /** Base64 encoded content */
   data: string;
 }
 
 /**
- * 代码片段（来自编辑器选中的代码）
+ * Code snippet (from editor selection)
  */
 export interface CodeSnippet {
-  /** 唯一标识符 */
+  /** Unique identifier */
   id: string;
-  /** 文件路径（相对路径） */
+  /** File path (relative) */
   filePath: string;
-  /** 起始行号 */
+  /** Start line number */
   startLine?: number;
-  /** 结束行号 */
+  /** End line number */
   endLine?: number;
 }
 
 /**
- * 图片媒体类型常量
+ * Image media type constants
  */
 export const IMAGE_MEDIA_TYPES = [
   'image/jpeg',
@@ -49,18 +59,18 @@ export const IMAGE_MEDIA_TYPES = [
 export type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
 
 /**
- * 判断是否为图片附件
+ * Check if attachment is an image
  */
 export function isImageAttachment(attachment: Attachment): boolean {
   return IMAGE_MEDIA_TYPES.includes(attachment.mediaType as ImageMediaType);
 }
 
 // ============================================================
-// 补全系统类型
+// Completion System Types
 // ============================================================
 
 /**
- * 补全项类型
+ * Completion item type
  */
 export type CompletionType =
   | 'file'
@@ -72,85 +82,85 @@ export type CompletionType =
   | 'section-header';
 
 /**
- * 下拉菜单项数据
+ * Dropdown menu item data
  */
 export interface DropdownItemData {
-  /** 唯一标识符 */
+  /** Unique identifier */
   id: string;
-  /** 显示文本 */
+  /** Display text */
   label: string;
-  /** 描述文本 */
+  /** Description text */
   description?: string;
-  /** 图标类名 */
+  /** Icon class name */
   icon?: string;
-  /** 项类型 */
+  /** Item type */
   type: CompletionType;
-  /** 是否选中（用于选择器） */
+  /** Whether selected (for selectors) */
   checked?: boolean;
-  /** 关联数据 */
+  /** Associated data */
   data?: Record<string, unknown>;
 }
 
 /**
- * 文件项（Java 返回）
+ * File item (returned from Java)
  */
 export interface FileItem {
-  /** 文件名 */
+  /** Filename */
   name: string;
-  /** 相对路径 */
+  /** Relative path */
   path: string;
-  /** 绝对路径 (可选) */
+  /** Absolute path (optional) */
   absolutePath?: string;
-  /** 类型 */
+  /** Type */
   type: 'file' | 'directory';
-  /** 扩展名 */
+  /** Extension */
   extension?: string;
 }
 
 /**
- * 命令项（Java 返回）
+ * Command item (returned from Java)
  */
 export interface CommandItem {
-  /** 命令标识 */
+  /** Command identifier */
   id: string;
-  /** 显示名称 */
+  /** Display name */
   label: string;
-  /** 描述 */
+  /** Description */
   description?: string;
-  /** 分类 */
+  /** Category */
   category?: string;
 }
 
 /**
- * 下拉菜单位置
+ * Dropdown menu position
  */
 export interface DropdownPosition {
-  /** 顶部坐标 (px) */
+  /** Top coordinate (px) */
   top: number;
-  /** 左侧坐标 (px) */
+  /** Left coordinate (px) */
   left: number;
-  /** 宽度 (px) */
+  /** Width (px) */
   width: number;
-  /** 高度 (px) */
+  /** Height (px) */
   height: number;
 }
 
 /**
- * 触发查询信息
+ * Trigger query information
  */
 export interface TriggerQuery {
-  /** 触发符号 ('@' 或 '/' 或 '#') */
+  /** Trigger symbol ('@' or '/' or '#') */
   trigger: string;
-  /** 搜索关键词 */
+  /** Search keyword */
   query: string;
-  /** 触发符号的字符偏移位置 */
+  /** Character offset position of trigger symbol */
   start: number;
-  /** 查询结束的字符偏移位置 */
+  /** Character offset position of query end */
   end: number;
 }
 
 /**
- * 选中的智能体信息
+ * Selected agent information
  */
 export interface SelectedAgent {
   id: string;
@@ -159,16 +169,16 @@ export interface SelectedAgent {
 }
 
 // ============================================================
-// 模式与模型类型
+// Mode and Model Types
 // ============================================================
 
 /**
- * 对话权限模式
+ * Permission mode for conversations
  */
 export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
 /**
- * 模式信息
+ * Mode information
  */
 export interface ModeInfo {
   id: PermissionMode;
@@ -176,46 +186,45 @@ export interface ModeInfo {
   icon: string;
   disabled?: boolean;
   tooltip?: string;
-  description?: string;  // 模式描述文案
+  description?: string;
 }
 
 /**
- * 预定义模式列表
+ * Available permission modes
  */
 export const AVAILABLE_MODES: ModeInfo[] = [
   {
     id: 'default',
-    label: '默认模式',
+    label: 'Default Mode',
     icon: 'codicon-comment-discussion',
-    tooltip: '标准权限行为',
-    description: '需要手动确认每个操作，适合谨慎使用'
+    tooltip: 'Standard permission behavior',
+    description: 'Requires manual confirmation for each operation',
   },
   {
     id: 'plan',
-    label: '规划模式',
+    label: 'Plan Mode',
     icon: 'codicon-tasklist',
-    disabled: true,
-    tooltip: '规划模式——无执行（暂不支持）',
-    description: '仅规划不执行，暂不支持'
+    tooltip: 'Plan mode - read-only analysis',
+    description: 'Read-only tools only, generates plan for user approval',
   },
   {
     id: 'acceptEdits',
-    label: '代理模式',
+    label: 'Agent Mode',
     icon: 'codicon-robot',
-    tooltip: '自动接受文件编辑',
-    description: '自动接受文件创建/编辑，减少确认步骤'
+    tooltip: 'Auto-accept file edits',
+    description: 'Auto-accept file creation/editing, fewer confirmations',
   },
   {
     id: 'bypassPermissions',
-    label: '自动模式',
+    label: 'Auto Mode',
     icon: 'codicon-zap',
-    tooltip: '绕过所有权限检查',
-    description: '完全自动化，绕过所有权限检查【谨慎使用】'
+    tooltip: 'Bypass all permission checks',
+    description: 'Fully automated, bypasses all permission checks [use with caution]',
   },
 ];
 
 /**
- * 模型信息
+ * Model information
  */
 export interface ModelInfo {
   id: string;
@@ -224,7 +233,7 @@ export interface ModelInfo {
 }
 
 /**
- * Claude 模型列表
+ * Claude model list
  */
 export const CLAUDE_MODELS: ModelInfo[] = [
   {
@@ -245,38 +254,38 @@ export const CLAUDE_MODELS: ModelInfo[] = [
 ];
 
 /**
- * Codex 模型列表
+ * Codex model list
  */
 export const CODEX_MODELS: ModelInfo[] = [
   {
     id: 'gpt-5.2-codex',
     label: 'gpt-5.2-codex',
-    description: 'Latest frontier agentic coding model.'
+    description: 'Latest frontier agentic coding model.',
   },
   {
     id: 'gpt-5.1-codex-max',
     label: 'gpt-5.1-codex-max',
-    description: 'Codex-optimized flagship for deep and fast reasoning.'
+    description: 'Codex-optimized flagship for deep and fast reasoning.',
   },
   {
     id: 'gpt-5.1-codex-mini',
     label: 'gpt-5.1-codex-mini',
-    description: 'Optimized for codex. Cheaper, faster, but less capable.'
+    description: 'Optimized for codex. Cheaper, faster, but less capable.',
   },
   {
     id: 'gpt-5.2',
     label: 'gpt-5.2',
-    description: 'Latest frontier model with improvements across knowledge.'
+    description: 'Latest frontier model with improvements across knowledge.',
   },
 ];
 
 /**
- * 预定义模型列表（向后兼容）
+ * Available models (backward compatibility)
  */
 export const AVAILABLE_MODELS = CLAUDE_MODELS;
 
 /**
- * AI 提供商信息
+ * AI provider information
  */
 export interface ProviderInfo {
   id: string;
@@ -286,16 +295,17 @@ export interface ProviderInfo {
 }
 
 /**
- * 预定义提供商列表
+ * Available AI providers
  */
 export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
   { id: 'codex', label: 'Codex Cli', icon: 'codicon-terminal', enabled: true },
   { id: 'gemini', label: 'Gemini Cli', icon: 'codicon-terminal', enabled: false },
+  { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: false },
 ];
 
 /**
- * Codex Reasoning Effort (思考深度)
+ * Codex Reasoning Effort (thinking depth)
  * Controls the depth of reasoning for Codex models
  * Valid values: low, medium, high, xhigh
  */
@@ -315,235 +325,278 @@ export interface ReasoningInfo {
  * Available reasoning levels for Codex
  */
 export const REASONING_LEVELS: ReasoningInfo[] = [
-  { id: 'low', label: 'Low', icon: 'codicon-circle-small', description: 'Quick responses with basic reasoning' },
-  { id: 'medium', label: 'Medium', icon: 'codicon-circle-filled', description: 'Balanced thinking (default)' },
-  { id: 'high', label: 'High', icon: 'codicon-circle-large-filled', description: 'Deep reasoning for complex tasks' },
-  { id: 'xhigh', label: 'Max', icon: 'codicon-flame', description: 'Maximum reasoning depth' },
+  {
+    id: 'low',
+    label: 'Low',
+    icon: 'codicon-circle-small',
+    description: 'Quick responses with basic reasoning',
+  },
+  {
+    id: 'medium',
+    label: 'Medium',
+    icon: 'codicon-circle-filled',
+    description: 'Balanced thinking (default)',
+  },
+  {
+    id: 'high',
+    label: 'High',
+    icon: 'codicon-circle-large-filled',
+    description: 'Deep reasoning for complex tasks',
+  },
+  {
+    id: 'xhigh',
+    label: 'Max',
+    icon: 'codicon-flame',
+    description: 'Maximum reasoning depth',
+  },
 ];
 
 // ============================================================
-// 使用量类型
+// Usage Types
 // ============================================================
 
 /**
- * 使用量信息
+ * Usage information
  */
 export interface UsageInfo {
-  /** 使用百分比 (0-100) */
+  /** Usage percentage (0-100) */
   percentage: number;
-  /** 已用量 */
+  /** Used amount */
   used?: number;
-  /** 总量 */
+  /** Total amount */
   total?: number;
 }
 
 // ============================================================
-// 组件 Props 类型
+// Component Ref Handle Types
 // ============================================================
 
 /**
- * ChatInputBox 组件 Props
+ * ChatInputBox imperative API
+ * Used for performance optimization - uncontrolled mode with imperative access
+ */
+export interface ChatInputBoxHandle {
+  /** Get current input text content */
+  getValue: () => string;
+  /** Set input text content */
+  setValue: (value: string) => void;
+  /** Focus the input element */
+  focus: () => void;
+  /** Clear input content */
+  clear: () => void;
+  /** Check if input has content */
+  hasContent: () => boolean;
+  /** Get file tags from input (for Codex context injection) */
+  getFileTags: () => FileTagInfo[];
+}
+
+// ============================================================
+// Component Props Types
+// ============================================================
+
+/**
+ * ChatInputBox component props
  */
 export interface ChatInputBoxProps {
-  /** 是否正在加载 */
+  /** Whether loading */
   isLoading?: boolean;
-  /** 当前模型 */
+  /** Current model */
   selectedModel?: string;
-  /** 当前模式 */
+  /** Current permission mode */
   permissionMode?: PermissionMode;
-  /** 当前提供商 */
+  /** Current provider */
   currentProvider?: string;
-  /** 使用量百分比 */
+  /** Usage percentage */
   usagePercentage?: number;
-  /** 已用上下文token */
+  /** Used context tokens */
   usageUsedTokens?: number;
-  /** 上下文最大token */
+  /** Maximum context tokens */
   usageMaxTokens?: number;
-  /** 是否显示使用量 */
+  /** Whether to show usage */
   showUsage?: boolean;
-  /** 是否开启始终思考 */
+  /** Whether always thinking is enabled */
   alwaysThinkingEnabled?: boolean;
-  /** 附件列表 */
+  /** Attachment list */
   attachments?: Attachment[];
-  /** 占位符文本 */
+  /** Placeholder text */
   placeholder?: string;
-  /** 是否禁用 */
+  /** Whether disabled */
   disabled?: boolean;
-  /** 受控模式：输入框内容 */
+  /** Controlled mode: input content */
   value?: string;
 
-  /** 当前活动文件 */
+  /** Current active file */
   activeFile?: string;
-  /** 选中行数信息 (例如: "L10-20") */
+  /** Selected lines info (e.g., "L10-20") */
   selectedLines?: string;
 
-  /** 清除上下文回调 */
+  /** Clear context callback */
   onClearContext?: () => void;
-  /** 移除代码片段回调 */
+  /** Remove code snippet callback */
   onRemoveCodeSnippet?: (id: string) => void;
 
-  // 事件回调
-  /** 提交消息 */
+  // Event callbacks
+  /** Submit message */
   onSubmit?: (content: string, attachments?: Attachment[]) => void;
-  /** 停止生成 */
+  /** Stop generation */
   onStop?: () => void;
-  /** 输入变化 */
+  /** Input change */
   onInput?: (content: string) => void;
-  /** 添加附件 */
+  /** Add attachment */
   onAddAttachment?: (files: FileList) => void;
-  /** 移除附件 */
+  /** Remove attachment */
   onRemoveAttachment?: (id: string) => void;
-  /** 切换模式 */
+  /** Switch mode */
   onModeSelect?: (mode: PermissionMode) => void;
-  /** 切换模型 */
+  /** Switch model */
   onModelSelect?: (modelId: string) => void;
-  /** 切换提供商 */
+  /** Switch provider */
   onProviderSelect?: (providerId: string) => void;
-  /** 当前思考深度 (Codex only) */
+  /** Current reasoning effort (Codex only) */
   reasoningEffort?: ReasoningEffort;
-  /** 切换思考深度回调 (Codex only) */
+  /** Switch reasoning effort callback (Codex only) */
   onReasoningChange?: (effort: ReasoningEffort) => void;
-  /** 切换思考模式 */
+  /** Toggle thinking mode */
   onToggleThinking?: (enabled: boolean) => void;
-  /** 是否开启流式传输 */
+  /** Whether streaming is enabled */
   streamingEnabled?: boolean;
-  /** 切换流式传输 */
+  /** Toggle streaming */
   onStreamingEnabledChange?: (enabled: boolean) => void;
 
-  /** 发送快捷键设置: 'enter' = Enter发送 | 'cmdEnter' = Cmd/Ctrl+Enter发送 */
+  /** Send shortcut setting: 'enter' = Enter sends | 'cmdEnter' = Cmd/Ctrl+Enter sends */
   sendShortcut?: 'enter' | 'cmdEnter';
 
-  /** 当前选中的智能体 */
+  /** Currently selected agent */
   selectedAgent?: SelectedAgent | null;
-  /** 选择智能体回调 */
+  /** Select agent callback */
   onAgentSelect?: (agent: SelectedAgent | null) => void;
-  /** 清除智能体回调 */
+  /** Clear agent callback */
   onClearAgent?: () => void;
-  /** 打开智能体设置回调 */
+  /** Open agent settings callback */
   onOpenAgentSettings?: () => void;
 
-  /** 是否有消息（用于回滚按钮显示） */
+  /** Whether has messages (for rewind button display) */
   hasMessages?: boolean;
-  /** 回溯文件回调 */
+  /** Rewind file callback */
   onRewind?: () => void;
 
-  /** 🔧 SDK 是否已安装（用于在未安装时禁止提问） */
+  /** SDK installed status (disable input when not installed) */
   sdkInstalled?: boolean;
-  /** 🔧 SDK 状态是否正在加载 */
+  /** SDK status loading state */
   sdkStatusLoading?: boolean;
-  /** 🔧 前往安装 SDK 回调 */
+  /** Go to install SDK callback */
   onInstallSdk?: () => void;
-  /** 显示 Toast 提示 */
+  /** Show toast message */
   addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
 /**
- * ButtonArea 组件 Props
+ * ButtonArea component props
  */
 export interface ButtonAreaProps {
-  /** 是否禁用提交 */
+  /** Whether submit disabled */
   disabled?: boolean;
-  /** 是否有输入内容 */
+  /** Whether has input content */
   hasInputContent?: boolean;
-  /** 是否在对话中 */
+  /** Whether in conversation */
   isLoading?: boolean;
-  /** 是否正在增强提示词 */
+  /** Whether enhancing prompt */
   isEnhancing?: boolean;
-  /** 当前模型 */
+  /** Current model */
   selectedModel?: string;
-  /** 当前模式 */
+  /** Current mode */
   permissionMode?: PermissionMode;
-  /** 当前提供商 */
+  /** Current provider */
   currentProvider?: string;
-  /** 当前思考深度 (Codex only) */
+  /** Current reasoning effort (Codex only) */
   reasoningEffort?: ReasoningEffort;
 
-  // 事件回调
+  // Event callbacks
   onSubmit?: () => void;
   onStop?: () => void;
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;
-  /** 切换思考深度回调 (Codex only) */
+  /** Switch reasoning effort callback (Codex only) */
   onReasoningChange?: (effort: ReasoningEffort) => void;
-  /** 增强提示词回调 */
+  /** Enhance prompt callback */
   onEnhancePrompt?: () => void;
-  /** 是否开启始终思考 */
+  /** Whether always thinking enabled */
   alwaysThinkingEnabled?: boolean;
-  /** 切换思考模式 */
+  /** Toggle thinking mode */
   onToggleThinking?: (enabled: boolean) => void;
-  /** 是否开启流式传输 */
+  /** Whether streaming enabled */
   streamingEnabled?: boolean;
-  /** 切换流式传输 */
+  /** Toggle streaming */
   onStreamingEnabledChange?: (enabled: boolean) => void;
-  /** 当前选中的智能体 */
+  /** Currently selected agent */
   selectedAgent?: SelectedAgent | null;
-  /** 智能体选择回调 */
+  /** Agent selection callback */
   onAgentSelect?: (agent: SelectedAgent) => void;
-  /** 清除智能体回调 */
+  /** Clear agent callback */
   onClearAgent?: () => void;
-  /** 打开智能体设置回调 */
+  /** Open agent settings callback */
   onOpenAgentSettings?: () => void;
 }
 
 /**
- * Dropdown 组件 Props
+ * Dropdown component props
  */
 export interface DropdownProps {
-  /** 是否可见 */
+  /** Whether visible */
   isVisible: boolean;
-  /** 位置信息 */
+  /** Position information */
   position: DropdownPosition | null;
-  /** 宽度 */
+  /** Width */
   width?: number;
-  /** Y 轴偏移 */
+  /** Y offset */
   offsetY?: number;
-  /** X 轴偏移 */
+  /** X offset */
   offsetX?: number;
-  /** 选中索引 */
+  /** Selected index */
   selectedIndex?: number;
-  /** 关闭回调 */
+  /** Close callback */
   onClose?: () => void;
-  /** 子元素 */
+  /** Children */
   children: React.ReactNode;
 }
 
 /**
- * TokenIndicator 组件 Props
+ * TokenIndicator component props
  */
 export interface TokenIndicatorProps {
-  /** 百分比 (0-100) */
+  /** Percentage (0-100) */
   percentage: number;
-  /** 尺寸 */
+  /** Size */
   size?: number;
-  /** 已用上下文token */
+  /** Used context tokens */
   usedTokens?: number;
-  /** 上下文最大token */
+  /** Maximum context tokens */
   maxTokens?: number;
 }
 
 /**
- * AttachmentList 组件 Props
+ * AttachmentList component props
  */
 export interface AttachmentListProps {
-  /** 附件列表 */
+  /** Attachment list */
   attachments: Attachment[];
-  /** 移除附件回调 */
+  /** Remove attachment callback */
   onRemove?: (id: string) => void;
-  /** 预览图片回调 */
+  /** Preview image callback */
   onPreview?: (attachment: Attachment) => void;
 }
 
 /**
- * DropdownItem 组件 Props
+ * DropdownItem component props
  */
 export interface DropdownItemProps {
-  /** 项数据 */
+  /** Item data */
   item: DropdownItemData;
-  /** 是否高亮 */
+  /** Whether highlighted */
   isActive?: boolean;
-  /** 点击回调 */
+  /** Click callback */
   onClick?: () => void;
-  /** 鼠标进入回调 */
+  /** Mouse enter callback */
   onMouseEnter?: () => void;
 }

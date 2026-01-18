@@ -39,6 +39,16 @@ public class PermissionService {
     // 多项目支持：按项目注册的 AskUserQuestion 对话框显示器
     private final Map<Project, AskUserQuestionDialogShower> askUserQuestionDialogShowers = new ConcurrentHashMap<>();
 
+    // 多项目支持：按项目注册的 PlanApproval 对话框显示器
+    private final Map<Project, PlanApprovalDialogShower> planApprovalDialogShowers = new ConcurrentHashMap<>();
+
+    // 最近活动的项目（用于无文件上下文的对话框选择）
+    private volatile Project lastActiveProject = null;
+
+    // 文件等待配置
+    private static final int FILE_WAIT_INITIAL_DELAY_MS = 50;
+    private static final int FILE_WAIT_MAX_RETRIES = 3;
+
     // 调试日志辅助方法
     private void debugLog(String tag, String message) {
         LOG.debug(String.format("[%s] %s", tag, message));
@@ -141,12 +151,33 @@ public class PermissionService {
         CompletableFuture<JsonObject> showAskUserQuestionDialog(String requestId, JsonObject questions);
     }
 
+    /**
+     * PlanApproval 对话框显示器接口 - 用于显示计划批准对话框
+     */
+    public interface PlanApprovalDialogShower {
+        /**
+         * 显示计划批准对话框并返回用户决策
+         * @param requestId 请求ID
+         * @param planData 计划数据（包含 allowedPrompts 等）
+         * @return CompletableFuture<JsonObject> 返回用户决策（格式：{ "approved": boolean, "targetMode": string }）
+         */
+        CompletableFuture<JsonObject> showPlanApprovalDialog(String requestId, JsonObject planData);
+    }
+
     private PermissionService(Project project) {
         this.project = project;
-        // 使用临时目录进行通信
-        this.permissionDir = Paths.get(System.getProperty("java.io.tmpdir"), "claude-permission");
-        debugLog("INIT", "Permission dir: " + permissionDir);
-        debugLog("INIT", "java.io.tmpdir: " + System.getProperty("java.io.tmpdir"));
+        // 统一权限通信目录：
+        // 1. 优先读取环境变量 CLAUDE_PERMISSION_DIR（由 Java 启动 Node 进程时注入）
+        // 2. 其次使用系统临时目录 {java.io.tmpdir}/claude-permission
+        // 不再使用 ~/.claude/permission，避免与 Node 侧默认的 /tmp 路径不一致
+        String envDir = System.getenv("CLAUDE_PERMISSION_DIR");
+        if (envDir != null && !envDir.trim().isEmpty()) {
+            this.permissionDir = Paths.get(envDir);
+            debugLog("INIT", "Using permission dir from env CLAUDE_PERMISSION_DIR: " + envDir);
+        } else {
+            this.permissionDir = Paths.get(System.getProperty("java.io.tmpdir"), "claude-permission");
+            debugLog("INIT", "Env CLAUDE_PERMISSION_DIR not set, using tmp dir: " + this.permissionDir);
+        }
         try {
             Files.createDirectories(permissionDir);
             debugLog("INIT", "Permission directory created/verified: " + permissionDir);
@@ -178,6 +209,7 @@ public class PermissionService {
     public void registerDialogShower(Project project, PermissionDialogShower shower) {
         if (project != null && shower != null) {
             dialogShowers.put(project, shower);
+            lastActiveProject = project; // Track most recent active project
             debugLog("CONFIG", "Dialog shower registered for project: " + project.getName() +
                 ", total registered: " + dialogShowers.size());
         }
@@ -207,6 +239,7 @@ public class PermissionService {
     public void registerAskUserQuestionDialogShower(Project project, AskUserQuestionDialogShower shower) {
         if (project != null && shower != null) {
             askUserQuestionDialogShowers.put(project, shower);
+            lastActiveProject = project; // Track most recent active project
             debugLog("CONFIG", "AskUserQuestion dialog shower registered for project: " + project.getName() +
                 ", total registered: " + askUserQuestionDialogShowers.size());
         }
@@ -223,6 +256,86 @@ public class PermissionService {
             AskUserQuestionDialogShower removed = askUserQuestionDialogShowers.remove(project);
             debugLog("CONFIG", "AskUserQuestion dialog shower unregistered for project: " + project.getName() +
                 ", was registered: " + (removed != null) + ", remaining: " + askUserQuestionDialogShowers.size());
+        }
+    }
+
+    /**
+     * 注册 PlanApproval 对话框显示器
+     * 支持多项目：每个项目注册自己的显示器
+     *
+     * @param project 项目
+     * @param shower PlanApproval 对话框显示器
+     */
+    public void registerPlanApprovalDialogShower(Project project, PlanApprovalDialogShower shower) {
+        if (project != null && shower != null) {
+            planApprovalDialogShowers.put(project, shower);
+            lastActiveProject = project; // Track most recent active project
+            debugLog("CONFIG", "PlanApproval dialog shower registered for project: " + project.getName() +
+                ", total registered: " + planApprovalDialogShowers.size());
+        }
+    }
+
+    /**
+     * Update the last active project (called when user interacts with a project)
+     * @param project The project that became active
+     */
+    public void setLastActiveProject(Project project) {
+        if (project != null) {
+            this.lastActiveProject = project;
+            debugLog("CONFIG", "Last active project updated: " + project.getName());
+        }
+    }
+
+    /**
+     * Get dialog shower with preference for last active project
+     * Falls back to first registered shower if last active project has no shower
+     */
+    private <T> T getPreferredDialogShower(Map<Project, T> showers) {
+        if (showers.isEmpty()) {
+            return null;
+        }
+        // Prefer the last active project's shower
+        if (lastActiveProject != null && showers.containsKey(lastActiveProject)) {
+            return showers.get(lastActiveProject);
+        }
+        // Fallback to first registered shower
+        return showers.values().iterator().next();
+    }
+
+    /**
+     * Wait for file to be ready with retry mechanism
+     * Uses exponential backoff for more reliable file system synchronization
+     */
+    private boolean waitForFileReady(Path file) {
+        int delay = FILE_WAIT_INITIAL_DELAY_MS;
+        for (int i = 0; i < FILE_WAIT_MAX_RETRIES; i++) {
+            try {
+                Thread.sleep(delay);
+                if (Files.exists(file) && Files.size(file) > 0) {
+                    return true;
+                }
+                delay *= 2; // Exponential backoff
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (IOException e) {
+                debugLog("FILE_WAIT", "Error checking file: " + e.getMessage());
+            }
+        }
+        return Files.exists(file);
+    }
+
+    /**
+     * 注销 PlanApproval 对话框显示器
+     * 在项目关闭时调用，防止内存泄漏
+     *
+     * @param project 项目
+     */
+    public void unregisterPlanApprovalDialogShower(Project project) {
+        if (project != null) {
+            PlanApprovalDialogShower removed = planApprovalDialogShowers.remove(project);
+            debugLog("CONFIG", "PlanApproval dialog shower unregistered for project: " + project.getName() +
+                ", was registered: " + (removed != null) + ", remaining: " + planApprovalDialogShowers.size());
         }
     }
 
@@ -405,6 +518,9 @@ public class PermissionService {
             return;
         }
 
+        // 清理旧的响应文件,避免误处理
+        cleanupOldResponseFiles();
+
         running = true;
 
         watchThread = new Thread(this::watchLoop, "PermissionWatcher");
@@ -412,6 +528,76 @@ public class PermissionService {
         watchThread.start();
 
         debugLog("START", "Started polling on: " + permissionDir);
+    }
+
+    /**
+     * 清理旧的响应文件和请求文件
+     */
+    private void cleanupOldResponseFiles() {
+        try {
+            File dir = permissionDir.toFile();
+            if (!dir.exists()) {
+                return;
+            }
+
+            // 清理普通权限响应文件
+            File[] responseFiles = dir.listFiles((d, name) -> name.startsWith("response-") && name.endsWith(".json"));
+            if (responseFiles != null) {
+                for (File file : responseFiles) {
+                    try {
+                        Files.delete(file.toPath());
+                        debugLog("CLEANUP", "Deleted old response file: " + file.getName());
+                    } catch (Exception e) {
+                        debugLog("CLEANUP_ERROR", "Failed to delete response file: " + file.getName());
+                    }
+                }
+            }
+
+            // 清理普通权限请求文件（可能是未完成的请求）
+            File[] requestFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
+            if (requestFiles != null) {
+                for (File file : requestFiles) {
+                    try {
+                        Files.delete(file.toPath());
+                        debugLog("CLEANUP", "Deleted old request file: " + file.getName());
+                    } catch (Exception e) {
+                        debugLog("CLEANUP_ERROR", "Failed to delete request file: " + file.getName());
+                    }
+                }
+            }
+
+            // 清理所有 AskUserQuestion 相关文件（请求和响应）
+            File[] askFiles = dir.listFiles((d, name) ->
+                name.startsWith("ask-user-question-") && name.endsWith(".json"));
+            if (askFiles != null) {
+                for (File file : askFiles) {
+                    try {
+                        Files.delete(file.toPath());
+                        debugLog("CLEANUP", "Deleted old AskUserQuestion file: " + file.getName());
+                    } catch (Exception e) {
+                        debugLog("CLEANUP_ERROR", "Failed to delete AskUserQuestion file: " + file.getName());
+                    }
+                }
+            }
+
+            // 清理所有 PlanApproval 相关文件（请求和响应）
+            File[] planApprovalFiles = dir.listFiles((d, name) ->
+                name.startsWith("plan-approval-") && name.endsWith(".json"));
+            if (planApprovalFiles != null) {
+                for (File file : planApprovalFiles) {
+                    try {
+                        Files.delete(file.toPath());
+                        debugLog("CLEANUP", "Deleted old PlanApproval file: " + file.getName());
+                    } catch (Exception e) {
+                        debugLog("CLEANUP_ERROR", "Failed to delete PlanApproval file: " + file.getName());
+                    }
+                }
+            }
+
+            debugLog("CLEANUP", "All old permission files cleanup complete");
+        } catch (Exception e) {
+            debugLog("CLEANUP_ERROR", "Error during cleanup: " + e.getMessage());
+        }
     }
 
     /**
@@ -432,16 +618,26 @@ public class PermissionService {
                 // 监控普通权限请求文件
                 File[] requestFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
 
-                // 监控 AskUserQuestion 请求文件
-                File[] askUserQuestionFiles = dir.listFiles((d, name) -> name.startsWith("ask-user-question-") && name.endsWith(".json"));
+                // 监控 AskUserQuestion 请求文件 (排除响应文件)
+                File[] askUserQuestionFiles = dir.listFiles((d, name) ->
+                    name.startsWith("ask-user-question-") &&
+                    !name.startsWith("ask-user-question-response-") &&
+                    name.endsWith(".json"));
+
+                // 监控 PlanApproval 请求文件 (排除响应文件)
+                File[] planApprovalFiles = dir.listFiles((d, name) ->
+                    name.startsWith("plan-approval-") &&
+                    !name.startsWith("plan-approval-response-") &&
+                    name.endsWith(".json"));
 
                 // 每20次轮询（约10秒）输出一次状态
                 // 降低日志频率：每100次轮询（约50秒）记录一次状态
                 if (pollCount % 100 == 0) {
                     int requestCount = requestFiles != null ? requestFiles.length : 0;
                     int askQuestionCount = askUserQuestionFiles != null ? askUserQuestionFiles.length : 0;
-                    debugLog("POLL_STATUS", String.format("Poll #%d, found %d request files, %d ask-user-question files",
-                        pollCount, requestCount, askQuestionCount));
+                    int planApprovalCount = planApprovalFiles != null ? planApprovalFiles.length : 0;
+                    debugLog("POLL_STATUS", String.format("Poll #%d, found %d request files, %d ask-user-question files, %d plan-approval files",
+                        pollCount, requestCount, askQuestionCount, planApprovalCount));
                 }
 
                 // 处理普通权限请求
@@ -461,6 +657,16 @@ public class PermissionService {
                         if (file.exists()) {
                             debugLog("ASK_USER_QUESTION_FOUND", "Found AskUserQuestion file: " + file.getName());
                             handleAskUserQuestionRequest(file.toPath());
+                        }
+                    }
+                }
+
+                // 处理 PlanApproval 请求
+                if (planApprovalFiles != null && planApprovalFiles.length > 0) {
+                    for (File file : planApprovalFiles) {
+                        if (file.exists()) {
+                            debugLog("PLAN_APPROVAL_FOUND", "Found PlanApproval file: " + file.getName());
+                            handlePlanApprovalRequest(file.toPath());
                         }
                     }
                 }
@@ -759,113 +965,135 @@ public class PermissionService {
 
     /**
      * 处理 AskUserQuestion 请求
+     *
+     * ⚠️ 关键修复说明：
+     * 原问题：轮询间隔 500ms，但异步处理对话框需要用户交互（可能几秒到几十秒）
+     * 在用户响应之前，轮询会多次检测到同一个请求文件，导致：
+     * 1. 多次调用 showAskUserQuestionDialog，前端队列堆积
+     * 2. 用户第一次点击后请求文件被删除，响应成功返回
+     * 3. 队列中的后续请求仍然弹出对话框，但 pendingRequest 已不存在
+     *
+     * 修复方案：读取文件内容后立即删除请求文件，然后再进行异步处理
      */
     private void handleAskUserQuestionRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
         long startTime = System.currentTimeMillis();
         debugLog("HANDLE_ASK_USER_QUESTION", "Processing AskUserQuestion file: " + fileName);
 
-        // 检查是否正在处理该请求
+        // 检查是否正在处理该请求（基于文件名去重）
         if (!processingRequests.add(fileName)) {
             debugLog("SKIP_DUPLICATE_ASK", "AskUserQuestion already being processed, skipping: " + fileName);
             return;
         }
 
+        String content;
         try {
             Thread.sleep(100); // 等待文件写入完成
 
             if (!Files.exists(requestFile)) {
                 debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing before read, likely already handled: " + fileName);
+                processingRequests.remove(fileName);
                 return;
             }
 
-            String content;
-            try {
-                content = Files.readString(requestFile);
-            } catch (NoSuchFileException e) {
-                debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing while reading, likely already handled: " + fileName);
-                return;
-            }
+            // 读取文件内容
+            content = Files.readString(requestFile);
             debugLog("ASK_FILE_READ", "Read AskUserQuestion content: " + content.substring(0, Math.min(200, content.length())) + "...");
 
-            JsonObject request = gson.fromJson(content, JsonObject.class);
-
-            String requestId = request.get("requestId").getAsString();
-            String toolName = request.get("toolName").getAsString();
-            // questions 是一个 JSON 对象，包含问题数据
-            JsonObject questionsData = request;
-
-            debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
-
-            // 获取 AskUserQuestion 对话框显示器
-            // 由于 AskUserQuestion 不涉及文件路径，使用第一个注册的项目
-            AskUserQuestionDialogShower dialogShower = null;
-            if (!askUserQuestionDialogShowers.isEmpty()) {
-                dialogShower = askUserQuestionDialogShowers.values().iterator().next();
-            }
-
-            if (dialogShower != null) {
-                debugLog("ASK_DIALOG_SHOWER", "Using AskUserQuestion dialog shower");
-
-                // 立即删除请求文件，避免重复处理
-                try {
-                    Files.deleteIfExists(requestFile);
-                    debugLog("ASK_FILE_DELETE", "Deleted AskUserQuestion request file: " + fileName);
-                } catch (Exception e) {
-                    debugLog("ASK_FILE_DELETE_ERROR", "Failed to delete AskUserQuestion request file: " + e.getMessage());
-                }
-
-                final long dialogStartTime = System.currentTimeMillis();
-
-                // 异步调用前端弹窗
-                debugLog("ASK_DIALOG_SHOW", "Calling dialogShower.showAskUserQuestionDialog");
-                CompletableFuture<JsonObject> future = dialogShower.showAskUserQuestionDialog(requestId, questionsData);
-
-                // 异步处理结果
-                future.thenAccept(answers -> {
-                    long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
-                    debugLog("ASK_DIALOG_RESPONSE", String.format("Got answers after %dms", dialogElapsed));
-                    try {
-                        debugLog("ASK_WRITE_RESPONSE", String.format("Writing AskUserQuestion response for %s", requestId));
-                        writeAskUserQuestionResponse(requestId, answers);
-
-                        debugLog("ASK_DIALOG_COMPLETE", "AskUserQuestion dialog processing complete");
-                    } catch (Exception e) {
-                        debugLog("ASK_DIALOG_ERROR", "Error processing AskUserQuestion dialog result: " + e.getMessage());
-                        LOG.error("Error occurred", e);
-                    } finally {
-                        processingRequests.remove(fileName);
-                    }
-                }).exceptionally(ex -> {
-                    debugLog("ASK_DIALOG_EXCEPTION", "AskUserQuestion dialog exception: " + ex.getMessage());
-                    try {
-                        // 用户取消或出错，写入空答案
-                        writeAskUserQuestionResponse(requestId, new JsonObject());
-                    } catch (Exception e) {
-                        LOG.error("Error occurred", e);
-                    }
-                    processingRequests.remove(fileName);
-                    return null;
-                });
-
-                // 异步处理，直接返回，不阻塞
-                return;
-            }
-
-            // 没有对话框显示器，写入空答案（拒绝）
-            debugLog("ASK_NO_DIALOG_SHOWER", "No AskUserQuestion dialog shower available, denying");
-            writeAskUserQuestionResponse(requestId, new JsonObject());
+            // ⚠️ 关键修复: 读取后立即删除请求文件，避免轮询重复处理
+            // 必须在解析和异步调用之前删除，因为轮询间隔只有 500ms
             Files.deleteIfExists(requestFile);
+            debugLog("ASK_FILE_DELETE", "Deleted AskUserQuestion request file: " + fileName);
 
-            long elapsed = System.currentTimeMillis() - startTime;
-            debugLog("ASK_REQUEST_COMPLETE", String.format("AskUserQuestion request %s completed in %dms", requestId, elapsed));
-
-        } catch (Exception e) {
-            debugLog("ASK_HANDLE_ERROR", "Error handling AskUserQuestion request: " + e.getMessage());
-            LOG.error("Error occurred", e);
-        } finally {
+        } catch (NoSuchFileException e) {
+            debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing while reading, likely already handled: " + fileName);
             processingRequests.remove(fileName);
+            return;
+        } catch (Exception e) {
+            debugLog("ASK_FILE_READ_ERROR", "Error reading AskUserQuestion file: " + e.getMessage());
+            LOG.error("Error occurred", e);
+            processingRequests.remove(fileName);
+            return;
         }
+
+        // 解析 JSON（文件已删除，即使解析失败也不会重复处理）
+        JsonObject request;
+        try {
+            request = gson.fromJson(content, JsonObject.class);
+        } catch (Exception e) {
+            debugLog("ASK_PARSE_ERROR", "Failed to parse AskUserQuestion JSON: " + fileName);
+            processingRequests.remove(fileName);
+            return;
+        }
+
+        // 验证必需字段
+        if (!request.has("requestId") || request.get("requestId").isJsonNull()) {
+            debugLog("ASK_INVALID_FORMAT", "AskUserQuestion missing requestId field: " + fileName);
+            processingRequests.remove(fileName);
+            return;
+        }
+
+        if (!request.has("toolName") || request.get("toolName").isJsonNull()) {
+            debugLog("ASK_INVALID_FORMAT", "AskUserQuestion missing toolName field: " + fileName);
+            processingRequests.remove(fileName);
+            return;
+        }
+
+        String requestId = request.get("requestId").getAsString();
+        String toolName = request.get("toolName").getAsString();
+        JsonObject questionsData = request;
+
+        debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
+
+        // 获取 AskUserQuestion 对话框显示器（优先使用最近活动的项目）
+        AskUserQuestionDialogShower dialogShower = getPreferredDialogShower(askUserQuestionDialogShowers);
+
+        if (dialogShower != null) {
+            debugLog("ASK_DIALOG_SHOWER", "Using AskUserQuestion dialog shower");
+
+            final long dialogStartTime = System.currentTimeMillis();
+
+            // 异步调用前端弹窗
+            debugLog("ASK_DIALOG_SHOW", "Calling dialogShower.showAskUserQuestionDialog");
+            CompletableFuture<JsonObject> future = dialogShower.showAskUserQuestionDialog(requestId, questionsData);
+
+            // 异步处理结果
+            future.thenAccept(answers -> {
+                long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
+                debugLog("ASK_DIALOG_RESPONSE", String.format("Got answers after %dms", dialogElapsed));
+                try {
+                    debugLog("ASK_WRITE_RESPONSE", String.format("Writing AskUserQuestion response for %s", requestId));
+                    writeAskUserQuestionResponse(requestId, answers);
+
+                    debugLog("ASK_DIALOG_COMPLETE", "AskUserQuestion dialog processing complete");
+                } catch (Exception e) {
+                    debugLog("ASK_DIALOG_ERROR", "Error processing AskUserQuestion dialog result: " + e.getMessage());
+                    LOG.error("Error occurred", e);
+                } finally {
+                    processingRequests.remove(fileName);
+                }
+            }).exceptionally(ex -> {
+                debugLog("ASK_DIALOG_EXCEPTION", "AskUserQuestion dialog exception: " + ex.getMessage());
+                try {
+                    writeAskUserQuestionResponse(requestId, new JsonObject());
+                } catch (Exception e) {
+                    LOG.error("Error occurred", e);
+                }
+                processingRequests.remove(fileName);
+                return null;
+            });
+
+            // 异步处理，不在这里移除 processingRequests，由回调处理
+            return;
+        }
+
+        // 没有对话框显示器，写入空答案（拒绝）
+        debugLog("ASK_NO_DIALOG_SHOWER", "No AskUserQuestion dialog shower available, denying");
+        writeAskUserQuestionResponse(requestId, new JsonObject());
+        processingRequests.remove(fileName);
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        debugLog("ASK_REQUEST_COMPLETE", String.format("AskUserQuestion request %s completed in %dms", requestId, elapsed));
     }
 
     /**
@@ -894,6 +1122,144 @@ public class PermissionService {
             }
         } catch (IOException e) {
             debugLog("ASK_WRITE_ERROR", "Failed to write AskUserQuestion response file: " + e.getMessage());
+            LOG.error("Error occurred", e);
+        }
+    }
+
+    /**
+     * 处理 PlanApproval 请求
+     * 请求文件格式：plan-approval-{requestId}.json
+     */
+    private void handlePlanApprovalRequest(Path requestFile) {
+        String fileName = requestFile.getFileName().toString();
+        long startTime = System.currentTimeMillis();
+        debugLog("PLAN_HANDLE_REQUEST", "Processing PlanApproval request file: " + fileName);
+
+        // 检查是否正在处理该请求
+        if (!processingRequests.add(fileName)) {
+            debugLog("PLAN_SKIP_DUPLICATE", "PlanApproval request already being processed, skipping: " + fileName);
+            return;
+        }
+
+        try {
+            Thread.sleep(100); // 等待文件写入完成
+
+            if (!Files.exists(requestFile)) {
+                debugLog("PLAN_FILE_MISSING", "PlanApproval request file missing before read: " + fileName);
+                processingRequests.remove(fileName);
+                return;
+            }
+
+            String content;
+            try {
+                content = Files.readString(requestFile);
+            } catch (NoSuchFileException e) {
+                debugLog("PLAN_FILE_MISSING", "PlanApproval request file missing while reading: " + fileName);
+                processingRequests.remove(fileName);
+                return;
+            }
+            debugLog("PLAN_FILE_READ", "Read PlanApproval request content: " + content.substring(0, Math.min(200, content.length())) + "...");
+
+            JsonObject request = gson.fromJson(content, JsonObject.class);
+            String requestId = request.get("requestId").getAsString();
+
+            debugLog("PLAN_REQUEST_PARSED", String.format("PlanApproval requestId=%s", requestId));
+
+            // 立即删除请求文件，避免重复处理
+            try {
+                Files.deleteIfExists(requestFile);
+                debugLog("PLAN_FILE_DELETE", "Deleted PlanApproval request file: " + fileName);
+            } catch (Exception e) {
+                debugLog("PLAN_FILE_DELETE_ERROR", "Failed to delete PlanApproval request file: " + e.getMessage());
+            }
+
+            // 找到对应的对话框显示器（优先使用最近活动的项目）
+            PlanApprovalDialogShower dialogShower = getPreferredDialogShower(planApprovalDialogShowers);
+
+            if (dialogShower != null) {
+                debugLog("PLAN_DIALOG_SHOWER", "Using frontend dialog for PlanApproval");
+
+                final long dialogStartTime = System.currentTimeMillis();
+
+                // 异步调用前端弹窗
+                debugLog("PLAN_DIALOG_SHOW", "Calling dialogShower.showPlanApprovalDialog");
+                CompletableFuture<JsonObject> future = dialogShower.showPlanApprovalDialog(requestId, request);
+
+                // 异步处理结果
+                future.thenAccept(response -> {
+                    long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
+                    debugLog("PLAN_DIALOG_RESPONSE", String.format("Got PlanApproval response after %dms", dialogElapsed));
+                    try {
+                        boolean approved = response.has("approved") && response.get("approved").getAsBoolean();
+                        String targetMode = response.has("targetMode") ? response.get("targetMode").getAsString() : "default";
+
+                        debugLog("PLAN_DECISION", String.format("PlanApproval decision: approved=%s, targetMode=%s", approved, targetMode));
+
+                        writePlanApprovalResponse(requestId, approved, targetMode);
+
+                        debugLog("PLAN_DIALOG_COMPLETE", "PlanApproval frontend dialog processing complete");
+                    } catch (Exception e) {
+                        debugLog("PLAN_DIALOG_ERROR", "Error processing PlanApproval dialog result: " + e.getMessage());
+                        LOG.error("Error occurred", e);
+                        // 出错时写入拒绝响应
+                        writePlanApprovalResponse(requestId, false, "default");
+                    } finally {
+                        processingRequests.remove(fileName);
+                    }
+                }).exceptionally(ex -> {
+                    debugLog("PLAN_DIALOG_EXCEPTION", "PlanApproval frontend dialog exception: " + ex.getMessage());
+                    writePlanApprovalResponse(requestId, false, "default");
+                    processingRequests.remove(fileName);
+                    return null;
+                });
+
+                // 异步处理，不在这里移除 processingRequests，由回调处理
+                return;
+            }
+
+            // 没有对话框显示器，写入拒绝响应
+            debugLog("PLAN_NO_DIALOG_SHOWER", "No PlanApproval dialog shower available, denying");
+            writePlanApprovalResponse(requestId, false, "default");
+            processingRequests.remove(fileName);
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            debugLog("PLAN_REQUEST_COMPLETE", String.format("PlanApproval request %s completed in %dms", requestId, elapsed));
+
+        } catch (Exception e) {
+            debugLog("PLAN_HANDLE_ERROR", "Error handling PlanApproval request: " + e.getMessage());
+            LOG.error("Error occurred", e);
+            processingRequests.remove(fileName);
+        }
+    }
+
+    /**
+     * 写入 PlanApproval 响应文件
+     * 响应格式：{ "approved": boolean, "targetMode": string }
+     */
+    private void writePlanApprovalResponse(String requestId, boolean approved, String targetMode) {
+        debugLog("WRITE_PLAN_RESPONSE_START", String.format("Writing PlanApproval response for requestId=%s, approved=%s, targetMode=%s",
+            requestId, approved, targetMode));
+        try {
+            JsonObject response = new JsonObject();
+            response.addProperty("approved", approved);
+            response.addProperty("targetMode", targetMode);
+
+            Path responseFile = permissionDir.resolve("plan-approval-response-" + requestId + ".json");
+            String responseContent = gson.toJson(response);
+            debugLog("PLAN_RESPONSE_CONTENT", "Response JSON: " + responseContent);
+            debugLog("PLAN_RESPONSE_FILE", "Target file: " + responseFile);
+
+            Files.writeString(responseFile, responseContent);
+
+            // 验证文件是否写入成功
+            if (Files.exists(responseFile)) {
+                long fileSize = Files.size(responseFile);
+                debugLog("PLAN_WRITE_SUCCESS", String.format("PlanApproval response file written successfully, size=%d bytes", fileSize));
+            } else {
+                debugLog("PLAN_WRITE_VERIFY_FAIL", "PlanApproval response file does NOT exist after write!");
+            }
+        } catch (IOException e) {
+            debugLog("PLAN_WRITE_ERROR", "Failed to write PlanApproval response file: " + e.getMessage());
             LOG.error("Error occurred", e);
         }
     }

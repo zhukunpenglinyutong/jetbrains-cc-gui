@@ -374,6 +374,77 @@ public class CodexHistoryReader {
     }
 
     /**
+     * Get sessions filtered by project path as JSON string.
+     * Only returns sessions whose cwd matches or is under the specified project path.
+     * @param projectPath The project path to filter by
+     */
+    public String getSessionsForProjectAsJson(String projectPath) {
+        try {
+            List<SessionInfo> allSessions = readAllSessions();
+
+            // Normalize the project path for comparison
+            String normalizedProjectPath = normalizePath(projectPath);
+
+            LOG.info("[CodexHistoryReader] Filtering sessions for project: " + normalizedProjectPath);
+            LOG.info("[CodexHistoryReader] Total sessions before filtering: " + allSessions.size());
+
+            // Filter sessions by cwd
+            List<SessionInfo> filteredSessions = allSessions.stream()
+                .filter(session -> {
+                    if (session.cwd == null || session.cwd.isEmpty()) {
+                        return false;
+                    }
+                    String normalizedCwd = normalizePath(session.cwd);
+                    // Match if cwd equals project path or is a subdirectory of it
+                    boolean matches = normalizedCwd.equals(normalizedProjectPath) ||
+                                     normalizedCwd.startsWith(normalizedProjectPath + "/");
+                    if (matches) {
+                        LOG.debug("[CodexHistoryReader] Session " + session.sessionId + " matches (cwd: " + session.cwd + ")");
+                    }
+                    return matches;
+                })
+                .collect(Collectors.toList());
+
+            LOG.info("[CodexHistoryReader] Sessions after filtering: " + filteredSessions.size());
+
+            int totalMessages = filteredSessions.stream()
+                .mapToInt(s -> s.messageCount)
+                .sum();
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("sessions", filteredSessions);
+            result.put("total", totalMessages);
+            result.put("sessionCount", filteredSessions.size());
+
+            return gson.toJson(result);
+        } catch (Exception e) {
+            LOG.error("[CodexHistoryReader] Failed to read sessions for project: " + e.getMessage(), e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Failed to read Codex sessions: " + e.getMessage());
+            return gson.toJson(error);
+        }
+    }
+
+    /**
+     * Normalize path for comparison.
+     * Converts backslashes to forward slashes and removes trailing slashes.
+     */
+    private String normalizePath(String path) {
+        if (path == null) {
+            return "";
+        }
+        // Convert backslashes to forward slashes
+        String normalized = path.replace("\\", "/");
+        // Remove trailing slash
+        while (normalized.endsWith("/") && normalized.length() > 1) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    /**
      * Check if command is a file/directory viewing operation.
      */
     private boolean isFileViewingCommand(String command) {

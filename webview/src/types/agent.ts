@@ -6,7 +6,7 @@ export interface AgentConfig {
   id: string;
   /** 智能体名称（最多20字符） */
   name: string;
-  /** 提示词（最多10000字符） */
+  /** 提示词（最多100000字符） */
   prompt?: string;
   /** 创建时间戳 */
   createdAt?: number;

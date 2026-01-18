@@ -76,6 +76,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     private static final Logger LOG = Logger.getInstance(ClaudeSDKToolWindow.class);
     private static final Map<Project, ClaudeChatWindow> instances = new ConcurrentHashMap<>();
+    // Map to store Content -> ClaudeChatWindow mapping for multi-tab support
+    // This allows sending code snippets to the currently selected tab instead of always the first tab
+    private static final Map<Content, ClaudeChatWindow> contentToWindowMap = new ConcurrentHashMap<>();
     private static volatile boolean shutdownHookRegistered = false;
     private static final String TAB_NAME_PREFIX = "AI";
 
@@ -131,6 +134,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         ContentFactory contentFactory = ContentFactory.getInstance();
         // Set the initial tab name to "AI1"
         Content content = contentFactory.createContent(chatWindow.getContent(), TAB_NAME_PREFIX + "1", false);
+
+        // Set parent content for the first tab (important for multi-tab code snippet support)
+        chatWindow.setParentContent(content);
 
         ContentManager contentManager = toolWindow.getContentManager();
         contentManager.addContent(content);
@@ -317,6 +323,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         public void setParentContent(Content content) {
             this.parentContent = content;
+            // Register this window in the contentToWindowMap for multi-tab support
+            if (content != null) {
+                contentToWindowMap.put(content, this);
+                LOG.debug("[MultiTab] Registered Content -> ClaudeChatWindow mapping for: " + content.getDisplayName());
+            }
         }
 
         /**
@@ -466,7 +477,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 注册 AskUserQuestion 对话框显示器
             permissionService.registerAskUserQuestionDialogShower(project, (requestId, questionsData) ->
                 permissionHandler.showAskUserQuestionDialog(requestId, questionsData));
-            LOG.info("Started permission service with frontend dialog and AskUserQuestion dialog for project: " + project.getName());
+            // 注册 PlanApproval 对话框显示器
+            permissionService.registerPlanApprovalDialogShower(project, (requestId, planData) ->
+                permissionHandler.showPlanApprovalDialog(requestId, planData));
+            LOG.info("Started permission service with frontend dialog, AskUserQuestion dialog, and PlanApproval dialog for project: " + project.getName());
         }
 
         private void initializeHandlers() {
@@ -489,6 +503,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 注册所有 Handler
             messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
             messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
+            messageDispatcher.registerHandler(new CodexMcpServerHandler(handlerContext, settingsService.getCodexMcpServerManager()));
             messageDispatcher.registerHandler(new SkillHandler(handlerContext, mainPanel));
             messageDispatcher.registerHandler(new FileHandler(handlerContext));
             messageDispatcher.registerHandler(new SettingsHandler(handlerContext));
@@ -654,8 +669,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             if (!claudeSDKBridge.checkEnvironment()) {
-                // Check if bridge extraction is still in progress
-                // If so, show loading panel instead of error panel
+                // Check if bridge extraction is still in progress or just completed
                 if (sharedResolver.isExtractionInProgress()) {
                     LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction in progress, showing loading panel...");
                     showLoadingPanel();
@@ -668,6 +682,19 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     });
                     return;
                 }
+
+                // Additional check: extraction completed but not yet effective (race condition)
+                // This can happen when extraction just finished on another thread but checkEnvironment
+                // was called before the directory became available
+                if (sharedResolver.isExtractionComplete()) {
+                    LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction just completed, retrying initialization with exponential backoff...");
+                    // Use exponential backoff retry strategy for more robust handling
+                    retryCheckEnvironmentWithBackoff(0);
+                    // Show loading panel while waiting for retry
+                    showLoadingPanel();
+                    return;
+                }
+
                 showErrorPanel();
                 return;
             }
@@ -853,6 +880,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     LOG.error("Failed to create UI components: " + e.getMessage(), e);
                     showErrorPanel();
                 }
+            } catch (NullPointerException e) {
+                // JCEF remote mode causes NPE when creating JBCefJSQuery
+                // Error message: "Cannot read field \"isNull\" because \"robj\" is null"
+                String msg = e.getMessage();
+                if (msg != null && msg.contains("isNull") && msg.contains("robj")) {
+                    LOG.error("JCEF remote mode incompatibility: " + e.getMessage(), e);
+                    showJcefRemoteModeErrorPanel();
+                } else {
+                    LOG.error("Failed to create UI components (NPE): " + e.getMessage(), e);
+                    showErrorPanel();
+                }
             } catch (Exception e) {
                 LOG.error("Failed to create UI components: " + e.getMessage(), e);
                 showErrorPanel();
@@ -958,6 +996,49 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             mainPanel.add(errorPanel, BorderLayout.CENTER);
         }
 
+        private void showJcefRemoteModeErrorPanel() {
+            JPanel errorPanel = new JPanel(new BorderLayout());
+            errorPanel.setBackground(new Color(30, 30, 30));
+
+            JPanel centerPanel = new JPanel();
+            centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+            centerPanel.setBackground(new Color(30, 30, 30));
+            centerPanel.setBorder(BorderFactory.createEmptyBorder(50, 50, 50, 50));
+
+            JLabel iconLabel = new JLabel("⚠️");
+            iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 48));
+            iconLabel.setForeground(Color.WHITE);
+            iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel titleLabel = new JLabel("编辑器 JCEF 模块报错");
+            titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+            titleLabel.setForeground(Color.WHITE);
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JTextArea messageArea = new JTextArea();
+            messageArea.setText(
+                "解决方案：\n" +
+                "✅ 彻底退出您当前的编辑器，重新启动编辑器就好了\n" +
+                "⚠️ 请注意，一定要彻底退出，不要只退到项目选择页面" 
+            );
+            messageArea.setEditable(false);
+            messageArea.setBackground(new Color(45, 45, 45));
+            messageArea.setForeground(new Color(200, 200, 200));
+            messageArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+            messageArea.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+            messageArea.setAlignmentX(Component.CENTER_ALIGNMENT);
+            messageArea.setMaximumSize(new Dimension(500, 300));
+
+            centerPanel.add(iconLabel);
+            centerPanel.add(Box.createVerticalStrut(15));
+            centerPanel.add(titleLabel);
+            centerPanel.add(Box.createVerticalStrut(20));
+            centerPanel.add(messageArea);
+
+            errorPanel.add(centerPanel, BorderLayout.CENTER);
+            mainPanel.add(errorPanel, BorderLayout.CENTER);
+        }
+
         /**
          * Show a loading panel while AI Bridge is being extracted.
          * This avoids EDT freeze during first-time setup.
@@ -1011,6 +1092,45 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 createUIComponents();
                 mainPanel.revalidate();
                 mainPanel.repaint();
+            });
+        }
+
+        /**
+         * Retry environment check with exponential backoff strategy.
+         * Delays: 100ms, 200ms, 400ms (max 3 retries)
+         * This handles race conditions where extraction just completed but environment isn't ready yet.
+         *
+         * @param attempt current retry attempt (0-based)
+         */
+        private void retryCheckEnvironmentWithBackoff(int attempt) {
+            final int MAX_RETRIES = 3;
+            final int[] BACKOFF_DELAYS_MS = {100, 200, 400};
+
+            if (attempt >= MAX_RETRIES) {
+                LOG.warn("[ClaudeSDKToolWindow] All " + MAX_RETRIES + " retry attempts failed after extraction completion");
+                ApplicationManager.getApplication().invokeLater(this::showErrorPanel);
+                return;
+            }
+
+            int delayMs = BACKOFF_DELAYS_MS[attempt];
+            LOG.info("[ClaudeSDKToolWindow] Retry attempt " + (attempt + 1) + "/" + MAX_RETRIES + ", waiting " + delayMs + "ms...");
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).thenRun(() -> {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (claudeSDKBridge.checkEnvironment()) {
+                        LOG.info("[ClaudeSDKToolWindow] Retry attempt " + (attempt + 1) + " succeeded after extraction completion");
+                        reinitializeAfterExtraction();
+                    } else {
+                        // Try next attempt with longer delay
+                        retryCheckEnvironmentWithBackoff(attempt + 1);
+                    }
+                });
             });
         }
 
@@ -1246,6 +1366,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 @Override
                 public void onStateChange(boolean busy, boolean loading, String error) {
                     ApplicationManager.getApplication().invokeLater(() -> {
+                        // FIX: 流式传输期间不发送 loading=false，避免 loading 状态被意外重置
+                        // 由 onStreamEnd 统一处理状态清理
+                        synchronized (streamMessageUpdateLock) {
+                            if (!loading && streamActive) {
+                                LOG.debug("Suppressing showLoading(false) during active streaming");
+                                if (error != null) {
+                                    callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
+                                }
+                                return;
+                            }
+                        }
+
                         callJavaScript("showLoading", String.valueOf(loading));
                         if (error != null) {
                             callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
@@ -1253,6 +1385,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         if (!busy && !loading) {
                             VirtualFileManager.getInstance().asyncRefresh(null);
                         }
+                    });
+                }
+
+                @Override
+                public void onStatusMessage(String message) {
+                    if (message == null || message.trim().isEmpty()) {
+                        return;
+                    }
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("updateStatus", JsUtils.escapeJs(message));
                     });
                 }
 
@@ -1316,8 +1458,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         streamMessageUpdateSequence += 1;
                     }
                     ApplicationManager.getApplication().invokeLater(() -> {
+                        // FIX: 流式开始时确保 loading 状态为 true
+                        // 防止在 stream_start 之前 loading 被意外重置
+                        callJavaScript("showLoading", "true");
                         callJavaScript("onStreamStart");
-                        LOG.debug("Stream started - notified frontend");
+                        LOG.debug("Stream started - notified frontend with loading=true");
                     });
                 }
 
@@ -1326,10 +1471,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     synchronized (streamMessageUpdateLock) {
                         streamActive = false;
                     }
-                    flushStreamMessageUpdates(() -> {
+                    ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("onStreamEnd");
-                        LOG.debug("Stream ended - notified frontend");
+                        callJavaScript("showLoading", "false");
+                        LOG.debug("Stream ended - notified frontend with onStreamEnd then loading=false");
                     });
+                    flushStreamMessageUpdates(null);
                 }
 
                 @Override
@@ -1904,6 +2051,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         /**
          * 从外部（右键菜单）添加代码片段
          * 调用 addCodeSnippet 而不是 addSelectionInfo
+         *
+         * [FIX] Now sends code to the currently selected tab instead of always the first tab
          */
         static void addSelectionFromExternalInternal(Project project, String selectionInfo) {
             if (project == null) {
@@ -1911,7 +2060,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
 
-            ClaudeChatWindow window = instances.get(project);
+            // [FIX] Try to get the currently selected tab's window first
+            ClaudeChatWindow window = getSelectedTabWindow(project);
+
+            // Fallback to instances map if no selected tab window found
+            if (window == null) {
+                window = instances.get(project);
+            }
+
             if (window == null) {
                 // 如果窗口不存在，自动打开工具窗口
                 LOG.info("窗口实例不存在，自动打开工具窗口: " + project.getName());
@@ -1933,6 +2089,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             if (window.disposed) {
+                // Clean up from contentToWindowMap as well
+                if (window.parentContent != null) {
+                    contentToWindowMap.remove(window.parentContent);
+                }
                 instances.remove(project);
                 return;
             }
@@ -1948,8 +2108,42 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
+         * Get the ClaudeChatWindow for the currently selected tab
+         * Returns null if no selected tab or mapping not found
+         */
+        private static ClaudeChatWindow getSelectedTabWindow(Project project) {
+            if (project == null || project.isDisposed()) {
+                return null;
+            }
+
+            try {
+                ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
+                if (toolWindow == null) {
+                    return null;
+                }
+
+                ContentManager contentManager = toolWindow.getContentManager();
+                Content selectedContent = contentManager.getSelectedContent();
+
+                if (selectedContent != null) {
+                    ClaudeChatWindow window = contentToWindowMap.get(selectedContent);
+                    if (window != null) {
+                        LOG.debug("[MultiTab] Found window for selected tab: " + selectedContent.getDisplayName());
+                        return window;
+                    }
+                }
+            } catch (Exception e) {
+                LOG.debug("[MultiTab] Failed to get selected tab window: " + e.getMessage());
+            }
+
+            return null;
+        }
+
+        /**
          * Schedule code snippet addition with retry mechanism using ScheduledExecutorService.
          * Uses exponential backoff (200ms, 400ms, 800ms) to avoid resource waste.
+         *
+         * [FIX] Now uses getSelectedTabWindow to send to the currently selected tab
          */
         private static void scheduleCodeSnippetRetry(Project project, String selectionInfo, int retriesLeft) {
             if (retriesLeft <= 0) {
@@ -1965,7 +2159,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     if (project.isDisposed()) {
                         return;
                     }
-                    ClaudeChatWindow retryWindow = instances.get(project);
+
+                    // [FIX] Try to get the currently selected tab's window first
+                    ClaudeChatWindow retryWindow = getSelectedTabWindow(project);
+
+                    // Fallback to instances map if no selected tab window found
+                    if (retryWindow == null) {
+                        retryWindow = instances.get(project);
+                    }
+
                     if (retryWindow != null && retryWindow.initialized && !retryWindow.disposed) {
                         retryWindow.addCodeSnippet(selectionInfo);
                     } else {
@@ -2070,11 +2272,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 slashCommandCache = null;
             }
 
-            // 注销权限服务的 dialogShower 和 askUserQuestionDialogShower，防止内存泄漏
+            // 注销权限服务的 dialogShower、askUserQuestionDialogShower 和 planApprovalDialogShower，防止内存泄漏
             try {
                 PermissionService permissionService = PermissionService.getInstance(project);
                 permissionService.unregisterDialogShower(project);
                 permissionService.unregisterAskUserQuestionDialogShower(project);
+                permissionService.unregisterPlanApprovalDialogShower(project);
             } catch (Exception e) {
                 LOG.warn("Failed to unregister dialog showers: " + e.getMessage());
             }
@@ -2083,6 +2286,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             disposed = true;
             handlerContext.setDisposed(true);
+
+            // [FIX] Clean up contentToWindowMap for multi-tab support
+            if (parentContent != null) {
+                contentToWindowMap.remove(parentContent);
+                LOG.debug("[MultiTab] Removed Content -> ClaudeChatWindow mapping during dispose");
+            }
 
             synchronized (instances) {
                 if (instances.get(project) == this) {

@@ -613,6 +613,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 try {
                     process = pb.start();
                     LOG.info("[ClaudeSDKBridge] Node.js process started, PID: " + process.pid());
+                    processManager.registerProcess(channelId, process);
 
                     // Check for early exit
                     try {
@@ -637,8 +638,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                     }
-
-                    processManager.registerProcess(channelId, process);
 
                     // Write to stdin
                     try (java.io.OutputStream stdin = process.getOutputStream()) {

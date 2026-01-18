@@ -33,7 +33,9 @@
     "emptyMessage": "Mensaje vacío",
     "clickToPreview": "Haz clic para previsualizar",
     "userUploadedImage": "Imagen subida por el usuario",
-    "inputPlaceholder": "@referenciar archivos, shift + enter para nueva línea",
+    "inputPlaceholder": "@referenciar archivos, #invocar agentes, Enter para enviar",
+    "inputPlaceholderEnter": "@referenciar archivos, #invocar agentes, Enter para enviar",
+    "inputPlaceholderCmdEnter": "@referenciar archivos, #invocar agentes, ⌘Enter para enviar",
     "sendMessageEnter": "Enviar mensaje (Enter)",
     "currentMode": "Modo actual: {{mode}}",
     "currentModel": "Modelo actual: {{model}}",
@@ -74,7 +76,11 @@
     "localProject": "Local",
     "disabled": "Deshabilitado",
     "sdkNotInstalled": "{{provider}} SDK no está instalado. Instala el SDK para comenzar a chatear.",
-    "goInstallSdk": "Ir a instalar"
+    "goInstallSdk": "Ir a instalar",
+    "commandNotImplemented": "La función `{{command}}` aún no está implementada.",
+    "attachmentFile": "[Adjunto: {{fileName}}]",
+    "attachmentsUploaded": "[Archivos adjuntos cargados]",
+    "streamingConnected": "Claude conectado, esperando respuesta"
   },
   "settings": {
     "title": "Configuración",
@@ -343,6 +349,7 @@
       "Write": "Escribir archivo",
       "Edit": "Editar archivo",
       "Read": "Leer archivo",
+      "ReadBatch": "Leer archivos en lote",
       "Bash": "Ejecutar comando",
       "TodoWrite": "Escribir tarea",
       "TodoRead": "Leer tarea",
@@ -555,10 +562,14 @@
     "refreshFileInIdeaSuccess": "Se ha actualizado manualmente el contenido de este archivo en IDEA",
     "showDiffInIdea": "Mostrar cambios en IDEA",
     "diffButton": "Diff",
+    "editBatchTitle": "Edición de archivos por lotes",
     "editPrefix": "Editar: {{fileName}}",
     "lineRange": "Líneas {{start}}-{{end}}",
     "filePath": "Ruta del archivo:",
     "unknownTool": "Herramienta desconocida"
+  },
+  "todo": {
+    "progress": "{{completed}} de {{total}} tareas completadas"
   },
   "skills": {
     "title": "Skills",
@@ -676,7 +687,6 @@
   "rewind": {
     "title": "Restaurar archivos al estado anterior",
     "tooltip": "Restaurar archivos a su estado en este mensaje",
-    "shortcut": "ESC ESC",
     "selectTitle": "Seleccionar punto de restauración",
     "noRewindableMessages": "No hay mensajes restaurables en esta sesión",
     "rewindTo": "Restaurar a",

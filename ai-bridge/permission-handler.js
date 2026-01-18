@@ -190,6 +190,107 @@ async function requestAskUserQuestionAnswers(input) {
 }
 
 /**
+ * Request plan approval via file system communication with Java process.
+ * @param {Object} input - ExitPlanMode tool parameters (contains allowedPrompts)
+ * @returns {Promise<Object>} - { approved: boolean, targetMode: string, message?: string }
+ */
+export async function requestPlanApproval(input) {
+  const requestStartTime = Date.now();
+  debugLog('PLAN_APPROVAL_START', 'Requesting plan approval', { input });
+
+  try {
+    const requestId = `plan-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    debugLog('PLAN_APPROVAL_ID', `Generated request ID: ${requestId}`);
+
+    const requestFile = join(PERMISSION_DIR, `plan-approval-${requestId}.json`);
+    const responseFile = join(PERMISSION_DIR, `plan-approval-response-${requestId}.json`);
+
+    const requestData = {
+      requestId,
+      toolName: 'ExitPlanMode',
+      allowedPrompts: input?.allowedPrompts || [],
+      timestamp: new Date().toISOString()
+    };
+
+    debugLog('PLAN_APPROVAL_FILE_WRITE', `Writing plan approval request file`, { requestFile, responseFile });
+
+    try {
+      writeFileSync(requestFile, JSON.stringify(requestData, null, 2));
+      debugLog('PLAN_APPROVAL_FILE_WRITE_OK', `Plan approval request file written successfully`);
+
+      if (existsSync(requestFile)) {
+        debugLog('PLAN_APPROVAL_FILE_VERIFY', `Plan approval request file exists after write`);
+      } else {
+        debugLog('PLAN_APPROVAL_FILE_VERIFY_ERROR', `Plan approval request file does NOT exist after write!`);
+      }
+    } catch (writeError) {
+      debugLog('PLAN_APPROVAL_FILE_WRITE_ERROR', `Failed to write plan approval request file: ${writeError.message}`);
+      return { approved: false, message: 'Failed to write plan approval request' };
+    }
+
+    // Wait for response file (up to 300 seconds for complex plan review)
+    const timeout = 300000;
+    let pollCount = 0;
+    const pollInterval = 100;
+
+    debugLog('PLAN_APPROVAL_WAIT_START', `Starting to wait for plan approval response (timeout: ${timeout}ms)`);
+
+    while (Date.now() - requestStartTime < timeout) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      pollCount++;
+
+      // Log status every 10 seconds
+      if (pollCount % 100 === 0) {
+        const elapsed = Date.now() - requestStartTime;
+        debugLog('PLAN_APPROVAL_WAITING', `Still waiting for plan approval`, { elapsed: `${elapsed}ms`, pollCount });
+      }
+
+      if (existsSync(responseFile)) {
+        debugLog('PLAN_APPROVAL_RESPONSE_FOUND', `Response file found!`);
+        try {
+          const responseContent = readFileSync(responseFile, 'utf-8');
+          debugLog('PLAN_APPROVAL_RESPONSE_CONTENT', `Raw response content: ${responseContent}`);
+
+          const responseData = JSON.parse(responseContent);
+          const approved = responseData.approved === true;
+          const targetMode = responseData.targetMode || 'default';
+          const message = responseData.message;
+
+          debugLog('PLAN_APPROVAL_RESPONSE_PARSED', `Parsed response`, {
+            approved,
+            targetMode,
+            elapsed: `${Date.now() - requestStartTime}ms`
+          });
+
+          // Clean up response file
+          try {
+            unlinkSync(responseFile);
+            debugLog('PLAN_APPROVAL_FILE_CLEANUP', `Response file deleted`);
+          } catch (cleanupError) {
+            debugLog('PLAN_APPROVAL_FILE_CLEANUP_ERROR', `Failed to delete response file: ${cleanupError.message}`);
+          }
+
+          return { approved, targetMode, message };
+        } catch (e) {
+          debugLog('PLAN_APPROVAL_RESPONSE_ERROR', `Error reading/parsing response: ${e.message}`);
+          return { approved: false, message: 'Failed to parse plan approval response' };
+        }
+      }
+    }
+
+    // Timeout, return not approved
+    const elapsed = Date.now() - requestStartTime;
+    debugLog('PLAN_APPROVAL_TIMEOUT', `Timeout waiting for plan approval`, { elapsed: `${elapsed}ms`, timeout: `${timeout}ms` });
+
+    return { approved: false, message: 'Plan approval timed out' };
+
+  } catch (error) {
+    debugLog('PLAN_APPROVAL_FATAL_ERROR', `Unexpected error: ${error.message}`, { stack: error.stack });
+    return { approved: false, message: error.message };
+  }
+}
+
+/**
  * Request permission via file system communication with Java process.
  * @param {string} toolName - Tool name
  * @param {Object} input - Tool parameters

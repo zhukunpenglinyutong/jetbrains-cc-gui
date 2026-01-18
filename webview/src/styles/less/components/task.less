@@ -26,9 +26,9 @@
     display: flex;
     align-items: center;
     gap: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
     flex: 1;
+    min-width: 0;
 }
 
 .task-icon-wrapper {
@@ -107,4 +107,73 @@
     border-radius: 6px;
     font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     border: 1px solid var(--border-primary);
+}
+
+/* ReadToolGroupBlock file list styles */
+.file-list-item {
+    transition: background-color 0.15s ease;
+}
+
+.file-list-item:hover {
+    background-color: var(--bg-secondary);
+}
+
+.file-list-item.clickable-file {
+    cursor: pointer;
+}
+
+.file-list-item.clickable-file:hover {
+    background-color: var(--bg-tertiary, var(--bg-secondary));
+}
+
+.file-list-item.clickable-file:active {
+    background-color: var(--bg-active, var(--bg-secondary));
+}
+
+/* File list container scrollbar */
+.file-list-container {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4)) transparent;
+}
+
+.file-list-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.file-list-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.file-list-container::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4));
+    border-radius: 3px;
+}
+
+.file-list-container::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover, rgba(128, 128, 128, 0.6));
+}
+
+/* EditToolGroupBlock action buttons */
+.edit-group-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.edit-group-action-btn:hover {
+    background: var(--bg-tertiary, var(--bg-secondary));
+    color: var(--text-primary);
+}
+
+.edit-group-action-btn:active {
+    background: var(--bg-active, var(--bg-secondary));
 }

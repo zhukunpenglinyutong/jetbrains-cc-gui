@@ -34,6 +34,7 @@ public class CodemossSettingsService {
     private final ConfigPathManager pathManager;
     private final ClaudeSettingsManager claudeSettingsManager;
     private final CodexSettingsManager codexSettingsManager;
+    private final CodexMcpServerManager codexMcpServerManager;
     private final WorkingDirectoryManager workingDirectoryManager;
     private final AgentManager agentManager;
     private final SkillManager skillManager;
@@ -133,6 +134,9 @@ public class CodemossSettingsService {
 
         // 初始化 CodexSettingsManager
         this.codexSettingsManager = new CodexSettingsManager(gson);
+
+        // 初始化 CodexMcpServerManager
+        this.codexMcpServerManager = new CodexMcpServerManager(codexSettingsManager);
 
         // 初始化 CodexProviderManager
         this.codexProviderManager = new CodexProviderManager(
@@ -430,6 +434,28 @@ public class CodemossSettingsService {
 
     public Map<String, Object> validateMcpServer(JsonObject server) {
         return mcpServerManager.validateMcpServer(server);
+    }
+
+    // ==================== Codex MCP Server 管理 ====================
+
+    public CodexMcpServerManager getCodexMcpServerManager() {
+        return codexMcpServerManager;
+    }
+
+    public List<JsonObject> getCodexMcpServers() throws IOException {
+        return codexMcpServerManager.getMcpServers();
+    }
+
+    public void upsertCodexMcpServer(JsonObject server) throws IOException {
+        codexMcpServerManager.upsertMcpServer(server);
+    }
+
+    public boolean deleteCodexMcpServer(String serverId) throws IOException {
+        return codexMcpServerManager.deleteMcpServer(serverId);
+    }
+
+    public Map<String, Object> validateCodexMcpServer(JsonObject server) {
+        return codexMcpServerManager.validateMcpServer(server);
     }
 
     // ==================== Skills 管理 ====================

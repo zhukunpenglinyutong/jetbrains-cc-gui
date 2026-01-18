@@ -33,7 +33,9 @@
     "emptyMessage": "空消息",
     "clickToPreview": "点击预览大图",
     "userUploadedImage": "用户上传的图片",
-    "inputPlaceholder": "@引用文件，#唤起智能体，shift + enter 换行",
+    "inputPlaceholder": "@引用文件，#唤起智能体，Enter 发送",
+    "inputPlaceholderEnter": "@引用文件，#唤起智能体，Enter 发送",
+    "inputPlaceholderCmdEnter": "@引用文件，#唤起智能体，⌘Enter 发送",
     "noThinkingContent": "无思考内容",
     "parseError": "无法解析内容",
     "sendMessageEnter": "发送消息 (Enter)",
@@ -75,7 +77,11 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
     "sdkStatusLoading": "正在检查 SDK 状态...",
-    "goInstallSdk": "前往安装"
+    "goInstallSdk": "前往安装",
+    "commandNotImplemented": "`{{command}}` 功能暂未实现。",
+    "attachmentFile": "[附件: {{fileName}}]",
+    "attachmentsUploaded": "[已上传附件]",
+    "streamingConnected": "Claude 已成功连接，正在等待回复"
   },
   "settings": {
     "title": "设置",
@@ -146,7 +152,7 @@
     "dependency": {
       "title": "SDK 依赖管理",
       "description": "管理 AI SDK 依赖包。首次使用时需要安装对应的 SDK。",
-      "installPolicyTip": "为了减少包体积，SDK现在将需要主动安装",
+      "installPolicyTip": "为了减少包体积，SDK现在需要主动安装",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相关依赖。",
       "codexSdkName": "Codex SDK",
@@ -388,6 +394,7 @@
       "Write": "写入文件",
       "Edit": "编辑文件",
       "Read": "读取文件",
+      "ReadBatch": "批量读取文件",
       "Bash": "执行命令",
       "TodoWrite": "写入待办",
       "TodoRead": "读取待办",
@@ -405,6 +412,17 @@
     "back": "上一步",
     "next": "下一步",
     "submit": "提交"
+  },
+  "planApproval": {
+    "title": "计划已准备就绪",
+    "subtitle": "Claude 已完成规划，准备执行。",
+    "requestedPermissions": "请求的权限",
+    "executionMode": "执行模式",
+    "executionModeDescription": "选择 Claude 执行计划的方式：",
+    "approve": "批准并执行",
+    "reject": "拒绝",
+    "toApprove": "批准",
+    "toReject": "拒绝"
   },
   "toast": {
     "switchSuccess": "切换成功",
@@ -610,10 +628,16 @@
     "refreshFileInIdeaSuccess": "已手动刷新本文件在IDEA中的内容",
     "showDiffInIdea": "在 IDEA 中显示变更",
     "diffButton": "Diff",
+    "editBatchTitle": "批量编辑文件",
     "editPrefix": "编辑: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
     "filePath": "文件路径：",
     "unknownTool": "未知工具"
+  },
+  "todo": {
+    "inProgress": "进行中 {{completed}}/{{total}} 个任务",
+    "allCompleted": "已完成 {{completed}}/{{total}} 个任务",
+    "stopped": "已停止"
   },
   "skills": {
     "title": "Skills",
@@ -736,8 +760,8 @@
     },
     "plan": {
       "label": "规划模式",
-      "tooltip": "规划模式——无执行（暂不支持）",
-      "description": "仅规划不执行，暂不支持"
+      "tooltip": "规划模式——只读分析",
+      "description": "仅使用只读工具，生成计划供用户审批后执行"
     },
     "acceptEdits": {
       "label": "代理模式",
@@ -755,6 +779,11 @@
       "label": "建议模式",
       "tooltip": "Codex approval_policy=untrusted：执行命令或写文件前都会弹窗确认。",
       "description": "最安全的选择，每一步都需要你亲自批准。"
+    },
+    "plan": {
+      "label": "规划模式",
+      "tooltip": "规划模式——只读分析",
+      "description": "仅使用只读工具，生成计划供用户审批后执行"
     },
     "acceptEdits": {
       "label": "自动编辑",
@@ -776,6 +805,9 @@
     },
     "gemini": {
       "label": "Gemini Cli"
+    },
+    "opencode": {
+      "label": "OpenCode"
     }
   },
   "promptEnhancer": {
@@ -795,7 +827,6 @@
   "rewind": {
     "title": "回溯文件到之前的状态",
     "tooltip": "回溯",
-    "shortcut": "ESC ESC",
     "tooltipFull": "将文件恢复到此消息时的状态",
     "selectTitle": "选择回溯点",
     "noRewindableMessages": "当前会话中没有可回溯的消息",

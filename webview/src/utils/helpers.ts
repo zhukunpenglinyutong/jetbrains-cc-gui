@@ -21,33 +21,17 @@ export const truncate = (text: string, maxLength = 60) => {
 };
 
 /**
- * 复制文本到剪贴板
- * @param text 要复制的文本内容
- * @returns Promise<boolean> 是否复制成功
+ * Format timestamp to time string (HH:mm)
+ * @param timestamp - ISO timestamp string
+ * @returns Formatted time string or empty string if invalid
  */
-export const copyToClipboard = async (text: string): Promise<boolean> => {
+export const formatTime = (timestamp?: string): string => {
+  if (!timestamp) return '';
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch (error) {
-    console.error('[Clipboard] Failed to copy text:', error);
-    // 降级方案：使用传统的 execCommand 方法
-    try {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      textArea.style.top = '-999999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      return successful;
-    } catch (fallbackError) {
-      console.error('[Clipboard] Fallback copy method also failed:', fallbackError);
-      return false;
-    }
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch (e) {
+    return '';
   }
 };
 

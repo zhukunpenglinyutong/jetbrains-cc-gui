@@ -33,7 +33,9 @@
     "emptyMessage": "空訊息",
     "clickToPreview": "點選預覽大圖",
     "userUploadedImage": "使用者上傳的圖片",
-    "inputPlaceholder": "@引用檔案，shift + enter 換行",
+    "inputPlaceholder": "@引用檔案，#喚起智能體，Enter 發送",
+    "inputPlaceholderEnter": "@引用檔案，#喚起智能體，Enter 發送",
+    "inputPlaceholderCmdEnter": "@引用檔案，#喚起智能體，⌘Enter 發送",
     "sendMessageEnter": "發送訊息 (Enter)",
     "currentMode": "目前模式: {{mode}}",
     "currentModel": "目前模型: {{model}}",
@@ -74,7 +76,11 @@
     "localProject": "本地專案",
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安裝，請先安裝 SDK 才能開始對話",
-    "goInstallSdk": "前往安裝"
+    "goInstallSdk": "前往安裝",
+    "commandNotImplemented": "`{{command}}` 功能尚未實現。",
+    "attachmentFile": "[附件: {{fileName}}]",
+    "attachmentsUploaded": "[已上傳附件]",
+    "streamingConnected": "Claude 已成功連接，正在等待回覆"
   },
   "settings": {
     "title": "設定",
@@ -343,6 +349,7 @@
       "Write": "寫入檔案",
       "Edit": "編輯檔案",
       "Read": "讀取檔案",
+      "ReadBatch": "批量讀取檔案",
       "Bash": "執行命令",
       "TodoWrite": "寫入待辦",
       "TodoRead": "讀取待辦",
@@ -555,10 +562,14 @@
     "refreshFileInIdeaSuccess": "已手動重新整理本檔案在 IDEA 中的內容",
     "showDiffInIdea": "在 IDEA 中顯示變更",
     "diffButton": "Diff",
+    "editBatchTitle": "批量編輯檔案",
     "editPrefix": "編輯: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
     "filePath": "檔案路徑：",
     "unknownTool": "未知工具"
+  },
+  "todo": {
+    "progress": "已完成 {{completed}}/{{total}} 個任務"
   },
   "skills": {
     "title": "Skills",
@@ -676,7 +687,6 @@
   "rewind": {
     "title": "回溯檔案到之前的狀態",
     "tooltip": "將檔案恢復到此訊息時的狀態",
-    "shortcut": "ESC ESC",
     "selectTitle": "選擇回溯點",
     "noRewindableMessages": "目前會話中沒有可回溯的訊息",
     "rewindTo": "回溯到",

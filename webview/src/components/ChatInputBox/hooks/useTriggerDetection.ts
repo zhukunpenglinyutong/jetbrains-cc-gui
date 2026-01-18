@@ -119,7 +119,12 @@ export function getRectAtCharOffset(
         range.selectNodeContents(node as HTMLElement);
         range.collapse(false);
       }
-      return range.getBoundingClientRect();
+      const rect = range.getBoundingClientRect();
+      // 如果获取的坐标无效（全为0），回退到元素自身的坐标
+      if (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0) {
+        return element.getBoundingClientRect();
+      }
+      return rect;
     } catch {
       return null;
     }
@@ -130,7 +135,11 @@ export function getRectAtCharOffset(
     const range = document.createRange();
     range.selectNodeContents(element);
     range.collapse(false);
-    return range.getBoundingClientRect();
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0) {
+      return element.getBoundingClientRect();
+    }
+    return rect;
   }
 
   return element.getBoundingClientRect();

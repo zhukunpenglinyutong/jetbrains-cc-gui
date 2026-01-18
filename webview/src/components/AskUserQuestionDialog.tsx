@@ -23,8 +23,28 @@ export interface AskUserQuestionRequest {
 interface AskUserQuestionDialogProps {
   isOpen: boolean;
   request: AskUserQuestionRequest | null;
-  onSubmit: (requestId: string, answers: Record<string, string>) => void;
+  onSubmit: (requestId: string, answers: Record<string, string | string[]>) => void;
   onCancel: (requestId: string) => void;
+}
+
+function normalizeQuestion(raw: any): Question | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const questionText = typeof raw.question === 'string' ? raw.question : (typeof raw.text === 'string' ? raw.text : '');
+  const header = typeof raw.header === 'string' ? raw.header : '';
+  const multiSelect = typeof raw.multiSelect === 'boolean' ? raw.multiSelect : false;
+  const rawOptions = Array.isArray(raw.options) ? raw.options : (Array.isArray(raw.choices) ? raw.choices : []);
+  const options: QuestionOption[] = rawOptions
+    .map((opt: any): QuestionOption | null => {
+      if (typeof opt === 'string') return { label: opt, description: '' };
+      if (!opt || typeof opt !== 'object') return null;
+      const label = typeof opt.label === 'string' ? opt.label : (typeof opt.value === 'string' ? opt.value : '');
+      const description = typeof opt.description === 'string' ? opt.description : '';
+      if (!label) return null;
+      return { label, description };
+    })
+    .filter(Boolean) as QuestionOption[];
+  if (!questionText) return null;
+  return { question: questionText, header, options, multiSelect };
 }
 
 const AskUserQuestionDialog = ({
@@ -37,12 +57,15 @@ const AskUserQuestionDialog = ({
   // 存储每个问题的答案：question -> selectedLabel(s)
   const [answers, setAnswers] = useState<Record<string, Set<string>>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const normalizedQuestions = (Array.isArray(request?.questions) ? request!.questions : [])
+    .map(normalizeQuestion)
+    .filter(Boolean) as Question[];
 
   useEffect(() => {
     if (isOpen && request) {
       // 初始化答案状态
       const initialAnswers: Record<string, Set<string>> = {};
-      request.questions.forEach((q) => {
+      normalizedQuestions.forEach((q) => {
         initialAnswers[q.question] = new Set<string>();
       });
       setAnswers(initialAnswers);
@@ -62,8 +85,28 @@ const AskUserQuestionDialog = ({
     return null;
   }
 
-  const currentQuestion = request.questions[currentQuestionIndex];
-  const isLastQuestion = currentQuestionIndex === request.questions.length - 1;
+  if (normalizedQuestions.length === 0) {
+    return (
+      <div className="permission-dialog-overlay">
+        <div className="ask-user-question-dialog">
+          <h3 className="ask-user-question-dialog-title">
+            {t('askUserQuestion.title', 'Claude 有一些问题想问你')}
+          </h3>
+          <p className="question-text">
+            {t('askUserQuestion.invalidFormat', '问题数据格式不支持，请取消后重试。')}
+          </p>
+          <div className="ask-user-question-dialog-actions">
+            <button className="action-button secondary" onClick={() => onCancel(request.requestId)}>
+              {t('askUserQuestion.cancel', '取消')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQuestion = normalizedQuestions[currentQuestionIndex]!;
+  const isLastQuestion = currentQuestionIndex === normalizedQuestions.length - 1;
   const currentAnswerSet = answers[currentQuestion.question] || new Set<string>();
 
   const handleOptionToggle = (label: string) => {
@@ -104,14 +147,12 @@ const AskUserQuestionDialog = ({
   };
 
   const handleSubmitFinal = () => {
-    // 将 Set 转换为逗号分隔的字符串（多选）或单个字符串（单选）
-    const formattedAnswers: Record<string, string> = {};
-    request.questions.forEach((q) => {
+    const formattedAnswers: Record<string, string | string[]> = {};
+    normalizedQuestions.forEach((q) => {
       const selectedSet = answers[q.question] || new Set<string>();
       if (selectedSet.size > 0) {
-        formattedAnswers[q.question] = Array.from(selectedSet).join(', ');
-      } else {
-        formattedAnswers[q.question] = '';
+        const selected = Array.from(selectedSet);
+        formattedAnswers[q.question] = q.multiSelect ? selected : selected[0]!;
       }
     });
 
@@ -134,7 +175,7 @@ const AskUserQuestionDialog = ({
         <div className="ask-user-question-dialog-progress">
           {t('askUserQuestion.progress', '问题 {{current}} / {{total}}', {
             current: currentQuestionIndex + 1,
-            total: request.questions.length,
+            total: normalizedQuestions.length,
           })}
         </div>
 

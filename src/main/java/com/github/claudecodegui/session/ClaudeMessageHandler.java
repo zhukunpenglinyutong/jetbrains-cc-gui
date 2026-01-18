@@ -51,6 +51,8 @@ public class ClaudeMessageHandler implements MessageCallback {
     // 解释：是否正在接收流式内容
     private boolean isStreaming = false;
 
+    private boolean streamEndedThisTurn = false;
+
     // 🔧 流式分段状态（用于在工具调用前/后切分 text/thinking）
     private boolean textSegmentActive = false;
     private boolean thinkingSegmentActive = false;
@@ -147,6 +149,7 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onError(String error) {
+        streamEndedThisTurn = false;
         state.setError(error);
         state.setBusy(false);
         state.setLoading(false);
@@ -167,6 +170,10 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onComplete(SDKResult result) {
+        if (streamEndedThisTurn) {
+            streamEndedThisTurn = false;
+            return;
+        }
         state.setBusy(false);
         state.setLoading(false);
         state.updateLastModifiedTime();
@@ -307,6 +314,9 @@ public class ClaudeMessageHandler implements MessageCallback {
      * 解释：AI正在一字一字地说话
      */
     private void handleContentDelta(String content) {
+        if (content == null || content.isEmpty()) {
+            return;
+        }
         // 如果之前在思考，现在开始输出内容，说明思考完成
         if (isThinking) {
             isThinking = false;
@@ -327,8 +337,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         applyTextDeltaToRaw(content);
         textSegmentActive = true;
 
-        // 🔧 流式渲染：通过 updateMessages 实时刷新（与 stream 分支一致）
-        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyContentDelta(content);
+        if (!isStreaming) {
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+        }
     }
 
     /**
@@ -345,7 +357,8 @@ public class ClaudeMessageHandler implements MessageCallback {
     /**
      * 处理用户消息（来自SDK）
      * 英文：Handle user message from SDK
-     * 解释：SDK返回的用户消息包含uuid，需要更新已有的用户消息
+     * 解释：SDK返回的用户消息包含uuid，需要更新已有的用户消息；
+     *       如果是包含 tool_result 的消息，需要添加到消息列表中
      */
     private void handleUserMessage(String content) {
         if (!content.startsWith("{")) {
@@ -354,6 +367,16 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         try {
             JsonObject userMsg = gson.fromJson(content, JsonObject.class);
+
+            // 检查是否包含 tool_result（工具调用结果）
+            if (messageParser.hasToolResult(userMsg)) {
+                // 这是一个包含 tool_result 的 user 消息，需要添加到消息列表
+                Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", userMsg);
+                state.addMessage(toolResultMessage);
+                LOG.debug("Added tool_result user message to state");
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                return;
+            }
 
             // 提取 uuid（用于 rewind 功能）
             String uuid = userMsg.has("uuid") ? userMsg.get("uuid").getAsString() : null;
@@ -434,9 +457,13 @@ public class ClaudeMessageHandler implements MessageCallback {
             callbackHandler.notifyThinkingStatusChanged(false);
         }
         ClaudeNotifier.clearStatus(project);
-        state.setBusy(false);
-        state.setLoading(false);
-        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+
+        // FIX: handleMessageEnd 不应该重置 loading/busy 状态
+        // 无论是流式还是非流式模式，状态重置应该由以下回调统一处理：
+        // - 流式模式：onStreamEnd
+        // - 非流式模式：onComplete
+        // 这样可以避免消息处理过程中状态被意外重置
+        LOG.debug("message_end received, deferring state cleanup to onComplete/onStreamEnd");
     }
 
     /**
@@ -559,6 +586,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     private void handleStreamStart() {
         LOG.debug("Stream started");
         isStreaming = true;  // 🔧 标记流式传输开始
+        streamEndedThisTurn = false;
         textSegmentActive = false;
         thinkingSegmentActive = false;
         callbackHandler.notifyStreamStart();
@@ -572,11 +600,16 @@ public class ClaudeMessageHandler implements MessageCallback {
     private void handleStreamEnd() {
         LOG.debug("Stream ended");
         isStreaming = false;  // 🔧 标记流式传输结束
+        streamEndedThisTurn = true;
         textSegmentActive = false;
         thinkingSegmentActive = false;
         // 流式结束后，发送最终的消息更新，确保消息列表同步
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStreamEnd();
+        state.setBusy(false);
+        state.setLoading(false);
+        state.updateLastModifiedTime();
+        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
     /**
@@ -585,6 +618,9 @@ public class ClaudeMessageHandler implements MessageCallback {
      * 解释：收到思考内容的增量，转发给前端实时显示
      */
     private void handleThinkingDelta(String content) {
+        if (content == null || content.isEmpty()) {
+            return;
+        }
         // 确保思考状态已开启
         if (!isThinking) {
             isThinking = true;
@@ -594,7 +630,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         ensureCurrentAssistantMessageExists();
         applyThinkingDeltaToRaw(content);
         thinkingSegmentActive = true;
-        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyThinkingDelta(content);
+        if (!isStreaming) {
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+        }
     }
 
     private void ensureCurrentAssistantMessageExists() {

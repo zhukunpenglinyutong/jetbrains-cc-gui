@@ -33,7 +33,9 @@
     "emptyMessage": "खाली संदेश",
     "clickToPreview": "पूर्वावलोकन के लिए क्लिक करें",
     "userUploadedImage": "उपयोगकर्ता द्वारा अपलोड की गई छवि",
-    "inputPlaceholder": "@फाइल संदर्भ, shift + enter नई लाइन",
+    "inputPlaceholder": "@फाइल संदर्भ, #एजेंट बुलाएं, Enter भेजने के लिए",
+    "inputPlaceholderEnter": "@फाइल संदर्भ, #एजेंट बुलाएं, Enter भेजने के लिए",
+    "inputPlaceholderCmdEnter": "@फाइल संदर्भ, #एजेंट बुलाएं, ⌘Enter भेजने के लिए",
     "sendMessageEnter": "संदेश भेजें (Enter)",
     "currentMode": "वर्तमान मोड: {{mode}}",
     "currentModel": "वर्तमान मॉडल: {{model}}",
@@ -74,7 +76,11 @@
     "localProject": "स्थानीय",
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
-    "goInstallSdk": "इंस्टॉल करने जाएं"
+    "goInstallSdk": "इंस्टॉल करने जाएं",
+    "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
+    "attachmentFile": "[अटैचमेंट: {{fileName}}]",
+    "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
+    "streamingConnected": "Claude कनेक्ट हो गया, प्रतिक्रिया की प्रतीक्षा कर रहा है"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -343,6 +349,7 @@
       "Write": "फ़ाइल लिखें",
       "Edit": "फ़ाइल संपादित करें",
       "Read": "फ़ाइल पढ़ें",
+      "ReadBatch": "फ़ाइलें बैच में पढ़ें",
       "Bash": "कमांड निष्पादित करें",
       "TodoWrite": "कार्य लिखें",
       "TodoRead": "कार्य पढ़ें",
@@ -555,10 +562,15 @@
     "refreshFileInIdeaSuccess": "इस फ़ाइल की सामग्री को IDEA में मैन्युअली रीफ्रेश किया गया",
     "showDiffInIdea": "IDEA में परिवर्तन दिखाएं",
     "diffButton": "Diff",
+    "editBatchTitle": "बैच फ़ाइल संपादन",
     "editPrefix": "संपादित करें: {{fileName}}",
     "lineRange": "पंक्तियाँ {{start}}-{{end}}",
     "filePath": "फ़ाइल पथ:",
     "unknownTool": "अज्ञात टूल"
+  },
+  "todo": {
+    "inProgress": "{{completed}}/{{total}} कार्य प्रगति में",
+    "allCompleted": "{{completed}}/{{total}} कार्य पूर्ण"
   },
   "skills": {
     "title": "Skills",
@@ -676,7 +688,6 @@
   "rewind": {
     "title": "फ़ाइलों को पिछली स्थिति में पुनर्स्थापित करें",
     "tooltip": "इस संदेश पर फ़ाइलों को उनकी स्थिति में पुनर्स्थापित करें",
-    "shortcut": "ESC ESC",
     "selectTitle": "पुनर्स्थापना बिंदु चुनें",
     "noRewindableMessages": "इस सत्र में कोई पुनर्स्थापन योग्य संदेश नहीं है",
     "rewindTo": "पुनर्स्थापित करें",

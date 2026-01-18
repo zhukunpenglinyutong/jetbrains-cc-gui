@@ -8,6 +8,7 @@ import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.util.PlatformUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -73,10 +74,23 @@ public class CodexSDKBridge extends BaseSDKBridge {
             try {
                 JsonObject msg = gson.fromJson(jsonStr, JsonObject.class);
                 if (msg != null) {
-                    result.messages.add(msg);
                     String msgType = msg.has("type") && !msg.get("type").isJsonNull()
                             ? msg.get("type").getAsString()
                             : "unknown";
+
+                    if ("status".equals(msgType)) {
+                        String status = "";
+                        if (msg.has("message") && !msg.get("message").isJsonNull()) {
+                            JsonElement statusEl = msg.get("message");
+                            status = statusEl.isJsonPrimitive() ? statusEl.getAsString() : statusEl.toString();
+                        }
+                        if (status != null && !status.isEmpty()) {
+                            callback.onMessage("status", status);
+                        }
+                        return;
+                    }
+
+                    result.messages.add(msg);
 
                     if ("assistant".equals(msgType)) {
                         try {
@@ -278,6 +292,54 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     env.put("CODEX_MODEL", model);
                 }
 
+                // 【关键修复】通过环境变量覆盖用户配置文件中的 sandbox 和 approval 设置
+                // Override user's ~/.codex/config.toml settings via environment variables
+                // 【Windows 特殊处理】Windows 沙箱支持是实验性的，使用 danger-full-access 模式
+                // Windows sandbox support is experimental, use danger-full-access mode
+                if (permissionMode != null && !permissionMode.isEmpty()) {
+                    // Check if running on Windows - Windows sandbox is experimental and may not work properly
+                    boolean isWindows = PlatformUtils.isWindows();
+
+                    switch (permissionMode) {
+                        case "bypassPermissions":
+                            if (isWindows) {
+                                // Windows: use danger-full-access to bypass experimental sandbox
+                                env.put("CODEX_SANDBOX_MODE", "danger-full-access");
+                            } else {
+                                env.put("CODEX_SANDBOX_MODE", "workspace-write");
+                            }
+                            env.put("CODEX_APPROVAL_POLICY", "never");
+                            break;
+                        case "acceptEdits":
+                            if (isWindows) {
+                                // Windows: use danger-full-access to bypass experimental sandbox
+                                env.put("CODEX_SANDBOX_MODE", "danger-full-access");
+                            } else {
+                                env.put("CODEX_SANDBOX_MODE", "workspace-write");
+                            }
+                            env.put("CODEX_APPROVAL_POLICY", "auto-edit");
+                            break;
+                        case "plan":
+                            env.put("CODEX_SANDBOX_MODE", "read-only");
+                            env.put("CODEX_APPROVAL_POLICY", "untrusted");
+                            break;
+                        default:
+                            // Default mode: workspace-write with confirmation
+                            if (isWindows) {
+                                // Windows: use danger-full-access to bypass experimental sandbox
+                                env.put("CODEX_SANDBOX_MODE", "danger-full-access");
+                            } else {
+                                env.put("CODEX_SANDBOX_MODE", "workspace-write");
+                            }
+                            env.put("CODEX_APPROVAL_POLICY", "untrusted");
+                            break;
+                    }
+                    LOG.info("[Codex] Permission env override: SANDBOX_MODE=" +
+                             env.get("CODEX_SANDBOX_MODE") + ", APPROVAL_POLICY=" +
+                             env.get("CODEX_APPROVAL_POLICY") + " (from permissionMode=" + permissionMode +
+                             ", isWindows=" + isWindows + ")");
+                }
+
                 pb.redirectErrorStream(true);
                 envConfigurator.updateProcessEnvironment(pb, node);
 
@@ -330,10 +392,23 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                 try {
                                     JsonObject msg = gson.fromJson(jsonStr, JsonObject.class);
                                     if (msg != null) {
-                                        result.messages.add(msg);
                                         String msgType = msg.has("type") && !msg.get("type").isJsonNull()
                                                 ? msg.get("type").getAsString()
                                                 : "unknown";
+
+                                        if ("status".equals(msgType)) {
+                                            String status = "";
+                                            if (msg.has("message") && !msg.get("message").isJsonNull()) {
+                                                JsonElement statusEl = msg.get("message");
+                                                status = statusEl.isJsonPrimitive() ? statusEl.getAsString() : statusEl.toString();
+                                            }
+                                            if (status != null && !status.isEmpty()) {
+                                                callback.onMessage("status", status);
+                                            }
+                                            continue;
+                                        }
+
+                                        result.messages.add(msg);
 
                                         if ("assistant".equals(msgType)) {
                                             try {
