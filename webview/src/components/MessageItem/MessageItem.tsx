@@ -106,6 +106,7 @@ export const MessageItem = memo(function MessageItem({
   extractMarkdownContent,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+  const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
 
   // Manage thinking expansion state locally to avoid prop drilling and unnecessary re-renders
   const [expandedThinking, setExpandedThinking] = useState<Record<number, boolean>>({});
@@ -138,6 +139,20 @@ export const MessageItem = memo(function MessageItem({
 
   // Memoize blocks and grouped blocks to avoid recalculation on every render
   const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
+  const isEmptyStreamingPlaceholder =
+    message.type === 'assistant' &&
+    isMessageStreaming &&
+    blocks.length === 0 &&
+    !(message.content && message.content.trim().length > 0);
+
+  useEffect(() => {
+    if (!isEmptyStreamingPlaceholder) {
+      setShowStreamingConnectHint(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowStreamingConnectHint(true), 350);
+    return () => window.clearTimeout(timer);
+  }, [isEmptyStreamingPlaceholder]);
 
   // Ref to track the last auto-expanded thinking block index to avoid overriding user interaction
   const lastAutoExpandedIndexRef = useRef<number>(-1);
@@ -178,6 +193,14 @@ export const MessageItem = memo(function MessageItem({
   const renderGroupedBlocks = () => {
     if (message.type === 'error') {
       return <MarkdownBlock content={getMessageText(message)} />;
+    }
+
+    if (isEmptyStreamingPlaceholder) {
+      return (
+        <div className="streaming-connect-status">
+          <span className="streaming-connect-text">Claude 已成功连接，正在准备回复</span>
+        </div>
+      );
     }
 
     return groupedBlocks.map((grouped) => {
@@ -256,6 +279,10 @@ export const MessageItem = memo(function MessageItem({
       );
     });
   };
+
+  if (isEmptyStreamingPlaceholder && !showStreamingConnectHint) {
+    return <></>;
+  }
 
   return (
     <div className={`message ${message.type}`} style={messageStyle}>

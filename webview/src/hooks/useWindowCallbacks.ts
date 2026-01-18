@@ -254,7 +254,26 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
               });
 
               smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
-              return appendOptimisticMessageIfMissing(prev, smartMerged);
+              const result = appendOptimisticMessageIfMissing(prev, smartMerged);
+
+              // FIX: 在 Claude 模式下，需要更新 streamingMessageIndexRef
+              // 这样 onContentDelta 才能知道应该更新哪个 assistant
+              const lastAssistantIdx = findLastAssistantIndex(result);
+              if (lastAssistantIdx >= 0) {
+                streamingMessageIndexRef.current = lastAssistantIdx;
+
+                // FIX: 如果有缓存的流式内容（onContentDelta 可能先于 updateMessages 被调用）
+                // 需要立即应用到 assistant 消息上，确保内容不丢失
+                if (streamingContentRef.current && result[lastAssistantIdx]?.type === 'assistant') {
+                  result[lastAssistantIdx] = patchAssistantForStreaming({
+                    ...result[lastAssistantIdx],
+                    content: streamingContentRef.current,
+                    isStreaming: true,
+                  });
+                }
+              }
+
+              return result;
             }
 
             const lastAssistantIdx = findLastAssistantIndex(parsed);
@@ -312,7 +331,24 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
             });
 
             smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
-            return appendOptimisticMessageIfMissing(prev, smartMerged);
+            const result = appendOptimisticMessageIfMissing(prev, smartMerged);
+
+            // FIX: 在 Claude 模式下，需要更新 streamingMessageIndexRef
+            const lastAssistantIdx = findLastAssistantIndex(result);
+            if (lastAssistantIdx >= 0) {
+              streamingMessageIndexRef.current = lastAssistantIdx;
+
+              // FIX: 如果有缓存的流式内容，需要立即应用
+              if (streamingContentRef.current && result[lastAssistantIdx]?.type === 'assistant') {
+                result[lastAssistantIdx] = patchAssistantForStreaming({
+                  ...result[lastAssistantIdx],
+                  content: streamingContentRef.current,
+                  isStreaming: true,
+                });
+              }
+            }
+
+            return result;
           }
 
           const lastAssistantIdx = findLastAssistantIndex(parsed);
@@ -367,9 +403,18 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     window.showLoading = (value) => {
       const isLoading = isTruthy(value);
+
+      // FIX: 流式传输期间忽略 loading=false，由 onStreamEnd 统一处理
+      if (!isLoading && isStreamingRef.current) {
+        console.log('[Frontend] Ignoring showLoading(false) during streaming');
+        return;
+      }
+
       setLoading(isLoading);
       if (isLoading) {
-        setLoadingStartTime(Date.now());
+        // FIX: 只有当 loadingStartTime 为 null 时才重置计时器
+        // 避免重复调用 showLoading(true) 导致计时器重置
+        setLoadingStartTime((prev) => prev ?? Date.now());
       } else {
         setLoadingStartTime(null);
       }
@@ -405,7 +450,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       console.log('[Frontend] Stream started');
       streamingContentRef.current = '';
       isStreamingRef.current = true;
-      useBackendStreamingRenderRef.current = currentProviderRef.current === 'claude';
+      useBackendStreamingRenderRef.current = false;
       autoExpandedThinkingKeysRef.current.clear();
       setStreamingActive(true);
       isUserAtBottomRef.current = true;
@@ -415,9 +460,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       activeThinkingSegmentIndexRef.current = -1;
       seenToolUseCountRef.current = 0;
 
-      if (useBackendStreamingRenderRef.current) {
-        return;
-      }
+      // FIX: 无论是否使用后端流式渲染，都必须重置 streamingMessageIndexRef
+      // 否则第二次提问时会使用第一次的索引，导致回复位置错乱
+      streamingMessageIndexRef.current = -1;
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         if (last?.type === 'assistant' && last?.isStreaming) {
@@ -448,12 +493,24 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       const now = Date.now();
       const timeSinceLastUpdate = now - lastContentUpdateRef.current;
 
-      if (timeSinceLastUpdate >= THROTTLE_INTERVAL) {
-        lastContentUpdateRef.current = now;
+      const updateMessages = () => {
         const currentContent = streamingContentRef.current;
         setMessages((prev) => {
           const newMessages = [...prev];
-          const idx = getOrCreateStreamingAssistantIndex(newMessages);
+          // FIX: 在 Claude 模式下，不使用 getOrCreateStreamingAssistantIndex 查找
+          // 而是直接使用 streamingMessageIndexRef.current，避免找到错误的旧 assistant
+          let idx: number;
+          if (useBackendStreamingRenderRef.current) {
+            idx = streamingMessageIndexRef.current;
+            // 如果索引还是 -1，说明后端还没有通过 updateMessages 创建 assistant
+            // 这时候需要等待后端创建，暂时不更新
+            if (idx < 0) {
+              return prev;
+            }
+          } else {
+            idx = getOrCreateStreamingAssistantIndex(newMessages);
+          }
+
           if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
             newMessages[idx] = patchAssistantForStreaming({
               ...newMessages[idx],
@@ -463,25 +520,18 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           }
           return newMessages;
         });
+      };
+
+      if (timeSinceLastUpdate >= THROTTLE_INTERVAL) {
+        lastContentUpdateRef.current = now;
+        updateMessages();
       } else {
         if (!contentUpdateTimeoutRef.current) {
           const remainingTime = THROTTLE_INTERVAL - timeSinceLastUpdate;
           contentUpdateTimeoutRef.current = setTimeout(() => {
             contentUpdateTimeoutRef.current = null;
             lastContentUpdateRef.current = Date.now();
-            const currentContent = streamingContentRef.current;
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              const idx = getOrCreateStreamingAssistantIndex(newMessages);
-              if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
-                newMessages[idx] = patchAssistantForStreaming({
-                  ...newMessages[idx],
-                  content: currentContent,
-                  isStreaming: true,
-                });
-              }
-              return newMessages;
-            });
+            updateMessages();
           }, remainingTime);
         }
       }
@@ -502,11 +552,23 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       const now = Date.now();
       const timeSinceLastUpdate = now - lastThinkingUpdateRef.current;
 
-      if (forceUpdate || timeSinceLastUpdate >= THROTTLE_INTERVAL) {
-        lastThinkingUpdateRef.current = now;
+      const updateMessages = () => {
         setMessages((prev) => {
           const newMessages = [...prev];
-          const idx = getOrCreateStreamingAssistantIndex(newMessages);
+          // FIX: 在 Claude 模式下，不使用 getOrCreateStreamingAssistantIndex 查找
+          // 而是直接使用 streamingMessageIndexRef.current，避免找到错误的旧 assistant
+          let idx: number;
+          if (useBackendStreamingRenderRef.current) {
+            idx = streamingMessageIndexRef.current;
+            // 如果索引还是 -1，说明后端还没有通过 updateMessages 创建 assistant
+            // 这时候需要等待后端创建，暂时不更新
+            if (idx < 0) {
+              return prev;
+            }
+          } else {
+            idx = getOrCreateStreamingAssistantIndex(newMessages);
+          }
+
           if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
             newMessages[idx] = patchAssistantForStreaming({
               ...newMessages[idx],
@@ -515,23 +577,18 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           }
           return newMessages;
         });
+      };
+
+      if (forceUpdate || timeSinceLastUpdate >= THROTTLE_INTERVAL) {
+        lastThinkingUpdateRef.current = now;
+        updateMessages();
       } else {
         if (!thinkingUpdateTimeoutRef.current) {
           const remainingTime = THROTTLE_INTERVAL - timeSinceLastUpdate;
           thinkingUpdateTimeoutRef.current = setTimeout(() => {
             thinkingUpdateTimeoutRef.current = null;
             lastThinkingUpdateRef.current = Date.now();
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              const idx = getOrCreateStreamingAssistantIndex(newMessages);
-              if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
-                newMessages[idx] = patchAssistantForStreaming({
-                  ...newMessages[idx],
-                  isStreaming: true,
-                });
-              }
-              return newMessages;
-            });
+            updateMessages();
           }, remainingTime);
         }
       }

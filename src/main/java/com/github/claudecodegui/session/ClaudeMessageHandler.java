@@ -450,9 +450,13 @@ public class ClaudeMessageHandler implements MessageCallback {
             callbackHandler.notifyThinkingStatusChanged(false);
         }
         ClaudeNotifier.clearStatus(project);
-        state.setBusy(false);
-        state.setLoading(false);
-        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+
+        // FIX: handleMessageEnd 不应该重置 loading/busy 状态
+        // 无论是流式还是非流式模式，状态重置应该由以下回调统一处理：
+        // - 流式模式：onStreamEnd
+        // - 非流式模式：onComplete
+        // 这样可以避免消息处理过程中状态被意外重置
+        LOG.debug("message_end received, deferring state cleanup to onComplete/onStreamEnd");
     }
 
     /**

@@ -1010,23 +1010,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             iconLabel.setForeground(Color.WHITE);
             iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            JLabel titleLabel = new JLabel("JCEF 远程模式不兼容");
+            JLabel titleLabel = new JLabel("编辑器 JCEF 模块报错");
             titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
             titleLabel.setForeground(Color.WHITE);
             titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
             JTextArea messageArea = new JTextArea();
             messageArea.setText(
-                "当前 IDE 正在使用 JCEF 远程模式，该模式与插件的浏览器组件不兼容。\n\n" +
-                "可能的原因：\n" +
-                "• IDE 配置为使用远程开发模式 (Remote Development)\n" +
-                "• IDE 使用了 JetBrains Client 连接远程后端\n" +
-                "• 某些 IDE 设置启用了远程渲染\n\n" +
                 "解决方案：\n" +
-                "1. 如果使用远程开发，请在本地 IDE 中使用此插件\n" +
-                "2. 尝试在 IDE 设置中禁用远程渲染相关选项\n" +
-                "3. 重启 IDE 后重试\n" +
-                "4. 使用本地安装的 IntelliJ IDEA 打开项目"
+                "✅ 彻底退出您当前的编辑器，重新启动编辑器就好了\n" +
+                "⚠️ 请注意，一定要彻底退出，不要只退到项目选择页面" 
             );
             messageArea.setEditable(false);
             messageArea.setBackground(new Color(45, 45, 45));
@@ -1373,6 +1366,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 @Override
                 public void onStateChange(boolean busy, boolean loading, String error) {
                     ApplicationManager.getApplication().invokeLater(() -> {
+                        // FIX: 流式传输期间不发送 loading=false，避免 loading 状态被意外重置
+                        // 由 onStreamEnd 统一处理状态清理
+                        synchronized (streamMessageUpdateLock) {
+                            if (!loading && streamActive) {
+                                LOG.debug("Suppressing showLoading(false) during active streaming");
+                                if (error != null) {
+                                    callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
+                                }
+                                return;
+                            }
+                        }
+
                         callJavaScript("showLoading", String.valueOf(loading));
                         if (error != null) {
                             callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
@@ -1453,8 +1458,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         streamMessageUpdateSequence += 1;
                     }
                     ApplicationManager.getApplication().invokeLater(() -> {
+                        // FIX: 流式开始时确保 loading 状态为 true
+                        // 防止在 stream_start 之前 loading 被意外重置
+                        callJavaScript("showLoading", "true");
                         callJavaScript("onStreamStart");
-                        LOG.debug("Stream started - notified frontend");
+                        LOG.debug("Stream started - notified frontend with loading=true");
                     });
                 }
 
@@ -1464,8 +1472,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         streamActive = false;
                     }
                     flushStreamMessageUpdates(() -> {
+                        // FIX: 流式结束时显式设置 loading=false
+                        // 确保状态清理的一致性
+                        callJavaScript("showLoading", "false");
                         callJavaScript("onStreamEnd");
-                        LOG.debug("Stream ended - notified frontend");
+                        LOG.debug("Stream ended - notified frontend with loading=false");
                     });
                 }
 

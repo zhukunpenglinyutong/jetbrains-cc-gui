@@ -983,9 +983,18 @@ public class ClaudeSession {
                 }
                 state.setError(null);  // 清除之前的错误状态
                 state.setBusy(false);
+                state.setLoading(false);  // FIX: 同时重置 loading 状态
+
+                // 注意：这里不调用 notifyStreamEnd()，因为：
+                // 1. 前端的 interruptSession() 已经直接清理了流式状态
+                // 2. 调用 notifyStreamEnd() 会触发 flushStreamMessageUpdates()，
+                //    可能会用 lastMessagesSnapshot 恢复之前的消息，影响 clearMessages 的效果
+                // 3. 状态重置通过 updateState() -> onStateChange() 来通知前端
+
                 updateState();
             } catch (Exception e) {
                 state.setError(e.getMessage());
+                state.setLoading(false);  // FIX: 错误时也重置 loading
                 updateState();
             }
         });

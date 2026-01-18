@@ -749,8 +749,14 @@ const App = () => {
   }, []);
 
   const interruptSession = () => {
+    // FIX: 立即重置前端状态，不等待后端回调
+    // 这样可以让用户立即看到停止效果
+    setLoading(false);
+    setLoadingStartTime(null);
+    setStreamingActive(false);
+    isStreamingRef.current = false;
+
     sendBridgeEvent('interrupt_session');
-    // 移除通知：已发送中断请求
   };
 
   // Message utility functions (use imported utilities with bound dependencies)

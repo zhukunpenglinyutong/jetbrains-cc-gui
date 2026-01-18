@@ -87,68 +87,67 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     return Array.isArray(blocks) ? blocks : [];
   };
 
+  const normalizeThinking = (thinking: string): string => {
+    return thinking
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n[ \t]*\n+/g, '\n')
+      .replace(/^\n+/, '')
+      .replace(/\n+$/, '');
+  };
+
   // Helper: Build streaming blocks from segments
   const buildStreamingBlocks = (existingBlocks: any[]): any[] => {
-    const toolUseBlocks = existingBlocks.filter((b) => b?.type === 'tool_use');
-    const otherBlocks = existingBlocks.filter(
-      (b) => b && b.type !== 'text' && b.type !== 'thinking' && b.type !== 'tool_use',
-    );
-
     const textSegments = streamingTextSegmentsRef.current;
     const thinkingSegments = streamingThinkingSegmentsRef.current;
 
-    // Calculate phases count, ensure at least 1 phase even when all arrays are empty
-    // This ensures tool_use blocks are processed even without text/thinking content
-    const phasesCount = Math.max(
-      textSegments.length,
-      thinkingSegments.length,
-      toolUseBlocks.length,
-      1
-    );
+    const output: any[] = [];
+    let thinkingIdx = 0;
+    let textIdx = 0;
 
-    const blocks: any[] = [];
-    const addedToolUseIds = new Set<string>();
+    for (const block of existingBlocks) {
+      if (!block || typeof block !== 'object') {
+        continue;
+      }
+      if (block.type === 'thinking') {
+        const thinking = thinkingSegments[thinkingIdx];
+        thinkingIdx += 1;
+        if (typeof thinking === 'string' && thinking.length > 0) {
+          const normalized = normalizeThinking(thinking);
+          if (normalized.length > 0) {
+            output.push({ type: 'thinking', thinking: normalized });
+          }
+        }
+        continue;
+      }
+      if (block.type === 'text') {
+        const text = textSegments[textIdx];
+        textIdx += 1;
+        if (typeof text === 'string' && text.length > 0) {
+          output.push({ type: 'text', text });
+        }
+        continue;
+      }
 
-    for (let phase = 0; phase < phasesCount; phase += 1) {
+      output.push(block);
+    }
+
+    const phasesCount = Math.max(textSegments.length, thinkingSegments.length);
+    const appendFromPhase = Math.max(textIdx, thinkingIdx);
+    for (let phase = appendFromPhase; phase < phasesCount; phase += 1) {
       const thinking = thinkingSegments[phase];
       if (typeof thinking === 'string' && thinking.length > 0) {
-        // Clean up newlines: merge consecutive blank lines, trim whitespace
-        const normalizedThinking = thinking
-          .replace(/\r\n?/g, '\n')          // Normalize line endings
-          .replace(/\n[ \t]*\n+/g, '\n')    // Remove blank lines (including space/tab only)
-          .replace(/^\n+/, '')              // Trim leading newlines
-          .replace(/\n+$/, '');             // Trim trailing newlines
-        if (normalizedThinking.length > 0) {
-          blocks.push({ type: 'thinking', thinking: normalizedThinking });
+        const normalized = normalizeThinking(thinking);
+        if (normalized.length > 0) {
+          output.push({ type: 'thinking', thinking: normalized });
         }
       }
       const text = textSegments[phase];
       if (typeof text === 'string' && text.length > 0) {
-        blocks.push({ type: 'text', text });
-      }
-      if (phase < toolUseBlocks.length) {
-        const toolBlock = toolUseBlocks[phase];
-        blocks.push(toolBlock);
-        if (toolBlock?.id) {
-          addedToolUseIds.add(toolBlock.id);
-        }
+        output.push({ type: 'text', text });
       }
     }
 
-    // Ensure all tool_use blocks are included (in case any were missed due to phase calculation)
-    for (const toolBlock of toolUseBlocks) {
-      if (toolBlock?.id && !addedToolUseIds.has(toolBlock.id)) {
-        blocks.push(toolBlock);
-      } else if (!toolBlock?.id && !blocks.includes(toolBlock)) {
-        // For blocks without id, use reference equality check
-        blocks.push(toolBlock);
-      }
-    }
-
-    if (otherBlocks.length > 0) {
-      blocks.push(...otherBlocks);
-    }
-    return blocks;
+    return output;
   };
 
   /**
