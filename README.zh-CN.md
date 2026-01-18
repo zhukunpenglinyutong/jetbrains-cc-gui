@@ -55,7 +55,30 @@
 
 ## 项目状态
 
-当前版本：**v0.1.5-beta1**（2026年1月8日更新）
+当前版本：**v0.1.5**（2026年1月18日更新）
+
+本次为最大的一次版本更新：113个文件改动，30次commit，新增代码13.6k，删除代码4.7k
+
+本次修改内容如下：
+
+- [x] P0（feat）Claude 计划模式 开放
+- [x] P0（fix）修复了 AskUserQuestion 弹窗异常问题
+- [x] P0（perf）优化了历史记录过多时候，输入框输入卡顿以及发送卡顿问题
+- [x] P0（fix）彻底解决了 Codex window下无法写入的问题
+- [x] P0（feat）支持了 Codex MCP功能
+- [x] P0（feat）支持了 Codex的AGENTS.md指令集合
+- [x] P1（feat）支持了 Codex自动注入当前活动文件内容
+- [x] P1（feat）按当前项目路径过滤Codex会话历史（之前是全都展示）
+- [x] P1（feat）实现todolist新UI交互
+- [x] P1（feat）实现 批量写入 和 批量读取 新交互
+- [x] P1（feat）流式输出时自动展开最新的思考块
+- [x] P1（refactor）拆分重构了输入框和对话过程的代码，使其后续更易维护
+- [x] P2（chore）预留了OpenCode支持
+- [x] P2（style）修改其他细节交互舒适性
+
+接下来将进行v0.1.6版本的开发
+
+v0.1.6版本，将带来更多功能，更好的性能 和 大家心心念念的 vscode端 和 客户端；
 
 项目处于活跃开发阶段，代码持续更新中。更多迭代进度请阅读 [CHANGELOG.md](CHANGELOG.md)
 
@@ -134,7 +157,7 @@ AGPL-3.0
       <a href="https://github.com/gadfly3173">
         <img src="https://avatars.githubusercontent.com/u/28685179?size=100" width="100" height="100" alt="gadfly3173" style="border-radius: 50%; border: 3px solid #ff6b35; box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);" />
       </a>
-      <div">🔥</div>
+      <div">🔥🔥</div>
     </td>
     <td align="center">
       <a href="https://github.com/song782360037">
@@ -200,6 +223,16 @@ AGPL-3.0
     <td align="center">
       <a href="https://github.com/JackWPP">
         <img src="https://avatars.githubusercontent.com/u/120316122?size=100" width="100" height="100" alt="JackWPP" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/luhua-123">
+        <img src="https://avatars.githubusercontent.com/u/83643600?size=100" width="100" height="100" alt="luhua-123" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/geofqiu-hub">
+        <img src="https://avatars.githubusercontent.com/u/248376932?size=100" width="100" height="100" alt="geofqiu-hub" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>

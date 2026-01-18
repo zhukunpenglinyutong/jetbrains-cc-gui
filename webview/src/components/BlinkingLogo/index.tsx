@@ -29,6 +29,8 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
   
   // Dropdown state
   const [isOpen, setIsOpen] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +91,27 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
     }
   };
 
+  /**
+   * Show toast message
+   */
+  const showToastMessage = (message: string) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => {
+      setShowToast(false);
+    }, 1500);
+  };
+
   const handleSelect = (providerId: string) => {
+    const provider = AVAILABLE_PROVIDERS.find(p => p.id === providerId);
+    if (!provider) return;
+
+    if (!provider.enabled) {
+      showToastMessage(t('settings.provider.featureComingSoon'));
+      setIsOpen(false);
+      return;
+    }
+
     if (onProviderChange) {
       onProviderChange(providerId);
     }
@@ -134,7 +156,7 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
               className={`selector-option ${p.id === provider ? 'selected' : ''} ${!p.enabled ? 'disabled' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
-                if (p.enabled) handleSelect(p.id);
+                handleSelect(p.id);
               }}
               style={{
                 opacity: p.enabled ? 1 : 0.5,
@@ -148,6 +170,13 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {showToast && (
+        <div className="selector-toast">
+          {toastMessage}
         </div>
       )}
     </div>
