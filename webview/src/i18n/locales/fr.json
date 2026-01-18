@@ -80,7 +80,7 @@
     "commandNotImplemented": "La fonctionnalité `{{command}}` n'est pas encore implémentée.",
     "attachmentFile": "[Pièce jointe: {{fileName}}]",
     "attachmentsUploaded": "[Pièces jointes téléchargées]",
-    "streamingConnected": "Claude connecté, en attente de réponse"
+    "streamingConnected": "Claude connecté, en train de comprendre votre question"
   },
   "settings": {
     "title": "Paramètres",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProjectStatistics, DailyUsage } from '../types/usage';
 
@@ -34,6 +34,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
     content: { date: '', cost: 0, sessions: 0 }
   });
   const sessionsPerPage = 20;
+  const isFirstMount = useRef(true);
 
   useEffect(() => {
     // 设置全局回调
@@ -48,9 +49,23 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
       }
     };
 
-    // 初始加载
-    loadStatistics();
+    // 仅在首次挂载时检查 pending 数据
+    if (isFirstMount.current && window.__pendingUsageStatistics) {
+      console.log('[UsageStatisticsSection] Found pending usage statistics, applying...');
+      try {
+        const data: ProjectStatistics = JSON.parse(window.__pendingUsageStatistics);
+        setStatistics(data);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to parse pending usage statistics:', error);
+        loadStatistics();
+      }
+      window.__pendingUsageStatistics = undefined;
+    } else {
+      loadStatistics();
+    }
 
+    isFirstMount.current = false;
   }, [projectScope]);
 
   const loadStatistics = () => {

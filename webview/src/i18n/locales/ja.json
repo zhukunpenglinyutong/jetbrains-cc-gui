@@ -80,7 +80,7 @@
     "commandNotImplemented": "`{{command}}` 機能はまだ実装されていません。",
     "attachmentFile": "[添付ファイル: {{fileName}}]",
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
-    "streamingConnected": "Claudeに接続しました、応答を待っています"
+    "streamingConnected": "Claudeに接続しました、質問を理解しています"
   },
   "settings": {
     "title": "設定",

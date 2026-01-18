@@ -80,7 +80,7 @@
     "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
     "attachmentFile": "[अटैचमेंट: {{fileName}}]",
     "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
-    "streamingConnected": "Claude कनेक्ट हो गया, प्रतिक्रिया की प्रतीक्षा कर रहा है"
+    "streamingConnected": "Claude कनेक्ट हो गया, आपके प्रश्न को समझ रहा है"
   },
   "settings": {
     "title": "सेटिंग्स",

@@ -163,6 +163,15 @@ if (typeof window !== 'undefined' && !window.updateSendShortcut) {
   };
 }
 
+// 预注册 updateUsageStatistics，避免后端返回状态早于 Settings/UsageStatisticsSection 初始化
+if (typeof window !== 'undefined' && !window.updateUsageStatistics) {
+  console.log('[Main] Pre-registering updateUsageStatistics placeholder');
+  window.updateUsageStatistics = (json: string) => {
+    console.log('[Main] Storing pending usage statistics, length=' + (json ? json.length : 0));
+    window.__pendingUsageStatistics = json;
+  };
+}
+
 if (typeof window !== 'undefined' && !window.showPermissionDialog) {
   console.log('[Main] Pre-registering showPermissionDialog placeholder');
   window.showPermissionDialog = (json: string) => {
