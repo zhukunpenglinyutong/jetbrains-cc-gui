@@ -58,9 +58,14 @@ public class CodexMessageHandler implements MessageCallback {
         } else if ("user".equals(type)) {
             // 处理 user 消息（tool_result）
             handleUserMessage(content);
+        } else if ("result".equals(type)) {
+            // 处理 result 消息（usage 等）
+            handleResultMessage(content);
         } else if ("session_id".equals(type)) {
             // 处理 session_id/thread_id（用于 session 恢复）
             handleSessionId(content);
+        } else if ("event_msg".equals(type)) {
+            handleEventMessage(content);
         } else if ("content_delta".equals(type) || "content".equals(type)) {
             // 处理流式内容增量（旧格式，保留兼容）
             // content_delta: 流式增量
@@ -171,6 +176,95 @@ public class CodexMessageHandler implements MessageCallback {
             callbackHandler.notifySessionIdReceived(threadId);
             LOG.info("Captured Codex thread ID: " + threadId);
         }
+    }
+
+    /**
+     * 处理 result（usage 统计）
+     * 英文：Handle result message (usage stats)
+     */
+    private void handleResultMessage(String jsonContent) {
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            com.google.gson.JsonObject msgJson = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
+            if (msgJson == null || !msgJson.has("usage") || !msgJson.get("usage").isJsonObject()) {
+                return;
+            }
+
+            com.google.gson.JsonObject usage = msgJson.getAsJsonObject("usage");
+            boolean updated = attachUsageToLastAssistant(usage);
+            if (updated) {
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                LOG.info("Codex usage applied from result message");
+            } else {
+                LOG.debug("Codex usage received but no assistant message to attach");
+            }
+        } catch (Exception e) {
+            LOG.debug("Failed to parse Codex result message: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 处理 event_msg（包含 token_count 等事件）
+     * 英文：Handle event_msg (token_count, etc.)
+     */
+    private void handleEventMessage(String jsonContent) {
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            com.google.gson.JsonObject msgJson = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
+            if (msgJson == null || !msgJson.has("payload") || !msgJson.get("payload").isJsonObject()) {
+                return;
+            }
+
+            com.google.gson.JsonObject payload = msgJson.getAsJsonObject("payload");
+            if (!payload.has("type") || !"token_count".equals(payload.get("type").getAsString())) {
+                return;
+            }
+
+            if (!payload.has("info") || payload.get("info").isJsonNull() || !payload.get("info").isJsonObject()) {
+                return;
+            }
+
+            com.google.gson.JsonObject info = payload.getAsJsonObject("info");
+            if (!info.has("total_token_usage") || !info.get("total_token_usage").isJsonObject()) {
+                return;
+            }
+
+            com.google.gson.JsonObject totalUsage = info.getAsJsonObject("total_token_usage");
+            int inputTokens = totalUsage.has("input_tokens") ? totalUsage.get("input_tokens").getAsInt() : 0;
+            int outputTokens = totalUsage.has("output_tokens") ? totalUsage.get("output_tokens").getAsInt() : 0;
+            int cachedInputTokens = totalUsage.has("cached_input_tokens") ? totalUsage.get("cached_input_tokens").getAsInt() : 0;
+
+            com.google.gson.JsonObject usage = new com.google.gson.JsonObject();
+            usage.addProperty("input_tokens", inputTokens);
+            usage.addProperty("output_tokens", outputTokens);
+            usage.addProperty("cache_read_input_tokens", cachedInputTokens);
+            usage.addProperty("cache_creation_input_tokens", 0);
+
+            boolean updated = attachUsageToLastAssistant(usage);
+            if (updated) {
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                LOG.debug("Codex token_count applied: input=" + inputTokens + ", output=" + outputTokens + ", cached=" + cachedInputTokens);
+            } else {
+                LOG.debug("Codex token_count received but no assistant message to attach");
+            }
+        } catch (Exception e) {
+            LOG.debug("Failed to parse Codex event_msg: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 将 usage 挂到最后一条 assistant 消息 raw 上，供前端展示。
+     */
+    private boolean attachUsageToLastAssistant(com.google.gson.JsonObject usage) {
+        java.util.List<Message> messages = state.getMessagesReference();
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message msg = messages.get(i);
+            if (msg.type == Message.Type.ASSISTANT && msg.raw != null) {
+                msg.raw.add("usage", usage);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
