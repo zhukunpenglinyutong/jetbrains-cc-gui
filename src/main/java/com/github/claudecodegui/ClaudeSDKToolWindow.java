@@ -1900,6 +1900,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             interruptFuture.thenRun(() -> {
                 LOG.info("Old session interrupted, creating new session");
 
+                // [FIX] Reset stream state and notify frontend
+                // This ensures streamActive flag is reset and loading=false takes effect
+                synchronized (streamMessageUpdateLock) {
+                    streamActive = false;
+                }
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("onStreamEnd");
+                    callJavaScript("showLoading", "false");
+                });
+
                 // 创建全新的 Session 对象
                 session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 

@@ -62,16 +62,18 @@ export function useSessionManagement({
 
   // Create new session
   const createNewSession = useCallback(() => {
-    // If there are messages in current session, show confirmation dialog
-    if (messages.length > 0) {
-      pendingActionRef.current = 'newSession';
-      setShowNewSessionConfirm(true);
-    } else if (loading) {
-      // If loading, show interrupt confirmation
+    // [FIX] Prioritize loading check - if AI is responding, must interrupt first
+    // This prevents creating new session without stopping the current conversation
+    if (loading) {
+      // If loading (AI is responding), show interrupt confirmation
       pendingActionRef.current = 'newSession';
       setShowInterruptConfirm(true);
+    } else if (messages.length > 0) {
+      // If there are messages but not loading, show new session confirmation
+      pendingActionRef.current = 'newSession';
+      setShowNewSessionConfirm(true);
     } else {
-      // If empty, directly create new session
+      // If empty and not loading, directly create new session
       sendBridgeEvent('create_new_session');
     }
   }, [messages.length, loading]);
@@ -79,11 +81,15 @@ export function useSessionManagement({
   // Confirm new session
   const handleConfirmNewSession = useCallback(() => {
     setShowNewSessionConfirm(false);
+    // [FIX] Safety check: if loading started while dialog was open, send interrupt first
+    if (loading) {
+      sendBridgeEvent('interrupt_session');
+    }
     // Clear current messages and create new session
     setMessages([]);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
-  }, [setMessages]);
+  }, [setMessages, loading]);
 
   // Cancel new session
   const handleCancelNewSession = useCallback(() => {
@@ -109,10 +115,14 @@ export function useSessionManagement({
 
   // Load history session
   const loadHistorySession = useCallback((sessionId: string) => {
+    // [FIX] Send interrupt signal if AI is responding
+    if (loading) {
+      sendBridgeEvent('interrupt_session');
+    }
     sendBridgeEvent('load_session', sessionId);
     setCurrentSessionId(sessionId);
     setCurrentView('chat');
-  }, [setCurrentSessionId, setCurrentView]);
+  }, [loading, setCurrentSessionId, setCurrentView]);
 
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
@@ -133,6 +143,10 @@ export function useSessionManagement({
 
       // If deleted session is current session, clear messages and reset state
       if (sessionId === currentSessionId) {
+        // [FIX] Send interrupt signal if AI is responding
+        if (loading) {
+          sendBridgeEvent('interrupt_session');
+        }
         setMessages([]);
         setCurrentSessionId(null);
         setUsagePercentage(0);
@@ -145,7 +159,7 @@ export function useSessionManagement({
       // Show success toast
       addToast(t('history.sessionDeleted'), 'success');
     }
-  }, [historyData, currentSessionId, setHistoryData, setMessages, setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, addToast, t]);
+  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, addToast, t]);
 
   // Export history session
   const exportHistorySession = useCallback((sessionId: string, title: string) => {

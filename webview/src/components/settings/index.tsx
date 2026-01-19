@@ -342,7 +342,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       window.updateStreamingEnabled = (jsonStr: string) => {
         try {
           const data = JSON.parse(jsonStr);
-          setLocalStreamingEnabled(data.streamingEnabled ?? false);
+          setLocalStreamingEnabled(data.streamingEnabled ?? true);
         } catch (error) {
           console.error('[SettingsView] Failed to parse streaming config:', error);
         }

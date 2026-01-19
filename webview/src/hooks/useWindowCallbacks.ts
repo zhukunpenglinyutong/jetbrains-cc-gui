@@ -11,6 +11,7 @@ import type { RewindRequest } from '../components/RewindDialog';
 import { THROTTLE_INTERVAL } from './useStreamingMessages';
 import { sendBridgeEvent } from '../utils/bridge';
 import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from '../components/ChatInputBox/providers';
+import { downloadJSON } from '../utils/exportMarkdown';
 
 // Performance optimization constants
 /**
@@ -658,19 +659,22 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     window.onExportSessionData = (json) => {
       try {
         const data = JSON.parse(json);
-        if (data.success && data.content) {
-          const blob = new Blob([data.content], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = data.filename || 'session.json';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          addToast(tRef.current('history.exportSuccess'), 'success');
+        // Backend sends: { sessionId, title, messages }
+        if (data.sessionId && data.messages) {
+          // Format the export content
+          const exportContent = JSON.stringify(data, null, 2);
+          // Generate filename from title, sanitize for file system
+          const sanitizedTitle = (data.title || 'session')
+            .replace(/[<>:"/\\|?*]/g, '_')  // Replace invalid file name chars
+            .replace(/\s+/g, '_')            // Replace spaces with underscores
+            .substring(0, 50);               // Limit length
+          const filename = `${sanitizedTitle}_${data.sessionId.substring(0, 8)}.json`;
+          // Use downloadJSON which calls backend to show native file save dialog
+          downloadJSON(exportContent, filename);
+        } else if (data.error) {
+          addToast(data.error, 'error');
         } else {
-          addToast(data.error || tRef.current('history.exportFailed'), 'error');
+          addToast(tRef.current('history.exportFailed'), 'error');
         }
       } catch (error) {
         console.error('[Frontend] Failed to process export data:', error);
@@ -788,7 +792,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     window.updateStreamingEnabled = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
-        setStreamingEnabledSetting(data.streamingEnabled ?? false);
+        setStreamingEnabledSetting(data.streamingEnabled ?? true);
       } catch (error) {
         console.error('[Frontend] Failed to parse streaming enabled:', error);
       }

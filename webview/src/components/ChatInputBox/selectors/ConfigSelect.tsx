@@ -374,7 +374,7 @@ export const ConfigSelect = ({
             </div>
             <Switch
               size="small"
-              checked={streamingEnabled ?? false}
+              checked={streamingEnabled ?? true}
               onClick={(checked, e) => {
                  e.stopPropagation();
                  onStreamingEnabledChange?.(checked);

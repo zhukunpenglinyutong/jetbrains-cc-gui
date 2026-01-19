@@ -254,19 +254,24 @@ tasks.register('buildWebview', Exec) {
     workingDir webviewDir
     environment 'VITE_ENABLE_VCONSOLE', enableVConsoleInWebview ? 'true' : 'false'
 
-    // If custom Node.js path is configured, prepend to PATH environment variable
+    // Determine npm command path
+    def npmCommand = 'npm'
     if (localNodePath) {
         def nodeFile = file(localNodePath)
-        def nodeBinDir = nodeFile.isFile() ? nodeFile.parentFile.absolutePath : nodeFile.absolutePath
+        def nodeBinDir = nodeFile.isFile() ? nodeFile.parentFile : nodeFile
+        def npmExecutable = new File(nodeBinDir, 'bin/npm')
+        if (npmExecutable.exists()) {
+            npmCommand = npmExecutable.absolutePath
+        }
         def currentPath = System.getenv('PATH') ?: ''
-        environment 'PATH', "${nodeBinDir}${File.pathSeparator}${currentPath}"
+        environment 'PATH', "${nodeBinDir}/bin${File.pathSeparator}${currentPath}"
         println "Using custom Node.js path: ${localNodePath}"
     }
 
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        commandLine 'cmd', '/c', 'npm', 'run', 'build'
+        commandLine 'cmd', '/c', npmCommand, 'run', 'build'
     } else {
-        commandLine 'npm', 'run', 'build'
+        commandLine npmCommand, 'run', 'build'
     }
 
     onlyIf { webviewDir.exists() }
