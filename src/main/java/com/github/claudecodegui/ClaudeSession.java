@@ -380,10 +380,10 @@ public class ClaudeSession {
             }
 
             // 处理终端引用
-            // Handle terminal references
-            StringBuilder processedText = new StringBuilder(normalizedInput);
+            // Handle terminal references - replace @terminal://xxx with actual output
             java.util.regex.Pattern termPattern = java.util.regex.Pattern.compile("@terminal://([a-zA-Z0-9_]+)");
             java.util.regex.Matcher termMatcher = termPattern.matcher(normalizedInput);
+            StringBuffer processedText = new StringBuffer();
             int matchCount = 0;
             while (termMatcher.find()) {
                  matchCount++;
@@ -392,13 +392,15 @@ public class ClaudeSession {
                  String content = resolveTerminalContent(safeName);
                  if (content != null && !content.isEmpty()) {
                      String terminalBlock = "\n\nTerminal Output (" + safeName + "):\n```\n" + content + "\n```";
-                     contentArr.add(createTextBlock(terminalBlock));
-                     processedText.append(terminalBlock);
-                     LOG.info("[Terminal] Successfully added content block for: " + safeName);
+                     termMatcher.appendReplacement(processedText, java.util.regex.Matcher.quoteReplacement(terminalBlock));
+                     LOG.info("[Terminal] Successfully replaced terminal reference for: " + safeName);
                  } else {
+                     // If no content, replace with empty string to remove the reference
+                     termMatcher.appendReplacement(processedText, "");
                      LOG.warn("[Terminal] Content was empty or null for: " + safeName);
                  }
             }
+            termMatcher.appendTail(processedText);
             if (matchCount == 0 && normalizedInput.contains("@terminal://")) {
                 LOG.warn("[Terminal] Message contains '@terminal://' but regex did not match correctly.");
             }
@@ -653,13 +655,39 @@ public class ClaudeSession {
         StringBuilder sb = new StringBuilder();
         boolean hasContent = false;
 
-        // 【FIX】处理用户通过 @ 引用的文件标签
-        // Process file tags added by user via @
+        // Separate terminal paths from file paths for distinct handling
+        List<String> terminalPaths = new java.util.ArrayList<>();
+        List<String> regularFilePaths = new java.util.ArrayList<>();
+
         if (fileTagPaths != null && !fileTagPaths.isEmpty()) {
+            for (String path : fileTagPaths) {
+                if (path != null && path.startsWith("terminal://")) {
+                    terminalPaths.add(path);
+                } else {
+                    regularFilePaths.add(path);
+                }
+            }
+        }
+
+        // Process terminal context - separate section
+        if (!terminalPaths.isEmpty()) {
+            sb.append("\n\n## Active Terminal Session\n\n");
+            sb.append("The user is working in the following terminal context:\n\n");
+            for (String terminalPath : terminalPaths) {
+                // Extract session name from terminal://session-name
+                String sessionName = terminalPath.substring("terminal://".length());
+                sb.append("- **Terminal**: `").append(sessionName).append("`\n");
+            }
+            sb.append("\nCommands should be executed in this terminal context.\n\n");
+            hasContent = true;
+        }
+
+        // Process regular file tags added by user via @
+        if (!regularFilePaths.isEmpty()) {
             sb.append("\n\n## Referenced Files\n\n");
             sb.append("The following files were referenced by the user:\n\n");
 
-            for (String filePath : fileTagPaths) {
+            for (String filePath : regularFilePaths) {
                 String fileContent = readFileContent(filePath);
                 if (fileContent != null) {
                     String extension = getFileExtension(filePath);
