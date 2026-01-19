@@ -66,7 +66,7 @@ const BasicConfigSection = ({
   savingWorkingDirectory = false,
   editorFontConfig,
   // 🔧 流式传输配置
-  streamingEnabled = false,
+  streamingEnabled = true,
   onStreamingEnabledChange = () => {},
   // 发送快捷键配置
   sendShortcut = 'enter',

@@ -315,7 +315,7 @@ public class CodemossSettingsService {
 
         // 检查是否有 streaming 配置
         if (!config.has("streaming")) {
-            return false;
+            return true;
         }
 
         JsonObject streaming = config.getAsJsonObject("streaming");
@@ -330,7 +330,7 @@ public class CodemossSettingsService {
             return streaming.get("default").getAsBoolean();
         }
 
-        return false;
+        return true;
     }
 
     /**

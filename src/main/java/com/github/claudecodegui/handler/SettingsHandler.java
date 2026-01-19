@@ -775,7 +775,7 @@ public class SettingsHandler extends BaseMessageHandler {
             if (projectPath == null) {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     JsonObject response = new JsonObject();
-                    response.addProperty("streamingEnabled", false);
+                    response.addProperty("streamingEnabled", true);
                     callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
                 });
                 return;
@@ -794,7 +794,7 @@ public class SettingsHandler extends BaseMessageHandler {
             LOG.error("[SettingsHandler] Failed to get streaming enabled: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
-                response.addProperty("streamingEnabled", false);
+                response.addProperty("streamingEnabled", true);
                 callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
             });
         }
@@ -815,7 +815,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
             Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            boolean streamingEnabled = false;
+            boolean streamingEnabled = true;
 
             if (json != null && json.has("streamingEnabled") && !json.get("streamingEnabled").isJsonNull()) {
                 streamingEnabled = json.get("streamingEnabled").getAsBoolean();

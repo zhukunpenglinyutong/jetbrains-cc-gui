@@ -265,6 +265,11 @@ interface Window {
   updateUsageStatistics?: (json: string) => void;
 
   /**
+   * Pending usage statistics before component mounts
+   */
+  __pendingUsageStatistics?: string;
+
+  /**
    * Update slash commands list (from SDK)
    */
   updateSlashCommands?: (json: string) => void;

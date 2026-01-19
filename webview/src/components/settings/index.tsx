@@ -342,7 +342,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       window.updateStreamingEnabled = (jsonStr: string) => {
         try {
           const data = JSON.parse(jsonStr);
-          setLocalStreamingEnabled(data.streamingEnabled ?? false);
+          setLocalStreamingEnabled(data.streamingEnabled ?? true);
         } catch (error) {
           console.error('[SettingsView] Failed to parse streaming config:', error);
         }
@@ -894,7 +894,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
         {/* 内容区域 */}
         <div className={`${styles.settingsContent} ${currentTab === 'providers' ? styles.providerSettingsContent : ''}`}>
           {/* 基础配置 */}
-          {currentTab === 'basic' && (
+          <div style={{ display: currentTab === 'basic' ? 'block' : 'none' }}>
             <BasicConfigSection
               theme={theme}
               onThemeChange={setTheme}
@@ -916,10 +916,10 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
               sendShortcut={sendShortcut}
               onSendShortcutChange={handleSendShortcutChange}
             />
-          )}
+          </div>
 
           {/* 供应商管理 */}
-          {currentTab === 'providers' && !isCodexMode && (
+          <div style={{ display: currentTab === 'providers' && !isCodexMode ? 'block' : 'none' }}>
             <ProviderManageSection
               claudeConfig={claudeConfig}
               claudeConfigLoading={claudeConfigLoading}
@@ -931,10 +931,10 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
               onSwitchProvider={handleSwitchProvider}
               addToast={addToast}
             />
-          )}
+          </div>
 
           {/* Codex 供应商管理 */}
-          {currentTab === 'providers' && isCodexMode && (
+          <div style={{ display: currentTab === 'providers' && isCodexMode ? 'block' : 'none' }}>
             <div className={styles.configSection}>
               <h3 className={styles.sectionTitle}>{t('settings.codexProvider.title')}</h3>
               <p className={styles.sectionDesc}>{t('settings.codexProvider.description')}</p>
@@ -1015,22 +1015,30 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
                 </div>
               )}
             </div>
-          )}
+          </div>
 
           {/* SDK 依赖管理 */}
-          {currentTab === 'dependencies' && <DependencySection addToast={addToast} />}
+          <div style={{ display: currentTab === 'dependencies' ? 'block' : 'none' }}>
+            <DependencySection addToast={addToast} />
+          </div>
 
           {/* 使用统计 */}
-          {currentTab === 'usage' && <UsageSection currentProvider={currentProvider} />}
+          <div style={{ display: currentTab === 'usage' ? 'block' : 'none' }}>
+            <UsageSection currentProvider={currentProvider} />
+          </div>
 
           {/* MCP服务器 */}
-          {currentTab === 'mcp' && <PlaceholderSection type="mcp" currentProvider={currentProvider} />}
+          <div style={{ display: currentTab === 'mcp' ? 'block' : 'none' }}>
+            <PlaceholderSection type="mcp" currentProvider={currentProvider} />
+          </div>
 
           {/* 权限配置 */}
-          {currentTab === 'permissions' && <PlaceholderSection type="permissions" />}
+          <div style={{ display: currentTab === 'permissions' ? 'block' : 'none' }}>
+            <PlaceholderSection type="permissions" />
+          </div>
 
           {/* Agents */}
-          {currentTab === 'agents' && (
+          <div style={{ display: currentTab === 'agents' ? 'block' : 'none' }}>
             <AgentSection
               agents={agents}
               loading={agentsLoading}
@@ -1038,13 +1046,17 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
               onEdit={handleEditAgent}
               onDelete={handleDeleteAgent}
             />
-          )}
+          </div>
 
           {/* Skills */}
-          {currentTab === 'skills' && <SkillsSettingsSection />}
+          <div style={{ display: currentTab === 'skills' ? 'block' : 'none' }}>
+            <SkillsSettingsSection />
+          </div>
 
           {/* 官方交流群 */}
-          {currentTab === 'community' && <CommunitySection />}
+          <div style={{ display: currentTab === 'community' ? 'block' : 'none' }}>
+            <CommunitySection />
+          </div>
         </div>
       </div>
 

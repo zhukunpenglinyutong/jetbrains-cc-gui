@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.5'
+version = '0.1.6-beta1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -48,15 +48,18 @@ if (localJavaHome) {
     if (javaHomeDir.exists()) {
         println "Using custom Java home: ${localJavaHome}"
 
-        // Set the Java launcher for all JavaExec and Test tasks
+        // Set the Java launcher for all JavaExec and Test tasks (except runIde)
         tasks.withType(JavaCompile).configureEach {
             options.fork = true
             options.forkOptions.javaHome = javaHomeDir
         }
 
         tasks.withType(JavaExec).configureEach {
-            javaLauncher = javaToolchains.launcherFor {
-                languageVersion = JavaLanguageVersion.of(17)
+            // Skip runIde task to use JBR for JCEF support
+            if (it.name != 'runIde') {
+                javaLauncher = javaToolchains.launcherFor {
+                    languageVersion = JavaLanguageVersion.of(17)
+                }
             }
         }
     } else {
@@ -251,19 +254,55 @@ tasks.register('buildWebview', Exec) {
     workingDir webviewDir
     environment 'VITE_ENABLE_VCONSOLE', enableVConsoleInWebview ? 'true' : 'false'
 
-    // If custom Node.js path is configured, prepend to PATH environment variable
+    // Determine npm command path with robust detection
+    def npmCommand = 'npm'
     if (localNodePath) {
         def nodeFile = file(localNodePath)
-        def nodeBinDir = nodeFile.isFile() ? nodeFile.parentFile.absolutePath : nodeFile.absolutePath
-        def currentPath = System.getenv('PATH') ?: ''
-        environment 'PATH', "${nodeBinDir}${File.pathSeparator}${currentPath}"
+        def npmExecutable = null
+        def pathToAdd = null
+
+        if (nodeFile.isFile()) {
+            // localNodePath points to node executable (e.g., /usr/local/bin/node)
+            // npm should be in the same directory
+            def binDir = nodeFile.parentFile
+            def npmInSameDir = new File(binDir, 'npm')
+            if (npmInSameDir.exists()) {
+                npmExecutable = npmInSameDir
+                pathToAdd = binDir.absolutePath
+            }
+        } else if (nodeFile.isDirectory()) {
+            // localNodePath points to a directory, check multiple possible locations
+            // Case 1: bin/npm (standard installation like /usr/local/node/bin/npm)
+            def npmInBin = new File(nodeFile, 'bin/npm')
+            // Case 2: npm directly in directory (e.g., /usr/local/bin/npm)
+            def npmInDir = new File(nodeFile, 'npm')
+
+            if (npmInBin.exists()) {
+                npmExecutable = npmInBin
+                pathToAdd = new File(nodeFile, 'bin').absolutePath
+            } else if (npmInDir.exists()) {
+                npmExecutable = npmInDir
+                pathToAdd = nodeFile.absolutePath
+            }
+        }
+
+        if (npmExecutable != null) {
+            npmCommand = npmExecutable.absolutePath
+            println "Using npm executable: ${npmCommand}"
+        }
+
+        if (pathToAdd != null) {
+            def currentPath = System.getenv('PATH') ?: ''
+            environment 'PATH', "${pathToAdd}${File.pathSeparator}${currentPath}"
+        }
+
         println "Using custom Node.js path: ${localNodePath}"
     }
 
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        commandLine 'cmd', '/c', 'npm', 'run', 'build'
+        commandLine 'cmd', '/c', npmCommand, 'run', 'build'
     } else {
-        commandLine 'npm', 'run', 'build'
+        commandLine npmCommand, 'run', 'build'
     }
 
     onlyIf { webviewDir.exists() }

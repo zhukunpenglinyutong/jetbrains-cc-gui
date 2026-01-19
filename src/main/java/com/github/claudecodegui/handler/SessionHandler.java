@@ -293,7 +293,12 @@ public class SessionHandler extends BaseMessageHandler {
      */
     private void handleInterruptSession() {
         context.getSession().interrupt().thenRun(() -> {
-            ApplicationManager.getApplication().invokeLater(() -> {});
+            ApplicationManager.getApplication().invokeLater(() -> {
+                // [FIX] Notify frontend that stream has ended and reset loading state
+                // This ensures streamActive flag is reset and loading=false takes effect
+                context.callJavaScript("onStreamEnd");
+                context.callJavaScript("showLoading", "false");
+            });
         });
     }
 

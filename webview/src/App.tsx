@@ -159,7 +159,7 @@ const App = () => {
   const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
   // 🔧 流式传输开关状态（同步设置页面）
-  const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(false);
+  const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(true);
   // 发送快捷键设置
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
 

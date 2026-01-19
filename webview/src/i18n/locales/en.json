@@ -81,7 +81,7 @@
     "commandNotImplemented": "`{{command}}` feature is not yet implemented.",
     "attachmentFile": "[Attachment: {{fileName}}]",
     "attachmentsUploaded": "[Attachments Uploaded]",
-    "streamingConnected": "Claude connected, waiting for response"
+    "streamingConnected": "Claude connected, understanding your question"
   },
   "settings": {
     "title": "Settings",
