@@ -1,3 +1,23 @@
+##### **2026年1月19日（v0.1.6-beta1）**
+
+English:
+- [x] Fix dialog appearing in wrong IDEA window when multiple instances are open
+- [x] Enable streaming responses by default for smoother experience
+- [x] Fix session state occasionally becoming abnormal
+- [x] Use system native save dialog when exporting sessions
+- [x] Fix settings tab losing input when switching tabs
+- [x] Fix usage statistics accuracy
+- [x] Fix custom Node.js path compatibility issue
+
+中文:
+- [x] 修复多开IDEA时，弹窗可能跑到其他IDEA窗口的问题
+- [x] 默认开启流式回复，响应更流畅
+- [x] 修复会话状态偶尔异常的问题
+- [x] 导出会话时使用系统原生保存对话框
+- [x] 修复切换设置页签时丢失已填写内容的问题
+- [x] 修复使用统计不准确的问题
+- [x] 修复自定义Node.js路径的兼容性问题
+
 ##### **2026年1月17日（v0.1.5）**
 
 English:

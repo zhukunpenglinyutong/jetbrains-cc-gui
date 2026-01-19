@@ -254,17 +254,48 @@ tasks.register('buildWebview', Exec) {
     workingDir webviewDir
     environment 'VITE_ENABLE_VCONSOLE', enableVConsoleInWebview ? 'true' : 'false'
 
-    // Determine npm command path
+    // Determine npm command path with robust detection
     def npmCommand = 'npm'
     if (localNodePath) {
         def nodeFile = file(localNodePath)
-        def nodeBinDir = nodeFile.isFile() ? nodeFile.parentFile : nodeFile
-        def npmExecutable = new File(nodeBinDir, 'bin/npm')
-        if (npmExecutable.exists()) {
-            npmCommand = npmExecutable.absolutePath
+        def npmExecutable = null
+        def pathToAdd = null
+
+        if (nodeFile.isFile()) {
+            // localNodePath points to node executable (e.g., /usr/local/bin/node)
+            // npm should be in the same directory
+            def binDir = nodeFile.parentFile
+            def npmInSameDir = new File(binDir, 'npm')
+            if (npmInSameDir.exists()) {
+                npmExecutable = npmInSameDir
+                pathToAdd = binDir.absolutePath
+            }
+        } else if (nodeFile.isDirectory()) {
+            // localNodePath points to a directory, check multiple possible locations
+            // Case 1: bin/npm (standard installation like /usr/local/node/bin/npm)
+            def npmInBin = new File(nodeFile, 'bin/npm')
+            // Case 2: npm directly in directory (e.g., /usr/local/bin/npm)
+            def npmInDir = new File(nodeFile, 'npm')
+
+            if (npmInBin.exists()) {
+                npmExecutable = npmInBin
+                pathToAdd = new File(nodeFile, 'bin').absolutePath
+            } else if (npmInDir.exists()) {
+                npmExecutable = npmInDir
+                pathToAdd = nodeFile.absolutePath
+            }
         }
-        def currentPath = System.getenv('PATH') ?: ''
-        environment 'PATH', "${nodeBinDir}/bin${File.pathSeparator}${currentPath}"
+
+        if (npmExecutable != null) {
+            npmCommand = npmExecutable.absolutePath
+            println "Using npm executable: ${npmCommand}"
+        }
+
+        if (pathToAdd != null) {
+            def currentPath = System.getenv('PATH') ?: ''
+            environment 'PATH', "${pathToAdd}${File.pathSeparator}${currentPath}"
+        }
+
         println "Using custom Node.js path: ${localNodePath}"
     }
 
