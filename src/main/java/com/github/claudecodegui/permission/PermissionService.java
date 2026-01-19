@@ -420,6 +420,150 @@ public class PermissionService {
     }
 
     /**
+     * 根据工作目录匹配项目
+     * 从 AskUserQuestion 请求中提取 cwd，然后找到对应的项目
+     *
+     * @param request AskUserQuestion 请求数据
+     * @return 匹配的项目对应的 DialogShower，如果匹配不到则使用 lastActiveProject
+     */
+    private AskUserQuestionDialogShower findAskUserQuestionDialogShowerByCwd(JsonObject request) {
+        if (askUserQuestionDialogShowers.isEmpty()) {
+            debugLog("MATCH_ASK_PROJECT", "No AskUserQuestion dialog showers registered");
+            return null;
+        }
+
+        // 只有一个项目时，直接返回
+        if (askUserQuestionDialogShowers.size() == 1) {
+            Map.Entry<Project, AskUserQuestionDialogShower> entry =
+                askUserQuestionDialogShowers.entrySet().iterator().next();
+            debugLog("MATCH_ASK_PROJECT", "Single project registered: " + entry.getKey().getName());
+            return entry.getValue();
+        }
+
+        // 从请求中提取 cwd
+        String cwd = null;
+        if (request.has("cwd") && !request.get("cwd").isJsonNull()) {
+            cwd = request.get("cwd").getAsString();
+        }
+
+        if (cwd == null || cwd.isEmpty()) {
+            debugLog("MATCH_ASK_PROJECT", "No cwd found in request, using preferred dialog shower");
+            return getPreferredDialogShower(askUserQuestionDialogShowers);
+        }
+
+        // 规范化 cwd 路径
+        String normalizedCwd = normalizePath(cwd);
+        debugLog("MATCH_ASK_PROJECT", "Extracted cwd: " + cwd +
+            (cwd.equals(normalizedCwd) ? "" : " (normalized: " + normalizedCwd + ")"));
+
+        // 遍历所有项目，找到路径匹配的项目（选择最长匹配）
+        Project bestMatch = null;
+        int longestMatchLength = 0;
+
+        for (Map.Entry<Project, AskUserQuestionDialogShower> entry :
+                askUserQuestionDialogShowers.entrySet()) {
+            Project project = entry.getKey();
+            String projectPath = project.getBasePath();
+
+            if (projectPath != null) {
+                String normalizedProjectPath = normalizePath(projectPath);
+
+                // 检查 cwd 是否在项目路径下
+                if (isFileInProject(normalizedCwd, normalizedProjectPath)) {
+                    if (normalizedProjectPath.length() > longestMatchLength) {
+                        longestMatchLength = normalizedProjectPath.length();
+                        bestMatch = project;
+                        debugLog("MATCH_ASK_PROJECT", "Found potential match: " + project.getName() +
+                            " (path: " + projectPath + ", length: " + normalizedProjectPath.length() + ")");
+                    }
+                }
+            }
+        }
+
+        if (bestMatch != null) {
+            debugLog("MATCH_ASK_PROJECT", "Matched project: " + bestMatch.getName() +
+                " (path: " + bestMatch.getBasePath() + ")");
+            return askUserQuestionDialogShowers.get(bestMatch);
+        }
+
+        // 匹配失败，使用 lastActiveProject
+        debugLog("MATCH_ASK_PROJECT", "No matching project found, using preferred dialog shower");
+        return getPreferredDialogShower(askUserQuestionDialogShowers);
+    }
+
+    /**
+     * 根据工作目录匹配项目
+     * 从 PlanApproval 请求中提取 cwd，然后找到对应的项目
+     *
+     * @param request PlanApproval 请求数据
+     * @return 匹配的项目对应的 DialogShower，如果匹配不到则使用 lastActiveProject
+     */
+    private PlanApprovalDialogShower findPlanApprovalDialogShowerByCwd(JsonObject request) {
+        if (planApprovalDialogShowers.isEmpty()) {
+            debugLog("MATCH_PLAN_PROJECT", "No PlanApproval dialog showers registered");
+            return null;
+        }
+
+        // 只有一个项目时，直接返回
+        if (planApprovalDialogShowers.size() == 1) {
+            Map.Entry<Project, PlanApprovalDialogShower> entry =
+                planApprovalDialogShowers.entrySet().iterator().next();
+            debugLog("MATCH_PLAN_PROJECT", "Single project registered: " + entry.getKey().getName());
+            return entry.getValue();
+        }
+
+        // 从请求中提取 cwd
+        String cwd = null;
+        if (request.has("cwd") && !request.get("cwd").isJsonNull()) {
+            cwd = request.get("cwd").getAsString();
+        }
+
+        if (cwd == null || cwd.isEmpty()) {
+            debugLog("MATCH_PLAN_PROJECT", "No cwd found in request, using preferred dialog shower");
+            return getPreferredDialogShower(planApprovalDialogShowers);
+        }
+
+        // 规范化 cwd 路径
+        String normalizedCwd = normalizePath(cwd);
+        debugLog("MATCH_PLAN_PROJECT", "Extracted cwd: " + cwd +
+            (cwd.equals(normalizedCwd) ? "" : " (normalized: " + normalizedCwd + ")"));
+
+        // 遍历所有项目，找到路径匹配的项目（选择最长匹配）
+        Project bestMatch = null;
+        int longestMatchLength = 0;
+
+        for (Map.Entry<Project, PlanApprovalDialogShower> entry :
+                planApprovalDialogShowers.entrySet()) {
+            Project project = entry.getKey();
+            String projectPath = project.getBasePath();
+
+            if (projectPath != null) {
+                String normalizedProjectPath = normalizePath(projectPath);
+
+                // 检查 cwd 是否在项目路径下
+                if (isFileInProject(normalizedCwd, normalizedProjectPath)) {
+                    if (normalizedProjectPath.length() > longestMatchLength) {
+                        longestMatchLength = normalizedProjectPath.length();
+                        bestMatch = project;
+                        debugLog("MATCH_PLAN_PROJECT", "Found potential match: " + project.getName() +
+                            " (path: " + projectPath + ", length: " + normalizedProjectPath.length() + ")");
+                    }
+                }
+            }
+        }
+
+        if (bestMatch != null) {
+            debugLog("MATCH_PLAN_PROJECT", "Matched project: " + bestMatch.getName() +
+                " (path: " + bestMatch.getBasePath() + ")");
+            return planApprovalDialogShowers.get(bestMatch);
+        }
+
+        // 匹配失败，使用 lastActiveProject
+        debugLog("MATCH_PLAN_PROJECT", "No matching project found, using preferred dialog shower");
+        return getPreferredDialogShower(planApprovalDialogShowers);
+    }
+
+    /**
      * 从 inputs 中提取文件路径
      * 支持多种字段：file_path、path、command 中的路径等
      */
@@ -1045,8 +1189,8 @@ public class PermissionService {
 
         debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
 
-        // 获取 AskUserQuestion 对话框显示器（优先使用最近活动的项目）
-        AskUserQuestionDialogShower dialogShower = getPreferredDialogShower(askUserQuestionDialogShowers);
+        // 获取 AskUserQuestion 对话框显示器（根据 cwd 匹配项目，支持多 IDEA 实例）
+        AskUserQuestionDialogShower dialogShower = findAskUserQuestionDialogShowerByCwd(request);
 
         if (dialogShower != null) {
             debugLog("ASK_DIALOG_SHOWER", "Using AskUserQuestion dialog shower");
@@ -1173,8 +1317,8 @@ public class PermissionService {
                 debugLog("PLAN_FILE_DELETE_ERROR", "Failed to delete PlanApproval request file: " + e.getMessage());
             }
 
-            // 找到对应的对话框显示器（优先使用最近活动的项目）
-            PlanApprovalDialogShower dialogShower = getPreferredDialogShower(planApprovalDialogShowers);
+            // 找到对应的对话框显示器（根据 cwd 匹配项目，支持多 IDEA 实例）
+            PlanApprovalDialogShower dialogShower = findPlanApprovalDialogShowerByCwd(request);
 
             if (dialogShower != null) {
                 debugLog("PLAN_DIALOG_SHOWER", "Using frontend dialog for PlanApproval");

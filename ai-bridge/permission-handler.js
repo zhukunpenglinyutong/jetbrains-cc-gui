@@ -115,7 +115,8 @@ async function requestAskUserQuestionAnswers(input) {
       requestId,
       toolName: 'AskUserQuestion',
       questions: input.questions || [],
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cwd: process.cwd()  // Add working directory for project matching in multi-IDEA scenarios
     };
 
     debugLog('ASK_USER_QUESTION_FILE_WRITE', `Writing question request file`, { requestFile, responseFile });
@@ -209,7 +210,8 @@ export async function requestPlanApproval(input) {
       requestId,
       toolName: 'ExitPlanMode',
       allowedPrompts: input?.allowedPrompts || [],
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cwd: process.cwd()  // Add working directory for project matching in multi-IDEA scenarios
     };
 
     debugLog('PLAN_APPROVAL_FILE_WRITE', `Writing plan approval request file`, { requestFile, responseFile });
