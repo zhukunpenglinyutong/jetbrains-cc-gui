@@ -120,6 +120,9 @@
             <add-to-group group-id="EditorPopupMenu"
                            anchor="after"
                            relative-to-action="ClaudeCodeGUI.SendSelectionToTerminalAction"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift Q"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift Q"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="meta shift Q"/>
         </action>
 
         <!-- Create New Tab Action (can be invoked via Find Action or programmatically) -->
