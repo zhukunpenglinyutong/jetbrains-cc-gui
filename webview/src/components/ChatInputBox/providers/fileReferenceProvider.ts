@@ -1,6 +1,6 @@
 import type { FileItem, DropdownItemData } from '../types';
 import { getFileIcon, getFolderIcon } from '../../../utils/fileIcons';
-import { icon_terminal } from '../../../utils/icons';
+import { icon_terminal, icon_server } from '../../../utils/icons';
 
 // 请求队列管理
 let pendingResolve: ((files: FileItem[]) => void) | null = null;
@@ -192,11 +192,14 @@ export async function fileReferenceProvider(
  */
 export function fileToDropdownItem(file: FileItem): DropdownItemData {
   let iconSvg: string;
-  let type: 'directory' | 'file' | 'terminal';
+  let type: 'directory' | 'file' | 'terminal' | 'service';
 
   if (file.type === 'terminal') {
     iconSvg = icon_terminal;
     type = 'terminal';
+  } else if (file.type === 'service') {
+    iconSvg = icon_server;
+    type = 'service';
   } else if (file.type === 'directory') {
     iconSvg = getFolderIcon(file.name, false);
     type = 'directory';

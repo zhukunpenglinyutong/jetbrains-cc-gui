@@ -19,6 +19,7 @@ import com.github.claudecodegui.terminal.TerminalMonitorService;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import com.github.claudecodegui.service.RunConfigMonitorService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -407,6 +408,29 @@ public class ClaudeSession {
 
             userDisplayText = processedText.toString();
 
+            // 处理 Service 引用
+            // Handle service references - replace @service://xxx with actual output
+            java.util.regex.Pattern servicePattern = java.util.regex.Pattern.compile("@service://([a-zA-Z0-9_]+)");
+            java.util.regex.Matcher serviceMatcher = servicePattern.matcher(userDisplayText);
+            StringBuffer serviceProcessedText = new StringBuffer();
+            int serviceMatchCount = 0;
+            while (serviceMatcher.find()) {
+                serviceMatchCount++;
+                String safeName = serviceMatcher.group(1);
+                LOG.info("[Service] Found mention in message: @service://" + safeName);
+                String content = resolveServiceContent(safeName);
+                if (content != null && !content.isEmpty()) {
+                    String serviceBlock = "\n\nService Output (" + safeName + "):\n```\n" + content + "\n```";
+                    serviceMatcher.appendReplacement(serviceProcessedText, java.util.regex.Matcher.quoteReplacement(serviceBlock));
+                    LOG.info("[Service] Successfully replaced service reference for: " + safeName);
+                } else {
+                    serviceMatcher.appendReplacement(serviceProcessedText, "");
+                    LOG.warn("[Service] Content was empty or null for: " + safeName);
+                }
+            }
+            serviceMatcher.appendTail(serviceProcessedText);
+            userDisplayText = serviceProcessedText.toString();
+
             // 添加文本块（始终添加）
             // Always add text block
             // 解释：把用户说的话也加进去
@@ -461,6 +485,31 @@ public class ClaudeSession {
                 LOG.warn("[Terminal] No matching terminal found for: " + safeName);
             } catch (Exception e) {
                 LOG.error("[Terminal] Error resolving terminal content: " + e.getMessage(), e);
+            }
+            return "";
+        });
+    }
+
+    private String resolveServiceContent(String safeName) {
+        return ReadAction.compute(() -> {
+            try {
+                List<RunConfigMonitorService.RunConfigInfo> configs = RunConfigMonitorService.getRunConfigurations(project);
+                LOG.info("[Service] Resolving: " + safeName + ". Available configs: " + configs.size());
+
+                for (RunConfigMonitorService.RunConfigInfo config : configs) {
+                    String displayName = config.getDisplayName();
+                    String wSafeName = displayName.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
+                    LOG.info("[Service] - Candidate: " + displayName + " (Safe: " + wSafeName + ")");
+
+                    if (wSafeName.equals(safeName)) {
+                        String content = config.getContent();
+                        LOG.info("[Service] Match found! Content length: " + (content != null ? content.length() : "null"));
+                        return content;
+                    }
+                }
+                LOG.warn("[Service] No matching service found for: " + safeName);
+            } catch (Exception e) {
+                LOG.error("[Service] Error resolving service content: " + e.getMessage(), e);
             }
             return "";
         });

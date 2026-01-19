@@ -96,6 +96,9 @@
         <!-- Monitor Terminal Output -->
         <postStartupActivity implementation="com.github.claudecodegui.terminal.TerminalMonitorService"/>
 
+        <!-- Monitor Run/Debug Service Output -->
+        <postStartupActivity implementation="com.github.claudecodegui.service.RunConfigMonitorService"/>
+
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
                                 implementation="com.github.claudecodegui.notifications.ClaudeStatusBarWidget$Factory"/>

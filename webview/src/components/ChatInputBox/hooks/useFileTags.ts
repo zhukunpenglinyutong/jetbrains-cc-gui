@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
 import { getFileIcon } from '../../../utils/fileIcons.js';
-import { icon_folder, icon_terminal } from '../../../utils/icons.js';
+import { icon_folder, icon_terminal, icon_server } from '../../../utils/icons.js';
 import type { FileTagInfo } from '../types.js';
 
 interface UseFileTagsOptions {
@@ -126,15 +126,18 @@ export function useFileTags({
       // Get display filename (with line number, for display)
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
 
-      // Check if it's a terminal
+      // Check if it's a terminal or service
       const isTerminal = pureFilePath.startsWith('terminal://');
+      const isService = pureFilePath.startsWith('service://');
 
-      // Determine if file or directory (only when not terminal)
-      const isDirectory = !isTerminal && !pureFileName.includes('.');
+      // Determine if file or directory (only when not terminal/service)
+      const isDirectory = !isTerminal && !isService && !pureFileName.includes('.');
 
       let iconSvg = '';
       if (isTerminal) {
         iconSvg = icon_terminal;
+      } else if (isService) {
+        iconSvg = icon_server;
       } else if (isDirectory) {
         iconSvg = icon_folder;
       } else {
