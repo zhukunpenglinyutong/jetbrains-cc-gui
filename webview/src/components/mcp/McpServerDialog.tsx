@@ -5,22 +5,25 @@ import type { McpServer, McpServerSpec } from '../../types/mcp';
 interface McpServerDialogProps {
   server?: McpServer | null;
   existingIds?: string[];
+  currentProvider?: 'claude' | 'codex' | string;
   onClose: () => void;
   onSave: (server: McpServer) => void;
 }
 
 /**
  * MCP Server Configuration Dialog (Add/Edit)
+ * Supports both Claude and Codex providers
  */
-export function McpServerDialog({ server, existingIds = [], onClose, onSave }: McpServerDialogProps) {
+export function McpServerDialog({ server, existingIds = [], currentProvider = 'claude', onClose, onSave }: McpServerDialogProps) {
   const { t } = useTranslation();
+  const isCodexMode = currentProvider === 'codex';
   const [saving, setSaving] = useState(false);
   const [jsonContent, setJsonContent] = useState('');
   const [parseError, setParseError] = useState('');
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
-  // 示例占位符
-  const placeholder = `// demo:
+  // Placeholder examples based on provider
+  const claudePlaceholder = `// demo:
 // {
 //   "mcpServers": {
 //     "example-server": {
@@ -32,6 +35,23 @@ export function McpServerDialog({ server, existingIds = [], onClose, onSave }: M
 //     }
 //   }
 // }`;
+
+  const codexPlaceholder = `// Codex MCP Server Example:
+// {
+//   "mcpServers": {
+//     "context7": {
+//       "command": "npx",
+//       "args": ["-y", "@upstash/context7-mcp"],
+//       "env": {
+//         "CONTEXT7_API_KEY": "your-api-key"
+//       },
+//       "startup_timeout_sec": 20,
+//       "tool_timeout_sec": 60
+//     }
+//   }
+// }`;
+
+  const placeholder = isCodexMode ? codexPlaceholder : claudePlaceholder;
 
   // 计算行数
   const lineCount = Math.max((jsonContent || placeholder).split('\n').length, 12);
@@ -121,10 +141,17 @@ export function McpServerDialog({ server, existingIds = [], onClose, onSave }: M
               env: serverConfig.env,
               url: serverConfig.url,
               headers: serverConfig.headers,
+              // Codex-specific fields
+              ...(isCodexMode && {
+                startup_timeout_sec: serverConfig.startup_timeout_sec,
+                tool_timeout_sec: serverConfig.tool_timeout_sec,
+                enabled_tools: serverConfig.enabled_tools,
+                disabled_tools: serverConfig.disabled_tools,
+              }),
             } as McpServerSpec,
             apps: {
-              claude: true,
-              codex: false,
+              claude: !isCodexMode,
+              codex: isCodexMode,
               gemini: false,
             },
             enabled: true,
@@ -145,10 +172,17 @@ export function McpServerDialog({ server, existingIds = [], onClose, onSave }: M
             env: parsed.env,
             url: parsed.url,
             headers: parsed.headers,
+            // Codex-specific fields
+            ...(isCodexMode && {
+              startup_timeout_sec: parsed.startup_timeout_sec,
+              tool_timeout_sec: parsed.tool_timeout_sec,
+              enabled_tools: parsed.enabled_tools,
+              disabled_tools: parsed.disabled_tools,
+            }),
           } as McpServerSpec,
           apps: {
-            claude: true,
-            codex: false,
+            claude: !isCodexMode,
+            codex: isCodexMode,
             gemini: false,
           },
           enabled: true,

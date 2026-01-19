@@ -30,12 +30,20 @@
 
 .todo-panel-progress {
   flex: 1;
+  min-width: 0;
   font-size: 13px;
   font-weight: 500;
   color: var(--color-todo-panel-progress);
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.todo-panel-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .todo-panel-loading {

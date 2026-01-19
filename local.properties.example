@@ -1,0 +1,15 @@
+# Local development configuration template
+# Copy this file to local.properties and modify according to your local environment
+# local.properties is not committed to git
+
+# JDK path (must be JDK 17 or higher)
+# This uses Gradle Toolchain to configure compilation
+# java.home=/data/jdk-17.0.8.1+1
+# java.home=/usr/lib/jvm/java-17-openjdk
+# java.home=C:\\Program Files\\Java\\jdk-17
+
+# Node.js executable path (for building webview)
+# Can be the full path to node executable, or a directory containing node
+# node.path=/usr/local/bin/node
+# node.path=/home/user/.nvm/versions/node/v20.10.0/bin/node
+# node.path=C:\\Program Files\\nodejs\\node.exe

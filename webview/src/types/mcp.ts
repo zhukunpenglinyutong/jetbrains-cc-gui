@@ -148,3 +148,89 @@ export interface McpServerValidationResult {
   errors?: string[];
   warnings?: string[];
 }
+
+// ==================== Codex MCP Types ====================
+
+/**
+ * Codex MCP 服务器连接规格
+ * 配置格式基于 ~/.codex/config.toml
+ *
+ * 支持两种连接方式:
+ * 1. STDIO: 本地命令行工具
+ * 2. Streamable HTTP: 远程 HTTP 服务
+ */
+export interface CodexMcpServerSpec {
+  // STDIO 类型字段
+  /** 执行命令 (STDIO 类型必需) */
+  command?: string;
+  /** 命令参数 */
+  args?: string[];
+  /** 环境变量 */
+  env?: Record<string, string>;
+  /** 工作目录 */
+  cwd?: string;
+  /** 额外环境变量白名单 */
+  env_vars?: string[];
+
+  // Streamable HTTP 类型字段
+  /** 服务器 URL (HTTP 类型必需) */
+  url?: string;
+  /** Bearer Token 环境变量名 */
+  bearer_token_env_var?: string;
+  /** HTTP 请求头 */
+  http_headers?: Record<string, string>;
+  /** 从环境变量读取的 HTTP 请求头 */
+  env_http_headers?: Record<string, string>;
+
+  // 通用可选字段
+  /** 是否启用 */
+  enabled?: boolean;
+  /** 启动超时时间(秒) */
+  startup_timeout_sec?: number;
+  /** 工具调用超时时间(秒) */
+  tool_timeout_sec?: number;
+  /** 启用的工具列表 */
+  enabled_tools?: string[];
+  /** 禁用的工具列表 */
+  disabled_tools?: string[];
+
+  /** 允许扩展字段 */
+  [key: string]: any;
+}
+
+/**
+ * Codex MCP 服务器完整配置
+ */
+export interface CodexMcpServer {
+  /** 唯一标识符 (配置文件中的 key) */
+  id: string;
+  /** 显示名称 */
+  name?: string;
+  /** 服务器连接规格 */
+  server: CodexMcpServerSpec;
+  /** 应用启用状态 */
+  apps?: McpApps;
+  /** 是否启用 */
+  enabled?: boolean;
+  /** 启动超时时间(秒) */
+  startup_timeout_sec?: number;
+  /** 工具调用超时时间(秒) */
+  tool_timeout_sec?: number;
+  /** 启用的工具列表 */
+  enabled_tools?: string[];
+  /** 禁用的工具列表 */
+  disabled_tools?: string[];
+  /** 允许扩展字段 */
+  [key: string]: any;
+}
+
+/**
+ * Codex config.toml 结构 (~/.codex/config.toml)
+ */
+export interface CodexConfig {
+  /** MCP 服务器配置 */
+  mcp_servers?: Record<string, CodexMcpServerSpec>;
+  /** 其他配置 */
+  [key: string]: any;
+}
+

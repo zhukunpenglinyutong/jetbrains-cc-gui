@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { McpServer, McpPreset, McpServerStatusInfo } from '../../types/mcp';
 import { sendToJava } from '../../utils/bridge';
@@ -7,13 +7,23 @@ import { McpPresetDialog } from './McpPresetDialog';
 import { McpHelpDialog } from './McpHelpDialog';
 import { McpConfirmDialog } from './McpConfirmDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
-import { copyToClipboard } from '../../utils/helpers';
+import { copyToClipboard } from '../../utils/copyUtils';
+
+interface McpSettingsSectionProps {
+  currentProvider?: 'claude' | 'codex' | string;
+}
 
 /**
  * MCP 服务器设置组件
+ * Supports both Claude and Codex providers
  */
-export function McpSettingsSection() {
+export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSectionProps) {
   const { t } = useTranslation();
+  const isCodexMode = currentProvider === 'codex';
+
+  // Generate message type prefix based on provider
+  const messagePrefix = useMemo(() => (isCodexMode ? 'codex_' : ''), [isCodexMode]);
+
   const [servers, setServers] = useState<McpServer[]>([]);
   const [serverStatus, setServerStatus] = useState<Map<string, McpServerStatusInfo>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -67,7 +77,8 @@ export function McpSettingsSection() {
       clearRefreshTimers();
 
       const serverRefreshDelays = enabled ? [200, 1000] : [200];
-      const statusRefreshDelays = enabled ? [400, 1500, 3500, 7000, 12000] : [400];
+      // Codex mode: no status refresh (Codex SDK doesn't support real-time status)
+      const statusRefreshDelays = isCodexMode ? [] : (enabled ? [400, 1500, 3500, 7000, 12000] : [400]);
 
       serverRefreshDelays.forEach((delay) => {
         refreshTimersRef.current.push(window.setTimeout(() => loadServers(), delay));
@@ -77,21 +88,21 @@ export function McpSettingsSection() {
       });
     };
 
-    // 注册回调
-    window.updateMcpServers = (jsonStr: string) => {
+    // Server list callback handler
+    const handleServerListUpdate = (jsonStr: string) => {
       try {
         const serverList: McpServer[] = JSON.parse(jsonStr);
         setServers(serverList);
         setLoading(false);
-        console.log('[McpSettings] Loaded servers:', serverList);
+        console.log(`[McpSettings] Loaded ${isCodexMode ? 'Codex' : 'Claude'} servers:`, serverList);
       } catch (error) {
         console.error('[McpSettings] Failed to parse servers:', error);
         setLoading(false);
       }
     };
 
-    // 注册状态回调
-    window.updateMcpServerStatus = (jsonStr: string) => {
+    // Server status callback handler (Claude only)
+    const handleServerStatusUpdate = (jsonStr: string) => {
       try {
         const statusList: McpServerStatusInfo[] = JSON.parse(jsonStr);
         const statusMap = new Map<string, McpServerStatusInfo>();
@@ -101,14 +112,14 @@ export function McpSettingsSection() {
         setServerStatus(statusMap);
         setStatusLoading(false);
         console.log('[McpSettings] Loaded server status:', statusList);
-        console.log('[McpSettings] Status map keys:', Array.from(statusMap.keys()));
       } catch (error) {
         console.error('[McpSettings] Failed to parse server status:', error);
         setStatusLoading(false);
       }
     };
 
-    window.mcpServerToggled = (jsonStr: string) => {
+    // Server toggled callback handler
+    const handleServerToggled = (jsonStr: string) => {
       try {
         const toggledServer: McpServer = JSON.parse(jsonStr);
         scheduleRefresh(isServerEnabled(toggledServer));
@@ -117,9 +128,24 @@ export function McpSettingsSection() {
       }
     };
 
+    // Register callbacks based on provider
+    if (isCodexMode) {
+      window.updateCodexMcpServers = handleServerListUpdate;
+      window.codexMcpServerToggled = handleServerToggled;
+      window.codexMcpServerAdded = () => loadServers();
+      window.codexMcpServerUpdated = () => loadServers();
+      window.codexMcpServerDeleted = () => loadServers();
+    } else {
+      window.updateMcpServers = handleServerListUpdate;
+      window.updateMcpServerStatus = handleServerStatusUpdate;
+      window.mcpServerToggled = handleServerToggled;
+    }
+
     // 加载服务器
     loadServers();
-    loadServerStatus();
+    if (!isCodexMode) {
+      loadServerStatus();
+    }
 
     // 点击外部关闭下拉菜单
     const handleClickOutside = (event: MouseEvent) => {
@@ -131,19 +157,33 @@ export function McpSettingsSection() {
 
     return () => {
       clearRefreshTimers();
-      window.updateMcpServers = undefined;
-      window.updateMcpServerStatus = undefined;
-      window.mcpServerToggled = undefined;
+      // Cleanup callbacks
+      if (isCodexMode) {
+        window.updateCodexMcpServers = undefined;
+        window.codexMcpServerToggled = undefined;
+        window.codexMcpServerAdded = undefined;
+        window.codexMcpServerUpdated = undefined;
+        window.codexMcpServerDeleted = undefined;
+      } else {
+        window.updateMcpServers = undefined;
+        window.updateMcpServerStatus = undefined;
+        window.mcpServerToggled = undefined;
+      }
       document.removeEventListener('click', handleClickOutside);
     };
-  }, []);
+  }, [isCodexMode]);
 
   const loadServers = () => {
     setLoading(true);
-    sendToJava('get_mcp_servers', {});
+    sendToJava(`get_${messagePrefix}mcp_servers`, {});
   };
 
   const loadServerStatus = () => {
+    // Codex doesn't support real-time MCP status query
+    if (isCodexMode) {
+      setStatusLoading(false);
+      return;
+    }
     setStatusLoading(true);
     sendToJava('get_mcp_server_status', {});
   };
@@ -249,7 +289,10 @@ export function McpSettingsSection() {
     if (server.enabled !== undefined) {
       return server.enabled;
     }
-    return server.apps?.claude !== false;
+    // Check provider-specific apps field
+    return isCodexMode
+      ? server.apps?.codex !== false
+      : server.apps?.claude !== false;
   };
 
   const toggleExpand = (serverId: string) => {
@@ -268,18 +311,19 @@ export function McpSettingsSection() {
   };
 
   const handleToggleServer = (server: McpServer, enabled: boolean) => {
+    // Set apps based on current provider mode
     const updatedServer: McpServer = {
       ...server,
       enabled,
       apps: {
-        claude: enabled,
-        codex: server.apps?.codex ?? false,
+        claude: isCodexMode ? (server.apps?.claude ?? false) : enabled,
+        codex: isCodexMode ? enabled : (server.apps?.codex ?? false),
         gemini: server.apps?.gemini ?? false,
       }
     };
 
     console.log('[McpSettings] Toggling server:', server.id, 'enabled:', enabled);
-    sendToJava('toggle_mcp_server', updatedServer);
+    sendToJava(`toggle_${messagePrefix}mcp_server`, updatedServer);
 
     // 显示Toast提示
     addToast(enabled ? `${t('mcp.enabled')} ${server.name || server.id}` : `${t('mcp.disabled')} ${server.name || server.id}`, 'success');
@@ -312,7 +356,7 @@ export function McpSettingsSection() {
 
   const confirmDelete = () => {
     if (deletingServer) {
-      sendToJava('delete_mcp_server', { id: deletingServer.id });
+      sendToJava(`delete_${messagePrefix}mcp_server`, { id: deletingServer.id });
       addToast(`${t('mcp.deleted')} ${deletingServer.name || deletingServer.id}`, 'success');
 
       // 刷新服务器列表
@@ -345,17 +389,17 @@ export function McpSettingsSection() {
       // 更新服务器：如果 ID 改变了，需要先删除旧的
       if (editingServer.id !== server.id) {
         // ID 改变了，先删除旧的，再添加新的
-        sendToJava('delete_mcp_server', { id: editingServer.id });
-        sendToJava('add_mcp_server', server);
+        sendToJava(`delete_${messagePrefix}mcp_server`, { id: editingServer.id });
+        sendToJava(`add_${messagePrefix}mcp_server`, server);
         addToast(`${t('mcp.updated')} ${server.name || server.id}`, 'success');
       } else {
         // ID 没变，直接更新
-        sendToJava('update_mcp_server', server);
+        sendToJava(`update_${messagePrefix}mcp_server`, server);
         addToast(`${t('mcp.saved')} ${server.name || server.id}`, 'success');
       }
     } else {
       // 添加服务器
-      sendToJava('add_mcp_server', server);
+      sendToJava(`add_${messagePrefix}mcp_server`, server);
       addToast(`${t('mcp.added')} ${server.name || server.id}`, 'success');
     }
 
@@ -377,15 +421,15 @@ export function McpSettingsSection() {
       tags: preset.tags,
       server: { ...preset.server },
       apps: {
-        claude: true,
-        codex: false,
+        claude: !isCodexMode,
+        codex: isCodexMode,
         gemini: false,
       },
       homepage: preset.homepage,
       docs: preset.docs,
       enabled: true,
     };
-    sendToJava('add_mcp_server', server);
+    sendToJava(`add_${messagePrefix}mcp_server`, server);
     addToast(`${t('mcp.added')} ${preset.name}`, 'success');
 
     // 刷新服务器列表
@@ -626,6 +670,7 @@ export function McpSettingsSection() {
         <McpServerDialog
           server={editingServer}
           existingIds={servers.map(s => s.id)}
+          currentProvider={currentProvider}
           onClose={() => {
             setShowServerDialog(false);
             setEditingServer(null);

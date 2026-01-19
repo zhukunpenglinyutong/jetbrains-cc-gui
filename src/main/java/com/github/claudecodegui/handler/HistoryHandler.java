@@ -93,17 +93,19 @@ public class HistoryHandler extends BaseMessageHandler {
             try {
                 String historyJson;
 
+                // 获取当前项目路径
+                String projectPath = context.getProject().getBasePath();
+
                 // 根据 provider 选择不同的 reader
                 if ("codex".equals(provider)) {
-                    // 使用 CodexHistoryReader 读取 Codex 会话
-                    LOG.info("[HistoryHandler] 使用 CodexHistoryReader 读取 Codex 会话");
+                    // 使用 CodexHistoryReader 读取 Codex 会话（按项目过滤）
+                    LOG.info("[HistoryHandler] 使用 CodexHistoryReader 读取 Codex 会话 (项目: " + projectPath + ")");
                     CodexHistoryReader codexReader = new CodexHistoryReader();
-                    historyJson = codexReader.getAllSessionsAsJson();
+                    historyJson = codexReader.getSessionsForProjectAsJson(projectPath);
                     LOG.info("[HistoryHandler] CodexHistoryReader 返回的 JSON 长度: " + historyJson.length());
                 } else {
                     // 默认使用 ClaudeHistoryReader 读取 Claude 会话
                     LOG.info("[HistoryHandler] 使用 ClaudeHistoryReader 读取 Claude 会话");
-                    String projectPath = context.getProject().getBasePath();
                     ClaudeHistoryReader historyReader = new ClaudeHistoryReader();
                     historyJson = historyReader.getProjectDataAsJson(projectPath);
                 }

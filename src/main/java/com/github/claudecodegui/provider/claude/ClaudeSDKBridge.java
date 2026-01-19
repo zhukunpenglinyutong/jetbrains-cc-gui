@@ -619,6 +619,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 try {
                     process = pb.start();
                     LOG.info("[ClaudeSDKBridge] Node.js process started, PID: " + process.pid());
+                    processManager.registerProcess(channelId, process);
 
                     // Check for early exit
                     try {
@@ -644,8 +645,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                         Thread.currentThread().interrupt();
                     }
 
-                    processManager.registerProcess(channelId, process);
-
                     // Write to stdin
                     try (java.io.OutputStream stdin = process.getOutputStream()) {
                         stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
@@ -654,18 +653,11 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                         // Ignore
                     }
 
-                    // 🔧 诊断日志：记录前 50 行输出，帮助排查问题
-                    final int[] lineCountHolder = {0};
                     try (BufferedReader reader = new BufferedReader(
                             new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 
                         String line;
                         while ((line = reader.readLine()) != null) {
-                            lineCountHolder[0]++;
-                            // 🔧 诊断日志：输出前 50 行
-                            if (lineCountHolder[0] <= 50) {
-                                LOG.info("[DIAG-OUTPUT] Line " + lineCountHolder[0] + ": " + line);
-                            }
                             // Capture error logs
                             if (line.startsWith("[UNCAUGHT_ERROR]")
                                     || line.startsWith("[UNHANDLED_REJECTION]")
@@ -771,12 +763,11 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     }
 
                     LOG.debug("[ClaudeSDKBridge] Output loop ended, waiting for process to exit...");
-                    LOG.info("[DIAG-OUTPUT] Total lines received: " + lineCountHolder[0]);
                     process.waitFor();
 
                     int exitCode = process.exitValue();
                     boolean wasInterrupted = processManager.wasInterrupted(channelId);
-                    LOG.info("[DIAG-OUTPUT] Process exited, exitCode=" + exitCode + ", wasInterrupted=" + wasInterrupted + ", hadSendError=" + hadSendError[0] + ", totalLines=" + lineCountHolder[0]);
+                    LOG.debug("[ClaudeSDKBridge] Process exited, exitCode=" + exitCode + ", wasInterrupted=" + wasInterrupted + ", hadSendError=" + hadSendError[0]);
 
                     result.finalResult = assistantContent.toString();
                     result.messageCount = result.messages.size();

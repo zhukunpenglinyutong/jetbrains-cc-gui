@@ -1,6 +1,7 @@
 package com.github.claudecodegui.settings;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
@@ -10,7 +11,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -251,10 +254,20 @@ public class CodexSettingsManager {
             return false;
         }
 
+        // Array: [value1, value2, ...]
+        if (valueStr.startsWith("[") && valueStr.endsWith("]")) {
+            return parseTomlArray(valueStr);
+        }
+
+        // Inline table: { key = "value", ... }
+        if (valueStr.startsWith("{") && valueStr.endsWith("}")) {
+            return parseTomlInlineTable(valueStr);
+        }
+
         // String (quoted)
         if ((valueStr.startsWith("\"") && valueStr.endsWith("\"")) ||
             (valueStr.startsWith("'") && valueStr.endsWith("'"))) {
-            return valueStr.substring(1, valueStr.length() - 1);
+            return unescapeTomlString(valueStr.substring(1, valueStr.length() - 1));
         }
 
         // Number
@@ -269,6 +282,152 @@ public class CodexSettingsManager {
 
         // Default: treat as unquoted string
         return valueStr;
+    }
+
+    /**
+     * Parse a TOML array: [value1, value2, ...]
+     */
+    private List<Object> parseTomlArray(String arrayStr) {
+        List<Object> result = new ArrayList<>();
+        String content = arrayStr.substring(1, arrayStr.length() - 1).trim();
+
+        if (content.isEmpty()) {
+            return result;
+        }
+
+        // Split by comma, respecting quotes and nested structures
+        List<String> elements = splitTomlElements(content, ',');
+        for (String element : elements) {
+            element = element.trim();
+            if (!element.isEmpty()) {
+                result.add(parseTomlValue(element));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Parse a TOML inline table: { key = "value", ... }
+     */
+    private Map<String, Object> parseTomlInlineTable(String tableStr) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        String content = tableStr.substring(1, tableStr.length() - 1).trim();
+
+        if (content.isEmpty()) {
+            return result;
+        }
+
+        // Split by comma, respecting quotes and nested structures
+        List<String> pairs = splitTomlElements(content, ',');
+        for (String pair : pairs) {
+            pair = pair.trim();
+            int eqIndex = pair.indexOf('=');
+            if (eqIndex > 0) {
+                String key = pair.substring(0, eqIndex).trim();
+                String valueStr = pair.substring(eqIndex + 1).trim();
+                // Remove quotes from key if present
+                if ((key.startsWith("\"") && key.endsWith("\"")) ||
+                    (key.startsWith("'") && key.endsWith("'"))) {
+                    key = key.substring(1, key.length() - 1);
+                }
+                result.put(key, parseTomlValue(valueStr));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Split TOML elements by delimiter, respecting quotes and nested structures
+     */
+    private List<String> splitTomlElements(String content, char delimiter) {
+        List<String> result = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int depth = 0;
+        boolean inDoubleQuote = false;
+        boolean inSingleQuote = false;
+        boolean escaped = false;
+
+        for (int i = 0; i < content.length(); i++) {
+            char c = content.charAt(i);
+
+            if (escaped) {
+                current.append(c);
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                current.append(c);
+                escaped = true;
+                continue;
+            }
+
+            if (c == '"' && !inSingleQuote) {
+                inDoubleQuote = !inDoubleQuote;
+                current.append(c);
+                continue;
+            }
+
+            if (c == '\'' && !inDoubleQuote) {
+                inSingleQuote = !inSingleQuote;
+                current.append(c);
+                continue;
+            }
+
+            if (!inDoubleQuote && !inSingleQuote) {
+                if (c == '[' || c == '{') {
+                    depth++;
+                } else if (c == ']' || c == '}') {
+                    depth--;
+                } else if (c == delimiter && depth == 0) {
+                    result.add(current.toString());
+                    current = new StringBuilder();
+                    continue;
+                }
+            }
+
+            current.append(c);
+        }
+
+        if (current.length() > 0) {
+            result.add(current.toString());
+        }
+
+        return result;
+    }
+
+    /**
+     * Unescape TOML string (handle \n, \t, \\, \", etc.)
+     */
+    private String unescapeTomlString(String str) {
+        StringBuilder result = new StringBuilder();
+        boolean escaped = false;
+
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (escaped) {
+                switch (c) {
+                    case 'n': result.append('\n'); break;
+                    case 't': result.append('\t'); break;
+                    case 'r': result.append('\r'); break;
+                    case '\\': result.append('\\'); break;
+                    case '"': result.append('"'); break;
+                    case '\'': result.append('\''); break;
+                    default: result.append('\\').append(c); break;
+                }
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else {
+                result.append(c);
+            }
+        }
+
+        if (escaped) {
+            result.append('\\');
+        }
+
+        return result.toString();
     }
 
     /**
@@ -337,9 +496,47 @@ public class CodexSettingsManager {
         if (value instanceof Number) {
             return value.toString();
         }
+        // List -> TOML array
+        if (value instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Object> list = (List<Object>) value;
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < list.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(toTomlValue(list.get(i)));
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+        // Map -> TOML inline table
+        if (value instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) value;
+            StringBuilder sb = new StringBuilder("{ ");
+            boolean first = true;
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                if (!first) sb.append(", ");
+                first = false;
+                sb.append("\"").append(escapeTomlString(entry.getKey())).append("\" = ");
+                sb.append(toTomlValue(entry.getValue()));
+            }
+            sb.append(" }");
+            return sb.toString();
+        }
         // String: quote it
         String str = value.toString();
-        return "\"" + str.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        return "\"" + escapeTomlString(str) + "\"";
+    }
+
+    /**
+     * Escape special characters in TOML string
+     */
+    private String escapeTomlString(String str) {
+        return str.replace("\\", "\\\\")
+                  .replace("\"", "\\\"")
+                  .replace("\n", "\\n")
+                  .replace("\t", "\\t")
+                  .replace("\r", "\\r");
     }
 
     /**
@@ -388,12 +585,45 @@ public class CodexSettingsManager {
                 result.addProperty(entry.getKey(), (Number) value);
             } else if (value instanceof String) {
                 result.addProperty(entry.getKey(), (String) value);
+            } else if (value instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<Object> list = (List<Object>) value;
+                result.add(entry.getKey(), listToJsonArray(list));
             } else if (value instanceof Map) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> nestedMap = (Map<String, Object>) value;
                 result.add(entry.getKey(), mapToJsonObject(nestedMap));
             } else {
                 result.addProperty(entry.getKey(), value.toString());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Convert List to JsonArray
+     */
+    private JsonArray listToJsonArray(List<Object> list) {
+        JsonArray result = new JsonArray();
+        for (Object item : list) {
+            if (item == null) {
+                result.add(com.google.gson.JsonNull.INSTANCE);
+            } else if (item instanceof Boolean) {
+                result.add((Boolean) item);
+            } else if (item instanceof Number) {
+                result.add((Number) item);
+            } else if (item instanceof String) {
+                result.add((String) item);
+            } else if (item instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<Object> nestedList = (List<Object>) item;
+                result.add(listToJsonArray(nestedList));
+            } else if (item instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> nestedMap = (Map<String, Object>) item;
+                result.add(mapToJsonObject(nestedMap));
+            } else {
+                result.add(item.toString());
             }
         }
         return result;

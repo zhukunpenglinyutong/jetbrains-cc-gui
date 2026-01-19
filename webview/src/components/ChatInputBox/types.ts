@@ -8,6 +8,16 @@
 // ============================================================
 
 /**
+ * File tag information for backend context injection (Codex mode)
+ */
+export interface FileTagInfo {
+  /** Display path (as shown in tag) */
+  displayPath: string;
+  /** Absolute path (for file reading) */
+  absolutePath: string;
+}
+
+/**
  * File attachment
  */
 export interface Attachment {
@@ -195,9 +205,8 @@ export const AVAILABLE_MODES: ModeInfo[] = [
     id: 'plan',
     label: 'Plan Mode',
     icon: 'codicon-tasklist',
-    disabled: true,
-    tooltip: 'Plan mode - no execution (not supported yet)',
-    description: 'Plan only without execution, not supported yet',
+    tooltip: 'Plan mode - read-only analysis',
+    description: 'Read-only tools only, generates plan for user approval',
   },
   {
     id: 'acceptEdits',
@@ -378,6 +387,8 @@ export interface ChatInputBoxHandle {
   clear: () => void;
   /** Check if input has content */
   hasContent: () => boolean;
+  /** Get file tags from input (for Codex context injection) */
+  getFileTags: () => FileTagInfo[];
 }
 
 // ============================================================

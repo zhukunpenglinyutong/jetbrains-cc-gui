@@ -4,9 +4,10 @@ import styles from './style.module.less';
 
 interface PlaceholderSectionProps {
   type: 'permissions' | 'mcp' | 'agents' | 'skills';
+  currentProvider?: 'claude' | 'codex' | string;
 }
 
-const PlaceholderSection = ({ type }: PlaceholderSectionProps) => {
+const PlaceholderSection = ({ type, currentProvider }: PlaceholderSectionProps) => {
   const { t } = useTranslation();
 
   const sectionConfig = {
@@ -44,7 +45,7 @@ const PlaceholderSection = ({ type }: PlaceholderSectionProps) => {
       <p className={styles.sectionDesc}>{config.desc}</p>
 
       {type === 'mcp' ? (
-        <McpSettingsSection />
+        <McpSettingsSection currentProvider={currentProvider} />
       ) : (
         <div className={styles.tempNotice}>
           <span className={`codicon ${config.icon}`} />

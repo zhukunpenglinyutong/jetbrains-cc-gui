@@ -55,7 +55,30 @@ A powerful IntelliJ IDEA plugin that provides a visual interface for **Claude Co
 
 ## Project Status
 
-Current version: **v0.1.5-beta1** (Updated on January 8, 2026)
+Current version: **v0.1.5** (Updated on January 18, 2026)
+
+This is the biggest version update so far: 113 files changed, 30 commits, 13.6k lines added, 4.7k lines deleted
+
+Changes in this version:
+
+- [x] P0 (feat) Claude Plan Mode is now available
+- [x] P0 (fix) Fixed AskUserQuestion popup issues
+- [x] P0 (perf) Optimized input lag and send delay when history records are too many
+- [x] P0 (fix) Completely resolved the Codex write issue on Windows
+- [x] P0 (feat) Added Codex MCP support
+- [x] P0 (feat) Added Codex AGENTS.md instruction set support
+- [x] P1 (feat) Added auto-injection of current active file content for Codex
+- [x] P1 (feat) Filter Codex session history by current project path (previously showed all)
+- [x] P1 (feat) Implemented new TodoList UI interaction
+- [x] P1 (feat) Implemented new batch write and batch read interactions
+- [x] P1 (feat) Auto-expand latest thinking block during streaming output
+- [x] P1 (refactor) Split and refactored input box and conversation code for better maintainability
+- [x] P2 (chore) Reserved OpenCode support
+- [x] P2 (style) Improved other interaction details
+
+Next up: v0.1.6 development
+
+v0.1.6 will bring more features, better performance, and the highly anticipated VSCode extension and standalone client.
 
 The project is under active development with continuous updates. For more iteration progress, please read [CHANGELOG.md](CHANGELOG.md)
 
@@ -134,7 +157,7 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
       <a href="https://github.com/gadfly3173">
         <img src="https://avatars.githubusercontent.com/u/28685179?size=100" width="100" height="100" alt="gadfly3173" style="border-radius: 50%; border: 3px solid #ff6b35; box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);" />
       </a>
-      <div>🔥</div>
+      <div>🔥🔥</div>
     </td>
     <td align="center">
       <a href="https://github.com/song782360037">
@@ -200,6 +223,16 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
     <td align="center">
       <a href="https://github.com/JackWPP">
         <img src="https://avatars.githubusercontent.com/u/120316122?size=100" width="100" height="100" alt="JackWPP" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/luhua-123">
+        <img src="https://avatars.githubusercontent.com/u/83643600?size=100" width="100" height="100" alt="luhua-123" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/geofqiu-hub">
+        <img src="https://avatars.githubusercontent.com/u/248376932?size=100" width="100" height="100" alt="geofqiu-hub" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>

@@ -4,6 +4,8 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -210,18 +212,52 @@ public class PlatformUtils {
                     killer.destroyForcibly();
                 }
             } else {
-                // Unix 系统使用标准方法
+                ProcessHandle handle = process.toHandle();
+                List<ProcessHandle> descendants = new ArrayList<>();
+                try {
+                    handle.descendants().forEach(descendants::add);
+                } catch (Exception ignored) {
+                }
+
+                for (ProcessHandle child : descendants) {
+                    try {
+                        child.destroy();
+                    } catch (Exception ignored) {
+                    }
+                }
+
                 process.destroy();
                 if (!process.waitFor(3, TimeUnit.SECONDS)) {
+                    for (ProcessHandle child : descendants) {
+                        try {
+                            if (child.isAlive()) {
+                                child.destroyForcibly();
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
                     process.destroyForcibly();
                 }
             }
         } catch (Exception e) {
-            // 回退到标准方法
             try {
+                try {
+                    ProcessHandle handle = process.toHandle();
+                    List<ProcessHandle> descendants = new ArrayList<>();
+                    try {
+                        handle.descendants().forEach(descendants::add);
+                    } catch (Exception ignored) {
+                    }
+                    for (ProcessHandle child : descendants) {
+                        try {
+                            child.destroyForcibly();
+                        } catch (Exception ignored) {
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
                 process.destroyForcibly();
             } catch (Exception ignored) {
-                // 忽略最后的异常
             }
         }
     }
