@@ -97,7 +97,15 @@ const App = () => {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(null); // IDE 主题状态
+  // IDE 主题状态 - 优先使用 Java 注入的初始主题
+  const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
+    // 检查 Java 是否注入了初始主题
+    const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
+    if (injectedTheme === 'light' || injectedTheme === 'dark') {
+      return injectedTheme;
+    }
+    return null;
+  });
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // Scroll behavior management
@@ -282,14 +290,20 @@ const App = () => {
     const savedTheme = localStorage.getItem('theme');
     console.log('[Frontend][Theme] Saved theme preference:', savedTheme);
 
+    // 检查是否有 Java 注入的初始主题
+    const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
+    console.log('[Frontend][Theme] Injected IDE theme:', injectedTheme);
+
+    // 注意：data-theme 已由 index.html 的内联脚本设置，这里只需要检查日志
     if (savedTheme === 'light' || savedTheme === 'dark') {
-      console.log('[Frontend][Theme] Applying explicit theme:', savedTheme);
-      document.documentElement.setAttribute('data-theme', savedTheme);
+      console.log('[Frontend][Theme] User explicit theme:', savedTheme);
+    } else if (injectedTheme === 'light' || injectedTheme === 'dark') {
+      console.log('[Frontend][Theme] Follow IDE mode with injected theme:', injectedTheme);
     } else {
       console.log('[Frontend][Theme] Follow IDE mode detected, will wait for IDE theme');
     }
 
-    // 请求 IDE 主题（带重试机制）
+    // 请求 IDE 主题（带重试机制）- 仍然需要，用于处理动态主题变化
     let retryCount = 0;
     const MAX_RETRIES = 20; // 最多重试 20 次 (2 秒)
 
@@ -304,10 +318,11 @@ const App = () => {
           setTimeout(requestIdeTheme, 100);
         } else {
           console.error('[Frontend][Theme] Failed to request IDE theme: bridge not available after', MAX_RETRIES, 'retries');
-          // 如果是 Follow IDE 模式且无法获取 IDE 主题，使用 dark 作为 fallback
+          // 如果是 Follow IDE 模式且无法获取 IDE 主题，使用注入的主题或 dark 作为 fallback
           if (savedTheme === null || savedTheme === 'system') {
-            console.warn('[Frontend][Theme] Fallback to dark theme');
-            setIdeTheme('dark');
+            const fallback = injectedTheme || 'dark';
+            console.warn('[Frontend][Theme] Fallback to theme:', fallback);
+            setIdeTheme(fallback as 'light' | 'dark');
           }
         }
       }

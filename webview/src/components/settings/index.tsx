@@ -141,8 +141,15 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
     return 'system'; // 默认跟随 IDE
   });
 
-  // IDE 主题状态（从后端获取）
-  const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(null);
+  // IDE 主题状态（优先使用 Java 注入的初始主题，用于处理动态变化）
+  const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
+    // 检查 Java 是否注入了初始主题
+    const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
+    if (injectedTheme === 'light' || injectedTheme === 'dark') {
+      return injectedTheme;
+    }
+    return null;
+  });
 
   // 字体缩放状态 (1-6，默认为 3，即 100%)
   const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {

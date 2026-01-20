@@ -8,6 +8,8 @@ import com.intellij.util.ui.StartupUiUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
+import java.awt.Color;
+
 /**
  * IDE 主题配置服务
  * 负责从 IDEA 获取当前 UI 主题信息（亮色/暗色）并提供给 Webview
@@ -23,6 +25,12 @@ import com.google.gson.JsonObject;
 public class ThemeConfigService {
 
     private static final Logger LOG = Logger.getInstance(ThemeConfigService.class);
+
+    // 主题背景色常量 - 统一管理，确保前后端一致
+    public static final Color DARK_BG_COLOR = new Color(30, 30, 30);   // #1e1e1e
+    public static final Color LIGHT_BG_COLOR = Color.WHITE;             // #ffffff
+    public static final String DARK_BG_HEX = "#1e1e1e";
+    public static final String LIGHT_BG_HEX = "#ffffff";
     private static ThemeChangeCallback themeChangeCallback = null;
     private static Boolean lastKnownIsDark = null; // 缓存上次的主题状态,用于去重
     private static boolean listenerRegistered = false;
@@ -157,5 +165,37 @@ public class ThemeConfigService {
         lastKnownIsDark = config.get("isDark").getAsBoolean();
 
         return new Gson().toJson(config);
+    }
+
+    /**
+     * 获取当前 IDE 主题对应的 Swing 背景色
+     * 统一的背景色获取方法，确保前后端颜色一致
+     *
+     * @return 当前主题的背景色（Dark: #1e1e1e, Light: #ffffff）
+     */
+    public static Color getBackgroundColor() {
+        try {
+            boolean isDark = getIdeThemeConfig().get("isDark").getAsBoolean();
+            return isDark ? DARK_BG_COLOR : LIGHT_BG_COLOR;
+        } catch (Exception e) {
+            LOG.warn("Failed to get theme background color, using dark as fallback: " + e.getMessage());
+            return DARK_BG_COLOR;
+        }
+    }
+
+    /**
+     * 获取当前 IDE 主题对应的 Hex 颜色值
+     * 用于注入到 HTML 中
+     *
+     * @return 当前主题的背景色 Hex 值
+     */
+    public static String getBackgroundColorHex() {
+        try {
+            boolean isDark = getIdeThemeConfig().get("isDark").getAsBoolean();
+            return isDark ? DARK_BG_HEX : LIGHT_BG_HEX;
+        } catch (Exception e) {
+            LOG.warn("Failed to get theme background color hex, using dark as fallback: " + e.getMessage());
+            return DARK_BG_HEX;
+        }
     }
 }
