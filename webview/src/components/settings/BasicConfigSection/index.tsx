@@ -21,9 +21,16 @@ const MoonIcon = () => (
   </svg>
 );
 
+const SystemIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2"/>
+    <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
 interface BasicConfigSectionProps {
-  theme: 'light' | 'dark';
-  onThemeChange: (theme: 'light' | 'dark') => void;
+  theme: 'light' | 'dark' | 'system';
+  onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
   fontSizeLevel: number;
   onFontSizeLevelChange: (level: number) => void;
   nodePath: string;
@@ -125,6 +132,25 @@ const BasicConfigSection = ({
         </div>
 
         <div className={styles.themeGrid}>
+          {/* 跟随 IDE 主题卡片 */}
+          <div
+            className={`${styles.themeCard} ${theme === 'system' ? styles.active : ''}`}
+            onClick={() => onThemeChange('system')}
+          >
+            {theme === 'system' && (
+              <div className={styles.checkBadge}>
+                <span className="codicon codicon-check" />
+              </div>
+            )}
+
+            <div className={styles.themeIconSystem}>
+              <SystemIcon />
+            </div>
+
+            <div className={styles.themeCardTitle}>{t('settings.basic.theme.system')}</div>
+            <div className={styles.themeCardDesc}>{t('settings.basic.theme.systemDesc')}</div>
+          </div>
+
           {/* 亮色主题卡片 */}
           <div
             className={`${styles.themeCard} ${theme === 'light' ? styles.active : ''}`}

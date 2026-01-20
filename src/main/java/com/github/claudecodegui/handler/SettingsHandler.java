@@ -6,6 +6,7 @@ import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.util.FontConfigService;
+import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
@@ -48,7 +49,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_streaming_enabled",
         "set_streaming_enabled",
         "get_send_shortcut",
-        "set_send_shortcut"
+        "set_send_shortcut",
+        "get_ide_theme"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -60,6 +62,20 @@ public class SettingsHandler extends BaseMessageHandler {
 
     public SettingsHandler(HandlerContext context) {
         super(context);
+        // 注册主题变化监听器，当 IDE 主题变化时自动通知前端
+        registerThemeChangeListener();
+    }
+
+    /**
+     * 注册主题变化监听器
+     */
+    private void registerThemeChangeListener() {
+        ThemeConfigService.registerThemeChangeListener(themeConfig -> {
+            // 当主题变化时，通知前端
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.onIdeThemeChanged", escapeJs(themeConfig.toString()));
+            });
+        });
     }
 
     @Override
@@ -114,6 +130,9 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_send_shortcut":
                 handleSetSendShortcut(content);
+                return true;
+            case "get_ide_theme":
+                handleGetIdeTheme();
                 return true;
             default:
                 return false;
@@ -1015,6 +1034,22 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("保存发送快捷键设置失败: " + e.getMessage()));
             });
+        }
+    }
+
+    /**
+     * 获取 IDE 主题配置
+     */
+    private void handleGetIdeTheme() {
+        try {
+            JsonObject themeConfig = ThemeConfigService.getIdeThemeConfig();
+            String themeConfigJson = themeConfig.toString();
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.onIdeThemeReceived", escapeJs(themeConfigJson));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get IDE theme: " + e.getMessage(), e);
         }
     }
 }

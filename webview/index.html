@@ -4,6 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Claude Chat Webview</title>
+    <!-- 在 React 加载前立即设置主题 data-theme 属性 -->
+    <!-- 注意：背景色由 Java 在 HTML 标签上注入内联样式，这里只需设置 data-theme -->
+    <script>
+      (function() {
+        try {
+          var savedTheme = localStorage.getItem('theme');
+          var ideTheme = window.__INITIAL_IDE_THEME__;
+          var theme;
+
+          if (savedTheme === 'light' || savedTheme === 'dark') {
+            // 用户明确选择的主题优先
+            theme = savedTheme;
+          } else if (ideTheme === 'light' || ideTheme === 'dark') {
+            // Follow IDE 模式，使用 Java 注入的主题
+            theme = ideTheme;
+          } else {
+            // Fallback（理论上不会发生，因为 Java 一定会注入）
+            theme = 'dark';
+          }
+
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

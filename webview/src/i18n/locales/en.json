@@ -90,6 +90,8 @@
       "description": "Configure page theme, language and Node.js environment",
       "theme": {
         "label": "Theme",
+        "system": "Follow IDE",
+        "systemDesc": "Automatically follow IDE theme",
         "light": "Light Theme",
         "lightDesc": "Fresh and bright, suitable for daytime use",
         "dark": "Dark Theme",

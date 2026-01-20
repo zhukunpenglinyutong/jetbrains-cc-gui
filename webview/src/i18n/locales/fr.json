@@ -89,6 +89,8 @@
       "description": "Configurer le thème de la page, la langue et l'environnement d'exécution Node.js",
       "theme": {
         "label": "Thème de l'interface",
+        "system": "Suivre l'IDE",
+        "systemDesc": "Suivre automatiquement le thème de l'IDE",
         "light": "Thème clair",
         "lightDesc": "Frais et lumineux, adapté pour une utilisation diurne",
         "dark": "Thème sombre",
