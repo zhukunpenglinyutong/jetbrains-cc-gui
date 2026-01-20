@@ -2,13 +2,30 @@ package com.github.claudecodegui;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.cache.SlashCommandCache;
+import com.github.claudecodegui.handler.AgentHandler;
+import com.github.claudecodegui.handler.CodexMcpServerHandler;
+import com.github.claudecodegui.handler.DependencyHandler;
+import com.github.claudecodegui.handler.DiffHandler;
+import com.github.claudecodegui.handler.FileExportHandler;
+import com.github.claudecodegui.handler.FileHandler;
+import com.github.claudecodegui.handler.HandlerContext;
+import com.github.claudecodegui.handler.HistoryHandler;
+import com.github.claudecodegui.handler.McpServerHandler;
+import com.github.claudecodegui.handler.MessageDispatcher;
+import com.github.claudecodegui.handler.PermissionHandler;
+import com.github.claudecodegui.handler.PromptEnhancerHandler;
+import com.github.claudecodegui.handler.ProviderHandler;
+import com.github.claudecodegui.handler.RewindHandler;
+import com.github.claudecodegui.handler.SessionHandler;
+import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.handler.SkillHandler;
+import com.github.claudecodegui.handler.TabHandler;
+import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
-import com.github.claudecodegui.handler.*;
-import com.github.claudecodegui.permission.PermissionRequest;
-import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.FontConfigService;
@@ -16,6 +33,7 @@ import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.LanguageConfigService;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -66,7 +84,13 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Claude SDK 聊天工具窗口
@@ -140,6 +164,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         ContentManager contentManager = toolWindow.getContentManager();
         contentManager.addContent(content);
+
+        // Add DevTools action to ToolWindow title bar (only in development mode)
+        if (PlatformUtils.isPluginDevMode()) {
+            com.intellij.openapi.actionSystem.AnAction devToolsAction =
+                    com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                            .getAction("ClaudeCodeGUI.OpenDevToolsAction");
+            if (devToolsAction != null) {
+                toolWindow.setTitleActions(java.util.List.of(devToolsAction));
+            }
+        }
 
         content.setDisposer(() -> {
             ClaudeChatWindow window = instances.get(project);
@@ -722,9 +756,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             try {
                 browser = JBCefBrowserFactory.create();
                 handlerContext.setBrowser(browser);
-
-                // 启用开发者工具（右键菜单）
-                browser.getJBCefClient().setProperty("allowRunningInsecureContent", true);
 
                 JBCefBrowserBase browserBase = browser;
                 JBCefJSQuery jsQuery = JBCefJSQuery.create(browserBase);

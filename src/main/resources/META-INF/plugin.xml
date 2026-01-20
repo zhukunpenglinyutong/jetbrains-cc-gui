@@ -124,5 +124,11 @@
                 icon="AllIcons.General.Add"
                 text="New Chat Tab"
                 description="Create a new chat tab in Claude Code GUI tool window"/>
+
+        <!-- Open DevTools Action for JCEF debugging -->
+        <action id="ClaudeCodeGUI.OpenDevToolsAction"
+                class="com.github.claudecodegui.OpenDevToolsAction"
+                text="Open DevTools"
+                description="Open JCEF DevTools for debugging"/>
     </actions>
 </idea-plugin>
