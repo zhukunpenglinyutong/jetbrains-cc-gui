@@ -15,9 +15,11 @@ import com.github.claudecodegui.util.EditorFileUtils;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import com.github.claudecodegui.terminal.TerminalMonitorService;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import com.github.claudecodegui.service.RunConfigMonitorService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -336,7 +338,7 @@ public class ClaudeSession {
             // 设置是否启用PSI语义上下文收集
             contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
             return contextCollector.collectContext().thenCompose(openedFilesJson ->
-                sendMessageToProvider(chId, normalizedInput, attachments, openedFilesJson, finalAgentPrompt, finalFileTagPaths)
+                sendMessageToProvider(chId, userMessage.content, attachments, openedFilesJson, finalAgentPrompt, finalFileTagPaths)
             );
         }).exceptionally(ex -> {
             state.setError(ex.getMessage());
@@ -378,6 +380,57 @@ public class ClaudeSession {
                 }
             }
 
+            // 处理终端引用
+            // Handle terminal references - replace @terminal://xxx with actual output
+            java.util.regex.Pattern termPattern = java.util.regex.Pattern.compile("@terminal://([a-zA-Z0-9_]+)");
+            java.util.regex.Matcher termMatcher = termPattern.matcher(normalizedInput);
+            StringBuffer processedText = new StringBuffer();
+            int matchCount = 0;
+            while (termMatcher.find()) {
+                 matchCount++;
+                 String safeName = termMatcher.group(1);
+                 LOG.info("[Terminal] Found mention in message: @terminal://" + safeName);
+                 String content = resolveTerminalContent(safeName);
+                 if (content != null && !content.isEmpty()) {
+                     String terminalBlock = "\n\nTerminal Output (" + safeName + "):\n```\n" + content + "\n```";
+                     termMatcher.appendReplacement(processedText, java.util.regex.Matcher.quoteReplacement(terminalBlock));
+                     LOG.info("[Terminal] Successfully replaced terminal reference for: " + safeName);
+                 } else {
+                     // If no content, replace with empty string to remove the reference
+                     termMatcher.appendReplacement(processedText, "");
+                     LOG.warn("[Terminal] Content was empty or null for: " + safeName);
+                 }
+            }
+            termMatcher.appendTail(processedText);
+            if (matchCount == 0 && normalizedInput.contains("@terminal://")) {
+                LOG.warn("[Terminal] Message contains '@terminal://' but regex did not match correctly.");
+            }
+
+            userDisplayText = processedText.toString();
+
+            // 处理 Service 引用
+            // Handle service references - replace @service://xxx with actual output
+            java.util.regex.Pattern servicePattern = java.util.regex.Pattern.compile("@service://([a-zA-Z0-9_]+)");
+            java.util.regex.Matcher serviceMatcher = servicePattern.matcher(userDisplayText);
+            StringBuffer serviceProcessedText = new StringBuffer();
+            int serviceMatchCount = 0;
+            while (serviceMatcher.find()) {
+                serviceMatchCount++;
+                String safeName = serviceMatcher.group(1);
+                LOG.info("[Service] Found mention in message: @service://" + safeName);
+                String content = resolveServiceContent(safeName);
+                if (content != null && !content.isEmpty()) {
+                    String serviceBlock = "\n\nService Output (" + safeName + "):\n```\n" + content + "\n```";
+                    serviceMatcher.appendReplacement(serviceProcessedText, java.util.regex.Matcher.quoteReplacement(serviceBlock));
+                    LOG.info("[Service] Successfully replaced service reference for: " + safeName);
+                } else {
+                    serviceMatcher.appendReplacement(serviceProcessedText, "");
+                    LOG.warn("[Service] Content was empty or null for: " + safeName);
+                }
+            }
+            serviceMatcher.appendTail(serviceProcessedText);
+            userDisplayText = serviceProcessedText.toString();
+
             // 添加文本块（始终添加）
             // Always add text block
             // 解释：把用户说的话也加进去
@@ -401,6 +454,65 @@ public class ClaudeSession {
         }
 
         return userMessage;
+    }
+
+    private String resolveTerminalContent(String safeName) {
+        return ReadAction.compute(() -> {
+            try {
+                List<Object> widgets = TerminalMonitorService.getWidgets(project);
+                LOG.info("[Terminal] Resolving: " + safeName + ". Available widgets: " + widgets.size());
+                
+                Map<String, Integer> nameCounts = new HashMap<>();
+                for (Object widget : widgets) {
+                    String baseTitle = TerminalMonitorService.getWidgetTitle(widget);
+                    int count = nameCounts.getOrDefault(baseTitle, 0) + 1;
+                    nameCounts.put(baseTitle, count);
+                    
+                    String titleText = baseTitle;
+                    if (count > 1) {
+                        titleText = baseTitle + " (" + count + ")";
+                    }
+                    
+                    String wSafeName = titleText.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
+                    LOG.info("[Terminal] - Candidate: " + titleText + " (Safe: " + wSafeName + ") ID: " + Integer.toHexString(System.identityHashCode(widget)));
+                    
+                    if (wSafeName.equals(safeName)) {
+                        String content = TerminalMonitorService.getWidgetContent(widget);
+                        LOG.info("[Terminal] Match found! Content length: " + (content != null ? content.length() : "null"));
+                        return content;
+                    }
+                }
+                LOG.warn("[Terminal] No matching terminal found for: " + safeName);
+            } catch (Exception e) {
+                LOG.error("[Terminal] Error resolving terminal content: " + e.getMessage(), e);
+            }
+            return "";
+        });
+    }
+
+    private String resolveServiceContent(String safeName) {
+        return ReadAction.compute(() -> {
+            try {
+                List<RunConfigMonitorService.RunConfigInfo> configs = RunConfigMonitorService.getRunConfigurations(project);
+                LOG.info("[Service] Resolving: " + safeName + ". Available configs: " + configs.size());
+
+                for (RunConfigMonitorService.RunConfigInfo config : configs) {
+                    String displayName = config.getDisplayName();
+                    String wSafeName = displayName.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
+                    LOG.info("[Service] - Candidate: " + displayName + " (Safe: " + wSafeName + ")");
+
+                    if (wSafeName.equals(safeName)) {
+                        String content = config.getContent();
+                        LOG.info("[Service] Match found! Content length: " + (content != null ? content.length() : "null"));
+                        return content;
+                    }
+                }
+                LOG.warn("[Service] No matching service found for: " + safeName);
+            } catch (Exception e) {
+                LOG.error("[Service] Error resolving service content: " + e.getMessage(), e);
+            }
+            return "";
+        });
     }
 
     /**
@@ -592,13 +704,39 @@ public class ClaudeSession {
         StringBuilder sb = new StringBuilder();
         boolean hasContent = false;
 
-        // 【FIX】处理用户通过 @ 引用的文件标签
-        // Process file tags added by user via @
+        // Separate terminal paths from file paths for distinct handling
+        List<String> terminalPaths = new java.util.ArrayList<>();
+        List<String> regularFilePaths = new java.util.ArrayList<>();
+
         if (fileTagPaths != null && !fileTagPaths.isEmpty()) {
+            for (String path : fileTagPaths) {
+                if (path != null && path.startsWith("terminal://")) {
+                    terminalPaths.add(path);
+                } else {
+                    regularFilePaths.add(path);
+                }
+            }
+        }
+
+        // Process terminal context - separate section
+        if (!terminalPaths.isEmpty()) {
+            sb.append("\n\n## Active Terminal Session\n\n");
+            sb.append("The user is working in the following terminal context:\n\n");
+            for (String terminalPath : terminalPaths) {
+                // Extract session name from terminal://session-name
+                String sessionName = terminalPath.substring("terminal://".length());
+                sb.append("- **Terminal**: `").append(sessionName).append("`\n");
+            }
+            sb.append("\nCommands should be executed in this terminal context.\n\n");
+            hasContent = true;
+        }
+
+        // Process regular file tags added by user via @
+        if (!regularFilePaths.isEmpty()) {
             sb.append("\n\n## Referenced Files\n\n");
             sb.append("The following files were referenced by the user:\n\n");
 
-            for (String filePath : fileTagPaths) {
+            for (String filePath : regularFilePaths) {
                 String fileContent = readFileContent(filePath);
                 if (fileContent != null) {
                     String extension = getFileExtension(filePath);

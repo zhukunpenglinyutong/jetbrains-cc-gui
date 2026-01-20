@@ -1,5 +1,6 @@
 import type { FileItem, DropdownItemData } from '../types';
 import { getFileIcon, getFolderIcon } from '../../../utils/fileIcons';
+import { icon_terminal, icon_server } from '../../../utils/icons';
 
 // 请求队列管理
 let pendingResolve: ((files: FileItem[]) => void) | null = null;
@@ -190,17 +191,29 @@ export async function fileReferenceProvider(
  * 将 FileItem 转换为 DropdownItemData
  */
 export function fileToDropdownItem(file: FileItem): DropdownItemData {
-  // 获取 SVG 字符串
-  const iconSvg = file.type === 'directory'
-    ? getFolderIcon(file.name, false)
-    : getFileIcon(file.extension, file.name);
+  let iconSvg: string;
+  let type: 'directory' | 'file' | 'terminal' | 'service';
+
+  if (file.type === 'terminal') {
+    iconSvg = icon_terminal;
+    type = 'terminal';
+  } else if (file.type === 'service') {
+    iconSvg = icon_server;
+    type = 'service';
+  } else if (file.type === 'directory') {
+    iconSvg = getFolderIcon(file.name, false);
+    type = 'directory';
+  } else {
+    iconSvg = getFileIcon(file.extension, file.name);
+    type = 'file';
+  }
 
   return {
     id: file.path,
     label: file.name,
     description: file.absolutePath || file.path, // 优先显示完整路径
     icon: iconSvg, // 直接使用 SVG 字符串
-    type: file.type === 'directory' ? 'directory' : 'file',
+    type: type,
     data: { file },
   };
 }

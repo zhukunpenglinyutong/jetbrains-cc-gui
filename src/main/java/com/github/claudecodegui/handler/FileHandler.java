@@ -1,6 +1,8 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.model.FileSortItem;
+import com.github.claudecodegui.service.RunConfigMonitorService;
+import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -15,8 +17,10 @@ import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -80,6 +84,12 @@ public class FileHandler extends BaseMessageHandler {
 
                 // 4. 收集文件
                 List<JsonObject> files = new ArrayList<>();
+
+                // Priority 0: Active Terminals
+                collectActiveTerminals(files, request);
+                
+                // Priority 0: Active Services
+                collectActiveServices(files, request);
 
                 // Priority 1: 当前打开的文件
                 collectOpenFiles(files, fileSet, basePath, request);
@@ -213,6 +223,82 @@ public class FileHandler extends BaseMessageHandler {
                 files.add(fileObj);
             }
         }
+    }
+
+    /**
+     * 收集活动服务 (Run/Debug configurations)
+     */
+    private void collectActiveServices(List<JsonObject> files, FileListRequest request) {
+        ApplicationManager.getApplication().runReadAction(() -> {
+            Project project = context.getProject();
+            if (project == null || project.isDisposed()) return;
+
+            try {
+                List<RunConfigMonitorService.RunConfigInfo> configs = RunConfigMonitorService.getRunConfigurations(project);
+                for (RunConfigMonitorService.RunConfigInfo config : configs) {
+                    String displayName = config.getDisplayName();
+                    String title = "Service: " + displayName;
+                    
+                    // Create safe name for the path (replace spaces with _, remove special chars)
+                    String safeName = displayName.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
+                    String path = "service://" + safeName;
+
+                    if (request.matches(title, path)) {
+                        JsonObject serviceObj = new JsonObject();
+                        serviceObj.addProperty("name", title);
+                        serviceObj.addProperty("path", path);
+                        serviceObj.addProperty("absolutePath", path); // Tag used in UI
+                        serviceObj.addProperty("type", "service");
+                        serviceObj.addProperty("priority", 0); // High priority
+                        files.add(serviceObj);
+                    }
+                }
+            } catch (Throwable t) {
+                LOG.warn("[FileHandler] Failed to collect services: " + t.getMessage());
+            }
+        });
+    }
+
+    /**
+     * 收集活动终端
+     */
+    private void collectActiveTerminals(List<JsonObject> files, FileListRequest request) {
+        ApplicationManager.getApplication().runReadAction(() -> {
+            Project project = context.getProject();
+            if (project == null || project.isDisposed()) return;
+
+            try {
+                List<Object> widgets = TerminalMonitorService.getWidgets(project);
+                Map<String, Integer> nameCounts = new HashMap<>();
+                
+                for (Object widget : widgets) {
+                    String baseTitle = TerminalMonitorService.getWidgetTitle(widget);
+                    int count = nameCounts.getOrDefault(baseTitle, 0) + 1;
+                    nameCounts.put(baseTitle, count);
+                    
+                    String titleText = baseTitle;
+                    if (count > 1) {
+                        titleText = baseTitle + " (" + count + ")";
+                    }
+                    
+                    String title = "Terminal: " + titleText;
+                    String safeName = titleText.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
+                    String path = "terminal://" + safeName;
+
+                    if (request.matches(title, path)) {
+                        JsonObject term = new JsonObject();
+                        term.addProperty("name", title);
+                        term.addProperty("path", path);
+                        term.addProperty("absolutePath", path);
+                        term.addProperty("type", "terminal");
+                        term.addProperty("priority", 0); // High priority
+                        files.add(term);
+                    }
+                }
+            } catch (Throwable t) {
+                LOG.warn("[FileHandler] Failed to collect terminals: " + t.getMessage());
+            }
+        });
     }
 
     /**
