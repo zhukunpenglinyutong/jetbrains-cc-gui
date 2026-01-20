@@ -1,0 +1,10 @@
+<idea-plugin>
+    <!--
+    Terminal-specific features for Claude Code GUI.
+    This configuration is only loaded when the Terminal plugin is available.
+    -->
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Monitor Terminal Output - Only active when Terminal plugin is installed -->
+        <postStartupActivity implementation="com.github.claudecodegui.terminal.TerminalMonitorService"/>
+    </extensions>
+</idea-plugin>

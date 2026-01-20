@@ -28,12 +28,11 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Service to monitor Run/Debug service output.
  * This service attaches listeners to all active and new Run configurations.
- * 
+ *
  * Unlike TerminalMonitorService which monitors terminal widgets,
  * this service monitors Run/Debug configurations (e.g., Spring Boot services,
  * application runs, Gradle/Maven tasks, etc.)
@@ -41,15 +40,23 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RunConfigMonitorService implements ProjectActivity {
 
     private static final Logger LOG = Logger.getInstance(RunConfigMonitorService.class);
-    
-    // Map of RunContentDescriptor -> captured output buffer
-    private static final Map<RunContentDescriptor, StringBuilder> buffers = new ConcurrentHashMap<>();
-    
-    // Set of monitored process handlers to avoid duplicate listeners
-    private static final Set<ProcessHandler> monitoredHandlers = Collections.synchronizedSet(new HashSet<>());
-    
+
+    /**
+     * Buffer storage for run configuration output using WeakHashMap.
+     * Buffers are automatically cleaned up when the associated descriptor is garbage collected.
+     */
+    private static final Map<RunContentDescriptor, StringBuilder> buffers =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    /**
+     * Set of monitored process handlers using WeakHashMap to prevent memory leaks.
+     * When a handler is garbage collected, it will be automatically removed from this set.
+     */
+    private static final Set<ProcessHandler> monitoredHandlers =
+            Collections.newSetFromMap(new WeakHashMap<>());
+
     private static final int MAX_BUFFER_SIZE = 100000; // Keep last 100k chars
-    
+
     private final Set<ContentManager> attachedManagers = Collections.synchronizedSet(new HashSet<>());
     private Project currentProject;
 
@@ -128,7 +135,7 @@ public class RunConfigMonitorService implements ProjectActivity {
             }
         });
 
-        LOG.info("ContentManager listener attached for: " + windowName);
+        LOG.debug("ContentManager listener attached for: " + windowName);
         
         // Check existing content
         for (Content content : contentManager.getContents()) {
@@ -168,7 +175,7 @@ public class RunConfigMonitorService implements ProjectActivity {
 
         monitoredHandlers.add(processHandler);
         String displayName = descriptor.getDisplayName();
-        LOG.info("Monitoring run configuration: " + displayName);
+        LOG.debug("Monitoring run configuration: " + displayName);
 
         // Initialize buffer for this descriptor
         buffers.computeIfAbsent(descriptor, k -> new StringBuilder());
@@ -191,7 +198,7 @@ public class RunConfigMonitorService implements ProjectActivity {
 
             @Override
             public void processTerminated(@NotNull ProcessEvent event) {
-                LOG.info("Process terminated: " + displayName + " with exit code: " + event.getExitCode());
+                LOG.debug("Process terminated: " + displayName + " with exit code: " + event.getExitCode());
             }
         });
 

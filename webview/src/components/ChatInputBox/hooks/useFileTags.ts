@@ -126,7 +126,24 @@ export function useFileTags({
       // Get display filename (with line number, for display)
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
 
-      // Check if it's a terminal or service
+      /**
+       * Protocol type detection for special references.
+       *
+       * Supported protocols:
+       * - terminal:// - Terminal session output
+       * - service://  - Run/Debug service output
+       *
+       * To add a new protocol type:
+       * 1. Add protocol check here (e.g., const isNewProtocol = pureFilePath.startsWith('newprotocol://'))
+       * 2. Add icon selection in the iconSvg logic below
+       * 3. Update backend ClaudeSession.java processReferences() method
+       * 4. Import the corresponding icon SVG
+       *
+       * Future protocol candidates:
+       * - git://      - Git diff/status output
+       * - browser://  - Browser/DevTools context
+       * - debug://    - Debug session variables
+       */
       const isTerminal = pureFilePath.startsWith('terminal://');
       const isService = pureFilePath.startsWith('service://');
 

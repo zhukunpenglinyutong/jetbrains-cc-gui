@@ -25,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Claude 会话管理类
@@ -380,56 +383,10 @@ public class ClaudeSession {
                 }
             }
 
-            // 处理终端引用
-            // Handle terminal references - replace @terminal://xxx with actual output
-            java.util.regex.Pattern termPattern = java.util.regex.Pattern.compile("@terminal://([a-zA-Z0-9_]+)");
-            java.util.regex.Matcher termMatcher = termPattern.matcher(normalizedInput);
-            StringBuffer processedText = new StringBuffer();
-            int matchCount = 0;
-            while (termMatcher.find()) {
-                 matchCount++;
-                 String safeName = termMatcher.group(1);
-                 LOG.info("[Terminal] Found mention in message: @terminal://" + safeName);
-                 String content = resolveTerminalContent(safeName);
-                 if (content != null && !content.isEmpty()) {
-                     String terminalBlock = "\n\nTerminal Output (" + safeName + "):\n```\n" + content + "\n```";
-                     termMatcher.appendReplacement(processedText, java.util.regex.Matcher.quoteReplacement(terminalBlock));
-                     LOG.info("[Terminal] Successfully replaced terminal reference for: " + safeName);
-                 } else {
-                     // If no content, replace with empty string to remove the reference
-                     termMatcher.appendReplacement(processedText, "");
-                     LOG.warn("[Terminal] Content was empty or null for: " + safeName);
-                 }
-            }
-            termMatcher.appendTail(processedText);
-            if (matchCount == 0 && normalizedInput.contains("@terminal://")) {
-                LOG.warn("[Terminal] Message contains '@terminal://' but regex did not match correctly.");
-            }
-
-            userDisplayText = processedText.toString();
-
-            // 处理 Service 引用
-            // Handle service references - replace @service://xxx with actual output
-            java.util.regex.Pattern servicePattern = java.util.regex.Pattern.compile("@service://([a-zA-Z0-9_]+)");
-            java.util.regex.Matcher serviceMatcher = servicePattern.matcher(userDisplayText);
-            StringBuffer serviceProcessedText = new StringBuffer();
-            int serviceMatchCount = 0;
-            while (serviceMatcher.find()) {
-                serviceMatchCount++;
-                String safeName = serviceMatcher.group(1);
-                LOG.info("[Service] Found mention in message: @service://" + safeName);
-                String content = resolveServiceContent(safeName);
-                if (content != null && !content.isEmpty()) {
-                    String serviceBlock = "\n\nService Output (" + safeName + "):\n```\n" + content + "\n```";
-                    serviceMatcher.appendReplacement(serviceProcessedText, java.util.regex.Matcher.quoteReplacement(serviceBlock));
-                    LOG.info("[Service] Successfully replaced service reference for: " + safeName);
-                } else {
-                    serviceMatcher.appendReplacement(serviceProcessedText, "");
-                    LOG.warn("[Service] Content was empty or null for: " + safeName);
-                }
-            }
-            serviceMatcher.appendTail(serviceProcessedText);
-            userDisplayText = serviceProcessedText.toString();
+            // 处理终端引用和服务引用
+            // Handle terminal and service references - replace @protocol://xxx with actual output
+            userDisplayText = processReferences(normalizedInput, "terminal", "Terminal Output", this::resolveTerminalContent);
+            userDisplayText = processReferences(userDisplayText, "service", "Service Output", this::resolveServiceContent);
 
             // 添加文本块（始终添加）
             // Always add text block
@@ -456,33 +413,74 @@ public class ClaudeSession {
         return userMessage;
     }
 
+    /**
+     * 通用引用处理方法
+     * Generic reference processing method for @protocol://name patterns
+     *
+     * @param input 输入文本
+     * @param protocol 协议名称 (如 "terminal", "service")
+     * @param blockTitle 输出块标题 (如 "Terminal Output", "Service Output")
+     * @param contentResolver 内容解析函数
+     * @return 处理后的文本
+     */
+    private String processReferences(String input, String protocol, String blockTitle,
+                                      Function<String, String> contentResolver) {
+        Pattern pattern = Pattern.compile("@" + protocol + "://([a-zA-Z0-9_]+)");
+        Matcher matcher = pattern.matcher(input);
+        StringBuffer result = new StringBuffer();
+        int matchCount = 0;
+
+        while (matcher.find()) {
+            matchCount++;
+            String safeName = matcher.group(1);
+            LOG.debug("[" + protocol + "] Found mention in message: @" + protocol + "://" + safeName);
+            String content = contentResolver.apply(safeName);
+
+            if (content != null && !content.isEmpty()) {
+                String block = "\n\n" + blockTitle + " (" + safeName + "):\n```\n" + content + "\n```";
+                matcher.appendReplacement(result, Matcher.quoteReplacement(block));
+                LOG.debug("[" + protocol + "] Successfully replaced reference for: " + safeName);
+            } else {
+                matcher.appendReplacement(result, "");
+                LOG.debug("[" + protocol + "] Content was empty or null for: " + safeName);
+            }
+        }
+        matcher.appendTail(result);
+
+        if (matchCount == 0 && input.contains("@" + protocol + "://")) {
+            LOG.warn("[" + protocol + "] Message contains '@" + protocol + "://' but regex did not match.");
+        }
+
+        return result.toString();
+    }
+
     private String resolveTerminalContent(String safeName) {
         return ReadAction.compute(() -> {
             try {
                 List<Object> widgets = TerminalMonitorService.getWidgets(project);
-                LOG.info("[Terminal] Resolving: " + safeName + ". Available widgets: " + widgets.size());
-                
+                LOG.debug("[Terminal] Resolving: " + safeName + ". Available widgets: " + widgets.size());
+
                 Map<String, Integer> nameCounts = new HashMap<>();
                 for (Object widget : widgets) {
                     String baseTitle = TerminalMonitorService.getWidgetTitle(widget);
                     int count = nameCounts.getOrDefault(baseTitle, 0) + 1;
                     nameCounts.put(baseTitle, count);
-                    
+
                     String titleText = baseTitle;
                     if (count > 1) {
                         titleText = baseTitle + " (" + count + ")";
                     }
-                    
+
                     String wSafeName = titleText.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
-                    LOG.info("[Terminal] - Candidate: " + titleText + " (Safe: " + wSafeName + ") ID: " + Integer.toHexString(System.identityHashCode(widget)));
-                    
+                    LOG.debug("[Terminal] - Candidate: " + titleText + " (Safe: " + wSafeName + ")");
+
                     if (wSafeName.equals(safeName)) {
                         String content = TerminalMonitorService.getWidgetContent(widget);
-                        LOG.info("[Terminal] Match found! Content length: " + (content != null ? content.length() : "null"));
+                        LOG.debug("[Terminal] Match found! Content length: " + (content != null ? content.length() : "null"));
                         return content;
                     }
                 }
-                LOG.warn("[Terminal] No matching terminal found for: " + safeName);
+                LOG.debug("[Terminal] No matching terminal found for: " + safeName);
             } catch (Exception e) {
                 LOG.error("[Terminal] Error resolving terminal content: " + e.getMessage(), e);
             }
@@ -494,20 +492,20 @@ public class ClaudeSession {
         return ReadAction.compute(() -> {
             try {
                 List<RunConfigMonitorService.RunConfigInfo> configs = RunConfigMonitorService.getRunConfigurations(project);
-                LOG.info("[Service] Resolving: " + safeName + ". Available configs: " + configs.size());
+                LOG.debug("[Service] Resolving: " + safeName + ". Available configs: " + configs.size());
 
                 for (RunConfigMonitorService.RunConfigInfo config : configs) {
                     String displayName = config.getDisplayName();
                     String wSafeName = displayName.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
-                    LOG.info("[Service] - Candidate: " + displayName + " (Safe: " + wSafeName + ")");
+                    LOG.debug("[Service] - Candidate: " + displayName + " (Safe: " + wSafeName + ")");
 
                     if (wSafeName.equals(safeName)) {
                         String content = config.getContent();
-                        LOG.info("[Service] Match found! Content length: " + (content != null ? content.length() : "null"));
+                        LOG.debug("[Service] Match found! Content length: " + (content != null ? content.length() : "null"));
                         return content;
                     }
                 }
-                LOG.warn("[Service] No matching service found for: " + safeName);
+                LOG.debug("[Service] No matching service found for: " + safeName);
             } catch (Exception e) {
                 LOG.error("[Service] Error resolving service content: " + e.getMessage(), e);
             }

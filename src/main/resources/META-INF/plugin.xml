@@ -73,7 +73,8 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
-    <depends>org.jetbrains.plugins.terminal</depends>
+    <!-- Optional: Terminal support for terminal output monitoring -->
+    <depends optional="true" config-file="terminal-features.xml">org.jetbrains.plugins.terminal</depends>
     <!-- Optional: Java support for enhanced context collection in Java/Kotlin IDEs -->
     <depends optional="true" config-file="java-features.xml">com.intellij.java</depends>
     <!-- Optional: Python support for enhanced context collection in PyCharm/IDEA with Python plugin -->
@@ -92,9 +93,6 @@
 
         <!-- Cleanup old ai-bridge cache when plugin version changes -->
         <postStartupActivity implementation="com.github.claudecodegui.startup.PluginUpdateListener"/>
-
-        <!-- Monitor Terminal Output -->
-        <postStartupActivity implementation="com.github.claudecodegui.terminal.TerminalMonitorService"/>
 
         <!-- Monitor Run/Debug Service Output -->
         <postStartupActivity implementation="com.github.claudecodegui.service.RunConfigMonitorService"/>

@@ -3,6 +3,7 @@ package com.github.claudecodegui.terminal;
 import com.intellij.execution.process.ProcessAdapter;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
@@ -23,21 +24,48 @@ import org.jetbrains.plugins.terminal.TerminalView;
 
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.WeakHashMap;
 
 /**
  * Service to monitor terminal output and user input (echoed).
  * This service attaches listeners to all active and new terminal widgets.
+ *
+ * <h3>Implementation Notes - Reflection Usage</h3>
+ * <p>This service uses Java Reflection to access JetBrains Terminal plugin internals because:</p>
+ * <ul>
+ *   <li>Terminal plugin does not provide public APIs for reading terminal content</li>
+ *   <li>Direct class dependencies would break compatibility across IDE versions</li>
+ *   <li>Reflection allows graceful degradation when APIs change between versions</li>
+ * </ul>
+ *
+ * <h3>Accessed Internal Classes (via reflection)</h3>
+ * <ul>
+ *   <li>{@code org.jetbrains.plugins.terminal.TerminalView} - Terminal view manager</li>
+ *   <li>{@code TerminalWidget} - Individual terminal tab widget</li>
+ *   <li>{@code Terminal/TerminalTextBuffer} - Terminal content buffer for screen scraping</li>
+ * </ul>
  */
 public class TerminalMonitorService implements ProjectActivity {
 
     private static final Logger LOG = Logger.getInstance(TerminalMonitorService.class);
-    private static final Set<Object> monitoredWidgets = Collections.synchronizedSet(new HashSet<>());
-    private static final Map<Object, StringBuilder> buffers = new ConcurrentHashMap<>();
+
+    /**
+     * Tracked terminal widgets using WeakHashMap to prevent memory leaks.
+     * When a widget is garbage collected, it will be automatically removed from this set.
+     * Wrapped with synchronizedSet for thread-safe access.
+     */
+    private static final Set<Object> monitoredWidgets =
+            Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+
+    /**
+     * Buffer storage for terminal output using WeakHashMap.
+     * Buffers are automatically cleaned up when the associated widget is garbage collected.
+     */
+    private static final Map<Object, StringBuilder> buffers = Collections.synchronizedMap(new WeakHashMap<>());
+
     private static final int MAX_BUFFER_SIZE = 100000; // Keep last 100k chars
     private boolean contentHandlerAttached = false;
 
@@ -63,24 +91,29 @@ public class TerminalMonitorService implements ProjectActivity {
     }
 
     private void setupTerminalListener(@NotNull Project project) {
-        ToolWindow terminalWindow = ToolWindowManager.getInstance(project).getToolWindow("Terminal");
-        if (terminalWindow == null) return;
+        // ContentManager access requires EDT, so schedule this on EDT
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) return;
 
-        // Attach listener to ContentManager to detect new tabs (Terminals)
-        if (!contentHandlerAttached) {
-            terminalWindow.getContentManager().addContentManagerListener(new ContentManagerAdapter() {
-                @Override
-                public void contentAdded(@NotNull ContentManagerEvent event) {
-                    // When a new tab is added, check for new widgets
-                    checkForNewWidgets(project);
-                }
-            });
-            contentHandlerAttached = true;
-            LOG.info("Terminal content listener attached for project: " + project.getName());
-        }
+            ToolWindow terminalWindow = ToolWindowManager.getInstance(project).getToolWindow("Terminal");
+            if (terminalWindow == null) return;
 
-        // Always check for existing widgets (in case we missed some or just started)
-        checkForNewWidgets(project);
+            // Attach listener to ContentManager to detect new tabs (Terminals)
+            if (!contentHandlerAttached) {
+                terminalWindow.getContentManager().addContentManagerListener(new ContentManagerAdapter() {
+                    @Override
+                    public void contentAdded(@NotNull ContentManagerEvent event) {
+                        // When a new tab is added, check for new widgets
+                        checkForNewWidgets(project);
+                    }
+                });
+                contentHandlerAttached = true;
+                LOG.debug("Terminal content listener attached for project: " + project.getName());
+            }
+
+            // Always check for existing widgets (in case we missed some or just started)
+            checkForNewWidgets(project);
+        });
     }
 
     private void checkForNewWidgets(@NotNull Project project) {
@@ -117,12 +150,12 @@ public class TerminalMonitorService implements ProjectActivity {
         } catch (Exception e) {
             // ignore
         }
-        LOG.info("Monitoring terminal widget: " + title + " (Class: " + widget.getClass().getName() + ")");
+        LOG.debug("Monitoring terminal widget: " + title + " (Class: " + widget.getClass().getName() + ")");
 
         // Handle disposal
         if (widget instanceof com.intellij.openapi.Disposable) {
             Disposer.register((com.intellij.openapi.Disposable) widget, () -> {
-                LOG.info("Terminal widget disposed: " + TerminalMonitorService.getWidgetTitle(widget));
+                LOG.debug("Terminal widget disposed: " + TerminalMonitorService.getWidgetTitle(widget));
                 monitoredWidgets.remove(widget);
                 buffers.remove(widget);
             });
@@ -145,7 +178,7 @@ public class TerminalMonitorService implements ProjectActivity {
             if (getHandlerMethod != null) {
                 ProcessHandler processHandler = (ProcessHandler) getHandlerMethod.invoke(widget);
                 if (processHandler != null) {
-                    LOG.info("Attached ProcessListener to terminal: " + title + " using " + getHandlerMethod.getName());
+                    LOG.debug("Attached ProcessListener to terminal: " + title + " using " + getHandlerMethod.getName());
                     processHandler.addProcessListener(new ProcessAdapter() {
                         @Override
                         public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
@@ -233,183 +266,234 @@ public class TerminalMonitorService implements ProjectActivity {
 
     /**
      * Get the captured content of a terminal widget.
+     * First tries dynamic capture from process listener, then supplements with screen scraping.
      */
     public static String getWidgetContent(@NotNull Object widget) {
-        StringBuilder sb = buffers.get(widget);
-        String captured = "";
-        if (sb != null) {
-            synchronized (sb) {
-                captured = sb.toString();
-            }
+        String captured = getCapturedContent(widget);
+        LOG.debug("[Terminal] Dynamic capture length: " + captured.length());
+
+        // Supplement with screen scrape to ensure we get history
+        String scraped = scrapeTerminalScreen(widget);
+        if (!scraped.isEmpty()) {
+            return scraped;
         }
-        
-        LOG.info("[Terminal] getWidgetContent dynamic capture length: " + captured.length());
 
-        // We supplement with a screen scrape if captured is small or always to ensure we get history
+        LOG.debug("[Terminal] Falling back to dynamic capture (length: " + captured.length() + ")");
+        return captured;
+    }
+
+    /**
+     * Get cached content from process listener buffer.
+     */
+    private static String getCapturedContent(@NotNull Object widget) {
+        StringBuilder sb = buffers.get(widget);
+        if (sb == null) return "";
+        synchronized (sb) {
+            return sb.toString();
+        }
+    }
+
+    /**
+     * Scrape terminal screen content via reflection.
+     * This method navigates: Widget -> Terminal -> TextBuffer -> Lines
+     */
+    private static String scrapeTerminalScreen(@NotNull Object widget) {
         try {
-            LOG.info("[Terminal] Starting exhaustive screen scrape for widget class: " + widget.getClass().getName());
-            Object terminal = null;
-            
-            // Step 1: Get Terminal Model
-            try {
-                terminal = widget.getClass().getMethod("getTerminal").invoke(widget);
-                LOG.info("[Terminal] [Step 1] Found terminal object directly via getTerminal()");
-            } catch (Exception e1) {
-                LOG.info("[Terminal] [Step 1] getTerminal() direct failed: " + e1.getMessage() + ". Trying getTerminalPanel()...");
-                try {
-                    java.lang.reflect.Method getPanelMethod = widget.getClass().getMethod("getTerminalPanel");
-                    Object panel = getPanelMethod.invoke(widget);
-                    if (panel != null) {
-                        LOG.info("[Terminal] [Step 1] Found panel: " + panel.getClass().getName());
-                        terminal = panel.getClass().getMethod("getTerminal").invoke(panel);
-                        if (terminal != null) {
-                            LOG.info("[Terminal] [Step 1] Found terminal object via panel.getTerminal()");
-                        } else {
-                            LOG.warn("[Terminal] [Step 1] panel.getTerminal() returned null");
-                        }
-                    } else {
-                        LOG.warn("[Terminal] [Step 1] getTerminalPanel() returned null");
-                    }
-                } catch (Exception e2) {
-                    LOG.error("[Terminal] [Step 1] Exhausted all ways to find Terminal object: " + e2.getMessage());
-                }
-            }
+            LOG.debug("[Terminal] Starting screen scrape for widget: " + widget.getClass().getName());
 
+            // Step 1: Get Terminal object
+            Object terminal = getTerminalObject(widget);
+            if (terminal == null) return "";
+
+            // Step 2: Get TextBuffer
+            Object buffer = getTextBuffer(terminal);
+            if (buffer == null) return "";
+
+            // Step 3: Scrape lines
+            return scrapeBufferLines(buffer, 500);
+        } catch (Exception e) {
+            LOG.debug("[Terminal] Screen scrape failed: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Get Terminal object from widget via reflection.
+     * Tries direct getTerminal() first, then falls back to getTerminalPanel().getTerminal()
+     */
+    private static Object getTerminalObject(@NotNull Object widget) {
+        // Try direct method first
+        try {
+            Object terminal = widget.getClass().getMethod("getTerminal").invoke(widget);
             if (terminal != null) {
-                // Step 2: Get Text Buffer
-                Object buffer = null;
-                String[] bufferMethods = {"getTextBuffer", "getTerminalTextBuffer"};
-                for (String m : bufferMethods) {
-                    try {
-                        buffer = terminal.getClass().getMethod(m).invoke(terminal);
-                        if (buffer != null) {
-                            LOG.info("[Terminal] [Step 2] Found buffer via " + m + "(): " + buffer.getClass().getName());
-                            break;
-                        }
-                    } catch (Exception e) {
-                        LOG.info("[Terminal] [Step 2] Method " + m + "() failed on " + terminal.getClass().getName());
-                    }
-                }
+                LOG.debug("[Terminal] Found terminal via getTerminal()");
+                return terminal;
+            }
+        } catch (Exception e) {
+            LOG.debug("[Terminal] getTerminal() failed: " + e.getMessage());
+        }
 
-                if (buffer != null) {
-                    // Step 3: Scrape lines
-                    StringBuilder scraped = new StringBuilder();
-                    try {
-                        // Dynamically find the method for line count (could be getLineCount, getLinesCount, getHeight, etc.)
-                        java.lang.reflect.Method getLineCountMethod = null;
-                        String[] countMethodNames = {"getLineCount", "getLinesCount", "getHeight", "getBufferHeight"};
-                        for (String name : countMethodNames) {
-                            try {
-                                getLineCountMethod = buffer.getClass().getMethod(name);
-                                break;
-                            } catch (Exception e) {}
-                        }
-
-                        if (getLineCountMethod == null) {
-                            // Last resort: search all methods
-                            for (java.lang.reflect.Method m : buffer.getClass().getMethods()) {
-                                if ((m.getName().toLowerCase().contains("linecount") || m.getName().toLowerCase().contains("height")) 
-                                    && m.getParameterCount() == 0 && m.getReturnType() == int.class) {
-                                    getLineCountMethod = m;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (getLineCountMethod == null) {
-                            throw new NoSuchMethodException("Could not find line count method on " + buffer.getClass().getName());
-                        }
-
-                        int totalLines = (int) getLineCountMethod.invoke(buffer);
-                        
-                        // Dynamically find the method to get a line
-                        java.lang.reflect.Method getLineMethod = null;
-                        try {
-                            getLineMethod = buffer.getClass().getMethod("getLine", int.class);
-                        } catch (Exception e) {
-                            for (java.lang.reflect.Method m : buffer.getClass().getMethods()) {
-                                if (m.getName().toLowerCase().contains("getline") && m.getParameterCount() == 1 
-                                    && m.getParameterTypes()[0] == int.class) {
-                                    getLineMethod = m;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (getLineMethod == null) {
-                            throw new NoSuchMethodException("Could not find getLine method on " + buffer.getClass().getName());
-                        }
-                        
-                        LOG.info("[Terminal] [Step 3] Using methods: " + getLineCountMethod.getName() + ", " + getLineMethod.getName());
-                        LOG.info("[Terminal] [Step 3] Buffer has " + totalLines + " total lines. Scraping last 500...");
-                        
-                        int start = Math.max(0, totalLines - 500);
-                        int successCount = 0;
-                        int emptyCount = 0;
-                        int failCount = 0;
-
-                        for (int i = start; i < totalLines; i++) {
-                            try {
-                                Object line = getLineMethod.invoke(buffer, i);
-                                if (line != null) {
-                                    String lineText = null;
-                                    // Try common method names for line text
-                                    String[] textMethods = {"getText", "getLineText", "getLine", "getString"};
-                                    for (String tm : textMethods) {
-                                        try {
-                                            java.lang.reflect.Method m = line.getClass().getMethod(tm);
-                                            lineText = (String) m.invoke(line);
-                                            if (lineText != null) break;
-                                        } catch (Exception e) {}
-                                    }
-                                    
-                                    if (lineText == null) {
-                                        // Try to find any method that returns String and has no params
-                                        for (java.lang.reflect.Method m : line.getClass().getMethods()) {
-                                            if (m.getReturnType() == String.class && m.getParameterCount() == 0 
-                                                && !m.getName().equals("toString") && !m.getName().equals("getClass")) {
-                                                lineText = (String) m.invoke(line);
-                                                if (lineText != null && !lineText.isEmpty()) break;
-                                            }
-                                        }
-                                    }
-                                    
-                                    if (lineText != null && !lineText.trim().isEmpty()) {
-                                        scraped.append(lineText).append("\n");
-                                        successCount++;
-                                    } else {
-                                        emptyCount++;
-                                    }
-                                } else {
-                                    failCount++;
-                                }
-                            } catch (Exception lineEx) {
-                                failCount++;
-                            }
-                        }
-                        LOG.info("[Terminal] [Step 3] Scrape stats: Total=" + (totalLines - start) + ", Non-Empty=" + successCount + ", Empty=" + emptyCount + ", Failed=" + failCount);
-                        
-                        String result = scraped.toString().trim();
-                        if (!result.isEmpty()) {
-                            LOG.info("[Terminal] Final scraped content length: " + result.length());
-                            // Merge with dynamic capture if needed, or just return scraped as it's more complete
-                            return result;
-                        } else {
-                            LOG.warn("[Terminal] [Step 3] Scraped content is empty despite " + totalLines + " lines in buffer");
-                        }
-                    } catch (Exception e) {
-                        LOG.error("[Terminal] [Step 3] Failed to iterate buffer lines: " + e.getMessage(), e);
-                    }
-                } else {
-                    LOG.warn("[Terminal] [Step 2] Failed to find a valid TextBuffer object");
+        // Try via panel
+        try {
+            java.lang.reflect.Method getPanelMethod = widget.getClass().getMethod("getTerminalPanel");
+            Object panel = getPanelMethod.invoke(widget);
+            if (panel != null) {
+                Object terminal = panel.getClass().getMethod("getTerminal").invoke(panel);
+                if (terminal != null) {
+                    LOG.debug("[Terminal] Found terminal via panel.getTerminal()");
+                    return terminal;
                 }
             }
         } catch (Exception e) {
-            LOG.error("[Terminal] Global crash during terminal scrape: " + e.getMessage(), e);
+            LOG.debug("[Terminal] getTerminalPanel().getTerminal() failed: " + e.getMessage());
         }
-        
-        LOG.info("[Terminal] Falling back to dynamic capture (length: " + captured.length() + ")");
-        return captured;
+
+        LOG.debug("[Terminal] Could not find Terminal object");
+        return null;
+    }
+
+    /**
+     * Get TextBuffer from Terminal object via reflection.
+     */
+    private static Object getTextBuffer(@NotNull Object terminal) {
+        String[] bufferMethods = {"getTextBuffer", "getTerminalTextBuffer"};
+        for (String methodName : bufferMethods) {
+            try {
+                Object buffer = terminal.getClass().getMethod(methodName).invoke(terminal);
+                if (buffer != null) {
+                    LOG.debug("[Terminal] Found buffer via " + methodName + "()");
+                    return buffer;
+                }
+            } catch (Exception e) {
+                LOG.debug("[Terminal] " + methodName + "() failed");
+            }
+        }
+        LOG.debug("[Terminal] Could not find TextBuffer object");
+        return null;
+    }
+
+    /**
+     * Scrape lines from TextBuffer.
+     * @param buffer The TextBuffer object
+     * @param maxLines Maximum number of lines to scrape from the end
+     * @return Scraped content as string
+     */
+    private static String scrapeBufferLines(@NotNull Object buffer, int maxLines) {
+        try {
+            // Find line count method
+            java.lang.reflect.Method getLineCountMethod = findLineCountMethod(buffer);
+            if (getLineCountMethod == null) {
+                LOG.debug("[Terminal] Could not find line count method");
+                return "";
+            }
+
+            // Find getLine method
+            java.lang.reflect.Method getLineMethod = findGetLineMethod(buffer);
+            if (getLineMethod == null) {
+                LOG.debug("[Terminal] Could not find getLine method");
+                return "";
+            }
+
+            int totalLines = (int) getLineCountMethod.invoke(buffer);
+            int start = Math.max(0, totalLines - maxLines);
+            LOG.debug("[Terminal] Scraping lines " + start + " to " + totalLines);
+
+            StringBuilder scraped = new StringBuilder();
+            int successCount = 0;
+
+            for (int i = start; i < totalLines; i++) {
+                String lineText = extractLineText(buffer, getLineMethod, i);
+                if (lineText != null && !lineText.trim().isEmpty()) {
+                    scraped.append(lineText).append("\n");
+                    successCount++;
+                }
+            }
+
+            LOG.debug("[Terminal] Scraped " + successCount + " non-empty lines");
+            return scraped.toString().trim();
+        } catch (Exception e) {
+            LOG.debug("[Terminal] Failed to scrape buffer lines: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Find method to get line count from buffer.
+     */
+    private static java.lang.reflect.Method findLineCountMethod(@NotNull Object buffer) {
+        String[] methodNames = {"getLineCount", "getLinesCount", "getHeight", "getBufferHeight"};
+        for (String name : methodNames) {
+            try {
+                return buffer.getClass().getMethod(name);
+            } catch (NoSuchMethodException e) {
+                // continue
+            }
+        }
+
+        // Fallback: search all methods
+        for (java.lang.reflect.Method m : buffer.getClass().getMethods()) {
+            String name = m.getName().toLowerCase();
+            if ((name.contains("linecount") || name.contains("height"))
+                    && m.getParameterCount() == 0 && m.getReturnType() == int.class) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find method to get a line from buffer.
+     */
+    private static java.lang.reflect.Method findGetLineMethod(@NotNull Object buffer) {
+        try {
+            return buffer.getClass().getMethod("getLine", int.class);
+        } catch (NoSuchMethodException e) {
+            // Fallback: search methods
+            for (java.lang.reflect.Method m : buffer.getClass().getMethods()) {
+                if (m.getName().toLowerCase().contains("getline")
+                        && m.getParameterCount() == 1
+                        && m.getParameterTypes()[0] == int.class) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extract text from a single line object.
+     */
+    private static String extractLineText(@NotNull Object buffer, @NotNull java.lang.reflect.Method getLineMethod, int lineIndex) {
+        try {
+            Object line = getLineMethod.invoke(buffer, lineIndex);
+            if (line == null) return null;
+
+            // Try common method names
+            String[] textMethods = {"getText", "getLineText", "getLine", "getString"};
+            for (String methodName : textMethods) {
+                try {
+                    java.lang.reflect.Method m = line.getClass().getMethod(methodName);
+                    String text = (String) m.invoke(line);
+                    if (text != null) return text;
+                } catch (Exception e) {
+                    // continue
+                }
+            }
+
+            // Fallback: find any String-returning method
+            for (java.lang.reflect.Method m : line.getClass().getMethods()) {
+                if (m.getReturnType() == String.class
+                        && m.getParameterCount() == 0
+                        && !m.getName().equals("toString")
+                        && !m.getName().equals("getClass")) {
+                    String text = (String) m.invoke(line);
+                    if (text != null && !text.isEmpty()) return text;
+                }
+            }
+        } catch (Exception e) {
+            // ignore individual line failures
+        }
+        return null;
     }
 
     /**

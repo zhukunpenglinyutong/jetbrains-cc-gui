@@ -25,11 +25,10 @@ import com.intellij.ui.content.ContentFactory;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyAdapter;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Deque;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
  * Quick Fix with Claude - Áp dụng các thay đổi thông minh dựa trên PSI context
@@ -37,10 +36,17 @@ import java.util.List;
 public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
 
     private static final Logger LOG = Logger.getInstance(QuickFixWithClaudeAction.class);
-    private static final List<String> INPUT_HISTORY = new LinkedList<>();
+
+    // UI Constants
+    private static final int NAV_BUTTON_WIDTH = 28;
+    private static final int NAV_BUTTON_HEIGHT = 14;
+    private static final int NAV_BUTTON_FONT_SIZE = 8;
+    private static final int INPUT_FIELD_WIDTH = 400;
+    private static final int INPUT_FIELD_HEIGHT = 28;
+
+    // History configuration
     private static final int MAX_HISTORY_SIZE = 20;
-    private int historyIndex = -1;
-    private String currentInput = "";
+    private static final Deque<String> INPUT_HISTORY = new ConcurrentLinkedDeque<>();
 
     public QuickFixWithClaudeAction() {
         super(
@@ -62,9 +68,9 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
     }
 
     private void showQuickFixInput(@NotNull Project project, @NotNull Editor editor) {
-        // Reset history index for new invocation
-        historyIndex = -1;
-        currentInput = "";
+        // Use local variables for thread safety (each popup invocation has its own state)
+        final int[] historyIndex = {-1};
+        final String[] currentInput = {""};
 
         JPanel panel = new JPanel(new BorderLayout(0, 4));
         panel.setBorder(JBUI.Borders.empty(8));
@@ -81,13 +87,13 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
 
         JButton historyUpButton = new JButton("▲");
         historyUpButton.setToolTipText("Previous in history (↑)");
-        historyUpButton.setPreferredSize(new Dimension(28, 14));
-        historyUpButton.setFont(new Font("SansSerif", Font.PLAIN, 8));
+        historyUpButton.setPreferredSize(new Dimension(NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT));
+        historyUpButton.setFont(new Font("SansSerif", Font.PLAIN, NAV_BUTTON_FONT_SIZE));
 
         JButton historyDownButton = new JButton("▼");
         historyDownButton.setToolTipText("Next in history (↓)");
-        historyDownButton.setPreferredSize(new Dimension(28, 14));
-        historyDownButton.setFont(new Font("SansSerif", Font.PLAIN, 8));
+        historyDownButton.setPreferredSize(new Dimension(NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT));
+        historyDownButton.setFont(new Font("SansSerif", Font.PLAIN, NAV_BUTTON_FONT_SIZE));
 
         navPanel.add(historyUpButton);
         navPanel.add(historyDownButton);
@@ -106,17 +112,16 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
 
         // Center: text field - prefill with most recent history
         JBTextField textField = new JBTextField();
-        textField.setPreferredSize(new Dimension(400, 28));
+        textField.setPreferredSize(new Dimension(INPUT_FIELD_WIDTH, INPUT_FIELD_HEIGHT));
 
-        // Prefill with the most recent input from history
-        synchronized (INPUT_HISTORY) {
-            if (!INPUT_HISTORY.isEmpty()) {
-                textField.setText(INPUT_HISTORY.get(0));
-                // Select all text so user can easily type to replace
-                textField.selectAll();
-                // Set historyIndex to 0 since we're showing the first item
-                historyIndex = 0;
-            }
+        // Prefill with the most recent input from history (thread-safe access)
+        String firstEntry = INPUT_HISTORY.peekFirst();
+        if (firstEntry != null) {
+            textField.setText(firstEntry);
+            // Select all text so user can easily type to replace
+            textField.selectAll();
+            // Set historyIndex to 0 since we're showing the first item
+            historyIndex[0] = 0;
         }
 
         inputPanel.add(navPanel, BorderLayout.WEST);
@@ -138,13 +143,12 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
         Runnable submitAction = () -> {
             String prompt = textField.getText().trim();
             if (!prompt.isEmpty()) {
-                // Add to history
-                synchronized (INPUT_HISTORY) {
-                    INPUT_HISTORY.remove(prompt); // Remove duplicates
-                    INPUT_HISTORY.add(0, prompt); // Add to front
-                    if (INPUT_HISTORY.size() > MAX_HISTORY_SIZE) {
-                        INPUT_HISTORY.remove(INPUT_HISTORY.size() - 1);
-                    }
+                // Thread-safe history management with bounded size
+                INPUT_HISTORY.remove(prompt); // Remove duplicates
+                INPUT_HISTORY.addFirst(prompt); // Add to front
+                // Trim to max size
+                while (INPUT_HISTORY.size() > MAX_HISTORY_SIZE) {
+                    INPUT_HISTORY.removeLast();
                 }
                 popup.closeOk(null);
                 executeQuickFix(project, editor, prompt);
@@ -154,28 +158,30 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
         // Cancel action
         Runnable cancelAction = popup::cancel;
 
-        // History navigation actions
+        // History navigation actions (using local state arrays for thread safety)
+        // IMPORTANT: Get array snapshot first, then use its length to avoid race conditions
         Runnable historyUpAction = () -> {
-            synchronized (INPUT_HISTORY) {
-                if (!INPUT_HISTORY.isEmpty() && historyIndex < INPUT_HISTORY.size() - 1) {
-                    if (historyIndex == -1) {
-                        currentInput = textField.getText();
-                    }
-                    historyIndex++;
-                    textField.setText(INPUT_HISTORY.get(historyIndex));
+            String[] historyArray = INPUT_HISTORY.toArray(new String[0]);
+            int size = historyArray.length;
+            if (size > 0 && historyIndex[0] < size - 1) {
+                if (historyIndex[0] == -1) {
+                    currentInput[0] = textField.getText();
+                }
+                historyIndex[0]++;
+                if (historyIndex[0] < historyArray.length) {
+                    textField.setText(historyArray[historyIndex[0]]);
                 }
             }
         };
 
         Runnable historyDownAction = () -> {
-            synchronized (INPUT_HISTORY) {
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    textField.setText(INPUT_HISTORY.get(historyIndex));
-                } else if (historyIndex == 0) {
-                    historyIndex = -1;
-                    textField.setText(currentInput);
-                }
+            String[] historyArray = INPUT_HISTORY.toArray(new String[0]);
+            if (historyIndex[0] > 0 && historyIndex[0] < historyArray.length) {
+                historyIndex[0]--;
+                textField.setText(historyArray[historyIndex[0]]);
+            } else if (historyIndex[0] == 0) {
+                historyIndex[0] = -1;
+                textField.setText(currentInput[0]);
             }
         };
 
