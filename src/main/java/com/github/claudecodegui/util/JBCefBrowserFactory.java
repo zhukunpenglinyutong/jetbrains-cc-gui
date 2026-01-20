@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.ui.jcef.JBCefBrowserBase;
 
 /**
  * JBCefBrowser 工厂类
@@ -37,11 +38,14 @@ public final class JBCefBrowserFactory {
             JBCefBrowser browser = JBCefBrowser.createBuilder()
                     .setOffScreenRendering(isOffScreenRendering)
                     .build();
+            configureContextMenu(browser);
             LOG.info("JBCefBrowser created successfully using builder");
             return browser;
         } catch (Exception e) {
             LOG.warn("JBCefBrowser builder failed, falling back to default constructor: " + e.getMessage());
-            return new JBCefBrowser();
+            JBCefBrowser browser = new JBCefBrowser();
+            configureContextMenu(browser);
+            return browser;
         }
     }
 
@@ -60,6 +64,7 @@ public final class JBCefBrowserFactory {
                     .setOffScreenRendering(isOffScreenRendering)
                     .setUrl(url)
                     .build();
+            configureContextMenu(browser);
             LOG.info("JBCefBrowser created successfully with URL");
             return browser;
         } catch (Exception e) {
@@ -68,6 +73,7 @@ public final class JBCefBrowserFactory {
             if (url != null && !url.isEmpty()) {
                 browser.loadURL(url);
             }
+            configureContextMenu(browser);
             return browser;
         }
     }
@@ -140,5 +146,17 @@ public final class JBCefBrowserFactory {
             LOG.warn("Failed to check JCEF support: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 配置浏览器右键菜单.
+     * 在开发环境启用右键菜单，在生产环境禁用右键菜单。
+     *
+     * @param browser JBCefBrowser 实例
+     */
+    private static void configureContextMenu(JBCefBrowser browser) {
+        boolean isDevMode = PlatformUtils.isPluginDevMode();
+        browser.setProperty(JBCefBrowserBase.Properties.NO_CONTEXT_MENU, !isDevMode);
+        LOG.info("Context menu " + (isDevMode ? "enabled" : "disabled") + " (devMode=" + isDevMode + ")");
     }
 }
