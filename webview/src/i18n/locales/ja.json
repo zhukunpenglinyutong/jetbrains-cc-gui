@@ -89,6 +89,8 @@
       "description": "ページテーマ、言語、Node.js環境を設定",
       "theme": {
         "label": "テーマ",
+        "system": "IDE のテーマに従う",
+        "systemDesc": "IDE のテーマに自動的に従う",
         "light": "ライトテーマ",
         "lightDesc": "爽やかで明るい、昼間の使用に適しています",
         "dark": "ダークテーマ",

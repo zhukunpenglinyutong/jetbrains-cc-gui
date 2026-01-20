@@ -1,9 +1,11 @@
 package com.github.claudecodegui.util;
 
+import com.intellij.ide.plugins.IdeaPluginDescriptor;
+import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.extensions.PluginId;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,8 +18,11 @@ import java.util.concurrent.TimeUnit;
 public class PlatformUtils {
 
     private static final Logger LOG = Logger.getInstance(PlatformUtils.class);
+
     // 平台类型缓存
     private static volatile PlatformType cachedPlatformType = null;
+    // 插件 ID 缓存
+    private static volatile String cachedPluginId = null;
 
     /**
      * 平台类型枚举
@@ -73,6 +78,81 @@ public class PlatformUtils {
      */
     public static boolean isLinux() {
         return getPlatformType() == PlatformType.LINUX;
+    }
+
+    /**
+     * 获取当前插件 ID.
+     * 通过遍历所有插件并匹配类加载器来自动获取，避免硬编码。
+     *
+     * @return 插件 ID，如果获取失败返回兜底值
+     */
+    public static String getPluginId() {
+        if (cachedPluginId == null) {
+            synchronized (PlatformUtils.class) {
+                if (cachedPluginId == null) {
+                    try {
+                        // 获取当前类的类加载器
+                        ClassLoader classLoader = PlatformUtils.class.getClassLoader();
+
+                        // 遍历所有插件，找到包含当前类的插件
+                        for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
+                            if (plugin.getPluginClassLoader() == classLoader) {
+                                cachedPluginId = plugin.getPluginId().getIdString();
+                                LOG.info("Plugin ID detected: " + cachedPluginId);
+                                return cachedPluginId;
+                            }
+                        }
+
+                        // 如果没找到，使用兜底值
+                        LOG.warn("Failed to detect plugin ID: no matching plugin found");
+                        cachedPluginId = "com.github.idea-claude-code-gui"; // 兜底值
+                    } catch (Exception e) {
+                        LOG.warn("Failed to detect plugin ID: " + e.getMessage());
+                        cachedPluginId = "com.github.idea-claude-code-gui"; // 兜底值
+                    }
+                }
+            }
+        }
+        return cachedPluginId;
+    }
+
+    /**
+     * 检查插件是否在开发模式下运行.
+     * 通过多个标志判断：插件路径、系统路径、内部标志等。
+     *
+     * @return true 表示开发模式
+     */
+    public static boolean isPluginDevMode() {
+        try {
+            // 检查系统路径是否包含 sandbox（runIde 的典型特征）
+            String systemPath = System.getProperty("idea.system.path");
+            if (systemPath != null && systemPath.contains("sandbox")) {
+                LOG.info("Dev mode detected: sandbox system path");
+                return true;
+            }
+
+            // 检查插件路径是否包含 build
+            String pluginsPath = System.getProperty("idea.plugins.path");
+            if (pluginsPath != null && pluginsPath.contains("build")) {
+                LOG.info("Dev mode detected: build plugins path");
+                return true;
+            }
+
+            // 检查插件实际路径
+            IdeaPluginDescriptor plugin = PluginManagerCore.getPlugin(
+                    PluginId.getId(getPluginId())
+            );
+            if (plugin != null) {
+                String pluginPath = plugin.getPluginPath().toString();
+                if (pluginPath.contains("build")) {
+                    LOG.info("Dev mode detected: plugin path contains build");
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to detect plugin dev mode: " + e.getMessage());
+        }
+        return false;
     }
 
     // ==================== 环境变量处理 ====================

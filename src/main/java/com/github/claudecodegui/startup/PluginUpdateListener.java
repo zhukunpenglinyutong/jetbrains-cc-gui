@@ -1,6 +1,7 @@
 package com.github.claudecodegui.startup;
 
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.ide.util.PropertiesComponent;
@@ -24,7 +25,6 @@ import java.io.File;
 public class PluginUpdateListener implements ProjectActivity {
 
     private static final Logger LOG = Logger.getInstance(PluginUpdateListener.class);
-    private static final String PLUGIN_ID = "com.github.idea-claude-code-gui";
     private static final String LAST_VERSION_KEY = "claude.code.last.plugin.version";
     private static final String SDK_DIR_NAME = "ai-bridge";
 
@@ -46,7 +46,7 @@ public class PluginUpdateListener implements ProjectActivity {
      */
     private void checkAndCleanupOldCache() {
         try {
-            PluginId pluginId = PluginId.getId(PLUGIN_ID);
+            PluginId pluginId = PluginId.getId(PlatformUtils.getPluginId());
             IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
             if (descriptor == null) {
                 LOG.debug("[PluginUpdateListener] Plugin descriptor not found");

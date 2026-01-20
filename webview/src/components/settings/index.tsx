@@ -132,10 +132,23 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
   }>({ isOpen: false, agent: null });
 
   // 主题状态
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+  const [themePreference, setThemePreference] = useState<'light' | 'dark' | 'system'>(() => {
     // 从 localStorage 读取主题设置
     const savedTheme = localStorage.getItem('theme');
-    return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
+    if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
+      return savedTheme;
+    }
+    return 'system'; // 默认跟随 IDE
+  });
+
+  // IDE 主题状态（优先使用 Java 注入的初始主题，用于处理动态变化）
+  const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
+    // 检查 Java 是否注入了初始主题
+    const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
+    if (injectedTheme === 'light' || injectedTheme === 'dark') {
+      return injectedTheme;
+    }
+    return null;
   });
 
   // 字体缩放状态 (1-6，默认为 3，即 100%)
@@ -336,6 +349,21 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       }
     };
 
+    // IDE 主题回调 - 保存之前的回调以便恢复
+    const previousOnIdeThemeReceived = window.onIdeThemeReceived;
+    window.onIdeThemeReceived = (jsonStr: string) => {
+      try {
+        const themeData = JSON.parse(jsonStr);
+        const theme = themeData.isDark ? 'dark' : 'light';
+        setIdeTheme(theme);
+        console.log('[SettingsView] IDE theme received:', themeData, 'resolved to:', theme);
+        // 同时调用之前的回调（App.tsx 的回调）
+        previousOnIdeThemeReceived?.(jsonStr);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse IDE theme:', error);
+      }
+    };
+
     // 🔧 流式传输配置回调 - 仅在未从 App.tsx 传递 props 时使用本地状态
     const previousUpdateStreamingEnabled = window.updateStreamingEnabled;
     if (!onStreamingEnabledChangeProp) {
@@ -473,6 +501,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
       window.onEditorFontConfigReceived = undefined;
+      // 恢复之前的 IDE 主题回调（App.tsx 的回调）
+      window.onIdeThemeReceived = previousOnIdeThemeReceived;
       // Restore previous streaming callback if we overrode it
       if (!onStreamingEnabledChangeProp) {
         window.updateStreamingEnabled = previousUpdateStreamingEnabled;
@@ -488,6 +518,9 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       window.updateActiveCodexProvider = undefined;
       window.updateCurrentCodexConfig = undefined;
     };
+
+    // 请求 IDE 主题信息
+    sendToJava('get_ide_theme:');
   }, [t, onStreamingEnabledChangeProp, onSendShortcutChangeProp]);
 
   // 监听窗口大小变化
@@ -520,13 +553,26 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
     }
   };
 
-  // 主题切换处理
+  // 主题切换处理（支持跟随 IDE）
   useEffect(() => {
-    // 应用主题到 document.documentElement
-    document.documentElement.setAttribute('data-theme', theme);
+    const applyTheme = (preference: 'light' | 'dark' | 'system') => {
+      if (preference === 'system') {
+        // 如果是跟随 IDE，需要等待 IDE 主题加载完成
+        if (ideTheme === null) {
+          console.log('[SettingsView] Waiting for IDE theme to load...');
+          return; // 等待 ideTheme 加载
+        }
+        document.documentElement.setAttribute('data-theme', ideTheme);
+      } else {
+        // 明确的 light/dark 选择，立即应用
+        document.documentElement.setAttribute('data-theme', preference);
+      }
+    };
+
+    applyTheme(themePreference);
     // 保存到 localStorage
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    localStorage.setItem('theme', themePreference);
+  }, [themePreference, ideTheme]);
 
   // 字体缩放处理
   useEffect(() => {
@@ -896,8 +942,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
           {/* 基础配置 */}
           <div style={{ display: currentTab === 'basic' ? 'block' : 'none' }}>
             <BasicConfigSection
-              theme={theme}
-              onThemeChange={setTheme}
+              theme={themePreference}
+              onThemeChange={setThemePreference}
               fontSizeLevel={fontSizeLevel}
               onFontSizeLevelChange={setFontSizeLevel}
               nodePath={nodePath}
