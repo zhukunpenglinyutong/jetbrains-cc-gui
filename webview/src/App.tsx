@@ -97,6 +97,7 @@ const App = () => {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(null); // IDE 主题状态
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // Scroll behavior management
@@ -226,10 +227,39 @@ const App = () => {
 
   // 初始化主题和字体缩放
   useEffect(() => {
-    // 初始化主题
-    const savedTheme = localStorage.getItem('theme');
-    const theme = (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
-    document.documentElement.setAttribute('data-theme', theme);
+    console.log('[Frontend][Theme] Initializing theme system');
+
+    // 注册 IDE 主题接收回调
+    window.onIdeThemeReceived = (jsonStr: string) => {
+      try {
+        const themeData = JSON.parse(jsonStr);
+        const theme = themeData.isDark ? 'dark' : 'light';
+        console.log('[Frontend][Theme] IDE theme received:', {
+          raw: themeData,
+          resolved: theme,
+          currentSetting: localStorage.getItem('theme')
+        });
+        setIdeTheme(theme);
+      } catch (e) {
+        console.error('[Frontend][Theme] Failed to parse IDE theme response:', e, 'Raw:', jsonStr);
+      }
+    };
+
+    // 监听 IDE 主题变化（当用户在 IDE 中切换主题时）
+    window.onIdeThemeChanged = (jsonStr: string) => {
+      try {
+        const themeData = JSON.parse(jsonStr);
+        const theme = themeData.isDark ? 'dark' : 'light';
+        console.log('[Frontend][Theme] IDE theme changed:', {
+          raw: themeData,
+          resolved: theme,
+          currentSetting: localStorage.getItem('theme')
+        });
+        setIdeTheme(theme);
+      } catch (e) {
+        console.error('[Frontend][Theme] Failed to parse IDE theme change:', e, 'Raw:', jsonStr);
+      }
+    };
 
     // 初始化字体缩放
     const savedLevel = localStorage.getItem('fontSizeLevel');
@@ -247,7 +277,71 @@ const App = () => {
     };
     const scale = fontSizeMap[fontSizeLevel] || 1.0;
     document.documentElement.style.setProperty('--font-scale', scale.toString());
+
+    // 先应用用户明确选择的主题（light/dark），跟随 IDE 的情况等 ideTheme 更新后再处理
+    const savedTheme = localStorage.getItem('theme');
+    console.log('[Frontend][Theme] Saved theme preference:', savedTheme);
+
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      console.log('[Frontend][Theme] Applying explicit theme:', savedTheme);
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    } else {
+      console.log('[Frontend][Theme] Follow IDE mode detected, will wait for IDE theme');
+    }
+
+    // 请求 IDE 主题（带重试机制）
+    let retryCount = 0;
+    const MAX_RETRIES = 20; // 最多重试 20 次 (2 秒)
+
+    const requestIdeTheme = () => {
+      if (window.sendToJava) {
+        console.log('[Frontend][Theme] Requesting IDE theme from backend');
+        window.sendToJava('get_ide_theme:');
+      } else {
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          console.log(`[Frontend][Theme] Bridge not ready, retrying (${retryCount}/${MAX_RETRIES})...`);
+          setTimeout(requestIdeTheme, 100);
+        } else {
+          console.error('[Frontend][Theme] Failed to request IDE theme: bridge not available after', MAX_RETRIES, 'retries');
+          // 如果是 Follow IDE 模式且无法获取 IDE 主题，使用 dark 作为 fallback
+          if (savedTheme === null || savedTheme === 'system') {
+            console.warn('[Frontend][Theme] Fallback to dark theme');
+            setIdeTheme('dark');
+          }
+        }
+      }
+    };
+
+    // 延迟 100ms 开始请求，给 bridge 初始化时间
+    setTimeout(requestIdeTheme, 100);
   }, []);
+
+  // 当 IDE 主题变化时，重新应用主题（如果用户选择了"跟随 IDE"）
+  // 这个 effect 也处理初始加载时的主题设置
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+
+    console.log('[Frontend][Theme] ideTheme effect triggered:', {
+      ideTheme,
+      savedTheme,
+      currentDataTheme: document.documentElement.getAttribute('data-theme')
+    });
+
+    // 只有在 ideTheme 已加载后才处理
+    if (ideTheme === null) {
+      console.log('[Frontend][Theme] IDE theme not loaded yet, waiting...');
+      return;
+    }
+
+    // 如果用户选择了 "Follow IDE" 模式
+    if (savedTheme === null || savedTheme === 'system') {
+      console.log('[Frontend][Theme] Applying IDE theme:', ideTheme);
+      document.documentElement.setAttribute('data-theme', ideTheme);
+    } else {
+      console.log('[Frontend][Theme] User has explicit theme preference:', savedTheme, '- not applying IDE theme');
+    }
+  }, [ideTheme]);
 
   // 从 LocalStorage 加载模型选择状态，并同步到后端
   useEffect(() => {

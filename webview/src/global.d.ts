@@ -338,6 +338,16 @@ interface Window {
   onEditorFontConfigReceived?: (json: string) => void;
 
   /**
+   * IDE theme received callback - 接收 IDE 主题配置
+   */
+  onIdeThemeReceived?: (json: string) => void;
+
+  /**
+   * IDE theme changed callback - IDE 主题变化时的回调
+   */
+  onIdeThemeChanged?: (json: string) => void;
+
+  /**
    * Update agents list
    */
   updateAgents?: (json: string) => void;
