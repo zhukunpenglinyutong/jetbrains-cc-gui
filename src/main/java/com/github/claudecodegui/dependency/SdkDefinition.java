@@ -14,7 +14,7 @@ public enum SdkDefinition {
         "claude-sdk",
         "Claude Code SDK",
         "@anthropic-ai/claude-agent-sdk",
-        "^0.2.12",
+        "^0.2.3",
         Arrays.asList("@anthropic-ai/sdk", "@anthropic-ai/bedrock-sdk"),
         "Claude AI 提供商所需，包含 Agent SDK 和 Bedrock 支持。"
     ),
