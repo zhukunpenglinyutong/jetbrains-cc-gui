@@ -89,6 +89,8 @@
       "description": "配置頁面主題、語言和 Node.js 執行環境",
       "theme": {
         "label": "介面主題",
+        "system": "跟隨 IDE",
+        "systemDesc": "自動跟隨 IDE 主題",
         "light": "亮色主題",
         "lightDesc": "清爽明亮，適合白天使用",
         "dark": "暗色主題",

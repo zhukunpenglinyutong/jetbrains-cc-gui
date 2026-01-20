@@ -296,6 +296,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             this.htmlLoader = new HtmlLoader(getClass());
             this.mainPanel = new JPanel(new BorderLayout());
 
+            // 设置 mainPanel 背景色，防止冷启动时闪白
+            this.mainPanel.setBackground(com.github.claudecodegui.util.ThemeConfigService.getBackgroundColor());
+
             initializeSession();
             loadNodePathFromSettings();
             syncActiveProvider();
@@ -833,6 +836,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 browser.loadHTML(htmlContent);
 
                 JComponent browserComponent = browser.getComponent();
+
+                // 设置 webview 容器背景色，防止 HTML 加载前闪白
+                // 根据 IDE 主题设置背景色，与注入到 HTML 的颜色保持一致
+                browserComponent.setBackground(com.github.claudecodegui.util.ThemeConfigService.getBackgroundColor());
 
                 // 添加拖拽支持 - 获取完整文件路径
                 new DropTarget(browserComponent, new DropTargetAdapter() {
