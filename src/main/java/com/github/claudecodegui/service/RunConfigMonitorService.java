@@ -9,6 +9,7 @@ import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
@@ -63,8 +64,8 @@ public class RunConfigMonitorService implements ProjectActivity {
     @Nullable
     @Override
     public Object execute(@NotNull Project project, @NotNull Continuation<? super Unit> continuation) {
-        currentProject = project;
-        monitorRunConfigurations(project);
+        this.currentProject = project;
+        ApplicationManager.getApplication().invokeLater(() -> monitorRunConfigurations(project));
         return Unit.INSTANCE;
     }
 
