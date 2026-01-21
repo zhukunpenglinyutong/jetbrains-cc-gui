@@ -84,6 +84,7 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -194,6 +195,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             public void contentRemoved(@NotNull ContentManagerEvent event) {
                 updateTabCloseableState(contentManager);
             }
+
+            @Override
+            public void selectionChanged(@NotNull ContentManagerEvent event) {
+                // 当用户切换标签时，更新最近活跃的窗口
+                Content selectedContent = event.getContent();
+                ClaudeChatWindow selectedWindow = contentToWindowMap.get(selectedContent);
+                if (selectedWindow != null) {
+                    PermissionService permissionService = PermissionService.getInstance(project);
+                    permissionService.setLastActiveWindow(selectedWindow.getWindowId());
+                    LOG.debug("[TabManager] Tab selection changed, updated last active window: " + selectedWindow.getWindowId());
+                }
+            }
         });
 
         // Initialize closeable state for the first tab
@@ -281,6 +294,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private final HtmlLoader htmlLoader;
         private Content parentContent;
 
+        // 窗口唯一标识符，用于多标签弹窗路由
+        private final String windowId;
+
         // Editor Event Listeners
         private Alarm contextUpdateAlarm;
         private MessageBusConnection connection;
@@ -324,6 +340,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         public ClaudeChatWindow(Project project, boolean skipRegister) {
             this.project = project;
+            this.windowId = UUID.randomUUID().toString();  // 生成窗口唯一标识
             this.claudeSDKBridge = new ClaudeSDKBridge();
             this.codexSDKBridge = new CodexSDKBridge();
             this.settingsService = new CodemossSettingsService();
@@ -390,7 +407,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void initializeSession() {
             this.session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
-            loadPermissionModeFromSettings();
+            // 不再从全局存储加载权限模式，每个标签页使用独立的默认值 "default"
+            // 这避免了标签页之间权限模式互相污染的问题
         }
 
         private void loadNodePathFromSettings() {
@@ -437,22 +455,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
         }
 
+        /**
+         * @deprecated 不再使用全局权限模式存储，每个标签页独立管理权限模式
+         * 保留此方法仅为兼容性考虑，实际不再被调用
+         */
+        @Deprecated
         private void loadPermissionModeFromSettings() {
-            try {
-                PropertiesComponent props = PropertiesComponent.getInstance();
-                String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
-                if (savedMode != null && !savedMode.trim().isEmpty()) {
-                    String mode = savedMode.trim();
-                    if (session != null) {
-                        session.setPermissionMode(mode);
-                        LOG.info("Loaded permission mode from settings: " + mode);
-                        // Update status bar
-                        com.github.claudecodegui.notifications.ClaudeNotifier.setMode(project, mode);
-                    }
-                }
-            } catch (Exception e) {
-                LOG.warn("Failed to load permission mode: " + e.getMessage());
-            }
+            // 已废弃：不再从全局存储加载权限模式
+            // 每个标签页使用 SessionState 中定义的默认值 "default"
+            LOG.debug("loadPermissionModeFromSettings is deprecated and no longer used");
         }
 
         private void initializeStatusBar() {
@@ -508,16 +519,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void setupPermissionService() {
             PermissionService permissionService = PermissionService.getInstance(project);
             permissionService.start();
-            // 使用项目注册机制，支持多窗口场景
-            permissionService.registerDialogShower(project, (toolName, inputs) ->
+            // 使用窗口 ID 注册机制，支持多标签场景
+            permissionService.registerDialogShower(windowId, project, (toolName, inputs) ->
                 permissionHandler.showFrontendPermissionDialog(toolName, inputs));
             // 注册 AskUserQuestion 对话框显示器
-            permissionService.registerAskUserQuestionDialogShower(project, (requestId, questionsData) ->
+            permissionService.registerAskUserQuestionDialogShower(windowId, project, (requestId, questionsData) ->
                 permissionHandler.showAskUserQuestionDialog(requestId, questionsData));
             // 注册 PlanApproval 对话框显示器
-            permissionService.registerPlanApprovalDialogShower(project, (requestId, planData) ->
+            permissionService.registerPlanApprovalDialogShower(windowId, project, (requestId, planData) ->
                 permissionHandler.showPlanApprovalDialog(requestId, planData));
-            LOG.info("Started permission service with frontend dialog, AskUserQuestion dialog, and PlanApproval dialog for project: " + project.getName());
+            LOG.info("Started permission service with frontend dialog for window: " + windowId + ", project: " + project.getName());
         }
 
         private void initializeHandlers() {
@@ -2006,8 +2017,24 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             });
         }
 
+        /**
+         * 权限被拒绝时中断当前会话
+         * 需要正确重置 streamActive 状态，确保 loading=false 能被正确发送到前端
+         */
         private void interruptDueToPermissionDenial() {
-            this.session.interrupt().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {}));
+            // 首先重置 streamActive 状态，确保后续的 showLoading(false) 不会被抑制
+            synchronized (streamMessageUpdateLock) {
+                streamActive = false;
+            }
+
+            // 通知前端流式传输已结束
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("onStreamEnd");
+                callJavaScript("showLoading", "false");
+            });
+
+            // 中断会话
+            this.session.interrupt();
         }
 
         /**
@@ -2298,6 +2325,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             return mainPanel;
         }
 
+        public String getWindowId() {
+            return windowId;
+        }
+
         public void dispose() {
             if (disposed) return;
 
@@ -2323,9 +2354,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 注销权限服务的 dialogShower、askUserQuestionDialogShower 和 planApprovalDialogShower，防止内存泄漏
             try {
                 PermissionService permissionService = PermissionService.getInstance(project);
-                permissionService.unregisterDialogShower(project);
-                permissionService.unregisterAskUserQuestionDialogShower(project);
-                permissionService.unregisterPlanApprovalDialogShower(project);
+                permissionService.unregisterDialogShower(windowId);
+                permissionService.unregisterAskUserQuestionDialogShower(windowId);
+                permissionService.unregisterPlanApprovalDialogShower(windowId);
+                LOG.info("Unregistered dialog showers for window: " + windowId);
             } catch (Exception e) {
                 LOG.warn("Failed to unregister dialog showers: " + e.getMessage());
             }

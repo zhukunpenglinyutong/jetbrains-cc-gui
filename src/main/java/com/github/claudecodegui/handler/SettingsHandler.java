@@ -144,7 +144,8 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleGetMode() {
         try {
-            String currentMode = "bypassPermissions";  // 默认值
+            // 默认使用 default 模式，需要用户确认敏感操作
+            String currentMode = "default";
 
             // 优先从 session 中获取
             if (context.getSession() != null) {
@@ -152,14 +153,8 @@ public class SettingsHandler extends BaseMessageHandler {
                 if (sessionMode != null && !sessionMode.trim().isEmpty()) {
                     currentMode = sessionMode;
                 }
-            } else {
-                // 如果 session 不存在，从持久化存储加载
-                PropertiesComponent props = PropertiesComponent.getInstance();
-                String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
-                if (savedMode != null && !savedMode.trim().isEmpty()) {
-                    currentMode = savedMode.trim();
-                }
             }
+            // 不再从全局存储加载，每个标签页独立管理权限模式
 
             final String modeToSend = currentMode;
 
@@ -173,12 +168,10 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * 处理设置模式请求
+     * 只设置当前标签页的权限模式，不影响其他标签页
      */
     private void handleSetMode(String content) {
         try {
-            // LOG.info("[SettingsHandler] ========== RECEIVED SET_MODE REQUEST ==========");
-            // LOG.info("[SettingsHandler] Raw content: " + content);
-
             String mode = content;
             if (content != null && !content.isEmpty()) {
                 try {
@@ -189,31 +182,20 @@ public class SettingsHandler extends BaseMessageHandler {
                     }
                 } catch (Exception e) {
                     // content 本身就是 mode
-                    // LOG.debug("[SettingsHandler] Content is not JSON, treating as plain string");
                 }
             }
 
-            // LOG.info("[SettingsHandler] Parsed permission mode: " + mode);
-
             // 检查 session 是否存在
             if (context.getSession() != null) {
-                // LOG.info("[SettingsHandler] Session exists, setting permission mode...");
                 context.getSession().setPermissionMode(mode);
+                LOG.info("[SettingsHandler] Set permission mode for current session: " + mode);
 
-                // 保存权限模式到持久化存储
-                PropertiesComponent props = PropertiesComponent.getInstance();
-                props.setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
-                LOG.info("Saved permission mode to settings: " + mode);
+                // 不再保存到全局存储，避免影响其他标签页
+                // 只更新状态栏显示
                 com.github.claudecodegui.notifications.ClaudeNotifier.setMode(context.getProject(), mode);
-
-                // 验证设置是否成功
-                // String currentMode = context.getSession().getPermissionMode();
-                // LOG.info("[SettingsHandler] Session permission mode confirmed: " + currentMode);
-                // LOG.info("[SettingsHandler] Mode update " + (mode.equals(currentMode) ? "SUCCESS" : "FAILED"));
             } else {
                 LOG.warn("[SettingsHandler] WARNING: Session is null! Cannot set permission mode");
             }
-            // LOG.info("[SettingsHandler] =============================================");
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set mode: " + e.getMessage(), e);
         }

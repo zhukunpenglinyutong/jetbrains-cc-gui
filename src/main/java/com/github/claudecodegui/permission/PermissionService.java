@@ -33,17 +33,42 @@ public class PermissionService {
     private final Map<String, Boolean> toolOnlyPermissionMemory = new ConcurrentHashMap<>();
     private volatile PermissionDecisionListener decisionListener;
 
-    // 多项目支持：按项目注册的权限对话框显示器
-    private final Map<Project, PermissionDialogShower> dialogShowers = new ConcurrentHashMap<>();
+    // 多标签支持：按窗口 ID 注册的权限对话框显示器
+    // 使用窗口 ID 而不是 Project 作为 key，因为同一个项目可能有多个标签
+    private final Map<String, DialogShowerEntry<PermissionDialogShower>> dialogShowers = new ConcurrentHashMap<>();
 
-    // 多项目支持：按项目注册的 AskUserQuestion 对话框显示器
-    private final Map<Project, AskUserQuestionDialogShower> askUserQuestionDialogShowers = new ConcurrentHashMap<>();
+    // 多标签支持：按窗口 ID 注册的 AskUserQuestion 对话框显示器
+    private final Map<String, DialogShowerEntry<AskUserQuestionDialogShower>> askUserQuestionDialogShowers = new ConcurrentHashMap<>();
 
-    // 多项目支持：按项目注册的 PlanApproval 对话框显示器
-    private final Map<Project, PlanApprovalDialogShower> planApprovalDialogShowers = new ConcurrentHashMap<>();
+    // 多标签支持：按窗口 ID 注册的 PlanApproval 对话框显示器
+    private final Map<String, DialogShowerEntry<PlanApprovalDialogShower>> planApprovalDialogShowers = new ConcurrentHashMap<>();
 
     // 最近活动的项目（用于无文件上下文的对话框选择）
     private volatile Project lastActiveProject = null;
+
+    // 最近活动的窗口 ID（用于优先路由到最近活跃的窗口）
+    private volatile String lastActiveWindowId = null;
+
+    /**
+     * 对话框显示器条目，包含项目和显示器
+     */
+    public static class DialogShowerEntry<T> {
+        private final Project project;
+        private final T shower;
+
+        public DialogShowerEntry(Project project, T shower) {
+            this.project = project;
+            this.shower = shower;
+        }
+
+        public Project getProject() {
+            return project;
+        }
+
+        public T getShower() {
+            return shower;
+        }
+    }
 
     // 文件等待配置
     private static final int FILE_WAIT_INITIAL_DELAY_MS = 50;
@@ -201,77 +226,190 @@ public class PermissionService {
 
     /**
      * 注册权限对话框显示器（用于显示前端弹窗）
-     * 支持多项目：每个项目注册自己的显示器
+     * 支持多标签：每个窗口注册自己的显示器
      *
+     * @param windowId 窗口唯一 ID
      * @param project 项目
      * @param shower 权限对话框显示器
      */
+    public void registerDialogShower(String windowId, Project project, PermissionDialogShower shower) {
+        if (windowId != null && project != null && shower != null) {
+            dialogShowers.put(windowId, new DialogShowerEntry<>(project, shower));
+            lastActiveProject = project;
+            lastActiveWindowId = windowId;
+            debugLog("CONFIG", "Dialog shower registered for window: " + windowId +
+                ", project: " + project.getName() + ", total registered: " + dialogShowers.size());
+        }
+    }
+
+    /**
+     * 注册权限对话框显示器（兼容旧 API）
+     * @deprecated 使用 {@link #registerDialogShower(String, Project, PermissionDialogShower)} 代替
+     */
+    @Deprecated
     public void registerDialogShower(Project project, PermissionDialogShower shower) {
         if (project != null && shower != null) {
-            dialogShowers.put(project, shower);
-            lastActiveProject = project; // Track most recent active project
-            debugLog("CONFIG", "Dialog shower registered for project: " + project.getName() +
-                ", total registered: " + dialogShowers.size());
+            // 兼容旧代码：使用项目名称作为窗口 ID
+            String windowId = "legacy-" + project.getName();
+            registerDialogShower(windowId, project, shower);
         }
     }
 
     /**
      * 注销权限对话框显示器
-     * 在项目关闭时调用，防止内存泄漏
+     * 在窗口关闭时调用，防止内存泄漏
      *
-     * @param project 项目
+     * @param windowId 窗口唯一 ID
      */
+    public void unregisterDialogShower(String windowId) {
+        if (windowId != null) {
+            DialogShowerEntry<PermissionDialogShower> removed = dialogShowers.remove(windowId);
+            debugLog("CONFIG", "Dialog shower unregistered for window: " + windowId +
+                ", was registered: " + (removed != null) + ", remaining: " + dialogShowers.size());
+            // 如果移除的是最近活跃的窗口，更新 lastActiveWindowId
+            if (windowId.equals(lastActiveWindowId)) {
+                lastActiveWindowId = dialogShowers.isEmpty() ? null : dialogShowers.keySet().iterator().next();
+            }
+        }
+    }
+
+    /**
+     * 注销权限对话框显示器（兼容旧 API）
+     * @deprecated 使用 {@link #unregisterDialogShower(String)} 代替
+     */
+    @Deprecated
     public void unregisterDialogShower(Project project) {
         if (project != null) {
-            PermissionDialogShower removed = dialogShowers.remove(project);
-            debugLog("CONFIG", "Dialog shower unregistered for project: " + project.getName() +
-                ", was registered: " + (removed != null) + ", remaining: " + dialogShowers.size());
+            // 兼容旧代码：使用项目名称作为窗口 ID
+            String windowId = "legacy-" + project.getName();
+            unregisterDialogShower(windowId);
         }
     }
 
     /**
      * 注册 AskUserQuestion 对话框显示器
-     * 支持多项目：每个项目注册自己的显示器
+     * 支持多标签：每个窗口注册自己的显示器
      *
+     * @param windowId 窗口唯一 ID
      * @param project 项目
      * @param shower AskUserQuestion 对话框显示器
      */
+    public void registerAskUserQuestionDialogShower(String windowId, Project project, AskUserQuestionDialogShower shower) {
+        if (windowId != null && project != null && shower != null) {
+            askUserQuestionDialogShowers.put(windowId, new DialogShowerEntry<>(project, shower));
+            lastActiveProject = project;
+            lastActiveWindowId = windowId;
+            debugLog("CONFIG", "AskUserQuestion dialog shower registered for window: " + windowId +
+                ", project: " + project.getName() + ", total registered: " + askUserQuestionDialogShowers.size());
+        }
+    }
+
+    /**
+     * 注册 AskUserQuestion 对话框显示器（兼容旧 API）
+     * @deprecated 使用 {@link #registerAskUserQuestionDialogShower(String, Project, AskUserQuestionDialogShower)} 代替
+     */
+    @Deprecated
     public void registerAskUserQuestionDialogShower(Project project, AskUserQuestionDialogShower shower) {
         if (project != null && shower != null) {
-            askUserQuestionDialogShowers.put(project, shower);
-            lastActiveProject = project; // Track most recent active project
-            debugLog("CONFIG", "AskUserQuestion dialog shower registered for project: " + project.getName() +
-                ", total registered: " + askUserQuestionDialogShowers.size());
+            String windowId = "legacy-" + project.getName();
+            registerAskUserQuestionDialogShower(windowId, project, shower);
         }
     }
 
     /**
      * 注销 AskUserQuestion 对话框显示器
-     * 在项目关闭时调用，防止内存泄漏
+     * 在窗口关闭时调用，防止内存泄漏
      *
-     * @param project 项目
+     * @param windowId 窗口唯一 ID
      */
-    public void unregisterAskUserQuestionDialogShower(Project project) {
-        if (project != null) {
-            AskUserQuestionDialogShower removed = askUserQuestionDialogShowers.remove(project);
-            debugLog("CONFIG", "AskUserQuestion dialog shower unregistered for project: " + project.getName() +
+    public void unregisterAskUserQuestionDialogShower(String windowId) {
+        if (windowId != null) {
+            DialogShowerEntry<AskUserQuestionDialogShower> removed = askUserQuestionDialogShowers.remove(windowId);
+            debugLog("CONFIG", "AskUserQuestion dialog shower unregistered for window: " + windowId +
                 ", was registered: " + (removed != null) + ", remaining: " + askUserQuestionDialogShowers.size());
         }
     }
 
     /**
+     * 注销 AskUserQuestion 对话框显示器（兼容旧 API）
+     * @deprecated 使用 {@link #unregisterAskUserQuestionDialogShower(String)} 代替
+     */
+    @Deprecated
+    public void unregisterAskUserQuestionDialogShower(Project project) {
+        if (project != null) {
+            String windowId = "legacy-" + project.getName();
+            unregisterAskUserQuestionDialogShower(windowId);
+        }
+    }
+
+    /**
      * 注册 PlanApproval 对话框显示器
-     * 支持多项目：每个项目注册自己的显示器
+     * 支持多标签：每个窗口注册自己的显示器
      *
+     * @param windowId 窗口唯一 ID
      * @param project 项目
      * @param shower PlanApproval 对话框显示器
      */
+    public void registerPlanApprovalDialogShower(String windowId, Project project, PlanApprovalDialogShower shower) {
+        if (windowId != null && project != null && shower != null) {
+            planApprovalDialogShowers.put(windowId, new DialogShowerEntry<>(project, shower));
+            lastActiveProject = project;
+            lastActiveWindowId = windowId;
+            debugLog("CONFIG", "PlanApproval dialog shower registered for window: " + windowId +
+                ", project: " + project.getName() + ", total registered: " + planApprovalDialogShowers.size());
+        }
+    }
+
+    /**
+     * 注册 PlanApproval 对话框显示器（兼容旧 API）
+     * @deprecated 使用 {@link #registerPlanApprovalDialogShower(String, Project, PlanApprovalDialogShower)} 代替
+     */
+    @Deprecated
     public void registerPlanApprovalDialogShower(Project project, PlanApprovalDialogShower shower) {
         if (project != null && shower != null) {
-            planApprovalDialogShowers.put(project, shower);
-            lastActiveProject = project; // Track most recent active project
-            debugLog("CONFIG", "PlanApproval dialog shower registered for project: " + project.getName() +
-                ", total registered: " + planApprovalDialogShowers.size());
+            String windowId = "legacy-" + project.getName();
+            registerPlanApprovalDialogShower(windowId, project, shower);
+        }
+    }
+
+    /**
+     * 注销 PlanApproval 对话框显示器
+     * 在窗口关闭时调用，防止内存泄漏
+     *
+     * @param windowId 窗口唯一 ID
+     */
+    public void unregisterPlanApprovalDialogShower(String windowId) {
+        if (windowId != null) {
+            DialogShowerEntry<PlanApprovalDialogShower> removed = planApprovalDialogShowers.remove(windowId);
+            debugLog("CONFIG", "PlanApproval dialog shower unregistered for window: " + windowId +
+                ", was registered: " + (removed != null) + ", remaining: " + planApprovalDialogShowers.size());
+        }
+    }
+
+    /**
+     * 注销 PlanApproval 对话框显示器（兼容旧 API）
+     * @deprecated 使用 {@link #unregisterPlanApprovalDialogShower(String)} 代替
+     */
+    @Deprecated
+    public void unregisterPlanApprovalDialogShower(Project project) {
+        if (project != null) {
+            String windowId = "legacy-" + project.getName();
+            unregisterPlanApprovalDialogShower(windowId);
+        }
+    }
+
+    /**
+     * Update the last active window (called when user interacts with a window)
+     * @param windowId The window ID that became active
+     */
+    public void setLastActiveWindow(String windowId) {
+        if (windowId != null && dialogShowers.containsKey(windowId)) {
+            this.lastActiveWindowId = windowId;
+            DialogShowerEntry<PermissionDialogShower> entry = dialogShowers.get(windowId);
+            if (entry != null) {
+                this.lastActiveProject = entry.getProject();
+            }
+            debugLog("CONFIG", "Last active window updated: " + windowId);
         }
     }
 
@@ -287,19 +425,19 @@ public class PermissionService {
     }
 
     /**
-     * Get dialog shower with preference for last active project
-     * Falls back to first registered shower if last active project has no shower
+     * Get dialog shower with preference for last active window
+     * Falls back to first registered shower if last active window has no shower
      */
-    private <T> T getPreferredDialogShower(Map<Project, T> showers) {
+    private <T> T getPreferredDialogShower(Map<String, DialogShowerEntry<T>> showers) {
         if (showers.isEmpty()) {
             return null;
         }
-        // Prefer the last active project's shower
-        if (lastActiveProject != null && showers.containsKey(lastActiveProject)) {
-            return showers.get(lastActiveProject);
+        // Prefer the last active window's shower
+        if (lastActiveWindowId != null && showers.containsKey(lastActiveWindowId)) {
+            return showers.get(lastActiveWindowId).getShower();
         }
         // Fallback to first registered shower
-        return showers.values().iterator().next();
+        return showers.values().iterator().next().getShower();
     }
 
     /**
@@ -326,70 +464,65 @@ public class PermissionService {
     }
 
     /**
-     * 注销 PlanApproval 对话框显示器
-     * 在项目关闭时调用，防止内存泄漏
-     *
-     * @param project 项目
-     */
-    public void unregisterPlanApprovalDialogShower(Project project) {
-        if (project != null) {
-            PlanApprovalDialogShower removed = planApprovalDialogShowers.remove(project);
-            debugLog("CONFIG", "PlanApproval dialog shower unregistered for project: " + project.getName() +
-                ", was registered: " + (removed != null) + ", remaining: " + planApprovalDialogShowers.size());
-        }
-    }
-
-    /**
      * 设置权限对话框显示器（用于显示前端弹窗）
-     * @deprecated 使用 {@link #registerDialogShower(Project, PermissionDialogShower)} 代替
+     * @deprecated 使用 {@link #registerDialogShower(String, Project, PermissionDialogShower)} 代替
      */
     @Deprecated
     public void setDialogShower(PermissionDialogShower shower) {
         // 兼容旧代码：使用默认项目注册
         if (shower != null && this.project != null) {
-            dialogShowers.put(this.project, shower);
+            String windowId = "legacy-" + this.project.getName();
+            dialogShowers.put(windowId, new DialogShowerEntry<>(this.project, shower));
         }
         debugLog("CONFIG", "Dialog shower set (legacy): " + (shower != null));
     }
 
     /**
-     * 根据文件路径匹配项目
-     * 从 inputs 中提取文件路径，然后找到对应的项目
+     * 根据文件路径匹配窗口
+     * 从 inputs 中提取文件路径，然后找到对应的窗口
+     * 优先使用最近活跃的窗口，然后尝试路径匹配
      *
      * @param inputs 权限请求的输入参数
-     * @return 匹配的项目对应的 DialogShower，如果匹配不到则返回第一个注册的
+     * @return 匹配的窗口对应的 DialogShower，如果匹配不到则返回最近活跃的窗口
      */
     private PermissionDialogShower findDialogShowerByInputs(JsonObject inputs) {
         if (dialogShowers.isEmpty()) {
-            debugLog("MATCH_PROJECT", "No dialog showers registered");
+            debugLog("MATCH_WINDOW", "No dialog showers registered");
             return null;
         }
 
-        // 只有一个项目时，直接返回
+        // 只有一个窗口时，直接返回
         if (dialogShowers.size() == 1) {
-            Map.Entry<Project, PermissionDialogShower> entry = dialogShowers.entrySet().iterator().next();
-            debugLog("MATCH_PROJECT", "Single project registered: " + entry.getKey().getName());
-            return entry.getValue();
+            Map.Entry<String, DialogShowerEntry<PermissionDialogShower>> entry = dialogShowers.entrySet().iterator().next();
+            debugLog("MATCH_WINDOW", "Single window registered: " + entry.getKey());
+            return entry.getValue().getShower();
+        }
+
+        // 优先使用最近活跃的窗口
+        if (lastActiveWindowId != null && dialogShowers.containsKey(lastActiveWindowId)) {
+            debugLog("MATCH_WINDOW", "Using last active window: " + lastActiveWindowId);
+            return dialogShowers.get(lastActiveWindowId).getShower();
         }
 
         // 从 inputs 中提取文件路径
         String filePath = extractFilePathFromInputs(inputs);
         if (filePath == null || filePath.isEmpty()) {
-            debugLog("MATCH_PROJECT", "No file path found in inputs, using first registered project");
-            return dialogShowers.values().iterator().next();
+            debugLog("MATCH_WINDOW", "No file path found in inputs, using first registered window");
+            return dialogShowers.values().iterator().next().getShower();
         }
 
         // 规范化文件路径（统一使用 Unix 风格的 / 分隔符）
         String normalizedFilePath = normalizePath(filePath);
-        debugLog("MATCH_PROJECT", "Extracted file path: " + filePath +
+        debugLog("MATCH_WINDOW", "Extracted file path: " + filePath +
             (filePath.equals(normalizedFilePath) ? "" : " (normalized: " + normalizedFilePath + ")"));
 
-        // 遍历所有项目，找到路径匹配的项目（选择最长匹配）
-        Project bestMatch = null;
+        // 遍历所有窗口，找到路径匹配的项目（选择最长匹配）
+        String bestMatchWindowId = null;
         int longestMatchLength = 0;
 
-        for (Map.Entry<Project, PermissionDialogShower> entry : dialogShowers.entrySet()) {
-            Project project = entry.getKey();
+        for (Map.Entry<String, DialogShowerEntry<PermissionDialogShower>> entry : dialogShowers.entrySet()) {
+            String windowId = entry.getKey();
+            Project project = entry.getValue().getProject();
             String projectPath = project.getBasePath();
 
             if (projectPath != null) {
@@ -400,49 +533,57 @@ public class PermissionService {
                 if (isFileInProject(normalizedFilePath, normalizedProjectPath)) {
                     if (normalizedProjectPath.length() > longestMatchLength) {
                         longestMatchLength = normalizedProjectPath.length();
-                        bestMatch = project;
-                        debugLog("MATCH_PROJECT", "Found potential match: " + project.getName() +
+                        bestMatchWindowId = windowId;
+                        debugLog("MATCH_WINDOW", "Found potential match: window=" + windowId +
+                            ", project=" + project.getName() +
                             " (path: " + projectPath + ", length: " + normalizedProjectPath.length() + ")");
                     }
                 }
             }
         }
 
-        if (bestMatch != null) {
-            debugLog("MATCH_PROJECT", "Matched project: " + bestMatch.getName() + " (path: " + bestMatch.getBasePath() + ")");
-            return dialogShowers.get(bestMatch);
+        if (bestMatchWindowId != null) {
+            debugLog("MATCH_WINDOW", "Matched window: " + bestMatchWindowId);
+            return dialogShowers.get(bestMatchWindowId).getShower();
         }
 
-        // 匹配失败，使用第一个注册的项目
-        Map.Entry<Project, PermissionDialogShower> firstEntry = dialogShowers.entrySet().iterator().next();
-        debugLog("MATCH_PROJECT", "No matching project found, using first: " + firstEntry.getKey().getName());
-        return firstEntry.getValue();
+        // 匹配失败，使用第一个注册的窗口
+        Map.Entry<String, DialogShowerEntry<PermissionDialogShower>> firstEntry = dialogShowers.entrySet().iterator().next();
+        debugLog("MATCH_WINDOW", "No matching window found, using first: " + firstEntry.getKey());
+        return firstEntry.getValue().getShower();
     }
 
     /**
-     * 根据工作目录匹配项目的通用方法
-     * 从请求中提取 cwd，然后找到对应的项目
+     * 根据工作目录匹配窗口的通用方法
+     * 从请求中提取 cwd，然后找到对应的窗口
+     * 优先使用最近活跃的窗口，然后尝试路径匹配
      *
      * @param request 请求数据（包含 cwd 字段）
-     * @param dialogShowers 已注册的 DialogShower 映射
+     * @param showers 已注册的 DialogShower 映射
      * @param logPrefix 日志前缀，用于区分不同类型的请求
      * @param <T> DialogShower 类型
-     * @return 匹配的项目对应的 DialogShower，如果匹配不到则使用 lastActiveProject
+     * @return 匹配的窗口对应的 DialogShower，如果匹配不到则使用最近活跃的窗口
      */
     private <T> T findDialogShowerByCwd(
             JsonObject request,
-            Map<Project, T> dialogShowers,
+            Map<String, DialogShowerEntry<T>> showers,
             String logPrefix) {
-        if (dialogShowers.isEmpty()) {
+        if (showers.isEmpty()) {
             debugLog(logPrefix, "No dialog showers registered");
             return null;
         }
 
-        // 只有一个项目时，直接返回
-        if (dialogShowers.size() == 1) {
-            Map.Entry<Project, T> entry = dialogShowers.entrySet().iterator().next();
-            debugLog(logPrefix, "Single project registered: " + entry.getKey().getName());
-            return entry.getValue();
+        // 只有一个窗口时，直接返回
+        if (showers.size() == 1) {
+            Map.Entry<String, DialogShowerEntry<T>> entry = showers.entrySet().iterator().next();
+            debugLog(logPrefix, "Single window registered: " + entry.getKey());
+            return entry.getValue().getShower();
+        }
+
+        // 优先使用最近活跃的窗口
+        if (lastActiveWindowId != null && showers.containsKey(lastActiveWindowId)) {
+            debugLog(logPrefix, "Using last active window: " + lastActiveWindowId);
+            return showers.get(lastActiveWindowId).getShower();
         }
 
         // 从请求中提取 cwd
@@ -453,7 +594,7 @@ public class PermissionService {
 
         if (cwd == null || cwd.isEmpty()) {
             debugLog(logPrefix, "No cwd found in request, using preferred dialog shower");
-            return getPreferredDialogShower(dialogShowers);
+            return getPreferredDialogShower(showers);
         }
 
         // 规范化 cwd 路径
@@ -461,12 +602,13 @@ public class PermissionService {
         debugLog(logPrefix, "Extracted cwd: " + cwd +
             (cwd.equals(normalizedCwd) ? "" : " (normalized: " + normalizedCwd + ")"));
 
-        // 遍历所有项目，找到路径匹配的项目（选择最长匹配）
-        Project bestMatch = null;
+        // 遍历所有窗口，找到路径匹配的项目（选择最长匹配）
+        String bestMatchWindowId = null;
         int longestMatchLength = 0;
 
-        for (Map.Entry<Project, T> entry : dialogShowers.entrySet()) {
-            Project project = entry.getKey();
+        for (Map.Entry<String, DialogShowerEntry<T>> entry : showers.entrySet()) {
+            String windowId = entry.getKey();
+            Project project = entry.getValue().getProject();
             String projectPath = project.getBasePath();
 
             if (projectPath != null) {
@@ -476,23 +618,23 @@ public class PermissionService {
                 if (isFileInProject(normalizedCwd, normalizedProjectPath)) {
                     if (normalizedProjectPath.length() > longestMatchLength) {
                         longestMatchLength = normalizedProjectPath.length();
-                        bestMatch = project;
-                        debugLog(logPrefix, "Found potential match: " + project.getName() +
+                        bestMatchWindowId = windowId;
+                        debugLog(logPrefix, "Found potential match: window=" + windowId +
+                            ", project=" + project.getName() +
                             " (path: " + projectPath + ", length: " + normalizedProjectPath.length() + ")");
                     }
                 }
             }
         }
 
-        if (bestMatch != null) {
-            debugLog(logPrefix, "Matched project: " + bestMatch.getName() +
-                " (path: " + bestMatch.getBasePath() + ")");
-            return dialogShowers.get(bestMatch);
+        if (bestMatchWindowId != null) {
+            debugLog(logPrefix, "Matched window: " + bestMatchWindowId);
+            return showers.get(bestMatchWindowId).getShower();
         }
 
-        // 匹配失败，使用 lastActiveProject
-        debugLog(logPrefix, "No matching project found, using preferred dialog shower");
-        return getPreferredDialogShower(dialogShowers);
+        // 匹配失败，使用 preferred dialog shower
+        debugLog(logPrefix, "No matching window found, using preferred dialog shower");
+        return getPreferredDialogShower(showers);
     }
 
     /**

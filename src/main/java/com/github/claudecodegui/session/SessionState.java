@@ -28,8 +28,9 @@ public class SessionState {
     private String cwd = null;
 
     // 配置
-    // 默认使用 bypassPermissions 与前端保持一致，确保 Codex 模式下有写入权限
-    private String permissionMode = "bypassPermissions";
+    // 默认使用 default 模式，每个标签页独立管理权限模式
+    // 避免标签页之间权限模式互相污染
+    private String permissionMode = "default";
     private String model = "claude-sonnet-4-5";
     private String provider = "claude";
     // Codex reasoning effort (思考深度)

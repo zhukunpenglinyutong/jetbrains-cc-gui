@@ -95,24 +95,42 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     currentPlanApprovalRequestRef.current = currentPlanApprovalRequest;
   }, [planApprovalDialogOpen, currentPlanApprovalRequest]);
 
-  // Open permission dialog
+  // Open permission dialog (with queue support for concurrent requests)
   const openPermissionDialog = useCallback((request: PermissionRequest) => {
+    // If a dialog is already open, queue the new request
+    if (permissionDialogOpenRef.current || currentPermissionRequestRef.current) {
+      pendingPermissionRequestsRef.current.push(request);
+      return;
+    }
+    // Show dialog immediately
     currentPermissionRequestRef.current = request;
     permissionDialogOpenRef.current = true;
     setCurrentPermissionRequest(request);
     setPermissionDialogOpen(true);
   }, []);
 
-  // Open ask user question dialog
+  // Open ask user question dialog (with queue support for concurrent requests)
   const openAskUserQuestionDialog = useCallback((request: AskUserQuestionRequest) => {
+    // If a dialog is already open, queue the new request
+    if (askUserQuestionDialogOpenRef.current || currentAskUserQuestionRequestRef.current) {
+      pendingAskUserQuestionRequestsRef.current.push(request);
+      return;
+    }
+    // Show dialog immediately
     currentAskUserQuestionRequestRef.current = request;
     askUserQuestionDialogOpenRef.current = true;
     setCurrentAskUserQuestionRequest(request);
     setAskUserQuestionDialogOpen(true);
   }, []);
 
-  // Open plan approval dialog
+  // Open plan approval dialog (with queue support for concurrent requests)
   const openPlanApprovalDialog = useCallback((request: PlanApprovalRequest) => {
+    // If a dialog is already open, queue the new request
+    if (planApprovalDialogOpenRef.current || currentPlanApprovalRequestRef.current) {
+      pendingPlanApprovalRequestsRef.current.push(request);
+      return;
+    }
+    // Show dialog immediately
     currentPlanApprovalRequestRef.current = request;
     planApprovalDialogOpenRef.current = true;
     setCurrentPlanApprovalRequest(request);

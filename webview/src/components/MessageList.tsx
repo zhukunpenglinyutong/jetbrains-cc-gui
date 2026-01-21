@@ -1,5 +1,4 @@
-import { memo, useCallback, forwardRef, useImperativeHandle, useRef } from 'react';
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { memo, forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
 import { MessageItem } from './MessageItem';
@@ -19,10 +18,8 @@ interface MessageListProps {
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   // 滚动状态回调
   onAtBottomStateChange?: (atBottom: boolean) => void;
-  // 初始是否在底部
-  initialAtBottom?: boolean;
   // 滚动容器 ref 回调（用于 ScrollControl）
-  onScrollerRef?: (scroller: HTMLElement | Window | null) => void;
+  onScrollerRef?: (scroller: HTMLElement | null) => void;
 }
 
 // 暴露给父组件的方法
@@ -31,7 +28,7 @@ export interface MessageListHandle {
   scrollToIndex: (index: number) => void;
 }
 
-// 使用 forwardRef 暴露 Virtuoso 的方法
+// 使用 forwardRef 暴露滚动方法
 export const MessageList = memo(forwardRef<MessageListHandle, MessageListProps>(function MessageList({
   messages,
   streamingActive,
@@ -45,113 +42,115 @@ export const MessageList = memo(forwardRef<MessageListHandle, MessageListProps>(
   extractMarkdownContent,
   messagesEndRef,
   onAtBottomStateChange,
-  initialAtBottom = true,
   onScrollerRef,
 }, ref) {
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isUserAtBottomRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
 
   // 暴露方法给父组件
   useImperativeHandle(ref, () => ({
     scrollToBottom: () => {
-      virtuosoRef.current?.scrollToIndex({
-        index: 'LAST',
-        behavior: 'smooth',
-        align: 'end',
-      });
+      if (containerRef.current) {
+        containerRef.current.scrollTo({
+          top: containerRef.current.scrollHeight,
+          behavior: 'smooth',
+        });
+      }
     },
     scrollToIndex: (index: number) => {
-      virtuosoRef.current?.scrollToIndex({
-        index,
-        behavior: 'smooth',
-        align: 'start',
-      });
+      if (!containerRef.current) return;
+      const messageElement = containerRef.current.querySelector(`[data-message-index="${index}"]`);
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     },
   }), []);
 
+  // 通知父组件 scroller ref（只在 mount 时执行一次）
+  useEffect(() => {
+    onScrollerRef?.(containerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 检测是否在底部
+  const checkIfAtBottom = useCallback(() => {
+    if (!containerRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    return distanceFromBottom < 100; // 100px 阈值
+  }, []);
+
+  // 滚动事件处理
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const { scrollTop } = containerRef.current;
+    const isScrollingUp = scrollTop < lastScrollTopRef.current;
+    lastScrollTopRef.current = scrollTop;
+
+    const atBottom = checkIfAtBottom();
+
+    // 用户向上滚动时，标记为不在底部
+    if (isScrollingUp && !atBottom) {
+      isUserAtBottomRef.current = false;
+    }
+
+    // 用户滚回底部时，恢复标记
+    if (atBottom) {
+      isUserAtBottomRef.current = true;
+    }
+
+    onAtBottomStateChange?.(atBottom);
+  }, [checkIfAtBottom, onAtBottomStateChange]);
+
+  // 流式输出时自动滚动到底部
+  useEffect(() => {
+    if (!streamingActive && !loading) return;
+    if (!isUserAtBottomRef.current) return;
+    if (!containerRef.current) return;
+
+    // 滚动到底部
+    containerRef.current.scrollTop = containerRef.current.scrollHeight;
+  }, [messages.length, streamingActive, loading]);
+
   // 计算消息的稳定 key
-  const computeItemKey = useCallback((index: number, message: ClaudeMessage) => {
+  const getMessageKey = useCallback((message: ClaudeMessage, index: number) => {
     const rawObj = typeof message.raw === 'object' ? message.raw as Record<string, unknown> : null;
     return rawObj?.uuid as string
       || (message.timestamp ? `${message.type}-${message.timestamp}` : `${message.type}-${index}`);
   }, []);
 
-  // 渲染单个消息项
-  const itemContent = useCallback((index: number, message: ClaudeMessage) => {
-    return (
-      <MessageItem
-        message={message}
-        messageIndex={index}
-        isLast={index === messages.length - 1}
-        streamingActive={streamingActive}
-        isThinking={isThinking}
-        t={t}
-        getMessageText={getMessageText}
-        getContentBlocks={getContentBlocks}
-        findToolResult={findToolResult}
-        extractMarkdownContent={extractMarkdownContent}
-      />
-    );
-  }, [messages.length, streamingActive, isThinking, t, getMessageText, getContentBlocks, findToolResult, extractMarkdownContent]);
-
-  // 底部状态变化回调
-  const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
-    onAtBottomStateChange?.(atBottom);
-  }, [onAtBottomStateChange]);
-
-  // 滚动容器 ref 回调
-  const handleScrollerRef = useCallback((scroller: HTMLElement | Window | null) => {
-    onScrollerRef?.(scroller);
-  }, [onScrollerRef]);
-
-  // Footer 组件：包含 WaitingIndicator 和 messagesEndRef
-  const Footer = useCallback(() => (
-    <>
+  return (
+    <div
+      ref={containerRef}
+      className="message-list-container"
+      onScroll={handleScroll}
+      style={{
+        height: '100%',
+        width: '100%',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+      }}
+    >
+      {messages.map((message, index) => (
+        <div key={getMessageKey(message, index)} data-message-index={index}>
+          <MessageItem
+            message={message}
+            messageIndex={index}
+            isLast={index === messages.length - 1}
+            streamingActive={streamingActive}
+            isThinking={isThinking}
+            t={t}
+            getMessageText={getMessageText}
+            getContentBlocks={getContentBlocks}
+            findToolResult={findToolResult}
+            extractMarkdownContent={extractMarkdownContent}
+          />
+        </div>
+      ))}
       {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
       <div ref={messagesEndRef} />
-    </>
-  ), [loading, loadingStartTime, messagesEndRef]);
-
-  // 如果没有消息，不渲染 Virtuoso（由父组件显示 WelcomeScreen）
-  if (messages.length === 0) {
-    return (
-      <>
-        {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
-        <div ref={messagesEndRef} />
-      </>
-    );
-  }
-
-  return (
-    <Virtuoso
-      ref={virtuosoRef}
-      data={messages}
-      computeItemKey={computeItemKey}
-      itemContent={itemContent}
-      // 自动跟随输出：当用户在底部时，新内容会自动滚动
-      followOutput={(isAtBottom) => {
-        // 流式输出或加载时，如果用户在底部，平滑滚动
-        if (isAtBottom && (streamingActive || loading)) {
-          return 'smooth';
-        }
-        // 新消息到达时，如果用户在底部，自动滚动
-        return isAtBottom ? 'auto' : false;
-      }}
-      // 初始滚动到底部
-      initialTopMostItemIndex={initialAtBottom ? messages.length - 1 : 0}
-      // 底部状态变化回调
-      atBottomStateChange={handleAtBottomStateChange}
-      // 底部阈值：距离底部 100px 以内认为是在底部
-      atBottomThreshold={100}
-      // 预渲染：上下各多渲染一些，避免快速滚动时出现空白
-      overscan={200}
-      // Footer 组件
-      components={{ Footer }}
-      // 增量渲染模式：适合聊天场景
-      increaseViewportBy={{ top: 200, bottom: 200 }}
-      // 滚动容器 ref 回调
-      scrollerRef={handleScrollerRef}
-      // 样式：占满容器
-      style={{ height: '100%', width: '100%' }}
-    />
+    </div>
   );
 }));

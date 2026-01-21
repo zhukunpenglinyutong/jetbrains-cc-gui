@@ -60,8 +60,8 @@ export function useModelSelection({
   const [currentProvider, setCurrentProvider] = useState('claude');
   const [selectedClaudeModel, setSelectedClaudeModel] = useState(CLAUDE_MODELS[0].id);
   const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
-  const [claudePermissionMode, setClaudePermissionMode] = useState<PermissionMode>('bypassPermissions');
-  const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
+  const [claudePermissionMode, setClaudePermissionMode] = useState<PermissionMode>('default');
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
@@ -83,7 +83,8 @@ export function useModelSelection({
       let restoredProvider = 'claude';
       let restoredClaudeModel = CLAUDE_MODELS[0].id;
       let restoredCodexModel = CODEX_MODELS[0].id;
-      let initialPermissionMode: PermissionMode = 'bypassPermissions';
+      // Default to 'default' permission mode for Claude, 'bypassPermissions' for Codex
+      let initialPermissionMode: PermissionMode = 'default';
 
       if (saved) {
         const state = JSON.parse(saved);

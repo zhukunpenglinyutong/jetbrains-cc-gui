@@ -7,6 +7,8 @@ interface ScrollControlProps {
   inputAreaRef?: React.RefObject<HTMLDivElement | null>;
   // Virtuoso 滚动方法（用于虚拟列表的精确滚动）
   messageListRef?: React.RefObject<MessageListHandle | null>;
+  // 点击滚动到底部时的回调（用于恢复自动跟随）
+  onScrollToBottom?: () => void;
 }
 
 /**
@@ -18,7 +20,7 @@ interface ScrollControlProps {
  * - 内容不足一屏时隐藏按钮
  * - 位置始终在输入框上方20px
  */
-export const ScrollControl = ({ containerRef, inputAreaRef, messageListRef }: ScrollControlProps) => {
+export const ScrollControl = ({ containerRef, inputAreaRef, messageListRef, onScrollToBottom }: ScrollControlProps) => {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [direction, setDirection] = useState<'up' | 'down'>('down');
@@ -161,16 +163,19 @@ export const ScrollControl = ({ containerRef, inputAreaRef, messageListRef }: Sc
     // 优先使用 Virtuoso API
     if (messageListRef?.current) {
       messageListRef.current.scrollToBottom();
-      return;
+    } else {
+      // 回退到原生滚动
+      const container = containerRef.current;
+      if (container) {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth',
+        });
+      }
     }
-    // 回退到原生滚动
-    const container = containerRef.current;
-    if (!container) return;
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: 'smooth',
-    });
-  }, [containerRef, messageListRef]);
+    // 通知父组件恢复自动跟随
+    onScrollToBottom?.();
+  }, [containerRef, messageListRef, onScrollToBottom]);
 
   /**
    * 处理点击事件
