@@ -27,8 +27,10 @@ public class EnvironmentConfigurator {
 
     private static final Logger LOG = Logger.getInstance(EnvironmentConfigurator.class);
     private static final String CLAUDE_PERMISSION_ENV = "CLAUDE_PERMISSION_DIR";
+    private static final String CLAUDE_SESSION_ID_ENV = "CLAUDE_SESSION_ID";
 
     private volatile String cachedPermissionDir = null;
+    private volatile String sessionId = null;
 
     // Cache for Codex env_key values from config.toml
     private volatile Map<String, String> cachedCodexEnvVars = null;
@@ -131,6 +133,25 @@ public class EnvironmentConfigurator {
         if (permissionDir != null) {
             env.putIfAbsent(CLAUDE_PERMISSION_ENV, permissionDir);
         }
+        String sid = getSessionId();
+        if (sid != null) {
+            env.putIfAbsent(CLAUDE_SESSION_ID_ENV, sid);
+        }
+    }
+
+    /**
+     * Get or generate session ID for this instance.
+     * @return Session ID
+     */
+    public String getSessionId() {
+        if (this.sessionId == null) {
+            synchronized (this) {
+                if (this.sessionId == null) {
+                    this.sessionId = java.util.UUID.randomUUID().toString();
+                }
+            }
+        }
+        return this.sessionId;
     }
 
     /**

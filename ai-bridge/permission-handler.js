@@ -21,9 +21,14 @@ const PERMISSION_DIR = process.env.CLAUDE_PERMISSION_DIR
   ? process.env.CLAUDE_PERMISSION_DIR
   : join(tmpdir(), 'claude-permission');
 
+// Session ID for isolating permission requests across multiple IDEA instances
+const SESSION_ID = process.env.CLAUDE_SESSION_ID || 'default';
+
 debugLog('INIT', `Permission dir: ${PERMISSION_DIR}`);
+debugLog('INIT', `Session ID: ${SESSION_ID}`);
 debugLog('INIT', `tmpdir(): ${tmpdir()}`);
 debugLog('INIT', `CLAUDE_PERMISSION_DIR env: ${process.env.CLAUDE_PERMISSION_DIR || 'NOT SET'}`);
+debugLog('INIT', `CLAUDE_SESSION_ID env: ${process.env.CLAUDE_SESSION_ID || 'NOT SET'}`);
 
 // 确保目录存在
 import { mkdirSync } from 'fs';
@@ -108,8 +113,8 @@ async function requestAskUserQuestionAnswers(input) {
     const requestId = `ask-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     debugLog('ASK_USER_QUESTION_ID', `Generated request ID: ${requestId}`);
 
-    const requestFile = join(PERMISSION_DIR, `ask-user-question-${requestId}.json`);
-    const responseFile = join(PERMISSION_DIR, `ask-user-question-response-${requestId}.json`);
+    const requestFile = join(PERMISSION_DIR, `ask-user-question-${SESSION_ID}-${requestId}.json`);
+    const responseFile = join(PERMISSION_DIR, `ask-user-question-response-${SESSION_ID}-${requestId}.json`);
 
     const requestData = {
       requestId,
@@ -203,8 +208,8 @@ export async function requestPlanApproval(input) {
     const requestId = `plan-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     debugLog('PLAN_APPROVAL_ID', `Generated request ID: ${requestId}`);
 
-    const requestFile = join(PERMISSION_DIR, `plan-approval-${requestId}.json`);
-    const responseFile = join(PERMISSION_DIR, `plan-approval-response-${requestId}.json`);
+    const requestFile = join(PERMISSION_DIR, `plan-approval-${SESSION_ID}-${requestId}.json`);
+    const responseFile = join(PERMISSION_DIR, `plan-approval-response-${SESSION_ID}-${requestId}.json`);
 
     const requestData = {
       requestId,
@@ -339,14 +344,15 @@ export async function requestPermissionFromJava(toolName, input) {
     debugLog('REQUEST_ID', `Generated request ID: ${requestId}`);
 
     // 创建请求文件
-    const requestFile = join(PERMISSION_DIR, `request-${requestId}.json`);
-    const responseFile = join(PERMISSION_DIR, `response-${requestId}.json`);
+    const requestFile = join(PERMISSION_DIR, `request-${SESSION_ID}-${requestId}.json`);
+    const responseFile = join(PERMISSION_DIR, `response-${SESSION_ID}-${requestId}.json`);
 
     const requestData = {
       requestId,
       toolName,
       inputs: input,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cwd: process.cwd()  // Add working directory for project matching in multi-IDEA scenarios
     };
 
     debugLog('FILE_WRITE', `Writing request file`, { requestFile, responseFile });
