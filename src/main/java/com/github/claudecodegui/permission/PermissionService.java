@@ -31,8 +31,8 @@ public class PermissionService {
     private static final String PLAN_APPROVAL_RESPONSE_FILE_PREFIX = "plan-approval-response-%s-%s.json";
 
     // Session清理配置
-    private static final long SESSION_CLEANUP_INTERVAL_MS = 3600000; // 1小时
-    private static final long SESSION_MAX_IDLE_TIME_MS = 86400000; // 24小时
+    private static final long SESSION_CLEANUP_INTERVAL_MS = TimeUnit.HOURS.toMillis(1);
+    private static final long SESSION_MAX_IDLE_TIME_MS = TimeUnit.HOURS.toMillis(24);
     private static volatile long lastCleanupTime = System.currentTimeMillis();
 
     private final Project project;
@@ -284,26 +284,29 @@ public class PermissionService {
         }
 
         lastCleanupTime = now;
-        int cleanedCount = 0;
 
-        Iterator<Map.Entry<String, PermissionService>> iterator = instancesBySessionId.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, PermissionService> entry = iterator.next();
+        // 收集需要清理的 session，避免 ConcurrentModificationException
+        List<String> sessionsToRemove = new ArrayList<>();
+        for (Map.Entry<String, PermissionService> entry : instancesBySessionId.entrySet()) {
             PermissionService service = entry.getValue();
-
-            // 检查最后活动时间
             if (now - service.lastActivityTime > SESSION_MAX_IDLE_TIME_MS) {
-                LOG.info(String.format("Cleaning up stale session: %s (idle for %d hours)",
+                LOG.info(String.format("Marking stale session for cleanup: %s (idle for %d hours)",
                     entry.getKey(), (now - service.lastActivityTime) / 3600000));
-                service.stop();
-                iterator.remove();
-                cleanedCount++;
+                sessionsToRemove.add(entry.getKey());
             }
         }
 
-        if (cleanedCount > 0) {
+        // 批量清理
+        for (String sessionId : sessionsToRemove) {
+            PermissionService service = instancesBySessionId.remove(sessionId);
+            if (service != null) {
+                service.stop();
+            }
+        }
+
+        if (!sessionsToRemove.isEmpty()) {
             LOG.info(String.format("Cleaned up %d stale session(s), remaining instances=%d",
-                cleanedCount, instancesBySessionId.size()));
+                sessionsToRemove.size(), instancesBySessionId.size()));
         }
     }
 
@@ -463,73 +466,6 @@ public class PermissionService {
             dialogShowers.put(this.project, shower);
         }
         debugLog("CONFIG", "Dialog shower set (legacy): " + (shower != null));
-    }
-
-    /**
-     * 根据文件路径匹配项目
-     * 从 inputs 中提取文件路径，然后找到对应的项目
-     *
-     * @param inputs 权限请求的输入参数
-     * @return 匹配的项目对应的 DialogShower，如果匹配不到则返回第一个注册的
-     */
-    private PermissionDialogShower findDialogShowerByInputs(JsonObject inputs) {
-        if (dialogShowers.isEmpty()) {
-            debugLog("MATCH_PROJECT", "No dialog showers registered");
-            return null;
-        }
-
-        // 只有一个项目时，直接返回
-        if (dialogShowers.size() == 1) {
-            Map.Entry<Project, PermissionDialogShower> entry = dialogShowers.entrySet().iterator().next();
-            debugLog("MATCH_PROJECT", "Single project registered: " + entry.getKey().getName());
-            return entry.getValue();
-        }
-
-        // 从 inputs 中提取文件路径
-        String filePath = extractFilePathFromInputs(inputs);
-        if (filePath == null || filePath.isEmpty()) {
-            debugLog("MATCH_PROJECT", "No file path found in inputs, using first registered project");
-            return dialogShowers.values().iterator().next();
-        }
-
-        // 规范化文件路径（统一使用 Unix 风格的 / 分隔符）
-        String normalizedFilePath = normalizePath(filePath);
-        debugLog("MATCH_PROJECT", "Extracted file path: " + filePath +
-            (filePath.equals(normalizedFilePath) ? "" : " (normalized: " + normalizedFilePath + ")"));
-
-        // 遍历所有项目，找到路径匹配的项目（选择最长匹配）
-        Project bestMatch = null;
-        int longestMatchLength = 0;
-
-        for (Map.Entry<Project, PermissionDialogShower> entry : dialogShowers.entrySet()) {
-            Project project = entry.getKey();
-            String projectPath = project.getBasePath();
-
-            if (projectPath != null) {
-                // 规范化项目路径
-                String normalizedProjectPath = normalizePath(projectPath);
-
-                // 使用新的路径匹配方法（检查路径分隔符）
-                if (isFileInProject(normalizedFilePath, normalizedProjectPath)) {
-                    if (normalizedProjectPath.length() > longestMatchLength) {
-                        longestMatchLength = normalizedProjectPath.length();
-                        bestMatch = project;
-                        debugLog("MATCH_PROJECT", "Found potential match: " + project.getName() +
-                            " (path: " + projectPath + ", length: " + normalizedProjectPath.length() + ")");
-                    }
-                }
-            }
-        }
-
-        if (bestMatch != null) {
-            debugLog("MATCH_PROJECT", "Matched project: " + bestMatch.getName() + " (path: " + bestMatch.getBasePath() + ")");
-            return dialogShowers.get(bestMatch);
-        }
-
-        // 匹配失败，使用第一个注册的项目
-        Map.Entry<Project, PermissionDialogShower> firstEntry = dialogShowers.entrySet().iterator().next();
-        debugLog("MATCH_PROJECT", "No matching project found, using first: " + firstEntry.getKey().getName());
-        return firstEntry.getValue();
     }
 
     /**
