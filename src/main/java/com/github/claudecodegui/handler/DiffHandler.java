@@ -17,7 +17,9 @@ import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,6 +29,12 @@ public class DiffHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(DiffHandler.class);
     private final Gson gson = new Gson();
+
+    // 缓存已知不存在的文件路径，避免频繁打印日志
+    // 使用 ConcurrentHashMap 作为 Set 使用
+    private static final Set<String> NON_EXISTENT_FILES = ConcurrentHashMap.newKeySet();
+    // 限制缓存大小，避免内存泄漏
+    private static final int MAX_CACHE_SIZE = 1000;
 
     private static final String[] SUPPORTED_TYPES = {
         "refresh_file",
@@ -74,6 +82,12 @@ public class DiffHandler extends BaseMessageHandler {
                 return;
             }
 
+            // 如果文件已知不存在，跳过刷新（避免频繁日志）
+            if (NON_EXISTENT_FILES.contains(filePath)) {
+                LOG.debug("Skipping refresh for known non-existent file: " + filePath);
+                return;
+            }
+
             LOG.info("Refreshing file: " + filePath);
 
             // 在后台线程中处理文件刷新
@@ -97,9 +111,17 @@ public class DiffHandler extends BaseMessageHandler {
                     }
 
                     if (!file.exists()) {
-                        LOG.warn("File does not exist: " + filePath);
+                        // 缓存不存在的文件路径，避免重复打印
+                        if (NON_EXISTENT_FILES.size() < MAX_CACHE_SIZE) {
+                            NON_EXISTENT_FILES.add(filePath);
+                        }
+                        // 使用 DEBUG 级别而不是 WARN，减少日志噪音
+                        LOG.debug("File does not exist (will skip future refreshes): " + filePath);
                         return;
                     }
+
+                    // 文件存在，从缓存中移除（如果之前被标记为不存在）
+                    NON_EXISTENT_FILES.remove(filePath);
 
                     final File finalFile = file;
 

@@ -39,8 +39,9 @@ import { ScrollControl } from './components/ScrollControl';
 import { extractMarkdownContent } from './utils/copyUtils';
 import { ChatHeader } from './components/ChatHeader';
 import { WelcomeScreen } from './components/WelcomeScreen';
-import { MessageList } from './components/MessageList';
+import { MessageList, type MessageListHandle } from './components/MessageList';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
+import { debugLog, debugError, debugWarn } from './utils/debugLogger';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -57,7 +58,12 @@ const DEFAULT_STATUS = 'ready';
 
 
 const App = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  // 使用 useMemo 创建稳定的 t 引用，只在语言变化时更新
+  // 这避免了依赖 t 的 useCallback/useMemo 在每次渲染时失效
+  // 注意：直接使用 t 而不是包装函数，以保持正确的类型
+  const stableT = useMemo(() => t, [i18n.language]);
 
   // Dialog management (permission, ask user question, plan approval, rewind)
   const {
@@ -121,6 +127,15 @@ const App = () => {
     streamingActive,
   });
 
+  // Virtuoso 内部滚动容器 ref（用于 ScrollControl）
+  const virtuosoScrollerRef = useRef<HTMLElement | null>(null);
+  const handleScrollerRef = useCallback((scroller: HTMLElement | Window | null) => {
+    // Virtuoso 可能返回 Window 或 HTMLElement，我们只需要 HTMLElement
+    if (scroller && scroller !== window) {
+      virtuosoScrollerRef.current = scroller as HTMLElement;
+    }
+  }, []);
+
   // Streaming message state and helpers
   const {
     streamingContentRef,
@@ -148,6 +163,8 @@ const App = () => {
   // This eliminates re-render loops caused by value/onInput sync
   // ============================================================
   const chatInputRef = useRef<ChatInputBoxHandle>(null);
+  // MessageList ref for virtualized scroll control
+  const messageListRef = useRef<MessageListHandle>(null);
   // Keep draftInput for backward compatibility (still used in some places)
   // but now it's updated via debounced callback, not on every keystroke
   const [draftInput, setDraftInput] = useState('');
@@ -181,6 +198,17 @@ const App = () => {
   useEffect(() => {
     currentProviderRef.current = currentProvider;
   }, [currentProvider]);
+
+  // 切换回 chat 视图时滚动到底部
+  useEffect(() => {
+    if (currentView === 'chat') {
+      // 使用 setTimeout 确保视图完全渲染后再滚动
+      const timer = setTimeout(() => {
+        messageListRef.current?.scrollToBottom();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [currentView]);
 
   // Context state (active file and selection) - 保留用于 ContextBar 显示
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
@@ -235,21 +263,21 @@ const App = () => {
 
   // 初始化主题和字体缩放
   useEffect(() => {
-    console.log('[Frontend][Theme] Initializing theme system');
+    debugLog('[Frontend][Theme] Initializing theme system');
 
     // 注册 IDE 主题接收回调
     window.onIdeThemeReceived = (jsonStr: string) => {
       try {
         const themeData = JSON.parse(jsonStr);
         const theme = themeData.isDark ? 'dark' : 'light';
-        console.log('[Frontend][Theme] IDE theme received:', {
+        debugLog('[Frontend][Theme] IDE theme received:', {
           raw: themeData,
           resolved: theme,
           currentSetting: localStorage.getItem('theme')
         });
         setIdeTheme(theme);
       } catch (e) {
-        console.error('[Frontend][Theme] Failed to parse IDE theme response:', e, 'Raw:', jsonStr);
+        debugError('[Frontend][Theme] Failed to parse IDE theme response:', e, 'Raw:', jsonStr);
       }
     };
 
@@ -258,14 +286,14 @@ const App = () => {
       try {
         const themeData = JSON.parse(jsonStr);
         const theme = themeData.isDark ? 'dark' : 'light';
-        console.log('[Frontend][Theme] IDE theme changed:', {
+        debugLog('[Frontend][Theme] IDE theme changed:', {
           raw: themeData,
           resolved: theme,
           currentSetting: localStorage.getItem('theme')
         });
         setIdeTheme(theme);
       } catch (e) {
-        console.error('[Frontend][Theme] Failed to parse IDE theme change:', e, 'Raw:', jsonStr);
+        debugError('[Frontend][Theme] Failed to parse IDE theme change:', e, 'Raw:', jsonStr);
       }
     };
 
@@ -288,19 +316,19 @@ const App = () => {
 
     // 先应用用户明确选择的主题（light/dark），跟随 IDE 的情况等 ideTheme 更新后再处理
     const savedTheme = localStorage.getItem('theme');
-    console.log('[Frontend][Theme] Saved theme preference:', savedTheme);
+    debugLog('[Frontend][Theme] Saved theme preference:', savedTheme);
 
     // 检查是否有 Java 注入的初始主题
     const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
-    console.log('[Frontend][Theme] Injected IDE theme:', injectedTheme);
+    debugLog('[Frontend][Theme] Injected IDE theme:', injectedTheme);
 
     // 注意：data-theme 已由 index.html 的内联脚本设置，这里只需要检查日志
     if (savedTheme === 'light' || savedTheme === 'dark') {
-      console.log('[Frontend][Theme] User explicit theme:', savedTheme);
+      debugLog('[Frontend][Theme] User explicit theme:', savedTheme);
     } else if (injectedTheme === 'light' || injectedTheme === 'dark') {
-      console.log('[Frontend][Theme] Follow IDE mode with injected theme:', injectedTheme);
+      debugLog('[Frontend][Theme] Follow IDE mode with injected theme:', injectedTheme);
     } else {
-      console.log('[Frontend][Theme] Follow IDE mode detected, will wait for IDE theme');
+      debugLog('[Frontend][Theme] Follow IDE mode detected, will wait for IDE theme');
     }
 
     // 请求 IDE 主题（带重试机制）- 仍然需要，用于处理动态主题变化
@@ -309,19 +337,19 @@ const App = () => {
 
     const requestIdeTheme = () => {
       if (window.sendToJava) {
-        console.log('[Frontend][Theme] Requesting IDE theme from backend');
+        debugLog('[Frontend][Theme] Requesting IDE theme from backend');
         window.sendToJava('get_ide_theme:');
       } else {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
-          console.log(`[Frontend][Theme] Bridge not ready, retrying (${retryCount}/${MAX_RETRIES})...`);
+          debugLog(`[Frontend][Theme] Bridge not ready, retrying (${retryCount}/${MAX_RETRIES})...`);
           setTimeout(requestIdeTheme, 100);
         } else {
-          console.error('[Frontend][Theme] Failed to request IDE theme: bridge not available after', MAX_RETRIES, 'retries');
+          debugError('[Frontend][Theme] Failed to request IDE theme: bridge not available after', MAX_RETRIES, 'retries');
           // 如果是 Follow IDE 模式且无法获取 IDE 主题，使用注入的主题或 dark 作为 fallback
           if (savedTheme === null || savedTheme === 'system') {
             const fallback = injectedTheme || 'dark';
-            console.warn('[Frontend][Theme] Fallback to theme:', fallback);
+            debugWarn('[Frontend][Theme] Fallback to theme:', fallback);
             setIdeTheme(fallback as 'light' | 'dark');
           }
         }
@@ -337,7 +365,7 @@ const App = () => {
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
 
-    console.log('[Frontend][Theme] ideTheme effect triggered:', {
+    debugLog('[Frontend][Theme] ideTheme effect triggered:', {
       ideTheme,
       savedTheme,
       currentDataTheme: document.documentElement.getAttribute('data-theme')
@@ -345,16 +373,16 @@ const App = () => {
 
     // 只有在 ideTheme 已加载后才处理
     if (ideTheme === null) {
-      console.log('[Frontend][Theme] IDE theme not loaded yet, waiting...');
+      debugLog('[Frontend][Theme] IDE theme not loaded yet, waiting...');
       return;
     }
 
     // 如果用户选择了 "Follow IDE" 模式
     if (savedTheme === null || savedTheme === 'system') {
-      console.log('[Frontend][Theme] Applying IDE theme:', ideTheme);
+      debugLog('[Frontend][Theme] Applying IDE theme:', ideTheme);
       document.documentElement.setAttribute('data-theme', ideTheme);
     } else {
-      console.log('[Frontend][Theme] User has explicit theme preference:', savedTheme, '- not applying IDE theme');
+      debugLog('[Frontend][Theme] User has explicit theme preference:', savedTheme, '- not applying IDE theme');
     }
   }, [ideTheme]);
 
@@ -406,21 +434,21 @@ const App = () => {
           const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
           sendBridgeEvent('set_model', modelToSync);
           sendBridgeEvent('set_mode', initialPermissionMode);
-          console.log('[Frontend] Synced model state to backend:', { provider: restoredProvider, model: modelToSync });
+          debugLog('[Frontend] Synced model state to backend:', { provider: restoredProvider, model: modelToSync });
         } else {
           // 如果 sendToJava 还没准备好，稍后重试
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
             setTimeout(syncToBackend, 100);
           } else {
-            console.warn('[Frontend] Failed to sync model state to backend: bridge not available after', MAX_SYNC_RETRIES, 'retries');
+            debugWarn('[Frontend] Failed to sync model state to backend: bridge not available after', MAX_SYNC_RETRIES, 'retries');
           }
         }
       };
       // 延迟同步，等待 bridge 准备好
       setTimeout(syncToBackend, 200);
     } catch (error) {
-      console.error('Failed to load model selection state:', error);
+      debugError('Failed to load model selection state:', error);
     }
   }, []);
 
@@ -433,7 +461,7 @@ const App = () => {
         codexModel: selectedCodexModel,
       }));
     } catch (error) {
-      console.error('Failed to save model selection state:', error);
+      debugError('Failed to save model selection state:', error);
     }
   }, [currentProvider, selectedClaudeModel, selectedCodexModel]);
 
@@ -446,13 +474,13 @@ const App = () => {
     const loadSelectedAgent = () => {
       if (window.sendToJava) {
         sendBridgeEvent('get_selected_agent');
-        console.log('[Frontend] Requested selected agent');
+        debugLog('[Frontend] Requested selected agent');
       } else {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
           timeoutId = window.setTimeout(loadSelectedAgent, 100);
         } else {
-          console.warn('[Frontend] Failed to load selected agent: bridge not available after', MAX_RETRIES, 'retries');
+          debugWarn('[Frontend] Failed to load selected agent: bridge not available after', MAX_RETRIES, 'retries');
           // 即使加载失败，也不影响其他功能的使用
         }
       }
@@ -688,7 +716,7 @@ const App = () => {
     });
 
     // 【FIX】在发送消息前，强制同步 provider 设置，确保后端使用正确的 SDK
-    console.log('[DEBUG] Current provider before send:', currentProvider);
+    debugLog('[DEBUG] Current provider before send:', currentProvider);
     sendBridgeEvent('set_provider', currentProvider);
 
     // 【FIX】构建智能体信息，随消息一起发送，确保每个标签页使用自己选择的智能体
@@ -721,7 +749,7 @@ const App = () => {
         });
         sendBridgeEvent('send_message_with_attachments', payload);
       } catch (error) {
-        console.error('[Frontend] Failed to serialize attachments payload', error);
+        debugError('[Frontend] Failed to serialize attachments payload', error);
         // Fallback: send message with agent info and file tags
         const fallbackPayload = JSON.stringify({ text, agent: agentInfo, fileTags: fileTagsInfo });
         sendBridgeEvent('send_message', fallbackPayload);
@@ -869,18 +897,38 @@ const App = () => {
   };
 
   // Message utility functions (use imported utilities with bound dependencies)
-  const localizeMessage = useMemo(() => createLocalizeMessage(t), [t]);
+  // 使用 stableT 替代 t，确保在语言不变时 localizeMessage 引用稳定
+  const localizeMessage = useMemo(() => createLocalizeMessage(stableT), [stableT]);
 
   // Cache for normalizeBlocks to avoid re-parsing unchanged messages
   const normalizeBlocksCache = useRef(new WeakMap<object, ClaudeContentBlock[]>());
   const shouldShowMessageCache = useRef(new WeakMap<object, boolean>());
   const mergedAssistantMessageCache = useRef(new Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>());
+
+  // 缓存大小限制常量
+  const MERGED_CACHE_MAX_SIZE = 500;
+
   // Clear cache when dependencies change
+  // 使用 stableT 替代 t，避免语言不变时不必要的缓存清除
   useEffect(() => {
     normalizeBlocksCache.current = new WeakMap();
     shouldShowMessageCache.current = new WeakMap();
     mergedAssistantMessageCache.current = new Map();
-  }, [localizeMessage, t, currentSessionId]);
+  }, [localizeMessage, stableT, currentSessionId]);
+
+  // 缓存清理：当 mergedAssistantMessageCache 超过限制 20% 时，删除最早的条目
+  // 使用 20% 缓冲区减少清理频率，避免每次消息变化都触发清理
+  const limitMergedCache = useCallback(() => {
+    const cache = mergedAssistantMessageCache.current;
+    const cleanupThreshold = Math.floor(MERGED_CACHE_MAX_SIZE * 1.2);
+    if (cache.size > cleanupThreshold) {
+      // Map 保持插入顺序，删除最早插入的条目
+      const keysToDelete = Array.from(cache.keys()).slice(0, cache.size - MERGED_CACHE_MAX_SIZE);
+      for (const key of keysToDelete) {
+        cache.delete(key);
+      }
+    }
+  }, []);
 
   const normalizeBlocks = useCallback(
     (raw?: ClaudeRawMessage | string) => {
@@ -890,25 +938,25 @@ const App = () => {
         if (cache.has(raw)) {
           return cache.get(raw)!;
         }
-        const result = normalizeBlocksUtil(raw, localizeMessage, t);
+        const result = normalizeBlocksUtil(raw, localizeMessage, stableT);
         if (result) {
           cache.set(raw, result);
         }
         return result;
       }
-      return normalizeBlocksUtil(raw, localizeMessage, t);
+      return normalizeBlocksUtil(raw, localizeMessage, stableT);
     },
-    [localizeMessage, t]
+    [localizeMessage, stableT]
   );
 
   const getMessageText = useCallback(
-    (message: ClaudeMessage) => getMessageTextUtil(message, localizeMessage, t),
-    [localizeMessage, t]
+    (message: ClaudeMessage) => getMessageTextUtil(message, localizeMessage, stableT),
+    [localizeMessage, stableT]
   );
 
   const shouldShowMessage = useCallback(
-    (message: ClaudeMessage) => shouldShowMessageUtil(message, getMessageText, normalizeBlocks, t),
-    [getMessageText, normalizeBlocks, t]
+    (message: ClaudeMessage) => shouldShowMessageUtil(message, getMessageText, normalizeBlocks, stableT),
+    [getMessageText, normalizeBlocks, stableT]
   );
 
   const shouldShowMessageCached = useCallback(
@@ -938,8 +986,10 @@ const App = () => {
       }
     }
     const result = mergeConsecutiveAssistantMessages(visible, normalizeBlocks, mergedAssistantMessageCache.current);
+    // 限制缓存大小，避免内存泄漏
+    limitMergedCache();
     return result;
-  }, [messages, shouldShowMessageCached, normalizeBlocks]);
+  }, [messages, shouldShowMessageCached, normalizeBlocks, limitMergedCache]);
 
   // Rewind handlers
   const {
@@ -962,9 +1012,13 @@ const App = () => {
   });
 
   // 从消息中提取最新的 todos 用于全局 TodoPanel 显示
+  // 性能优化：只扫描最后50条消息，因为 todowrite 通常出现在最近的对话中
   const globalTodos = useMemo(() => {
+    const SCAN_LIMIT = 50;
+    const startIndex = Math.max(0, messages.length - SCAN_LIMIT);
+
     // 从后往前遍历，找到最新的 todowrite 工具调用
-    for (let i = messages.length - 1; i >= 0; i--) {
+    for (let i = messages.length - 1; i >= startIndex; i--) {
       const msg = messages[i];
       if (msg.type !== 'assistant') continue;
 
@@ -982,45 +1036,62 @@ const App = () => {
       }
     }
     return [];
-  }, [messages]);
+  }, [messages, getContentBlocks]);
 
-  const canRewindFromMessageIndex = (userMessageIndex: number) => {
-    if (userMessageIndex < 0 || userMessageIndex >= mergedMessages.length) {
-      return false;
+  // 预计算可 rewind 的用户消息索引集合
+  // 性能优化：O(n²) → O(n)，通过单次遍历预计算替代每个消息的重复遍历
+  const rewindableIndicesSet = useMemo(() => {
+    const indices = new Set<number>();
+    if (currentProvider !== 'claude' || mergedMessages.length === 0) {
+      return indices;
     }
 
-    const current = mergedMessages[userMessageIndex];
-    if (current.type !== 'user') return false;
-    if ((current.content || '').trim() === '[tool_result]') return false;
-    const raw = current.raw;
-    if (raw && typeof raw !== 'string') {
-      const content = (raw as any).content ?? (raw as any).message?.content;
-      if (Array.isArray(content) && content.some((block: any) => block && block.type === 'tool_result')) {
-        return false;
-      }
-    }
+    // 从后向前遍历，标记哪些用户消息后面有文件修改操作
+    let hasFileModifyAfter = false;
+    let lastUserIndex = -1;
 
-    for (let i = userMessageIndex + 1; i < mergedMessages.length; i += 1) {
+    for (let i = mergedMessages.length - 1; i >= 0; i--) {
       const msg = mergedMessages[i];
+
       if (msg.type === 'user') {
-        break;
-      }
-      const blocks = getContentBlocks(msg);
-      for (const block of blocks) {
-        if (block.type !== 'tool_use') {
-          continue;
+        // 遇到用户消息时，检查其后是否有文件修改
+        if (hasFileModifyAfter && lastUserIndex !== i) {
+          // 还需要检查这条用户消息是否是 tool_result
+          const content = (msg.content || '').trim();
+          if (content !== '[tool_result]') {
+            const raw = msg.raw;
+            let isToolResult = false;
+            if (raw && typeof raw !== 'string') {
+              const rawContent = (raw as any).content ?? (raw as any).message?.content;
+              if (Array.isArray(rawContent) && rawContent.some((block: any) => block && block.type === 'tool_result')) {
+                isToolResult = true;
+              }
+            }
+            if (!isToolResult) {
+              indices.add(i);
+            }
+          }
         }
-        // Check if this is a file modification tool
-        if (isToolName(block.name, FILE_MODIFY_TOOL_NAMES)) {
-          return true;
+        // 重置状态，开始检测这条用户消息之前的区间
+        hasFileModifyAfter = false;
+        lastUserIndex = i;
+      } else if (msg.type === 'assistant') {
+        // 检查 assistant 消息中是否有文件修改工具
+        const blocks = getContentBlocks(msg);
+        for (const block of blocks) {
+          if (block.type === 'tool_use' && isToolName(block.name, FILE_MODIFY_TOOL_NAMES)) {
+            hasFileModifyAfter = true;
+            break;
+          }
         }
       }
     }
 
-    return false;
-  };
+    return indices;
+  }, [mergedMessages, currentProvider, getContentBlocks]);
 
   // Calculate rewindable messages for the select dialog
+  // 使用预计算的索引集合，避免重复遍历
   const rewindableMessages = useMemo((): RewindableMessage[] => {
     if (currentProvider !== 'claude') {
       return [];
@@ -1028,10 +1099,9 @@ const App = () => {
 
     const result: RewindableMessage[] = [];
 
-    for (let i = 0; i < mergedMessages.length - 1; i++) {
-      if (!canRewindFromMessageIndex(i)) {
-        continue;
-      }
+    // 只遍历预计算的可 rewind 索引
+    for (const i of rewindableIndicesSet) {
+      if (i >= mergedMessages.length - 1) continue;
 
       const message = mergedMessages[i];
       const content = message.content || getMessageText(message);
@@ -1047,8 +1117,11 @@ const App = () => {
       });
     }
 
+    // 按索引排序，确保顺序一致
+    result.sort((a, b) => a.messageIndex - b.messageIndex);
+
     return result;
-  }, [mergedMessages, currentProvider]);
+  }, [mergedMessages, currentProvider, rewindableIndicesSet, getMessageText]);
 
   // 使用 useRef 存储最新的 messages，避免 findToolResult 依赖变化导致子组件重渲染
   const messagesRef = useRef(messages);
@@ -1139,6 +1212,7 @@ const App = () => {
           )}
 
           <MessageList
+            ref={messageListRef}
             messages={mergedMessages}
             streamingActive={streamingActive}
             isThinking={isThinking}
@@ -1150,11 +1224,19 @@ const App = () => {
             findToolResult={findToolResult}
             extractMarkdownContent={extractMarkdownContent}
             messagesEndRef={messagesEndRef}
+            onAtBottomStateChange={(atBottom) => {
+              isUserAtBottomRef.current = atBottom;
+            }}
+            onScrollerRef={handleScrollerRef}
           />
         </div>
 
-        {/* 滚动控制按钮 */}
-        <ScrollControl containerRef={messagesContainerRef} inputAreaRef={inputAreaRef} />
+        {/* 滚动控制按钮 - 使用 Virtuoso 内部滚动容器和 API */}
+        <ScrollControl
+          containerRef={virtuosoScrollerRef}
+          inputAreaRef={inputAreaRef}
+          messageListRef={messageListRef}
+        />
       </>
       ) : (
         <HistoryView

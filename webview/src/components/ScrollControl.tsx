@@ -1,9 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { MessageListHandle } from './MessageList';
 
 interface ScrollControlProps {
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  containerRef: React.RefObject<HTMLElement | null>;
   inputAreaRef?: React.RefObject<HTMLDivElement | null>;
+  // Virtuoso 滚动方法（用于虚拟列表的精确滚动）
+  messageListRef?: React.RefObject<MessageListHandle | null>;
 }
 
 /**
@@ -15,15 +18,44 @@ interface ScrollControlProps {
  * - 内容不足一屏时隐藏按钮
  * - 位置始终在输入框上方20px
  */
-export const ScrollControl = ({ containerRef, inputAreaRef }: ScrollControlProps) => {
+export const ScrollControl = ({ containerRef, inputAreaRef, messageListRef }: ScrollControlProps) => {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [direction, setDirection] = useState<'up' | 'down'>('down');
   const [bottomOffset, setBottomOffset] = useState(120);
   const hideTimerRef = useRef<number | null>(null);
+  // 追踪容器是否已挂载
+  const [containerMounted, setContainerMounted] = useState(false);
 
   const THRESHOLD = 100; // 距离底部的阈值（像素）
   const HIDE_DELAY = 1500; // 停止滚动后隐藏的延迟时间（毫秒）
+
+  // 检测容器挂载状态（使用 MutationObserver 替代轮询）
+  useEffect(() => {
+    // 立即检查
+    if (containerRef.current) {
+      setContainerMounted(true);
+      return;
+    }
+
+    // 使用 MutationObserver 监听 DOM 变化
+    const observer = new MutationObserver(() => {
+      if (containerRef.current && !containerMounted) {
+        setContainerMounted(true);
+        observer.disconnect();
+      }
+    });
+
+    // 观察 document.body 的子节点变化
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [containerRef, containerMounted]);
 
   /**
    * 更新按钮位置，使其始终在输入框上方20px
@@ -108,27 +140,37 @@ export const ScrollControl = ({ containerRef, inputAreaRef }: ScrollControlProps
    * 滚动到顶部
    */
   const scrollToTop = useCallback(() => {
+    // 优先使用 Virtuoso API
+    if (messageListRef?.current) {
+      messageListRef.current.scrollToIndex(0);
+      return;
+    }
+    // 回退到原生滚动
     const container = containerRef.current;
     if (!container) return;
-
     container.scrollTo({
       top: 0,
       behavior: 'smooth',
     });
-  }, [containerRef]);
+  }, [containerRef, messageListRef]);
 
   /**
    * 滚动到底部
    */
   const scrollToBottom = useCallback(() => {
+    // 优先使用 Virtuoso API
+    if (messageListRef?.current) {
+      messageListRef.current.scrollToBottom();
+      return;
+    }
+    // 回退到原生滚动
     const container = containerRef.current;
     if (!container) return;
-
     container.scrollTo({
       top: container.scrollHeight,
       behavior: 'smooth',
     });
-  }, [containerRef]);
+  }, [containerRef, messageListRef]);
 
   /**
    * 处理点击事件
@@ -147,6 +189,9 @@ export const ScrollControl = ({ containerRef, inputAreaRef }: ScrollControlProps
    * 监听滚动和滚轮事件
    */
   useEffect(() => {
+    // 等待容器挂载
+    if (!containerMounted) return;
+
     const container = containerRef.current;
     if (!container) return;
 
@@ -185,7 +230,7 @@ export const ScrollControl = ({ containerRef, inputAreaRef }: ScrollControlProps
         clearTimeout(hideTimerRef.current);
       }
     };
-  }, [containerRef, inputAreaRef, checkScrollPosition, handleWheel, updatePosition]);
+  }, [containerMounted, containerRef, inputAreaRef, checkScrollPosition, handleWheel, updatePosition]);
 
   if (!visible) return null;
 

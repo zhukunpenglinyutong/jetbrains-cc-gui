@@ -6,7 +6,8 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir, platform } from 'os';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import { debugLog, diagLog, errorLog } from '../utils/debug-logger.js';
 
 /**
  * 读取 Claude Code 配置
@@ -32,14 +33,17 @@ function readMacKeychainCredentials() {
 
     for (const serviceName of serviceNames) {
       try {
-        const result = execSync(
-          `security find-generic-password -s "${serviceName}" -w 2>/dev/null`,
-          { encoding: 'utf8', timeout: 5000 }
+        // 使用 execFileSync 替代 execSync，避免 shell 注入风险
+        // 参数以数组形式传递，而非字符串拼接
+        const result = execFileSync(
+          'security',
+          ['find-generic-password', '-s', serviceName, '-w'],
+          { encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }
         );
 
         if (result && result.trim()) {
           const credentials = JSON.parse(result.trim());
-          console.log(`[DEBUG] Successfully read credentials from macOS Keychain (service: ${serviceName})`);
+          debugLog(`Successfully read credentials from macOS Keychain (service: ${serviceName})`);
           return credentials;
         }
       } catch (e) {
@@ -48,10 +52,10 @@ function readMacKeychainCredentials() {
       }
     }
 
-    console.log('[DEBUG] No credentials found in macOS Keychain');
+    debugLog('No credentials found in macOS Keychain');
     return null;
   } catch (error) {
-    console.log('[DEBUG] Failed to read from macOS Keychain:', error.message);
+    debugLog('Failed to read from macOS Keychain:', error.message);
     return null;
   }
 }
@@ -65,15 +69,15 @@ function readFileCredentials() {
     const credentialsPath = join(homedir(), '.claude', '.credentials.json');
 
     if (!existsSync(credentialsPath)) {
-      console.log('[DEBUG] No CLI session found: .credentials.json does not exist');
+      debugLog('No CLI session found: .credentials.json does not exist');
       return null;
     }
 
     const credentials = JSON.parse(readFileSync(credentialsPath, 'utf8'));
-    console.log('[DEBUG] Successfully read credentials from file');
+    debugLog('Successfully read credentials from file');
     return credentials;
   } catch (error) {
-    console.log('[DEBUG] Failed to read credentials file:', error.message);
+    debugLog('Failed to read credentials file:', error.message);
     return null;
   }
 }
@@ -92,16 +96,16 @@ export function hasCliSessionAuth() {
 
     // macOS uses Keychain, other platforms use file
     if (currentPlatform === 'darwin') {
-      console.log('[DEBUG] Detected macOS, attempting to read from Keychain...');
+      debugLog('Detected macOS, attempting to read from Keychain...');
       credentials = readMacKeychainCredentials();
 
       // Fallback to file if keychain fails (in case user manually created the file)
       if (!credentials) {
-        console.log('[DEBUG] Keychain read failed, trying file fallback...');
+        debugLog('Keychain read failed, trying file fallback...');
         credentials = readFileCredentials();
       }
     } else {
-      console.log(`[DEBUG] Detected ${currentPlatform}, reading from credentials file...`);
+      debugLog(`Detected ${currentPlatform}, reading from credentials file...`);
       credentials = readFileCredentials();
     }
 
@@ -110,14 +114,14 @@ export function hasCliSessionAuth() {
                          credentials.claudeAiOauth.accessToken.length > 0;
 
     if (hasValidToken) {
-      console.log('[DEBUG] Valid CLI session found with access token');
+      debugLog('Valid CLI session found with access token');
       return true;
     } else {
-      console.log('[DEBUG] No valid access token found in credentials');
+      debugLog('No valid access token found in credentials');
       return false;
     }
   } catch (error) {
-    console.log('[DEBUG] Failed to check CLI session:', error.message);
+    debugLog('Failed to check CLI session:', error.message);
     return false;
   }
 }
@@ -127,12 +131,12 @@ export function hasCliSessionAuth() {
  * @returns {Object} 包含 apiKey, baseUrl, authType 及其来源
  */
 export function setupApiKey() {
-  console.log('[DIAG-CONFIG] ========== setupApiKey() START ==========');
+  diagLog('CONFIG', '========== setupApiKey() START ==========');
 
   const settings = loadClaudeSettings();
-  console.log('[DIAG-CONFIG] Settings loaded:', settings ? 'yes' : 'no');
+  diagLog('CONFIG', 'Settings loaded:', settings ? 'yes' : 'no');
   if (settings?.env) {
-    console.log('[DIAG-CONFIG] Settings env keys:', Object.keys(settings.env));
+    diagLog('CONFIG', 'Settings env keys:', Object.keys(settings.env));
   }
 
   let apiKey;
@@ -143,7 +147,7 @@ export function setupApiKey() {
 
   // 🔥 配置优先级：只从 settings.json 读取，忽略系统环境变量
   // 这样确保配置来源唯一，避免 shell 环境变量干扰
-  console.log('[DEBUG] Loading configuration from settings.json only (ignoring shell environment variables)...');
+  debugLog('Loading configuration from settings.json only (ignoring shell environment variables)...');
 
   // 优先使用 ANTHROPIC_AUTH_TOKEN（Bearer 认证），回退到 ANTHROPIC_API_KEY（x-api-key 认证）
   // 这样可以兼容 Claude Code CLI 的两种认证方式
@@ -168,11 +172,11 @@ export function setupApiKey() {
 
   // 如果没有配置 API Key，检查是否存在 CLI 会话认证
   if (!apiKey) {
-    console.log('[DEBUG] No API Key found in settings.json, checking for CLI session...');
+    debugLog('No API Key found in settings.json, checking for CLI session...');
 
     if (hasCliSessionAuth()) {
       // 使用 CLI 会话认证
-      console.log('[INFO] Using CLI session authentication (claude login)');
+      debugLog('Using CLI session authentication (claude login)');
       authType = 'cli_session';
       // Set source based on platform
       const currentPlatform = platform();
@@ -189,14 +193,14 @@ export function setupApiKey() {
         process.env.ANTHROPIC_BASE_URL = baseUrl;
       }
 
-      console.log('[DEBUG] Auth type:', authType);
+      debugLog('Auth type:', authType);
       return { apiKey: null, baseUrl, authType, apiKeySource, baseUrlSource };
     } else {
       // 既没有 API Key 也没有 CLI 会话
-      console.error('[ERROR] API Key not configured and no CLI session found.');
-      console.error('[ERROR] Please either:');
-      console.error('[ERROR]   1. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in ~/.claude/settings.json');
-      console.error('[ERROR]   2. Run "claude login" to authenticate via CLI');
+      errorLog('API Key not configured and no CLI session found.');
+      errorLog('Please either:');
+      errorLog('  1. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in ~/.claude/settings.json');
+      errorLog('  2. Run "claude login" to authenticate via CLI');
       throw new Error('API Key not configured and no CLI session found');
     }
   }
@@ -219,14 +223,14 @@ export function setupApiKey() {
     process.env.ANTHROPIC_BASE_URL = baseUrl;
   }
 
-  console.log('[DEBUG] Auth type:', authType);
+  debugLog('Auth type:', authType);
 
-  console.log('[DIAG-CONFIG] ========== setupApiKey() RESULT ==========');
-  console.log('[DIAG-CONFIG] authType:', authType);
-  console.log('[DIAG-CONFIG] apiKeySource:', apiKeySource);
-  console.log('[DIAG-CONFIG] baseUrl:', baseUrl || '(not set)');
-  console.log('[DIAG-CONFIG] baseUrlSource:', baseUrlSource);
-  console.log('[DIAG-CONFIG] apiKey preview:', apiKey ? `${apiKey.substring(0, 10)}...` : '(null)');
+  diagLog('CONFIG', '========== setupApiKey() RESULT ==========');
+  diagLog('CONFIG', 'authType:', authType);
+  diagLog('CONFIG', 'apiKeySource:', apiKeySource);
+  diagLog('CONFIG', 'baseUrl:', baseUrl || '(not set)');
+  diagLog('CONFIG', 'baseUrlSource:', baseUrlSource);
+  diagLog('CONFIG', 'apiKey:', apiKey ? '[CONFIGURED]' : '(null)');
 
   return { apiKey, baseUrl, authType, apiKeySource, baseUrlSource };
 }

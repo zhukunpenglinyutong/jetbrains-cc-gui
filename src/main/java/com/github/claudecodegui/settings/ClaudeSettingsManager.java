@@ -13,6 +13,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Set;
 
 /**
  * Claude Settings 管理器
@@ -78,6 +81,19 @@ public class ClaudeSettingsManager {
         try (FileWriter writer = new FileWriter(settingsPath.toFile())) {
             gson.toJson(settings, writer);
             LOG.info("[ClaudeSettingsManager] Synced settings to: " + settingsPath);
+        }
+
+        // 设置文件权限为 600 (rw-------)，确保只有当前用户可以读写
+        // 仅在 POSIX 兼容系统（Linux/macOS）上生效
+        try {
+            if (!System.getProperty("os.name").toLowerCase().contains("windows")) {
+                Set<PosixFilePermission> permissions = PosixFilePermissions.fromString("rw-------");
+                Files.setPosixFilePermissions(settingsPath, permissions);
+                LOG.info("[ClaudeSettingsManager] Set file permissions to 600: " + settingsPath);
+            }
+        } catch (UnsupportedOperationException e) {
+            // Windows 系统不支持 POSIX 文件权限，忽略此错误
+            LOG.debug("[ClaudeSettingsManager] POSIX file permissions not supported on this system");
         }
     }
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { openFile, showDiff, refreshFile } from '../../utils/bridge';
@@ -85,7 +85,7 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffResult {
   return { lines: diffLines, additions, deletions };
 }
 
-const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
+const EditToolBlock = memo(({ name, input, result }: EditToolBlockProps) => {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
@@ -369,6 +369,8 @@ const EditToolBlock = ({ name, input, result }: EditToolBlockProps) => {
       </div>
     </div>
   );
-};
+});
+
+EditToolBlock.displayName = 'EditToolBlock';
 
 export default EditToolBlock;

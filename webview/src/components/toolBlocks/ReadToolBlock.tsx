@@ -1,92 +1,16 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput } from '../../types';
 import { openFile } from '../../utils/bridge';
 import { getFileName } from '../../utils/helpers';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
+import { extractFilePathFromCommand } from '../../utils/commandParser';
 
 interface ReadToolBlockProps {
   input?: ToolInput;
 }
 
-/**
- * Extract file/directory path from command string (for Codex commands)
- */
-const extractFilePathFromCommand = (command: string | undefined, workdir?: string): string | undefined => {
-  if (!command || typeof command !== 'string') return undefined;
-
-  let trimmed = command.trim();
-
-  // Extract actual command from shell wrapper (/bin/zsh -lc '...' or /bin/bash -c '...')
-  const shellWrapperMatch = trimmed.match(/^\/bin\/(zsh|bash)\s+(?:-lc|-c)\s+['"](.+)['"]$/);
-  if (shellWrapperMatch) {
-    trimmed = shellWrapperMatch[2];
-  }
-
-  // Remove 'cd dir &&' prefix if present
-  const cdPrefixMatch = trimmed.match(/^cd\s+\S+\s+&&\s+(.+)$/);
-  if (cdPrefixMatch) {
-    trimmed = cdPrefixMatch[1].trim();
-  }
-
-  // Match pwd command - returns current directory from workdir
-  if (/^pwd\s*$/.test(trimmed)) {
-    return workdir ? workdir + '/' : undefined;
-  }
-
-  // Match ls command (with or without flags)
-  const lsMatch = trimmed.match(/^ls\s+(?:-[a-zA-Z]+\s+)?(.+)$/);
-  if (lsMatch) {
-    const path = lsMatch[1].trim().replace(/^["']|["']$/g, '');
-    return path.endsWith('/') ? path : path + '/';
-  }
-
-  // Match ls without path (current directory)
-  if (/^ls(?:\s+-[a-zA-Z]+)*\s*$/.test(trimmed)) {
-    return workdir ? workdir + '/' : undefined;
-  }
-
-  // Match tree command
-  if (/^tree\b/.test(trimmed)) {
-    const treeMatch = trimmed.match(/^tree\s+(.+)$/);
-    if (treeMatch) {
-      const path = treeMatch[1].trim().replace(/^["']|["']$/g, '');
-      return path.endsWith('/') ? path : path + '/';
-    }
-    return workdir ? workdir + '/' : undefined;
-  }
-
-  // Match sed -n command (e.g., sed -n '700,780p' file.txt)
-  const sedMatch = trimmed.match(/^sed\s+-n\s+['"]?(\d+)(?:,(\d+))?p['"]?\s+(.+)$/);
-  if (sedMatch) {
-    const startLine = sedMatch[1];
-    const endLine = sedMatch[2];
-    const path = sedMatch[3].trim().replace(/^["']|["']$/g, '');
-    if (endLine) {
-      return `${path}:${startLine}-${endLine}`;
-    } else {
-      return `${path}:${startLine}`;
-    }
-  }
-
-  // Match cat command
-  const catMatch = trimmed.match(/^cat\s+(.+)$/);
-  if (catMatch) {
-    const path = catMatch[1].trim();
-    return path.replace(/^["']|["']$/g, '');
-  }
-
-  // Match head/tail commands
-  const headTailMatch = trimmed.match(/^(head|tail)\s+(?:.*\s)?([^\s-][^\s]*)$/);
-  if (headTailMatch) {
-    const path = headTailMatch[2].trim();
-    return path.replace(/^["']|["']$/g, '');
-  }
-
-  return undefined;
-};
-
-const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
+const ReadToolBlock = memo(({ input }: ReadToolBlockProps) => {
   const [expanded, setExpanded] = useState(false);
   const { t } = useTranslation();
 
@@ -246,7 +170,9 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
       )}
     </div>
   );
-};
+});
+
+ReadToolBlock.displayName = 'ReadToolBlock';
 
 export default ReadToolBlock;
 

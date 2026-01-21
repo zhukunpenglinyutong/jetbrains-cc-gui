@@ -5,6 +5,8 @@ import { openBrowser, openFile } from '../utils/bridge';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 import { markedHighlight } from 'marked-highlight';
+import DOMPurify from 'dompurify';
+import { debugError } from '../utils/debugLogger';
 
 // 配置 marked 使用语法高亮
 marked.use(
@@ -14,7 +16,7 @@ marked.use(
         try {
           return hljs.highlight(code, { language: lang }).value;
         } catch (err) {
-          console.error('[MarkdownBlock] Highlight error:', err);
+          debugError('[MarkdownBlock] Highlight error:', err);
         }
       }
       return hljs.highlightAuto(code).value;
@@ -65,7 +67,7 @@ const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
         document.body.removeChild(textarea);
         return successful;
       } catch (e) {
-        console.error('Copy failed:', e);
+        debugError('[MarkdownBlock] Copy fallback failed:', e);
         return false;
       }
     }
@@ -120,10 +122,26 @@ const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
         wrapper.appendChild(btn);
       });
 
-      return doc.body.innerHTML.trim();
+      // 使用 DOMPurify 清理 HTML，防止 XSS 攻击
+      const sanitizedHtml = DOMPurify.sanitize(doc.body.innerHTML.trim(), {
+        ALLOWED_TAGS: [
+          'p', 'br', 'strong', 'em', 'code', 'pre', 'a', 'ul', 'ol', 'li',
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'hr', 'span',
+          'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'del',
+          'button', 'svg', 'path'
+        ],
+        ALLOWED_ATTR: [
+          'href', 'class', 'className', 'title', 'aria-label', 'type',
+          'src', 'alt', 'width', 'height', 'viewBox', 'fill', 'xmlns',
+          'd', 'fill-opacity'
+        ],
+        ALLOW_DATA_ATTR: false
+      });
+      return sanitizedHtml;
     } catch (error) {
-      console.error('[MarkdownBlock] Failed to parse markdown', error);
-      return content;
+      debugError('[MarkdownBlock] Failed to parse markdown:', error);
+      // 对于错误回退，也需要清理
+      return DOMPurify.sanitize(content);
     }
   }, [content, i18n.language, t]);
 

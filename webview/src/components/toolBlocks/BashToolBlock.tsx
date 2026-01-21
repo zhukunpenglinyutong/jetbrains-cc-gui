@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 
@@ -8,7 +8,7 @@ interface BashToolBlockProps {
   result?: ToolResultBlock | null;
 }
 
-const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
+const BashToolBlock = memo(({ input, result }: BashToolBlockProps) => {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
@@ -70,7 +70,9 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
       )}
     </div>
   );
-};
+});
+
+BashToolBlock.displayName = 'BashToolBlock';
 
 export default BashToolBlock;
 

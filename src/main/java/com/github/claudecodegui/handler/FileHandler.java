@@ -4,6 +4,7 @@ import com.github.claudecodegui.model.FileSortItem;
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.github.claudecodegui.util.EditorFileUtils;
+import com.github.claudecodegui.util.IgnoreRuleMatcher;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.BrowserUtil;
@@ -18,7 +19,6 @@ import com.intellij.openapi.vfs.VirtualFile;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -34,9 +34,9 @@ public class FileHandler extends BaseMessageHandler {
 
     // 常量定义
     private static final int MAX_RECENT_FILES = 50;
-    private static final int MAX_SEARCH_RESULTS = 200;
-    private static final int MAX_SEARCH_DEPTH = 15;
-    private static final int MAX_DIRECTORY_CHILDREN = 100;
+
+    // 文件搜索辅助类
+    private final FileSearchHelper searchHelper = new FileSearchHelper();
 
     public FileHandler(HandlerContext context) {
         super(context);
@@ -74,20 +74,20 @@ public class FileHandler extends BaseMessageHandler {
         CompletableFuture.runAsync(() -> {
             try {
                 // 1. 解析请求
-                FileListRequest request = parseRequest(content);
+                FileSearchHelper.FileListRequest request = parseRequest(content);
 
                 // 2. 获取基础路径
                 String basePath = getEffectiveBasePath();
 
                 // 3. 初始化文件集合（去重）
-                FileSet fileSet = new FileSet();
+                FileSearchHelper.FileSet fileSet = new FileSearchHelper.FileSet();
 
                 // 4. 收集文件
                 List<JsonObject> files = new ArrayList<>();
 
                 // Priority 0: Active Terminals
                 collectActiveTerminals(files, request);
-                
+
                 // Priority 0: Active Services
                 collectActiveServices(files, request);
 
@@ -128,7 +128,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 收集当前打开的文件
      */
-    private void collectOpenFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
+    private void collectOpenFiles(List<JsonObject> files, FileSearchHelper.FileSet fileSet, String basePath, FileSearchHelper.FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
             if (project == null || project.isDisposed()) {
@@ -158,7 +158,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 收集最近打开的文件
      */
-    private void collectRecentFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
+    private void collectRecentFiles(List<JsonObject> files, FileSearchHelper.FileSet fileSet, String basePath, FileSearchHelper.FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
             if (project == null || project.isDisposed()) {
@@ -202,16 +202,19 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 收集文件系统文件
      */
-    private void collectFileSystemFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
+    private void collectFileSystemFiles(List<JsonObject> files, FileSearchHelper.FileSet fileSet, String basePath, FileSearchHelper.FileListRequest request) {
         List<JsonObject> diskFiles = new ArrayList<>();
+
+        // 获取或创建 Ignore 规则匹配器
+        IgnoreRuleMatcher ignoreMatcher = searchHelper.getOrCreateIgnoreMatcher(basePath);
 
         if (request.hasQuery) {
             File baseDir = new File(basePath);
-            collectFilesRecursive(baseDir, basePath, diskFiles, request, 0);
+            searchHelper.collectFilesRecursive(baseDir, basePath, diskFiles, request, 0, ignoreMatcher);
         } else {
             File targetDir = new File(basePath, request.currentPath);
             if (targetDir.exists() && targetDir.isDirectory()) {
-                listDirectChildren(targetDir, basePath, diskFiles);
+                searchHelper.listDirectChildren(targetDir, basePath, diskFiles, ignoreMatcher);
             }
         }
 
@@ -228,7 +231,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 收集活动服务 (Run/Debug configurations)
      */
-    private void collectActiveServices(List<JsonObject> files, FileListRequest request) {
+    private void collectActiveServices(List<JsonObject> files, FileSearchHelper.FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
             if (project == null || project.isDisposed()) return;
@@ -262,7 +265,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 收集活动终端
      */
-    private void collectActiveTerminals(List<JsonObject> files, FileListRequest request) {
+    private void collectActiveTerminals(List<JsonObject> files, FileSearchHelper.FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
             if (project == null || project.isDisposed()) return;
@@ -304,19 +307,19 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 解析请求
      */
-    private FileListRequest parseRequest(String content) {
+    private FileSearchHelper.FileListRequest parseRequest(String content) {
         if (content == null || content.isEmpty()) {
-            return new FileListRequest("", "");
+            return new FileSearchHelper.FileListRequest("", "");
         }
 
         try {
             JsonObject json = new Gson().fromJson(content, JsonObject.class);
             String query = json.has("query") ? json.get("query").getAsString() : "";
             String currentPath = json.has("currentPath") ? json.get("currentPath").getAsString() : "";
-            return new FileListRequest(query, currentPath);
+            return new FileSearchHelper.FileListRequest(query, currentPath);
         } catch (Exception e) {
             // 如果不是 JSON，当作纯文本 query
-            return new FileListRequest(content.trim(), "");
+            return new FileSearchHelper.FileListRequest(content.trim(), "");
         }
     }
 
@@ -613,145 +616,6 @@ public class FileHandler extends BaseMessageHandler {
     }
 
     /**
-     * 列出目录的直接子文件/文件夹（不递归）
-     */
-    private void listDirectChildren(File dir, String basePath, List<JsonObject> files) {
-        if (!dir.isDirectory()) return;
-
-        File[] children = dir.listFiles();
-        if (children == null) return;
-
-        int added = 0;
-        for (File child : children) {
-            if (added >= MAX_DIRECTORY_CHILDREN) break;
-
-            String name = child.getName();
-            boolean isDir = child.isDirectory();
-
-            if (shouldSkipInSearch(name, isDir)) {
-                continue;
-            }
-
-            String relativePath = getRelativePath(child, basePath);
-            JsonObject fileObj = createFileObject(child, name, relativePath);
-            files.add(fileObj);
-            added++;
-        }
-    }
-
-    /**
-     * 递归收集文件
-     */
-    private void collectFilesRecursive(File dir, String basePath, List<JsonObject> files, FileListRequest request, int depth) {
-        if (depth > MAX_SEARCH_DEPTH || files.size() >= MAX_SEARCH_RESULTS) return;
-        if (!dir.isDirectory()) return;
-
-        File[] children = dir.listFiles();
-
-        if (children == null) return;
-
-        for (File child : children) {
-            if (files.size() >= MAX_SEARCH_RESULTS) break;
-
-            String name = child.getName();
-            boolean isDir = child.isDirectory();
-
-            if (shouldSkipInSearch(name, isDir)) {
-                continue;
-            }
-
-            String relativePath = getRelativePath(child, basePath);
-
-            // 检查是否匹配查询
-            boolean matches = true;
-            if (request.hasQuery) {
-                matches = request.matches(name, relativePath);
-            }
-
-            if (matches) {
-                JsonObject fileObj = createFileObject(child, name, relativePath);
-                files.add(fileObj);
-            }
-
-            // 目录总是递归搜索（即使目录本身不匹配，其子文件可能匹配）
-            if (isDir) {
-                collectFilesRecursive(child, basePath, files, request, depth + 1);
-            }
-        }
-    }
-
-    /**
-     * 判断是否应该跳过文件或目录
-     */
-    private boolean shouldSkipInSearch(String name, boolean isDirectory) {
-        // 通用跳过
-        if (name.equals(".git") || name.equals(".svn") || name.equals(".hg")) {
-            return true;
-        }
-        if (name.equals("node_modules") || name.equals("__pycache__")) {
-            return true;
-        }
-
-        // 目录特有
-        if (isDirectory) {
-            return (name.equals("target") || name.equals("build") || name.equals("dist") || name.equals("out"));
-        }
-
-        // 文件特有
-        return name.equals(".DS_Store") || name.equals(".idea");
-    }
-
-    /**
-     * 获取相对路径
-     */
-    private String getRelativePath(File file, String basePath) {
-        String relativePath = file.getAbsolutePath().substring(basePath.length());
-        if (relativePath.startsWith(File.separator)) {
-            relativePath = relativePath.substring(1);
-        }
-        return relativePath.replace("\\", "/");
-    }
-
-    /**
-     * 创建文件对象
-     */
-    private JsonObject createFileObject(File file, String name, String relativePath) {
-        JsonObject fileObj = new JsonObject();
-        fileObj.addProperty("name", name);
-        fileObj.addProperty("path", relativePath);
-        fileObj.addProperty("absolutePath", file.getAbsolutePath().replace("\\", "/"));
-        fileObj.addProperty("type", file.isDirectory() ? "directory" : "file");
-
-        if (file.isFile()) {
-            int dotIndex = name.lastIndexOf('.');
-            if (dotIndex > 0) {
-                fileObj.addProperty("extension", name.substring(dotIndex + 1));
-            }
-        }
-        return fileObj;
-    }
-
-    /**
-     * 创建文件对象 (从 VirtualFile，避免物理 I/O)
-     */
-    private JsonObject createFileObject(VirtualFile file, String relativePath) {
-        JsonObject fileObj = new JsonObject();
-        String name = file.getName();
-        fileObj.addProperty("name", name);
-        fileObj.addProperty("path", relativePath);
-        fileObj.addProperty("absolutePath", file.getPath()); // VirtualFile path uses /
-        fileObj.addProperty("type", file.isDirectory() ? "directory" : "file");
-
-        if (!file.isDirectory()) {
-            String extension = file.getExtension();
-            if (extension != null) {
-                fileObj.addProperty("extension", extension);
-            }
-        }
-        return fileObj;
-    }
-
-    /**
      * 添加命令到列表
      */
     private void addCommand(List<JsonObject> commands, String label, String description, String query) {
@@ -766,7 +630,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 添加 VirtualFile 到列表
      */
-    private void addVirtualFile(VirtualFile vf, String basePath, List<JsonObject> files, FileSet fileSet, FileListRequest request, int priority) {
+    private void addVirtualFile(VirtualFile vf, String basePath, List<JsonObject> files, FileSearchHelper.FileSet fileSet, FileSearchHelper.FileListRequest request, int priority) {
         // Enhanced null safety checks
         if (vf == null || !vf.isValid() || vf.isDirectory()) return;
         if (basePath == null) {
@@ -775,7 +639,7 @@ public class FileHandler extends BaseMessageHandler {
         }
 
         String name = vf.getName();
-        if (shouldSkipInSearch(name, false)) return;
+        if (searchHelper.shouldSkipInSearch(name, false)) return;
 
         String path = vf.getPath();
         if (path == null) {
@@ -795,56 +659,9 @@ public class FileHandler extends BaseMessageHandler {
 
         // 匹配查询
         if (request.matches(name, relativePath)) {
-            JsonObject obj = createFileObject(vf, relativePath);
+            JsonObject obj = searchHelper.createFileObject(vf, relativePath);
             obj.addProperty("priority", priority);
             files.add(obj);
-        }
-    }
-
-    // --- 内部辅助类 ---
-
-    /**
-     * 文件列表请求封装
-     */
-    private static class FileListRequest {
-
-        final String query;
-        final String queryLower;
-        final String currentPath;
-        final boolean hasQuery;
-
-        FileListRequest(String query, String currentPath) {
-            this.query = query != null ? query : "";
-            this.queryLower = this.query.toLowerCase();
-            this.currentPath = currentPath != null ? currentPath : "";
-            this.hasQuery = !this.query.isEmpty();
-        }
-
-        boolean matches(String name, String relativePath) {
-            if (!hasQuery) return true;
-            String lowerName = name.toLowerCase();
-            String lowerPath = relativePath.toLowerCase();
-            return (lowerName.contains(queryLower) || lowerPath.contains(queryLower));
-        }
-    }
-
-    /**
-     * 文件集合，自动处理路径归一化和去重
-     */
-    private static class FileSet {
-
-        private final HashSet<String> paths = new HashSet<>();
-
-        boolean tryAdd(String path) {
-            return paths.add(normalizePath(path));
-        }
-
-        boolean contains(String path) {
-            return paths.contains(normalizePath(path));
-        }
-
-        private String normalizePath(String path) {
-            return path == null ? "" : path.replace('\\', '/');
         }
     }
 }
