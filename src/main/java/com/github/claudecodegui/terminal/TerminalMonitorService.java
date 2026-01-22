@@ -1,8 +1,8 @@
 package com.github.claudecodegui.terminal;
 
-import com.intellij.execution.process.ProcessAdapter;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
+import com.intellij.execution.process.ProcessListener;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -14,13 +14,12 @@ import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentManager;
-import com.intellij.ui.content.ContentManagerAdapter;
 import com.intellij.ui.content.ContentManagerEvent;
+import com.intellij.ui.content.ContentManagerListener;
 import kotlin.Unit;
 import kotlin.coroutines.Continuation;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.plugins.terminal.TerminalView;
 
 
 import java.util.Collections;
@@ -100,7 +99,7 @@ public class TerminalMonitorService implements ProjectActivity {
 
             // Attach listener to ContentManager to detect new tabs (Terminals)
             if (!contentHandlerAttached) {
-                terminalWindow.getContentManager().addContentManagerListener(new ContentManagerAdapter() {
+                terminalWindow.getContentManager().addContentManagerListener(new ContentManagerListener() {
                     @Override
                     public void contentAdded(@NotNull ContentManagerEvent event) {
                         // When a new tab is added, check for new widgets
@@ -179,7 +178,7 @@ public class TerminalMonitorService implements ProjectActivity {
                 ProcessHandler processHandler = (ProcessHandler) getHandlerMethod.invoke(widget);
                 if (processHandler != null) {
                     LOG.debug("Attached ProcessListener to terminal: " + title + " using " + getHandlerMethod.getName());
-                    processHandler.addProcessListener(new ProcessAdapter() {
+                    processHandler.addProcessListener(new ProcessListener() {
                         @Override
                         public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
                             String text = event.getText();
@@ -249,11 +248,11 @@ public class TerminalMonitorService implements ProjectActivity {
                 if (widget.equals(content.getComponent()) || widget.equals(content.getPreferredFocusableComponent())) {
                     return i;
                 }
-                
-                // Terminal specific lookup via reflection to avoid direct dependency on internal classes
+
+                // Try to match via display name as fallback
                 try {
-                    Object contentWidget = content.getUserData(Key.findKeyByName("terminalWidget"));
-                    if (widget.equals(contentWidget)) {
+                    String widgetTitle = getWidgetTitle(widget);
+                    if (widgetTitle != null && widgetTitle.equals(content.getDisplayName())) {
                         return i;
                     }
                 } catch (Exception e) {

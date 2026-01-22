@@ -61,10 +61,30 @@ public class PythonContextCollector {
         PyClass pyClass = PsiTreeUtil.getParentOfType(element, PyClass.class);
 
         if (pyFunction != null) {
-            scope.addProperty("function", pyFunction.getName());
-            if (pyFunction.getDocStringValue() != null) {
-                scope.addProperty("docstring", pyFunction.getDocStringValue());
+            // Note: PyFunction.getName() and getDocStringValue() are experimental APIs
+            // but are the standard way to access Python function information
+            try {
+                String funcName = pyFunction.getName();
+                if (funcName != null) {
+                    scope.addProperty("function", funcName);
+                }
+            } catch (Throwable t) {
+                // Fallback: try to get name from identifier
+                PsiElement nameId = pyFunction.getNameIdentifier();
+                if (nameId != null) {
+                    scope.addProperty("function", nameId.getText());
+                }
             }
+
+            try {
+                String docString = pyFunction.getDocStringValue();
+                if (docString != null) {
+                    scope.addProperty("docstring", docString);
+                }
+            } catch (Throwable t) {
+                // ignore - docstring is optional
+            }
+
             // Args
             JsonArray args = new JsonArray();
             for (PyParameter param : pyFunction.getParameterList().getParameters()) {
@@ -76,7 +96,20 @@ public class PythonContextCollector {
         }
 
         if (pyClass != null) {
-            scope.addProperty("class", pyClass.getName());
+            // Note: PyClass.getName() is experimental API
+            try {
+                String className = pyClass.getName();
+                if (className != null) {
+                    scope.addProperty("class", className);
+                }
+            } catch (Throwable t) {
+                // Fallback: try to get name from identifier
+                PsiElement nameId = pyClass.getNameIdentifier();
+                if (nameId != null) {
+                    scope.addProperty("class", nameId.getText());
+                }
+            }
+
             // Parent classes
             JsonArray parents = new JsonArray();
             for (PyExpression parent : pyClass.getSuperClassExpressions()) {
