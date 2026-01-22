@@ -4,7 +4,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.ide.ui.LafManager;
 import com.intellij.ide.ui.LafManagerListener;
-import com.intellij.util.ui.StartupUiUtil;
+import com.intellij.ui.JBColor;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
@@ -14,8 +14,8 @@ import java.awt.Color;
  * IDE 主题配置服务
  * 负责从 IDEA 获取当前 UI 主题信息（亮色/暗色）并提供给 Webview
  *
- * 使用 IntelliJ Platform 官方 API:
- * - StartupUiUtil.isDarkTheme() - IntelliJ 内部用于判断暗色主题的标准方法
+ * 使用 IntelliJ Platform 公开 API:
+ * - JBColor.isBright() - 检测当前是否为亮色主题
  * - LafManagerListener - 监听所有主题变化事件（包括 Sync with OS）
  *
  * 参考:
@@ -126,8 +126,8 @@ public class ThemeConfigService {
     /**
      * 获取 IDE 主题配置
      *
-     * 使用 IntelliJ Platform 官方 API StartupUiUtil.isDarkTheme()
-     * 这是 JBColor 内部使用的标准方法,比自己计算亮度更可靠
+     * 使用 IntelliJ Platform 公开 API JBColor.isBright()
+     * JBColor.isBright() 返回 true 表示亮色主题，取反即为暗色主题
      *
      * @return 包含主题配置的 JsonObject,格式: {"isDark": true/false}
      */
@@ -135,9 +135,9 @@ public class ThemeConfigService {
         JsonObject config = new JsonObject();
 
         try {
-            // 使用 IntelliJ 官方 API 检测是否为暗色主题
-            // StartupUiUtil.INSTANCE.isDarkTheme() 是 JBColor 内部使用的方法,最可靠
-            boolean isDark = StartupUiUtil.INSTANCE.isDarkTheme();
+            // 使用 IntelliJ 公开 API 检测是否为暗色主题
+            // JBColor.isBright() 返回 true 表示亮色主题，取反得到暗色主题
+            boolean isDark = !JBColor.isBright();
 
             config.addProperty("isDark", isDark);
 

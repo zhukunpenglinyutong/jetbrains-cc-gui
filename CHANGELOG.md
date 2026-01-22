@@ -1,3 +1,43 @@
+##### **2026年1月22日（v0.1.6-beta2）**
+
+English:
+- [x] Add terminal support and enhance terminal monitoring features
+- [x] Add keyboard shortcuts for Quick Fix action
+- [x] Add RunConfigMonitorService to monitor Run/Debug service output
+- [x] Add dev mode detection and DevTools support
+- [x] Add Follow IDE theme option with reliable theme detection
+- [x] Add permission isolation per IDE session
+- [x] Filter @ file search results with .gitignore rules
+- [x] Add mermaid diagram rendering support
+- [x] Add send file path to CCG from project tree context menu
+- [x] Add sponsor section to settings with i18n support
+- [x] Fix Codex usage updates from result messages
+- [x] Fix: remove redundance in terminal output
+- [x] Fix: inject IDE theme at HTML load time to prevent flash
+- [x] Fix: downgrade Claude SDK to v0.2.3
+- [x] Fix: defer run-config monitoring to EDT
+- [x] Refactor: improve code quality, memory management, and security
+- [x] Refactor: improve PermissionService code quality
+
+中文:
+- [x] 添加终端支持并增强终端监控功能
+- [x] 添加 Quick Fix 操作的键盘快捷键
+- [x] 添加 RunConfigMonitorService 监控 Run/Debug 服务输出
+- [x] 添加开发模式检测和 DevTools 支持
+- [x] 添加跟随 IDE 主题选项，支持可靠的主题检测
+- [x] 实现每个 IDE 会话的权限隔离
+- [x] 根据 .gitignore 规则过滤 @ 文件搜索结果
+- [x] 添加 mermaid 图表渲染支持
+- [x] 添加从项目树右键菜单发送文件路径到 CCG 功能
+- [x] 在设置中添加赞助商部分（支持国际化）
+- [x] 修复 Codex 使用量统计更新问题
+- [x] 修复终端输出中的冗余内容
+- [x] 修复 HTML 加载时注入 IDE 主题以防止闪烁
+- [x] 修复：降级 Claude SDK 到 v0.2.3
+- [x] 修复：将 run-config 监控推迟到 EDT
+- [x] 重构：改进代码质量、内存管理和安全性
+- [x] 重构：改进 PermissionService 代码质量
+
 ##### **2026年1月19日（v0.1.6-beta1）**
 
 English:

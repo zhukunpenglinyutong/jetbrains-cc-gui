@@ -2,9 +2,9 @@ package com.github.claudecodegui.service;
 
 import com.intellij.execution.ExecutionManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
-import com.intellij.execution.process.ProcessAdapter;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
+import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
@@ -122,12 +122,13 @@ public class RunConfigMonitorService implements ProjectActivity {
             public void contentAdded(@NotNull ContentManagerEvent event) {
                 LOG.debug("Content added to " + windowName + ": " + event.getContent().getDisplayName());
                 // Small delay to allow the content to be fully initialized
-                com.intellij.util.Alarm alarm = new com.intellij.util.Alarm();
-                alarm.addRequest(() -> {
-                    if (currentProject != null) {
-                        attachToExistingDescriptors(currentProject);
-                    }
-                }, 500);
+                // Use AppExecutorUtil instead of deprecated Alarm() constructor
+                com.intellij.util.concurrency.AppExecutorUtil.getAppScheduledExecutorService()
+                    .schedule(() -> ApplicationManager.getApplication().invokeLater(() -> {
+                        if (currentProject != null && !currentProject.isDisposed()) {
+                            attachToExistingDescriptors(currentProject);
+                        }
+                    }), 500, java.util.concurrent.TimeUnit.MILLISECONDS);
             }
 
             @Override
@@ -182,7 +183,7 @@ public class RunConfigMonitorService implements ProjectActivity {
         buffers.computeIfAbsent(descriptor, k -> new StringBuilder());
 
         // Attach process listener to capture output
-        processHandler.addProcessListener(new ProcessAdapter() {
+        processHandler.addProcessListener(new ProcessListener() {
             @Override
             public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
                 String text = event.getText();
@@ -205,15 +206,16 @@ public class RunConfigMonitorService implements ProjectActivity {
 
         // Handle disposal
         if (descriptor.getProcessHandler() != null) {
-            processHandler.addProcessListener(new ProcessAdapter() {
+            processHandler.addProcessListener(new ProcessListener() {
                 @Override
                 public void processTerminated(@NotNull ProcessEvent event) {
                     // Clean up after a delay to allow final output to be captured
-                    com.intellij.util.Alarm alarm = new com.intellij.util.Alarm();
-                    alarm.addRequest(() -> {
-                        monitoredHandlers.remove(processHandler);
-                        // Keep buffer for a while in case user wants to read it
-                    }, 5000);
+                    // Use AppExecutorUtil instead of deprecated Alarm() constructor
+                    com.intellij.util.concurrency.AppExecutorUtil.getAppScheduledExecutorService()
+                        .schedule(() -> {
+                            monitoredHandlers.remove(processHandler);
+                            // Keep buffer for a while in case user wants to read it
+                        }, 5000, java.util.concurrent.TimeUnit.MILLISECONDS);
                 }
             });
         }
