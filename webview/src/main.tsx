@@ -42,6 +42,8 @@ if (enableVConsole) {
  * a resize recalculation for components relying on window size.
  */
 function setupScaleRecovery() {
+  type CSSStyleDeclarationWithZoom = CSSStyleDeclaration & { zoom: string };
+
   const getExpectedScale = (): string => {
     const fromCss = getComputedStyle(document.documentElement).getPropertyValue('--font-scale').trim();
     if (fromCss) return fromCss;
@@ -61,7 +63,9 @@ function setupScaleRecovery() {
   };
 
   let hiddenAt: number | null = null;
+  let lastRecoveryAt = 0;
   let scheduled = false;
+  const RECOVERY_COOLDOWN_MS = 1500;
 
   const forceReapply = (reason: string) => {
     const app = document.getElementById('app') as HTMLElement | null;
@@ -70,7 +74,9 @@ function setupScaleRecovery() {
     // Re-set the CSS variable to ensure width/height calc(100vw/scale) is refreshed.
     document.documentElement.style.setProperty('--font-scale', expected);
 
-    const computedZoom = app ? (getComputedStyle(app) as any).zoom : null;
+    const computedZoom = app
+      ? (getComputedStyle(app) as unknown as CSSStyleDeclarationWithZoom).zoom
+      : null;
     const computedZoomNumber = typeof computedZoom === 'string' ? parseFloat(computedZoom) : Number.NaN;
     const expectedNumber = parseFloat(expected);
 
@@ -80,32 +86,37 @@ function setupScaleRecovery() {
       (!Number.isFinite(computedZoomNumber) || Math.abs(computedZoomNumber - expectedNumber) > 0.01);
 
     if (app && needsZoomNudge) {
+      const appStyle = app.style as unknown as CSSStyleDeclarationWithZoom;
       // Toggle inline zoom to ensure Chromium/JCEF re-applies scaling after resume.
       // Keep the final value aligned with the CSS variable.
-      (app.style as any).zoom = '1';
+      appStyle.zoom = '1';
       // Force a sync layout.
       void app.offsetHeight;
-      (app.style as any).zoom = expected;
+      appStyle.zoom = expected;
     }
 
     // Let components recompute layout (some rely on window resize).
     requestAnimationFrame(() => {
       window.dispatchEvent(new Event('resize'));
       if (app && needsZoomNudge) {
+        const appStyle = app.style as unknown as CSSStyleDeclarationWithZoom;
         // One more tick to reduce flakiness on macOS/JCEF.
-        (app.style as any).zoom = expected;
+        appStyle.zoom = expected;
       }
-      console.log('[ScaleRecovery] Applied scale recovery:', {
-        reason,
-        expected,
-        computedZoom,
-        needsZoomNudge,
-      });
+      if (import.meta.env.DEV) {
+        console.log('[ScaleRecovery] Applied scale recovery:', {
+          reason,
+          expected,
+          computedZoom,
+          needsZoomNudge,
+        });
+      }
+      lastRecoveryAt = Date.now();
     });
   };
 
   const schedule = (reason: string) => {
-    if (scheduled) return;
+    if (scheduled || Date.now() - lastRecoveryAt < RECOVERY_COOLDOWN_MS) return;
     scheduled = true;
     requestAnimationFrame(() => {
       scheduled = false;
