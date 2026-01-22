@@ -31,6 +31,113 @@ if (enableVConsole) {
 /**
  * 应用 IDEA 编辑器字体配置到 CSS 变量
  */
+/**
+ * JCEF (macOS) may occasionally render with an incorrect zoom/layout after the IDE
+ * stays in background / screen-off for a while. The UI uses CSS `zoom` with an
+ * inverse `vw/vh` container size to implement font scaling. If the zoom is not
+ * applied correctly after resume, the container becomes smaller than the viewport,
+ * leaving blank areas and causing "misalignment".
+ *
+ * This recovery nudges Chromium/JCEF to re-apply the expected zoom and triggers
+ * a resize recalculation for components relying on window size.
+ */
+function setupScaleRecovery() {
+  const getExpectedScale = (): string => {
+    const fromCss = getComputedStyle(document.documentElement).getPropertyValue('--font-scale').trim();
+    if (fromCss) return fromCss;
+
+    const savedLevel = localStorage.getItem('fontSizeLevel');
+    const level = savedLevel ? parseInt(savedLevel, 10) : 3;
+    const fontSizeLevel = level >= 1 && level <= 6 ? level : 3;
+    const fontSizeMap: Record<number, number> = {
+      1: 0.8,
+      2: 0.9,
+      3: 1.0,
+      4: 1.1,
+      5: 1.2,
+      6: 1.4,
+    };
+    return String(fontSizeMap[fontSizeLevel] || 1.0);
+  };
+
+  let hiddenAt: number | null = null;
+  let scheduled = false;
+
+  const forceReapply = (reason: string) => {
+    const app = document.getElementById('app') as HTMLElement | null;
+    const expected = getExpectedScale();
+
+    // Re-set the CSS variable to ensure width/height calc(100vw/scale) is refreshed.
+    document.documentElement.style.setProperty('--font-scale', expected);
+
+    const computedZoom = app ? (getComputedStyle(app) as any).zoom : null;
+    const computedZoomNumber = typeof computedZoom === 'string' ? parseFloat(computedZoom) : Number.NaN;
+    const expectedNumber = parseFloat(expected);
+
+    const needsZoomNudge =
+      !!app &&
+      Number.isFinite(expectedNumber) &&
+      (!Number.isFinite(computedZoomNumber) || Math.abs(computedZoomNumber - expectedNumber) > 0.01);
+
+    if (app && needsZoomNudge) {
+      // Toggle inline zoom to ensure Chromium/JCEF re-applies scaling after resume.
+      // Keep the final value aligned with the CSS variable.
+      (app.style as any).zoom = '1';
+      // Force a sync layout.
+      void app.offsetHeight;
+      (app.style as any).zoom = expected;
+    }
+
+    // Let components recompute layout (some rely on window resize).
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+      if (app && needsZoomNudge) {
+        // One more tick to reduce flakiness on macOS/JCEF.
+        (app.style as any).zoom = expected;
+      }
+      console.log('[ScaleRecovery] Applied scale recovery:', {
+        reason,
+        expected,
+        computedZoom,
+        needsZoomNudge,
+      });
+    });
+  };
+
+  const schedule = (reason: string) => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      forceReapply(reason);
+    });
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      return;
+    }
+
+    const elapsed = hiddenAt ? Date.now() - hiddenAt : 0;
+    hiddenAt = null;
+    // Only nudge after a meaningful pause to avoid unnecessary work during normal tab switches.
+    if (elapsed > 1500) {
+      schedule('visibilitychange-resume');
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    // Focus can return without a visibilitychange in some IDE/window states.
+    schedule('window-focus');
+  });
+
+  window.addEventListener('pageshow', () => {
+    // Helps if the page is restored from bfcache-like behavior.
+    schedule('pageshow');
+  });
+}
+
 function applyFontConfig(config: { fontFamily: string; fontSize: number; lineSpacing: number; fallbackFonts?: string[] }) {
   const root = document.documentElement;
 
@@ -209,6 +316,8 @@ ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
 /**
  * 等待 sendToJava 桥接函数可用
  */
+setupScaleRecovery();
+
 function waitForBridge(callback: () => void, maxAttempts = 50, interval = 100) {
   let attempts = 0;
 
