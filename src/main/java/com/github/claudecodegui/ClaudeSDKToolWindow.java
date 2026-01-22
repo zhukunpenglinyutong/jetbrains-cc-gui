@@ -2,13 +2,30 @@ package com.github.claudecodegui;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.cache.SlashCommandCache;
+import com.github.claudecodegui.handler.AgentHandler;
+import com.github.claudecodegui.handler.CodexMcpServerHandler;
+import com.github.claudecodegui.handler.DependencyHandler;
+import com.github.claudecodegui.handler.DiffHandler;
+import com.github.claudecodegui.handler.FileExportHandler;
+import com.github.claudecodegui.handler.FileHandler;
+import com.github.claudecodegui.handler.HandlerContext;
+import com.github.claudecodegui.handler.HistoryHandler;
+import com.github.claudecodegui.handler.McpServerHandler;
+import com.github.claudecodegui.handler.MessageDispatcher;
+import com.github.claudecodegui.handler.PermissionHandler;
+import com.github.claudecodegui.handler.PromptEnhancerHandler;
+import com.github.claudecodegui.handler.ProviderHandler;
+import com.github.claudecodegui.handler.RewindHandler;
+import com.github.claudecodegui.handler.SessionHandler;
+import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.handler.SkillHandler;
+import com.github.claudecodegui.handler.TabHandler;
+import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
-import com.github.claudecodegui.handler.*;
-import com.github.claudecodegui.permission.PermissionRequest;
-import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.FontConfigService;
@@ -16,6 +33,7 @@ import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.LanguageConfigService;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -66,7 +84,13 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Claude SDK 聊天工具窗口
@@ -140,6 +164,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         ContentManager contentManager = toolWindow.getContentManager();
         contentManager.addContent(content);
+
+        // Add DevTools action to ToolWindow title bar (only in development mode)
+        if (PlatformUtils.isPluginDevMode()) {
+            com.intellij.openapi.actionSystem.AnAction devToolsAction =
+                    com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                            .getAction("ClaudeCodeGUI.OpenDevToolsAction");
+            if (devToolsAction != null) {
+                toolWindow.setTitleActions(java.util.List.of(devToolsAction));
+            }
+        }
 
         content.setDisposer(() -> {
             ClaudeChatWindow window = instances.get(project);
@@ -246,6 +280,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private final CodemossSettingsService settingsService;
         private final HtmlLoader htmlLoader;
         private Content parentContent;
+
+        // Session ID for permission service cleanup
+        private volatile String sessionId = null;
 
         // Editor Event Listeners
         private Alarm contextUpdateAlarm;
@@ -472,18 +509,27 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void setupPermissionService() {
-            PermissionService permissionService = PermissionService.getInstance(project);
+            String sessionId = this.claudeSDKBridge.getSessionId();
+
+            // Add defensive check for sessionId
+            if (sessionId == null || sessionId.isEmpty()) {
+                LOG.warn("Failed to get session ID from bridge, generating fallback UUID");
+                sessionId = java.util.UUID.randomUUID().toString();
+            }
+
+            this.sessionId = sessionId;  // Save session ID for cleanup on dispose
+            PermissionService permissionService = PermissionService.getInstance(this.project, sessionId);
             permissionService.start();
-            // 使用项目注册机制，支持多窗口场景
-            permissionService.registerDialogShower(project, (toolName, inputs) ->
-                permissionHandler.showFrontendPermissionDialog(toolName, inputs));
-            // 注册 AskUserQuestion 对话框显示器
-            permissionService.registerAskUserQuestionDialogShower(project, (requestId, questionsData) ->
-                permissionHandler.showAskUserQuestionDialog(requestId, questionsData));
-            // 注册 PlanApproval 对话框显示器
-            permissionService.registerPlanApprovalDialogShower(project, (requestId, planData) ->
-                permissionHandler.showPlanApprovalDialog(requestId, planData));
-            LOG.info("Started permission service with frontend dialog, AskUserQuestion dialog, and PlanApproval dialog for project: " + project.getName());
+            // Use project registration mechanism to support multi-window scenarios
+            permissionService.registerDialogShower(this.project, (toolName, inputs) ->
+                this.permissionHandler.showFrontendPermissionDialog(toolName, inputs));
+            // Register AskUserQuestion dialog shower
+            permissionService.registerAskUserQuestionDialogShower(this.project, (requestId, questionsData) ->
+                this.permissionHandler.showAskUserQuestionDialog(requestId, questionsData));
+            // Register PlanApproval dialog shower
+            permissionService.registerPlanApprovalDialogShower(this.project, (requestId, planData) ->
+                this.permissionHandler.showPlanApprovalDialog(requestId, planData));
+            LOG.info("Started permission service with frontend dialog, AskUserQuestion dialog, and PlanApproval dialog for project: " + this.project.getName());
         }
 
         private void initializeHandlers() {
@@ -722,9 +768,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             try {
                 browser = JBCefBrowserFactory.create();
                 handlerContext.setBrowser(browser);
-
-                // 启用开发者工具（右键菜单）
-                browser.getJBCefClient().setProperty("allowRunningInsecureContent", true);
 
                 JBCefBrowserBase browserBase = browser;
                 JBCefJSQuery jsQuery = JBCefJSQuery.create(browserBase);
@@ -2291,12 +2334,20 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             // 注销权限服务的 dialogShower、askUserQuestionDialogShower 和 planApprovalDialogShower，防止内存泄漏
             try {
-                PermissionService permissionService = PermissionService.getInstance(project);
-                permissionService.unregisterDialogShower(project);
-                permissionService.unregisterAskUserQuestionDialogShower(project);
-                permissionService.unregisterPlanApprovalDialogShower(project);
+                // Get permission service using sessionId to avoid deprecated method
+                if (this.sessionId != null && !this.sessionId.isEmpty()) {
+                    PermissionService permissionService = PermissionService.getInstance(project, this.sessionId);
+                    permissionService.unregisterDialogShower(project);
+                    permissionService.unregisterAskUserQuestionDialogShower(project);
+                    permissionService.unregisterPlanApprovalDialogShower(project);
+
+                    // Clean up the session instance from static map to prevent memory leak
+                    // This removes the PermissionService instance from instancesBySessionId
+                    PermissionService.removeInstance(this.sessionId);
+                    LOG.info("Removed PermissionService instance for sessionId: " + this.sessionId);
+                }
             } catch (Exception e) {
-                LOG.warn("Failed to unregister dialog showers: " + e.getMessage());
+                LOG.warn("Failed to unregister dialog showers or remove session instance: " + e.getMessage());
             }
 
             LOG.info("开始清理窗口资源，项目: " + project.getName());

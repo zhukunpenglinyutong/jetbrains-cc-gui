@@ -1,5 +1,6 @@
 package com.github.claudecodegui.bridge;
 
+import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.ApplicationManager;
@@ -30,8 +31,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.github.claudecodegui.util.PlatformUtils;
-
 /**
  * Bridge 目录解析器
  * 负责查找和管理 ai-bridge 目录（统一的 Claude 和 Codex SDK 桥接）
@@ -46,7 +45,6 @@ public class BridgeDirectoryResolver {
     private static final String BRIDGE_VERSION_FILE = ".bridge-version";
     private static final String BRIDGE_PATH_PROPERTY = "claude.bridge.path";
     private static final String BRIDGE_PATH_ENV = "CLAUDE_BRIDGE_PATH";
-    private static final String PLUGIN_ID = "com.github.idea-claude-code-gui";
     private static final String PLUGIN_DIR_NAME = "idea-claude-code-gui";
 
     private volatile File cachedSdkDir = null;
@@ -209,7 +207,7 @@ public class BridgeDirectoryResolver {
 
     private void addPluginCandidates(List<File> possibleDirs) {
         try {
-            PluginId pluginId = PluginId.getId(PLUGIN_ID);
+            PluginId pluginId = PluginId.getId(PlatformUtils.getPluginId());
             IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
             if (descriptor != null) {
                 File pluginDir = descriptor.getPluginPath().toFile();
@@ -223,14 +221,14 @@ public class BridgeDirectoryResolver {
             String pluginsRoot = PathManager.getPluginsPath();
             if (!pluginsRoot.isEmpty()) {
                 addCandidate(possibleDirs, Paths.get(pluginsRoot, PLUGIN_DIR_NAME, SDK_DIR_NAME).toFile());
-                addCandidate(possibleDirs, Paths.get(pluginsRoot, PLUGIN_ID, SDK_DIR_NAME).toFile());
+                addCandidate(possibleDirs, Paths.get(pluginsRoot, PlatformUtils.getPluginId(), SDK_DIR_NAME).toFile());
             }
 
             String systemPath = PathManager.getSystemPath();
             if (!systemPath.isEmpty()) {
                 Path sandboxPath = Paths.get(systemPath, "plugins");
                 addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_DIR_NAME).resolve(SDK_DIR_NAME).toFile());
-                addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_ID).resolve(SDK_DIR_NAME).toFile());
+                addCandidate(possibleDirs, sandboxPath.resolve(PlatformUtils.getPluginId()).resolve(SDK_DIR_NAME).toFile());
             }
         } catch (Throwable t) {
             LOG.debug("[BridgeResolver] Cannot infer from plugin path: " + t.getMessage());
@@ -249,7 +247,7 @@ public class BridgeDirectoryResolver {
             while (classDir != null && classDir.exists()) {
                 addCandidate(possibleDirs, new File(classDir, SDK_DIR_NAME));
                 String name = classDir.getName();
-                if (PLUGIN_DIR_NAME.equals(name) || PLUGIN_ID.equals(name)) {
+                if (PLUGIN_DIR_NAME.equals(name) || PlatformUtils.getPluginId().equals(name)) {
                     break;
                 }
                 if (isRootDirectory(classDir)) {
@@ -318,10 +316,10 @@ public class BridgeDirectoryResolver {
         try {
             LOG.debug("[BridgeResolver] Looking for embedded ai-bridge.zip...");
 
-            PluginId pluginId = PluginId.getId(PLUGIN_ID);
+            PluginId pluginId = PluginId.getId(PlatformUtils.getPluginId());
             IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
             if (descriptor == null) {
-                LOG.debug("[BridgeResolver] Cannot get plugin descriptor by PluginId: " + PLUGIN_ID);
+                LOG.debug("[BridgeResolver] Cannot get plugin descriptor by PluginId: " + PlatformUtils.getPluginId());
 
                 // 尝试通过遍历所有插件来查找
                 for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
@@ -379,7 +377,7 @@ public class BridgeDirectoryResolver {
                         File maybeTopPlugins = new File(parent, "plugins");
                         if (maybeTopPlugins.exists() && maybeTopPlugins.isDirectory()) {
                             fallbackCandidates.add(new File(maybeTopPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
-                            fallbackCandidates.add(new File(maybeTopPlugins, PLUGIN_ID + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeTopPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
                         }
 
                         // system/config siblings under this parent
@@ -387,11 +385,11 @@ public class BridgeDirectoryResolver {
                         File maybeConfigPlugins = new File(parent, "config/plugins");
                         if (maybeSystemPlugins.exists() && maybeSystemPlugins.isDirectory()) {
                             fallbackCandidates.add(new File(maybeSystemPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
-                            fallbackCandidates.add(new File(maybeSystemPlugins, PLUGIN_ID + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeSystemPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
                         }
                         if (maybeConfigPlugins.exists() && maybeConfigPlugins.isDirectory()) {
                             fallbackCandidates.add(new File(maybeConfigPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
-                            fallbackCandidates.add(new File(maybeConfigPlugins, PLUGIN_ID + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeConfigPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
                         }
 
                         ancestor = parent;

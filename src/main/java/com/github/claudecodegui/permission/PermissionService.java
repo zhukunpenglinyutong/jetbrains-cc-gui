@@ -20,12 +20,29 @@ public class PermissionService {
     private static final Logger LOG = Logger.getInstance(PermissionService.class);
 
     private static PermissionService instance;
+    private static final Map<String, PermissionService> instancesBySessionId = new ConcurrentHashMap<>();
+
+    // 文件名模式常量
+    private static final String REQUEST_FILE_PREFIX = "request-%s-%s.json";
+    private static final String RESPONSE_FILE_PREFIX = "response-%s-%s.json";
+    private static final String ASK_USER_QUESTION_FILE_PREFIX = "ask-user-question-%s-%s.json";
+    private static final String ASK_USER_QUESTION_RESPONSE_FILE_PREFIX = "ask-user-question-response-%s-%s.json";
+    private static final String PLAN_APPROVAL_FILE_PREFIX = "plan-approval-%s-%s.json";
+    private static final String PLAN_APPROVAL_RESPONSE_FILE_PREFIX = "plan-approval-response-%s-%s.json";
+
+    // Session清理配置
+    private static final long SESSION_CLEANUP_INTERVAL_MS = TimeUnit.HOURS.toMillis(1);
+    private static final long SESSION_MAX_IDLE_TIME_MS = TimeUnit.HOURS.toMillis(24);
+    private static volatile long lastCleanupTime = System.currentTimeMillis();
+
     private final Project project;
     private final Path permissionDir;
+    private final String sessionId;
     private final Gson gson = new Gson();
     private WatchService watchService;
     private Thread watchThread;
     private boolean running = false;
+    private volatile long lastActivityTime = System.currentTimeMillis();
 
     // 记忆用户选择（工具+参数级别）
     private final Map<String, Integer> permissionMemory = new ConcurrentHashMap<>();
@@ -164,8 +181,10 @@ public class PermissionService {
         CompletableFuture<JsonObject> showPlanApprovalDialog(String requestId, JsonObject planData);
     }
 
-    private PermissionService(Project project) {
+    private PermissionService(Project project, String sessionId) {
         this.project = project;
+        this.sessionId = sessionId;
+
         // 统一权限通信目录：
         // 1. 优先读取环境变量 CLAUDE_PERMISSION_DIR（由 Java 启动 Node 进程时注入）
         // 2. 其次使用系统临时目录 {java.io.tmpdir}/claude-permission
@@ -178,6 +197,7 @@ public class PermissionService {
             this.permissionDir = Paths.get(System.getProperty("java.io.tmpdir"), "claude-permission");
             debugLog("INIT", "Env CLAUDE_PERMISSION_DIR not set, using tmp dir: " + this.permissionDir);
         }
+        debugLog("INIT", "Session ID: " + this.sessionId);
         try {
             Files.createDirectories(permissionDir);
             debugLog("INIT", "Permission directory created/verified: " + permissionDir);
@@ -187,11 +207,107 @@ public class PermissionService {
         }
     }
 
+    public String getSessionId() {
+        return this.sessionId;
+    }
+
+    /**
+     * Get or create PermissionService instance for the specified project and session.
+     * This is the recommended method for multi-window scenarios.
+     *
+     * @param project the project
+     * @param sessionId the session ID (should be unique per IDE instance)
+     * @return PermissionService instance
+     */
+    public static synchronized PermissionService getInstance(Project project, String sessionId) {
+        // 定期清理过期的session实例
+        cleanupStaleInstancesIfNeeded();
+
+        // 按 sessionId 管理多个实例，而不是全局单例
+        if (sessionId == null || sessionId.isEmpty()) {
+            // 兼容旧代码：如果没有 sessionId，使用全局单例（已弃用）
+            if (instance == null) {
+                instance = new PermissionService(project, java.util.UUID.randomUUID().toString());
+            }
+            return instance;
+        }
+
+        // 为每个 sessionId 创建或返回对应的实例
+        return instancesBySessionId.computeIfAbsent(sessionId, sid ->
+            new PermissionService(project, sid)
+        );
+    }
+
+    /**
+     * 清理指定 sessionId 的 PermissionService 实例.
+     * 在项目关闭时调用，防止内存泄漏
+     *
+     * @param sessionId Session ID
+     */
+    public static synchronized void removeInstance(String sessionId) {
+        if (sessionId != null && !sessionId.isEmpty()) {
+            PermissionService removed = instancesBySessionId.remove(sessionId);
+            if (removed != null) {
+                removed.stop();
+                LOG.info(String.format("PermissionService instance removed for sessionId=%s, remaining instances=%d",
+                    sessionId, instancesBySessionId.size()));
+            }
+        }
+    }
+
+    /**
+     * Get PermissionService instance for the specified project (deprecated).
+     * Please use getInstance(Project, String) instead to support multi-window scenarios.
+     *
+     * @param project the project
+     * @return PermissionService instance
+     * @deprecated Use {@link #getInstance(Project, String)} instead. This method will be removed in version 0.2.0.
+     */
+    @Deprecated(since = "0.1.6", forRemoval = true)
     public static synchronized PermissionService getInstance(Project project) {
+        LOG.warn("Deprecated getInstance(Project) called - please migrate to getInstance(Project, String sessionId). " +
+            "This method will be removed in a future version.");
         if (instance == null) {
-            instance = new PermissionService(project);
+            instance = new PermissionService(project, java.util.UUID.randomUUID().toString());
         }
         return instance;
+    }
+
+    /**
+     * 定期清理过期的session实例，防止内存泄漏.
+     * 当session超过24小时未活动时，自动清理
+     */
+    private static synchronized void cleanupStaleInstancesIfNeeded() {
+        long now = System.currentTimeMillis();
+        if (now - lastCleanupTime < SESSION_CLEANUP_INTERVAL_MS) {
+            return;
+        }
+
+        lastCleanupTime = now;
+
+        // 收集需要清理的 session，避免 ConcurrentModificationException
+        List<String> sessionsToRemove = new ArrayList<>();
+        for (Map.Entry<String, PermissionService> entry : instancesBySessionId.entrySet()) {
+            PermissionService service = entry.getValue();
+            if (now - service.lastActivityTime > SESSION_MAX_IDLE_TIME_MS) {
+                LOG.info(String.format("Marking stale session for cleanup: %s (idle for %d hours)",
+                    entry.getKey(), (now - service.lastActivityTime) / 3600000));
+                sessionsToRemove.add(entry.getKey());
+            }
+        }
+
+        // 批量清理
+        for (String sessionId : sessionsToRemove) {
+            PermissionService service = instancesBySessionId.remove(sessionId);
+            if (service != null) {
+                service.stop();
+            }
+        }
+
+        if (!sessionsToRemove.isEmpty()) {
+            LOG.info(String.format("Cleaned up %d stale session(s), remaining instances=%d",
+                sessionsToRemove.size(), instancesBySessionId.size()));
+        }
     }
 
     public void setDecisionListener(PermissionDecisionListener listener) {
@@ -350,73 +466,6 @@ public class PermissionService {
             dialogShowers.put(this.project, shower);
         }
         debugLog("CONFIG", "Dialog shower set (legacy): " + (shower != null));
-    }
-
-    /**
-     * 根据文件路径匹配项目
-     * 从 inputs 中提取文件路径，然后找到对应的项目
-     *
-     * @param inputs 权限请求的输入参数
-     * @return 匹配的项目对应的 DialogShower，如果匹配不到则返回第一个注册的
-     */
-    private PermissionDialogShower findDialogShowerByInputs(JsonObject inputs) {
-        if (dialogShowers.isEmpty()) {
-            debugLog("MATCH_PROJECT", "No dialog showers registered");
-            return null;
-        }
-
-        // 只有一个项目时，直接返回
-        if (dialogShowers.size() == 1) {
-            Map.Entry<Project, PermissionDialogShower> entry = dialogShowers.entrySet().iterator().next();
-            debugLog("MATCH_PROJECT", "Single project registered: " + entry.getKey().getName());
-            return entry.getValue();
-        }
-
-        // 从 inputs 中提取文件路径
-        String filePath = extractFilePathFromInputs(inputs);
-        if (filePath == null || filePath.isEmpty()) {
-            debugLog("MATCH_PROJECT", "No file path found in inputs, using first registered project");
-            return dialogShowers.values().iterator().next();
-        }
-
-        // 规范化文件路径（统一使用 Unix 风格的 / 分隔符）
-        String normalizedFilePath = normalizePath(filePath);
-        debugLog("MATCH_PROJECT", "Extracted file path: " + filePath +
-            (filePath.equals(normalizedFilePath) ? "" : " (normalized: " + normalizedFilePath + ")"));
-
-        // 遍历所有项目，找到路径匹配的项目（选择最长匹配）
-        Project bestMatch = null;
-        int longestMatchLength = 0;
-
-        for (Map.Entry<Project, PermissionDialogShower> entry : dialogShowers.entrySet()) {
-            Project project = entry.getKey();
-            String projectPath = project.getBasePath();
-
-            if (projectPath != null) {
-                // 规范化项目路径
-                String normalizedProjectPath = normalizePath(projectPath);
-
-                // 使用新的路径匹配方法（检查路径分隔符）
-                if (isFileInProject(normalizedFilePath, normalizedProjectPath)) {
-                    if (normalizedProjectPath.length() > longestMatchLength) {
-                        longestMatchLength = normalizedProjectPath.length();
-                        bestMatch = project;
-                        debugLog("MATCH_PROJECT", "Found potential match: " + project.getName() +
-                            " (path: " + projectPath + ", length: " + normalizedProjectPath.length() + ")");
-                    }
-                }
-            }
-        }
-
-        if (bestMatch != null) {
-            debugLog("MATCH_PROJECT", "Matched project: " + bestMatch.getName() + " (path: " + bestMatch.getBasePath() + ")");
-            return dialogShowers.get(bestMatch);
-        }
-
-        // 匹配失败，使用第一个注册的项目
-        Map.Entry<Project, PermissionDialogShower> firstEntry = dialogShowers.entrySet().iterator().next();
-        debugLog("MATCH_PROJECT", "No matching project found, using first: " + firstEntry.getKey().getName());
-        return firstEntry.getValue();
     }
 
     /**
@@ -608,7 +657,7 @@ public class PermissionService {
     }
 
     /**
-     * 启动权限服务
+     * 启动权限服务.
      */
     public void start() {
         if (running) {
@@ -619,17 +668,18 @@ public class PermissionService {
         // 清理旧的响应文件,避免误处理
         cleanupOldResponseFiles();
 
-        running = true;
+        this.running = true;
+        this.lastActivityTime = System.currentTimeMillis(); // 更新活动时间
 
-        watchThread = new Thread(this::watchLoop, "PermissionWatcher");
-        watchThread.setDaemon(true);
-        watchThread.start();
+        this.watchThread = new Thread(this::watchLoop, "PermissionWatcher");
+        this.watchThread.setDaemon(true);
+        this.watchThread.start();
 
-        debugLog("START", "Started polling on: " + permissionDir);
+        debugLog("START", "Started polling on: " + this.permissionDir);
     }
 
     /**
-     * 清理旧的响应文件和请求文件
+     * 清理旧的响应文件和请求文件（只清理属于自己 session 的文件）
      */
     private void cleanupOldResponseFiles() {
         try {
@@ -638,8 +688,9 @@ public class PermissionService {
                 return;
             }
 
-            // 清理普通权限响应文件
-            File[] responseFiles = dir.listFiles((d, name) -> name.startsWith("response-") && name.endsWith(".json"));
+            // 清理普通权限响应文件（只清理自己的 session）
+            File[] responseFiles = dir.listFiles((d, name) ->
+                name.startsWith("response-" + sessionId + "-") && name.endsWith(".json"));
             if (responseFiles != null) {
                 for (File file : responseFiles) {
                     try {
@@ -651,8 +702,9 @@ public class PermissionService {
                 }
             }
 
-            // 清理普通权限请求文件（可能是未完成的请求）
-            File[] requestFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
+            // 清理普通权限请求文件（只清理自己的 session）
+            File[] requestFiles = dir.listFiles((d, name) ->
+                name.startsWith("request-" + sessionId + "-") && name.endsWith(".json"));
             if (requestFiles != null) {
                 for (File file : requestFiles) {
                     try {
@@ -664,9 +716,9 @@ public class PermissionService {
                 }
             }
 
-            // 清理所有 AskUserQuestion 相关文件（请求和响应）
+            // 清理所有 AskUserQuestion 相关文件（只清理自己的 session）
             File[] askFiles = dir.listFiles((d, name) ->
-                name.startsWith("ask-user-question-") && name.endsWith(".json"));
+                name.startsWith("ask-user-question-" + sessionId + "-") && name.endsWith(".json"));
             if (askFiles != null) {
                 for (File file : askFiles) {
                     try {
@@ -678,9 +730,9 @@ public class PermissionService {
                 }
             }
 
-            // 清理所有 PlanApproval 相关文件（请求和响应）
+            // 清理所有 PlanApproval 相关文件（只清理自己的 session）
             File[] planApprovalFiles = dir.listFiles((d, name) ->
-                name.startsWith("plan-approval-") && name.endsWith(".json"));
+                name.startsWith("plan-approval-" + sessionId + "-") && name.endsWith(".json"));
             if (planApprovalFiles != null) {
                 for (File file : planApprovalFiles) {
                     try {
@@ -692,7 +744,7 @@ public class PermissionService {
                 }
             }
 
-            debugLog("CLEANUP", "All old permission files cleanup complete");
+            debugLog("CLEANUP", "Session-specific permission files cleanup complete");
         } catch (Exception e) {
             debugLog("CLEANUP_ERROR", "Error during cleanup: " + e.getMessage());
         }
@@ -713,18 +765,19 @@ public class PermissionService {
                     dir.mkdirs();
                 }
 
-                // 监控普通权限请求文件
-                File[] requestFiles = dir.listFiles((d, name) -> name.startsWith("request-") && name.endsWith(".json"));
+                // 监控普通权限请求文件（只处理包含自己 session ID 的文件）
+                File[] requestFiles = dir.listFiles((d, name) ->
+                    name.startsWith("request-" + sessionId + "-") && name.endsWith(".json"));
 
-                // 监控 AskUserQuestion 请求文件 (排除响应文件)
+                // 监控 AskUserQuestion 请求文件 (排除响应文件，只处理自己的 session)
                 File[] askUserQuestionFiles = dir.listFiles((d, name) ->
-                    name.startsWith("ask-user-question-") &&
+                    name.startsWith("ask-user-question-" + sessionId + "-") &&
                     !name.startsWith("ask-user-question-response-") &&
                     name.endsWith(".json"));
 
-                // 监控 PlanApproval 请求文件 (排除响应文件)
+                // 监控 PlanApproval 请求文件 (排除响应文件，只处理自己的 session)
                 File[] planApprovalFiles = dir.listFiles((d, name) ->
-                    name.startsWith("plan-approval-") &&
+                    name.startsWith("plan-approval-" + sessionId + "-") &&
                     !name.startsWith("plan-approval-response-") &&
                     name.endsWith(".json"));
 
@@ -788,11 +841,12 @@ public class PermissionService {
     private final Set<String> processingRequests = ConcurrentHashMap.newKeySet();
 
     /**
-     * 处理权限请求
+     * 处理权限请求.
      */
     private void handlePermissionRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
         long startTime = System.currentTimeMillis();
+        this.lastActivityTime = startTime; // 更新活动时间
         debugLog("HANDLE_REQUEST", "Processing request file: " + fileName);
 
         // 检查是否正在处理该请求
@@ -854,8 +908,8 @@ public class PermissionService {
                 return;
             }
 
-            // 根据文件路径匹配项目，找到对应的前端弹窗显示器
-            PermissionDialogShower matchedDialogShower = findDialogShowerByInputs(inputs);
+            // 根据工作目录匹配项目，找到对应的前端弹窗显示器（支持多 IDEA 实例）
+            PermissionDialogShower matchedDialogShower = findDialogShowerByCwd(request, dialogShowers, "MATCH_PROJECT");
 
             // 如果有前端弹窗显示器，使用异步方式
             if (matchedDialogShower != null) {
@@ -1033,7 +1087,7 @@ public class PermissionService {
     }
 
     /**
-     * 写入响应文件
+     * 写入响应文件.
      */
     private void writeResponse(String requestId, boolean allow) {
         debugLog("WRITE_RESPONSE_START", String.format("Writing response for requestId=%s, allow=%s", requestId, allow));
@@ -1041,8 +1095,9 @@ public class PermissionService {
             JsonObject response = new JsonObject();
             response.addProperty("allow", allow);
 
-            Path responseFile = permissionDir.resolve("response-" + requestId + ".json");
-            String responseContent = gson.toJson(response);
+            String fileName = String.format(RESPONSE_FILE_PREFIX, this.sessionId, requestId);
+            Path responseFile = this.permissionDir.resolve(fileName);
+            String responseContent = this.gson.toJson(response);
             debugLog("RESPONSE_CONTENT", "Response JSON: " + responseContent);
             debugLog("RESPONSE_FILE", "Target file: " + responseFile);
 
@@ -1195,7 +1250,7 @@ public class PermissionService {
     }
 
     /**
-     * 写入 AskUserQuestion 响应文件
+     * 写入 AskUserQuestion 响应文件.
      * 响应格式：{ "answers": { "问题文本": "答案" } }
      */
     private void writeAskUserQuestionResponse(String requestId, JsonObject answers) {
@@ -1204,8 +1259,9 @@ public class PermissionService {
             JsonObject response = new JsonObject();
             response.add("answers", answers);
 
-            Path responseFile = permissionDir.resolve("ask-user-question-response-" + requestId + ".json");
-            String responseContent = gson.toJson(response);
+            String fileName = String.format(ASK_USER_QUESTION_RESPONSE_FILE_PREFIX, this.sessionId, requestId);
+            Path responseFile = this.permissionDir.resolve(fileName);
+            String responseContent = this.gson.toJson(response);
             debugLog("ASK_RESPONSE_CONTENT", "Response JSON: " + responseContent);
             debugLog("ASK_RESPONSE_FILE", "Target file: " + responseFile);
 
@@ -1331,7 +1387,7 @@ public class PermissionService {
     }
 
     /**
-     * 写入 PlanApproval 响应文件
+     * 写入 PlanApproval 响应文件.
      * 响应格式：{ "approved": boolean, "targetMode": string }
      */
     private void writePlanApprovalResponse(String requestId, boolean approved, String targetMode) {
@@ -1342,8 +1398,9 @@ public class PermissionService {
             response.addProperty("approved", approved);
             response.addProperty("targetMode", targetMode);
 
-            Path responseFile = permissionDir.resolve("plan-approval-response-" + requestId + ".json");
-            String responseContent = gson.toJson(response);
+            String fileName = String.format(PLAN_APPROVAL_RESPONSE_FILE_PREFIX, this.sessionId, requestId);
+            Path responseFile = this.permissionDir.resolve(fileName);
+            String responseContent = this.gson.toJson(response);
             debugLog("PLAN_RESPONSE_CONTENT", "Response JSON: " + responseContent);
             debugLog("PLAN_RESPONSE_FILE", "Target file: " + responseFile);
 

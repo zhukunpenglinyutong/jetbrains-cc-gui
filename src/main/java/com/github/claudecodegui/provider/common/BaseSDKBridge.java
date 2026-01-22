@@ -101,6 +101,14 @@ public abstract class BaseSDKBridge {
     }
 
     /**
+     * Get the session ID for this bridge instance.
+     * @return Session ID
+     */
+    public String getSessionId() {
+        return envConfigurator.getSessionId();
+    }
+
+    /**
      * Interrupt a channel.
      */
     public void interruptChannel(String channelId) {

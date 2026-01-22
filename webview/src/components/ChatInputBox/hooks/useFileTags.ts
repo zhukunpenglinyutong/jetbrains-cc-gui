@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
 import { getFileIcon } from '../../../utils/fileIcons.js';
-import { icon_folder } from '../../../utils/icons.js';
+import { icon_folder, icon_terminal, icon_server } from '../../../utils/icons.js';
 import type { FileTagInfo } from '../types.js';
 
 interface UseFileTagsOptions {
@@ -126,11 +126,36 @@ export function useFileTags({
       // Get display filename (with line number, for display)
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
 
-      // Determine if file or directory (using pure filename)
-      const isDirectory = !pureFileName.includes('.');
+      /**
+       * Protocol type detection for special references.
+       *
+       * Supported protocols:
+       * - terminal:// - Terminal session output
+       * - service://  - Run/Debug service output
+       *
+       * To add a new protocol type:
+       * 1. Add protocol check here (e.g., const isNewProtocol = pureFilePath.startsWith('newprotocol://'))
+       * 2. Add icon selection in the iconSvg logic below
+       * 3. Update backend ClaudeSession.java processReferences() method
+       * 4. Import the corresponding icon SVG
+       *
+       * Future protocol candidates:
+       * - git://      - Git diff/status output
+       * - browser://  - Browser/DevTools context
+       * - debug://    - Debug session variables
+       */
+      const isTerminal = pureFilePath.startsWith('terminal://');
+      const isService = pureFilePath.startsWith('service://');
+
+      // Determine if file or directory (only when not terminal/service)
+      const isDirectory = !isTerminal && !isService && !pureFileName.includes('.');
 
       let iconSvg = '';
-      if (isDirectory) {
+      if (isTerminal) {
+        iconSvg = icon_terminal;
+      } else if (isService) {
+        iconSvg = icon_server;
+      } else if (isDirectory) {
         iconSvg = icon_folder;
       } else {
         const extension = pureFileName.indexOf('.') !== -1 ? pureFileName.split('.').pop() : '';

@@ -73,6 +73,8 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <!-- Optional: Terminal support for terminal output monitoring -->
+    <depends optional="true" config-file="terminal-features.xml">org.jetbrains.plugins.terminal</depends>
     <!-- Optional: Java support for enhanced context collection in Java/Kotlin IDEs -->
     <depends optional="true" config-file="java-features.xml">com.intellij.java</depends>
     <!-- Optional: Python support for enhanced context collection in PyCharm/IDEA with Python plugin -->
@@ -91,6 +93,9 @@
 
         <!-- Cleanup old ai-bridge cache when plugin version changes -->
         <postStartupActivity implementation="com.github.claudecodegui.startup.PluginUpdateListener"/>
+
+        <!-- Monitor Run/Debug Service Output -->
+        <postStartupActivity implementation="com.github.claudecodegui.service.RunConfigMonitorService"/>
 
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
@@ -116,6 +121,9 @@
             <add-to-group group-id="EditorPopupMenu"
                            anchor="after"
                            relative-to-action="ClaudeCodeGUI.SendSelectionToTerminalAction"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift Q"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift Q"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="meta shift Q"/>
         </action>
 
         <!-- Create New Tab Action (can be invoked via Find Action or programmatically) -->
@@ -124,5 +132,11 @@
                 icon="AllIcons.General.Add"
                 text="New Chat Tab"
                 description="Create a new chat tab in Claude Code GUI tool window"/>
+
+        <!-- Open DevTools Action for JCEF debugging -->
+        <action id="ClaudeCodeGUI.OpenDevToolsAction"
+                class="com.github.claudecodegui.OpenDevToolsAction"
+                text="Open DevTools"
+                description="Open JCEF DevTools for debugging"/>
     </actions>
 </idea-plugin>

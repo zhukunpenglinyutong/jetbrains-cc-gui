@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * Claude Agent SDK bridge.
@@ -31,6 +32,28 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     private static final String NODE_SCRIPT = "simple-query.js";
     private static final String SLASH_COMMANDS_CHANNEL_ID = "__slash_commands__";
     private static final String MCP_STATUS_CHANNEL_ID = "__mcp_status__";
+
+    /** Maximum characters to preview in log output */
+    private static final int LOG_PREVIEW_MAX_CHARS = 500;
+
+    /**
+     * Pattern to match sensitive data for log sanitization.
+     * Matches common sensitive field names followed by their values:
+     * - api_key, api-key, apikey
+     * - token, access_token, refresh_token
+     * - password, passwd
+     * - secret, client_secret
+     * - authorization, bearer
+     * - credential, credentials
+     * - private_key, private-key
+     * - access_key, access-key
+     */
+    private static final Pattern SENSITIVE_DATA_PATTERN = Pattern.compile(
+            "(api[_-]?key|token|access[_-]?token|refresh[_-]?token|password|passwd|secret|client[_-]?secret|" +
+            "authorization|bearer|credential|credentials|private[_-]?key|access[_-]?key)" +
+            "[\"']?\\s*[:=]\\s*[\"']?[^\"'\\s,}]{8,}",
+            Pattern.CASE_INSENSITIVE
+    );
 
     public ClaudeSDKBridge() {
         super(ClaudeSDKBridge.class);
@@ -577,6 +600,13 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     LOG.info("[Streaming] ✓ Adding streaming to stdinInput: " + streaming);
                 }
                 String stdinJson = gson.toJson(stdinInput);
+
+                // Log prompt preview with sensitive data sanitized
+                String sanitizedJson = sanitizeSensitiveData(stdinJson);
+                String preview = sanitizedJson.length() > LOG_PREVIEW_MAX_CHARS
+                    ? sanitizedJson.substring(0, LOG_PREVIEW_MAX_CHARS) + "\n... (truncated, total: " + stdinJson.length() + " chars)"
+                    : sanitizedJson;
+                LOG.debug("[PROMPT] Sending to Node.js (" + stdinJson.length() + " chars):\n" + preview);
 
                 List<String> command = new ArrayList<>();
                 command.add(node);
@@ -1287,6 +1317,20 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         if (endIdx == -1) return null;
 
         return text.substring(startIdx, endIdx);
+    }
+
+    /**
+     * Sanitize sensitive data from JSON string for logging.
+     * Replaces API keys, tokens, passwords, and secrets with [REDACTED].
+     *
+     * @param json The JSON string to sanitize
+     * @return Sanitized JSON string safe for logging
+     */
+    private String sanitizeSensitiveData(String json) {
+        if (json == null || json.isEmpty()) {
+            return json;
+        }
+        return SENSITIVE_DATA_PATTERN.matcher(json).replaceAll("$1: [REDACTED]");
     }
 
     /**

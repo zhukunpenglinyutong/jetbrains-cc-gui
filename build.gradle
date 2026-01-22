@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.6-beta1'
+version = '0.1.6-beta1-fix'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -90,6 +90,8 @@ dependencies {
             bundledPlugin('com.intellij.java')
             // Add Python plugin to support compiling PythonContextCollector
             plugin('PythonCore', '243.22562.145')
+            // Enable Terminal Plugin support
+            bundledPlugin('org.jetbrains.plugins.terminal')
         }
 
         instrumentationTools()
