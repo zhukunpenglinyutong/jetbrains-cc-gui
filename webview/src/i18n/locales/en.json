@@ -189,6 +189,11 @@
     "communityDesc": "Scan the QR code below to join the official WeChat group for the latest news and technical support",
     "communityQrTip": "Scan with WeChat to join the community",
     "communityQrAlt": "Official WeChat community QR code",
+    "sponsor": "Sponsor",
+    "sponsorDesc": "If this project helps you, consider sponsoring to support ongoing maintenance!",
+    "alipay": "Alipay",
+    "wechatPay": "WeChat Pay",
+    "paypal": "PayPal",
     "provider": {
       "currentConfig": "Current ClaudeCode Configuration",
       "loading": "Loading...",

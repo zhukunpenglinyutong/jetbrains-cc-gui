@@ -337,6 +337,27 @@
     transform: translateY(-2px);
 }
 
+/* Mermaid Diagram Styles */
+.mermaid-diagram {
+    padding: 16px;
+    background: var(--color-code-block-bg);
+    border-radius: 6px;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+
+    svg {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+.code-block-wrapper.mermaid-rendered {
+    .copy-code-btn {
+        z-index: 11;
+    }
+}
+
 .markdown-content code {
     font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     background-color: var(--color-code-inline-bg);

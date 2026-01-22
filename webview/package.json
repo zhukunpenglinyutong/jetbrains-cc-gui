@@ -26,6 +26,7 @@
     "i18next": "^25.7.2",
     "marked": "^17.0.1",
     "marked-highlight": "^2.2.3",
+    "mermaid": "^11.12.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^16.4.1",
