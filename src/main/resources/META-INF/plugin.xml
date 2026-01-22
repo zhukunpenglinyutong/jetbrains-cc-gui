@@ -138,5 +138,13 @@
                 class="com.github.claudecodegui.OpenDevToolsAction"
                 text="Open DevTools"
                 description="Open JCEF DevTools for debugging"/>
+
+        <!-- 从文件树发送文件路径到输入框的 Action -->
+        <action id="ClaudeCodeGUI.SendFilePathToInputAction"
+                class="com.github.claudecodegui.SendFilePathToInputAction"
+                icon="/icons/send-to-terminal.svg">
+            <!-- 添加到项目文件树右键菜单 -->
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
+        </action>
     </actions>
 </idea-plugin>
