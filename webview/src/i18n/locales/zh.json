@@ -189,6 +189,11 @@
     "communityDesc": "扫描下方二维码加入官方微信交流群，获取最新资讯和技术支持",
     "communityQrTip": "使用微信扫一扫加入交流群",
     "communityQrAlt": "官方微信交流群二维码",
+    "sponsor": "赞助支持",
+    "sponsorDesc": "如果这个项目对你有帮助，欢迎赞助支持，你的支持是我持续维护的动力！",
+    "alipay": "支付宝",
+    "wechatPay": "微信",
+    "paypal": "PayPal",
     "provider": {
       "currentConfig": "当前ClaudeCode配置",
       "loading": "加载中...",

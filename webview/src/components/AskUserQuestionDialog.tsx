@@ -105,8 +105,12 @@ const AskUserQuestionDialog = ({
     );
   }
 
-  const currentQuestion = normalizedQuestions[currentQuestionIndex]!;
-  const isLastQuestion = currentQuestionIndex === normalizedQuestions.length - 1;
+  // FIX: 确保 currentQuestionIndex 不会越界
+  // 当 request 变化导致 normalizedQuestions 长度减少时，
+  // currentQuestionIndex 可能仍是旧值（因为 useEffect 的 state 更新是异步的）
+  const safeQuestionIndex = Math.min(currentQuestionIndex, normalizedQuestions.length - 1);
+  const currentQuestion = normalizedQuestions[safeQuestionIndex];
+  const isLastQuestion = safeQuestionIndex === normalizedQuestions.length - 1;
   const currentAnswerSet = answers[currentQuestion.question] || new Set<string>();
 
   const handleOptionToggle = (label: string) => {
@@ -141,8 +145,8 @@ const AskUserQuestionDialog = ({
   };
 
   const handleBack = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1);
+    if (safeQuestionIndex > 0) {
+      setCurrentQuestionIndex((prev) => Math.max(0, prev - 1));
     }
   };
 
@@ -174,7 +178,7 @@ const AskUserQuestionDialog = ({
         </h3>
         <div className="ask-user-question-dialog-progress">
           {t('askUserQuestion.progress', '问题 {{current}} / {{total}}', {
-            current: currentQuestionIndex + 1,
+            current: safeQuestionIndex + 1,
             total: normalizedQuestions.length,
           })}
         </div>
@@ -230,7 +234,7 @@ const AskUserQuestionDialog = ({
           </button>
 
           <div className="action-buttons-right">
-            {currentQuestionIndex > 0 && (
+            {safeQuestionIndex > 0 && (
               <button
                 className="action-button secondary"
                 onClick={handleBack}

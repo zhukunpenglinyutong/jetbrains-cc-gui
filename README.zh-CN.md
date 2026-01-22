@@ -235,6 +235,11 @@ AGPL-3.0
         <img src="https://avatars.githubusercontent.com/u/248376932?size=100" width="100" height="100" alt="geofqiu-hub" style="border-radius: 50%;" />
       </a>
     </td>
+    <td align="center">
+      <a href="https://github.com/1lck">
+        <img src="https://avatars.githubusercontent.com/u/159525154?size=100" width="100" height="100" alt="1lck" style="border-radius: 50%;" />
+      </a>
+    </td>
   </tr>
 </table>
 
@@ -255,6 +260,11 @@ AGPL-3.0
       <img src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/wx.jpg" width="200" alt="微信">
       <br>
       <b>微信</b>
+    </td>
+    <td align="center">
+      <img src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/paypal.png" width="200" alt="PayPal">
+      <br>
+      <b>PayPal</b>
     </td>
   </tr>
 </table>

@@ -177,6 +177,11 @@
     "communityDesc": "掃描下方二維碼加入官方微信交流群，獲取最新資訊和技術支援",
     "communityQrTip": "使用微信掃一掃加入交流群",
     "communityQrAlt": "官方微信交流群二維碼",
+    "sponsor": "贊助支持",
+    "sponsorDesc": "如果這個項目對你有幫助，歡迎贊助支持，你的支持是我持續維護的動力！",
+    "alipay": "支付寶",
+    "wechatPay": "微信",
+    "paypal": "PayPal",
     "provider": {
       "currentConfig": "目前ClaudeCode配置",
       "loading": "載入中...",
