@@ -240,6 +240,39 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
 
 ---
 
+## 赞助支持
+
+如果这个项目对你有帮助，欢迎赞助支持，你的支持是我持续维护的动力！
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/zfb.jpg" width="200" alt="支付宝">
+      <br>
+      <b>支付宝</b>
+    </td>
+    <td align="center">
+      <img src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/wx.jpg" width="200" alt="微信">
+      <br>
+      <b>微信</b>
+    </td>
+  </tr>
+</table>
+
+### 赞助者列表
+
+感谢以下赞助者的支持 ❤️
+
+<!-- SPONSORS:START -->
+| 名称 | 金额 | 日期 |
+|------|------|------|
+| 虚位以待 | - | - |
+<!-- SPONSORS:END -->
+
+> 无论多少金额，我会将你添加到赞助者列表中，感谢各位的支持
+
+---
+
 ## Star History
 
 [![Star History](https://api.star-history.com/svg?repos=zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)](https://www.star-history.com/#zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)
