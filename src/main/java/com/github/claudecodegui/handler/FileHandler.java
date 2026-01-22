@@ -4,6 +4,7 @@ import com.github.claudecodegui.model.FileSortItem;
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.github.claudecodegui.util.EditorFileUtils;
+import com.github.claudecodegui.util.IgnoreRuleMatcher;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.BrowserUtil;
@@ -21,6 +22,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -37,6 +39,40 @@ public class FileHandler extends BaseMessageHandler {
     private static final int MAX_SEARCH_RESULTS = 200;
     private static final int MAX_SEARCH_DEPTH = 15;
     private static final int MAX_DIRECTORY_CHILDREN = 100;
+
+    // 始终跳过的目录（版本控制、包管理、构建缓存、IDE 配置等）
+    private static final Set<String> ALWAYS_SKIP_DIRS = Set.of(
+            // 版本控制
+            ".git", ".svn", ".hg", ".bzr",
+            // 包管理和依赖缓存
+            "node_modules", "__pycache__", ".pnpm", "bower_components",
+            // Java/JVM 构建缓存
+            ".m2", ".gradle", ".ivy2", ".sbt", ".coursier",
+            // 其他语言包管理缓存
+            ".npm", ".yarn", ".pnpm-store", ".cargo", ".rustup",
+            ".pub-cache", ".gem", ".bundle", ".composer", ".nuget",
+            ".cache", ".local",
+            // 构建输出目录
+            "target", "build", "dist", "out", "output", "bin", "obj",
+            // IDE 和编辑器配置
+            ".idea", ".vscode", ".vs", ".eclipse", ".settings",
+            // 虚拟环境
+            "venv", ".venv", "env", ".env", "virtualenv",
+            // 测试和覆盖率
+            "coverage", ".nyc_output", ".pytest_cache", "__snapshots__",
+            // 临时和日志
+            "tmp", "temp", "logs", ".tmp", ".temp"
+    );
+
+    // 始终跳过的文件
+    private static final Set<String> ALWAYS_SKIP_FILES = Set.of(
+            ".DS_Store", "Thumbs.db", "desktop.ini"
+    );
+
+    // Ignore 规则匹配器缓存
+    private IgnoreRuleMatcher cachedIgnoreMatcher = null;
+    private String cachedIgnoreMatcherBasePath = null;
+    private long cachedGitignoreLastModified = 0;
 
     public FileHandler(HandlerContext context) {
         super(context);
@@ -205,13 +241,16 @@ public class FileHandler extends BaseMessageHandler {
     private void collectFileSystemFiles(List<JsonObject> files, FileSet fileSet, String basePath, FileListRequest request) {
         List<JsonObject> diskFiles = new ArrayList<>();
 
+        // 获取或创建 ignore 规则匹配器
+        IgnoreRuleMatcher ignoreMatcher = getOrCreateIgnoreMatcher(basePath);
+
         if (request.hasQuery) {
             File baseDir = new File(basePath);
-            collectFilesRecursive(baseDir, basePath, diskFiles, request, 0);
+            collectFilesRecursive(baseDir, basePath, diskFiles, request, 0, ignoreMatcher);
         } else {
             File targetDir = new File(basePath, request.currentPath);
             if (targetDir.exists() && targetDir.isDirectory()) {
-                listDirectChildren(targetDir, basePath, diskFiles);
+                listDirectChildren(targetDir, basePath, diskFiles, ignoreMatcher);
             }
         }
 
@@ -615,7 +654,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 列出目录的直接子文件/文件夹（不递归）
      */
-    private void listDirectChildren(File dir, String basePath, List<JsonObject> files) {
+    private void listDirectChildren(File dir, String basePath, List<JsonObject> files, IgnoreRuleMatcher ignoreMatcher) {
         if (!dir.isDirectory()) return;
 
         File[] children = dir.listFiles();
@@ -627,12 +666,12 @@ public class FileHandler extends BaseMessageHandler {
 
             String name = child.getName();
             boolean isDir = child.isDirectory();
+            String relativePath = getRelativePath(child, basePath);
 
-            if (shouldSkipInSearch(name, isDir)) {
+            if (shouldSkipInSearch(name, isDir, relativePath, ignoreMatcher)) {
                 continue;
             }
 
-            String relativePath = getRelativePath(child, basePath);
             JsonObject fileObj = createFileObject(child, name, relativePath);
             files.add(fileObj);
             added++;
@@ -642,7 +681,7 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * 递归收集文件
      */
-    private void collectFilesRecursive(File dir, String basePath, List<JsonObject> files, FileListRequest request, int depth) {
+    private void collectFilesRecursive(File dir, String basePath, List<JsonObject> files, FileListRequest request, int depth, IgnoreRuleMatcher ignoreMatcher) {
         if (depth > MAX_SEARCH_DEPTH || files.size() >= MAX_SEARCH_RESULTS) return;
         if (!dir.isDirectory()) return;
 
@@ -655,12 +694,11 @@ public class FileHandler extends BaseMessageHandler {
 
             String name = child.getName();
             boolean isDir = child.isDirectory();
+            String relativePath = getRelativePath(child, basePath);
 
-            if (shouldSkipInSearch(name, isDir)) {
+            if (shouldSkipInSearch(name, isDir, relativePath, ignoreMatcher)) {
                 continue;
             }
-
-            String relativePath = getRelativePath(child, basePath);
 
             // 检查是否匹配查询
             boolean matches = true;
@@ -675,30 +713,73 @@ public class FileHandler extends BaseMessageHandler {
 
             // 目录总是递归搜索（即使目录本身不匹配，其子文件可能匹配）
             if (isDir) {
-                collectFilesRecursive(child, basePath, files, request, depth + 1);
+                collectFilesRecursive(child, basePath, files, request, depth + 1, ignoreMatcher);
             }
         }
     }
 
     /**
-     * 判断是否应该跳过文件或目录
+     * 判断是否应该跳过文件或目录（基础版本，仅检查硬编码列表）
      */
     private boolean shouldSkipInSearch(String name, boolean isDirectory) {
-        // 通用跳过
-        if (name.equals(".git") || name.equals(".svn") || name.equals(".hg")) {
-            return true;
-        }
-        if (name.equals("node_modules") || name.equals("__pycache__")) {
-            return true;
-        }
-
-        // 目录特有
         if (isDirectory) {
-            return (name.equals("target") || name.equals("build") || name.equals("dist") || name.equals("out"));
+            return ALWAYS_SKIP_DIRS.contains(name);
+        }
+        return ALWAYS_SKIP_FILES.contains(name);
+    }
+
+    /**
+     * 判断是否应该跳过文件或目录（包含 .gitignore 规则检查）
+     */
+    private boolean shouldSkipInSearch(String name, boolean isDirectory, String relativePath, IgnoreRuleMatcher matcher) {
+        // 首先检查硬编码的排除列表
+        if (shouldSkipInSearch(name, isDirectory)) {
+            return true;
         }
 
-        // 文件特有
-        return name.equals(".DS_Store") || name.equals(".idea");
+        // 然后检查 .gitignore 规则
+        if (matcher != null && relativePath != null) {
+            return matcher.isIgnored(relativePath, isDirectory);
+        }
+
+        return false;
+    }
+
+    /**
+     * 获取或创建 Ignore 规则匹配器
+     */
+    private IgnoreRuleMatcher getOrCreateIgnoreMatcher(String basePath) {
+        if (basePath == null) {
+            return null;
+        }
+
+        File gitignoreFile = new File(basePath, ".gitignore");
+        long currentLastModified = gitignoreFile.exists() ? gitignoreFile.lastModified() : 0;
+
+        // 检查缓存是否有效
+        boolean cacheValid = cachedIgnoreMatcher != null
+                && basePath.equals(cachedIgnoreMatcherBasePath)
+                && currentLastModified == cachedGitignoreLastModified;
+
+        if (cacheValid) {
+            return cachedIgnoreMatcher;
+        }
+
+        // 重新创建 matcher
+        try {
+            IgnoreRuleMatcher matcher = IgnoreRuleMatcher.forProject(basePath);
+            LOG.debug("[FileHandler] Created IgnoreRuleMatcher with " + matcher.getRuleCount() + " rules for " + basePath);
+
+            // 更新缓存
+            cachedIgnoreMatcher = matcher;
+            cachedIgnoreMatcherBasePath = basePath;
+            cachedGitignoreLastModified = currentLastModified;
+
+            return matcher;
+        } catch (Exception e) {
+            LOG.warn("[FileHandler] Failed to create IgnoreRuleMatcher: " + e.getMessage());
+            return null;
+        }
     }
 
     /**

@@ -233,6 +233,27 @@ const App = () => {
     }
   };
 
+  // 全局拖拽事件拦截 - 阻止浏览器默认的文件打开行为
+  // 这确保拖拽文件到插件任意位置都不会触发浏览器打开文件
+  useEffect(() => {
+    const preventDefaultDragDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // 在 document 级别拦截所有 dragover 和 drop 事件
+    document.addEventListener('dragover', preventDefaultDragDrop);
+    document.addEventListener('drop', preventDefaultDragDrop);
+    // 同时处理 dragenter 和 dragleave 以防止任何意外行为
+    document.addEventListener('dragenter', preventDefaultDragDrop);
+
+    return () => {
+      document.removeEventListener('dragover', preventDefaultDragDrop);
+      document.removeEventListener('drop', preventDefaultDragDrop);
+      document.removeEventListener('dragenter', preventDefaultDragDrop);
+    };
+  }, []);
+
   // 初始化主题和字体缩放
   useEffect(() => {
     console.log('[Frontend][Theme] Initializing theme system');
