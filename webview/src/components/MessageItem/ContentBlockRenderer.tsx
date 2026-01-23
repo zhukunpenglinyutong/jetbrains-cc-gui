@@ -141,7 +141,12 @@ export function ContentBlockRenderer({
     }
 
     if (toolName === 'task') {
-      return <TaskExecutionBlock input={block.input} />;
+      return (
+        <TaskExecutionBlock
+          input={block.input}
+          result={findToolResult(block.id, messageIndex)}
+        />
+      );
     }
 
     if (isToolName(block.name, EDIT_TOOL_NAMES)) {

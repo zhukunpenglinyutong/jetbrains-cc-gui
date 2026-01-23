@@ -93,6 +93,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       onOpenAgentSettings,
       hasMessages,
       onRewind,
+      statusPanelExpanded = true,
+      onToggleStatusPanel,
       sdkInstalled = true, // Default to true to avoid disabling input box on initial state
       sdkStatusLoading = false, // SDK status loading state
       onInstallSdk,
@@ -376,6 +378,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         }
       }
     }, [
+      justRenderedTagRef,
       getTextContent,
       getCursorPosition,
       detectTrigger,
@@ -1124,6 +1127,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           currentProvider={currentProvider}
           hasMessages={hasMessages}
           onRewind={onRewind}
+          statusPanelExpanded={statusPanelExpanded}
+          onToggleStatusPanel={onToggleStatusPanel}
         />
 
         {/* Input area */}

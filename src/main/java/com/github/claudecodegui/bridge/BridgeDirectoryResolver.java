@@ -169,10 +169,11 @@ public class BridgeDirectoryResolver {
             LOG.warn("  - " + dir.getAbsolutePath() + " (exists: " + dir.exists() + ")");
         }
 
-        // 返回默认值
-        this.cachedSdkDir = new File(currentDir, SDK_DIR_NAME);
-        LOG.warn("[BridgeResolver] Using default path: " + this.cachedSdkDir.getAbsolutePath());
-        return this.cachedSdkDir;
+        // 不返回不存在的默认路径，这会导致 ProcessBuilder 使用错误的工作目录
+        // 例如当 user.dir 为 "/" 时，会产生 "/ai-bridge" 这个无效路径
+        LOG.error("[BridgeResolver] Failed to find valid ai-bridge directory. " +
+                "Please ensure the plugin is properly installed or set CLAUDE_BRIDGE_PATH environment variable.");
+        return null;
     }
 
     /**
@@ -262,7 +263,10 @@ public class BridgeDirectoryResolver {
 
     /**
      * 验证目录是否为有效的 bridge 目录
-     * 增强验证: 检查核心脚本和关键依赖
+     * 检查核心脚本和 node_modules 存在性
+     *
+     * 注意：@anthropic-ai/claude-agent-sdk 等 AI SDK 不在 ai-bridge 中打包，
+     * 而是从 ~/.codemoss/dependencies/ 动态加载，因此不检查 SDK 存在性
      */
     public boolean isValidBridgeDir(File dir) {
         if (dir == null) {
@@ -275,22 +279,19 @@ public class BridgeDirectoryResolver {
         // 检查核心脚本
         File scriptFile = new File(dir, NODE_SCRIPT);
         if (!scriptFile.exists()) {
+            LOG.debug("[BridgeResolver] Core script not found: " + scriptFile.getAbsolutePath());
             return false;
         }
 
-        // 检查 node_modules 关键依赖
+        // 检查 node_modules 存在（包含 sql.js 等桥接层依赖）
         File nodeModules = new File(dir, "node_modules");
         if (!nodeModules.exists() || !nodeModules.isDirectory()) {
             LOG.debug("[BridgeResolver] node_modules not found: " + dir.getAbsolutePath());
             return false;
         }
 
-        // 检查 @anthropic-ai/claude-agent-sdk
-        File claudeSdk = new File(nodeModules, "@anthropic-ai/claude-agent-sdk");
-        if (!claudeSdk.exists()) {
-            LOG.debug("[BridgeResolver] Missing @anthropic-ai/claude-agent-sdk: " + dir.getAbsolutePath());
-            return false;
-        }
+        // AI SDK（@anthropic-ai/claude-agent-sdk, @openai/codex-sdk 等）
+        // 从 ~/.codemoss/dependencies/ 动态加载，不需要在 ai-bridge 中检查
 
         return true;
     }
@@ -432,12 +433,22 @@ public class BridgeDirectoryResolver {
 
             if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
                 this.cachedSdkDir = extractedDir;
+                // 确保通知等待者，即使目录已经存在
+                this.extractionState.compareAndSet(ExtractionState.NOT_STARTED, ExtractionState.COMPLETED);
+                if (!this.extractionReadyFuture.isDone()) {
+                    this.extractionReadyFuture.complete(true);
+                }
                 return extractedDir;
             }
 
             synchronized (this.bridgeExtractionLock) {
                 if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
                     this.cachedSdkDir = extractedDir;
+                    // 确保通知等待者
+                    this.extractionState.compareAndSet(ExtractionState.NOT_STARTED, ExtractionState.COMPLETED);
+                    if (!this.extractionReadyFuture.isDone()) {
+                        this.extractionReadyFuture.complete(true);
+                    }
                     return extractedDir;
                 }
 
@@ -453,6 +464,10 @@ public class BridgeDirectoryResolver {
                 if (currentState == ExtractionState.COMPLETED && isValidBridgeDir(extractedDir)) {
                     // Already extracted and valid
                     this.cachedSdkDir = extractedDir;
+                    // 确保通知等待者
+                    if (!this.extractionReadyFuture.isDone()) {
+                        this.extractionReadyFuture.complete(true);
+                    }
                     return extractedDir;
                 }
 

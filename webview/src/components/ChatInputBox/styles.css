@@ -241,6 +241,36 @@
   margin: 0 4px;
 }
 
+/* Right side tools container */
+.context-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* StatusPanel toggle button */
+.status-panel-toggle {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.status-panel-toggle .codicon {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.status-panel-toggle.expanded .codicon {
+  transform: rotate(0deg);
+}
+
+.status-panel-toggle.collapsed .codicon {
+  transform: rotate(0deg);
+}
+
+.status-panel-toggle:hover .codicon {
+  color: var(--text-primary);
+}
+
 .context-item {
   display: flex;
   align-items: center;

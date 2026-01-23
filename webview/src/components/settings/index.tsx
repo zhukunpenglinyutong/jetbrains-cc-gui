@@ -151,11 +151,11 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
     return null;
   });
 
-  // 字体缩放状态 (1-6，默认为 3，即 100%)
+  // 字体缩放状态 (1-6，默认为 2，即 90%)
   const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {
     const savedLevel = localStorage.getItem('fontSizeLevel');
-    const level = savedLevel ? parseInt(savedLevel, 10) : 3;
-    return level >= 1 && level <= 6 ? level : 3;
+    const level = savedLevel ? parseInt(savedLevel, 10) : 2;
+    return level >= 1 && level <= 6 ? level : 2;
   });
 
   // Node.js 路径（手动指定时使用）
@@ -579,8 +579,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
     // 将档位映射到缩放比例
     const fontSizeMap: Record<number, number> = {
       1: 0.8,   // 80%
-      2: 0.9,   // 90%
-      3: 1.0,   // 100% (默认)
+      2: 0.9,   // 90% (默认)
+      3: 1.0,   // 100%
       4: 1.1,   // 110%
       5: 1.2,   // 120%
       6: 1.4,   // 140%

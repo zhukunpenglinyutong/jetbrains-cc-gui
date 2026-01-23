@@ -317,18 +317,6 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
         }}
       >
         <div className="task-title-section">
-          {isCollapsible && lowerName !== 'grep' && (
-            <span
-              className="codicon codicon-chevron-right"
-              style={{
-                marginRight: '4px',
-                transform: expanded ? 'rotate(90deg)' : 'none',
-                transition: 'transform 0.2s',
-                fontSize: '12px',
-                color: 'var(--vscode-descriptionForeground)',
-              }}
-            />
-          )}
           <span className={`codicon ${codicon} tool-title-icon`} />
 
           <span className="tool-title-text">

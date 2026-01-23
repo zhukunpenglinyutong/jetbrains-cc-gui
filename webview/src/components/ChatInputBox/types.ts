@@ -482,6 +482,11 @@ export interface ChatInputBoxProps {
   /** Rewind file callback */
   onRewind?: () => void;
 
+  /** Whether StatusPanel is expanded */
+  statusPanelExpanded?: boolean;
+  /** Toggle StatusPanel expand/collapse */
+  onToggleStatusPanel?: () => void;
+
   /** SDK installed status (disable input when not installed) */
   sdkInstalled?: boolean;
   /** SDK status loading state */

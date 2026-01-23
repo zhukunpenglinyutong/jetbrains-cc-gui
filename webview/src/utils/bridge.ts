@@ -1,21 +1,35 @@
 const BRIDGE_UNAVAILABLE_WARNED = new Set<string>();
 
+/** Path traversal patterns to detect (including URL-encoded variants) */
+const PATH_TRAVERSAL_PATTERNS = [
+  '..',           // Direct traversal
+  '~',            // Home directory reference
+  '%2e%2e',       // URL-encoded ..
+  '%2E%2E',       // URL-encoded .. (uppercase)
+  '%252e%252e',   // Double URL-encoded ..
+];
+
+/**
+ * Validate file path doesn't contain path traversal patterns
+ * Defense-in-depth: backend also validates using canonical paths
+ */
+const isValidPath = (filePath: string): boolean => {
+  if (!filePath) return false;
+  // Check both original and decoded path for traversal patterns
+  const decodedPath = decodeURIComponent(filePath);
+  return !PATH_TRAVERSAL_PATTERNS.some(pattern =>
+    filePath.toLowerCase().includes(pattern.toLowerCase()) ||
+    decodedPath.toLowerCase().includes(pattern.toLowerCase())
+  );
+};
+
 const callBridge = (payload: string) => {
   if (window.sendToJava) {
-    // const timestamp = Date.now();
-    // console.log(`[Bridge][${timestamp}][PERF] Sending to Java:`, payload.substring(0, 100));
-    // // 记录消息发送时间，用于计算端到端延迟
-    // if (payload.startsWith('send_message')) {
-    //   console.log(`[Bridge][${timestamp}][PERF] >>> 用户消息发送开始 <<<`);
-    //   (window as any).__lastMessageSendTime = timestamp;
-    // }
     window.sendToJava(payload);
     return true;
   }
-  if (!BRIDGE_UNAVAILABLE_WARNED.has(payload)) {
-    console.warn('[Bridge] sendToJava not available yet. payload=', payload.substring(0, 50));
-    BRIDGE_UNAVAILABLE_WARNED.add(payload);
-  }
+  // Track warned payloads to avoid spam, but don't log to console
+  BRIDGE_UNAVAILABLE_WARNED.add(payload);
   return false;
 };
 
@@ -25,6 +39,10 @@ export const sendBridgeEvent = (event: string, content = '') => {
 
 export const openFile = (filePath?: string) => {
   if (!filePath) {
+    return;
+  }
+  // Security: Validate file path
+  if (!isValidPath(filePath)) {
     return;
   }
   sendBridgeEvent('open_file', filePath);
@@ -66,4 +84,22 @@ export const showMultiEditDiff = (
  */
 export const rewindFiles = (sessionId: string, userMessageId: string) => {
   sendToJava('rewind_files', { sessionId, userMessageId });
+};
+
+/**
+ * Undo changes for a single file
+ * @param filePath - Absolute path to the file
+ * @param status - File status: 'A' (added) or 'M' (modified)
+ * @param operations - Array of edit operations to reverse
+ */
+export const undoFileChanges = (
+  filePath: string,
+  status: 'A' | 'M',
+  operations: Array<{ oldString: string; newString: string; replaceAll?: boolean }>
+) => {
+  // Security: Validate file path (defense-in-depth, backend also validates)
+  if (!isValidPath(filePath)) {
+    return;
+  }
+  sendToJava('undo_file_changes', { filePath, status, operations });
 };

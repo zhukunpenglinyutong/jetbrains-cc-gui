@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import type { ToolInput } from '../../types';
+import type { ToolInput, ToolResultBlock } from '../../types';
 
 interface TaskExecutionBlockProps {
   input?: ToolInput;
+  result?: ToolResultBlock | null;
 }
 
-const TaskExecutionBlock = ({ input }: TaskExecutionBlockProps) => {
+const TaskExecutionBlock = ({ input, result }: TaskExecutionBlockProps) => {
   const [expanded, setExpanded] = useState(false);
 
   if (!input) {
@@ -13,6 +14,10 @@ const TaskExecutionBlock = ({ input }: TaskExecutionBlockProps) => {
   }
 
   const { description, prompt, subagent_type: subagentType, ...rest } = input;
+
+  // Determine status based on result
+  const isCompleted = result !== undefined && result !== null;
+  const isError = isCompleted && result?.is_error === true;
 
   return (
     <div className="task-container">
@@ -34,7 +39,7 @@ const TaskExecutionBlock = ({ input }: TaskExecutionBlockProps) => {
           )}
         </div>
 
-        <div className="tool-status-indicator completed" />
+        <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
       </div>
 
       {expanded && (

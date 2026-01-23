@@ -20,6 +20,8 @@ import {
   useRewindHandlers,
   useHistoryLoader,
   useUsageStats,
+  useFileChanges,
+  useSubagents,
 } from './hooks';
 import type { ContextInfo } from './hooks';
 import { createLocalizeMessage } from './utils/localizationUtils';
@@ -33,7 +35,7 @@ import {
 } from './utils/messageUtils';
 import { CLAUDE_MODELS, CODEX_MODELS } from './components/ChatInputBox/types';
 import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent } from './components/ChatInputBox/types';
-import { TodoPanel } from './components/TodoPanel';
+import { StatusPanel, StatusPanelErrorBoundary } from './components/StatusPanel';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import { ScrollControl } from './components/ScrollControl';
 import { extractMarkdownContent } from './utils/copyUtils';
@@ -171,6 +173,12 @@ const App = () => {
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(true);
   // 发送快捷键设置
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
+  // StatusPanel 展开/收起状态（默认收起，有内容时自动展开）
+  const [statusPanelExpanded, setStatusPanelExpanded] = useState(false);
+  // 已撤销的文件路径列表（用于从 fileChanges 中过滤）
+  const [undoneFiles, setUndoneFiles] = useState<string[]>([]);
+  // 基准消息索引（用于 Keep All 功能，只统计该索引之后的改动）
+  const [baseMessageIndex, setBaseMessageIndex] = useState(0);
 
   // 🔧 SDK 安装状态（用于在未安装时禁止提问）
   const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
@@ -292,14 +300,14 @@ const App = () => {
 
     // 初始化字体缩放
     const savedLevel = localStorage.getItem('fontSizeLevel');
-    const level = savedLevel ? parseInt(savedLevel, 10) : 3; // 默认档位 3 (100%)
-    const fontSizeLevel = (level >= 1 && level <= 6) ? level : 3;
+    const level = savedLevel ? parseInt(savedLevel, 10) : 2; // 默认档位 2 (90%)
+    const fontSizeLevel = (level >= 1 && level <= 6) ? level : 2;
 
     // 将档位映射到缩放比例
     const fontSizeMap: Record<number, number> = {
       1: 0.8,   // 80%
-      2: 0.9,   // 90%
-      3: 1.0,   // 100% (默认)
+      2: 0.9,   // 90% (默认)
+      3: 1.0,   // 100%
       4: 1.1,   // 110%
       5: 1.2,   // 120%
       6: 1.4,   // 140%
@@ -1109,6 +1117,89 @@ const App = () => {
     return null;
   }, []);
 
+  // 从消息中提取文件改动汇总，用于 StatusPanel 显示
+  const fileChanges = useFileChanges({
+    messages,
+    getContentBlocks,
+    findToolResult,
+    startFromIndex: baseMessageIndex,
+  });
+
+  // 过滤掉已撤销的文件
+  const filteredFileChanges = useMemo(() => {
+    if (undoneFiles.length === 0) return fileChanges;
+    return fileChanges.filter(fc => !undoneFiles.includes(fc.filePath));
+  }, [fileChanges, undoneFiles]);
+
+  // 文件撤销成功后的回调
+  const handleUndoFile = useCallback((filePath: string) => {
+    setUndoneFiles(prev => [...prev, filePath]);
+  }, []);
+
+  // 批量撤销成功后的回调（Discard All）
+  const handleDiscardAll = useCallback(() => {
+    // 将所有当前显示的文件添加到已撤销列表
+    setUndoneFiles(prev => [...prev, ...filteredFileChanges.map(fc => fc.filePath)]);
+  }, [filteredFileChanges]);
+
+  // 保存全部的回调（Keep All）- 将当前改动作为新基准
+  const handleKeepAll = useCallback(() => {
+    // 设置新的基准消息索引为当前消息长度
+    const newBaseIndex = messages.length;
+    setBaseMessageIndex(newBaseIndex);
+    // 清空已撤销文件列表
+    setUndoneFiles([]);
+
+    // 持久化到 localStorage（按 sessionId 存储）
+    if (currentSessionId) {
+      try {
+        localStorage.setItem(`keep-all-base-${currentSessionId}`, String(newBaseIndex));
+      } catch (e) {
+        console.error('Failed to persist Keep All state:', e);
+      }
+    }
+  }, [messages.length, currentSessionId]);
+
+  // 会话切换时恢复/重置 Keep All 基准，避免历史加载时被清空
+  useEffect(() => {
+    setUndoneFiles([]);
+
+    if (!currentSessionId) {
+      setBaseMessageIndex(0);
+      return;
+    }
+
+    try {
+      const savedBaseIndex = localStorage.getItem(`keep-all-base-${currentSessionId}`);
+      if (savedBaseIndex) {
+        const index = parseInt(savedBaseIndex, 10);
+        if (!isNaN(index) && index >= 0) {
+          setBaseMessageIndex(index);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load Keep All state:', e);
+    }
+
+    setBaseMessageIndex(0);
+  }, [currentSessionId]);
+
+  // 从消息中提取子代理信息，用于 StatusPanel 显示
+  const subagents = useSubagents({
+    messages,
+    getContentBlocks,
+    findToolResult,
+  });
+
+  // 当有内容时自动展开 StatusPanel
+  const hasStatusPanelContent = globalTodos.length > 0 || filteredFileChanges.length > 0 || subagents.length > 0;
+  useEffect(() => {
+    if (hasStatusPanelContent) {
+      setStatusPanelExpanded(true);
+    }
+  }, [hasStatusPanelContent]);
+
   const sessionTitle = useMemo(() => {
     if (messages.length === 0) {
       return t('common.newSession');
@@ -1191,7 +1282,17 @@ const App = () => {
 
       {currentView === 'chat' && (
         <>
-          {globalTodos.length > 0 && <TodoPanel todos={globalTodos} isStreaming={streamingActive || loading} />}
+          <StatusPanelErrorBoundary>
+            <StatusPanel
+              todos={globalTodos}
+              fileChanges={filteredFileChanges}
+              subagents={subagents}
+              expanded={statusPanelExpanded}
+              onUndoFile={handleUndoFile}
+              onDiscardAll={handleDiscardAll}
+              onKeepAll={handleKeepAll}
+            />
+          </StatusPanelErrorBoundary>
           <div className="input-area" ref={inputAreaRef}>
           <ChatInputBox
             ref={chatInputRef}
@@ -1240,6 +1341,8 @@ const App = () => {
             }}
             hasMessages={messages.length > 0}
             onRewind={handleOpenRewindSelectDialog}
+            statusPanelExpanded={statusPanelExpanded}
+            onToggleStatusPanel={() => setStatusPanelExpanded(!statusPanelExpanded)}
             addToast={addToast}
           />
         </div>

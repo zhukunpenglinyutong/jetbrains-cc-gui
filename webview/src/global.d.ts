@@ -418,6 +418,16 @@ interface Window {
    */
   onRewindResult?: (json: string) => void;
 
+  /**
+   * Undo file result callback - 单文件撤销操作结果回调
+   */
+  onUndoFileResult?: (json: string) => void;
+
+  /**
+   * Undo all files result callback - 批量撤销操作结果回调
+   */
+  onUndoAllFileResult?: (json: string) => void;
+
   // ============================================================================
   // 🔧 依赖管理回调函数
   // ============================================================================
