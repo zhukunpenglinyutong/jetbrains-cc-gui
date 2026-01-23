@@ -1018,15 +1018,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageArea.setText(
                 "当前环境不支持 JCEF (Java Chromium Embedded Framework)。\n\n" +
                 "可能的原因：\n" +
-                "• 使用了不支持 JCEF 的 IDE 版本或运行时\n" +
+                "• Android Studio 官方默认没安装JCEF\n" +
                 "• IDE 启动时使用了 -Dide.browser.jcef.enabled=false 参数\n" +
-                "• 系统环境缺少必要的依赖库\n\n" +
                 "解决方案：\n" +
-                "1. 确保使用支持 JCEF 的 IntelliJ IDEA 版本 (2020.2+)\n" +
-                "2. 检查 IDE 设置：Help → Find Action → Registry，\n" +
-                "   确保 ide.browser.jcef.enabled 为 true\n" +
-                "3. 尝试重启 IDE\n" +
-                "4. 如果使用 JetBrains Runtime，确保版本支持 JCEF"
+                "百度一下，如何安装JCEF，安装一下就好了"
             );
             messageArea.setEditable(false);
             messageArea.setBackground(new Color(45, 45, 45));
