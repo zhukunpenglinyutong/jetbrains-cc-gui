@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
+import { getCursorOffset, setCursorOffset } from '../utils/selectionUtils.js';
 import { getFileIcon } from '../../../utils/fileIcons.js';
 import { icon_folder, icon_terminal, icon_server } from '../../../utils/icons.js';
 import type { FileTagInfo } from '../types.js';
@@ -190,6 +191,9 @@ export function useFileTags({
       newHTML += currentText.substring(lastIndex);
     }
 
+    // Preserve cursor before updating innerHTML to avoid jumping to end
+    const cursorOffset = getCursorOffset(editableRef.current);
+
     // Set flag before updating innerHTML to prevent triggering completion detection
     justRenderedTagRef.current = true;
     onCloseCompletions();
@@ -211,20 +215,23 @@ export function useFileTags({
       });
     });
 
-    // Restore cursor position to end
-    const selection = window.getSelection();
-    if (selection && editableRef.current.childNodes.length > 0) {
-      try {
-        const range = document.createRange();
-        const lastChild = editableRef.current.lastChild;
-        if (lastChild) {
-          range.setStartAfter(lastChild);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
+    // Restore cursor position if possible, otherwise fall back to end
+    const restored = cursorOffset >= 0 && setCursorOffset(editableRef.current, cursorOffset);
+    if (!restored) {
+      const selection = window.getSelection();
+      if (selection && editableRef.current.childNodes.length > 0) {
+        try {
+          const range = document.createRange();
+          const lastChild = editableRef.current.lastChild;
+          if (lastChild) {
+            range.setStartAfter(lastChild);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        } catch {
+          // Ignore cursor restore errors
         }
-      } catch {
-        // Ignore cursor restore errors
       }
     }
 
