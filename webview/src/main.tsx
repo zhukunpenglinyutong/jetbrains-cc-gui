@@ -16,16 +16,18 @@ function createBridgeHeartbeatStarter() {
     started = true;
 
     let lastRafAt = Date.now();
+    let rafId: number | null = null;
     const rafLoop = () => {
       lastRafAt = Date.now();
-      requestAnimationFrame(rafLoop);
+      rafId = requestAnimationFrame(rafLoop);
     };
-    requestAnimationFrame(rafLoop);
+    rafId = requestAnimationFrame(rafLoop);
 
     let sequence = 0;
     const intervalMs = 5000;
 
-    window.setInterval(() => {
+    let intervalId: number | null = null;
+    intervalId = window.setInterval(() => {
       sequence += 1;
       const payload = JSON.stringify({
         ts: Date.now(),
@@ -36,6 +38,26 @@ function createBridgeHeartbeatStarter() {
       });
       sendBridgeEvent('heartbeat', payload);
     }, intervalMs);
+
+    const cleanup = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    // Explicitly cleanup timers on navigation/unload (best effort; helpful for long-running JCEF contexts).
+    window.addEventListener('beforeunload', cleanup, { once: true });
+    window.addEventListener('pagehide', cleanup, { once: true });
+
+    // Cleanup on Vite HMR (dev only).
+    if (import.meta.hot) {
+      import.meta.hot.dispose(() => cleanup());
+    }
 
     if (import.meta.env.DEV) {
       console.log('[Main] Bridge heartbeat enabled');

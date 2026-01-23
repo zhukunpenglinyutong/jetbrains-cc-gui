@@ -1306,6 +1306,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
 
+            if (disposed) return;
+
             webviewStallCount += 1;
             String reason = "heartbeatAgeMs=" + heartbeatAgeMs + ", rafAgeMs=" + rafAgeMs;
             LOG.warn("[WebviewWatchdog] Webview appears stalled (" + webviewStallCount + "), attempting recovery. " + reason);
