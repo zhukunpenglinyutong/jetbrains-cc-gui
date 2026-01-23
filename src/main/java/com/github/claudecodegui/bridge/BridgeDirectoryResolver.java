@@ -505,13 +505,30 @@ public class BridgeDirectoryResolver {
                         deleteDirectory(extractedDir);
                         unzipArchive(archiveFile, extractedDir);
                         Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
-                        this.extractionState.set(ExtractionState.COMPLETED);
-                        this.cachedSdkDir = extractedDir;
-                        CompletableFuture<File> future = this.extractionFutureRef.get();
-                        if (future != null) {
-                            future.complete(extractedDir);
+
+                        // Wait for filesystem to sync and validate with retry
+                        // This fixes race condition where unzip returns before files are fully synced
+                        File validatedDir = waitForValidBridgeDir(extractedDir, 3, 100);
+                        if (validatedDir != null) {
+                            this.extractionState.set(ExtractionState.COMPLETED);
+                            this.cachedSdkDir = validatedDir;
+                            CompletableFuture<File> future = this.extractionFutureRef.get();
+                            if (future != null) {
+                                future.complete(validatedDir);
+                            }
+                            this.extractionReadyFuture.complete(true);
+                            LOG.info("[BridgeResolver] ai-bridge extraction completed: " + validatedDir.getAbsolutePath());
+                            return validatedDir;
+                        } else {
+                            LOG.error("[BridgeResolver] Bridge validation failed after extraction and retries");
+                            this.extractionState.set(ExtractionState.FAILED);
+                            CompletableFuture<File> future = this.extractionFutureRef.get();
+                            if (future != null) {
+                                future.completeExceptionally(new IOException("Bridge validation failed after extraction"));
+                            }
+                            this.extractionReadyFuture.complete(false);
+                            return null;
                         }
-                        this.extractionReadyFuture.complete(true);
                     } catch (Exception e) {
                         this.extractionState.set(ExtractionState.FAILED);
                         CompletableFuture<File> future = this.extractionFutureRef.get();
@@ -524,13 +541,8 @@ public class BridgeDirectoryResolver {
                     }
                 }
             }
-
-            if (isValidBridgeDir(extractedDir)) {
-                LOG.info("[BridgeResolver] ai-bridge extraction completed: " + extractedDir.getAbsolutePath());
-                return extractedDir;
-            }
-
-            LOG.warn("[BridgeResolver] ai-bridge structure invalid after extraction: " + extractedDir.getAbsolutePath());
+            // Note: All branches within synchronized block have explicit return statements,
+            // so this code path is only reachable if an exception is caught below
         } catch (Exception e) {
             LOG.error("[BridgeResolver] Auto-extraction of ai-bridge failed: " + e.getMessage());
         }
@@ -547,6 +559,40 @@ public class BridgeDirectoryResolver {
         } catch (IOException e) {
             return false;
         }
+    }
+
+    /**
+     * Wait for bridge directory to become valid with retry mechanism.
+     * This fixes race condition where filesystem hasn't fully synced after extraction.
+     *
+     * @param dir The directory to validate
+     * @param maxRetries Maximum number of retry attempts
+     * @param initialDelayMs Initial delay in milliseconds (doubles with each retry)
+     * @return The validated directory, or null if validation fails after all retries
+     */
+    private File waitForValidBridgeDir(File dir, int maxRetries, int initialDelayMs) {
+        int delayMs = initialDelayMs;
+        for (int i = 0; i <= maxRetries; i++) {
+            if (isValidBridgeDir(dir)) {
+                if (i > 0) {
+                    LOG.info("[BridgeResolver] Bridge validation succeeded after " + i + " retries");
+                }
+                return dir;
+            }
+            if (i < maxRetries) {
+                LOG.debug("[BridgeResolver] Bridge validation failed, retrying in " + delayMs + "ms (attempt " + (i + 1) + "/" + (maxRetries + 1) + ")");
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    LOG.warn("[BridgeResolver] Validation retry interrupted");
+                    return null;
+                }
+                delayMs *= 2; // Exponential backoff
+            }
+        }
+        LOG.warn("[BridgeResolver] Bridge validation failed after " + (maxRetries + 1) + " attempts");
+        return null;
     }
 
     /**
@@ -608,17 +654,31 @@ public class BridgeDirectoryResolver {
                         indicator.setText("Finalizing...");
                         Files.writeString(versionFile.toPath(), signature, StandardCharsets.UTF_8);
 
-                        indicator.setFraction(1.0);
-                        LOG.info("[BridgeResolver] Background extraction completed successfully");
+                        // Validate with retry to handle filesystem sync delay
+                        indicator.setText("Validating extraction...");
+                        File validatedDir = waitForValidBridgeDir(extractedDir, 3, 100);
 
-                        // Mark as completed and cache the directory
-                        BridgeDirectoryResolver.this.extractionState.set(ExtractionState.COMPLETED);
-                        BridgeDirectoryResolver.this.cachedSdkDir = extractedDir;
-                        CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
-                        if (future != null) {
-                            future.complete(extractedDir);
+                        indicator.setFraction(1.0);
+
+                        if (validatedDir != null) {
+                            LOG.info("[BridgeResolver] Background extraction completed successfully");
+                            // Mark as completed and cache the directory
+                            BridgeDirectoryResolver.this.extractionState.set(ExtractionState.COMPLETED);
+                            BridgeDirectoryResolver.this.cachedSdkDir = validatedDir;
+                            CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
+                            if (future != null) {
+                                future.complete(validatedDir);
+                            }
+                            BridgeDirectoryResolver.this.extractionReadyFuture.complete(true);
+                        } else {
+                            LOG.error("[BridgeResolver] Background extraction completed but validation failed");
+                            BridgeDirectoryResolver.this.extractionState.set(ExtractionState.FAILED);
+                            CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
+                            if (future != null) {
+                                future.completeExceptionally(new IOException("Bridge validation failed after extraction"));
+                            }
+                            BridgeDirectoryResolver.this.extractionReadyFuture.complete(false);
                         }
-                        BridgeDirectoryResolver.this.extractionReadyFuture.complete(true);
                     } catch (IOException e) {
                         LOG.error("[BridgeResolver] Background extraction failed: " + e.getMessage(), e);
                         BridgeDirectoryResolver.this.extractionState.set(ExtractionState.FAILED);

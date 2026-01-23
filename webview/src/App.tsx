@@ -264,21 +264,14 @@ const App = () => {
 
   // 初始化主题和字体缩放
   useEffect(() => {
-    console.log('[Frontend][Theme] Initializing theme system');
-
     // 注册 IDE 主题接收回调
     window.onIdeThemeReceived = (jsonStr: string) => {
       try {
         const themeData = JSON.parse(jsonStr);
         const theme = themeData.isDark ? 'dark' : 'light';
-        console.log('[Frontend][Theme] IDE theme received:', {
-          raw: themeData,
-          resolved: theme,
-          currentSetting: localStorage.getItem('theme')
-        });
         setIdeTheme(theme);
-      } catch (e) {
-        console.error('[Frontend][Theme] Failed to parse IDE theme response:', e, 'Raw:', jsonStr);
+      } catch {
+        // Failed to parse IDE theme response
       }
     };
 
@@ -287,14 +280,9 @@ const App = () => {
       try {
         const themeData = JSON.parse(jsonStr);
         const theme = themeData.isDark ? 'dark' : 'light';
-        console.log('[Frontend][Theme] IDE theme changed:', {
-          raw: themeData,
-          resolved: theme,
-          currentSetting: localStorage.getItem('theme')
-        });
         setIdeTheme(theme);
-      } catch (e) {
-        console.error('[Frontend][Theme] Failed to parse IDE theme change:', e, 'Raw:', jsonStr);
+      } catch {
+        // Failed to parse IDE theme change
       }
     };
 
@@ -317,20 +305,9 @@ const App = () => {
 
     // 先应用用户明确选择的主题（light/dark），跟随 IDE 的情况等 ideTheme 更新后再处理
     const savedTheme = localStorage.getItem('theme');
-    console.log('[Frontend][Theme] Saved theme preference:', savedTheme);
 
     // 检查是否有 Java 注入的初始主题
     const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
-    console.log('[Frontend][Theme] Injected IDE theme:', injectedTheme);
-
-    // 注意：data-theme 已由 index.html 的内联脚本设置，这里只需要检查日志
-    if (savedTheme === 'light' || savedTheme === 'dark') {
-      console.log('[Frontend][Theme] User explicit theme:', savedTheme);
-    } else if (injectedTheme === 'light' || injectedTheme === 'dark') {
-      console.log('[Frontend][Theme] Follow IDE mode with injected theme:', injectedTheme);
-    } else {
-      console.log('[Frontend][Theme] Follow IDE mode detected, will wait for IDE theme');
-    }
 
     // 请求 IDE 主题（带重试机制）- 仍然需要，用于处理动态主题变化
     let retryCount = 0;
@@ -338,19 +315,15 @@ const App = () => {
 
     const requestIdeTheme = () => {
       if (window.sendToJava) {
-        console.log('[Frontend][Theme] Requesting IDE theme from backend');
         window.sendToJava('get_ide_theme:');
       } else {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
-          console.log(`[Frontend][Theme] Bridge not ready, retrying (${retryCount}/${MAX_RETRIES})...`);
           setTimeout(requestIdeTheme, 100);
         } else {
-          console.error('[Frontend][Theme] Failed to request IDE theme: bridge not available after', MAX_RETRIES, 'retries');
           // 如果是 Follow IDE 模式且无法获取 IDE 主题，使用注入的主题或 dark 作为 fallback
           if (savedTheme === null || savedTheme === 'system') {
             const fallback = injectedTheme || 'dark';
-            console.warn('[Frontend][Theme] Fallback to theme:', fallback);
             setIdeTheme(fallback as 'light' | 'dark');
           }
         }
@@ -366,24 +339,14 @@ const App = () => {
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
 
-    console.log('[Frontend][Theme] ideTheme effect triggered:', {
-      ideTheme,
-      savedTheme,
-      currentDataTheme: document.documentElement.getAttribute('data-theme')
-    });
-
     // 只有在 ideTheme 已加载后才处理
     if (ideTheme === null) {
-      console.log('[Frontend][Theme] IDE theme not loaded yet, waiting...');
       return;
     }
 
     // 如果用户选择了 "Follow IDE" 模式
     if (savedTheme === null || savedTheme === 'system') {
-      console.log('[Frontend][Theme] Applying IDE theme:', ideTheme);
       document.documentElement.setAttribute('data-theme', ideTheme);
-    } else {
-      console.log('[Frontend][Theme] User has explicit theme preference:', savedTheme, '- not applying IDE theme');
     }
   }, [ideTheme]);
 
@@ -435,21 +398,18 @@ const App = () => {
           const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
           sendBridgeEvent('set_model', modelToSync);
           sendBridgeEvent('set_mode', initialPermissionMode);
-          console.log('[Frontend] Synced model state to backend:', { provider: restoredProvider, model: modelToSync });
         } else {
           // 如果 sendToJava 还没准备好，稍后重试
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
             setTimeout(syncToBackend, 100);
-          } else {
-            console.warn('[Frontend] Failed to sync model state to backend: bridge not available after', MAX_SYNC_RETRIES, 'retries');
           }
         }
       };
       // 延迟同步，等待 bridge 准备好
       setTimeout(syncToBackend, 200);
-    } catch (error) {
-      console.error('Failed to load model selection state:', error);
+    } catch {
+      // Failed to load model selection state
     }
   }, []);
 
@@ -461,8 +421,8 @@ const App = () => {
         claudeModel: selectedClaudeModel,
         codexModel: selectedCodexModel,
       }));
-    } catch (error) {
-      console.error('Failed to save model selection state:', error);
+    } catch {
+      // Failed to save model selection state
     }
   }, [currentProvider, selectedClaudeModel, selectedCodexModel]);
 
@@ -475,15 +435,12 @@ const App = () => {
     const loadSelectedAgent = () => {
       if (window.sendToJava) {
         sendBridgeEvent('get_selected_agent');
-        console.log('[Frontend] Requested selected agent');
       } else {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
           timeoutId = window.setTimeout(loadSelectedAgent, 100);
-        } else {
-          console.warn('[Frontend] Failed to load selected agent: bridge not available after', MAX_RETRIES, 'retries');
-          // 即使加载失败，也不影响其他功能的使用
         }
+        // 即使加载失败，也不影响其他功能的使用
       }
     };
 
@@ -604,75 +561,52 @@ const App = () => {
     openPlanApprovalDialog,
   });
 
+  /**
+   * 检查未实现的斜杠命令
+   * @returns true 如果是未实现的命令（已处理），false 否则
+   */
+  const checkUnimplementedCommand = useCallback((text: string): boolean => {
+    if (!text.startsWith('/')) return false;
+
+    const command = text.split(/\s+/)[0].toLowerCase();
+    const unimplementedCommands = ['/plugin', '/plugins'];
+
+    if (unimplementedCommands.includes(command)) {
+      const userMessage: ClaudeMessage = {
+        type: 'user',
+        content: text,
+        timestamp: new Date().toISOString(),
+      };
+      const assistantMessage: ClaudeMessage = {
+        type: 'assistant',
+        content: t('chat.commandNotImplemented', { command }),
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      return true;
+    }
+    return false;
+  }, [t]);
 
   /**
-   * 处理消息发送（来自 ChatInputBox）
+   * 构建用户消息的内容块
    */
-  const handleSubmit = (content: string, attachments?: Attachment[]) => {
-    // Remove zero-width spaces and other invisible characters
-    const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+  const buildUserContentBlocks = useCallback((
+    text: string,
+    attachments: Attachment[] | undefined
+  ): ClaudeContentBlock[] => {
+    const blocks: ClaudeContentBlock[] = [];
 
-    if (!text && !hasAttachments) {
-      return;
-    }
-    if (loading) {
-      return;
-    }
-
-    // 🔧 防御性校验：即使输入框侧 gating 失效，也不能在 SDK 状态未知/未安装时发送
-    if (!sdkStatusLoaded) {
-      addToast(t('chat.sdkStatusLoading'), 'info');
-      return;
-    }
-    if (!currentSdkInstalled) {
-      addToast(
-        t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' }) + ' ' + t('chat.goInstallSdk'),
-        'warning'
-      );
-      setSettingsInitialTab('dependencies');
-      setCurrentView('settings');
-      return;
-    }
-
-    // 🔧 检查未实现的斜杠命令
-    // Check for unimplemented slash commands
-    if (text.startsWith('/')) {
-      const command = text.split(/\s+/)[0].toLowerCase();
-      const unimplementedCommands = ['/plugin', '/plugins'];
-      if (unimplementedCommands.includes(command)) {
-        // 添加用户消息
-        const userMessage: ClaudeMessage = {
-          type: 'user',
-          content: text,
-          timestamp: new Date().toISOString(),
-        };
-        // 添加提示消息
-        const assistantMessage: ClaudeMessage = {
-          type: 'assistant',
-          content: t('chat.commandNotImplemented', { command }),
-          timestamp: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, userMessage, assistantMessage]);
-        return;
-      }
-    }
-
-    // 构建用户消息的内容块（用于前端显示）
-    const userContentBlocks: ClaudeContentBlock[] = [];
-
-    if (hasAttachments) {
-      // 添加图片块
-      for (const att of attachments || []) {
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      for (const att of attachments) {
         if (att.mediaType?.startsWith('image/')) {
-          userContentBlocks.push({
+          blocks.push({
             type: 'image',
             src: `data:${att.mediaType};base64,${att.data}`,
             mediaType: att.mediaType,
           });
         } else {
-          // Non-image attachment - display file name
-          userContentBlocks.push({
+          blocks.push({
             type: 'text',
             text: t('chat.attachmentFile', { fileName: att.fileName }),
           });
@@ -680,62 +614,24 @@ const App = () => {
       }
     }
 
-    // 添加文本块
     if (text) {
-      userContentBlocks.push({ type: 'text', text });
-    } else if (userContentBlocks.length === 0) {
-      // 如果既没有附件也没有文本，不发送
-      return;
+      blocks.push({ type: 'text', text });
     }
 
-    // Add user message immediately on frontend (includes image preview)
-    const userMessage: ClaudeMessage = {
-      type: 'user',
-      content: text || (hasAttachments ? t('chat.attachmentsUploaded') : ''),
-      timestamp: new Date().toISOString(),
-      isOptimistic: true, // 标记为乐观更新消息
-      raw: {
-        message: {
-          content: userContentBlocks,
-        },
-      },
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    return blocks;
+  }, [t]);
 
-    // 【FIX】立即设置 loading 状态，避免与后端回调的竞态条件
-    // 第二次发送消息时，后端的 channelId 已存在，响应可能非常快
-    // 如果等待后端回调设置 loading，可能会被 message_end 的 loading=false 覆盖
-    setLoading(true);
-    setLoadingStartTime(Date.now());
+  /**
+   * 发送消息到后端
+   */
+  const sendMessageToBackend = useCallback((
+    text: string,
+    attachments: Attachment[] | undefined,
+    agentInfo: { id: string; name: string; prompt?: string } | null,
+    fileTagsInfo: { displayPath: string; absolutePath: string }[] | null
+  ) => {
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-    // 发送消息后强制滚动到底部，确保用户能看到"正在生成响应"提示和新内容
-    isUserAtBottomRef.current = true;
-    requestAnimationFrame(() => {
-      if (messagesContainerRef.current) {
-        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-      }
-    });
-
-    // 【FIX】在发送消息前，强制同步 provider 设置，确保后端使用正确的 SDK
-    console.log('[DEBUG] Current provider before send:', currentProvider);
-    sendBridgeEvent('set_provider', currentProvider);
-
-    // 【FIX】构建智能体信息，随消息一起发送，确保每个标签页使用自己选择的智能体
-    const agentInfo = selectedAgent ? {
-      id: selectedAgent.id,
-      name: selectedAgent.name,
-      prompt: selectedAgent.prompt,
-    } : null;
-
-    // 【FIX】提取文件标签信息，用于 Codex 上下文注入
-    // Extract file tags for Codex context injection
-    const fileTags = chatInputRef.current?.getFileTags() ?? [];
-    const fileTagsInfo = fileTags.length > 0 ? fileTags.map(tag => ({
-      displayPath: tag.displayPath,
-      absolutePath: tag.absolutePath,
-    })) : null;
-
-    // 发送消息（智能体提示词由前端传递，不依赖后端全局设置）
     if (hasAttachments) {
       try {
         const payload = JSON.stringify({
@@ -751,15 +647,89 @@ const App = () => {
         sendBridgeEvent('send_message_with_attachments', payload);
       } catch (error) {
         console.error('[Frontend] Failed to serialize attachments payload', error);
-        // Fallback: send message with agent info and file tags
         const fallbackPayload = JSON.stringify({ text, agent: agentInfo, fileTags: fileTagsInfo });
         sendBridgeEvent('send_message', fallbackPayload);
       }
     } else {
-      // 【FIX】将消息、智能体信息和文件标签打包成 JSON 发送
       const payload = JSON.stringify({ text, agent: agentInfo, fileTags: fileTagsInfo });
       sendBridgeEvent('send_message', payload);
     }
+  }, []);
+
+  /**
+   * 处理消息发送（来自 ChatInputBox）
+   */
+  const handleSubmit = (content: string, attachments?: Attachment[]) => {
+    const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+
+    // 验证输入
+    if (!text && !hasAttachments) return;
+    if (loading) return;
+
+    // 检查 SDK 状态
+    if (!sdkStatusLoaded) {
+      addToast(t('chat.sdkStatusLoading'), 'info');
+      return;
+    }
+    if (!currentSdkInstalled) {
+      addToast(
+        t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' }) + ' ' + t('chat.goInstallSdk'),
+        'warning'
+      );
+      setSettingsInitialTab('dependencies');
+      setCurrentView('settings');
+      return;
+    }
+
+    // 检查未实现的命令
+    if (checkUnimplementedCommand(text)) return;
+
+    // 构建用户消息内容块
+    const userContentBlocks = buildUserContentBlocks(text, attachments);
+    if (userContentBlocks.length === 0) return;
+
+    // 创建并添加用户消息（乐观更新）
+    const userMessage: ClaudeMessage = {
+      type: 'user',
+      content: text || (hasAttachments ? t('chat.attachmentsUploaded') : ''),
+      timestamp: new Date().toISOString(),
+      isOptimistic: true,
+      raw: { message: { content: userContentBlocks } },
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    // 设置 loading 状态
+    setLoading(true);
+    setLoadingStartTime(Date.now());
+
+    // 滚动到底部
+    isUserAtBottomRef.current = true;
+    requestAnimationFrame(() => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+    });
+
+    // 同步 provider 设置
+    sendBridgeEvent('set_provider', currentProvider);
+
+    // 构建智能体信息
+    const agentInfo = selectedAgent ? {
+      id: selectedAgent.id,
+      name: selectedAgent.name,
+      prompt: selectedAgent.prompt,
+    } : null;
+
+    // 提取文件标签信息
+    const fileTags = chatInputRef.current?.getFileTags() ?? [];
+    const fileTagsInfo = fileTags.length > 0 ? fileTags.map(tag => ({
+      displayPath: tag.displayPath,
+      absolutePath: tag.absolutePath,
+    })) : null;
+
+    // 发送消息到后端
+    sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo);
   };
 
   /**
@@ -1288,6 +1258,7 @@ const App = () => {
               fileChanges={filteredFileChanges}
               subagents={subagents}
               expanded={statusPanelExpanded}
+              isStreaming={streamingActive}
               onUndoFile={handleUndoFile}
               onDiscardAll={handleDiscardAll}
               onKeepAll={handleKeepAll}

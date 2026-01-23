@@ -8,6 +8,8 @@ export interface StatusPanelProps {
   subagents: SubagentInfo[];
   /** Whether the panel is expanded */
   expanded?: boolean;
+  /** Whether the conversation is currently streaming (active) */
+  isStreaming?: boolean;
   /** Callback when a file is successfully undone */
   onUndoFile?: (filePath: string) => void;
   /** Callback when all files are successfully discarded */

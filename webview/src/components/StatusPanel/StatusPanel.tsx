@@ -11,7 +11,7 @@ import DiscardAllDialog from './DiscardAllDialog';
 import type { TabType, StatusPanelProps } from './types';
 import './StatusPanel.less';
 
-const StatusPanel = ({ todos, fileChanges, subagents, expanded = true, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
+const StatusPanel = ({ todos, fileChanges, subagents, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
   const { t } = useTranslation();
   const [openPopover, setOpenPopover] = useState<TabType | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -240,7 +240,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, expanded = true, onUndoFil
               {completedCount}/{totalCount}
             </span>
           )}
-          {hasInProgressTodo && (
+          {isStreaming && hasInProgressTodo && (
             <span className="codicon codicon-loading status-panel-tab-loading" />
           )}
         </div>
@@ -257,7 +257,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, expanded = true, onUndoFil
               {subagentCompletedCount}/{subagentTotalCount}
             </span>
           )}
-          {hasRunningSubagent && (
+          {isStreaming && hasRunningSubagent && (
             <span className="codicon codicon-loading status-panel-tab-loading" />
           )}
         </div>
