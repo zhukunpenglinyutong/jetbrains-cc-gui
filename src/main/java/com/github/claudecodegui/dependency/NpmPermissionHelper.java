@@ -229,9 +229,12 @@ public class NpmPermissionHelper {
             LOG.info("[NpmPermissionHelper] Adding --force flag for retry attempt " + retryAttempt);
         }
 
-        // Wrap packages containing special characters in quotes to prevent shell interpretation
+        // On Windows, wrap packages containing semver operators in quotes to prevent
+        // cmd.exe from interpreting ^ as escape character. Unix systems don't need this
+        // as ProcessBuilder passes arguments directly via execve() without shell interpretation.
+        boolean needsQuoting = PlatformUtils.isWindows();
         for (String pkg : packages) {
-            if (pkg.contains("^") || pkg.contains("~") || pkg.contains(">") || pkg.contains("<")) {
+            if (needsQuoting && (pkg.contains("^") || pkg.contains("~") || pkg.contains(">") || pkg.contains("<"))) {
                 command.add("\"" + pkg + "\"");
             } else {
                 command.add(pkg);

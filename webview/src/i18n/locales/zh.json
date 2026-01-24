@@ -415,10 +415,13 @@
     "title": "Claude 有一些问题想问你",
     "progress": "问题 {{current}} / {{total}}",
     "multiSelectHint": "可以选择多个选项",
-    "cancel": "AI自动选择",
+    "cancel": "Auto",
     "back": "上一步",
     "next": "下一步",
-    "submit": "提交"
+    "submit": "提交",
+    "otherOption": "其他",
+    "otherOptionDesc": "输入自定义答案",
+    "customInputPlaceholder": "请输入您的答案..."
   },
   "planApproval": {
     "title": "计划已准备就绪",

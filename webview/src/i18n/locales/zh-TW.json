@@ -370,10 +370,13 @@
     "title": "Claude 有一些問題想問你",
     "progress": "問題 {{current}} / {{total}}",
     "multiSelectHint": "可以選擇多個選項",
-    "cancel": "AI自動選擇",
+    "cancel": "Auto",
     "back": "上一步",
     "next": "下一步",
-    "submit": "提交"
+    "submit": "提交",
+    "otherOption": "其他",
+    "otherOptionDesc": "輸入自訂答案",
+    "customInputPlaceholder": "請輸入您的答案..."
   },
   "toast": {
     "switchSuccess": "切換成功",

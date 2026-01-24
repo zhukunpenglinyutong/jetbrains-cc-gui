@@ -365,10 +365,13 @@
     "title": "Claude tiene algunas preguntas para ti",
     "progress": "Pregunta {{current}} / {{total}}",
     "multiSelectHint": "Puedes seleccionar múltiples opciones",
-    "cancel": "Selección automática de IA",
+    "cancel": "Auto",
     "back": "Atrás",
     "next": "Siguiente",
-    "submit": "Enviar"
+    "submit": "Enviar",
+    "otherOption": "Otro",
+    "otherOptionDesc": "Ingresa una respuesta personalizada",
+    "customInputPlaceholder": "Ingresa tu respuesta..."
   },
   "toast": {
     "switchSuccess": "Cambio exitoso",

@@ -6,9 +6,9 @@
   border: 1px solid var(--vscode-widget-border, #454545);
   border-radius: 8px;
   padding: 24px;
+  width: 100%;
   max-width: 600px;
-  width: 80%;
-  max-height: 80vh;
+  max-height: min(400px, 50vh);
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   display: flex;
@@ -119,6 +119,46 @@
   margin: -8px 0 0 0;
 }
 
+/* 其他选项样式 */
+.question-option.other-option {
+  border-style: dashed;
+}
+
+.question-option.other-option .option-label {
+  color: var(--vscode-textLink-foreground, #4daafc);
+}
+
+/* 自定义输入框容器 */
+.custom-input-container {
+  margin-top: 8px;
+}
+
+/* 自定义输入框 */
+.custom-input {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  border: 1px solid var(--vscode-focusBorder, #007acc);
+  border-radius: 6px;
+  background: var(--vscode-input-background, #3c3c3c);
+  color: var(--vscode-input-foreground, #cccccc);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.custom-input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder, #007acc);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #007acc);
+}
+
+.custom-input::placeholder {
+  color: var(--vscode-input-placeholderForeground, #999999);
+}
+
 .ask-user-question-dialog-actions {
   display: flex;
   justify-content: space-between;
@@ -176,7 +216,6 @@
 @media (max-width: 600px) {
   .ask-user-question-dialog {
     padding: 16px;
-    width: 95%;
   }
 
   .ask-user-question-dialog-title {

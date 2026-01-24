@@ -415,10 +415,13 @@
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
     "multiSelectHint": "You can select multiple options",
-    "cancel": "AI Auto Select",
+    "cancel": "Auto",
     "back": "Back",
     "next": "Next",
-    "submit": "Submit"
+    "submit": "Submit",
+    "otherOption": "Other",
+    "otherOptionDesc": "Enter a custom answer",
+    "customInputPlaceholder": "Enter your answer..."
   },
   "planApproval": {
     "title": "Plan Ready for Approval",
