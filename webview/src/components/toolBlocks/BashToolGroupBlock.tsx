@@ -26,6 +26,8 @@ interface BashToolGroupBlockProps {
 const MAX_VISIBLE_ITEMS = 3.5;
 /** Height per item in pixels */
 const ITEM_HEIGHT = 32;
+/** Max height when an item is expanded */
+const EXPANDED_MAX_HEIGHT = 400;
 
 /**
  * Parse item to BashItem
@@ -118,9 +120,20 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
 
   // Calculate list height for 3.5 visible items
   const needsScroll = bashItems.length > MAX_VISIBLE_ITEMS;
-  const listHeight = needsScroll
+  
+  // Base height for collapsed state
+  const baseHeight = needsScroll
     ? MAX_VISIBLE_ITEMS * ITEM_HEIGHT
     : bashItems.length * ITEM_HEIGHT;
+
+  // When an item is expanded, increase max-height to allow viewing details
+  // otherwise use the compact base height
+  const listHeight = expandedItemIndex !== null
+    ? EXPANDED_MAX_HEIGHT
+    : baseHeight;
+
+  // Enable scrolling if there are many items OR if an item is expanded (content might overflow)
+  const overflowY = (needsScroll || expandedItemIndex !== null) ? 'auto' : 'hidden';
 
   // Progress summary text
   const getProgressSummary = () => {
@@ -172,7 +185,7 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
           className="bash-group-timeline"
           style={{
             maxHeight: `${listHeight + 16}px`,
-            overflowY: needsScroll ? 'auto' : 'hidden',
+            overflowY: overflowY,
           }}
         >
           {bashItems.map((item, index) => {

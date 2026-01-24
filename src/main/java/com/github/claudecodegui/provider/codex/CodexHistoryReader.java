@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
+import com.github.claudecodegui.util.TagExtractor;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
@@ -424,6 +425,7 @@ public class CodexHistoryReader {
                     if (payload.has("message")) {
                         String text = payload.get("message").getAsString();
                         if (text != null && !text.isEmpty()) {
+                            text = TagExtractor.extractCommandMessageContent(text);
                             text = text.replace("\n", " ").trim();
                             if (text.length() > 45) {
                                 text = text.substring(0, 45) + "...";
@@ -848,6 +850,7 @@ public class CodexHistoryReader {
                             if (payload.has("message")) {
                                 String text = payload.get("message").getAsString();
                                 if (text != null && !text.isEmpty()) {
+                                    text = TagExtractor.extractCommandMessageContent(text);
                                     sessionTitle = text.replace("\n", " ").trim();
                                     if (sessionTitle.length() > 45) {
                                         sessionTitle = sessionTitle.substring(0, 45) + "...";

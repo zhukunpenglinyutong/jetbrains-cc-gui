@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.util.PathUtils;
+import com.github.claudecodegui.util.TagExtractor;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.*;
@@ -486,6 +487,7 @@ public class ClaudeHistoryReader {
 
                 String text = extractTextFromContent(msg.message.content);
                 if (text != null && !text.isEmpty()) {
+                    text = TagExtractor.extractCommandMessageContent(text);
                     text = text.replace("\n", " ").trim();
                     if (text.length() > 45) {
                         text = text.substring(0, 45) + "...";
