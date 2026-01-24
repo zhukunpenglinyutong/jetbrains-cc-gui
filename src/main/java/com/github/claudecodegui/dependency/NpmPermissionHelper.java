@@ -229,7 +229,15 @@ public class NpmPermissionHelper {
             LOG.info("[NpmPermissionHelper] Adding --force flag for retry attempt " + retryAttempt);
         }
 
-        command.addAll(packages);
+        // Wrap packages containing special characters in quotes to prevent shell interpretation
+        for (String pkg : packages) {
+            if (pkg.contains("^") || pkg.contains("~") || pkg.contains(">") || pkg.contains("<")) {
+                command.add("\"" + pkg + "\"");
+            } else {
+                command.add(pkg);
+            }
+        }
+
         return command;
     }
 
