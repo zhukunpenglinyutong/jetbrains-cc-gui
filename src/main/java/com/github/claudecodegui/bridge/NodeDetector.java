@@ -173,30 +173,40 @@ public class NodeDetector {
         try {
             // 使用 -l（登录 shell）和 -i（交互式）确保加载用户配置
             // 这样可以获取 nvm、fnm 等版本管理器配置的路径
-            ProcessBuilder pb = new ProcessBuilder(shellPath, "-l", "-c", "which node");
-            String methodDesc = shellName + " which 命令";
+            // fnm 需要交互式 shell 来执行 .zshrc 中的 eval "$(fnm env)" 初始化
+            ProcessBuilder pb = new ProcessBuilder(shellPath, "-l", "-i", "-c", "which node");
+            String methodDesc = shellName + " which 命令（交互式）";
 
             LOG.info("  尝试方法: " + methodDesc);
             Process process = pb.start();
 
+            String nodePath = null;
             try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String path = reader.readLine();
-                if (path != null && !path.isEmpty()) {
-                    path = path.trim();
-                    // 排除 "node not found" 类似的错误信息
-                    if (path.startsWith("/") && !path.contains("not found")) {
-                        triedPaths.add(path);
+                // 读取所有输出行，找出有效的 node 路径
+                // 交互式 shell 可能会输出额外内容（如提示符、欢迎消息等）
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    // 有效的 node 路径应该以 / 开头，不包含错误信息
+                    if (line.startsWith("/") && !line.contains("not found") &&
+                        (line.endsWith("/node") || line.contains("/node\n") || line.matches(".*/node$"))) {
+                        nodePath = line;
+                        break;
+                    }
+                }
 
-                        String version = verifyNodePath(path);
-                        if (version != null) {
-                            LOG.info("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
-                            return NodeDetectionResult.success(
-                                path, version,
-                                NodeDetectionResult.DetectionMethod.WHICH_COMMAND,
-                                triedPaths
-                            );
-                        }
+                if (nodePath != null) {
+                    triedPaths.add(nodePath);
+
+                    String version = verifyNodePath(nodePath);
+                    if (version != null) {
+                        LOG.info("✓ 通过 " + methodDesc + " 找到 Node.js: " + nodePath + " (" + version + ")");
+                        return NodeDetectionResult.success(
+                            nodePath, version,
+                            NodeDetectionResult.DetectionMethod.WHICH_COMMAND,
+                            triedPaths
+                        );
                     }
                 }
             }

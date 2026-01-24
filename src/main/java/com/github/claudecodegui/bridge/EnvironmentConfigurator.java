@@ -367,7 +367,8 @@ public class EnvironmentConfigurator {
      */
     private String getEnvFromShell(String envName) {
         try {
-            // Use login shell to get full environment
+            // Use login + interactive shell to get full environment
+            // fnm and other version managers require interactive shell to load .zshrc
             String shell = System.getenv("SHELL");
             if (shell == null || shell.isEmpty()) {
                 shell = "/bin/zsh"; // Default to zsh on macOS
@@ -376,6 +377,7 @@ public class EnvironmentConfigurator {
             List<String> command = new ArrayList<>();
             command.add(shell);
             command.add("-l"); // Login shell
+            command.add("-i"); // Interactive shell (needed for fnm, nvm etc.)
             command.add("-c");
             command.add("echo \"$" + envName + "\"");
 
