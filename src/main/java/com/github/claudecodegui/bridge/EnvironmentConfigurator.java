@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -359,6 +360,21 @@ public class EnvironmentConfigurator {
     }
 
     /**
+     * Validate environment variable name format.
+     * Valid names start with a letter or underscore, followed by letters, digits, or underscores.
+     * This prevents command injection when the name is used in shell commands.
+     *
+     * @param envName Environment variable name to validate
+     * @return true if valid, false otherwise
+     */
+    private boolean isValidEnvName(String envName) {
+        if (envName == null || envName.isEmpty()) {
+            return false;
+        }
+        return envName.matches("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    }
+
+    /**
      * Get environment variable by executing a login shell (macOS/Linux).
      * This captures environment variables set in .zshrc, .bash_profile, etc.
      *
@@ -366,6 +382,12 @@ public class EnvironmentConfigurator {
      * @return Value or null
      */
     private String getEnvFromShell(String envName) {
+        // Validate env name to prevent command injection
+        if (!isValidEnvName(envName)) {
+            LOG.warn("[Codex] Invalid env var name, skipping: " + envName);
+            return null;
+        }
+
         try {
             // Use login + interactive shell to get full environment
             // fnm and other version managers require interactive shell to load .zshrc
@@ -382,17 +404,42 @@ public class EnvironmentConfigurator {
             command.add("echo \"$" + envName + "\"");
 
             ProcessBuilder pb = new ProcessBuilder(command);
+            // Set TERM=dumb to suppress interactive shell extra output (colors, prompts, etc.)
+            pb.environment().put("TERM", "dumb");
             pb.redirectErrorStream(true);
 
             Process process = pb.start();
+
+            // Wait for process to complete first (with timeout) to avoid readLine blocking
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+            if (!finished) {
+                LOG.debug("[Codex] Shell command timeout for env: " + envName);
+                process.destroyForcibly();
+                return null;
+            }
+
+            // Process completed, now safe to read output
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line = reader.readLine();
-                process.waitFor();
+                // Read all lines and find the valid value
+                // Interactive shell may output extra content (prompts, welcome messages, etc.)
+                String line;
+                String lastValidValue = null;
+                while ((line = reader.readLine()) != null) {
+                    String trimmed = line.trim();
+                    // Skip empty lines and common shell artifacts
+                    if (!trimmed.isEmpty() &&
+                        !trimmed.startsWith("[") &&      // Skip MOTD brackets
+                        !trimmed.startsWith("%") &&      // Skip zsh prompts
+                        !trimmed.startsWith(">") &&      // Skip continuation prompts
+                        !trimmed.contains("Last login")) { // Skip login messages
+                        lastValidValue = trimmed;
+                    }
+                }
 
-                if (line != null && !line.trim().isEmpty()) {
+                if (lastValidValue != null && !lastValidValue.isEmpty()) {
                     LOG.debug("[Codex] Env var found via shell: " + envName);
-                    return line.trim();
+                    return lastValidValue;
                 }
             }
         } catch (Exception e) {
@@ -408,6 +455,12 @@ public class EnvironmentConfigurator {
      * @return Value or null
      */
     private String getEnvFromWindowsShell(String envName) {
+        // Validate env name to prevent command injection
+        if (!isValidEnvName(envName)) {
+            LOG.warn("[Codex] Invalid env var name, skipping: " + envName);
+            return null;
+        }
+
         try {
             List<String> command = new ArrayList<>();
             command.add("cmd");

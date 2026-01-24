@@ -175,11 +175,24 @@ public class NodeDetector {
             // 这样可以获取 nvm、fnm 等版本管理器配置的路径
             // fnm 需要交互式 shell 来执行 .zshrc 中的 eval "$(fnm env)" 初始化
             ProcessBuilder pb = new ProcessBuilder(shellPath, "-l", "-i", "-c", "which node");
-            String methodDesc = shellName + " which 命令（交互式）";
+            String methodDesc = shellName + " which 命令（登录+交互式 shell）";
+
+            // 设置 TERM=dumb 抑制交互式 shell 的额外输出（如颜色代码、提示符等）
+            pb.environment().put("TERM", "dumb");
+            pb.redirectErrorStream(true);
 
             LOG.info("  尝试方法: " + methodDesc);
             Process process = pb.start();
 
+            // 先等待进程完成（带超时），确保不会因 readLine 阻塞
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+            if (!finished) {
+                LOG.debug("  " + shellName + " 命令超时");
+                process.destroyForcibly();
+                return null;
+            }
+
+            // 进程已完成，现在可以安全地读取输出
             String nodePath = null;
             try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -188,9 +201,8 @@ public class NodeDetector {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     line = line.trim();
-                    // 有效的 node 路径应该以 / 开头，不包含错误信息
-                    if (line.startsWith("/") && !line.contains("not found") &&
-                        (line.endsWith("/node") || line.contains("/node\n") || line.matches(".*/node$"))) {
+                    // 有效的 node 路径应该以 / 开头，以 /node 结尾，不包含错误信息
+                    if (line.startsWith("/") && !line.contains("not found") && line.endsWith("/node")) {
                         nodePath = line;
                         break;
                     }
@@ -209,11 +221,6 @@ public class NodeDetector {
                         );
                     }
                 }
-            }
-
-            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
             }
         } catch (Exception e) {
             LOG.debug("  " + shellName + " 命令查找失败: " + e.getMessage());
