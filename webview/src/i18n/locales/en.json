@@ -638,7 +638,12 @@
     "editPrefix": "Edit: {{fileName}}",
     "lineRange": "Lines {{start}}-{{end}}",
     "filePath": "File path:",
-    "unknownTool": "Unknown tool"
+    "unknownTool": "Unknown tool",
+    "bashGroupBatchRun": "Batch Run Commands",
+    "bashGroupBatchExecution": "Batch Execution",
+    "bashGroupCompleted": "completed",
+    "bashGroupAllCompleted": "All Completed",
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "In Progress {{completed}}/{{total}} tasks",

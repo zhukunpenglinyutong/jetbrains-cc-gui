@@ -639,7 +639,12 @@
     "editPrefix": "编辑: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
     "filePath": "文件路径：",
-    "unknownTool": "未知工具"
+    "unknownTool": "未知工具",
+    "bashGroupBatchRun": "批量运行命令",
+    "bashGroupBatchExecution": "批量执行",
+    "bashGroupCompleted": "完成",
+    "bashGroupAllCompleted": "全部完成",
+    "bashGroupFailed": "失败"
   },
   "todo": {
     "inProgress": "进行中 {{completed}}/{{total}} 个任务",
