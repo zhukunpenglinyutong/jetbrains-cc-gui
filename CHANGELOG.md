@@ -1,3 +1,39 @@
+##### **2026年1月24日（v0.1.6-beta3）**
+
+English:
+- [x] Add StatusPanel with task tracking, subagent status, and file changes undo
+- [x] Add session index cache system with in-memory caching (5min TTL) and disk persistence
+- [x] Add BashToolGroupBlock for batch command display with timeline view
+- [x] Extract and display command-message tag content from user input
+- [x] Extract settings state management into custom hooks (useProviderManagement, useCodexProviderManagement, useAgentManagement)
+- [x] Add useIsToolDenied shared hook to reduce code duplication
+- [x] Add useFileChanges hook with single/batch undo support
+- [x] Add useSubagents hook for background task status tracking
+- [x] Fix cursor position preservation during input value sync and file tag rendering
+- [x] Fix permission handling issues (JSON parse error handling, stale state cleanup, React safety)
+- [x] Fix BashToolGroupBlock expanded item scrolling by increasing max-height
+- [x] Fix BridgeDirectoryResolver filesystem sync race condition
+- [x] Refactor: remove duplicate LOG.info/debugLog calls in permission services
+- [x] Refactor: extract permission timeout as named constants with cross-reference comments
+- [x] Clean up frontend console logs
+
+中文:
+- [x] 新增状态面板（StatusPanel）：支持任务跟踪、子代理状态显示和文件变更撤销
+- [x] 新增会话索引缓存系统：内存缓存（5分钟 TTL）+ 磁盘持久化
+- [x] 新增批量命令显示组件（BashToolGroupBlock）：支持时间线视图
+- [x] 提取并显示用户输入中的 command-message 标签内容
+- [x] 提取设置状态管理到自定义 hooks（useProviderManagement、useCodexProviderManagement、useAgentManagement）
+- [x] 新增 useIsToolDenied 共享 hook，减少代码重复
+- [x] 新增 useFileChanges hook，支持单个/批量撤销功能
+- [x] 新增 useSubagents hook，用于后台任务状态跟踪
+- [x] 修复输入框光标位置：输入值同步和文件标签渲染时保持光标位置
+- [x] 修复权限处理问题（JSON 解析错误处理、过期状态清理、React 安全性）
+- [x] 修复 BashToolGroupBlock 展开项滚动问题
+- [x] 修复 BridgeDirectoryResolver 文件系统同步竞态条件
+- [x] 重构：移除权限服务中的重复 LOG.info/debugLog 调用
+- [x] 重构：提取权限超时为命名常量并添加交叉引用注释
+- [x] 清理前端 console.log 语句
+
 ##### **2026年1月22日（v0.1.6-beta2）**
 
 English:
