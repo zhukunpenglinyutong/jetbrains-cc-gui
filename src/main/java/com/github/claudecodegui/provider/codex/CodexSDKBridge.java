@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import com.github.claudecodegui.ClaudeSession;
+import com.github.claudecodegui.dependency.DependencyManager;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
@@ -168,12 +169,18 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
     /**
      * Set executable permission for Codex binary.
+     * Codex SDK is installed in ~/.codemoss/dependencies/codex-sdk/, not in ai-bridge.
      */
     private void setCodexExecutablePermission(File bridgeDir) {
         try {
-            File vendorDir = new File(bridgeDir, "node_modules/@openai/codex-sdk/vendor");
+            // Codex SDK is installed in ~/.codemoss/dependencies/codex-sdk/
+            // not in ai-bridge directory
+            DependencyManager depManager = new DependencyManager();
+            File sdkNodeModules = depManager.getSdkNodeModulesDir("codex-sdk").toFile();
+            File vendorDir = new File(sdkNodeModules, "@openai/codex-sdk/vendor");
+
             if (!vendorDir.exists()) {
-                LOG.info("vendor directory not found, skipping permission setup");
+                LOG.info("Codex vendor directory not found at: " + vendorDir.getAbsolutePath() + ", skipping permission setup");
                 return;
             }
 
@@ -233,6 +240,13 @@ public class CodexSDKBridge extends BaseSDKBridge {
             try {
                 String node = nodeDetector.findNodeExecutable();
                 File bridgeDir = getDirectoryResolver().findSdkDir();
+
+                // Null check for bridgeDir
+                if (bridgeDir == null || !bridgeDir.exists()) {
+                    result.success = false;
+                    result.error = "Bridge directory not ready or invalid";
+                    return result;
+                }
 
                 // Ensure Codex SDK binary has executable permission
                 setCodexExecutablePermission(bridgeDir);

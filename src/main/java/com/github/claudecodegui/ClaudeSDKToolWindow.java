@@ -16,6 +16,7 @@ import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.handler.PromptEnhancerHandler;
 import com.github.claudecodegui.handler.ProviderHandler;
 import com.github.claudecodegui.handler.RewindHandler;
+import com.github.claudecodegui.handler.UndoFileHandler;
 import com.github.claudecodegui.handler.SessionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.SkillHandler;
@@ -154,16 +155,69 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         // 注册 JVM Shutdown Hook（只注册一次）
         registerShutdownHook();
 
-        ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
         ContentFactory contentFactory = ContentFactory.getInstance();
-        // Set the initial tab name to "AI1"
-        Content content = contentFactory.createContent(chatWindow.getContent(), TAB_NAME_PREFIX + "1", false);
-
-        // Set parent content for the first tab (important for multi-tab code snippet support)
-        chatWindow.setParentContent(content);
-
         ContentManager contentManager = toolWindow.getContentManager();
-        contentManager.addContent(content);
+
+        // 检查 ai-bridge 是否已准备好
+        if (BridgePreloader.isBridgeReady()) {
+            // ai-bridge 已准备好，直接创建聊天窗口
+            LOG.info("[ToolWindow] ai-bridge ready, creating chat window directly");
+            createChatWindowContent(project, toolWindow, contentFactory, contentManager);
+        } else {
+            // ai-bridge 还没准备好，显示加载界面
+            LOG.info("[ToolWindow] ai-bridge not ready, showing loading panel");
+            JPanel loadingPanel = createLoadingPanel();
+            Content loadingContent = contentFactory.createContent(loadingPanel, TAB_NAME_PREFIX + "1", false);
+            contentManager.addContent(loadingContent);
+
+            // 在后台触发解压并等待完成
+            ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                try {
+                    // 触发解压（如果还没开始的话）
+                    BridgePreloader.getSharedResolver().findSdkDir();
+
+                    // 等待解压完成（最多等待 60 秒）
+                    CompletableFuture<Boolean> future = BridgePreloader.waitForBridgeAsync();
+                    Boolean ready = future.get(60, TimeUnit.SECONDS);
+
+                    if (project.isDisposed()) {
+                        return;
+                    }
+
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (project.isDisposed()) {
+                            return;
+                        }
+
+                        if (ready != null && ready) {
+                            LOG.info("[ToolWindow] ai-bridge ready, replacing loading panel with chat window");
+                            // 移除加载界面
+                            contentManager.removeContent(loadingContent, true);
+                            // 创建聊天窗口
+                            createChatWindowContent(project, toolWindow, contentFactory, contentManager);
+                        } else {
+                            LOG.error("[ToolWindow] ai-bridge preparation failed");
+                            // 显示错误信息
+                            updateLoadingPanelWithError(loadingPanel, "AI Bridge preparation failed. Please restart IDE.");
+                        }
+                    });
+                } catch (TimeoutException e) {
+                    LOG.error("[ToolWindow] ai-bridge preparation timeout");
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (!project.isDisposed()) {
+                            updateLoadingPanelWithError(loadingPanel, "AI Bridge preparation timeout. Please restart IDE.");
+                        }
+                    });
+                } catch (Exception e) {
+                    LOG.error("[ToolWindow] ai-bridge preparation error: " + e.getMessage());
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (!project.isDisposed()) {
+                            updateLoadingPanelWithError(loadingPanel, "Error: " + e.getMessage());
+                        }
+                    });
+                }
+            });
+        }
 
         // Add DevTools action to ToolWindow title bar (only in development mode)
         if (PlatformUtils.isPluginDevMode()) {
@@ -174,13 +228,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 toolWindow.setTitleActions(java.util.List.of(devToolsAction));
             }
         }
-
-        content.setDisposer(() -> {
-            ClaudeChatWindow window = instances.get(project);
-            if (window != null) {
-                window.dispose();
-            }
-        });
 
         // Add listener to manage tab closeable state based on tab count
         // When there's only one tab, disable the close button to prevent closing the last tab
@@ -213,6 +260,93 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         LOG.debug("[TabManager] Updated tab closeable state: count=" + tabCount + ", closeable=" + closeable);
+    }
+
+    /**
+     * 创建加载面板，在 ai-bridge 准备好之前显示
+     */
+    private JPanel createLoadingPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(com.github.claudecodegui.util.ThemeConfigService.getBackgroundColor());
+
+        JPanel centerPanel = new JPanel();
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setOpaque(false);
+
+        // 加载动画图标
+        JLabel iconLabel = new JLabel("\u2699");  // ⚙ 齿轮符号
+        iconLabel.setFont(iconLabel.getFont().deriveFont(48f));
+        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        centerPanel.add(iconLabel);
+
+        centerPanel.add(Box.createVerticalStrut(16));
+
+        // 加载提示文字
+        JLabel textLabel = new JLabel("Preparing AI Bridge...(插件解压中...)");
+        textLabel.setFont(textLabel.getFont().deriveFont(14f));
+        textLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        centerPanel.add(textLabel);
+
+        panel.add(centerPanel);
+        return panel;
+    }
+
+    /**
+     * 更新加载面板显示错误信息
+     */
+    private void updateLoadingPanelWithError(JPanel loadingPanel, String errorMessage) {
+        loadingPanel.removeAll();
+
+        JPanel centerPanel = new JPanel();
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setOpaque(false);
+
+        // 错误图标
+        JLabel iconLabel = new JLabel("\u26A0");  // ⚠ 警告符号
+        iconLabel.setFont(iconLabel.getFont().deriveFont(48f));
+        iconLabel.setForeground(Color.ORANGE);
+        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        centerPanel.add(iconLabel);
+
+        centerPanel.add(Box.createVerticalStrut(16));
+
+        // 错误信息
+        JLabel textLabel = new JLabel(errorMessage);
+        textLabel.setFont(textLabel.getFont().deriveFont(14f));
+        textLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        centerPanel.add(textLabel);
+
+        loadingPanel.add(centerPanel);
+        loadingPanel.revalidate();
+        loadingPanel.repaint();
+    }
+
+    /**
+     * 创建聊天窗口内容（从原来的 createToolWindowContent 提取）
+     */
+    private void createChatWindowContent(
+            @NotNull Project project,
+            @NotNull ToolWindow toolWindow,
+            ContentFactory contentFactory,
+            ContentManager contentManager
+    ) {
+        ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
+        Content content = contentFactory.createContent(chatWindow.getContent(), TAB_NAME_PREFIX + "1", false);
+
+        // Set parent content for the first tab (important for multi-tab code snippet support)
+        chatWindow.setParentContent(content);
+
+        contentManager.addContent(content);
+
+        content.setDisposer(() -> {
+            ClaudeChatWindow window = instances.get(project);
+            if (window != null) {
+                window.dispose();
+            }
+        });
+
+        // Initialize closeable state for the first tab
+        updateTabCloseableState(contentManager);
     }
 
     /**
@@ -563,6 +697,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new AgentHandler(handlerContext));
             messageDispatcher.registerHandler(new TabHandler(handlerContext));
             messageDispatcher.registerHandler(new RewindHandler(handlerContext));
+            messageDispatcher.registerHandler(new UndoFileHandler(handlerContext));
             messageDispatcher.registerHandler(new DependencyHandler(handlerContext));
 
             // 权限处理器（需要特殊回调）
@@ -1009,24 +1144,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             iconLabel.setForeground(Color.WHITE);
             iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            JLabel titleLabel = new JLabel("JCEF 不可用");
+            JLabel titleLabel = new JLabel("当前IDE JCEF 模块未安装");
             titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
             titleLabel.setForeground(Color.WHITE);
             titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
             JTextArea messageArea = new JTextArea();
             messageArea.setText(
-                "当前环境不支持 JCEF (Java Chromium Embedded Framework)。\n\n" +
-                "可能的原因：\n" +
-                "• 使用了不支持 JCEF 的 IDE 版本或运行时\n" +
-                "• IDE 启动时使用了 -Dide.browser.jcef.enabled=false 参数\n" +
-                "• 系统环境缺少必要的依赖库\n\n" +
                 "解决方案：\n" +
-                "1. 确保使用支持 JCEF 的 IntelliJ IDEA 版本 (2020.2+)\n" +
-                "2. 检查 IDE 设置：Help → Find Action → Registry，\n" +
-                "   确保 ide.browser.jcef.enabled 为 true\n" +
-                "3. 尝试重启 IDE\n" +
-                "4. 如果使用 JetBrains Runtime，确保版本支持 JCEF"
+                "双击 Shift 键，搜索 Choose Boot Java Runtime for the IDE\n" +
+                "在弹出窗口的下拉列表中，选择一个标记有 with JCEF 的版本进行下载和安装。\n" +
+                "等待下载完成并点击确定，随后重启 Android Studio"
             );
             messageArea.setEditable(false);
             messageArea.setBackground(new Color(45, 45, 45));
@@ -1379,6 +1507,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
             callJavaScript("clearMessages");
+
+            // 清理所有待处理的权限请求，防止旧会话的请求干扰新会话
+            permissionHandler.clearPendingRequests();
 
             session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 
@@ -1960,6 +2091,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     callJavaScript("showLoading", "false");
                 });
 
+                // 清理所有待处理的权限请求，防止旧会话的请求干扰新会话
+                permissionHandler.clearPendingRequests();
+
                 // 创建全新的 Session 对象
                 session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 
@@ -2019,7 +2153,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void interruptDueToPermissionDenial() {
-            this.session.interrupt().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {}));
+            this.session.interrupt().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
+                // 通知前端权限被拒绝，让前端标记未完成的工具调用为"中断"状态
+                callJavaScript("onPermissionDenied");
+                // Align with explicit interrupt behavior to clear streaming/loading UI state.
+                callJavaScript("onStreamEnd");
+                callJavaScript("showLoading", "false");
+                com.github.claudecodegui.notifications.ClaudeNotifier.clearStatus(project);
+            }));
         }
 
         /**
@@ -2068,9 +2209,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         "  try {" +
                         "    if (typeof " + callee + " === 'function') {" +
                         "      " + callee + "(" + argsJs + ");" +
-                        "      console.log('[Backend->Frontend] Successfully called " + functionName + "');" +
-                        "    } else {" +
-                        "      console.warn('[Backend->Frontend] Function " + functionName + " not found: ' + (typeof " + callee + "));" +
                         "    }" +
                         "  } catch (e) {" +
                         "    console.error('[Backend->Frontend] Failed to call " + functionName + ":', e);" +

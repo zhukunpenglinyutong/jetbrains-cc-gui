@@ -44,6 +44,7 @@ import {
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
 import { generateId } from './utils/generateId.js';
+import { getCursorOffset, setCursorOffset } from './utils/selectionUtils.js';
 import './styles.css';
 
 /**
@@ -93,6 +94,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       onOpenAgentSettings,
       hasMessages,
       onRewind,
+      statusPanelExpanded = true,
+      onToggleStatusPanel,
       sdkInstalled = true, // Default to true to avoid disabling input box on initial state
       sdkStatusLoading = false, // SDK status loading state
       onInstallSdk,
@@ -376,6 +379,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         }
       }
     }, [
+      justRenderedTagRef,
       getTextContent,
       getCursorPosition,
       detectTrigger,
@@ -742,6 +746,19 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       // Skip during IME composition to avoid breaking input
       if (isComposingRef.current) return;
 
+      const hasFocus = document.activeElement === editableRef.current;
+
+      // Performance optimization: Skip sync when user is actively editing
+      // Only sync when:
+      // 1. Element doesn't have focus (external programmatic update)
+      // 2. Value is empty (clear operation after submit)
+      // 3. Value changed significantly (more than just typing - e.g., paste or external reset)
+      if (hasFocus && value !== '') {
+        // User is actively editing, skip DOM rebuild to prevent cursor jump and lag
+        // The content is already in the DOM from user input
+        return;
+      }
+
       // Invalidate cache before comparing
       invalidateCache();
       const currentText = getTextContent();
@@ -752,12 +769,25 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         // Mark as external update to prevent debounced onInput from firing
         isExternalUpdateRef.current = true;
 
+        // Save cursor position before updating content
+        // This preserves cursor position when editing in the middle of text
+        const cursorOffset = getCursorOffset(editableRef.current);
+
         editableRef.current.innerText = value;
         setHasContent(!!value.trim());
         adjustHeight();
 
-        // Move cursor to end
-        if (value) {
+        // Restore cursor position if element has focus and cursor was inside
+        // Otherwise move to end (for programmatic value changes when not focused)
+        if (value && hasFocus && cursorOffset >= 0) {
+          // Use requestAnimationFrame to ensure DOM is updated before setting cursor
+          requestAnimationFrame(() => {
+            // Check if element still exists in DOM (component may have unmounted)
+            if (editableRef.current && document.body.contains(editableRef.current)) {
+              setCursorOffset(editableRef.current, cursorOffset);
+            }
+          });
+        } else if (value) {
           const range = document.createRange();
           const selection = window.getSelection();
           range.selectNodeContents(editableRef.current);
@@ -1124,6 +1154,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           currentProvider={currentProvider}
           hasMessages={hasMessages}
           onRewind={onRewind}
+          statusPanelExpanded={statusPanelExpanded}
+          onToggleStatusPanel={onToggleStatusPanel}
         />
 
         {/* Input area */}

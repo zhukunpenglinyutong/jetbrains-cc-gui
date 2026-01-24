@@ -38,6 +38,42 @@
   color: var(--text-secondary);
 }
 
+.themeSelector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.themeOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-tertiary);
+  }
+
+  &.active {
+    border-color: var(--accent-primary);
+    background: rgba(0, 120, 212, 0.08);
+  }
+}
+
+.themeOptionLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* 保留 themeGrid 和 themeCard 供其他地方使用 (如发送快捷键) */
 .themeGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -82,52 +118,58 @@
 }
 
 .themeIconLight {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
   border: 1px solid #e0e0e0;
-  margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 
   .codicon, svg {
-    font-size: 20px;
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
     color: #333333;
   }
 }
 
 .themeIconDark {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   background: linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%);
   border: 1px solid #404040;
-  margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 
   .codicon, svg {
-    font-size: 20px;
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
     color: #ffffff;
   }
 }
 
 .themeIconSystem {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   border: 1px solid #818cf8;
-  margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 
   .codicon, svg {
-    font-size: 20px;
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
     color: #ffffff;
   }
 }

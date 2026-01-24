@@ -58,3 +58,9 @@ export interface HistoryData {
   total?: number;
   favorites?: Record<string, { favoritedAt: number }>;
 }
+
+// File changes types
+export type { FileChangeStatus, EditOperation, FileChangeSummary } from './fileChanges';
+
+// Subagent types
+export type { SubagentStatus, SubagentInfo } from './subagent';

@@ -4,6 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.github.claudecodegui.cache.SessionIndexCache;
+import com.github.claudecodegui.cache.SessionIndexManager;
+import com.github.claudecodegui.util.TagExtractor;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
@@ -137,14 +140,176 @@ public class CodexHistoryReader {
     /**
      * Read all Codex sessions.
      * Returns all sessions regardless of project.
+     * Uses memory cache and file index for performance optimization.
      */
     public List<SessionInfo> readAllSessions() throws IOException {
+        return readAllSessionsWithCache("__all__");
+    }
+
+    /**
+     * Read all sessions with cache support
+     * @param cacheKey 缓存键（用于区分不同项目的缓存）
+     */
+    private List<SessionInfo> readAllSessionsWithCache(String cacheKey) throws IOException {
         List<SessionInfo> sessions = new ArrayList<>();
 
         if (!Files.exists(CODEX_SESSIONS_DIR) || !Files.isDirectory(CODEX_SESSIONS_DIR)) {
             LOG.info("[CodexHistoryReader] Codex sessions directory not found: " + CODEX_SESSIONS_DIR);
             return sessions;
         }
+
+        // 1. 检查内存缓存
+        SessionIndexCache cache = SessionIndexCache.getInstance();
+        List<SessionInfo> cachedSessions = cache.getCodexSessions(cacheKey, CODEX_SESSIONS_DIR);
+        if (cachedSessions != null) {
+            LOG.info("[CodexHistoryReader] Using memory cache for " + cacheKey + ", sessions: " + cachedSessions.size());
+            return cachedSessions;
+        }
+
+        // 2. 检查索引文件和更新类型
+        SessionIndexManager indexManager = SessionIndexManager.getInstance();
+        SessionIndexManager.SessionIndex index = indexManager.readCodexIndex();
+        SessionIndexManager.ProjectIndex projectIndex = index.projects.get(cacheKey);
+        SessionIndexManager.UpdateType updateType = indexManager.getUpdateTypeRecursive(projectIndex, CODEX_SESSIONS_DIR);
+
+        if (updateType == SessionIndexManager.UpdateType.NONE) {
+            // 索引有效，从索引恢复
+            LOG.info("[CodexHistoryReader] Using file index for " + cacheKey + ", sessions: " + projectIndex.sessions.size());
+            sessions = restoreSessionsFromIndex(projectIndex);
+            // 更新内存缓存
+            cache.updateCodexCache(cacheKey, CODEX_SESSIONS_DIR, sessions);
+            return sessions;
+        }
+
+        long startTime = System.currentTimeMillis();
+
+        if (updateType == SessionIndexManager.UpdateType.INCREMENTAL && projectIndex != null) {
+            // 3a. 增量更新：只扫描新文件
+            LOG.info("[CodexHistoryReader] Incremental scan for Codex sessions");
+            sessions = incrementalScan(projectIndex);
+        } else {
+            // 3b. 全量扫描
+            LOG.info("[CodexHistoryReader] Full scan for Codex sessions");
+            sessions = scanAllSessions();
+        }
+
+        long scanTime = System.currentTimeMillis() - startTime;
+        LOG.info("[CodexHistoryReader] Scan completed in " + scanTime + "ms, sessions: " + sessions.size());
+
+        // 4. 更新索引
+        updateCodexIndex(index, cacheKey, sessions);
+        indexManager.saveCodexIndex(index);
+
+        // 5. 更新内存缓存
+        cache.updateCodexCache(cacheKey, CODEX_SESSIONS_DIR, sessions);
+
+        return sessions;
+    }
+
+    /**
+     * 增量扫描：只扫描新文件，合并已有索引
+     */
+    private List<SessionInfo> incrementalScan(SessionIndexManager.ProjectIndex existingIndex) throws IOException {
+        // 获取已索引的 sessionId 集合
+        Set<String> indexedIds = existingIndex.getIndexedSessionIds();
+
+        // 从现有索引恢复已有会话
+        List<SessionInfo> sessions = restoreSessionsFromIndex(existingIndex);
+
+        // 扫描新文件
+        List<SessionInfo> newSessions = new ArrayList<>();
+        try (Stream<Path> paths = Files.walk(CODEX_SESSIONS_DIR)) {
+            List<Path> newFiles = paths
+                .filter(Files::isRegularFile)
+                .filter(path -> path.toString().endsWith(".jsonl"))
+                .filter(path -> {
+                    String fileName = path.getFileName().toString();
+                    String sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
+                    return !indexedIds.contains(sessionId);
+                })
+                .filter(path -> {
+                    try {
+                        return Files.size(path) > 0;
+                    } catch (IOException e) {
+                        return false;
+                    }
+                })
+                .collect(Collectors.toList());
+
+            LOG.info("[CodexHistoryReader] Found " + newFiles.size() + " new Codex session files");
+
+            for (Path sessionFile : newFiles) {
+                try {
+                    SessionInfo session = parseSessionFile(sessionFile);
+                    if (session != null && isValidSession(session)) {
+                        newSessions.add(session);
+                    }
+                } catch (Exception e) {
+                    LOG.warn("[CodexHistoryReader] Failed to parse new session file: " + sessionFile + " - " + e.getMessage());
+                }
+            }
+        }
+
+        LOG.info("[CodexHistoryReader] Incremental scan found " + newSessions.size() + " new valid sessions");
+
+        // 合并新旧会话
+        sessions.addAll(newSessions);
+
+        // 按时间排序
+        sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
+
+        return sessions;
+    }
+
+    /**
+     * 从索引恢复会话列表
+     */
+    private List<SessionInfo> restoreSessionsFromIndex(SessionIndexManager.ProjectIndex projectIndex) {
+        List<SessionInfo> sessions = new ArrayList<>();
+        for (SessionIndexManager.SessionIndexEntry entry : projectIndex.sessions) {
+            SessionInfo session = new SessionInfo();
+            session.sessionId = entry.sessionId;
+            session.title = entry.title;
+            session.messageCount = entry.messageCount;
+            session.lastTimestamp = entry.lastTimestamp;
+            session.firstTimestamp = entry.firstTimestamp;
+            session.cwd = entry.cwd;
+            sessions.add(session);
+        }
+        return sessions;
+    }
+
+    /**
+     * 更新 Codex 索引
+     */
+    private void updateCodexIndex(
+            SessionIndexManager.SessionIndex index,
+            String cacheKey,
+            List<SessionInfo> sessions
+    ) {
+        SessionIndexManager.ProjectIndex projectIndex = new SessionIndexManager.ProjectIndex();
+        projectIndex.lastDirScanTime = System.currentTimeMillis();
+        projectIndex.fileCount = sessions.size();
+
+        for (SessionInfo session : sessions) {
+            SessionIndexManager.SessionIndexEntry entry = new SessionIndexManager.SessionIndexEntry();
+            entry.sessionId = session.sessionId;
+            entry.title = session.title;
+            entry.messageCount = session.messageCount;
+            entry.lastTimestamp = session.lastTimestamp;
+            entry.firstTimestamp = session.firstTimestamp;
+            entry.cwd = session.cwd;
+            projectIndex.sessions.add(entry);
+        }
+
+        index.projects.put(cacheKey, projectIndex);
+    }
+
+    /**
+     * 扫描所有 Codex 会话（原有逻辑）
+     */
+    private List<SessionInfo> scanAllSessions() throws IOException {
+        List<SessionInfo> sessions = new ArrayList<>();
 
         try (Stream<Path> paths = Files.walk(CODEX_SESSIONS_DIR)) {
             List<Path> jsonlFiles = paths
@@ -260,6 +425,7 @@ public class CodexHistoryReader {
                     if (payload.has("message")) {
                         String text = payload.get("message").getAsString();
                         if (text != null && !text.isEmpty()) {
+                            text = TagExtractor.extractCommandMessageContent(text);
                             text = text.replace("\n", " ").trim();
                             if (text.length() > 45) {
                                 text = text.substring(0, 45) + "...";
@@ -684,6 +850,7 @@ public class CodexHistoryReader {
                             if (payload.has("message")) {
                                 String text = payload.get("message").getAsString();
                                 if (text != null && !text.isEmpty()) {
+                                    text = TagExtractor.extractCommandMessageContent(text);
                                     sessionTitle = text.replace("\n", " ").trim();
                                     if (sessionTitle.length() > 45) {
                                         sessionTitle = sessionTitle.substring(0, 45) + "...";

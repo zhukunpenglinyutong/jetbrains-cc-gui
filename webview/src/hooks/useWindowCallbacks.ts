@@ -423,7 +423,10 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
     window.setHistoryData = (data) => setHistoryData(data);
-    window.clearMessages = () => setMessages([]);
+    window.clearMessages = () => {
+      window.__deniedToolIds?.clear();
+      setMessages([]);
+    };
     window.addErrorMessage = (message) =>
       setMessages((prev) => [...prev, { type: 'error', content: message }]);
 
@@ -644,6 +647,72 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       seenToolUseCountRef.current = 0;
       autoExpandedThinkingKeysRef.current.clear();
       setStreamingActive(false);
+    };
+
+    // 权限被拒绝回调 - 标记未完成的工具调用为"中断"状态
+    window.onPermissionDenied = () => {
+      if (!window.__deniedToolIds) {
+        window.__deniedToolIds = new Set<string>();
+      }
+
+      // 收集需要标记为拒绝的工具 ID
+      const idsToAdd: string[] = [];
+
+      setMessages((currentMessages) => {
+        try {
+          // 从后向前遍历，找到最后一条包含未完成工具调用的消息
+          for (let i = currentMessages.length - 1; i >= 0; i--) {
+            const msg = currentMessages[i];
+            if (msg.type === 'assistant' && msg.raw) {
+              const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
+              const content = rawObj.content || rawObj.message?.content;
+
+              if (Array.isArray(content)) {
+                const toolUses = content.filter(
+                  (block: { type?: string; id?: string }) => block.type === 'tool_use' && block.id
+                ) as Array<{ type: string; id: string; name?: string }>;
+
+                if (toolUses.length > 0) {
+                  // 检查这些工具调用是否已经有结果
+                  const nextMsg = currentMessages[i + 1];
+                  const existingResultIds = new Set<string>();
+
+                  if (nextMsg?.type === 'user' && nextMsg.raw) {
+                    const nextRaw = typeof nextMsg.raw === 'string' ? JSON.parse(nextMsg.raw) : nextMsg.raw;
+                    const nextContent = nextRaw.content || nextRaw.message?.content;
+                    if (Array.isArray(nextContent)) {
+                      nextContent.forEach((block: { type?: string; tool_use_id?: string }) => {
+                        if (block.type === 'tool_result' && block.tool_use_id) {
+                          existingResultIds.add(block.tool_use_id);
+                        }
+                      });
+                    }
+                  }
+
+                  // 收集没有结果的工具调用 ID
+                  for (const tu of toolUses) {
+                    if (!existingResultIds.has(tu.id)) {
+                      idsToAdd.push(tu.id);
+                    }
+                  }
+
+                  break;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[Frontend] Error in onPermissionDenied:', e);
+        }
+
+        // 返回新数组引用以触发重新渲染
+        return [...currentMessages];
+      });
+
+      // 在 updater 外部修改全局状态，避免并发模式下的副作用问题
+      for (const id of idsToAdd) {
+        window.__deniedToolIds!.add(id);
+      }
     };
 
     // ========== Session Callbacks ==========

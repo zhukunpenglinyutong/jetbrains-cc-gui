@@ -8,11 +8,13 @@ import {
   EditToolGroupBlock,
   ReadToolBlock,
   ReadToolGroupBlock,
+  BashToolBlock,
+  BashToolGroupBlock,
 } from '../toolBlocks';
 import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
-import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
+import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -30,7 +32,8 @@ export interface MessageItemProps {
 type GroupedBlock =
   | { type: 'single'; block: ClaudeContentBlock; originalIndex: number }
   | { type: 'read_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number };
+  | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number }
+  | { type: 'bash_group'; blocks: ClaudeContentBlock[]; startIndex: number };
 
 function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): boolean {
   return block.type === 'tool_use' && isToolName(block.name, toolNames);
@@ -42,6 +45,8 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   let readGroupStartIndex = -1;
   let currentEditGroup: ClaudeContentBlock[] = [];
   let editGroupStartIndex = -1;
+  let currentBashGroup: ClaudeContentBlock[] = [];
+  let bashGroupStartIndex = -1;
 
   const flushReadGroup = () => {
     if (currentReadGroup.length > 0) {
@@ -67,28 +72,51 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     }
   };
 
+  const flushBashGroup = () => {
+    if (currentBashGroup.length > 0) {
+      groupedBlocks.push({
+        type: 'bash_group',
+        blocks: [...currentBashGroup],
+        startIndex: bashGroupStartIndex,
+      });
+      currentBashGroup = [];
+      bashGroupStartIndex = -1;
+    }
+  };
+
   blocks.forEach((block, idx) => {
     if (isToolBlockOfType(block, READ_TOOL_NAMES)) {
       flushEditGroup();
+      flushBashGroup();
       if (currentReadGroup.length === 0) {
         readGroupStartIndex = idx;
       }
       currentReadGroup.push(block);
     } else if (isToolBlockOfType(block, EDIT_TOOL_NAMES)) {
       flushReadGroup();
+      flushBashGroup();
       if (currentEditGroup.length === 0) {
         editGroupStartIndex = idx;
       }
       currentEditGroup.push(block);
+    } else if (isToolBlockOfType(block, BASH_TOOL_NAMES)) {
+      flushReadGroup();
+      flushEditGroup();
+      if (currentBashGroup.length === 0) {
+        bashGroupStartIndex = idx;
+      }
+      currentBashGroup.push(block);
     } else {
       flushReadGroup();
       flushEditGroup();
+      flushBashGroup();
       groupedBlocks.push({ type: 'single', block, originalIndex: idx });
     }
   });
 
   flushReadGroup();
   flushEditGroup();
+  flushBashGroup();
 
   return groupedBlocks;
 }
@@ -254,6 +282,37 @@ export const MessageItem = memo(function MessageItem({
         return (
           <div key={`${messageIndex}-editgroup-${grouped.startIndex}`} className="content-block">
             <EditToolGroupBlock items={editItems} />
+          </div>
+        );
+      }
+
+      if (grouped.type === 'bash_group') {
+        const bashItems = grouped.blocks.map((b) => {
+          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
+          return {
+            name: block.name,
+            input: block.input,
+            result: findToolResult(block.id, messageIndex),
+            toolId: block.id,
+          };
+        });
+
+        if (bashItems.length === 1) {
+          return (
+            <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
+              <BashToolBlock
+                name={bashItems[0].name}
+                input={bashItems[0].input}
+                result={bashItems[0].result}
+                toolId={bashItems[0].toolId}
+              />
+            </div>
+          );
+        }
+
+        return (
+          <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
+            <BashToolGroupBlock items={bashItems} deniedToolIds={window.__deniedToolIds} />
           </div>
         );
       }

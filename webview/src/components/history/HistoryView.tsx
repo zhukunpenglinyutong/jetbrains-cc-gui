@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
 import VirtualList from './VirtualList';
 import { Claude, OpenAI } from '@lobehub/icons';
+import { extractCommandMessageContent } from '../../utils/messageUtils';
 
 interface HistoryViewProps {
   historyData: HistoryData | null;
@@ -307,8 +308,8 @@ const HistoryView = ({ historyData, currentProvider: _currentProvider, onLoadSes
                 </button>
               </div>
             ) : (
-              // 正常模式：显示标题（带高亮）
-              highlightText(session.title, searchQuery)
+              // 正常模式：显示标题（带高亮），提取 <command-message> 内容
+              highlightText(extractCommandMessageContent(session.title), searchQuery)
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

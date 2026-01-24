@@ -206,3 +206,194 @@
     background: #f5f5f5;
     border: 1px solid #d0d0d0;
 }
+
+/* ==================== Bash Group 时间线样式 ==================== */
+.bash-group-container {
+    margin: 8px 0;
+}
+
+.bash-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-bottom: none;
+}
+
+.bash-group-chevron {
+    font-size: 12px;
+    margin-right: 6px;
+    color: var(--text-tertiary);
+    transition: transform 0.2s ease;
+}
+
+.bash-group-count {
+    color: var(--text-tertiary);
+    font-size: 12px;
+}
+
+.bash-group-summary {
+    display: flex;
+    align-items: center;
+}
+
+.bash-group-progress {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+}
+
+.bash-group-progress.completed {
+    color: var(--color-success);
+}
+
+.bash-group-progress.error {
+    color: var(--color-error);
+}
+
+/* 时间线列表容器 */
+.bash-group-timeline {
+    padding: 8px 12px 8px 16px;
+    overflow-x: hidden;
+}
+
+/* 自定义滚动条 */
+.bash-group-timeline::-webkit-scrollbar {
+    width: 6px;
+}
+
+.bash-group-timeline::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.bash-group-timeline::-webkit-scrollbar-thumb {
+    background-color: rgba(128, 128, 128, 0.4);
+    border-radius: 3px;
+}
+
+.bash-group-timeline::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(128, 128, 128, 0.6);
+}
+
+/* 时间线单项 */
+.bash-timeline-item {
+    display: flex;
+    position: relative;
+    min-height: 32px;
+}
+
+/* 时间线连接器 */
+.bash-timeline-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 20px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* 时间线垂直线 */
+.bash-timeline-line {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--border-primary);
+    transform: translateX(-50%);
+}
+
+.bash-timeline-line.last {
+    height: 10px;
+}
+
+/* 时间线节点 */
+.bash-timeline-node {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: var(--text-tertiary);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+    margin-top: 12px;
+}
+
+.bash-timeline-node.pending {
+    background-color: var(--color-warning);
+    animation: breathing 1.5s ease-in-out infinite;
+}
+
+.bash-timeline-node.completed {
+    background-color: var(--color-success);
+}
+
+.bash-timeline-node.error {
+    background-color: var(--color-error);
+}
+
+/* 时间线内容 */
+.bash-timeline-content {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    margin-left: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.bash-timeline-content:hover {
+    background-color: var(--bg-secondary);
+}
+
+.bash-timeline-content.expanded {
+    background-color: var(--bg-secondary);
+}
+
+/* 时间线行 */
+.bash-timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bash-timeline-description {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 展开的详情 */
+.bash-timeline-detail {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-primary);
+}
+
+.bash-timeline-detail .bash-command-block {
+    font-size: 12px;
+    padding: 8px 10px;
+}
+
+.bash-timeline-detail .bash-output-block {
+    margin-top: 6px;
+    font-size: 11px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+/* 亮色模式适配 */
+[data-theme="light"] .bash-timeline-content:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .bash-timeline-content.expanded {
+    background-color: rgba(0, 0, 0, 0.04);
+}

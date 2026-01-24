@@ -1,4 +1,5 @@
 /* Confirm Dialog Styles */
+/* z-index: 1200 确保 Alert/Confirm 弹窗始终显示在 Provider/Agent 编辑弹窗(z-index:1100)之上 */
 .confirm-dialog-overlay {
     position: fixed;
     top: 0;
@@ -9,7 +10,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1100;
+    z-index: 1200;
     animation: fadeIn 0.2s ease-out;
 }
 
@@ -119,7 +120,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1100;
+    z-index: 1200;
     animation: fadeIn 0.2s ease-out;
 }
 

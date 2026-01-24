@@ -91,9 +91,9 @@
         "label": "テーマ",
         "system": "IDE のテーマに従う",
         "systemDesc": "IDE のテーマに自動的に従う",
-        "light": "ライトテーマ",
+        "light": "ライト",
         "lightDesc": "爽やかで明るい、昼間の使用に適しています",
-        "dark": "ダークテーマ",
+        "dark": "ダーク",
         "darkDesc": "目に優しい、夜間の使用に適しています"
       },
       "language": {
@@ -590,7 +590,40 @@
     "unknownTool": "不明なツール"
   },
   "todo": {
-    "progress": "{{total}} 件中 {{completed}} 件完了"
+    "progress": "{{total}} 件中 {{completed}} 件完了",
+    "inProgress": "進行中 {{completed}}/{{total}} タスク",
+    "allCompleted": "完了 {{completed}}/{{total}} タスク",
+    "stopped": "停止"
+  },
+  "statusPanel": {
+    "todoTab": "計画",
+    "tasksTab": "タスク",
+    "subagentTab": "サブエージェント",
+    "filesTab": "ファイル変更",
+    "editsTab": "編集",
+    "noTodos": "実行中のタスクなし",
+    "noSubagents": "実行中のサブエージェントなし",
+    "noFileChanges": "ファイル変更なし",
+    "showDiff": "差分を表示",
+    "expand": "ステータスパネルを展開",
+    "collapse": "ステータスパネルを折りたたむ",
+    "undoChanges": "変更を元に戻す",
+    "undoConfirmTitle": "ファイル変更を元に戻す",
+    "undoWillDelete": "このファイルは新規作成されました。元に戻すとファイルが削除されます。",
+    "undoWillRestore": "Claude が変更する前の状態にファイルを復元します。",
+    "undoCannotUndo": "この操作は取り消せません。",
+    "confirmUndo": "元に戻す",
+    "undoSuccess": "{{fileName}} の変更を元に戻しました",
+    "undoFailed": "元に戻す失敗: {{error}}",
+    "discardAll": "すべて破棄",
+    "keepAll": "すべて保持",
+    "discardAllConfirmTitle": "すべての変更を破棄",
+    "discardAllConfirmMessage": "すべてのファイルの変更を元に戻します。この操作は取り消せません。",
+    "keepAllConfirmTitle": "すべて保持",
+    "keepAllConfirmMessage": "現在の変更を新しい基準として保持します。今後の変更はゼロからカウントされます。",
+    "discardAllSuccess": "すべての変更を元に戻しました",
+    "discardAllFailed": "元に戻す失敗: {{error}}",
+    "keepAllSuccess": "すべて保持しました。変更記録をリセットしました"
   },
   "skills": {
     "title": "スキル",
