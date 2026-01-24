@@ -1144,19 +1144,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             iconLabel.setForeground(Color.WHITE);
             iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            JLabel titleLabel = new JLabel("JCEF 不可用");
+            JLabel titleLabel = new JLabel("当前IDE JCEF 模块未安装");
             titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
             titleLabel.setForeground(Color.WHITE);
             titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
             JTextArea messageArea = new JTextArea();
             messageArea.setText(
-                "当前环境不支持 JCEF (Java Chromium Embedded Framework)。\n\n" +
-                "可能的原因：\n" +
-                "• Android Studio 官方默认没安装JCEF\n" +
-                "• IDE 启动时使用了 -Dide.browser.jcef.enabled=false 参数\n" +
                 "解决方案：\n" +
-                "百度一下，如何安装JCEF，安装一下就好了"
+                "双击 Shift 键，搜索 Choose Boot Java Runtime for the IDE\n" +
+                "在弹出窗口的下拉列表中，选择一个标记有 with JCEF 的版本进行下载和安装。\n" +
+                "等待下载完成并点击确定，随后重启 Android Studio"
             );
             messageArea.setEditable(false);
             messageArea.setBackground(new Color(45, 45, 45));
@@ -1509,6 +1507,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
             callJavaScript("clearMessages");
+
+            // 清理所有待处理的权限请求，防止旧会话的请求干扰新会话
+            permissionHandler.clearPendingRequests();
 
             session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 
@@ -2090,6 +2091,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     callJavaScript("showLoading", "false");
                 });
 
+                // 清理所有待处理的权限请求，防止旧会话的请求干扰新会话
+                permissionHandler.clearPendingRequests();
+
                 // 创建全新的 Session 对象
                 session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 
@@ -2149,7 +2153,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         private void interruptDueToPermissionDenial() {
-            this.session.interrupt().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {}));
+            this.session.interrupt().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
+                // 通知前端权限被拒绝，让前端标记未完成的工具调用为"中断"状态
+                callJavaScript("onPermissionDenied");
+                // Align with explicit interrupt behavior to clear streaming/loading UI state.
+                callJavaScript("onStreamEnd");
+                callJavaScript("showLoading", "false");
+                com.github.claudecodegui.notifications.ClaudeNotifier.clearStatus(project);
+            }));
         }
 
         /**
@@ -2198,9 +2209,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         "  try {" +
                         "    if (typeof " + callee + " === 'function') {" +
                         "      " + callee + "(" + argsJs + ");" +
-                        "      console.log('[Backend->Frontend] Successfully called " + functionName + "');" +
-                        "    } else {" +
-                        "      console.warn('[Backend->Frontend] Function " + functionName + " not found: ' + (typeof " + callee + "));" +
                         "    }" +
                         "  } catch (e) {" +
                         "    console.error('[Backend->Frontend] Failed to call " + functionName + ":', e);" +

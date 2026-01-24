@@ -155,6 +155,7 @@ export function ContentBlockRenderer({
           name={block.name}
           input={block.input}
           result={findToolResult(block.id, messageIndex)}
+          toolId={block.id}
         />
       );
     }
@@ -165,6 +166,7 @@ export function ContentBlockRenderer({
           name={block.name}
           input={block.input}
           result={findToolResult(block.id, messageIndex)}
+          toolId={block.id}
         />
       );
     }
@@ -174,6 +176,7 @@ export function ContentBlockRenderer({
         name={block.name}
         input={block.input}
         result={findToolResult(block.id, messageIndex)}
+        toolId={block.id}
       />
     );
   }

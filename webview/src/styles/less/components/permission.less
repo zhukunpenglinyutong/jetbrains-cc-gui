@@ -1,18 +1,29 @@
 /* Permission Dialog Styles */
+/* 底部固定栏模式 - 不遮挡消息列表内容 */
 .permission-dialog-overlay {
     position: fixed;
-    top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    /* 移除全屏遮罩，只在底部显示 */
+    background: transparent;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
     z-index: 10000;
-    animation: fadeIn 0.2s ease-out;
+    /* 底部滑入动画 */
+    animation: slideFromBottom 0.2s ease-out;
+}
+
+@keyframes slideFromBottom {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .permission-dialog {
@@ -352,15 +363,22 @@
     border-color: #007fd4;
 }
 
-/* Permission Dialog V3 Styles - 新设计 */
+/* Permission Dialog V3 Styles - 底部固定栏设计 */
 .permission-dialog-v3 {
-    background: #1a1a1a;
-    border-radius: 12px;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-    min-width: 400px;
-    max-width: 600px;
-    padding: 16px;
-    animation: slideUp 0.2s ease-out;
+    background: rgba(26, 26, 26, 0.85);
+    /* 毛玻璃效果 */
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    /* 只有顶部圆角 */
+    border-radius: 12px 12px 0 0;
+    /* 顶部边框强调分隔 */
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    /* 全宽 */
+    width: 100%;
+    max-width: 100%;
+    padding: 12px 16px;
+    /* 移除原有动画，由 overlay 统一控制 */
 }
 
 .permission-dialog-v3-title {
@@ -450,23 +468,30 @@
 
 .permission-dialog-v3-options {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    /* 改为横排布局 */
+    flex-direction: row;
+    gap: 8px;
+    /* 按钮靠右对齐 */
+    justify-content: flex-end;
 }
 
 .permission-dialog-v3-option {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
+    gap: 6px;
     background: #2a2a2a;
     border: 1px solid #3a3a3a;
-    border-radius: 8px;
-    padding: 10px 14px;
+    border-radius: 6px;
+    /* 调整为适合横排的 padding */
+    padding: 8px 14px;
     color: #e0e0e0;
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s;
-    text-align: left;
+    text-align: center;
+    /* 不要撑满，自然宽度 */
+    flex: 0 0 auto;
 }
 
 .permission-dialog-v3-option:hover {
@@ -505,11 +530,7 @@
 
 @media (max-width: 450px) {
     .permission-dialog-v3 {
-        min-width: unset;
-        width: 92%;
-        max-width: 95%;
-        padding: 12px;
-        margin: 0 auto;
+        padding: 10px 12px;
     }
 
     .permission-dialog-v3-title {
@@ -532,7 +553,18 @@
         padding: 8px 10px;
     }
 
+    .permission-dialog-v3-options {
+        /* 窄屏下仍保持横排，但间距更小 */
+        gap: 6px;
+    }
+
     .permission-dialog-v3-option {
-        padding: 8px 10px;
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+
+    /* 窄屏隐藏快捷键提示 */
+    .permission-dialog-v3-option .option-key {
+        display: none;
     }
 }

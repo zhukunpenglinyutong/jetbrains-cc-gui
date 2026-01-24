@@ -24,6 +24,9 @@ const PERMISSION_DIR = process.env.CLAUDE_PERMISSION_DIR
 // Session ID for isolating permission requests across multiple IDEA instances
 const SESSION_ID = process.env.CLAUDE_SESSION_ID || 'default';
 
+// 权限请求超时时间（5 分钟），与 Java 端 PermissionHandler.PERMISSION_TIMEOUT_SECONDS 保持一致
+const PERMISSION_TIMEOUT_MS = 300000;
+
 debugLog('INIT', `Permission dir: ${PERMISSION_DIR}`);
 debugLog('INIT', `Session ID: ${SESSION_ID}`);
 debugLog('INIT', `tmpdir(): ${tmpdir()}`);
@@ -236,7 +239,7 @@ export async function requestPlanApproval(input) {
     }
 
     // Wait for response file (up to 300 seconds for complex plan review)
-    const timeout = 300000;
+    const timeout = PERMISSION_TIMEOUT_MS;
     let pollCount = 0;
     const pollInterval = 100;
 
@@ -372,8 +375,8 @@ export async function requestPermissionFromJava(toolName, input) {
       return false;
     }
 
-    // 等待响应文件（最多60秒）——需要略长于 IDE 前端的超时时间，避免 Node 先于前端超时
-    const timeout = 60000;
+    // 等待响应文件（延长到 5 分钟，让用户有足够时间查看上下文做决定）
+    const timeout = PERMISSION_TIMEOUT_MS;
     let pollCount = 0;
     const pollInterval = 100;
 

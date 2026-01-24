@@ -23,6 +23,9 @@ public class PermissionHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(PermissionHandler.class);
 
+    // 权限请求超时时间（5 分钟），与 Node 端 PERMISSION_TIMEOUT_MS 保持一致
+    private static final long PERMISSION_TIMEOUT_SECONDS = 300;
+
     private static final String[] SUPPORTED_TYPES = {
         "permission_decision",
         "ask_user_question_response",
@@ -86,10 +89,10 @@ public class PermissionHandler extends BaseMessageHandler {
         String channelId = UUID.randomUUID().toString();
         CompletableFuture<Integer> future = new CompletableFuture<>();
 
-        LOG.debug("[PERM_DEBUG][FRONTEND_DIALOG] Starting showFrontendPermissionDialog");
-        LOG.debug("[PERM_DEBUG][FRONTEND_DIALOG] channelId=" + channelId + ", toolName=" + toolName);
+        LOG.info("[PERM_SHOW] showFrontendPermissionDialog called: channelId=" + channelId + ", toolName=" + toolName);
 
         pendingPermissionRequests.put(channelId, future);
+        LOG.info("[PERM_SHOW] Stored pending request, total pending: " + pendingPermissionRequests.size());
 
         try {
             Gson gson = new Gson();
@@ -102,6 +105,7 @@ public class PermissionHandler extends BaseMessageHandler {
             String escapedJson = escapeJs(requestJson);
 
             ApplicationManager.getApplication().invokeLater(() -> {
+                LOG.info("[PERM_SHOW] Executing JS to show dialog for channelId=" + channelId);
                 String jsCode = "(function retryShowDialog(retries) { " +
                     "  if (window.showPermissionDialog) { " +
                     "    window.showPermissionDialog('" + escapedJson + "'); " +
@@ -115,16 +119,17 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // 超时处理
-            CompletableFuture.delayedExecutor(35, TimeUnit.SECONDS).execute(() -> {
+            // 超时处理（让用户有足够时间查看上下文）
+            CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
                 if (!future.isDone()) {
+                    LOG.warn("[PERM_SHOW] Timeout! Removing pending request for channelId=" + channelId);
                     pendingPermissionRequests.remove(channelId);
                     future.complete(PermissionService.PermissionResponse.DENY.getValue());
                 }
             });
 
         } catch (Exception e) {
-            LOG.error("[PERM_DEBUG][FRONTEND_DIALOG] ERROR: " + e.getMessage(), e);
+            LOG.error("[PERM_SHOW] ERROR: " + e.getMessage(), e);
             pendingPermissionRequests.remove(channelId);
             future.complete(PermissionService.PermissionResponse.DENY.getValue());
         }
@@ -201,7 +206,8 @@ public class PermissionHandler extends BaseMessageHandler {
      * 处理来自 JavaScript 的权限决策消息
      */
     private void handlePermissionDecision(String jsonContent) {
-        LOG.debug("[PERM_DEBUG][HANDLE_DECISION] Received decision from JS: " + jsonContent);
+        LOG.info("[PERM_DECISION] Received permission decision from JS");
+        LOG.debug("[PERM_DEBUG][HANDLE_DECISION] Content: " + jsonContent);
         try {
             Gson gson = new Gson();
             JsonObject decision = gson.fromJson(jsonContent, JsonObject.class);
@@ -214,9 +220,13 @@ public class PermissionHandler extends BaseMessageHandler {
                 rejectMessage = decision.get("rejectMessage").getAsString();
             }
 
+            LOG.info("[PERM_DECISION] channelId=" + channelId + ", allow=" + allow + ", remember=" + remember);
+            LOG.info("[PERM_DECISION] pendingPermissionRequests size before remove: " + pendingPermissionRequests.size());
+
             CompletableFuture<Integer> pendingFuture = pendingPermissionRequests.remove(channelId);
 
             if (pendingFuture != null) {
+                LOG.info("[PERM_DECISION] Found pending future, completing with allow=" + allow);
                 int responseValue;
                 if (allow) {
                     responseValue = remember ?
@@ -226,11 +236,14 @@ public class PermissionHandler extends BaseMessageHandler {
                     responseValue = PermissionService.PermissionResponse.DENY.getValue();
                 }
                 pendingFuture.complete(responseValue);
+                LOG.info("[PERM_DECISION] Future completed with value=" + responseValue);
 
                 if (!allow) {
                     notifyPermissionDenied();
                 }
             } else {
+                LOG.warn("[PERM_DECISION] No pending future found for channelId=" + channelId + ", falling back to session handler");
+                LOG.warn("[PERM_DECISION] Current pendingPermissionRequests keys: " + pendingPermissionRequests.keySet());
                 // 处理来自 Session 的权限请求
                 if (remember) {
                     context.getSession().handlePermissionDecisionAlways(channelId, allow);
@@ -242,7 +255,7 @@ public class PermissionHandler extends BaseMessageHandler {
                 }
             }
         } catch (Exception e) {
-            LOG.error("[PERM_DEBUG][HANDLE_DECISION] ERROR: " + e.getMessage(), e);
+            LOG.error("[PERM_DECISION] ERROR: " + e.getMessage(), e);
         }
     }
 
@@ -253,6 +266,42 @@ public class PermissionHandler extends BaseMessageHandler {
         if (deniedCallback != null) {
             deniedCallback.onPermissionDenied();
         }
+    }
+
+    /**
+     * 清理所有待处理的权限请求
+     * 在会话切换或历史恢复时调用，避免旧的请求干扰新会话
+     */
+    public void clearPendingRequests() {
+        LOG.info("[PERM_CLEAR] Clearing all pending permission requests");
+
+        int permissionCount = pendingPermissionRequests.size();
+        int askUserCount = pendingAskUserQuestionRequests.size();
+        int planCount = pendingPlanApprovalRequests.size();
+
+        // 取消所有待处理的权限请求
+        for (Map.Entry<String, CompletableFuture<Integer>> entry : pendingPermissionRequests.entrySet()) {
+            entry.getValue().complete(PermissionService.PermissionResponse.DENY.getValue());
+        }
+        pendingPermissionRequests.clear();
+
+        // 取消所有待处理的 AskUserQuestion 请求
+        for (Map.Entry<String, CompletableFuture<JsonObject>> entry : pendingAskUserQuestionRequests.entrySet()) {
+            entry.getValue().complete(null);
+        }
+        pendingAskUserQuestionRequests.clear();
+
+        // 取消所有待处理的 PlanApproval 请求
+        for (Map.Entry<String, CompletableFuture<JsonObject>> entry : pendingPlanApprovalRequests.entrySet()) {
+            JsonObject rejected = new com.google.gson.JsonObject();
+            rejected.addProperty("approved", false);
+            rejected.addProperty("message", "Session changed");
+            entry.getValue().complete(rejected);
+        }
+        pendingPlanApprovalRequests.clear();
+
+        LOG.info("[PERM_CLEAR] Cleared: " + permissionCount + " permission, " +
+                 askUserCount + " askUser, " + planCount + " plan requests");
     }
 
     /**
