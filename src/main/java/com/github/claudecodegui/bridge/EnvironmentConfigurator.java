@@ -28,6 +28,7 @@ public class EnvironmentConfigurator {
     private static final Logger LOG = Logger.getInstance(EnvironmentConfigurator.class);
     private static final String CLAUDE_PERMISSION_ENV = "CLAUDE_PERMISSION_DIR";
     private static final String CLAUDE_SESSION_ID_ENV = "CLAUDE_SESSION_ID";
+    private static final String CODEX_HOME_ENV = "CODEX_HOME";
 
     private volatile String cachedPermissionDir = null;
     private volatile String sessionId = null;
@@ -116,6 +117,16 @@ public class EnvironmentConfigurator {
             home = System.getProperty("user.home");
             if (home != null && !home.isEmpty()) {
                 env.put("HOME", home);
+            }
+        }
+
+        // 5. 确保 CODEX_HOME 稳定且非空（Codex 用它定位 config/sessions/skills）
+        // macOS GUI 启动场景下环境变量可能缺失，依赖隐式默认值会导致功能探测不稳定（例如 skills tool 时有时无）
+        String codexHome = env.get(CODEX_HOME_ENV);
+        if (codexHome == null || codexHome.trim().isEmpty()) {
+            String userHome = System.getProperty("user.home");
+            if (userHome != null && !userHome.isEmpty()) {
+                env.put(CODEX_HOME_ENV, Paths.get(userHome, ".codex").toString());
             }
         }
 

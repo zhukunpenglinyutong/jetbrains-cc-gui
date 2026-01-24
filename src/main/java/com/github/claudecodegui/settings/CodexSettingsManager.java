@@ -8,9 +8,11 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -80,11 +82,10 @@ public class CodexSettingsManager {
      * Write config.toml from a map structure
      */
     public void writeConfigToml(Map<String, Object> config) throws IOException {
-        ensureCodexDirectory();
         Path configPath = getConfigTomlPath();
 
         String tomlContent = generateToml(config);
-        Files.writeString(configPath, tomlContent, StandardCharsets.UTF_8);
+        writeStringAtomically(configPath, tomlContent);
         LOG.info("[CodexSettingsManager] Wrote config.toml to: " + configPath);
     }
 
@@ -92,10 +93,9 @@ public class CodexSettingsManager {
      * Write config.toml from raw string content
      */
     public void writeConfigTomlRaw(String content) throws IOException {
-        ensureCodexDirectory();
         Path configPath = getConfigTomlPath();
 
-        Files.writeString(configPath, content, StandardCharsets.UTF_8);
+        writeStringAtomically(configPath, content);
         LOG.info("[CodexSettingsManager] Wrote raw config.toml to: " + configPath);
     }
 
@@ -121,13 +121,10 @@ public class CodexSettingsManager {
      * Write auth.json
      */
     public void writeAuthJson(JsonObject auth) throws IOException {
-        ensureCodexDirectory();
         Path authPath = getAuthJsonPath();
 
-        try (Writer writer = Files.newBufferedWriter(authPath, StandardCharsets.UTF_8)) {
-            gson.toJson(auth, writer);
-            LOG.info("[CodexSettingsManager] Wrote auth.json to: " + authPath);
-        }
+        writeStringAtomically(authPath, gson.toJson(auth));
+        LOG.info("[CodexSettingsManager] Wrote auth.json to: " + authPath);
     }
 
     /**
@@ -161,6 +158,37 @@ public class CodexSettingsManager {
 
         String providerId = provider.has("id") ? provider.get("id").getAsString() : "unknown";
         LOG.info("[CodexSettingsManager] Applied provider to ~/.codex: " + providerId);
+    }
+
+    /**
+     * Atomic write helper: write to a temp file in the same directory, then replace the target.
+     * Prevents consumers (e.g., Codex SDK/CLI) from observing a partially written file.
+     */
+    private void writeStringAtomically(Path target, String content) throws IOException {
+        ensureCodexDirectory();
+
+        Path parent = target.getParent();
+        if (parent == null) {
+            // Should never happen for ~/.codex/{config.toml,auth.json}
+            Files.writeString(target, content, StandardCharsets.UTF_8);
+            return;
+        }
+
+        String prefix = target.getFileName() != null ? target.getFileName().toString() : "codex";
+        Path tmp = Files.createTempFile(parent, prefix, ".tmp");
+        try {
+            Files.writeString(tmp, content, StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     /**
