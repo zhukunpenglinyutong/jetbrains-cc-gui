@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
@@ -21,9 +21,13 @@ interface ContextBarProps {
   hasMessages?: boolean;
   /** Rewind callback */
   onRewind?: () => void;
+  /** Whether StatusPanel is expanded */
+  statusPanelExpanded?: boolean;
+  /** Toggle StatusPanel expand/collapse */
+  onToggleStatusPanel?: () => void;
 }
 
-export const ContextBar: React.FC<ContextBarProps> = ({
+export const ContextBar: React.FC<ContextBarProps> = memo(({
   activeFile,
   selectedLines,
   percentage = 0,
@@ -37,6 +41,8 @@ export const ContextBar: React.FC<ContextBarProps> = ({
   currentProvider = 'claude',
   hasMessages = false,
   onRewind,
+  statusPanelExpanded = true,
+  onToggleStatusPanel,
 }) => {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,9 +173,21 @@ export const ContextBar: React.FC<ContextBarProps> = ({
         </div>
       )}
 
-      {/* Right side tools - Rewind button */}
-      {currentProvider === 'claude' && onRewind && (
-        <div className="context-tools-right">
+      {/* Right side tools - StatusPanel toggle and Rewind button */}
+      <div className="context-tools-right">
+        {/* StatusPanel expand/collapse toggle - always visible */}
+        {onToggleStatusPanel && (
+          <button
+            className={`context-tool-btn status-panel-toggle has-tooltip ${statusPanelExpanded ? 'expanded' : 'collapsed'}`}
+            onClick={onToggleStatusPanel}
+            data-tooltip={statusPanelExpanded ? t('statusPanel.collapse') : t('statusPanel.expand')}
+          >
+            <span className={`codicon ${statusPanelExpanded ? 'codicon-chevron-down' : 'codicon-layers'}`} />
+          </button>
+        )}
+
+        {/* Rewind button */}
+        {currentProvider === 'claude' && onRewind && (
           <button
             className="context-tool-btn has-tooltip"
             onClick={onRewind}
@@ -178,8 +196,8 @@ export const ContextBar: React.FC<ContextBarProps> = ({
           >
             <span className="codicon codicon-discard" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
-};
+});

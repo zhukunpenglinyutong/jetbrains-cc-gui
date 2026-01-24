@@ -91,9 +91,9 @@
         "label": "Tema de interfaz",
         "system": "Seguir IDE",
         "systemDesc": "Seguir automáticamente el tema del IDE",
-        "light": "Tema claro",
+        "light": "Claro",
         "lightDesc": "Fresco y brillante, adecuado para uso diurno",
-        "dark": "Tema oscuro",
+        "dark": "Oscuro",
         "darkDesc": "Cómodo para los ojos, adecuado para uso nocturno"
       },
       "language": {
@@ -571,7 +571,40 @@
     "unknownTool": "Herramienta desconocida"
   },
   "todo": {
-    "progress": "{{completed}} de {{total}} tareas completadas"
+    "progress": "{{completed}} de {{total}} tareas completadas",
+    "inProgress": "En progreso {{completed}}/{{total}} tareas",
+    "allCompleted": "Completado {{completed}}/{{total}} tareas",
+    "stopped": "Detenido"
+  },
+  "statusPanel": {
+    "todoTab": "Plan",
+    "tasksTab": "Tareas",
+    "subagentTab": "Subagente",
+    "filesTab": "Cambios",
+    "editsTab": "Ediciones",
+    "noTodos": "Sin tareas en ejecución",
+    "noSubagents": "Sin subagentes en ejecución",
+    "noFileChanges": "Sin cambios",
+    "showDiff": "Ver diferencias",
+    "expand": "Expandir panel de estado",
+    "collapse": "Contraer panel de estado",
+    "undoChanges": "Deshacer cambios",
+    "undoConfirmTitle": "Deshacer cambios del archivo",
+    "undoWillDelete": "Este archivo fue recién creado. Deshacer eliminará este archivo.",
+    "undoWillRestore": "Esto restaurará el archivo a su estado antes de las modificaciones de Claude.",
+    "undoCannotUndo": "Esta acción no se puede deshacer.",
+    "confirmUndo": "Confirmar deshacer",
+    "undoSuccess": "Cambios de {{fileName}} deshechos",
+    "undoFailed": "Error al deshacer: {{error}}",
+    "discardAll": "Descartar Todo",
+    "keepAll": "Mantener Todo",
+    "discardAllConfirmTitle": "Descartar Todos los Cambios",
+    "discardAllConfirmMessage": "Esto deshará todos los cambios de archivos. Esta acción no se puede deshacer.",
+    "keepAllConfirmTitle": "Mantener Todo",
+    "keepAllConfirmMessage": "Aceptar los cambios actuales como base. Los cambios futuros se rastrearán desde cero.",
+    "discardAllSuccess": "Todos los cambios descartados",
+    "discardAllFailed": "Error al descartar: {{error}}",
+    "keepAllSuccess": "Todos los cambios mantenidos, seguimiento reiniciado"
   },
   "skills": {
     "title": "Skills",

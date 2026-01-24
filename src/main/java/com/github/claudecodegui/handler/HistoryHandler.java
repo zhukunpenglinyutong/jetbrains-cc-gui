@@ -1,5 +1,7 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.cache.SessionIndexCache;
+import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.util.JsUtils;
@@ -151,7 +153,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 });
 
             } catch (Exception e) {
-                LOG.error("[HistoryHandler] ❌ 加载历史数据失败: " + e.getMessage(), e);
+                LOG.error("[HistoryHandler] 加载历史数据失败: " + e.getMessage(), e);
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
@@ -377,43 +379,17 @@ public class HistoryHandler extends BaseMessageHandler {
             try {
                 CodexHistoryReader codexReader = new CodexHistoryReader();
                 String messagesJson = codexReader.getSessionMessagesAsJson(sessionId);
-
-                // 解析消息并转换为前端可识别的格式
                 com.google.gson.JsonArray messages = com.google.gson.JsonParser.parseString(messagesJson).getAsJsonArray();
 
                 LOG.info("[HistoryHandler] 读取到 " + messages.size() + " 条 Codex 消息");
 
-                // 提取 cwd 和真实的 threadId（session_meta.id）
-                String cwd = null;
-                String actualThreadId = null;
-                for (int i = 0; i < messages.size(); i++) {
-                    com.google.gson.JsonObject msg = messages.get(i).getAsJsonObject();
-                    if (msg.has("type") && "session_meta".equals(msg.get("type").getAsString())) {
-                        if (msg.has("payload")) {
-                            com.google.gson.JsonObject payload = msg.getAsJsonObject("payload");
+                // 提取会话元数据并恢复会话状态
+                String[] sessionMeta = extractSessionMeta(messages);
+                String threadIdToUse = sessionMeta[0] != null ? sessionMeta[0] : sessionId;
+                String cwd = sessionMeta[1];
 
-                            // 提取 cwd
-                            if (payload.has("cwd")) {
-                                cwd = payload.get("cwd").getAsString();
-                            }
-
-                            // 提取真实的 thread ID（UUID）
-                            if (payload.has("id")) {
-                                actualThreadId = payload.get("id").getAsString();
-                            }
-
-                            break;
-                        }
-                    }
-                }
-
-                // 使用真实的 threadId（session_meta.id），而不是文件名
-                // Codex SDK 的 resumeThread() 需要 UUID，不是带前缀的文件名
-                String threadIdToUse = actualThreadId != null ? actualThreadId : sessionId;
-
-                // 恢复会话状态，使用户能够在历史会话中继续对话
                 context.getSession().setSessionInfo(threadIdToUse, cwd);
-                LOG.info("[HistoryHandler] ✅ 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
+                LOG.info("[HistoryHandler] 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
 
                 // 清空当前消息
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -423,229 +399,13 @@ public class HistoryHandler extends BaseMessageHandler {
                 // 将 Codex 消息转换为前端格式并逐条注入
                 for (int i = 0; i < messages.size(); i++) {
                     com.google.gson.JsonObject msg = messages.get(i).getAsJsonObject();
-
-                    // 只处理 response_item 类型的消息
-                    if (msg.has("type") && "response_item".equals(msg.get("type").getAsString())) {
-                        com.google.gson.JsonObject payload = msg.has("payload") ? msg.getAsJsonObject("payload") : null;
-
-                        if (payload != null && payload.has("type")) {
-                            String payloadType = payload.get("type").getAsString();
-                            com.google.gson.JsonObject frontendMsg = null;
-
-                            // 处理普通消息
-                            if ("message".equals(payloadType)) {
-                                // 提取内容字符串用于过滤
-                                String contentStr = extractContentAsString(payload.get("content"));
-
-                                // 过滤掉系统消息（不是用户真正输入的）
-                                if (contentStr != null && (
-                                    // 系统警告消息
-                                    contentStr.startsWith("Warning:") ||
-                                    contentStr.startsWith("Tool result:") ||
-                                    contentStr.startsWith("Exit code:") ||
-                                    // Codex 系统提示词
-                                    contentStr.startsWith("# AGENTS.md instructions") ||
-                                    contentStr.startsWith("<INSTRUCTIONS>") ||
-                                    contentStr.startsWith("<environment_context>")
-                                )) {
-                                    // 跳过这些系统消息
-                                    continue;
-                                }
-
-                                frontendMsg = new com.google.gson.JsonObject();
-
-                                // 提取角色
-                                String role = "user";
-                                if (payload.has("role")) {
-                                    role = payload.get("role").getAsString();
-                                    frontendMsg.addProperty("type", role);
-                                }
-
-                                // 提取内容 - 转换为 Claude 格式的 content blocks
-                                if (payload.has("content")) {
-                                    // 同时设置简单字符串内容（用于搜索和预览）
-                                    if (contentStr != null && !contentStr.isEmpty()) {
-                                        frontendMsg.addProperty("content", contentStr);
-                                    }
-
-                                    // 转换为 Claude 格式的 content blocks
-                                    com.google.gson.JsonArray claudeContentBlocks = convertToClaudeContentBlocks(payload.get("content"));
-
-                                    // 构造 raw 对象，包含结构化的 content
-                                    com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
-                                    rawObj.add("content", claudeContentBlocks);
-                                    rawObj.addProperty("role", role);
-
-                                    frontendMsg.add("raw", rawObj);
-                                }
-
-                                // 提取时间戳
-                                if (msg.has("timestamp")) {
-                                    frontendMsg.addProperty("timestamp", msg.get("timestamp").getAsString());
-                                }
-                            }
-                            // 处理工具调用 (Codex function_call -> Claude tool_use)
-                            else if ("function_call".equals(payloadType)) {
-                                frontendMsg = new com.google.gson.JsonObject();
-                                frontendMsg.addProperty("type", "assistant");
-
-                                String toolName = payload.has("name") ? payload.get("name").getAsString() : "unknown";
-                                com.google.gson.JsonElement toolInput = null;
-
-                                // 解析 arguments JSON 字符串为对象
-                                if (payload.has("arguments")) {
-                                    try {
-                                        toolInput = com.google.gson.JsonParser.parseString(payload.get("arguments").getAsString());
-                                    } catch (Exception e) {
-                                        toolInput = new com.google.gson.JsonObject();
-                                    }
-                                }
-
-                                // 优化1: 智能转换 shell_command 为更具体的工具类型
-                                if ("shell_command".equals(toolName) && toolInput != null && toolInput.isJsonObject()) {
-                                    com.google.gson.JsonObject inputObj = toolInput.getAsJsonObject();
-                                    if (inputObj.has("command")) {
-                                        String command = inputObj.get("command").getAsString().trim();
-                                        // 根据命令类型转换工具名（只转换格式兼容的命令）
-                                        if (command.matches("^(ls|pwd|find|cat|head|tail|file|stat|tree)\\b.*")) {
-                                            toolName = "read";  // 文件查看类命令
-                                        } else if (command.matches("^(grep|rg|ack|ag)\\b.*")) {
-                                            toolName = "glob";  // 搜索类命令，使用 glob（可收起）
-                                        }
-                                        // 其他命令（包括 sed/awk 等）保持 shell_command，使用 BashToolBlock
-                                    }
-                                }
-
-                                // 优化2: 转换 update_plan 为 todowrite 格式
-                                if ("update_plan".equals(toolName) && toolInput != null && toolInput.isJsonObject()) {
-                                    com.google.gson.JsonObject inputObj = toolInput.getAsJsonObject();
-                                    if (inputObj.has("plan") && inputObj.get("plan").isJsonArray()) {
-                                        // 转换 plan 数组为 todos 数组
-                                        com.google.gson.JsonArray planArray = inputObj.getAsJsonArray("plan");
-                                        com.google.gson.JsonArray todosArray = new com.google.gson.JsonArray();
-
-                                        for (int j = 0; j < planArray.size(); j++) {
-                                            if (planArray.get(j).isJsonObject()) {
-                                                com.google.gson.JsonObject planItem = planArray.get(j).getAsJsonObject();
-                                                com.google.gson.JsonObject todoItem = new com.google.gson.JsonObject();
-
-                                                // 转换字段名: step -> content, status 保持不变
-                                                if (planItem.has("step")) {
-                                                    todoItem.addProperty("content", planItem.get("step").getAsString());
-                                                }
-                                                if (planItem.has("status")) {
-                                                    todoItem.addProperty("status", planItem.get("status").getAsString());
-                                                } else {
-                                                    todoItem.addProperty("status", "pending");
-                                                }
-                                                // 添加 activeForm 字段（TodoListBlock 需要）
-                                                if (planItem.has("step")) {
-                                                    todoItem.addProperty("activeForm", planItem.get("step").getAsString());
-                                                }
-                                                // 添加 id 用于唯一标识
-                                                todoItem.addProperty("id", String.valueOf(j));
-
-                                                todosArray.add(todoItem);
-                                            }
-                                        }
-
-                                        // 替换 input 为新格式
-                                        com.google.gson.JsonObject newInput = new com.google.gson.JsonObject();
-                                        newInput.add("todos", todosArray);
-                                        toolInput = newInput;
-
-                                        // 修改工具名为 todowrite
-                                        toolName = "todowrite";
-                                    }
-                                }
-
-                                // 构造 tool_use 格式
-                                com.google.gson.JsonObject toolUse = new com.google.gson.JsonObject();
-                                toolUse.addProperty("type", "tool_use");
-                                toolUse.addProperty("id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
-                                toolUse.addProperty("name", toolName);
-
-                                if (toolInput != null) {
-                                    toolUse.add("input", toolInput);
-                                }
-
-                                // 构造 content 数组
-                                com.google.gson.JsonArray content = new com.google.gson.JsonArray();
-                                content.add(toolUse);
-
-                                // 设置简单字符串内容
-                                frontendMsg.addProperty("content", "Tool: " + toolName);
-
-                                // 构造 raw 对象
-                                com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
-                                rawObj.add("content", content);
-                                rawObj.addProperty("role", "assistant");
-                                frontendMsg.add("raw", rawObj);
-
-                                if (msg.has("timestamp")) {
-                                    frontendMsg.addProperty("timestamp", msg.get("timestamp").getAsString());
-                                }
-                            }
-                            // 处理工具调用结果 (Codex function_call_output -> Claude tool_result)
-                            else if ("function_call_output".equals(payloadType)) {
-                                frontendMsg = new com.google.gson.JsonObject();
-                                frontendMsg.addProperty("type", "user");
-
-                                // 构造 tool_result 格式
-                                com.google.gson.JsonObject toolResult = new com.google.gson.JsonObject();
-                                toolResult.addProperty("type", "tool_result");
-                                toolResult.addProperty("tool_use_id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
-
-                                // 输出内容
-                                String output = payload.has("output") ? payload.get("output").getAsString() : "";
-                                toolResult.addProperty("content", output);
-
-                                // 构造 content 数组
-                                com.google.gson.JsonArray content = new com.google.gson.JsonArray();
-                                content.add(toolResult);
-
-                                // 设置为特殊标识，让前端知道这是工具结果而不是用户输入
-                                frontendMsg.addProperty("content", "[tool_result]");
-
-                                // 构造 raw 对象
-                                com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
-                                rawObj.add("content", content);
-                                rawObj.addProperty("role", "user");
-                                frontendMsg.add("raw", rawObj);
-
-                                if (msg.has("timestamp")) {
-                                    frontendMsg.addProperty("timestamp", msg.get("timestamp").getAsString());
-                                }
-                            }
-
-                            // 注入消息到前端
-                            if (frontendMsg != null) {
-                                String msgJson = new com.google.gson.Gson().toJson(frontendMsg);
-                                String escapedJson = escapeJs(msgJson);
-
-                                ApplicationManager.getApplication().invokeLater(() -> {
-                                    String jsCode = "if (window.addHistoryMessage) { " +
-                                        "  try { " +
-                                        "    var msgStr = '" + escapedJson + "'; " +
-                                        "    var msg = JSON.parse(msgStr); " +
-                                        "    window.addHistoryMessage(msg); " +
-                                        "  } catch(e) { " +
-                                        "    console.error('[HistoryHandler] Failed to parse/add message:', e); " +
-                                        "  } " +
-                                        "} else { " +
-                                        "  console.warn('[HistoryHandler] addHistoryMessage not available'); " +
-                                        "}";
-                                    context.executeJavaScriptOnEDT(jsCode);
-                                });
-                            }
-                        }
-                    }
+                    processAndInjectCodexMessage(msg);
                 }
 
                 LOG.info("[HistoryHandler] ========== Codex 会话加载完成 ==========");
 
             } catch (Exception e) {
-                LOG.error("[HistoryHandler] ❌ 加载 Codex 会话失败: " + e.getMessage(), e);
+                LOG.error("[HistoryHandler] 加载 Codex 会话失败: " + e.getMessage(), e);
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
@@ -655,6 +415,279 @@ public class HistoryHandler extends BaseMessageHandler {
                     context.executeJavaScriptOnEDT(jsCode);
                 });
             }
+        });
+    }
+
+    /**
+     * 提取 Codex 会话元数据（threadId 和 cwd）
+     * @return String[2]: [0]=actualThreadId, [1]=cwd
+     */
+    private String[] extractSessionMeta(com.google.gson.JsonArray messages) {
+        String cwd = null;
+        String actualThreadId = null;
+
+        for (int i = 0; i < messages.size(); i++) {
+            com.google.gson.JsonObject msg = messages.get(i).getAsJsonObject();
+            if (msg.has("type") && "session_meta".equals(msg.get("type").getAsString())) {
+                if (msg.has("payload")) {
+                    com.google.gson.JsonObject payload = msg.getAsJsonObject("payload");
+                    if (payload.has("cwd")) {
+                        cwd = payload.get("cwd").getAsString();
+                    }
+                    if (payload.has("id")) {
+                        actualThreadId = payload.get("id").getAsString();
+                    }
+                    break;
+                }
+            }
+        }
+
+        return new String[]{actualThreadId, cwd};
+    }
+
+    /**
+     * 处理并注入单条 Codex 消息到前端
+     */
+    private void processAndInjectCodexMessage(com.google.gson.JsonObject msg) {
+        if (!msg.has("type") || !"response_item".equals(msg.get("type").getAsString())) {
+            return;
+        }
+
+        com.google.gson.JsonObject payload = msg.has("payload") ? msg.getAsJsonObject("payload") : null;
+        if (payload == null || !payload.has("type")) {
+            return;
+        }
+
+        String payloadType = payload.get("type").getAsString();
+        com.google.gson.JsonObject frontendMsg = null;
+        String timestamp = msg.has("timestamp") ? msg.get("timestamp").getAsString() : null;
+
+        if ("message".equals(payloadType)) {
+            frontendMsg = convertCodexMessageToFrontend(payload, timestamp);
+        } else if ("function_call".equals(payloadType)) {
+            frontendMsg = convertFunctionCallToToolUse(payload, timestamp);
+        } else if ("function_call_output".equals(payloadType)) {
+            frontendMsg = convertFunctionCallOutputToToolResult(payload, timestamp);
+        }
+
+        if (frontendMsg != null) {
+            injectMessageToFrontend(frontendMsg);
+        }
+    }
+
+    /**
+     * 转换 Codex 普通消息为前端格式
+     */
+    private com.google.gson.JsonObject convertCodexMessageToFrontend(com.google.gson.JsonObject payload, String timestamp) {
+        String contentStr = extractContentAsString(payload.get("content"));
+
+        // 过滤掉系统消息
+        if (contentStr != null && isSystemMessage(contentStr)) {
+            return null;
+        }
+
+        com.google.gson.JsonObject frontendMsg = new com.google.gson.JsonObject();
+        String role = payload.has("role") ? payload.get("role").getAsString() : "user";
+        frontendMsg.addProperty("type", role);
+
+        if (payload.has("content")) {
+            if (contentStr != null && !contentStr.isEmpty()) {
+                frontendMsg.addProperty("content", contentStr);
+            }
+
+            com.google.gson.JsonArray claudeContentBlocks = convertToClaudeContentBlocks(payload.get("content"));
+            com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
+            rawObj.add("content", claudeContentBlocks);
+            rawObj.addProperty("role", role);
+            frontendMsg.add("raw", rawObj);
+        }
+
+        if (timestamp != null) {
+            frontendMsg.addProperty("timestamp", timestamp);
+        }
+
+        return frontendMsg;
+    }
+
+    /**
+     * 检查是否为系统消息（需要过滤）
+     */
+    private boolean isSystemMessage(String contentStr) {
+        return contentStr.startsWith("Warning:") ||
+               contentStr.startsWith("Tool result:") ||
+               contentStr.startsWith("Exit code:") ||
+               contentStr.startsWith("# AGENTS.md instructions") ||
+               contentStr.startsWith("<INSTRUCTIONS>") ||
+               contentStr.startsWith("<environment_context>");
+    }
+
+    /**
+     * 转换 Codex function_call 为 Claude tool_use 格式
+     */
+    private com.google.gson.JsonObject convertFunctionCallToToolUse(com.google.gson.JsonObject payload, String timestamp) {
+        com.google.gson.JsonObject frontendMsg = new com.google.gson.JsonObject();
+        frontendMsg.addProperty("type", "assistant");
+
+        String toolName = payload.has("name") ? payload.get("name").getAsString() : "unknown";
+        com.google.gson.JsonElement toolInput = parseToolArguments(payload);
+
+        // 智能转换工具名
+        toolName = convertToolName(toolName, toolInput);
+        toolInput = convertToolInput(toolName, toolInput);
+
+        // 构造 tool_use 格式
+        com.google.gson.JsonObject toolUse = new com.google.gson.JsonObject();
+        toolUse.addProperty("type", "tool_use");
+        toolUse.addProperty("id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
+        toolUse.addProperty("name", toolName);
+
+        if (toolInput != null) {
+            toolUse.add("input", toolInput);
+        }
+
+        com.google.gson.JsonArray content = new com.google.gson.JsonArray();
+        content.add(toolUse);
+
+        frontendMsg.addProperty("content", "Tool: " + toolName);
+
+        com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
+        rawObj.add("content", content);
+        rawObj.addProperty("role", "assistant");
+        frontendMsg.add("raw", rawObj);
+
+        if (timestamp != null) {
+            frontendMsg.addProperty("timestamp", timestamp);
+        }
+
+        return frontendMsg;
+    }
+
+    /**
+     * 解析工具调用参数
+     */
+    private com.google.gson.JsonElement parseToolArguments(com.google.gson.JsonObject payload) {
+        if (!payload.has("arguments")) {
+            return null;
+        }
+        try {
+            return com.google.gson.JsonParser.parseString(payload.get("arguments").getAsString());
+        } catch (Exception e) {
+            return new com.google.gson.JsonObject();
+        }
+    }
+
+    /**
+     * 智能转换工具名（shell_command -> read/glob, update_plan -> todowrite）
+     */
+    private String convertToolName(String toolName, com.google.gson.JsonElement toolInput) {
+        if ("shell_command".equals(toolName) && toolInput != null && toolInput.isJsonObject()) {
+            com.google.gson.JsonObject inputObj = toolInput.getAsJsonObject();
+            if (inputObj.has("command")) {
+                String command = inputObj.get("command").getAsString().trim();
+                if (command.matches("^(ls|pwd|find|cat|head|tail|file|stat|tree)\\b.*")) {
+                    return "read";
+                } else if (command.matches("^(grep|rg|ack|ag)\\b.*")) {
+                    return "glob";
+                }
+            }
+        }
+        if ("update_plan".equals(toolName) && toolInput != null && toolInput.isJsonObject()) {
+            com.google.gson.JsonObject inputObj = toolInput.getAsJsonObject();
+            if (inputObj.has("plan") && inputObj.get("plan").isJsonArray()) {
+                return "todowrite";
+            }
+        }
+        return toolName;
+    }
+
+    /**
+     * 转换工具输入（update_plan -> todowrite 格式转换）
+     */
+    private com.google.gson.JsonElement convertToolInput(String toolName, com.google.gson.JsonElement toolInput) {
+        if (!"todowrite".equals(toolName) || toolInput == null || !toolInput.isJsonObject()) {
+            return toolInput;
+        }
+
+        com.google.gson.JsonObject inputObj = toolInput.getAsJsonObject();
+        if (!inputObj.has("plan") || !inputObj.get("plan").isJsonArray()) {
+            return toolInput;
+        }
+
+        com.google.gson.JsonArray planArray = inputObj.getAsJsonArray("plan");
+        com.google.gson.JsonArray todosArray = new com.google.gson.JsonArray();
+
+        for (int j = 0; j < planArray.size(); j++) {
+            if (planArray.get(j).isJsonObject()) {
+                com.google.gson.JsonObject planItem = planArray.get(j).getAsJsonObject();
+                com.google.gson.JsonObject todoItem = new com.google.gson.JsonObject();
+
+                if (planItem.has("step")) {
+                    todoItem.addProperty("content", planItem.get("step").getAsString());
+                    todoItem.addProperty("activeForm", planItem.get("step").getAsString());
+                }
+                todoItem.addProperty("status", planItem.has("status") ? planItem.get("status").getAsString() : "pending");
+                todoItem.addProperty("id", String.valueOf(j));
+
+                todosArray.add(todoItem);
+            }
+        }
+
+        com.google.gson.JsonObject newInput = new com.google.gson.JsonObject();
+        newInput.add("todos", todosArray);
+        return newInput;
+    }
+
+    /**
+     * 转换 Codex function_call_output 为 Claude tool_result 格式
+     */
+    private com.google.gson.JsonObject convertFunctionCallOutputToToolResult(com.google.gson.JsonObject payload, String timestamp) {
+        com.google.gson.JsonObject frontendMsg = new com.google.gson.JsonObject();
+        frontendMsg.addProperty("type", "user");
+
+        com.google.gson.JsonObject toolResult = new com.google.gson.JsonObject();
+        toolResult.addProperty("type", "tool_result");
+        toolResult.addProperty("tool_use_id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
+
+        String output = payload.has("output") ? payload.get("output").getAsString() : "";
+        toolResult.addProperty("content", output);
+
+        com.google.gson.JsonArray content = new com.google.gson.JsonArray();
+        content.add(toolResult);
+
+        frontendMsg.addProperty("content", "[tool_result]");
+
+        com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
+        rawObj.add("content", content);
+        rawObj.addProperty("role", "user");
+        frontendMsg.add("raw", rawObj);
+
+        if (timestamp != null) {
+            frontendMsg.addProperty("timestamp", timestamp);
+        }
+
+        return frontendMsg;
+    }
+
+    /**
+     * 注入消息到前端
+     */
+    private void injectMessageToFrontend(com.google.gson.JsonObject frontendMsg) {
+        String msgJson = new com.google.gson.Gson().toJson(frontendMsg);
+        String escapedJson = escapeJs(msgJson);
+
+        ApplicationManager.getApplication().invokeLater(() -> {
+            String jsCode = "if (window.addHistoryMessage) { " +
+                "  try { " +
+                "    var msgStr = '" + escapedJson + "'; " +
+                "    var msg = JSON.parse(msgStr); " +
+                "    window.addHistoryMessage(msg); " +
+                "  } catch(e) { " +
+                "    console.error('[HistoryHandler] Failed to parse/add message:', e); " +
+                "  } " +
+                "} else { " +
+                "  console.warn('[HistoryHandler] addHistoryMessage not available'); " +
+                "}";
+            context.executeJavaScriptOnEDT(jsCode);
         });
     }
 
@@ -681,7 +714,7 @@ public class HistoryHandler extends BaseMessageHandler {
                     LOG.info("[HistoryHandler] 使用 Codex 会话目录: " + sessionDir);
 
                     if (!java.nio.file.Files.exists(sessionDir)) {
-                        LOG.error("[HistoryHandler] ❌ Codex 会话目录不存在: " + sessionDir);
+                        LOG.error("[HistoryHandler] Codex 会话目录不存在: " + sessionDir);
                         return;
                     }
 
@@ -696,10 +729,10 @@ public class HistoryHandler extends BaseMessageHandler {
                         for (java.nio.file.Path sessionFile : sessionFiles) {
                             try {
                                 java.nio.file.Files.delete(sessionFile);
-                                LOG.info("[HistoryHandler] ✅ 已删除 Codex 会话文件: " + sessionFile);
+                                LOG.info("[HistoryHandler] 已删除 Codex 会话文件: " + sessionFile);
                                 mainDeleted = true;
                             } catch (Exception e) {
-                                LOG.error("[HistoryHandler] ❌ 删除 Codex 会话文件失败: " + sessionFile + " - " + e.getMessage(), e);
+                                LOG.error("[HistoryHandler] 删除 Codex 会话文件失败: " + sessionFile + " - " + e.getMessage(), e);
                             }
                         }
                     }
@@ -719,7 +752,7 @@ public class HistoryHandler extends BaseMessageHandler {
                     LOG.info("[HistoryHandler] 使用 Claude 会话目录: " + sessionDir);
 
                     if (!java.nio.file.Files.exists(sessionDir)) {
-                        LOG.error("[HistoryHandler] ❌ Claude 项目目录不存在: " + sessionDir);
+                        LOG.error("[HistoryHandler] Claude 项目目录不存在: " + sessionDir);
                         return;
                     }
 
@@ -728,10 +761,10 @@ public class HistoryHandler extends BaseMessageHandler {
 
                     if (java.nio.file.Files.exists(mainSessionFile)) {
                         java.nio.file.Files.delete(mainSessionFile);
-                        LOG.info("[HistoryHandler] ✅ 已删除主会话文件: " + mainSessionFile.getFileName());
+                        LOG.info("[HistoryHandler] 已删除主会话文件: " + mainSessionFile.getFileName());
                         mainDeleted = true;
                     } else {
-                        LOG.warn("[HistoryHandler] ⚠️ 主会话文件不存在: " + mainSessionFile.getFileName());
+                        LOG.warn("[HistoryHandler] 主会话文件不存在: " + mainSessionFile.getFileName());
                     }
 
                     // 删除相关的 agent 文件
@@ -755,10 +788,10 @@ public class HistoryHandler extends BaseMessageHandler {
                         for (java.nio.file.Path agentFile : agentFiles) {
                             try {
                                 java.nio.file.Files.delete(agentFile);
-                                LOG.info("[HistoryHandler] ✅ 已删除关联 agent 文件: " + agentFile.getFileName());
+                                LOG.info("[HistoryHandler] 已删除关联 agent 文件: " + agentFile.getFileName());
                                 agentFilesDeleted++;
                             } catch (Exception e) {
-                                LOG.error("[HistoryHandler] ❌ 删除 agent 文件失败: " + agentFile.getFileName() + " - " + e.getMessage(), e);
+                                LOG.error("[HistoryHandler] 删除 agent 文件失败: " + agentFile.getFileName() + " - " + e.getMessage(), e);
                             }
                         }
                     }
@@ -775,15 +808,36 @@ public class HistoryHandler extends BaseMessageHandler {
 
                         // 清理收藏数据
                         callNodeJsFavoritesService("removeFavorite", sessionId);
-                        LOG.info("[HistoryHandler] ✅ 已清理收藏数据");
+                        LOG.info("[HistoryHandler] 已清理收藏数据");
 
                         // 清理标题数据
                         String deleteResult = callNodeJsDeleteTitle(sessionId);
-                        LOG.info("[HistoryHandler] ✅ 已清理标题数据");
+                        LOG.info("[HistoryHandler] 已清理标题数据");
 
                     } catch (Exception e) {
-                        LOG.warn("[HistoryHandler] ⚠️ 清理关联数据失败（不影响会话删除）: " + e.getMessage());
+                        LOG.warn("[HistoryHandler] 清理关联数据失败（不影响会话删除）: " + e.getMessage());
                     }
+                }
+
+                // 清理缓存，确保下次加载时不会返回已删除的会话
+                try {
+                    String projectPath = context.getProject().getBasePath();
+                    LOG.info("[HistoryHandler] 清理会话缓存...");
+
+                    if ("codex".equals(currentProvider)) {
+                        // Codex 使用 "__all__" 作为缓存键，需要清除所有 Codex 缓存
+                        SessionIndexCache.getInstance().clearAllCodexCache();
+                        SessionIndexManager.getInstance().clearAllCodexIndex();
+                        LOG.info("[HistoryHandler] 已清理所有 Codex 缓存和索引");
+                    } else {
+                        // Claude 使用 projectPath 作为缓存键
+                        SessionIndexCache.getInstance().clearProject(projectPath);
+                        SessionIndexManager.getInstance().clearProjectIndex("claude", projectPath);
+                        LOG.info("[HistoryHandler] 已清理 Claude 项目缓存和索引");
+                    }
+
+                } catch (Exception e) {
+                    LOG.warn("[HistoryHandler] 清理缓存失败（不影响会话删除）: " + e.getMessage());
                 }
 
                 // 删除完成后，重新加载历史数据并推送给前端
@@ -791,7 +845,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 handleLoadHistoryData(currentProvider);
 
             } catch (Exception e) {
-                LOG.error("[HistoryHandler] ❌ 删除会话失败: " + e.getMessage(), e);
+                LOG.error("[HistoryHandler] 删除会话失败: " + e.getMessage(), e);
             }
         });
     }
@@ -860,7 +914,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] ========== 导出会话完成 ==========");
 
             } catch (Exception e) {
-                LOG.error("[HistoryHandler] ❌ 导出会话失败: " + e.getMessage(), e);
+                LOG.error("[HistoryHandler] 导出会话失败: " + e.getMessage(), e);
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "if (window.addToast) { " +
@@ -886,7 +940,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] 收藏状态切换结果: " + result);
 
             } catch (Exception e) {
-                LOG.error("[HistoryHandler] ❌ 切换收藏状态失败: " + e.getMessage(), e);
+                LOG.error("[HistoryHandler] 切换收藏状态失败: " + e.getMessage(), e);
             }
         });
     }
@@ -926,7 +980,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 }
 
             } catch (Exception e) {
-                LOG.error("[HistoryHandler] ❌ 更新标题失败: " + e.getMessage(), e);
+                LOG.error("[HistoryHandler] 更新标题失败: " + e.getMessage(), e);
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "if (window.addToast) { " +
                         "  window.addToast('更新标题失败: " + escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误") + "', 'error'); " +
@@ -975,7 +1029,7 @@ public class HistoryHandler extends BaseMessageHandler {
             return new com.google.gson.Gson().toJson(history);
 
         } catch (Exception e) {
-            LOG.warn("[HistoryHandler] ⚠️ 增强历史数据失败，返回原始数据: " + e.getMessage());
+            LOG.warn("[HistoryHandler] 增强历史数据失败，返回原始数据: " + e.getMessage());
             return historyJson;
         }
     }
@@ -1014,7 +1068,7 @@ public class HistoryHandler extends BaseMessageHandler {
             return new com.google.gson.Gson().toJson(history);
 
         } catch (Exception e) {
-            LOG.warn("[HistoryHandler] ⚠️ 增强标题数据失败，返回原始数据: " + e.getMessage());
+            LOG.warn("[HistoryHandler] 增强标题数据失败，返回原始数据: " + e.getMessage());
             return historyJson;
         }
     }
@@ -1219,7 +1273,7 @@ public class HistoryHandler extends BaseMessageHandler {
             return false;
         } catch (Exception e) {
             // 如果读取失败，为了安全起见，不删除这个文件
-            LOG.warn("[HistoryHandler] ⚠️ 无法读取agent文件 " + agentFilePath.getFileName() + ": " + e.getMessage());
+            LOG.warn("[HistoryHandler] 无法读取agent文件 " + agentFilePath.getFileName() + ": " + e.getMessage());
             return false;
         }
     }

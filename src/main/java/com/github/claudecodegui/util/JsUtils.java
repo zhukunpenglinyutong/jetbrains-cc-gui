@@ -9,6 +9,7 @@ public class JsUtils {
     /**
      * 转义 JavaScript 字符串
      * 用于将 Java 字符串安全地嵌入到 JavaScript 代码中
+     * 包括处理特殊字符如行分隔符、段落分隔符等
      */
     public static String escapeJs(String str) {
         if (str == null) {
@@ -18,8 +19,12 @@ public class JsUtils {
             .replace("\\", "\\\\")
             .replace("'", "\\'")
             .replace("\"", "\\\"")
+            .replace("`", "\\`")
             .replace("\n", "\\n")
-            .replace("\r", "\\r");
+            .replace("\r", "\\r")
+            .replace("\u2028", "\\u2028")  // Line separator
+            .replace("\u2029", "\\u2029")  // Paragraph separator
+            .replace("\0", "\\0");         // Null character
     }
 
     /**

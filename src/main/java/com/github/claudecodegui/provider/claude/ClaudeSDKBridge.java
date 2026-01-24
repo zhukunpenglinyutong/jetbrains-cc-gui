@@ -260,12 +260,18 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             stdinInput.addProperty("prompt", prompt);
             String stdinJson = gson.toJson(stdinInput);
 
+            File workDir = getDirectoryResolver().findSdkDir();
+            if (workDir == null || !workDir.exists()) {
+                result.success = false;
+                result.error = "Bridge directory not ready or invalid";
+                return result;
+            }
+
             List<String> command = new ArrayList<>();
             command.add(node);
             command.add(NODE_SCRIPT);
 
             ProcessBuilder pb = new ProcessBuilder(command);
-            File workDir = getDirectoryResolver().findSdkDir();
             pb.directory(workDir);
             pb.redirectErrorStream(true);
             envConfigurator.updateProcessEnvironment(pb, node);
@@ -373,6 +379,13 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 stdinInput.addProperty("prompt", prompt);
                 String stdinJson = gson.toJson(stdinInput);
 
+                File workDir = getDirectoryResolver().findSdkDir();
+                if (workDir == null || !workDir.exists()) {
+                    result.success = false;
+                    result.error = "Bridge directory not ready or invalid";
+                    return result;
+                }
+
                 List<String> command = new ArrayList<>();
                 command.add(node);
                 command.add(NODE_SCRIPT);
@@ -381,7 +394,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 Set<String> existingTempMarkers = processManager.snapshotClaudeCwdFiles(processTempDir);
 
                 ProcessBuilder pb = new ProcessBuilder(command);
-                File workDir = getDirectoryResolver().findSdkDir();
                 pb.directory(workDir);
                 pb.redirectErrorStream(true);
 
@@ -570,6 +582,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 String node = nodeDetector.findNodeExecutable();
                 File workDir = getDirectoryResolver().findSdkDir();
 
+                // Check if bridge directory is ready
+                if (workDir == null || !workDir.exists()) {
+                    result.success = false;
+                    result.error = "Bridge directory not ready or invalid. Please wait for extraction to complete or reinstall the plugin.";
+                    callback.onError(result.error);
+                    return result;
+                }
+
                 // Diagnostics
                 LOG.info("[ClaudeSDKBridge] Environment diagnostics:");
                 LOG.info("[ClaudeSDKBridge]   Node.js path: " + node);
@@ -625,10 +645,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     if (userWorkDir.exists() && userWorkDir.isDirectory()) {
                         pb.directory(userWorkDir);
                     } else {
-                        pb.directory(getDirectoryResolver().findSdkDir());
+                        pb.directory(workDir);
                     }
                 } else {
-                    pb.directory(getDirectoryResolver().findSdkDir());
+                    pb.directory(workDir);
                 }
 
                 Map<String, String> env = pb.environment();
@@ -849,6 +869,11 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         try {
             String node = nodeDetector.findNodeExecutable();
 
+            File workDir = getDirectoryResolver().findSdkDir();
+            if (workDir == null || !workDir.exists()) {
+                throw new RuntimeException("Bridge directory not ready or invalid");
+            }
+
             List<String> command = new ArrayList<>();
             command.add(node);
             command.add(CHANNEL_SCRIPT);
@@ -858,7 +883,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             command.add(cwd != null ? cwd : "");
 
             ProcessBuilder pb = new ProcessBuilder(command);
-            File workDir = getDirectoryResolver().findSdkDir();
             pb.directory(workDir);
             pb.redirectErrorStream(true);
             envConfigurator.updateProcessEnvironment(pb, node);
@@ -932,9 +956,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 String stdinJson = gson.toJson(stdinInput);
 
+                File bridgeDir = getDirectoryResolver().findSdkDir();
+                if (bridgeDir == null || !bridgeDir.exists()) {
+                    LOG.warn("[SlashCommands] Bridge directory not ready or invalid");
+                    return new ArrayList<>();
+                }
+
                 List<String> command = new ArrayList<>();
                 command.add(node);
-                File bridgeDir = getDirectoryResolver().findSdkDir();
                 command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
                 command.add("claude");
                 command.add("getSlashCommands");
@@ -1059,9 +1088,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 String stdinJson = this.gson.toJson(stdinInput);
 
+                File bridgeDir = getDirectoryResolver().findSdkDir();
+                if (bridgeDir == null || !bridgeDir.exists()) {
+                    LOG.warn("[McpStatus] Bridge directory not ready or invalid");
+                    return new ArrayList<>();
+                }
+
                 List<String> command = new ArrayList<>();
                 command.add(node);
-                File bridgeDir = getDirectoryResolver().findSdkDir();
                 command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
                 command.add("claude");
                 command.add("getMcpServerStatus");
@@ -1190,6 +1224,13 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             try {
                 String node = nodeDetector.findNodeExecutable();
                 File workDir = getDirectoryResolver().findSdkDir();
+
+                // Check if bridge directory is ready
+                if (workDir == null || !workDir.exists()) {
+                    response.addProperty("success", false);
+                    response.addProperty("error", "Bridge directory not ready or invalid");
+                    return response;
+                }
 
                 LOG.info("[Rewind] Starting rewind operation");
                 LOG.info("[Rewind] Session ID: " + sessionId);

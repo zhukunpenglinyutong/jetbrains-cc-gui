@@ -934,11 +934,11 @@ public class PermissionService {
                 // 异步处理结果
                 future.thenAccept(response -> {
                     long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
-                    debugLog("DIALOG_RESPONSE", String.format("Got response %d after %dms for %s", response, dialogElapsed, tool));
+                    LOG.info("[PERM_FUTURE] thenAccept called: response=" + response + ", dialogElapsed=" + dialogElapsed + "ms, tool=" + tool);
                     try {
                         PermissionResponse decision = PermissionResponse.fromValue(response);
                         if (decision == null) {
-                            debugLog("RESPONSE_NULL", "Response value " + response + " mapped to null, defaulting to DENY");
+                            LOG.warn("[PERM_FUTURE] Response value " + response + " mapped to null, defaulting to DENY");
                             decision = PermissionResponse.DENY;
                         }
 
@@ -946,34 +946,33 @@ public class PermissionService {
                         switch (decision) {
                             case ALLOW:
                                 allow = true;
-                                debugLog("DECISION", "ALLOW (single) for " + tool);
+                                LOG.info("[PERM_FUTURE] Decision: ALLOW for " + tool);
                                 break;
                             case ALLOW_ALWAYS:
                                 allow = true;
                                 // 保存到工具级别权限记忆（按工具类型，不是按参数）
                                 toolOnlyPermissionMemory.put(tool, true);
-                                debugLog("DECISION", "ALLOW_ALWAYS for " + tool + ", saved to memory");
+                                LOG.info("[PERM_FUTURE] Decision: ALLOW_ALWAYS for " + tool + ", saved to memory");
                                 break;
                             case DENY:
                             default:
                                 allow = false;
-                                debugLog("DECISION", "DENY for " + tool);
+                                LOG.info("[PERM_FUTURE] Decision: DENY for " + tool);
                                 break;
                         }
 
                         notifyDecision(toolName, inputs, decision);
-                        debugLog("WRITE_RESPONSE", String.format("Writing response for %s: allow=%s", requestId, allow));
+                        LOG.info("[PERM_FUTURE] About to writeResponse for requestId=" + requestId + ", allow=" + allow);
                         writeResponse(requestId, allow);
 
-                        debugLog("DIALOG_COMPLETE", "Frontend dialog processing complete: allow=" + allow);
+                        LOG.info("[PERM_FUTURE] Dialog processing complete for " + tool);
                     } catch (Exception e) {
-                        debugLog("DIALOG_ERROR", "Error processing dialog result: " + e.getMessage());
-                        LOG.error("Error occurred", e);
+                        LOG.error("[PERM_FUTURE] Error in thenAccept callback: " + e.getMessage(), e);
                     } finally {
                         processingRequests.remove(fileName);
                     }
                 }).exceptionally(ex -> {
-                    debugLog("DIALOG_EXCEPTION", "Frontend dialog exception: " + ex.getMessage());
+                    LOG.error("[PERM_FUTURE] exceptionally called: " + ex.getMessage(), ex);
                     try {
                         writeResponse(requestId, false);
                     } catch (Exception e) {
@@ -1090,7 +1089,7 @@ public class PermissionService {
      * 写入响应文件.
      */
     private void writeResponse(String requestId, boolean allow) {
-        debugLog("WRITE_RESPONSE_START", String.format("Writing response for requestId=%s, allow=%s", requestId, allow));
+        LOG.info("[PERM_WRITE] Writing response for requestId=" + requestId + ", allow=" + allow);
         try {
             JsonObject response = new JsonObject();
             response.addProperty("allow", allow);
@@ -1106,13 +1105,12 @@ public class PermissionService {
             // 验证文件是否写入成功
             if (Files.exists(responseFile)) {
                 long fileSize = Files.size(responseFile);
-                debugLog("WRITE_SUCCESS", String.format("Response file written successfully, size=%d bytes", fileSize));
+                LOG.info("[PERM_WRITE] Response file written successfully: " + responseFile + ", size=" + fileSize + " bytes");
             } else {
-                debugLog("WRITE_VERIFY_FAIL", "Response file does NOT exist after write!");
+                LOG.error("[PERM_WRITE] Response file does NOT exist after write: " + responseFile);
             }
         } catch (IOException e) {
-            debugLog("WRITE_ERROR", "Failed to write response file: " + e.getMessage());
-            LOG.error("Error occurred", e);
+            LOG.error("[PERM_WRITE] Failed to write response file: " + e.getMessage(), e);
         }
     }
 

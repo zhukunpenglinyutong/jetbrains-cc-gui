@@ -91,9 +91,9 @@
         "label": "介面主題",
         "system": "跟隨 IDE",
         "systemDesc": "自動跟隨 IDE 主題",
-        "light": "亮色主題",
+        "light": "亮色",
         "lightDesc": "清爽明亮，適合白天使用",
-        "dark": "暗色主題",
+        "dark": "暗色",
         "darkDesc": "護眼舒適，適合夜間使用"
       },
       "language": {
@@ -576,7 +576,40 @@
     "unknownTool": "未知工具"
   },
   "todo": {
-    "progress": "已完成 {{completed}}/{{total}} 個任務"
+    "progress": "已完成 {{completed}}/{{total}} 個任務",
+    "inProgress": "進行中 {{completed}}/{{total}} 個任務",
+    "allCompleted": "已完成 {{completed}}/{{total}} 個任務",
+    "stopped": "已停止"
+  },
+  "statusPanel": {
+    "todoTab": "計畫",
+    "tasksTab": "任務",
+    "subagentTab": "子代理",
+    "filesTab": "檔案改動",
+    "editsTab": "編輯",
+    "noTodos": "暫無任務運行",
+    "noSubagents": "暫無子代理運行",
+    "noFileChanges": "暫無檔案改動",
+    "showDiff": "查看差異",
+    "expand": "展開狀態面板",
+    "collapse": "收起狀態面板",
+    "undoChanges": "撤銷更改",
+    "undoConfirmTitle": "撤銷檔案更改",
+    "undoWillDelete": "此檔案是新建立的，撤銷將刪除該檔案。",
+    "undoWillRestore": "將恢復此檔案到 Claude 修改之前的狀態。",
+    "undoCannotUndo": "此操作無法撤銷。",
+    "confirmUndo": "確認撤銷",
+    "undoSuccess": "已撤銷 {{fileName}} 的更改",
+    "undoFailed": "撤銷失敗: {{error}}",
+    "discardAll": "回撤全部",
+    "keepAll": "保存全部",
+    "discardAllConfirmTitle": "回撤全部更改",
+    "discardAllConfirmMessage": "將撤銷所有檔案的更改，此操作無法恢復。",
+    "keepAllConfirmTitle": "保存全部",
+    "keepAllConfirmMessage": "將當前改動作為新基準，後續改動從零開始記錄。",
+    "discardAllSuccess": "已撤銷所有檔案更改",
+    "discardAllFailed": "撤銷失敗: {{error}}",
+    "keepAllSuccess": "已保存全部，改動記錄已重置"
   },
   "skills": {
     "title": "Skills",

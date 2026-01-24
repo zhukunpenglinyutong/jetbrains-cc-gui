@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
+import { useIsToolDenied } from '../../hooks/useIsToolDenied';
 
 interface BashToolBlockProps {
   name?: string;
   input?: ToolInput;
   result?: ToolResultBlock | null;
+  /** 工具调用的唯一 ID，用于判断该工具是否被用户拒绝了权限 */
+  toolId?: string;
 }
 
-const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
+const BashToolBlock = ({ input, result, toolId }: BashToolBlockProps) => {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
@@ -19,9 +22,13 @@ const BashToolBlock = ({ input, result }: BashToolBlockProps) => {
   const command = (input.command as string | undefined) ?? '';
   const description = (input.description as string | undefined) ?? '';
 
+  const isDenied = useIsToolDenied(toolId);
+
   // Determine tool call status based on result
-  const isCompleted = result !== undefined && result !== null;
-  const isError = isCompleted && result?.is_error === true;
+  // 如果被拒绝，视为已完成（显示错误状态）
+  const isCompleted = (result !== undefined && result !== null) || isDenied;
+  // 如果被拒绝，显示为错误状态
+  const isError = isDenied || (isCompleted && result?.is_error === true);
 
   let output = '';
 

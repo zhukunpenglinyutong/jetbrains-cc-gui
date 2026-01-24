@@ -11,7 +11,7 @@ import mermaid from 'mermaid';
 mermaid.initialize({
   startOnLoad: false,
   theme: 'dark',
-  securityLevel: 'loose',
+  securityLevel: 'strict',
   fontFamily: 'inherit',
 });
 
@@ -26,8 +26,8 @@ marked.use(
       if (lang && hljs.getLanguage(lang)) {
         try {
           return hljs.highlight(code, { language: lang }).value;
-        } catch (err) {
-          console.error('[MarkdownBlock] Highlight error:', err);
+        } catch {
+          // Silently fall through to auto-highlight
         }
       }
       return hljs.highlightAuto(code).value;
@@ -64,16 +64,61 @@ marked.setOptions({
 
 interface MarkdownBlockProps {
   content?: string;
-  isStreaming?: boolean; // App.tsx 传递的属性，MarkdownBlock 不使用
+  isStreaming?: boolean;
+}
+
+/**
+ * 流式安全处理：处理未闭合的代码块和其他 markdown 结构
+ * 在流式传输过程中，代码块可能被截断，导致 markdown 解析错误
+ * 此函数检测并临时闭合未完成的代码块
+ */
+function makeStreamSafe(content: string): string {
+  if (!content) return content;
+
+  let result = content;
+
+  // 处理代码块：检测是否有未闭合的围栏代码块（```）
+  // 使用状态机方式追踪代码块
+  const lines = result.split('\n');
+  let inCodeBlock = false;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    // 检测代码块开始或结束
+    if (trimmedLine.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+    }
+  }
+
+  // 如果仍在代码块内，添加闭合标记
+  if (inCodeBlock) {
+    result = result + '\n```';
+  }
+
+  // 处理行内代码：检测是否有未闭合的行内代码（`）
+  // 只处理最后一行，避免影响多行结构
+  const lastNewlineIndex = result.lastIndexOf('\n');
+  const lastLine = lastNewlineIndex >= 0 ? result.slice(lastNewlineIndex + 1) : result;
+
+  // 计算最后一行中单个反引号的数量（排除双反引号和三反引号）
+  const singleBacktickMatches = lastLine.match(/(?<!`)`(?!`)/g);
+  if (singleBacktickMatches && singleBacktickMatches.length % 2 !== 0) {
+    result = result + '`';
+  }
+
+  return result;
 }
 
 // Mermaid 渲染计数器，用于生成唯一 ID
 let mermaidIdCounter = 0;
 
-const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
+const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps) => {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { t, i18n } = useTranslation();
+
+  // 追踪上一次的 isStreaming 状态，用于检测流式结束
+  const prevIsStreamingRef = useRef(isStreaming);
 
   // 渲染 mermaid 图表
   const renderMermaidDiagrams = useCallback(async () => {
@@ -122,8 +167,8 @@ const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
           newWrapper.appendChild(mermaidContainer);
           pre.parentNode?.replaceChild(newWrapper, pre);
         }
-      } catch (err) {
-        console.error('[MarkdownBlock] Mermaid render error:', err);
+      } catch {
+        // Mermaid render error - silently skip invalid diagrams
       }
     }
   }, []);
@@ -170,7 +215,13 @@ const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
   const html = useMemo(() => {
     try {
       // 去除内容末尾的换行符，避免产生额外空白
-      const trimmedContent = content.replace(/[\r\n]+$/, '');
+      let trimmedContent = content.replace(/[\r\n]+$/, '');
+
+      // 流式传输时，处理未闭合的代码块
+      if (isStreaming) {
+        trimmedContent = makeStreamSafe(trimmedContent);
+      }
+
       // marked.parse 返回的 HTML 末尾可能有换行符，也需要去除
       const parsed = marked.parse(trimmedContent);
       const rawHtml = typeof parsed === 'string' ? parsed.trim() : String(parsed);
@@ -217,11 +268,29 @@ const MarkdownBlock = ({ content = '' }: MarkdownBlockProps) => {
       });
 
       return doc.body.innerHTML.trim();
-    } catch (error) {
-      console.error('[MarkdownBlock] Failed to parse markdown', error);
+    } catch {
+      // Failed to parse markdown - return raw content
       return content;
     }
-  }, [content, i18n.language, t]);
+  }, [content, isStreaming, i18n.language, t]);
+
+  // 流式结束时强制刷新 DOM，修复流式渲染可能导致的布局错乱
+  useEffect(() => {
+    if (prevIsStreamingRef.current && !isStreaming && containerRef.current) {
+      // 流式从 true 变为 false，延迟一帧后强制刷新
+      const timer = setTimeout(() => {
+        if (containerRef.current) {
+          containerRef.current.innerHTML = html;
+          // 刷新后重新渲染 mermaid 图表
+          renderMermaidDiagrams();
+        }
+      }, 50);
+      prevIsStreamingRef.current = isStreaming;
+      return () => clearTimeout(timer);
+    }
+    prevIsStreamingRef.current = isStreaming;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreaming, renderMermaidDiagrams]); // html 在流式结束时已是最新，无需作为依赖
 
   const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;

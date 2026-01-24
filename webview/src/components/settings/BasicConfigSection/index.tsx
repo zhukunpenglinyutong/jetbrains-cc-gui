@@ -2,7 +2,7 @@ import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 
 const SunIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 17C14.7614 17 17 14.7614 17 12C17 9.23858 14.7614 7 12 7C9.23858 7 7 9.23858 7 12C7 14.7614 9.23858 17 12 17Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     <path d="M12 1V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     <path d="M12 21V23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -16,13 +16,13 @@ const SunIcon = () => (
 );
 
 const MoonIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
 const SystemIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2"/>
     <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
   </svg>
@@ -131,62 +131,38 @@ const BasicConfigSection = ({
           <span className={styles.fieldLabel}>{t('settings.basic.theme.label')}</span>
         </div>
 
-        <div className={styles.themeGrid}>
-          {/* 跟随 IDE 主题卡片 */}
+        <div className={styles.themeSelector}>
+          {/* 跟随 IDE */}
           <div
-            className={`${styles.themeCard} ${theme === 'system' ? styles.active : ''}`}
+            className={`${styles.themeOption} ${theme === 'system' ? styles.active : ''}`}
             onClick={() => onThemeChange('system')}
           >
-            {theme === 'system' && (
-              <div className={styles.checkBadge}>
-                <span className="codicon codicon-check" />
-              </div>
-            )}
-
             <div className={styles.themeIconSystem}>
               <SystemIcon />
             </div>
-
-            <div className={styles.themeCardTitle}>{t('settings.basic.theme.system')}</div>
-            <div className={styles.themeCardDesc}>{t('settings.basic.theme.systemDesc')}</div>
+            <span className={styles.themeOptionLabel}>{t('settings.basic.theme.system')}</span>
           </div>
 
-          {/* 亮色主题卡片 */}
+          {/* 亮色主题 */}
           <div
-            className={`${styles.themeCard} ${theme === 'light' ? styles.active : ''}`}
+            className={`${styles.themeOption} ${theme === 'light' ? styles.active : ''}`}
             onClick={() => onThemeChange('light')}
           >
-            {theme === 'light' && (
-              <div className={styles.checkBadge}>
-                <span className="codicon codicon-check" />
-              </div>
-            )}
-
             <div className={styles.themeIconLight}>
               <SunIcon />
             </div>
-
-            <div className={styles.themeCardTitle}>{t('settings.basic.theme.light')}</div>
-            <div className={styles.themeCardDesc}>{t('settings.basic.theme.lightDesc')}</div>
+            <span className={styles.themeOptionLabel}>{t('settings.basic.theme.light')}</span>
           </div>
 
-          {/* 暗色主题卡片 */}
+          {/* 暗色主题 */}
           <div
-            className={`${styles.themeCard} ${theme === 'dark' ? styles.active : ''}`}
+            className={`${styles.themeOption} ${theme === 'dark' ? styles.active : ''}`}
             onClick={() => onThemeChange('dark')}
           >
-            {theme === 'dark' && (
-              <div className={styles.checkBadge}>
-                <span className="codicon codicon-check" />
-              </div>
-            )}
-
             <div className={styles.themeIconDark}>
               <MoonIcon />
             </div>
-
-            <div className={styles.themeCardTitle}>{t('settings.basic.theme.dark')}</div>
-            <div className={styles.themeCardDesc}>{t('settings.basic.theme.darkDesc')}</div>
+            <span className={styles.themeOptionLabel}>{t('settings.basic.theme.dark')}</span>
           </div>
         </div>
       </div>

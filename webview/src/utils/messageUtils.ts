@@ -1,6 +1,54 @@
 import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
 
+/**
+ * Extract content from <command-message> and <command-args> tags if present.
+ * Returns the combined content: "command-message content command-args content"
+ *
+ * Example:
+ *   Input: "<command-message>aimax:auto</command-message>\n<command-name>/aimax:auto</command-name>\n<command-args>你好啊</command-args>"
+ *   Output: "aimax:auto 你好啊"
+ */
+export function extractCommandMessageContent(text: string): string {
+  if (!text) return text;
+
+  const parts: string[] = [];
+
+  // Extract <command-message> content
+  const messageMatch = text.match(/<command-message>([\s\S]*?)<\/command-message>/);
+  if (messageMatch) {
+    const content = messageMatch[1].trim();
+    if (content) {
+      parts.push(content);
+    }
+  }
+
+  // Extract <command-args> content
+  const argsMatch = text.match(/<command-args>([\s\S]*?)<\/command-args>/);
+  if (argsMatch) {
+    const content = argsMatch[1].trim();
+    if (content) {
+      parts.push(content);
+    }
+  }
+
+  // If we found any parts, return them combined
+  if (parts.length > 0) {
+    return parts.join(' ');
+  }
+
+  // No command tags found, return original text
+  return text;
+}
+
+/**
+ * Check if text contains a <command-message> tag
+ */
+export function hasCommandMessageTag(text: string): boolean {
+  if (!text) return false;
+  return text.includes('<command-message>') && text.includes('</command-message>');
+}
+
 // Performance optimization constants
 /**
  * Maximum number of merged message groups to cache before clearing.
@@ -99,7 +147,13 @@ export function normalizeBlocks(
       return null;
     }
     if (typeof content === 'string') {
-      // Filter empty strings and command messages
+      // If has <command-message>, extract and show content
+      if (hasCommandMessageTag(content)) {
+        const processedContent = extractCommandMessageContent(content);
+        return [{ type: 'text' as const, text: localizeMessage(processedContent) }];
+      }
+
+      // Filter empty strings and command messages (without <command-message>)
       if (!content.trim() ||
           content.includes('<command-name>') ||
           content.includes('<local-command-stdout>')) {
@@ -169,7 +223,14 @@ export function getMessageText(
   }
 
   // Apply localization
-  return localizeMessage(text);
+  let result = localizeMessage(text);
+
+  // Extract <command-message> content if present
+  if (hasCommandMessageTag(result)) {
+    result = extractCommandMessageContent(result);
+  }
+
+  return result;
 }
 
 /**
@@ -187,16 +248,58 @@ export function shouldShowMessage(
   }
 
   // Filter command messages (containing <command-name> or <local-command-stdout> tags)
-  const text = getMessageTextFn(message);
-  if (text && (
-    text.includes('<command-name>') ||
-    text.includes('<local-command-stdout>') ||
-    text.includes('<local-command-stderr>') ||
-    text.includes('<command-message>') ||
-    text.includes('<command-args>')
+  // BUT allow <command-message> tags - they will be processed to show only inner content
+
+  // Get raw text content for tag checking (before extraction)
+  const getRawTextContent = (): string => {
+    if (message.content) return message.content;
+    const raw = message.raw;
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw;
+    if (typeof raw.content === 'string') return raw.content;
+    if (Array.isArray(raw.content)) {
+      return raw.content
+        .filter((block) => block && block.type === 'text')
+        .map((block) => block.text ?? '')
+        .join('\n');
+    }
+    if (raw.message?.content) {
+      if (typeof raw.message.content === 'string') return raw.message.content;
+      if (Array.isArray(raw.message.content)) {
+        return raw.message.content
+          .filter((block) => block && block.type === 'text')
+          .map((block) => block.text ?? '')
+          .join('\n');
+      }
+    }
+    return '';
+  };
+
+  const rawText = getRawTextContent();
+
+  // If message has <command-message>, allow it to be shown
+  // (the content will be extracted by extractCommandMessageContent)
+  if (rawText && hasCommandMessageTag(rawText)) {
+    // Only filter if it has stdout/stderr output (which should be hidden)
+    const hasOutputTags =
+      rawText.includes('<local-command-stdout>') ||
+      rawText.includes('<local-command-stderr>');
+    if (!hasOutputTags) {
+      return true;
+    }
+  }
+
+  // Filter messages with command tags but no <command-message>
+  if (rawText && (
+    rawText.includes('<command-name>') ||
+    rawText.includes('<local-command-stdout>') ||
+    rawText.includes('<local-command-stderr>') ||
+    rawText.includes('<command-args>')
   )) {
     return false;
   }
+
+  const text = getMessageTextFn(message);
   if (message.type === 'user' && text === '[tool_result]') {
     return false;
   }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
+import { useIsToolDenied } from '../../hooks/useIsToolDenied';
 import { openFile } from '../../utils/bridge';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
@@ -217,9 +218,11 @@ interface GenericToolBlockProps {
   name?: string;
   input?: ToolInput;
   result?: ToolResultBlock | null;
+  /** 工具调用的唯一 ID，用于判断该工具是否被用户拒绝了权限 */
+  toolId?: string;
 }
 
-const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
+const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps) => {
   const { t } = useTranslation();
   // Tools that should be collapsible (Grep, Glob, Write, Update Plan, Shell Command and MCP tools)
   const lowerName = (name ?? '').toLowerCase();
@@ -229,12 +232,16 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
 
   const filePath = input ? pickFilePath(input, name) : undefined;
 
+  const isDenied = useIsToolDenied(toolId);
+
   // Determine tool call status based on result
-  const isCompleted = result !== undefined && result !== null;
+  // 如果被拒绝，视为已完成（显示错误状态）
+  const isCompleted = (result !== undefined && result !== null) || isDenied;
   // AskUserQuestion tool should never show as error - it's a user interaction tool
   // The is_error field may be set by SDK but it doesn't indicate a real error
   const isAskUserQuestion = lowerName === 'askuserquestion';
-  const isError = isCompleted && result?.is_error === true && !isAskUserQuestion;
+  // 如果被拒绝，显示为错误状态
+  const isError = isDenied || (isCompleted && result?.is_error === true && !isAskUserQuestion);
 
   if (!input) {
     return null;
@@ -317,18 +324,6 @@ const GenericToolBlock = ({ name, input, result }: GenericToolBlockProps) => {
         }}
       >
         <div className="task-title-section">
-          {isCollapsible && lowerName !== 'grep' && (
-            <span
-              className="codicon codicon-chevron-right"
-              style={{
-                marginRight: '4px',
-                transform: expanded ? 'rotate(90deg)' : 'none',
-                transition: 'transform 0.2s',
-                fontSize: '12px',
-                color: 'var(--vscode-descriptionForeground)',
-              }}
-            />
-          )}
           <span className={`codicon ${codicon} tool-title-icon`} />
 
           <span className="tool-title-text">

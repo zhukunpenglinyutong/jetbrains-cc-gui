@@ -89,9 +89,9 @@
       "description": "पेज थीम, भाषा और Node.js रनटाइम वातावरण कॉन्फ़िगर करें",
       "theme": {
         "label": "इंटरफ़ेस थीम",
-        "light": "लाइट थीम",
+        "light": "लाइट",
         "lightDesc": "ताज़ा और उज्ज्वल, दिन के उपयोग के लिए उपयुक्त",
-        "dark": "डार्क थीम",
+        "dark": "डार्क",
         "darkDesc": "आंखों के लिए आरामदायक, रात के उपयोग के लिए उपयुक्त"
       },
       "language": {
@@ -570,7 +570,38 @@
   },
   "todo": {
     "inProgress": "{{completed}}/{{total}} कार्य प्रगति में",
-    "allCompleted": "{{completed}}/{{total}} कार्य पूर्ण"
+    "allCompleted": "{{completed}}/{{total}} कार्य पूर्ण",
+    "stopped": "रुका हुआ"
+  },
+  "statusPanel": {
+    "todoTab": "योजना",
+    "tasksTab": "कार्य",
+    "subagentTab": "उप-एजेंट",
+    "filesTab": "फ़ाइल परिवर्तन",
+    "editsTab": "संपादन",
+    "noTodos": "कोई कार्य नहीं चल रहा",
+    "noSubagents": "कोई उप-एजेंट नहीं चल रहा",
+    "noFileChanges": "कोई परिवर्तन नहीं",
+    "showDiff": "अंतर दिखाएं",
+    "expand": "स्टेटस पैनल विस्तारित करें",
+    "collapse": "स्टेटस पैनल संक्षिप्त करें",
+    "undoChanges": "परिवर्तन पूर्ववत करें",
+    "undoConfirmTitle": "फ़ाइल परिवर्तन पूर्ववत करें",
+    "undoWillDelete": "यह फ़ाइल नई बनाई गई थी। पूर्ववत करने से यह फ़ाइल हटा दी जाएगी।",
+    "undoWillRestore": "यह फ़ाइल को Claude के संशोधनों से पहले की स्थिति में वापस लाएगा।",
+    "undoCannotUndo": "यह कार्रवाई पूर्ववत नहीं की जा सकती।",
+    "confirmUndo": "पूर्ववत की पुष्टि करें",
+    "undoSuccess": "{{fileName}} के परिवर्तन पूर्ववत किए गए",
+    "undoFailed": "पूर्ववत विफल: {{error}}",
+    "discardAll": "सब हटाएं",
+    "keepAll": "सब रखें",
+    "discardAllConfirmTitle": "सभी परिवर्तन हटाएं",
+    "discardAllConfirmMessage": "यह सभी फ़ाइल परिवर्तनों को पूर्ववत करेगा। यह क्रिया पूर्ववत नहीं की जा सकती।",
+    "keepAllConfirmTitle": "सब रखें",
+    "keepAllConfirmMessage": "वर्तमान परिवर्तनों को आधार के रूप में स्वीकार करें। भविष्य के परिवर्तन शून्य से ट्रैक किए जाएंगे।",
+    "discardAllSuccess": "सभी परिवर्तन हटा दिए गए",
+    "discardAllFailed": "हटाना विफल: {{error}}",
+    "keepAllSuccess": "सभी परिवर्तन रखे गए, ट्रैकिंग रीसेट"
   },
   "skills": {
     "title": "Skills",

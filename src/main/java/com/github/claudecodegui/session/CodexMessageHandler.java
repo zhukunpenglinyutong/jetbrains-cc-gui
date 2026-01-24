@@ -307,15 +307,18 @@ public class CodexMessageHandler implements MessageCallback {
                     }
                 }
 
-                // 如果内容包含命令标签，过滤掉
-                if (contentStr != null && (
-                    contentStr.contains("<command-name>") ||
-                    contentStr.contains("<local-command-stdout>") ||
-                    contentStr.contains("<local-command-stderr>") ||
-                    contentStr.contains("<command-message>") ||
-                    contentStr.contains("<command-args>")
-                )) {
-                    return null;
+                // 如果内容包含命令标签，过滤掉（允许包含 <command-message> 的用户输入）
+                if (contentStr != null) {
+                    boolean hasCommandMessage = contentStr.contains("<command-message>") &&
+                        contentStr.contains("</command-message>");
+                    if (!hasCommandMessage && (
+                        contentStr.contains("<command-name>") ||
+                        contentStr.contains("<local-command-stdout>") ||
+                        contentStr.contains("<local-command-stderr>") ||
+                        contentStr.contains("<command-args>")
+                    )) {
+                        return null;
+                    }
                 }
             }
         }

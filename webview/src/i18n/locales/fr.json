@@ -91,9 +91,9 @@
         "label": "Thème de l'interface",
         "system": "Suivre l'IDE",
         "systemDesc": "Suivre automatiquement le thème de l'IDE",
-        "light": "Thème clair",
+        "light": "Clair",
         "lightDesc": "Frais et lumineux, adapté pour une utilisation diurne",
-        "dark": "Thème sombre",
+        "dark": "Sombre",
         "darkDesc": "Confortable pour les yeux, adapté pour une utilisation nocturne"
       },
       "language": {
@@ -571,7 +571,40 @@
     "unknownTool": "Outil inconnu"
   },
   "todo": {
-    "progress": "{{completed}} sur {{total}} tâches terminées"
+    "progress": "{{completed}} sur {{total}} tâches terminées",
+    "inProgress": "En cours {{completed}}/{{total}} tâches",
+    "allCompleted": "Terminé {{completed}}/{{total}} tâches",
+    "stopped": "Arrêté"
+  },
+  "statusPanel": {
+    "todoTab": "Plan",
+    "tasksTab": "Tâches",
+    "subagentTab": "Sous-agent",
+    "filesTab": "Modifications",
+    "editsTab": "Éditions",
+    "noTodos": "Aucune tâche en cours",
+    "noSubagents": "Aucun sous-agent en cours",
+    "noFileChanges": "Aucune modification",
+    "showDiff": "Afficher les différences",
+    "expand": "Développer le panneau de statut",
+    "collapse": "Réduire le panneau de statut",
+    "undoChanges": "Annuler les modifications",
+    "undoConfirmTitle": "Annuler les modifications du fichier",
+    "undoWillDelete": "Ce fichier a été nouvellement créé. L'annulation supprimera ce fichier.",
+    "undoWillRestore": "Cela restaurera le fichier à son état avant les modifications de Claude.",
+    "undoCannotUndo": "Cette action ne peut pas être annulée.",
+    "confirmUndo": "Confirmer l'annulation",
+    "undoSuccess": "Modifications de {{fileName}} annulées",
+    "undoFailed": "Échec de l'annulation: {{error}}",
+    "discardAll": "Tout Annuler",
+    "keepAll": "Tout Conserver",
+    "discardAllConfirmTitle": "Annuler Tous les Changements",
+    "discardAllConfirmMessage": "Cela annulera toutes les modifications de fichiers. Cette action ne peut pas être annulée.",
+    "keepAllConfirmTitle": "Tout Conserver",
+    "keepAllConfirmMessage": "Accepter les modifications actuelles comme référence. Les modifications futures seront suivies à partir de zéro.",
+    "discardAllSuccess": "Tous les changements annulés",
+    "discardAllFailed": "Échec de l'annulation: {{error}}",
+    "keepAllSuccess": "Tous les changements conservés, suivi réinitialisé"
   },
   "skills": {
     "title": "Skills",

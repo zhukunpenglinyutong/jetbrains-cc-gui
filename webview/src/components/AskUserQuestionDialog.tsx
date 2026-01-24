@@ -108,8 +108,31 @@ const AskUserQuestionDialog = ({
   // FIX: 确保 currentQuestionIndex 不会越界
   // 当 request 变化导致 normalizedQuestions 长度减少时，
   // currentQuestionIndex 可能仍是旧值（因为 useEffect 的 state 更新是异步的）
-  const safeQuestionIndex = Math.min(currentQuestionIndex, normalizedQuestions.length - 1);
+  const safeQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, normalizedQuestions.length - 1));
   const currentQuestion = normalizedQuestions[safeQuestionIndex];
+
+  // FIX: 额外的防御性检查，防止在极端边界情况下 currentQuestion 为 undefined
+  // 这可能发生在 React 并发渲染或状态更新时序问题时
+  if (!currentQuestion) {
+    return (
+      <div className="permission-dialog-overlay">
+        <div className="ask-user-question-dialog">
+          <h3 className="ask-user-question-dialog-title">
+            {t('askUserQuestion.title', 'Claude 有一些问题想问你')}
+          </h3>
+          <p className="question-text">
+            {t('askUserQuestion.loading', '正在加载问题...')}
+          </p>
+          <div className="ask-user-question-dialog-actions">
+            <button className="action-button secondary" onClick={() => onCancel(request.requestId)}>
+              {t('askUserQuestion.cancel', '取消')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const isLastQuestion = safeQuestionIndex === normalizedQuestions.length - 1;
   const currentAnswerSet = answers[currentQuestion.question] || new Set<string>();
 
