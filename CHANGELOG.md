@@ -1,3 +1,39 @@
+##### **2026年1月25日（v0.1.6）**
+
+English:
+- [x] Add custom "Other" option to AskUserQuestion dialog with textarea for custom input
+- [x] Auto-detect fnm (Fast Node Manager) nodejs path (#265)
+- [x] Fix npm package specs quoting to preserve semver operators (^~><) on Windows (#258)
+- [x] Fix macOS JCEF zoom/layout recovery after resume (#248)
+- [x] Fix MCP plugin connection and invocation issues (#266)
+- [x] Extract shell execution logic to ShellExecutor utility class for better reusability
+- [x] Use toast notifications for error messages with type-based duration (error: 5s, warning: 3s, default: 2s)
+- [x] Improve MCP status service security: command whitelist validation, unified logging, reusable functions
+- [x] Add ReDoS protection with line length limits in mcp-status-service
+- [x] Replace regex-based JSON parsing with bracket matching algorithm for better security
+- [x] Add input length limits in AskUserQuestionDialog
+- [x] Improve NpmPermissionHelper with precompiled regex and quote escaping
+- [x] Extract Toast duration constants for better maintainability
+- [x] Add i18n translations for "Other" option (en, es, fr, hi, ja, zh, zh-TW)
+- [x] Change cancel button text to "Auto" across all languages
+
+中文:
+- [x] 在 AskUserQuestion 对话框中添加自定义 "Other" 选项，支持文本输入
+- [x] 自动检测 fnm（快速 Node 管理器）的 nodejs 路径 (#265)
+- [x] 修复 Windows 上 npm 包规格引用问题，保留 semver 操作符（^~><）(#258)
+- [x] 修复 macOS JCEF 休眠恢复后的缩放/布局问题 (#248)
+- [x] 修复 MCP 插件无法正常连接调用的问题 (#266)
+- [x] 提取 shell 执行逻辑到 ShellExecutor 工具类，提升代码复用性
+- [x] 使用 toast 通知替代错误消息，根据类型设置显示时长（错误: 5秒，警告: 3秒，默认: 2秒）
+- [x] 改进 MCP 状态服务安全性：命令白名单验证、统一日志系统、提取可复用函数
+- [x] 在 mcp-status-service 中添加 ReDoS 防护，限制行长度
+- [x] 用括号匹配算法替换基于正则的 JSON 解析，提升安全性
+- [x] 在 AskUserQuestionDialog 中添加输入长度限制
+- [x] 改进 NpmPermissionHelper，添加预编译正则和引号转义
+- [x] 提取 Toast 显示时长常量，提升可维护性
+- [x] 为 "Other" 选项添加多语言翻译（en、es、fr、hi、ja、zh、zh-TW）
+- [x] 将取消按钮文本统一更改为 "Auto"
+
 ##### **2026年1月24日（v0.1.6-beta3）**
 
 English:

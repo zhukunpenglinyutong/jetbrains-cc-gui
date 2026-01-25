@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import './AskUserQuestionDialog.css';
+
+// 用于标识"其他"选项的特殊标记
+const OTHER_OPTION_MARKER = '__OTHER__';
+
+// 自定义输入的最大长度限制
+const MAX_CUSTOM_INPUT_LENGTH = 2000;
 
 export interface QuestionOption {
   label: string;
@@ -56,7 +62,10 @@ const AskUserQuestionDialog = ({
   const { t } = useTranslation();
   // 存储每个问题的答案：question -> selectedLabel(s)
   const [answers, setAnswers] = useState<Record<string, Set<string>>>({});
+  // 存储每个问题的自定义输入文本：question -> customText
+  const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const customInputRef = useRef<HTMLTextAreaElement>(null);
   const normalizedQuestions = (Array.isArray(request?.questions) ? request!.questions : [])
     .map(normalizeQuestion)
     .filter(Boolean) as Question[];
@@ -65,10 +74,13 @@ const AskUserQuestionDialog = ({
     if (isOpen && request) {
       // 初始化答案状态
       const initialAnswers: Record<string, Set<string>> = {};
+      const initialCustomInputs: Record<string, string> = {};
       normalizedQuestions.forEach((q) => {
         initialAnswers[q.question] = new Set<string>();
+        initialCustomInputs[q.question] = '';
       });
       setAnswers(initialAnswers);
+      setCustomInputs(initialCustomInputs);
       setCurrentQuestionIndex(0);
 
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -135,6 +147,8 @@ const AskUserQuestionDialog = ({
 
   const isLastQuestion = safeQuestionIndex === normalizedQuestions.length - 1;
   const currentAnswerSet = answers[currentQuestion.question] || new Set<string>();
+  const currentCustomInput = customInputs[currentQuestion.question] || '';
+  const isOtherSelected = currentAnswerSet.has(OTHER_OPTION_MARKER);
 
   const handleOptionToggle = (label: string) => {
     setAnswers((prev) => {
@@ -157,6 +171,22 @@ const AskUserQuestionDialog = ({
       newAnswers[currentQuestion.question] = currentSet;
       return newAnswers;
     });
+
+    // 如果选中"其他"选项，自动聚焦到输入框
+    if (label === OTHER_OPTION_MARKER) {
+      setTimeout(() => {
+        customInputRef.current?.focus();
+      }, 0);
+    }
+  };
+
+  const handleCustomInputChange = (value: string) => {
+    // 限制输入长度以防止过长输入
+    const sanitizedValue = value.slice(0, MAX_CUSTOM_INPUT_LENGTH);
+    setCustomInputs((prev) => ({
+      ...prev,
+      [currentQuestion.question]: sanitizedValue,
+    }));
   };
 
   const handleNext = () => {
@@ -177,9 +207,18 @@ const AskUserQuestionDialog = ({
     const formattedAnswers: Record<string, string | string[]> = {};
     normalizedQuestions.forEach((q) => {
       const selectedSet = answers[q.question] || new Set<string>();
-      if (selectedSet.size > 0) {
-        const selected = Array.from(selectedSet);
-        formattedAnswers[q.question] = q.multiSelect ? selected : selected[0]!;
+      const customText = customInputs[q.question] || '';
+
+      // 过滤掉"其他"标记，获取实际选中的选项
+      const selectedLabels = Array.from(selectedSet).filter(label => label !== OTHER_OPTION_MARKER);
+
+      // 如果选中了"其他"且有自定义输入，将自定义输入添加到答案中
+      if (selectedSet.has(OTHER_OPTION_MARKER) && customText.trim()) {
+        selectedLabels.push(customText.trim());
+      }
+
+      if (selectedLabels.length > 0) {
+        formattedAnswers[q.question] = q.multiSelect ? selectedLabels : selectedLabels[0]!;
       }
     });
 
@@ -190,7 +229,12 @@ const AskUserQuestionDialog = ({
     onCancel(request.requestId);
   };
 
-  const canProceed = currentAnswerSet.size > 0;
+  // 检查是否可以继续：
+  // 1. 选中了普通选项（非"其他"）
+  // 2. 或者选中了"其他"且有有效的自定义输入
+  const hasRegularSelection = Array.from(currentAnswerSet).some(label => label !== OTHER_OPTION_MARKER);
+  const hasValidCustomInput = isOtherSelected && currentCustomInput.trim().length > 0;
+  const canProceed = hasRegularSelection || hasValidCustomInput;
 
   return (
     <div className="permission-dialog-overlay">
@@ -237,7 +281,40 @@ const AskUserQuestionDialog = ({
                 </button>
               );
             })}
+
+            {/* 其他选项 - 允许用户自定义输入 */}
+            <button
+              className={`question-option other-option ${isOtherSelected ? 'selected' : ''}`}
+              onClick={() => handleOptionToggle(OTHER_OPTION_MARKER)}
+            >
+              <div className="option-checkbox">
+                {currentQuestion.multiSelect ? (
+                  <span className={`codicon codicon-${isOtherSelected ? 'check' : 'blank'}`} />
+                ) : (
+                  <span className={`codicon codicon-${isOtherSelected ? 'circle-filled' : 'circle-outline'}`} />
+                )}
+              </div>
+              <div className="option-content">
+                <div className="option-label">{t('askUserQuestion.otherOption', '其他')}</div>
+                <div className="option-description">{t('askUserQuestion.otherOptionDesc', '输入自定义答案')}</div>
+              </div>
+            </button>
           </div>
+
+          {/* 自定义输入框 - 仅当选中"其他"时显示 */}
+          {isOtherSelected && (
+            <div className="custom-input-container">
+              <textarea
+                ref={customInputRef}
+                className="custom-input"
+                value={currentCustomInput}
+                onChange={(e) => handleCustomInputChange(e.target.value)}
+                placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
+                rows={3}
+                maxLength={MAX_CUSTOM_INPUT_LENGTH}
+              />
+            </div>
+          )}
 
           {/* 提示文本 */}
           {currentQuestion.multiSelect && (

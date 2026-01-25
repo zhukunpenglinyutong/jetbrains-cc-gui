@@ -32,6 +32,9 @@ public class NpmPermissionHelper {
         Pattern.CASE_INSENSITIVE
     );
 
+    // Windows shell 需要转义的特殊字符
+    private static final Pattern WINDOWS_SPECIAL_CHARS = Pattern.compile("[\\^~<>|&()\\s]");
+
     /**
      * 检测日志中是否包含权限错误
      */
@@ -229,7 +232,19 @@ public class NpmPermissionHelper {
             LOG.info("[NpmPermissionHelper] Adding --force flag for retry attempt " + retryAttempt);
         }
 
-        command.addAll(packages);
+        // On Windows, wrap packages containing shell special characters in quotes to prevent
+        // cmd.exe from interpreting them. Unix systems don't need this as ProcessBuilder
+        // passes arguments directly via execve() without shell interpretation.
+        boolean needsQuoting = PlatformUtils.isWindows();
+        for (String pkg : packages) {
+            if (needsQuoting && WINDOWS_SPECIAL_CHARS.matcher(pkg).find()) {
+                // Escape any existing quotes in the package name and wrap in quotes
+                command.add("\"" + pkg.replace("\"", "\\\"") + "\"");
+            } else {
+                command.add(pkg);
+            }
+        }
+
         return command;
     }
 

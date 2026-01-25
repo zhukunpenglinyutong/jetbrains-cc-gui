@@ -363,10 +363,13 @@
     "title": "Claude के पास आपके लिए कुछ प्रश्न हैं",
     "progress": "प्रश्न {{current}} / {{total}}",
     "multiSelectHint": "आप एकाधिक विकल्प चुन सकते हैं",
-    "cancel": "AI स्वचालित चयन",
+    "cancel": "Auto",
     "back": "पीछे",
     "next": "आगे",
-    "submit": "सबमिट करें"
+    "submit": "सबमिट करें",
+    "otherOption": "अन्य",
+    "otherOptionDesc": "कस्टम उत्तर दर्ज करें",
+    "customInputPlaceholder": "अपना उत्तर दर्ज करें..."
   },
   "toast": {
     "switchSuccess": "स्विच सफल",

@@ -57,6 +57,8 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 
+import { getMcpServersStatus } from './mcp-status-service.js';
+
 import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { mapModelIdToSdkName } from '../../utils/model-utils.js';
@@ -1709,70 +1711,16 @@ export async function getSlashCommands(cwd = null) {
 
 /**
  * 获取 MCP 服务器连接状态
- * 通过 SDK 的 mcpServerStatus() 方法获取所有配置的 MCP 服务器的连接状态
- * @param {string} cwd - 工作目录（可选）
+ * 直接验证每个 MCP 服务器的真实连接状态（通过 mcp-status-service 模块）
+ * @param {string} [_cwd=null] - 工作目录（已废弃，保留仅为 API 兼容性，实际不使用）
+ * @deprecated cwd 参数已不再使用，状态检测直接读取 ~/.claude.json 配置
  */
-export async function getMcpServerStatus(cwd = null) {
+export async function getMcpServerStatus(_cwd = null) {
   try {
-    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
+    console.log('[McpStatus] Getting MCP server status...');
 
-    // 设置 API Key
-    setupApiKey();
-
-    // 确保 HOME 环境变量设置正确
-    if (!process.env.HOME) {
-      const os = await import('os');
-      process.env.HOME = os.homedir();
-    }
-
-    // 智能确定工作目录
-    const workingDirectory = selectWorkingDirectory(cwd);
-    try {
-      process.chdir(workingDirectory);
-    } catch (chdirError) {
-      console.error('[WARNING] Failed to change process.cwd():', chdirError.message);
-    }
-
-    // 创建一个空的输入流
-    const inputStream = new AsyncStream();
-
-    // 动态加载 Claude SDK
-    const sdk = await ensureClaudeSdk();
-    const query = sdk?.query;
-    if (typeof query !== 'function') {
-      throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
-    }
-
-    // 调用 query 函数，使用空输入流
-    const result = query({
-      prompt: inputStream,
-      options: {
-        cwd: workingDirectory,
-        permissionMode: 'default',
-        maxTurns: 0,
-        canUseTool: async () => ({
-          behavior: 'deny',
-          message: 'Config loading only'
-        }),
-        tools: { type: 'preset', preset: 'claude_code' },
-        settingSources: ['user', 'project', 'local'],
-        stderr: (data) => {
-          if (data && data.trim()) {
-            console.log(`[SDK-STDERR] ${data.trim()}`);
-          }
-        }
-      }
-    });
-
-    // 立即关闭输入流
-    inputStream.done();
-
-    // 获取 MCP 服务器状态
-    // SDK 返回的格式是 McpServerStatus[]，包含 name, status, serverInfo
-    const mcpStatus = await result.mcpServerStatus?.() || [];
-
-    // 清理资源
-    await result.return?.();
+    // 使用 mcp-status-service 模块获取状态
+    const mcpStatus = await getMcpServersStatus();
 
     // 输出 MCP 服务器状态
     console.log('[MCP_SERVER_STATUS]', JSON.stringify(mcpStatus));

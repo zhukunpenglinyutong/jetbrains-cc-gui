@@ -315,6 +315,7 @@ public class DependencyManager {
                 List<String> command = NpmPermissionHelper.buildInstallCommandWithFallback(
                     npmPath, normalizedSdkDir, packages, attempt
                 );
+                log.accept("Command: " + String.join(" ", command));
 
                 ProcessBuilder pb = new ProcessBuilder(command);
                 pb.directory(sdkDir.toFile());

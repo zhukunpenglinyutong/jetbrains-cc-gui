@@ -375,10 +375,13 @@
     "title": "Claudeからの質問があります",
     "progress": "質問 {{current}} / {{total}}",
     "multiSelectHint": "複数のオプションを選択できます",
-    "cancel": "AI自動選択",
+    "cancel": "Auto",
     "back": "戻る",
     "next": "次へ",
-    "submit": "送信"
+    "submit": "送信",
+    "otherOption": "その他",
+    "otherOptionDesc": "カスタム回答を入力",
+    "customInputPlaceholder": "回答を入力してください..."
   },
   "toast": {
     "switchSuccess": "切り替えが成功しました",

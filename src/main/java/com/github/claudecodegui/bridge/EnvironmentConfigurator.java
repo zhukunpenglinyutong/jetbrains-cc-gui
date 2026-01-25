@@ -2,6 +2,7 @@ package com.github.claudecodegui.bridge;
 
 import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.ShellExecutor;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -16,7 +17,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -388,63 +388,32 @@ public class EnvironmentConfigurator {
             return null;
         }
 
-        try {
-            // Use login + interactive shell to get full environment
-            // fnm and other version managers require interactive shell to load .zshrc
-            String shell = System.getenv("SHELL");
-            if (shell == null || shell.isEmpty()) {
-                shell = "/bin/zsh"; // Default to zsh on macOS
-            }
-
-            List<String> command = new ArrayList<>();
-            command.add(shell);
-            command.add("-l"); // Login shell
-            command.add("-i"); // Interactive shell (needed for fnm, nvm etc.)
-            command.add("-c");
-            command.add("echo \"$" + envName + "\"");
-
-            ProcessBuilder pb = new ProcessBuilder(command);
-            // Set TERM=dumb to suppress interactive shell extra output (colors, prompts, etc.)
-            pb.environment().put("TERM", "dumb");
-            pb.redirectErrorStream(true);
-
-            Process process = pb.start();
-
-            // Wait for process to complete first (with timeout) to avoid readLine blocking
-            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
-            if (!finished) {
-                LOG.debug("[Codex] Shell command timeout for env: " + envName);
-                process.destroyForcibly();
-                return null;
-            }
-
-            // Process completed, now safe to read output
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                // Read all lines and find the valid value
-                // Interactive shell may output extra content (prompts, welcome messages, etc.)
-                String line;
-                String lastValidValue = null;
-                while ((line = reader.readLine()) != null) {
-                    String trimmed = line.trim();
-                    // Skip empty lines and common shell artifacts
-                    if (!trimmed.isEmpty() &&
-                        !trimmed.startsWith("[") &&      // Skip MOTD brackets
-                        !trimmed.startsWith("%") &&      // Skip zsh prompts
-                        !trimmed.startsWith(">") &&      // Skip continuation prompts
-                        !trimmed.contains("Last login")) { // Skip login messages
-                        lastValidValue = trimmed;
-                    }
-                }
-
-                if (lastValidValue != null && !lastValidValue.isEmpty()) {
-                    LOG.debug("[Codex] Env var found via shell: " + envName);
-                    return lastValidValue;
-                }
-            }
-        } catch (Exception e) {
-            LOG.debug("[Codex] Failed to get env from shell: " + e.getMessage());
+        // Use login + interactive shell to get full environment
+        // fnm and other version managers require interactive shell to load .zshrc
+        String shell = System.getenv("SHELL");
+        if (shell == null || shell.isEmpty()) {
+            shell = "/bin/zsh"; // Default to zsh on macOS
         }
+
+        List<String> command = new ArrayList<>();
+        command.add(shell);
+        command.add("-l"); // Login shell
+        command.add("-i"); // Interactive shell (needed for fnm, nvm etc.)
+        command.add("-c");
+        command.add("echo \"$" + envName + "\"");
+
+        ShellExecutor.ExecutionResult result = ShellExecutor.executeAndGetLast(
+                command,
+                ShellExecutor.createShellOutputFilter(),
+                "[Codex] getEnvFromShell(" + envName + ")",
+                ShellExecutor.DEFAULT_TIMEOUT_SECONDS
+        );
+
+        if (result.isSuccess() && result.getOutput() != null) {
+            LOG.debug("[Codex] Env var found via shell: " + envName);
+            return result.getOutput();
+        }
+
         return null;
     }
 

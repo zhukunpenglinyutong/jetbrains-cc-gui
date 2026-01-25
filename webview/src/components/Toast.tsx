@@ -47,11 +47,35 @@ interface ToastContainerProps {
   onDismiss: (id: string) => void;
 }
 
+// Toast 显示时长常量（毫秒）
+const TOAST_DURATION = {
+  error: 5000,   // 错误消息显示 5 秒
+  warning: 3000, // 警告消息显示 3 秒
+  default: 2000, // 其他消息显示 2 秒
+} as const;
+
+// 根据消息类型设置不同的显示时长
+const getDuration = (type?: ToastMessage['type']) => {
+  switch (type) {
+    case 'error':
+      return TOAST_DURATION.error;
+    case 'warning':
+      return TOAST_DURATION.warning;
+    default:
+      return TOAST_DURATION.default;
+  }
+};
+
 export const ToastContainer: React.FC<ToastContainerProps> = ({ messages, onDismiss }) => {
   return (
     <div className="toast-container">
       {messages.map((msg) => (
-        <Toast key={msg.id} message={msg} onDismiss={onDismiss} />
+        <Toast
+          key={msg.id}
+          message={msg}
+          onDismiss={onDismiss}
+          duration={getDuration(msg.type)}
+        />
       ))}
     </div>
   );
