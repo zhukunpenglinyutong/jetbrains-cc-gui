@@ -174,7 +174,7 @@ public class CodexSettingsManager {
             return;
         }
 
-        String prefix = target.getFileName() != null ? target.getFileName().toString() : "codex";
+        String prefix = target.getFileName() != null ? target.getFileName().toString() + "-" : "codex-";
         Path tmp = Files.createTempFile(parent, prefix, ".tmp");
         try {
             Files.writeString(tmp, content, StandardCharsets.UTF_8);
@@ -186,7 +186,8 @@ public class CodexSettingsManager {
         } finally {
             try {
                 Files.deleteIfExists(tmp);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                LOG.debug("[CodexSettingsManager] Failed to cleanup temp file: " + tmp + " (" + e.getMessage() + ")");
             }
         }
     }
