@@ -69,11 +69,15 @@ public class IgnoreRuleParser {
                     case '*':
                         // ** 匹配任意路径（包括 /）
                         if (i + 1 < pattern.length() && pattern.charAt(i + 1) == '*') {
-                            regex.append(".*");
                             i++; // 跳过第二个 *
-                            // 如果后面紧跟 /，也跳过
+
+                            // **/ 语义：匹配任意层级目录（包含 0 层），必须以 / 边界结束
                             if (i + 1 < pattern.length() && pattern.charAt(i + 1) == '/') {
-                                i++;
+                                regex.append("(?:.*/)?");
+                                i++; // 跳过 /
+                            } else {
+                                // ** 语义：匹配任意字符（包括 /）
+                                regex.append(".*");
                             }
                         } else {
                             // 单个 * 匹配除 / 外的任意字符
