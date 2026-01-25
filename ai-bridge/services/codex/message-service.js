@@ -171,7 +171,9 @@ function collectAgentsInstructions(cwd) {
   let totalBytes = 0;
 
   // 1. 首先读取全局指令 (~/.codex/)
-  const codexHome = process.env.CODEX_HOME || join(homedir(), '.codex');
+  const codexHome = (process.env.CODEX_HOME && process.env.CODEX_HOME.trim())
+    ? process.env.CODEX_HOME.trim()
+    : join(homedir(), '.codex');
   const globalFile = findAgentsFileInDir(codexHome);
   if (globalFile) {
     const content = readAgentsFile(globalFile);
