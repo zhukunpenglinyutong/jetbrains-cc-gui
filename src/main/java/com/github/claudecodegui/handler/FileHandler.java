@@ -592,9 +592,9 @@ public class FileHandler extends BaseMessageHandler {
                 }
 
                 if (!file.exists()) {
-                    LOG.error("文件不存在: " + actualPath);
+                    LOG.warn("文件不存在: " + actualPath);
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        callJavaScript("addErrorMessage", escapeJs("无法打开文件: 文件不存在 (" + actualPath + ")"));
+                        callJavaScript("addErrorMessage", escapeJs("无法打开文件: 当前文件不存在 (" + actualPath + ")"));
                     }, ModalityState.nonModal());
                     return;
                 }

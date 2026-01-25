@@ -427,8 +427,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       window.__deniedToolIds?.clear();
       setMessages([]);
     };
-    window.addErrorMessage = (message) =>
-      setMessages((prev) => [...prev, { type: 'error', content: message }]);
+    window.addErrorMessage = (message) => addToast(message, 'error');
 
     window.addHistoryMessage = (message: ClaudeMessage) => {
       setMessages((prev) => [...prev, message]);
