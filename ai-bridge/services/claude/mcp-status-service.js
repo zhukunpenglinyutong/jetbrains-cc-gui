@@ -9,17 +9,128 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const MCP_VERIFY_TIMEOUT = 8000; // 8 秒超时
+// ============================================================================
+// 配置常量
+// ============================================================================
+
+/** 验证超时时间（毫秒），可通过环境变量配置 */
+const MCP_VERIFY_TIMEOUT = parseInt(process.env.MCP_VERIFY_TIMEOUT) || 8000;
+
+/** 是否启用调试日志 */
+const DEBUG = process.env.MCP_DEBUG === 'true' || process.env.DEBUG === 'true';
+
+/**
+ * 允许执行的命令白名单
+ * 只允许常见的 MCP 服务器启动命令，防止任意命令执行
+ */
+const ALLOWED_COMMANDS = new Set([
+  'node',
+  'npx',
+  'npm',
+  'pnpm',
+  'yarn',
+  'bunx',
+  'bun',
+  'python',
+  'python3',
+  'uvx',
+  'uv',
+  'deno',
+  'docker',
+  'cargo',
+  'go',
+]);
+
+// ============================================================================
+// 日志工具
+// ============================================================================
+
+/**
+ * 统一的日志输出函数
+ * @param {'info' | 'debug' | 'error' | 'warn'} level - 日志级别
+ * @param  {...any} args - 日志参数
+ */
+function log(level, ...args) {
+  const prefix = '[McpStatus]';
+  switch (level) {
+    case 'debug':
+      if (DEBUG) {
+        console.log(prefix, '[DEBUG]', ...args);
+      }
+      break;
+    case 'error':
+      console.error(prefix, '[ERROR]', ...args);
+      break;
+    case 'warn':
+      console.warn(prefix, '[WARN]', ...args);
+      break;
+    case 'info':
+    default:
+      console.log(prefix, ...args);
+      break;
+  }
+}
+
+// ============================================================================
+// 工具函数
+// ============================================================================
+
+/**
+ * 验证命令是否在白名单中
+ * @param {string} command - 要验证的命令
+ * @returns {{ valid: boolean, reason?: string }} 验证结果
+ */
+function validateCommand(command) {
+  if (!command || typeof command !== 'string') {
+    return { valid: false, reason: 'Command is empty or invalid' };
+  }
+
+  // 提取基础命令名（去除路径）
+  const baseCommand = command.split('/').pop().split('\\').pop();
+
+  // 检查是否在白名单中
+  if (ALLOWED_COMMANDS.has(baseCommand)) {
+    return { valid: true };
+  }
+
+  // 检查是否是完整路径指向白名单命令
+  for (const allowed of ALLOWED_COMMANDS) {
+    if (baseCommand === allowed || baseCommand.startsWith(`${allowed}.`)) {
+      return { valid: true };
+    }
+  }
+
+  return {
+    valid: false,
+    reason: `Command "${baseCommand}" is not in the allowed list. Allowed: ${[...ALLOWED_COMMANDS].join(', ')}`
+  };
+}
 
 /**
  * 安全地终止子进程
- * @param {ChildProcess} child - 子进程
+ * @param {import('child_process').ChildProcess | null} child - 子进程
+ * @param {string} serverName - 服务器名称（用于日志）
  */
-function safeKillProcess(child) {
+function safeKillProcess(child, serverName) {
+  if (!child) return;
+
   try {
-    child.kill();
-  } catch {
-    // 进程可能已退出，忽略 kill 错误
+    if (!child.killed) {
+      child.kill('SIGTERM');
+      // 如果 SIGTERM 没有终止进程，500ms 后发送 SIGKILL
+      setTimeout(() => {
+        try {
+          if (!child.killed) {
+            child.kill('SIGKILL');
+            log('debug', `Force killed process for ${serverName}`);
+          }
+        } catch (e) {
+          log('debug', `SIGKILL failed for ${serverName}:`, e.message);
+        }
+      }, 500);
+    }
+  } catch (e) {
+    log('debug', `Failed to kill process for ${serverName}:`, e.message);
   }
 }
 
@@ -33,7 +144,8 @@ function parseServerInfo(stdout) {
     const lines = stdout.split('\n');
     for (const line of lines) {
       if (line.includes('"serverInfo"')) {
-        const jsonMatch = line.match(/\{.*"serverInfo".*\}/);
+        // 使用非贪婪匹配提升性能
+        const jsonMatch = line.match(/\{.*?"serverInfo".*?\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           if (parsed.result && parsed.result.serverInfo) {
@@ -42,8 +154,8 @@ function parseServerInfo(stdout) {
         }
       }
     }
-  } catch {
-    // JSON 解析失败，返回 null
+  } catch (e) {
+    log('debug', 'Failed to parse server info:', e.message);
   }
   return null;
 }
@@ -74,15 +186,82 @@ function hasValidMcpResponse(stdout) {
   return stdout.includes('"jsonrpc"') || stdout.includes('"result"');
 }
 
+// ============================================================================
+// 进程管理
+// ============================================================================
+
+/**
+ * 创建进程事件处理器
+ * @param {Object} context - 上下文对象
+ * @param {string} context.serverName - 服务器名称
+ * @param {import('child_process').ChildProcess} context.child - 子进程
+ * @param {Function} context.finalize - 完成回调
+ * @returns {Object} 事件处理器集合
+ */
+function createProcessHandlers(context) {
+  const { serverName, finalize } = context;
+  let stdout = '';
+
+  return {
+    stdout: {
+      onData: (data) => {
+        stdout += data.toString();
+        if (hasValidMcpResponse(stdout)) {
+          const serverInfo = parseServerInfo(stdout);
+          finalize('connected', serverInfo);
+        }
+      }
+    },
+    stderr: {
+      onData: () => {
+        // 收集 stderr 但不使用，避免缓冲区满导致进程阻塞
+      }
+    },
+    onError: (error) => {
+      log('debug', `Process error for ${serverName}:`, error.message);
+      finalize('failed');
+    },
+    onClose: (code) => {
+      if (hasValidMcpResponse(stdout) || stdout.includes('MCP')) {
+        finalize('connected', parseServerInfo(stdout));
+      } else if (code !== 0) {
+        finalize('failed');
+      } else {
+        finalize('pending');
+      }
+    },
+    getStdout: () => stdout
+  };
+}
+
+/**
+ * 发送初始化请求到子进程
+ * @param {import('child_process').ChildProcess} child - 子进程
+ * @param {string} serverName - 服务器名称
+ */
+function sendInitializeRequest(child, serverName) {
+  try {
+    child.stdin.write(createInitializeRequest());
+    child.stdin.end();
+  } catch (e) {
+    log('debug', `Failed to write to stdin for ${serverName}:`, e.message);
+  }
+}
+
+// ============================================================================
+// 核心验证逻辑
+// ============================================================================
+
 /**
  * 验证单个 MCP 服务器的连接状态
  * @param {string} serverName - 服务器名称
  * @param {Object} serverConfig - 服务器配置
- * @returns {Promise<Object>} 服务器状态信息 { name, status, serverInfo }
+ * @returns {Promise<Object>} 服务器状态信息 { name, status, serverInfo, error? }
  */
 export async function verifyMcpServerStatus(serverName, serverConfig) {
   return new Promise((resolve) => {
     let resolved = false;
+    let child = null;
 
     const result = {
       name: serverName,
@@ -94,79 +273,77 @@ export async function verifyMcpServerStatus(serverName, serverConfig) {
     const args = serverConfig.args || [];
     const env = { ...process.env, ...(serverConfig.env || {}) };
 
+    // 检查命令是否存在
     if (!command) {
       result.status = 'failed';
+      result.error = 'No command specified';
       resolve(result);
       return;
     }
 
-    console.log('[McpStatus] Verifying server:', serverName, 'command:', command, args.join(' '));
-
-    let child;
-    try {
-      child = spawn(command, args, {
-        env,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-    } catch (spawnError) {
-      console.log('[McpStatus] Failed to spawn process for', serverName, ':', spawnError.message);
+    // 验证命令白名单
+    const validation = validateCommand(command);
+    if (!validation.valid) {
+      log('warn', `Blocked command for ${serverName}: ${validation.reason}`);
       result.status = 'failed';
+      result.error = validation.reason;
       resolve(result);
       return;
     }
 
+    log('info', 'Verifying server:', serverName, 'command:', command, args.join(' '));
+
+    // 完成处理函数
     const finalize = (status, serverInfo = null) => {
       if (resolved) return;
       resolved = true;
       clearTimeout(timeoutId);
       result.status = status;
       result.serverInfo = serverInfo;
-      safeKillProcess(child);
+      safeKillProcess(child, serverName);
       resolve(result);
     };
 
+    // 设置超时
     const timeoutId = setTimeout(() => {
+      log('debug', `Timeout for ${serverName} after ${MCP_VERIFY_TIMEOUT}ms`);
       finalize('pending');
     }, MCP_VERIFY_TIMEOUT);
 
-    let stdout = '';
-
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-      if (hasValidMcpResponse(stdout) && !resolved) {
-        const serverInfo = parseServerInfo(stdout);
-        finalize('connected', serverInfo);
-      }
-    });
-
-    child.stderr.on('data', () => {
-      // 收集 stderr 但不使用，避免缓冲区满导致进程阻塞
-    });
-
-    child.on('error', (error) => {
-      console.log('[McpStatus] Process error for', serverName, ':', error.message);
-      finalize('failed');
-    });
-
-    child.on('close', (code) => {
-      if (resolved) return;
-
-      if (hasValidMcpResponse(stdout) || stdout.includes('MCP')) {
-        finalize('connected', parseServerInfo(stdout));
-      } else if (code !== 0) {
-        finalize('failed');
-      } else {
-        finalize('pending');
-      }
-    });
-
-    // 发送 MCP initialize 请求
+    // 尝试启动进程
     try {
-      child.stdin.write(createInitializeRequest());
-      child.stdin.end();
-    } catch {
-      console.log('[McpStatus] Failed to write to stdin for', serverName);
+      child = spawn(command, args, {
+        env,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+    } catch (spawnError) {
+      log('debug', `Failed to spawn process for ${serverName}:`, spawnError.message);
+      clearTimeout(timeoutId);
+      result.status = 'failed';
+      result.error = spawnError.message;
+      resolve(result);
+      return;
     }
+
+    // 创建事件处理器
+    const handlers = createProcessHandlers({
+      serverName,
+      child,
+      finalize
+    });
+
+    // 绑定事件
+    child.stdout.on('data', handlers.stdout.onData);
+    child.stderr.on('data', handlers.stderr.onData);
+    child.on('error', handlers.onError);
+    child.on('close', (code) => {
+      if (!resolved) {
+        handlers.onClose(code);
+      }
+    });
+
+    // 发送初始化请求
+    sendInitializeRequest(child, serverName);
   });
 }
 
@@ -179,7 +356,7 @@ export async function loadMcpServersConfig() {
     const claudeJsonPath = join(homedir(), '.claude.json');
 
     if (!existsSync(claudeJsonPath)) {
-      console.log('[McpStatus] ~/.claude.json not found');
+      log('info', '~/.claude.json not found');
       return [];
     }
 
@@ -198,7 +375,7 @@ export async function loadMcpServersConfig() {
 
     return enabledServers;
   } catch (error) {
-    console.error('[McpStatus] Failed to load MCP servers config:', error.message);
+    log('error', 'Failed to load MCP servers config:', error.message);
     return [];
   }
 }
@@ -211,7 +388,7 @@ export async function getMcpServersStatus() {
   try {
     const enabledServers = await loadMcpServersConfig();
 
-    console.log('[McpStatus] Found', enabledServers.length, 'enabled MCP servers, verifying...');
+    log('info', 'Found', enabledServers.length, 'enabled MCP servers, verifying...');
 
     // 并行验证所有服务器
     const results = await Promise.all(
@@ -220,7 +397,7 @@ export async function getMcpServersStatus() {
 
     return results;
   } catch (error) {
-    console.error('[McpStatus] Failed to get MCP servers status:', error.message);
+    log('error', 'Failed to get MCP servers status:', error.message);
     return [];
   }
 }

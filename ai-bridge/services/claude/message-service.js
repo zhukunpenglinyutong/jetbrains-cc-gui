@@ -1711,8 +1711,9 @@ export async function getSlashCommands(cwd = null) {
 
 /**
  * 获取 MCP 服务器连接状态
- * 直接验证每个 MCP 服务器的真实连接状态
- * @param {string} _cwd - 工作目录（保留参数以兼容 API）
+ * 直接验证每个 MCP 服务器的真实连接状态（通过 mcp-status-service 模块）
+ * @param {string} [_cwd=null] - 工作目录（已废弃，保留仅为 API 兼容性，实际不使用）
+ * @deprecated cwd 参数已不再使用，状态检测直接读取 ~/.claude.json 配置
  */
 export async function getMcpServerStatus(_cwd = null) {
   try {
