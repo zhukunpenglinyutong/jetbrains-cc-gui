@@ -41,6 +41,14 @@ const ALLOWED_COMMANDS = new Set([
   'go',
 ]);
 
+/**
+ * 允许的可执行文件扩展名（Windows）
+ */
+const VALID_EXTENSIONS = new Set(['', '.exe', '.cmd', '.bat']);
+
+/** 最大输出行长度限制（防止 ReDoS 攻击） */
+const MAX_LINE_LENGTH = 10000;
+
 // ============================================================================
 // 日志工具
 // ============================================================================
@@ -88,14 +96,28 @@ function validateCommand(command) {
   // 提取基础命令名（去除路径）
   const baseCommand = command.split('/').pop().split('\\').pop();
 
-  // 检查是否在白名单中
+  // 检查是否在白名单中（完全匹配）
   if (ALLOWED_COMMANDS.has(baseCommand)) {
     return { valid: true };
   }
 
-  // 检查是否是完整路径指向白名单命令
-  for (const allowed of ALLOWED_COMMANDS) {
-    if (baseCommand === allowed || baseCommand.startsWith(`${allowed}.`)) {
+  // 检查是否是带扩展名的白名单命令（如 node.exe）
+  // 提取扩展名并验证
+  const lastDotIndex = baseCommand.lastIndexOf('.');
+  if (lastDotIndex > 0) {
+    const nameWithoutExt = baseCommand.substring(0, lastDotIndex);
+    const ext = baseCommand.substring(lastDotIndex).toLowerCase();
+
+    // 验证扩展名是否在允许列表中
+    if (!VALID_EXTENSIONS.has(ext)) {
+      return {
+        valid: false,
+        reason: `Invalid command extension "${ext}". Allowed extensions: ${[...VALID_EXTENSIONS].filter(e => e).join(', ')}`
+      };
+    }
+
+    // 验证基础命令名是否在白名单中
+    if (ALLOWED_COMMANDS.has(nameWithoutExt)) {
       return { valid: true };
     }
   }
@@ -118,7 +140,8 @@ function safeKillProcess(child, serverName) {
     if (!child.killed) {
       child.kill('SIGTERM');
       // 如果 SIGTERM 没有终止进程，500ms 后发送 SIGKILL
-      setTimeout(() => {
+      // 使用 unref() 确保此定时器不会阻止父进程退出
+      const killTimer = setTimeout(() => {
         try {
           if (!child.killed) {
             child.kill('SIGKILL');
@@ -128,6 +151,7 @@ function safeKillProcess(child, serverName) {
           log('debug', `SIGKILL failed for ${serverName}:`, e.message);
         }
       }, 500);
+      killTimer.unref();
     }
   } catch (e) {
     log('debug', `Failed to kill process for ${serverName}:`, e.message);
@@ -143,11 +167,34 @@ function parseServerInfo(stdout) {
   try {
     const lines = stdout.split('\n');
     for (const line of lines) {
+      // 跳过过长的行以防止 ReDoS 攻击
+      if (line.length > MAX_LINE_LENGTH) {
+        log('debug', 'Skipping oversized line in parseServerInfo');
+        continue;
+      }
+
       if (line.includes('"serverInfo"')) {
-        // 使用非贪婪匹配提升性能
-        const jsonMatch = line.match(/\{.*?"serverInfo".*?\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
+        // 使用更安全的 JSON 解析方式：找到 JSON 对象边界
+        const startIdx = line.indexOf('{');
+        if (startIdx === -1) continue;
+
+        // 简单的括号匹配来找到完整的 JSON 对象
+        let depth = 0;
+        let endIdx = -1;
+        for (let i = startIdx; i < line.length; i++) {
+          if (line[i] === '{') depth++;
+          else if (line[i] === '}') {
+            depth--;
+            if (depth === 0) {
+              endIdx = i + 1;
+              break;
+            }
+          }
+        }
+
+        if (endIdx > startIdx) {
+          const jsonStr = line.substring(startIdx, endIdx);
+          const parsed = JSON.parse(jsonStr);
           if (parsed.result && parsed.result.serverInfo) {
             return parsed.result.serverInfo;
           }
@@ -291,7 +338,8 @@ export async function verifyMcpServerStatus(serverName, serverConfig) {
       return;
     }
 
-    log('info', 'Verifying server:', serverName, 'command:', command, args.join(' '));
+    log('info', 'Verifying server:', serverName, 'command:', command);
+    log('debug', 'Full command args:', args.length, 'arguments');
 
     // 完成处理函数
     const finalize = (status, serverInfo = null) => {

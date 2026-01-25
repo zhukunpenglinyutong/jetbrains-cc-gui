@@ -5,6 +5,9 @@ import './AskUserQuestionDialog.css';
 // 用于标识"其他"选项的特殊标记
 const OTHER_OPTION_MARKER = '__OTHER__';
 
+// 自定义输入的最大长度限制
+const MAX_CUSTOM_INPUT_LENGTH = 2000;
+
 export interface QuestionOption {
   label: string;
   description: string;
@@ -178,9 +181,11 @@ const AskUserQuestionDialog = ({
   };
 
   const handleCustomInputChange = (value: string) => {
+    // 限制输入长度以防止过长输入
+    const sanitizedValue = value.slice(0, MAX_CUSTOM_INPUT_LENGTH);
     setCustomInputs((prev) => ({
       ...prev,
-      [currentQuestion.question]: value,
+      [currentQuestion.question]: sanitizedValue,
     }));
   };
 
@@ -306,6 +311,7 @@ const AskUserQuestionDialog = ({
                 onChange={(e) => handleCustomInputChange(e.target.value)}
                 placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
                 rows={3}
+                maxLength={MAX_CUSTOM_INPUT_LENGTH}
               />
             </div>
           )}
