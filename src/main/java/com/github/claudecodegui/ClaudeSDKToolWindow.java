@@ -229,6 +229,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
         }
 
+        // Add Rename Tab action to tool window gear menu
+        com.intellij.openapi.actionSystem.AnAction renameTabAction =
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                        .getAction("ClaudeCodeGUI.RenameTabAction");
+        if (renameTabAction != null) {
+            toolWindow.setAdditionalGearActions(new com.intellij.openapi.actionSystem.DefaultActionGroup(renameTabAction));
+        }
+
         // Add listener to manage tab closeable state based on tab count
         // When there's only one tab, disable the close button to prevent closing the last tab
         contentManager.addContentManagerListener(new ContentManagerListener() {
