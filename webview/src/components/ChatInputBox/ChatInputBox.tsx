@@ -1,8 +1,6 @@
 import {
   forwardRef,
   useCallback,
-  useEffect,
-  useImperativeHandle,
   useMemo,
   useRef,
   useState,
@@ -32,6 +30,14 @@ import {
   usePasteAndDrop,
   usePromptEnhancer,
   useGlobalCallbacks,
+  useInputHistory,
+  useSubmitHandler,
+  useKeyboardHandler,
+  useNativeEventCapture,
+  useControlledValueSync,
+  useAttachmentHandlers,
+  useChatInputImperativeHandle,
+  useSpaceKeyListener,
 } from './hooks/index.js';
 import {
   commandToDropdownItem,
@@ -43,8 +49,6 @@ import {
   type AgentItem,
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
-import { generateId } from './utils/generateId.js';
-import { getCursorOffset, setCursorOffset } from './utils/selectionUtils.js';
 import './styles.css';
 
 /**
@@ -379,7 +383,6 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         }
       }
     }, [
-      justRenderedTagRef,
       getTextContent,
       getCursorPosition,
       detectTrigger,
@@ -480,6 +483,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       renderFileTags,
     });
 
+    const { record: recordInputHistory, handleKeyDown: handleHistoryKeyDown } = useInputHistory({
+      editableRef,
+      getTextContent,
+      handleInput,
+    });
+
     // Keyboard navigation hook
     const { handleMacCursorMovement } = useKeyboardNavigation({
       editableRef,
@@ -500,80 +509,25 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       [debouncedRenderFileTags]
     );
 
-    /**
-     * Handle submit
-     * Preserve user input original format (spaces, newlines, indentation, etc.)
-     */
-    const handleSubmit = useCallback(() => {
-      const content = getTextContent();
-      // Remove zero-width spaces and other invisible characters
-      const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-
-      if (sdkStatusLoading) {
-        // SDK status loading, don't allow sending
-        addToast?.(t('chat.sdkStatusLoading'), 'info');
-        return;
-      }
-
-      if (!sdkInstalled) {
-        // Prompt user to download dependency package
-        addToast?.(
-          t('chat.sdkNotInstalled', {
-            provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
-          }) +
-            ' ' +
-            t('chat.goInstallSdk'),
-          'warning'
-        );
-        onInstallSdk?.();
-        return;
-      }
-
-      // Only use trim when checking if empty, don't modify actual sent content
-      if (!cleanContent && attachments.length === 0) {
-        return;
-      }
-      if (isLoading) {
-        return;
-      }
-
-      // Close completion menus
-      fileCompletion.close();
-      commandCompletion.close();
-      agentCompletion.close();
-
-      // Capture attachments before clearing
-      const attachmentsToSend = attachments.length > 0 ? [...attachments] : undefined;
-
-      // Clear input box immediately for responsiveness
-      clearInput();
-
-      // If using internal attachments state, also clear attachments
-      if (externalAttachments === undefined) {
-        setInternalAttachments([]);
-      }
-
-      // Defer the heavy submission logic to allow UI update
-      setTimeout(() => {
-        onSubmit?.(content, attachmentsToSend);
-      }, 10);
-    }, [
+    const handleSubmit = useSubmitHandler({
       getTextContent,
       attachments,
       isLoading,
-      onSubmit,
+      sdkStatusLoading,
+      sdkInstalled,
+      currentProvider,
       clearInput,
       externalAttachments,
+      setInternalAttachments,
       fileCompletion,
       commandCompletion,
       agentCompletion,
-      sdkStatusLoading,
-      sdkInstalled,
+      recordInputHistory,
+      onSubmit,
       onInstallSdk,
       addToast,
       t,
-      currentProvider,
-    ]);
+    });
 
     // Prompt enhancer hook
     const {
@@ -593,367 +547,47 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       onInput,
     });
 
-    /**
-     * Handle keyboard events
-     */
-    const handleKeyDown = useCallback(
-      (e: React.KeyboardEvent<HTMLDivElement>) => {
-        // Detect IME composition state (multiple methods)
-        // keyCode 229 is special code during IME input
-        // nativeEvent.isComposing is native event composition state
-        const isIMEComposing = isComposing || e.nativeEvent.isComposing;
-
-        const isEnterKey =
-          e.key === 'Enter' ||
-          (e as unknown as { keyCode?: number }).keyCode === 13 ||
-          (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
-          (e as unknown as { which?: number }).which === 13;
-
-        // First handle Mac-style cursor movement and text selection
-        if (handleMacCursorMovement(e)) {
-          return;
-        }
-
-        // Allow other cursor movement shortcuts (Home/End/Ctrl+A/Ctrl+E)
-        const isCursorMovementKey =
-          e.key === 'Home' ||
-          e.key === 'End' ||
-          ((e.key === 'a' || e.key === 'A') && e.ctrlKey && !e.metaKey) || // Ctrl+A (Linux/Windows)
-          ((e.key === 'e' || e.key === 'E') && e.ctrlKey && !e.metaKey); // Ctrl+E (Linux/Windows)
-
-        if (isCursorMovementKey) {
-          // Allow default cursor movement behavior
-          return;
-        }
-
-        // First handle completion menu keyboard events
-        if (fileCompletion.isOpen) {
-          const handled = fileCompletion.handleKeyDown(e.nativeEvent);
-          if (handled) {
-            e.preventDefault();
-            e.stopPropagation();
-            // If enter key selected, mark to prevent subsequent message sending
-            if (e.key === 'Enter') {
-              completionSelectedRef.current = true;
-            }
-            return;
-          }
-        }
-
-        if (commandCompletion.isOpen) {
-          const handled = commandCompletion.handleKeyDown(e.nativeEvent);
-          if (handled) {
-            e.preventDefault();
-            e.stopPropagation();
-            // If enter key selected, mark to prevent subsequent message sending
-            if (e.key === 'Enter') {
-              completionSelectedRef.current = true;
-            }
-            return;
-          }
-        }
-
-        if (agentCompletion.isOpen) {
-          const handled = agentCompletion.handleKeyDown(e.nativeEvent);
-          if (handled) {
-            e.preventDefault();
-            e.stopPropagation();
-            // If enter key selected, mark to prevent subsequent message sending
-            if (e.key === 'Enter') {
-              completionSelectedRef.current = true;
-            }
-            return;
-          }
-        }
-
-        // Check if composition input just ended (prevent IME confirm enter false trigger)
-        // If compositionend and keydown interval is very short, this keydown might be IME confirm enter
-        const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
-
-        // Determine send behavior based on sendShortcut setting
-        // sendShortcut === 'enter': Enter sends, Shift+Enter newline
-        // sendShortcut === 'cmdEnter': Cmd/Ctrl+Enter sends, Enter newline
-        const isSendKey =
-          sendShortcut === 'cmdEnter'
-            ? isEnterKey && (e.metaKey || e.ctrlKey) && !isIMEComposing
-            : isEnterKey && !e.shiftKey && !isIMEComposing && !isRecentlyComposing;
-
-        if (isSendKey) {
-          e.preventDefault();
-          if (sdkStatusLoading || !sdkInstalled) {
-            // SDK status loading or not installed, enter doesn't send
-            return;
-          }
-          submittedOnEnterRef.current = true;
-          handleSubmit();
-          return;
-        }
-
-        // For cmdEnter mode, allow normal Enter newline (default behavior)
-        // For enter mode, Shift+Enter allows newline (default behavior)
-      },
-      [
-        isComposing,
-        handleSubmit,
-        fileCompletion,
-        commandCompletion,
-        agentCompletion,
-        sdkStatusLoading,
-        sdkInstalled,
-        sendShortcut,
-        handleMacCursorMovement,
-        lastCompositionEndTimeRef,
-      ]
-    );
-
-    const handleKeyUp = useCallback(
-      (e: React.KeyboardEvent<HTMLDivElement>) => {
-        const isEnterKey =
-          e.key === 'Enter' ||
-          (e as unknown as { keyCode?: number }).keyCode === 13 ||
-          (e.nativeEvent as unknown as { keyCode?: number }).keyCode === 13 ||
-          (e as unknown as { which?: number }).which === 13;
-
-        // Determine if send key based on sendShortcut setting
-        const isSendKey =
-          sendShortcut === 'cmdEnter'
-            ? isEnterKey && (e.metaKey || e.ctrlKey)
-            : isEnterKey && !e.shiftKey;
-
-        if (isSendKey) {
-          e.preventDefault();
-          // If item was just selected in completion menu, don't send message
-          if (completionSelectedRef.current) {
-            completionSelectedRef.current = false;
-            return;
-          }
-          if (submittedOnEnterRef.current) {
-            submittedOnEnterRef.current = false;
-            return;
-          }
-        }
-      },
-      [sendShortcut]
-    );
-
-    // Performance optimization: Simplified controlled mode
-    // Only sync external value when it's explicitly different and not from user input
-    useEffect(() => {
-      // Skip if value prop is not provided (uncontrolled mode)
-      if (value === undefined) return;
-      if (!editableRef.current) return;
-
-      // Skip during IME composition to avoid breaking input
-      if (isComposingRef.current) return;
-
-      const hasFocus = document.activeElement === editableRef.current;
-
-      // Performance optimization: Skip sync when user is actively editing
-      // Only sync when:
-      // 1. Element doesn't have focus (external programmatic update)
-      // 2. Value is empty (clear operation after submit)
-      // 3. Value changed significantly (more than just typing - e.g., paste or external reset)
-      if (hasFocus && value !== '') {
-        // User is actively editing, skip DOM rebuild to prevent cursor jump and lag
-        // The content is already in the DOM from user input
-        return;
-      }
-
-      // Invalidate cache before comparing
-      invalidateCache();
-      const currentText = getTextContent();
-
-      // Only update if external value differs from current content
-      // This prevents the update loop: user types -> onInput -> parent sets value -> useEffect
-      if (currentText !== value) {
-        // Mark as external update to prevent debounced onInput from firing
-        isExternalUpdateRef.current = true;
-
-        // Save cursor position before updating content
-        // This preserves cursor position when editing in the middle of text
-        const cursorOffset = getCursorOffset(editableRef.current);
-
-        editableRef.current.innerText = value;
-        setHasContent(!!value.trim());
-        adjustHeight();
-
-        // Restore cursor position if element has focus and cursor was inside
-        // Otherwise move to end (for programmatic value changes when not focused)
-        if (value && hasFocus && cursorOffset >= 0) {
-          // Use requestAnimationFrame to ensure DOM is updated before setting cursor
-          requestAnimationFrame(() => {
-            // Check if element still exists in DOM (component may have unmounted)
-            if (editableRef.current && document.body.contains(editableRef.current)) {
-              setCursorOffset(editableRef.current, cursorOffset);
-            }
-          });
-        } else if (value) {
-          const range = document.createRange();
-          const selection = window.getSelection();
-          range.selectNodeContents(editableRef.current);
-          range.collapse(false);
-          selection?.removeAllRanges();
-          selection?.addRange(range);
-        }
-
-        // Invalidate cache after update
-        invalidateCache();
-      }
-    }, [value, getTextContent, adjustHeight, invalidateCache, isComposingRef]);
-
-    // Native event capture, compatible with JCEF/IME special behavior
-    useEffect(() => {
-      const el = editableRef.current;
-      if (!el) return;
-
-      const nativeKeyDown = (ev: KeyboardEvent) => {
-        // Detect IME input: keyCode 229 means IME is processing key
-        // This is earlier than compositionStart event, can set composing state earlier
-        const isIMEProcessing =
-          (ev as unknown as { keyCode?: number }).keyCode === 229 || ev.isComposing;
-        if (isIMEProcessing) {
-          isComposingRef.current = true;
-        }
-
-        const isEnterKey =
-          ev.key === 'Enter' ||
-          (ev as unknown as { keyCode?: number }).keyCode === 13 ||
-          (ev as unknown as { which?: number }).which === 13;
-
-        // ⌘/ shortcut: enhance prompt
-        if (ev.key === '/' && ev.metaKey && !ev.shiftKey && !ev.altKey) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          handleEnhancePrompt();
-          return;
-        }
-
-        // Mac-style cursor movement shortcuts and delete operations (already handled in React event, not needed here)
-        const isMacCursorMovementOrDelete =
-          (ev.key === 'ArrowLeft' && ev.metaKey) ||
-          (ev.key === 'ArrowRight' && ev.metaKey) ||
-          (ev.key === 'ArrowUp' && ev.metaKey) ||
-          (ev.key === 'ArrowDown' && ev.metaKey) ||
-          (ev.key === 'Backspace' && ev.metaKey);
-
-        if (isMacCursorMovementOrDelete) {
-          // Mac shortcuts already handled in React event
-          return;
-        }
-
-        // Allow other cursor movement shortcuts (Home/End/Ctrl+A/Ctrl+E)
-        const isCursorMovementKey =
-          ev.key === 'Home' ||
-          ev.key === 'End' ||
-          ((ev.key === 'a' || ev.key === 'A') && ev.ctrlKey && !ev.metaKey) ||
-          ((ev.key === 'e' || ev.key === 'E') && ev.ctrlKey && !ev.metaKey);
-
-        if (isCursorMovementKey) {
-          // Allow default cursor movement behavior
-          return;
-        }
-
-        // When completion menu is open, don't handle in native event (React onKeyDown already handled, avoid duplication)
-        if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
-          return;
-        }
-
-        // Check if composition input just ended
-        const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
-
-        // Determine send behavior based on sendShortcut setting
-        const shift = (ev as KeyboardEvent).shiftKey === true;
-        const metaOrCtrl = ev.metaKey || ev.ctrlKey;
-        const isSendKey =
-          sendShortcut === 'cmdEnter'
-            ? isEnterKey && metaOrCtrl && !isComposingRef.current && !isComposing
-            : isEnterKey &&
-              !shift &&
-              !isComposingRef.current &&
-              !isComposing &&
-              !isRecentlyComposing;
-
-        // Use ref instead of state to check composing state, because ref is sync
-        if (isSendKey) {
-          ev.preventDefault();
-          submittedOnEnterRef.current = true;
-          handleSubmit();
-        }
-      };
-
-      const nativeKeyUp = (ev: KeyboardEvent) => {
-        const isEnterKey =
-          ev.key === 'Enter' ||
-          (ev as unknown as { keyCode?: number }).keyCode === 13 ||
-          (ev as unknown as { which?: number }).which === 13;
-        const shift = (ev as KeyboardEvent).shiftKey === true;
-        const metaOrCtrl = ev.metaKey || ev.ctrlKey;
-
-        // Determine if send key based on sendShortcut setting
-        const isSendKey =
-          sendShortcut === 'cmdEnter' ? isEnterKey && metaOrCtrl : isEnterKey && !shift;
-
-        if (isSendKey) {
-          ev.preventDefault();
-          // If item was just selected in completion menu, don't send message
-          if (completionSelectedRef.current) {
-            completionSelectedRef.current = false;
-            return;
-          }
-          if (submittedOnEnterRef.current) {
-            submittedOnEnterRef.current = false;
-            return;
-          }
-        }
-      };
-
-      const nativeBeforeInput = (ev: InputEvent) => {
-        const type = (ev as InputEvent).inputType;
-        if (type === 'insertParagraph') {
-          // For cmdEnter mode, normal Enter should allow newline
-          if (sendShortcut === 'cmdEnter') {
-            // Allow default newline behavior
-            return;
-          }
-
-          ev.preventDefault();
-          // If item was just selected in completion menu with enter, don't send message
-          if (completionSelectedRef.current) {
-            completionSelectedRef.current = false;
-            return;
-          }
-          // Don't send message when completion menu is open
-          if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
-            return;
-          }
-          handleSubmit();
-        }
-      };
-
-      el.addEventListener('keydown', nativeKeyDown, { capture: true });
-      el.addEventListener('keyup', nativeKeyUp, { capture: true });
-      el.addEventListener('beforeinput', nativeBeforeInput as EventListener, {
-        capture: true,
-      });
-
-      return () => {
-        el.removeEventListener('keydown', nativeKeyDown, { capture: true });
-        el.removeEventListener('keyup', nativeKeyUp, { capture: true });
-        el.removeEventListener('beforeinput', nativeBeforeInput as EventListener, {
-          capture: true,
-        });
-      };
-    }, [
+    const { onKeyDown: handleKeyDown, onKeyUp: handleKeyUp } = useKeyboardHandler({
       isComposing,
-      isComposingRef,
-      handleSubmit,
-      handleEnhancePrompt,
+      lastCompositionEndTimeRef,
+      sendShortcut,
+      sdkStatusLoading,
+      sdkInstalled,
       fileCompletion,
       commandCompletion,
       agentCompletion,
-      sendShortcut,
+      handleMacCursorMovement,
+      handleHistoryKeyDown,
+      completionSelectedRef,
+      submittedOnEnterRef,
+      handleSubmit,
+    });
+
+    useControlledValueSync({
+      value,
+      editableRef,
+      isComposingRef,
+      isExternalUpdateRef,
+      getTextContent,
+      setHasContent,
+      adjustHeight,
+      invalidateCache,
+    });
+
+    useNativeEventCapture({
+      editableRef,
+      isComposing,
+      isComposingRef,
       lastCompositionEndTimeRef,
-    ]);
+      sendShortcut,
+      fileCompletion,
+      commandCompletion,
+      agentCompletion,
+      completionSelectedRef,
+      submittedOnEnterRef,
+      handleSubmit,
+      handleEnhancePrompt,
+    });
 
     // Paste and drop hook
     const { handlePaste, handleDragOver, handleDrop } = usePasteAndDrop({
@@ -970,47 +604,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       handleInput,
     });
 
-    /**
-     * Handle add attachment
-     */
-    const handleAddAttachment = useCallback(
-      (files: FileList) => {
-        if (externalAttachments !== undefined) {
-          onAddAttachment?.(files);
-        } else {
-          // Use internal state
-          Array.from(files).forEach((file) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const base64 = (reader.result as string).split(',')[1];
-              const attachment: Attachment = {
-                id: generateId(),
-                fileName: file.name,
-                mediaType: file.type || 'application/octet-stream',
-                data: base64,
-              };
-              setInternalAttachments((prev) => [...prev, attachment]);
-            };
-            reader.readAsDataURL(file);
-          });
-        }
-      },
-      [externalAttachments, onAddAttachment]
-    );
-
-    /**
-     * Handle remove attachment
-     */
-    const handleRemoveAttachment = useCallback(
-      (id: string) => {
-        if (externalAttachments !== undefined) {
-          onRemoveAttachment?.(id);
-        } else {
-          setInternalAttachments((prev) => prev.filter((a) => a.id !== id));
-        }
-      },
-      [externalAttachments, onRemoveAttachment]
-    );
+    const { handleAddAttachment, handleRemoveAttachment } = useAttachmentHandlers({
+      externalAttachments,
+      onAddAttachment,
+      onRemoveAttachment,
+      setInternalAttachments,
+    });
 
     /**
      * Handle mode select
@@ -1039,40 +638,19 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       editableRef.current?.focus();
     }, []);
 
-    // Performance optimization: Imperative handle for uncontrolled mode
-    // Exposes methods for parent to interact without causing re-renders
-    useImperativeHandle(
+    useChatInputImperativeHandle({
       ref,
-      () => ({
-        getValue: () => {
-          invalidateCache(); // Ensure fresh content
-          return getTextContent();
-        },
-        setValue: (newValue: string) => {
-          if (!editableRef.current) return;
-          isExternalUpdateRef.current = true;
-          editableRef.current.innerText = newValue;
-          setHasContent(!!newValue.trim());
-          adjustHeight();
-          invalidateCache();
-
-          // Move cursor to end
-          if (newValue) {
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.selectNodeContents(editableRef.current);
-            range.collapse(false);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-          }
-        },
-        focus: focusInput,
-        clear: clearInput,
-        hasContent: () => hasContent,
-        getFileTags: extractFileTags,
-      }),
-      [getTextContent, focusInput, clearInput, adjustHeight, invalidateCache, hasContent, extractFileTags]
-    );
+      editableRef,
+      getTextContent,
+      invalidateCache,
+      isExternalUpdateRef,
+      setHasContent,
+      adjustHeight,
+      focusInput,
+      clearInput,
+      hasContent,
+      extractFileTags,
+    });
 
     // Global callbacks hook
     useGlobalCallbacks({
@@ -1088,22 +666,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       focusInput,
     });
 
-    // Add space key listener to trigger file tag rendering
-    useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        handleKeyDownForTagRendering(e);
-      };
-
-      if (editableRef.current) {
-        editableRef.current.addEventListener('keydown', handleKeyDown);
-      }
-
-      return () => {
-        if (editableRef.current) {
-          editableRef.current.removeEventListener('keydown', handleKeyDown);
-        }
-      };
-    }, [handleKeyDownForTagRendering]);
+    useSpaceKeyListener({ editableRef, onKeyDown: handleKeyDownForTagRendering });
 
     return (
       <div className="chat-input-box" onClick={focusInput} ref={containerRef}>
@@ -1177,7 +740,10 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
             onKeyDown={handleKeyDown}
             onKeyUp={handleKeyUp}
             onBeforeInput={(e) => {
-              const inputType = (e.nativeEvent as unknown as { inputType?: string }).inputType;
+              const inputType =
+                'inputType' in e.nativeEvent
+                  ? (e.nativeEvent as InputEvent).inputType
+                  : undefined;
               if (inputType === 'insertParagraph') {
                 e.preventDefault();
                 // If item was just selected in completion menu with enter, don't send message
