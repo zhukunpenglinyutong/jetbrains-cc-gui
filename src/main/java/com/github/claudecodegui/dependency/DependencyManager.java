@@ -39,7 +39,8 @@ public class DependencyManager {
 
     public DependencyManager() {
         this.gson = new GsonBuilder().setPrettyPrinting().create();
-        this.nodeDetector = new NodeDetector();
+        // 使用 NodeDetector 单例，避免重复检测 Node.js 路径
+        this.nodeDetector = NodeDetector.getInstance();
         this.envConfigurator = new EnvironmentConfigurator();
     }
 

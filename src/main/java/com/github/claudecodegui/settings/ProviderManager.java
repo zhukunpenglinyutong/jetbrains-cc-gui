@@ -475,10 +475,9 @@ public class ProviderManager {
                 LOG.info("[ProviderManager] 读取用户配置的 Node.js 路径失败: " + e.getMessage());
             }
 
-            // 如果用户没有配置或配置无效,使用 NodeDetector 自动检测
+            // 如果用户没有配置或配置无效,使用 NodeDetector 单例自动检测
             if (nodePath == null) {
-                NodeDetector nodeDetector = new NodeDetector();
-                nodePath = nodeDetector.findNodeExecutable();
+                nodePath = NodeDetector.getInstance().findNodeExecutable();
                 LOG.info("[ProviderManager] 自动检测到的 Node.js 路径: " + nodePath);
             }
 

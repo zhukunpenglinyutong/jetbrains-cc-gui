@@ -245,6 +245,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             LOG.error("[ShutdownHook] 清理进程时出错: " + e.getMessage());
                         }
                     }
+
+                    // 清理 ACE MCP 代理服务
+                    try {
+                        com.github.claudecodegui.service.AceMcpService.disposeAll();
+                        LOG.info("[ShutdownHook] ACE MCP 代理服务清理完成");
+                    } catch (Exception e) {
+                        LOG.error("[ShutdownHook] 清理 ACE MCP 服务时出错: " + e.getMessage());
+                    }
                 });
 
                 // 最多等待3秒

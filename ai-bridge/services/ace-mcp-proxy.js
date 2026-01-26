@@ -13,9 +13,7 @@
  */
 
 import http from 'http';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
+import { readMcpConfig } from '../config/api-config.js';
 
 // 解析命令行参数
 const args = process.argv.slice(2);
@@ -45,21 +43,6 @@ let mcpTransport = null;
 let aceServerConfig = null;
 let isConnecting = false;
 let isConnected = false;
-
-/**
- * 读取 MCP 配置
- */
-function readMcpConfig() {
-  try {
-    const claudeJsonPath = join(homedir(), '.claude.json');
-    const content = readFileSync(claudeJsonPath, 'utf-8');
-    const config = JSON.parse(content);
-    return config.mcpServers || {};
-  } catch (error) {
-    console.log('[AceMcpProxy] Failed to read MCP config:', error.message);
-    return {};
-  }
-}
 
 /**
  * 查找 ACE 服务器配置
@@ -200,7 +183,7 @@ async function callCodebaseRetrieval(informationRequest) {
  */
 async function handleRequest(req, res) {
   // CORS 头
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -225,15 +208,29 @@ async function handleRequest(req, res) {
 
   // 代码检索 API
   if (url.pathname === '/retrieve' && req.method === 'POST') {
-    let body = '';
 
+    const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
+    let body = '';
     req.on('data', chunk => {
       body += chunk.toString();
+      if (body.length > MAX_BODY_SIZE) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Request body too large' }));
+        req.destroy();
+      }
     });
 
     req.on('end', async () => {
       try {
-        const { query } = JSON.parse(body);
+        let parsedBody;
+        try {
+          parsedBody = JSON.parse(body);
+        } catch (e) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid JSON' }));
+          return;
+        }
+        const { query } = parsedBody;
 
         if (!query) {
           res.writeHead(400, { 'Content-Type': 'application/json' });

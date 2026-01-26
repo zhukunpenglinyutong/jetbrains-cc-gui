@@ -15,10 +15,36 @@ import java.util.concurrent.TimeUnit;
 /**
  * Node.js 检测器
  * 负责在各种平台上查找和验证 Node.js 可执行文件
+ *
+ * 使用单例模式，确保 Node.js 路径只检测一次，避免重复检测开销。
+ * 单例在应用级别共享，所有项目使用同一个 Node.js 路径。
  */
 public class NodeDetector {
 
     private static final Logger LOG = Logger.getInstance(NodeDetector.class);
+
+    // 单例实例（应用级别共享，所有项目使用同一个 Node.js）
+    private static volatile NodeDetector instance;
+    private static final Object INSTANCE_LOCK = new Object();
+
+    /**
+     * 获取 NodeDetector 单例实例
+     * 使用双重检查锁定确保线程安全
+     *
+     * @return NodeDetector 单例实例
+     */
+    public static NodeDetector getInstance() {
+        if (instance == null) {
+            synchronized (INSTANCE_LOCK) {
+                if (instance == null) {
+                    instance = new NodeDetector();
+                    LOG.info("[NodeDetector] 单例实例已创建");
+                }
+            }
+        }
+        return instance;
+    }
+
     // Windows 常见 Node.js 安装路径
     private static final String[] WINDOWS_NODE_PATHS = {
         // 官方安装程序默认路径

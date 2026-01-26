@@ -35,8 +35,8 @@ public class DependencyHandler extends BaseMessageHandler {
 
     public DependencyHandler(HandlerContext context) {
         super(context);
-        // 创建 NodeDetector 并尝试使用配置中的 Node.js 路径
-        NodeDetector nodeDetector = new NodeDetector();
+        // 使用 NodeDetector 单例并尝试使用配置中的 Node.js 路径
+        NodeDetector nodeDetector = NodeDetector.getInstance();
         String configuredNodePath = getConfiguredNodePath();
         if (configuredNodePath != null && !configuredNodePath.isEmpty()) {
             String version = nodeDetector.verifyNodePath(configuredNodePath);
@@ -255,8 +255,8 @@ public class DependencyHandler extends BaseMessageHandler {
             String detectedVersion = null;
 
             if (configuredPath != null && !configuredPath.isEmpty()) {
-                // 使用配置的路径
-                NodeDetector nodeDetector = new NodeDetector();
+                // 使用配置的路径（使用单例）
+                NodeDetector nodeDetector = NodeDetector.getInstance();
                 String version = nodeDetector.verifyNodePath(configuredPath);
                 if (version != null) {
                     available = true;

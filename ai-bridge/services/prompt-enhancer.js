@@ -11,11 +11,13 @@
  */
 
 import { loadClaudeSdk, isClaudeSdkAvailable } from '../utils/sdk-loader.js';
-import { setupApiKey, loadClaudeSettings } from '../config/api-config.js';
+import { setupApiKey, loadClaudeSettings, readMcpConfig } from '../config/api-config.js';
 import { mapModelIdToSdkName } from '../utils/model-utils.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { dirname, join as pathJoin } from 'path';
+import { existsSync } from 'fs';
 import { homedir } from 'os';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import http from 'http';
 
 // ACE MCP 配置
@@ -46,22 +48,6 @@ const MAX_SINGLE_RELATED_FILE_LENGTH = 500; // 单个相关文件最大长度
 
 // 缓存 ACE MCP 客户端连接
 let aceClientCache = null;
-
-/**
- * 读取 MCP 服务器配置
- * @returns {Object} MCP 服务器配置对象
- */
-function readMcpConfig() {
-  try {
-    const claudeJsonPath = join(homedir(), '.claude.json');
-    const content = readFileSync(claudeJsonPath, 'utf-8');
-    const config = JSON.parse(content);
-    return config.mcpServers || {};
-  } catch (error) {
-    console.log('[PromptEnhancer] 读取 MCP 配置失败:', error.message);
-    return {};
-  }
-}
 
 /**
  * 检测 ACE MCP 服务器是否可用
@@ -182,9 +168,6 @@ async function getAceContextViaProxy(informationRequest, proxyPort) {
  */
 async function getAceContextDirect(informationRequest, serverConfig, serverName, projectPath) {
   try {
-    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
-    const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
-
     console.log(`[PromptEnhancer] [ACE] 开始连接 ACE MCP 服务器: ${serverName}`);
     console.log(`[PromptEnhancer] [ACE] 命令: ${serverConfig.command} ${(serverConfig.args || []).join(' ')}`);
     console.log(`[PromptEnhancer] [ACE] 工作目录: ${projectPath || '未指定'}`);
@@ -607,9 +590,6 @@ async function enhancePrompt(originalPrompt, systemPrompt, model, context, acePr
       let projectPath = null;
       if (context?.currentFile?.path) {
         // 尝试找到项目根目录（包含 .git, pom.xml, package.json 等的目录）
-        const { dirname, join: pathJoin } = await import('path');
-        const { existsSync } = await import('fs');
-
         let currentDir = dirname(context.currentFile.path);
         const projectMarkers = ['.git', 'pom.xml', 'build.gradle', 'package.json', '.project'];
 

@@ -245,3 +245,20 @@ export function isCustomBaseUrl(baseUrl) {
   ];
   return !officialUrls.some(url => baseUrl.toLowerCase().includes('api.anthropic.com'));
 }
+
+/**
+ * 读取 MCP 服务器配置
+ * 从 ~/.claude.json 中读取 mcpServers 配置
+ * @returns {Object} MCP 服务器配置对象，如果读取失败返回空对象
+ */
+export function readMcpConfig() {
+  try {
+    const claudeJsonPath = join(homedir(), '.claude.json');
+    const content = readFileSync(claudeJsonPath, 'utf-8');
+    const config = JSON.parse(content);
+    return config.mcpServers || {};
+  } catch (error) {
+    console.log('[Config] Failed to read MCP config:', error.message);
+    return {};
+  }
+}

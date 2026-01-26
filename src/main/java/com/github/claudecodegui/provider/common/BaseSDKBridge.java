@@ -30,7 +30,8 @@ public abstract class BaseSDKBridge {
 
     protected final Logger LOG;
     protected final Gson gson = new Gson();
-    protected final NodeDetector nodeDetector = new NodeDetector();
+    // 使用 NodeDetector 单例，避免重复检测 Node.js 路径
+    protected final NodeDetector nodeDetector = NodeDetector.getInstance();
     protected final ProcessManager processManager = new ProcessManager();
     protected final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
 
