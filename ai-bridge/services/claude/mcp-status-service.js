@@ -396,30 +396,146 @@ export async function verifyMcpServerStatus(serverName, serverConfig) {
 }
 
 /**
- * 从 ~/.claude.json 读取 MCP 服务器配置
+ * 验证项目路径是否安全（防止原型污染）
+ * @param {string|null} projectPath - 项目路径
+ * @returns {boolean} 是否为安全的项目路径
+ */
+function isValidProjectPath(projectPath) {
+  return projectPath &&
+    typeof projectPath === 'string' &&
+    !['__proto__', 'constructor', 'prototype'].includes(projectPath);
+}
+
+/**
+ * 从 ~/.claude.json 加载 MCP 服务器配置
+ * @param {string} configPath - 配置文件路径
+ * @param {string|null} projectPath - 项目路径
+ * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>}|null>}
+ */
+async function loadClaudeJsonConfig(configPath, projectPath) {
+  if (!existsSync(configPath)) {
+    return null;
+  }
+
+  try {
+    const content = await readFile(configPath, 'utf8');
+    const config = JSON.parse(content);
+
+    if (!config.mcpServers || Object.keys(config.mcpServers).length === 0) {
+      return null;
+    }
+
+    const disabledServers = new Set();
+
+    // 读取全局禁用列表
+    if (config.disabledMcpServers && Array.isArray(config.disabledMcpServers)) {
+      config.disabledMcpServers.forEach(name => disabledServers.add(name));
+    }
+
+    // 读取项目级别禁用列表
+    if (isValidProjectPath(projectPath) &&
+        config.projects &&
+        Object.prototype.hasOwnProperty.call(config.projects, projectPath)) {
+      const projectConfig = config.projects[projectPath];
+      if (projectConfig.disabledMcpServers && Array.isArray(projectConfig.disabledMcpServers)) {
+        projectConfig.disabledMcpServers.forEach(name => disabledServers.add(name));
+        log('debug', `Merged project-level disabled servers from: ${projectPath}`);
+      }
+    }
+
+    return { mcpServers: config.mcpServers, disabledServers };
+  } catch (e) {
+    log('warn', 'Failed to read ~/.claude.json:', e.message);
+    return null;
+  }
+}
+
+/**
+ * 从 ~/.codemoss/config.json 加载 MCP 服务器配置（回退源）
+ * @param {string} configPath - 配置文件路径
+ * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>}|null>}
+ */
+async function loadCodemossConfig(configPath) {
+  if (!existsSync(configPath)) {
+    return null;
+  }
+
+  try {
+    const content = await readFile(configPath, 'utf8');
+    const config = JSON.parse(content);
+
+    if (!config.mcpServers || !Array.isArray(config.mcpServers)) {
+      return null;
+    }
+
+    const mcpServers = {};
+    const disabledServers = new Set();
+
+    for (const server of config.mcpServers) {
+      if (!server || !server.id) continue;
+
+      mcpServers[server.id] = server.server || {
+        command: server.command,
+        args: server.args,
+        env: server.env,
+        url: server.url,
+        type: server.type
+      };
+
+      if (server.enabled === false) {
+        disabledServers.add(server.id);
+      }
+    }
+
+    return { mcpServers, disabledServers };
+  } catch (e) {
+    log('warn', 'Failed to read ~/.codemoss/config.json:', e.message);
+    return null;
+  }
+}
+
+/**
+ * 过滤出启用的服务器列表
+ * @param {Object} mcpServers - 服务器配置对象
+ * @param {Set<string>} disabledServers - 禁用的服务器名称集合
+ * @returns {Array<{name: string, config: Object}>}
+ */
+function filterEnabledServers(mcpServers, disabledServers) {
+  return Object.entries(mcpServers)
+    .filter(([name]) => !disabledServers.has(name))
+    .map(([name, config]) => ({ name, config }));
+}
+
+/**
+ * 从配置文件读取 MCP 服务器配置
+ * 优先从 ~/.claude.json 读取，回退到 ~/.codemoss/config.json
+ * @param {string|null} projectPath - 项目路径，用于读取项目级别的禁用列表
  * @returns {Promise<Array<{name: string, config: Object}>>} 启用的 MCP 服务器列表
  */
-export async function loadMcpServersConfig() {
+export async function loadMcpServersConfig(projectPath = null) {
   try {
-    const claudeJsonPath = join(homedir(), '.claude.json');
+    const homeDir = homedir();
+    const claudeJsonPath = join(homeDir, '.claude.json');
+    const codemossConfigPath = join(homeDir, '.codemoss', 'config.json');
 
-    if (!existsSync(claudeJsonPath)) {
-      log('info', '~/.claude.json not found');
+    // 1. 尝试从 ~/.claude.json 加载
+    let result = await loadClaudeJsonConfig(claudeJsonPath, projectPath);
+    let configSource = result ? '~/.claude.json' : null;
+
+    // 2. 回退到 ~/.codemoss/config.json
+    if (!result) {
+      result = await loadCodemossConfig(codemossConfigPath);
+      configSource = result ? '~/.codemoss/config.json' : null;
+    }
+
+    // 3. 返回启用的服务器列表
+    if (!result) {
+      log('info', 'No MCP server config found');
       return [];
     }
 
-    const content = await readFile(claudeJsonPath, 'utf8');
-    const config = JSON.parse(content);
-
-    const mcpServers = config.mcpServers || {};
-    const disabledServers = new Set(config.disabledMcpServers || []);
-
-    const enabledServers = [];
-    for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
-      if (!disabledServers.has(serverName)) {
-        enabledServers.push({ name: serverName, config: serverConfig });
-      }
-    }
+    const enabledServers = filterEnabledServers(result.mcpServers, result.disabledServers);
+    log('info', `Loaded ${enabledServers.length} enabled MCP servers from ${configSource} (disabled: ${result.disabledServers.size})`);
 
     return enabledServers;
   } catch (error) {
@@ -430,11 +546,12 @@ export async function loadMcpServersConfig() {
 
 /**
  * 获取所有 MCP 服务器的连接状态
+ * @param {string|null} projectPath - 项目路径，用于读取项目级别的禁用列表
  * @returns {Promise<Object[]>} MCP 服务器状态列表
  */
-export async function getMcpServersStatus() {
+export async function getMcpServersStatus(projectPath = null) {
   try {
-    const enabledServers = await loadMcpServersConfig();
+    const enabledServers = await loadMcpServersConfig(projectPath);
 
     log('info', 'Found', enabledServers.length, 'enabled MCP servers, verifying...');
 
