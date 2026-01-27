@@ -7,6 +7,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.InputValidator;
+import com.intellij.openapi.ui.InputValidatorEx;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
@@ -22,6 +23,11 @@ import org.jetbrains.annotations.Nullable;
 public class RenameTabAction extends AnAction implements DumbAware {
 
     private static final Logger LOG = Logger.getInstance(RenameTabAction.class);
+
+    /**
+     * Maximum length for tab names.
+     * This limit ensures tab names display properly in the UI without truncation or layout issues.
+     */
     private static final int MAX_TAB_NAME_LENGTH = 50;
 
     public RenameTabAction() {
@@ -104,8 +110,9 @@ public class RenameTabAction extends AnAction implements DumbAware {
     /**
      * Input validator for tab name.
      * Validates that the name is not empty and does not exceed maximum length.
+     * Provides detailed error messages for invalid input.
      */
-    private static class TabNameInputValidator implements InputValidator {
+    private static class TabNameInputValidator implements InputValidatorEx {
         @Override
         public boolean checkInput(@Nullable String inputString) {
             if (inputString == null) {
@@ -118,6 +125,17 @@ public class RenameTabAction extends AnAction implements DumbAware {
         @Override
         public boolean canClose(@Nullable String inputString) {
             return checkInput(inputString);
+        }
+
+        @Override
+        public @Nullable String getErrorText(@Nullable String inputString) {
+            if (inputString == null || inputString.trim().isEmpty()) {
+                return ClaudeCodeGuiBundle.message("action.renameTab.error.empty");
+            }
+            if (inputString.trim().length() > MAX_TAB_NAME_LENGTH) {
+                return ClaudeCodeGuiBundle.message("action.renameTab.error.tooLong");
+            }
+            return null;
         }
     }
 }
