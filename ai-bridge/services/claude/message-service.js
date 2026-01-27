@@ -1715,15 +1715,14 @@ export async function getSlashCommands(cwd = null) {
 /**
  * 获取 MCP 服务器连接状态
  * 直接验证每个 MCP 服务器的真实连接状态（通过 mcp-status-service 模块）
- * @param {string} [_cwd=null] - 工作目录（已废弃，保留仅为 API 兼容性，实际不使用）
- * @deprecated cwd 参数已不再使用，状态检测直接读取 ~/.claude.json 配置
+ * @param {string} [cwd=null] - 工作目录（项目路径），用于读取项目级别的禁用列表
  */
-export async function getMcpServerStatus(_cwd = null) {
+export async function getMcpServerStatus(cwd = null) {
   try {
-    console.log('[McpStatus] Getting MCP server status...');
+    console.log('[McpStatus] Getting MCP server status, cwd:', cwd || '(none)');
 
-    // 使用 mcp-status-service 模块获取状态
-    const mcpStatus = await getMcpServersStatus();
+    // 使用 mcp-status-service 模块获取状态，传递 cwd 用于项目级别配置
+    const mcpStatus = await getMcpServersStatus(cwd);
 
     // 输出 MCP 服务器状态
     console.log('[MCP_SERVER_STATUS]', JSON.stringify(mcpStatus));

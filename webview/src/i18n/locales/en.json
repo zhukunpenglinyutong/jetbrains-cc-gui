@@ -576,6 +576,18 @@
     "statusNeedsAuth": "Needs Authentication",
     "statusPending": "Connecting...",
     "statusUnknown": "Unknown",
+    "errorDetails": "Error Details",
+    "logs": {
+      "title": "Connection Logs",
+      "empty": "No logs yet",
+      "clear": "Clear logs",
+      "close": "Close",
+      "count": "{{count}} log entries",
+      "connected": "Connected",
+      "failed": "Connection failed",
+      "needsAuth": "Authentication required",
+      "unknownError": "Unknown error"
+    },
     "presets": {
       "fetch": "Web content fetching tool for scraping web pages",
       "time": "Time and timezone utilities",

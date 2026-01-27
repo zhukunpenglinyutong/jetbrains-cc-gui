@@ -576,6 +576,18 @@
     "statusNeedsAuth": "需要认证",
     "statusPending": "连接中...",
     "statusUnknown": "未知",
+    "errorDetails": "错误详情",
+    "logs": {
+      "title": "连接日志",
+      "empty": "暂无日志",
+      "clear": "清空日志",
+      "close": "关闭",
+      "count": "共 {{count}} 条日志",
+      "connected": "连接成功",
+      "failed": "连接失败",
+      "needsAuth": "需要认证",
+      "unknownError": "未知错误"
+    },
     "presets": {
       "fetch": "Web 内容获取工具，可以抓取网页内容",
       "time": "时间和时区工具",

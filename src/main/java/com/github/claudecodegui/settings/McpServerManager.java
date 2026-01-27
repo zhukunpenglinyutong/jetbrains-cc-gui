@@ -122,21 +122,18 @@ public class McpServerManager {
                                 if (!server.has("server")) {
                                     JsonObject serverSpec = new JsonObject();
 
-                                    // 复制相关字段到 server 规格
-                                    if (server.has("type")) {
-                                        serverSpec.add("type", server.get("type"));
-                                    }
-                                    if (server.has("command")) {
-                                        serverSpec.add("command", server.get("command"));
-                                    }
-                                    if (server.has("args")) {
-                                        serverSpec.add("args", server.get("args"));
-                                    }
-                                    if (server.has("env")) {
-                                        serverSpec.add("env", server.get("env"));
-                                    }
-                                    if (server.has("url")) {
-                                        serverSpec.add("url", server.get("url"));
+                                    // 复制所有字段到 server 规格（除了特殊字段）
+                                    Set<String> excludedFields = new HashSet<>();
+                                    excludedFields.add("id");
+                                    excludedFields.add("name");
+                                    excludedFields.add("enabled");
+                                    excludedFields.add("apps");
+                                    excludedFields.add("server");
+
+                                    for (String key : server.keySet()) {
+                                        if (!excludedFields.contains(key)) {
+                                            serverSpec.add(key, server.get(key));
+                                        }
                                     }
 
                                     server.add("server", serverSpec);
@@ -220,6 +217,16 @@ public class McpServerManager {
                         serverSpec = server.getAsJsonObject("server").deepCopy();
                     } else {
                         serverSpec = new JsonObject();
+                    }
+
+                    // 如果服务器已存在，合并原有配置（保留未在新配置中指定的字段）
+                    if (mcpServers.has(serverId) && mcpServers.get(serverId).isJsonObject()) {
+                        JsonObject existingSpec = mcpServers.getAsJsonObject(serverId).deepCopy();
+                        // 将新配置合并到原有配置上（新配置覆盖旧配置中的同名字段）
+                        for (String key : serverSpec.keySet()) {
+                            existingSpec.add(key, serverSpec.get(key));
+                        }
+                        serverSpec = existingSpec;
                     }
 
                     // 更新或添加服务器
