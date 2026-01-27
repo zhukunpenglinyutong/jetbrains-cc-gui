@@ -2,6 +2,7 @@ package com.github.claudecodegui.util;
 
 import com.github.claudecodegui.util.IgnoreRuleParser.IgnoreRule;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.SystemInfo;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,10 +40,12 @@ public class IgnoreRuleMatcher {
 
             // 非锚定模式：可以匹配路径中任意位置的文件/目录名
             // 例如 "ZKP.md" 应该匹配 "ZKP.md"、"foo/ZKP.md"、"foo/bar/ZKP.md"
-            this.pattern = getOrCompilePattern("(^|.*?/)" + regex + "(/.*)?$");
+            // 需要确保匹配到路径分段边界，避免 "build" 误匹配 "build2"
+            this.pattern = getOrCompilePattern("(^|.*/)" + regex + "(?:/.*)?$");
 
             // 锚定模式：必须从根开始匹配
-            this.anchoredPattern = getOrCompilePattern("^" + regex + "(/.*)?$");
+            // 同样需要分段边界，避免 "foo/bar" 误匹配 "foo/bar2"
+            this.anchoredPattern = getOrCompilePattern("^" + regex + "(?:/.*)?$");
         }
 
         private Pattern getOrCompilePattern(String regex) {
@@ -50,9 +53,11 @@ public class IgnoreRuleMatcher {
             if (PATTERN_CACHE.size() > MAX_CACHE_SIZE) {
                 PATTERN_CACHE.clear();
             }
-            // 使用大小写不敏感模式，因为 macOS/Windows 文件系统默认大小写不敏感
-            String cacheKey = "(?i)" + regex;
-            return PATTERN_CACHE.computeIfAbsent(cacheKey, k -> Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
+            // 仅在 Windows/macOS 使用不区分大小写；Linux 通常区分大小写
+            boolean caseInsensitive = SystemInfo.isWindows || SystemInfo.isMac;
+            int flags = caseInsensitive ? Pattern.CASE_INSENSITIVE : 0;
+            String cacheKey = (caseInsensitive ? "(?i)" : "(?c)") + regex;
+            return PATTERN_CACHE.computeIfAbsent(cacheKey, k -> Pattern.compile(regex, flags));
         }
     }
 
@@ -119,9 +124,9 @@ public class IgnoreRuleMatcher {
 
             boolean matches;
             if (rule.isAnchored()) {
-                matches = compiled.anchoredPattern.matcher(normalizedPath).matches();
+                matches = compiled.anchoredPattern.matcher(ensureSegmentBoundary(normalizedPath)).matches();
             } else {
-                matches = compiled.pattern.matcher(normalizedPath).matches();
+                matches = compiled.pattern.matcher(ensureSegmentBoundary(normalizedPath)).matches();
             }
 
             if (matches) {
@@ -154,6 +159,17 @@ public class IgnoreRuleMatcher {
             return "";
         }
         return path.replace('\\', '/');
+    }
+
+    /**
+     * 将路径追加一个分段边界，便于规则在不引入误匹配的情况下匹配目录/文件名。
+     * 例如 rule "build" 的正则 "build" 不应匹配 "build2"；追加 "/" 后可利用边界判断。
+     */
+    private String ensureSegmentBoundary(String path) {
+        if (path == null || path.isEmpty()) {
+            return "";
+        }
+        return path.endsWith("/") ? path : path + "/";
     }
 
     /**
