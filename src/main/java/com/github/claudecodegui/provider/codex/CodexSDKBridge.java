@@ -216,7 +216,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
      * Send message to Codex (streaming response).
      *
      * Note: Codex uses threadId instead of sessionId
-     * Note: Codex does not support attachments
+     * Note: Codex supports images via local_image type (requires file path, not base64)
      * Note: Codex does not support system prompts, so agentPrompt is appended to user message
      */
     public CompletableFuture<SDKResult> sendMessage(
@@ -224,7 +224,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
             String message,
             String threadId,  // Codex uses threadId, not sessionId
             String cwd,
-            List<ClaudeSession.Attachment> attachments,  // Ignored for Codex
+            List<ClaudeSession.Attachment> attachments,  // Image attachments (saved to temp files for Codex)
             String permissionMode,
             String model,
             String agentPrompt,  // Agent prompt (appended to message for Codex)
@@ -271,6 +271,15 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // API configuration
                 stdinInput.addProperty("baseUrl", baseUrl != null ? baseUrl : "");
                 stdinInput.addProperty("apiKey", apiKey != null ? apiKey : "");
+
+                // Process attachments for Codex (images need to be saved as temp files)
+                // Codex SDK requires local file paths, not base64 data
+                JsonArray attachmentsArray = buildCodexAttachments(attachments, cwd);
+                if (attachmentsArray.size() > 0) {
+                    stdinInput.add("attachments", attachmentsArray);
+                    LOG.info("[Codex] ✓ Prepared " + attachmentsArray.size() + " image attachment(s)");
+                }
+
                 String stdinJson = gson.toJson(stdinInput);
 
                 List<String> command = new ArrayList<>();
@@ -520,6 +529,103 @@ public class CodexSDKBridge extends BaseSDKBridge {
     // ============================================================================
     // Utility methods
     // ============================================================================
+
+    /**
+     * Build Codex-compatible attachments array.
+     * Codex SDK requires local file paths for images, not base64 data.
+     * This method saves base64 image data to temporary files and returns file paths.
+     *
+     * @param attachments List of attachments from the UI
+     * @param cwd Working directory (used to determine temp file location)
+     * @return JsonArray with local_image entries for Codex SDK
+     */
+    private JsonArray buildCodexAttachments(List<ClaudeSession.Attachment> attachments, String cwd) {
+        JsonArray result = new JsonArray();
+
+        if (attachments == null || attachments.isEmpty()) {
+            return result;
+        }
+
+        // Determine temp directory
+        File tempDir;
+        if (cwd != null && !cwd.isEmpty()) {
+            tempDir = new File(cwd, ".codex-temp");
+        } else {
+            tempDir = new File(System.getProperty("java.io.tmpdir"), "codex-images");
+        }
+
+        // Create temp directory if not exists
+        if (!tempDir.exists()) {
+            tempDir.mkdirs();
+        }
+
+        for (ClaudeSession.Attachment attachment : attachments) {
+            if (attachment == null) continue;
+
+            String type = attachment.mediaType;
+            String data = attachment.data;
+
+            // Only process image types
+            if (type == null || !type.startsWith("image/") || data == null) {
+                LOG.debug("[Codex] Skipping non-image attachment: " + type);
+                continue;
+            }
+
+            try {
+                // Determine file extension from MIME type
+                String extension = getImageExtension(type);
+
+                // Generate unique filename
+                String filename = "codex-img-" + System.currentTimeMillis() + "-" +
+                                  java.util.UUID.randomUUID().toString().substring(0, 8) + extension;
+                File imageFile = new File(tempDir, filename);
+
+                // Decode base64 and write to file
+                byte[] imageBytes = java.util.Base64.getDecoder().decode(data);
+                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(imageFile)) {
+                    fos.write(imageBytes);
+                }
+
+                LOG.info("[Codex] Saved image to temp file: " + imageFile.getAbsolutePath() +
+                         " (" + imageBytes.length + " bytes)");
+
+                // Add to result array in Codex SDK format
+                JsonObject imageEntry = new JsonObject();
+                imageEntry.addProperty("type", "local_image");
+                imageEntry.addProperty("path", imageFile.getAbsolutePath());
+                result.add(imageEntry);
+
+            } catch (Exception e) {
+                LOG.warn("[Codex] Failed to process image attachment: " + e.getMessage());
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Get file extension from MIME type.
+     */
+    private String getImageExtension(String mimeType) {
+        if (mimeType == null) return ".png";
+
+        switch (mimeType.toLowerCase()) {
+            case "image/jpeg":
+            case "image/jpg":
+                return ".jpg";
+            case "image/gif":
+                return ".gif";
+            case "image/webp":
+                return ".webp";
+            case "image/bmp":
+                return ".bmp";
+            case "image/svg+xml":
+                return ".svg";
+            case "image/png":
+            default:
+                return ".png";
+        }
+    }
 
     private String extractAssistantText(JsonObject msg) {
         if (msg == null) return "";
