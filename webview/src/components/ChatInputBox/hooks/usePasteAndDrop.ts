@@ -3,6 +3,12 @@ import type { Attachment } from '../types.js';
 import { generateId } from '../utils/generateId.js';
 import { insertTextAtCursor } from '../utils/selectionUtils.js';
 
+declare global {
+  interface Window {
+    getClipboardFilePath?: () => Promise<string>;
+  }
+}
+
 interface UsePasteAndDropOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
   pathMappingRef: React.MutableRefObject<Map<string, string>>;
@@ -124,8 +130,8 @@ export function usePasteAndDrop({
           }
 
           // If there's a file type item, try to get full path via Java side
-          if (hasFileItem && (window as unknown as { getClipboardFilePath?: () => Promise<string> }).getClipboardFilePath) {
-            (window as unknown as { getClipboardFilePath: () => Promise<string> })
+          if (hasFileItem && window.getClipboardFilePath) {
+            window
               .getClipboardFilePath()
               .then((fullPath: string) => {
                 if (fullPath && fullPath.trim()) {

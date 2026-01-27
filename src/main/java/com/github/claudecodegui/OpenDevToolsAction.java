@@ -1,5 +1,6 @@
 package com.github.claudecodegui;
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
@@ -19,6 +20,11 @@ import java.awt.*;
 public class OpenDevToolsAction extends AnAction {
 
     private static final Logger LOG = Logger.getInstance(OpenDevToolsAction.class);
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
+    }
 
     @Override
     public void update(@NotNull AnActionEvent e) {

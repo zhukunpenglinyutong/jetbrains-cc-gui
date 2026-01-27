@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { CodexProviderConfig } from '../../../types/provider';
+import { STORAGE_KEYS } from '../../../types/provider';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -7,6 +8,24 @@ const sendToJava = (message: string) => {
   }
   // sendToJava 不可用时静默处理，避免生产环境日志污染
 };
+
+/**
+ * 安全地设置 localStorage 并派发自定义事件通知同标签页的其他组件
+ * @param key localStorage key
+ * @param value 要存储的值
+ * @returns 是否成功
+ */
+function safeSetLocalStorage(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    // 派发自定义事件，通知同标签页内的其他组件
+    window.dispatchEvent(new CustomEvent('localStorageChange', { detail: { key } }));
+    return true;
+  } catch (e) {
+    console.warn(`Failed to save to localStorage (key: ${key}):`, e);
+    return false;
+  }
+}
 
 export interface CodexProviderDialogState {
   isOpen: boolean;
@@ -64,6 +83,11 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
       setCodexProviders((prev) =>
         prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
       );
+      // 同步 customModels 到 localStorage
+      safeSetLocalStorage(
+        STORAGE_KEYS.CODEX_CUSTOM_MODELS,
+        JSON.stringify(activeProvider.customModels || [])
+      );
     }
   }, []);
 
@@ -104,16 +128,26 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
             remark: providerData.remark,
             configToml: providerData.configToml,
             authJson: providerData.authJson,
+            customModels: providerData.customModels,
           },
         };
         sendToJava(`update_codex_provider:${JSON.stringify(updateData)}`);
         onSuccess?.('Codex 供应商已更新');
       }
 
+      // 如果更新的是当前激活的 provider，同步 customModels 到 localStorage
+      const activeProvider = codexProviders.find(p => p.isActive);
+      if (activeProvider && activeProvider.id === providerData.id) {
+        safeSetLocalStorage(
+          STORAGE_KEYS.CODEX_CUSTOM_MODELS,
+          JSON.stringify(providerData.customModels || [])
+        );
+      }
+
       setCodexProviderDialog({ isOpen: false, provider: null });
       setCodexLoading(true);
     },
-    [codexProviderDialog.provider, onSuccess]
+    [codexProviderDialog.provider, codexProviders, onSuccess]
   );
 
   // 切换 Codex Provider

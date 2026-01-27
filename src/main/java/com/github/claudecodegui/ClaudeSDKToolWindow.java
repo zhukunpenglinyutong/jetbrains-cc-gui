@@ -27,6 +27,7 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.FontConfigService;
@@ -230,17 +231,53 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
         }
 
+        // Add Rename Tab action to tool window gear menu
+        com.intellij.openapi.actionSystem.AnAction renameTabAction =
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                        .getAction("ClaudeCodeGUI.RenameTabAction");
+        if (renameTabAction != null) {
+            toolWindow.setAdditionalGearActions(new com.intellij.openapi.actionSystem.DefaultActionGroup(renameTabAction));
+        }
+
         // Add listener to manage tab closeable state based on tab count
         // When there's only one tab, disable the close button to prevent closing the last tab
         contentManager.addContentManagerListener(new ContentManagerListener() {
             @Override
             public void contentAdded(@NotNull ContentManagerEvent event) {
                 updateTabCloseableState(contentManager);
+                // Save tab count when tab is added
+                TabStateService tabStateService = TabStateService.getInstance(project);
+                tabStateService.saveTabCount(contentManager.getContentCount());
             }
 
             @Override
             public void contentRemoved(@NotNull ContentManagerEvent event) {
                 updateTabCloseableState(contentManager);
+                // Update tab state service when tab is removed
+                int removedIndex = event.getIndex();
+                TabStateService tabStateService = TabStateService.getInstance(project);
+                tabStateService.onTabRemoved(removedIndex);
+            }
+
+            @Override
+            public void contentRemoveQuery(@NotNull ContentManagerEvent event) {
+                // Show confirmation dialog before closing tab
+                Content content = event.getContent();
+                String tabName = content.getDisplayName();
+
+                int result = com.intellij.openapi.ui.Messages.showYesNoDialog(
+                    project,
+                    ClaudeCodeGuiBundle.message("tab.close.confirm.message", tabName),
+                    ClaudeCodeGuiBundle.message("tab.close.confirm.title"),
+                    ClaudeCodeGuiBundle.message("tab.close.confirm.yes"),
+                    ClaudeCodeGuiBundle.message("tab.close.confirm.no"),
+                    com.intellij.openapi.ui.Messages.getQuestionIcon()
+                );
+
+                if (result != com.intellij.openapi.ui.Messages.YES) {
+                    // User cancelled, prevent closing
+                    event.consume();
+                }
             }
         });
 
@@ -331,22 +368,45 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             ContentFactory contentFactory,
             ContentManager contentManager
     ) {
-        ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
-        Content content = contentFactory.createContent(chatWindow.getContent(), TAB_NAME_PREFIX + "1", false);
+        TabStateService tabStateService = TabStateService.getInstance(project);
+        int savedTabCount = tabStateService.getTabCount();
+        LOG.info("[TabManager] Restoring " + savedTabCount + " tabs from storage");
 
-        // Set parent content for the first tab (important for multi-tab code snippet support)
-        chatWindow.setParentContent(content);
+        // Create multiple tabs based on saved count
+        for (int i = 0; i < savedTabCount; i++) {
+            // First tab uses the main instance, subsequent tabs use skipRegister=true
+            boolean isFirstTab = (i == 0);
+            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, !isFirstTab);
 
-        contentManager.addContent(content);
-
-        content.setDisposer(() -> {
-            ClaudeChatWindow window = instances.get(project);
-            if (window != null) {
-                window.dispose();
+            // Get saved tab name or use default
+            String tabName;
+            String savedName = tabStateService.getTabName(i);
+            if (savedName != null && !savedName.isEmpty()) {
+                tabName = savedName;
+                LOG.info("[TabManager] Restored tab " + i + " name from storage: " + tabName);
+            } else {
+                tabName = TAB_NAME_PREFIX + (i + 1);
             }
-        });
 
-        // Initialize closeable state for the first tab
+            Content content = contentFactory.createContent(chatWindow.getContent(), tabName, false);
+
+            // Set parent content for multi-tab code snippet support
+            chatWindow.setParentContent(content);
+
+            contentManager.addContent(content);
+
+            // Only set disposer for the first tab (main instance)
+            if (isFirstTab) {
+                content.setDisposer(() -> {
+                    ClaudeChatWindow window = instances.get(project);
+                    if (window != null) {
+                        window.dispose();
+                    }
+                });
+            }
+        }
+
+        // Initialize closeable state for all tabs
         updateTabCloseableState(contentManager);
     }
 

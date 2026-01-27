@@ -7,7 +7,9 @@
 
 /**
  * Insert text at current cursor position in a contenteditable element
- * Replaces document.execCommand('insertText', false, text)
+ *
+ * Uses document.execCommand('insertText') as primary method to preserve
+ * browser's native undo/redo history. Falls back to Range API if execCommand fails.
  *
  * @param text - Text to insert
  * @param element - Optional target contenteditable element (uses active element if not provided)
@@ -23,6 +25,18 @@ export function insertTextAtCursor(text: string, element?: HTMLElement | null): 
   if (element && !element.contains(range.commonAncestorContainer)) {
     return false;
   }
+
+  // Try execCommand first - this preserves browser's native undo/redo history
+  // Although deprecated, it's still widely supported and essential for undo functionality
+  const execCommandSuccess = document.execCommand('insertText', false, text);
+
+  if (execCommandSuccess) {
+    // execCommand handles everything including input event dispatch
+    return true;
+  }
+
+  // Fallback to Range API if execCommand fails (e.g., in some strict CSP environments)
+  // Note: This fallback does NOT support browser's native undo
 
   // Delete any selected content first
   if (!range.collapsed) {

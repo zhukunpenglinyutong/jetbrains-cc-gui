@@ -303,6 +303,38 @@ public class CodemossSettingsService {
         return workingDirectoryManager.getAllWorkingDirectories();
     }
 
+    // ==================== Commit Prompt 配置管理 ====================
+
+    /**
+     * 获取 commit AI 提示词
+     * @return commit 提示词
+     */
+    public String getCommitPrompt() throws IOException {
+        JsonObject config = readConfig();
+
+        // 检查是否有 commitPrompt 配置
+        if (config.has("commitPrompt")) {
+            return config.get("commitPrompt").getAsString();
+        }
+
+        // 返回默认值（从 i18n 资源包获取）
+        return ClaudeCodeGuiBundle.message("commit.defaultPrompt");
+    }
+
+    /**
+     * 设置 commit AI 提示词
+     * @param prompt commit 提示词
+     */
+    public void setCommitPrompt(String prompt) throws IOException {
+        JsonObject config = readConfig();
+
+        // 保存配置
+        config.addProperty("commitPrompt", prompt);
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set commit prompt: " + prompt);
+    }
+
     // ==================== 🔧 Streaming 配置管理 ====================
 
     /**

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.CodemossSettingsService;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.ClaudeSession;
@@ -50,7 +51,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_streaming_enabled",
         "get_send_shortcut",
         "set_send_shortcut",
-        "get_ide_theme"
+        "get_ide_theme",
+        "get_commit_prompt",
+        "set_commit_prompt"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -133,6 +136,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "get_ide_theme":
                 handleGetIdeTheme();
+                return true;
+            case "get_commit_prompt":
+                handleGetCommitPrompt();
+                return true;
+            case "set_commit_prompt":
+                handleSetCommitPrompt(content);
                 return true;
             default:
                 return false;
@@ -1033,6 +1042,82 @@ public class SettingsHandler extends BaseMessageHandler {
             LOG.error("[SettingsHandler] Failed to set send shortcut: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("保存发送快捷键设置失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 获取 Commit AI 提示词
+     */
+    private void handleGetCommitPrompt() {
+        try {
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            String commitPrompt = settingsService.getCommitPrompt();
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("commitPrompt", commitPrompt);
+                callJavaScript("window.updateCommitPrompt", escapeJs(new Gson().toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get commit prompt: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 设置 Commit AI 提示词
+     */
+    private void handleSetCommitPrompt(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+
+            if (json == null || !json.has("prompt")) {
+                LOG.warn("[SettingsHandler] Invalid commit prompt request: missing prompt field");
+                return;
+            }
+
+            String prompt = json.get("prompt").getAsString();
+
+            // Input validation
+            if (prompt == null) {
+                LOG.warn("[SettingsHandler] Invalid commit prompt: prompt is null");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("提示词不能为空"));
+                });
+                return;
+            }
+
+            // Trim whitespace
+            prompt = prompt.trim();
+
+            // Maximum length validation (10000 characters should be more than enough)
+            final int MAX_PROMPT_LENGTH = 10000;
+            if (prompt.length() > MAX_PROMPT_LENGTH) {
+                LOG.warn("[SettingsHandler] Commit prompt too long: " + prompt.length() + " characters");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("提示词长度不能超过 " + MAX_PROMPT_LENGTH + " 字符"));
+                });
+                return;
+            }
+
+            final String validatedPrompt = prompt;
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            settingsService.setCommitPrompt(validatedPrompt);
+
+            LOG.info("[SettingsHandler] Set commit prompt, length: " + validatedPrompt.length());
+
+            // 返回成功响应，同时更新前端状态以重置 loading
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("commitPrompt", validatedPrompt);
+                response.addProperty("saved", true);
+                callJavaScript("window.updateCommitPrompt", escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set commit prompt: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("保存 Commit 提示词失败: " + e.getMessage()));
             });
         }
     }

@@ -133,6 +133,13 @@
                 text="New Chat Tab"
                 description="Create a new chat tab in Claude Code GUI tool window"/>
 
+        <!-- Rename Tab Action -->
+        <action id="ClaudeCodeGUI.RenameTabAction"
+                class="com.github.claudecodegui.RenameTabAction"
+                icon="AllIcons.Actions.Edit"
+                text="Rename Tab"
+                description="Rename the current chat tab"/>
+
         <!-- Open DevTools Action for JCEF debugging -->
         <action id="ClaudeCodeGUI.OpenDevToolsAction"
                 class="com.github.claudecodegui.OpenDevToolsAction"
@@ -145,6 +152,14 @@
                 icon="/icons/send-to-terminal.svg">
             <!-- 添加到项目文件树右键菜单 -->
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
+        </action>
+
+        <!-- Generate Commit Message with AI Action -->
+        <action id="ClaudeCodeGUI.GenerateCommitMessageAction"
+                class="com.github.claudecodegui.GenerateCommitMessageAction"
+                icon="/icons/logo-16.png">
+            <!-- 添加到 VCS Commit 工具栏 -->
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
         </action>
     </actions>
 </idea-plugin>

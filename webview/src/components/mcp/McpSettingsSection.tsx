@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { McpServer, McpPreset, McpServerStatusInfo } from '../../types/mcp';
+import type { McpServer, McpPreset, McpServerStatusInfo, McpLogEntry } from '../../types/mcp';
 import { sendToJava } from '../../utils/bridge';
 import { McpServerDialog } from './McpServerDialog';
 import { McpPresetDialog } from './McpPresetDialog';
 import { McpHelpDialog } from './McpHelpDialog';
 import { McpConfirmDialog } from './McpConfirmDialog';
+import { McpLogDialog } from './McpLogDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
 import { copyToClipboard } from '../../utils/copyUtils';
 
@@ -38,6 +39,8 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showLogDialog, setShowLogDialog] = useState(false);
+  const [logs, setLogs] = useState<McpLogEntry[]>([]);
   const [editingServer, setEditingServer] = useState<McpServer | null>(null);
   const [deletingServer, setDeletingServer] = useState<McpServer | null>(null);
 
@@ -53,6 +56,30 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
+
+  /**
+   * 添加日志条目
+   * @param serverName - 服务器名称
+   * @param level - 日志级别
+   * @param message - 日志消息
+   */
+  const addLog = useCallback((serverName: string, level: McpLogEntry['level'], message: string) => {
+    const entry: McpLogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+      timestamp: new Date(),
+      serverName,
+      level,
+      message,
+    };
+    setLogs((prev) => [...prev.slice(-99), entry]); // Keep last 100 logs
+  }, []);
+
+  /**
+   * 清空所有日志
+   */
+  const clearLogs = useCallback(() => {
+    setLogs([]);
+  }, []);
 
   // 服务器图标颜色
   const iconColors = [
@@ -94,9 +121,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         const serverList: McpServer[] = JSON.parse(jsonStr);
         setServers(serverList);
         setLoading(false);
-        console.log(`[McpSettings] Loaded ${isCodexMode ? 'Codex' : 'Claude'} servers:`, serverList);
       } catch (error) {
-        console.error('[McpSettings] Failed to parse servers:', error);
         setLoading(false);
       }
     };
@@ -108,12 +133,20 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         const statusMap = new Map<string, McpServerStatusInfo>();
         statusList.forEach((status) => {
           statusMap.set(status.name, status);
+          // Add log entries for status updates
+          if (status.status === 'connected') {
+            const version = status.serverInfo ? ` (v${status.serverInfo.version})` : '';
+            addLog(status.name, 'success', `${t('mcp.logs.connected')}${version}`);
+          } else if (status.status === 'failed') {
+            const errorMsg = status.error || t('mcp.logs.unknownError');
+            addLog(status.name, 'error', `${t('mcp.logs.failed')}: ${errorMsg}`);
+          } else if (status.status === 'needs-auth') {
+            addLog(status.name, 'warn', t('mcp.logs.needsAuth'));
+          }
         });
         setServerStatus(statusMap);
         setStatusLoading(false);
-        console.log('[McpSettings] Loaded server status:', statusList);
       } catch (error) {
-        console.error('[McpSettings] Failed to parse server status:', error);
         setStatusLoading(false);
       }
     };
@@ -171,7 +204,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
       }
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [isCodexMode]);
+  }, [isCodexMode, addLog, t]);
 
   const loadServers = () => {
     setLoading(true);
@@ -322,7 +355,6 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
       }
     };
 
-    console.log('[McpSettings] Toggling server:', server.id, 'enabled:', enabled);
     sendToJava(`toggle_${messagePrefix}mcp_server`, updatedServer);
 
     // 显示Toast提示
@@ -465,6 +497,14 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         </div>
         <div className="header-right">
           <button
+            className="log-btn"
+            onClick={() => setShowLogDialog(true)}
+            title={t('mcp.logs.title')}
+          >
+            <span className="codicon codicon-output"></span>
+            {logs.length > 0 && <span className="log-badge">{logs.length}</span>}
+          </button>
+          <button
             className="refresh-btn"
             onClick={handleRefresh}
             disabled={loading || statusLoading}
@@ -557,6 +597,13 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
                             {' '}{getStatusText(server, statusInfo?.status)}
                           </span>
                         </div>
+                        {/* 显示错误详情 */}
+                        {statusInfo?.error && statusInfo.status === 'failed' && (
+                          <div className="info-row error-row">
+                            <span className="info-label">{t('mcp.errorDetails')}:</span>
+                            <span className="info-value error-value">{statusInfo.error}</span>
+                          </div>
+                        )}
                         {statusInfo?.serverInfo && (
                           <div className="info-row">
                             <span className="info-label">{t('mcp.serverVersion')}:</span>
@@ -698,6 +745,14 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
           cancelText={t('mcp.cancel')}
           onConfirm={confirmDelete}
           onCancel={cancelDelete}
+        />
+      )}
+
+      {showLogDialog && (
+        <McpLogDialog
+          logs={logs}
+          onClose={() => setShowLogDialog(false)}
+          onClear={clearLogs}
         />
       )}
 

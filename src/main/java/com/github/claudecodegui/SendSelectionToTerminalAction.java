@@ -1,5 +1,6 @@
 package com.github.claudecodegui;
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -38,6 +39,11 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
             ClaudeCodeGuiBundle.message("action.sendToGui.description"),
             null
         );
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
     }
 
     /**

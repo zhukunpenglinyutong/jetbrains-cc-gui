@@ -1,5 +1,6 @@
 package com.github.claudecodegui;
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
@@ -18,6 +19,11 @@ import org.jetbrains.annotations.NotNull;
 public class CreateNewTabAction extends AnAction {
 
     private static final Logger LOG = Logger.getInstance(CreateNewTabAction.class);
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
+    }
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
