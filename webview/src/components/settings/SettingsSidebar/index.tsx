@@ -1,7 +1,7 @@
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 
-export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'mcp' | 'agents' | 'skills' | 'community';
+export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'commit' | 'mcp' | 'agents' | 'skills' | 'community';
 
 interface SidebarItem {
   key: SettingsTab;
@@ -16,6 +16,7 @@ const sidebarItems: SidebarItem[] = [
   { key: 'usage', icon: 'codicon-graph', labelKey: 'settings.usage' },
   { key: 'mcp', icon: 'codicon-server', labelKey: 'settings.mcp' },
   { key: 'permissions', icon: 'codicon-shield', labelKey: 'settings.permissions' },
+  { key: 'commit', icon: 'codicon-git-commit', labelKey: 'settings.commit.title' },
   { key: 'agents', icon: 'codicon-robot', labelKey: 'settings.agents' },
   { key: 'skills', icon: 'codicon-book', labelKey: 'settings.skills' },
   { key: 'community', icon: 'codicon-comment-discussion', labelKey: 'settings.community' },
@@ -71,7 +72,7 @@ const SettingsSidebar = ({
       <div
         className={styles.sidebarToggle}
         onClick={onToggleCollapse}
-        title={isCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+        title={isCollapsed ? t('settings.sidebar.expand') : t('settings.sidebar.collapse')}
       >
         <span className={`codicon ${isCollapsed ? 'codicon-chevron-right' : 'codicon-chevron-left'}`} />
       </div>

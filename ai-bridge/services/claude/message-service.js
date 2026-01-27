@@ -442,13 +442,14 @@ function createPreToolUseHook(permissionMode) {
  * @param {string} agentPrompt - 智能体提示词（可选）
  * @param {boolean} streaming - 是否启用流式传输（可选，默认从配置读取）
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] message length:', message ? message.length : 0);
   console.log('[DIAG] resumeSessionId:', resumeSessionId || '(new session)');
   console.log('[DIAG] cwd:', cwd);
   console.log('[DIAG] permissionMode:', permissionMode);
   console.log('[DIAG] model:', model);
+  console.log('[DIAG] disableThinking:', disableThinking);
 
   const sdkStderrLines = [];
   let timeoutId;
@@ -539,10 +540,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[STREAMING_DEBUG] streamingEnabled (final):', streamingEnabled);
 
 	    // 根据配置决定是否启用 Extended Thinking
+	    // - 如果 disableThinking 为 true，强制禁用思考模式
 	    // - 如果 alwaysThinkingEnabled 为 true，使用配置的 maxThinkingTokens 值
 	    // - 如果 alwaysThinkingEnabled 为 false，不设置 maxThinkingTokens（让 SDK 使用默认行为）
-	    const maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+	    const maxThinkingTokens = disableThinking ? undefined : (alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined);
 
+	    console.log('[THINKING_DEBUG] disableThinking:', disableThinking);
 	    console.log('[THINKING_DEBUG] alwaysThinkingEnabled:', alwaysThinkingEnabled);
 	    console.log('[THINKING_DEBUG] maxThinkingTokens:', maxThinkingTokens);
 

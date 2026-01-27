@@ -48,7 +48,7 @@ interface BasicConfigSectionProps {
     fontSize: number;
     lineSpacing: number;
   };
-  // 🔧 流式传输配置
+  // 流式传输配置
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
   // 发送快捷键配置
@@ -72,7 +72,7 @@ const BasicConfigSection = ({
   onSaveWorkingDirectory = () => {},
   savingWorkingDirectory = false,
   editorFontConfig,
-  // 🔧 流式传输配置
+  // 流式传输配置
   streamingEnabled = true,
   onStreamingEnabledChange = () => {},
   // 发送快捷键配置

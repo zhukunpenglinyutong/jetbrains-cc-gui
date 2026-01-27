@@ -21,8 +21,8 @@ export async function handleClaudeCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
-        // 🔧 解构时包含 streaming 参数
-        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming } = stdinData;
+        // 🔧 解构时包含 streaming 和 disableThinking 参数
+        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking } = stdinData;
         await claudeSendMessage(
           message,
           sessionId || '',
@@ -31,7 +31,8 @@ export async function handleClaudeCommand(command, args, stdinData) {
           model || '',
           openedFiles || null,
           agentPrompt || null,
-          streaming  // 🔧 传递 streaming 参数
+          streaming,  // 🔧 传递 streaming 参数
+          disableThinking || false  // 🔧 传递 disableThinking 参数
         );
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
@@ -68,14 +69,9 @@ export async function handleClaudeCommand(command, args, stdinData) {
     }
 
     case 'rewindFiles': {
-      console.log('[CHANNEL] rewindFiles command received');
-      console.log('[CHANNEL] stdinData:', JSON.stringify(stdinData));
-      console.log('[CHANNEL] args:', JSON.stringify(args));
       const sessionId = stdinData?.sessionId || args[0];
       const userMessageId = stdinData?.userMessageId || args[1];
       const cwd = stdinData?.cwd || args[2] || null;
-      console.log('[CHANNEL] Parsed sessionId:', sessionId);
-      console.log('[CHANNEL] Parsed userMessageId:', userMessageId);
       if (!sessionId || !userMessageId) {
         console.log(JSON.stringify({
           success: false,

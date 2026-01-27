@@ -181,11 +181,30 @@
     "mcpDesc": "Configure and manage Model Context Protocol servers",
     "permissions": "Permissions",
     "permissionsDesc": "Manage Claude Code's file access and operation permissions",
+    "commit": {
+      "title": "Commit AI",
+      "description": "Configure AI-generated Git commit message behavior",
+      "prompt": {
+        "label": "Additional Prompt",
+        "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
+        "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "codeReview": {
+        "comingSoon": "Coming Soon",
+        "label": "Code Review AI Additional Prompt",
+        "placeholder": "This feature is under development, stay tuned...",
+        "hint": "Code Review AI will help you automatically review code, identify potential issues, and provide improvement suggestions. You can configure review preferences and focus areas here."
+      }
+    },
     "agents": "Agents",
     "agentsDesc": "Manage and configure AI agents",
     "skills": "Skills",
     "skillsDesc": "Manage and configure skill modules",
     "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",
+    "sidebar": {
+      "expand": "Expand Sidebar",
+      "collapse": "Collapse Sidebar"
+    },
     "community": "Community",
     "communityDesc": "Scan the QR code below to join the official WeChat group for the latest news and technical support",
     "communityQrTip": "Scan with WeChat to join the community",
@@ -451,6 +470,7 @@
     "thinkingDisabled": "Thinking disabled",
     "configLoading": "Configuration loading, please try again",
     "saveSuccess": "Saved successfully",
+    "saveFailed": "Save failed",
     "deleteSuccess": "Deleted successfully",
     "operationFailed": "Operation failed",
     "copySuccess": "{{label}} copied to clipboard",

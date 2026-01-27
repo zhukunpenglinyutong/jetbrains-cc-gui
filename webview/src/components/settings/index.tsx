@@ -21,6 +21,7 @@ import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
 import CommunitySection from './CommunitySection';
 import AgentSection from './AgentSection';
+import CommitSection from './CommitSection';
 import { SkillsSettingsSection } from '../skills';
 
 // 导入自定义 hooks
@@ -226,6 +227,10 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
   const [localSendShortcut, setLocalSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
   const sendShortcut = sendShortcutProp ?? localSendShortcut;
 
+  // Commit AI 提示词配置
+  const [commitPrompt, setCommitPrompt] = useState('');
+  const [savingCommitPrompt, setSavingCommitPrompt] = useState(false);
+
   const handleTabChange = (tab: SettingsTab) => {
     if (isCodexMode && disabledTabs.includes(tab)) {
       addToast(t('settings.codexFeatureUnavailable'), 'warning');
@@ -291,6 +296,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       setLoading(false);
       setSavingNodePath(false);
       setSavingWorkingDirectory(false);
+      setSavingCommitPrompt(false);
     };
 
     window.showSwitchSuccess = (message: string) => {
@@ -384,6 +390,23 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       };
     }
 
+    // Commit AI 提示词回调
+    window.updateCommitPrompt = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setCommitPrompt(data.commitPrompt || '');
+        setSavingCommitPrompt(false);
+        // 如果是保存操作，显示成功提示
+        if (data.saved) {
+          addToast(t('toast.saveSuccess'), 'success');
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse commit prompt:', error);
+        setSavingCommitPrompt(false);
+        addToast(t('toast.saveFailed'), 'error');
+      }
+    };
+
     // Agent 智能体回调 - 使用 hooks 提供的更新函数
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
@@ -453,6 +476,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
     sendToJava('get_editor_font_config:');
     // 🔧 加载流式传输配置
     sendToJava('get_streaming_enabled:');
+    // 加载 Commit AI 提示词
+    sendToJava('get_commit_prompt:');
 
     return () => {
       // 清理 Agent 超时定时器 - 使用 hook 提供的清理函数
@@ -477,6 +502,7 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       if (!onSendShortcutChangeProp) {
         window.updateSendShortcut = previousUpdateSendShortcut;
       }
+      window.updateCommitPrompt = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       // Cleanup Codex callbacks
@@ -607,6 +633,13 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
       const payload = { sendShortcut: shortcut };
       sendToJava(`set_send_shortcut:${JSON.stringify(payload)}`);
     }
+  };
+
+  // Commit AI 提示词保存处理
+  const handleSaveCommitPrompt = () => {
+    setSavingCommitPrompt(true);
+    const payload = { prompt: commitPrompt };
+    sendToJava(`set_commit_prompt:${JSON.stringify(payload)}`);
   };
 
   // 保存供应商（带验证逻辑的包装函数）
@@ -855,6 +888,16 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
           {/* 权限配置 */}
           <div style={{ display: currentTab === 'permissions' ? 'block' : 'none' }}>
             <PlaceholderSection type="permissions" />
+          </div>
+
+          {/* Commit AI 配置 */}
+          <div style={{ display: currentTab === 'commit' ? 'block' : 'none' }}>
+            <CommitSection
+              commitPrompt={commitPrompt}
+              onCommitPromptChange={setCommitPrompt}
+              onSaveCommitPrompt={handleSaveCommitPrompt}
+              savingCommitPrompt={savingCommitPrompt}
+            />
           </div>
 
           {/* Agents */}

@@ -153,5 +153,13 @@
             <!-- 添加到项目文件树右键菜单 -->
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
         </action>
+
+        <!-- Generate Commit Message with AI Action -->
+        <action id="ClaudeCodeGUI.GenerateCommitMessageAction"
+                class="com.github.claudecodegui.GenerateCommitMessageAction"
+                icon="/icons/logo-16.png">
+            <!-- 添加到 VCS Commit 工具栏 -->
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>

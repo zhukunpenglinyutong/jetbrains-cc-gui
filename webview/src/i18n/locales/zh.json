@@ -181,11 +181,30 @@
     "mcpDesc": "配置和管理 Model Context Protocol 服务器",
     "permissions": "权限配置",
     "permissionsDesc": "管理 Claude Code 的文件访问和操作权限",
+    "commit": {
+      "title": "Commit AI",
+      "description": "配置 AI 生成 Git Commit 消息的行为",
+      "prompt": {
+        "label": "附加提示词",
+        "placeholder": "在此添加您的额外要求，例如：使用中文生成 commit、包含 issue 编号，使用表情符号等等...",
+        "hint": "插件已内置完整的 CCG Commits 规范提示词。您在此处添加的内容将作为附加要求，AI 会优先遵循您的要求。"
+      },
+      "codeReview": {
+        "comingSoon": "即将推出",
+        "label": "Code Review AI 附加提示词",
+        "placeholder": "此功能正在开发中，敬请期待...",
+        "hint": "Code Review AI 将帮助您自动审查代码，识别潜在问题并提供改进建议。您可以在此配置审查偏好和关注重点。"
+      }
+    },
     "agents": "Agents",
     "agentsDesc": "管理和配置AI代理",
     "skills": "Skills",
     "skillsDesc": "管理和配置技能模块",
     "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",
+    "sidebar": {
+      "expand": "展开侧边栏",
+      "collapse": "折叠侧边栏"
+    },
     "community": "官方交流群",
     "communityDesc": "扫描下方二维码加入官方微信交流群，获取最新资讯和技术支持",
     "communityQrTip": "使用微信扫一扫加入交流群",
@@ -451,6 +470,7 @@
     "thinkingDisabled": "思考已关闭",
     "configLoading": "配置加载中，请稍后再试",
     "saveSuccess": "保存成功",
+    "saveFailed": "保存失败",
     "deleteSuccess": "删除成功",
     "operationFailed": "操作失败",
     "copySuccess": "{{label}}已复制到剪切板",
