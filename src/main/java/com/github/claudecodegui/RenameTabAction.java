@@ -1,12 +1,12 @@
 package com.github.claudecodegui;
 
+import com.github.claudecodegui.settings.TabStateService;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.ui.InputValidator;
 import com.intellij.openapi.ui.InputValidatorEx;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.wm.ToolWindow;
@@ -86,6 +86,14 @@ public class RenameTabAction extends AnAction implements DumbAware {
 
         // Update the tab name
         selectedContent.setDisplayName(newName);
+
+        // Get tab index and save to persistent storage
+        int tabIndex = contentManager.getIndexOfContent(selectedContent);
+        if (tabIndex >= 0) {
+            TabStateService tabStateService = TabStateService.getInstance(project);
+            tabStateService.saveTabName(tabIndex, newName);
+        }
+
         LOG.info(String.format("[RenameTabAction] Renamed tab from '%s' to '%s'", currentName, newName));
     }
 
