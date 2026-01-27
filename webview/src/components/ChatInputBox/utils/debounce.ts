@@ -1,8 +1,8 @@
 /**
  * Debounced function interface with cancel capability
  */
-export interface DebouncedFunction<T extends (...args: any[]) => void> {
-  (...args: Parameters<T>): void;
+export interface DebouncedFunction<Args extends unknown[]> {
+  (...args: Args): void;
   /** Cancel any pending execution */
   cancel: () => void;
 }
@@ -17,19 +17,19 @@ export interface DebouncedFunction<T extends (...args: any[]) => void> {
  * debouncedFn('arg1');
  * debouncedFn.cancel(); // Cancel pending execution (e.g., on unmount)
  */
-export function debounce<T extends (...args: any[]) => void>(
-  func: T,
+export function debounce<Args extends unknown[]>(
+  func: (...args: Args) => void,
   wait: number
-): DebouncedFunction<T> {
+): DebouncedFunction<Args> {
   let timeout: ReturnType<typeof setTimeout> | null = null;
 
-  const debouncedFn = function (this: unknown, ...args: Parameters<T>) {
+  const debouncedFn = function (this: unknown, ...args: Args) {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => {
       timeout = null;
       func.apply(this, args);
     }, wait);
-  } as DebouncedFunction<T>;
+  } as DebouncedFunction<Args>;
 
   debouncedFn.cancel = () => {
     if (timeout) {

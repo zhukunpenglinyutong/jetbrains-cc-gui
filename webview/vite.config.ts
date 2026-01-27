@@ -8,6 +8,10 @@ export default defineConfig({
     viteSingleFile(),
   ],
   build: {
+    minify: 'esbuild',
+    esbuild: {
+      drop: ['console', 'debugger'],
+    },
     assetsInlineLimit: 1024 * 1024,
     cssCodeSplit: false,
     sourcemap: false,
