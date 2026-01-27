@@ -131,24 +131,18 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
           }
 
           const serverConfig = config as any;
+          // 保留所有原始字段，只设置默认的 type
+          const serverSpec = {
+            ...serverConfig,
+            type: serverConfig.type || (serverConfig.command ? 'stdio' : serverConfig.url ? 'http' : 'stdio'),
+          };
+          // 移除不属于 server spec 的字段
+          delete serverSpec.name;
+
           const newServer: McpServer = {
             id,
             name: serverConfig.name || id,
-            server: {
-              type: serverConfig.type || (serverConfig.command ? 'stdio' : serverConfig.url ? 'http' : 'stdio'),
-              command: serverConfig.command,
-              args: serverConfig.args,
-              env: serverConfig.env,
-              url: serverConfig.url,
-              headers: serverConfig.headers,
-              // Codex-specific fields
-              ...(isCodexMode && {
-                startup_timeout_sec: serverConfig.startup_timeout_sec,
-                tool_timeout_sec: serverConfig.tool_timeout_sec,
-                enabled_tools: serverConfig.enabled_tools,
-                disabled_tools: serverConfig.disabled_tools,
-              }),
-            } as McpServerSpec,
+            server: serverSpec as McpServerSpec,
             apps: {
               claude: !isCodexMode,
               codex: isCodexMode,
@@ -162,24 +156,18 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
       // 直接服务器配置格式
       else if (parsed.command || parsed.url) {
         const id = `server-${Date.now()}`;
+        // 保留所有原始字段
+        const serverSpec = {
+          ...parsed,
+          type: parsed.type || (parsed.command ? 'stdio' : 'http'),
+        };
+        // 移除不属于 server spec 的字段
+        delete serverSpec.name;
+
         const newServer: McpServer = {
           id,
           name: parsed.name || id,
-          server: {
-            type: parsed.type || (parsed.command ? 'stdio' : 'http'),
-            command: parsed.command,
-            args: parsed.args,
-            env: parsed.env,
-            url: parsed.url,
-            headers: parsed.headers,
-            // Codex-specific fields
-            ...(isCodexMode && {
-              startup_timeout_sec: parsed.startup_timeout_sec,
-              tool_timeout_sec: parsed.tool_timeout_sec,
-              enabled_tools: parsed.enabled_tools,
-              disabled_tools: parsed.disabled_tools,
-            }),
-          } as McpServerSpec,
+          server: serverSpec as McpServerSpec,
           apps: {
             claude: !isCodexMode,
             codex: isCodexMode,

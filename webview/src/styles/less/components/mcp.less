@@ -366,6 +366,25 @@
     font-weight: 500;
 }
 
+/* 错误详情行 */
+.status-section .error-row {
+    flex-wrap: wrap;
+}
+
+.status-section .error-value {
+    color: var(--color-error);
+    font-family: var(--idea-editor-font-family, monospace);
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    word-break: break-all;
+    line-height: 1.4;
+    width: 100%;
+    margin-top: 4px;
+}
+
 /* 标签区 */
 .tags-section {
     display: flex;
@@ -1047,3 +1066,7 @@
         font-size: 11px;
     }
 }
+
+/* 导入日志弹窗样式 */
+@import './mcp-log-dialog.less';
+

@@ -19,35 +19,16 @@ const MCP_VERIFY_TIMEOUT = parseInt(process.env.MCP_VERIFY_TIMEOUT) || 8000;
 /** 是否启用调试日志 */
 const DEBUG = process.env.MCP_DEBUG === 'true' || process.env.DEBUG === 'true';
 
-/**
- * 允许执行的命令白名单
- * 只允许常见的 MCP 服务器启动命令，防止任意命令执行
- */
-const ALLOWED_COMMANDS = new Set([
-  'node',
-  'npx',
-  'npm',
-  'pnpm',
-  'yarn',
-  'bunx',
-  'bun',
-  'python',
-  'python3',
-  'uvx',
-  'uv',
-  'deno',
-  'docker',
-  'cargo',
-  'go',
-]);
-
-/**
- * 允许的可执行文件扩展名（Windows）
- */
-const VALID_EXTENSIONS = new Set(['', '.exe', '.cmd', '.bat']);
-
 /** 最大输出行长度限制（防止 ReDoS 攻击） */
 const MAX_LINE_LENGTH = 10000;
+
+// 启动时输出配置状态
+if (DEBUG) {
+  console.log('[McpStatus] Configuration loaded:', {
+    MCP_VERIFY_TIMEOUT,
+    DEBUG
+  });
+}
 
 // ============================================================================
 // 日志工具
@@ -84,7 +65,7 @@ function log(level, ...args) {
 // ============================================================================
 
 /**
- * 验证命令是否在白名单中
+ * 验证命令是否有效
  * @param {string} command - 要验证的命令
  * @returns {{ valid: boolean, reason?: string }} 验证结果
  */
@@ -93,39 +74,8 @@ function validateCommand(command) {
     return { valid: false, reason: 'Command is empty or invalid' };
   }
 
-  // 提取基础命令名（去除路径）
-  const baseCommand = command.split('/').pop().split('\\').pop();
-
-  // 检查是否在白名单中（完全匹配）
-  if (ALLOWED_COMMANDS.has(baseCommand)) {
-    return { valid: true };
-  }
-
-  // 检查是否是带扩展名的白名单命令（如 node.exe）
-  // 提取扩展名并验证
-  const lastDotIndex = baseCommand.lastIndexOf('.');
-  if (lastDotIndex > 0) {
-    const nameWithoutExt = baseCommand.substring(0, lastDotIndex);
-    const ext = baseCommand.substring(lastDotIndex).toLowerCase();
-
-    // 验证扩展名是否在允许列表中
-    if (!VALID_EXTENSIONS.has(ext)) {
-      return {
-        valid: false,
-        reason: `Invalid command extension "${ext}". Allowed extensions: ${[...VALID_EXTENSIONS].filter(e => e).join(', ')}`
-      };
-    }
-
-    // 验证基础命令名是否在白名单中
-    if (ALLOWED_COMMANDS.has(nameWithoutExt)) {
-      return { valid: true };
-    }
-  }
-
-  return {
-    valid: false,
-    reason: `Command "${baseCommand}" is not in the allowed list. Allowed: ${[...ALLOWED_COMMANDS].join(', ')}`
-  };
+  // 命令存在即有效，不做白名单限制
+  return { valid: true };
 }
 
 /**
@@ -233,6 +183,153 @@ function hasValidMcpResponse(stdout) {
   return stdout.includes('"jsonrpc"') || stdout.includes('"result"');
 }
 
+/**
+ * 验证 HTTP/SSE 类型的 MCP 服务器
+ * @param {string} serverName - 服务器名称
+ * @param {Object} serverConfig - 服务器配置
+ * @returns {Promise<Object>} 服务器状态信息
+ */
+async function verifyHttpMcpServer(serverName, serverConfig) {
+  const result = {
+    name: serverName,
+    status: 'pending',
+    serverInfo: null
+  };
+
+  const url = serverConfig.url;
+  if (!url) {
+    result.status = 'failed';
+    result.error = 'No URL specified for HTTP/SSE server';
+    return result;
+  }
+
+  log('info', 'Verifying HTTP/SSE server:', serverName, 'url:', url, 'type:', serverConfig.type || 'auto');
+
+  try {
+    // 构建请求头
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+      ...(serverConfig.headers || {})
+    };
+
+    // 创建 MCP initialize 请求
+    const initRequest = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'codemoss-ide', version: '1.0.0' }
+      }
+    };
+
+    // 创建 AbortController 用于超时控制
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), MCP_VERIFY_TIMEOUT);
+
+    try {
+      log('debug', `Sending HTTP request to ${serverName}:`, { url, headers: Object.keys(headers) });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(initRequest),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      log('debug', `HTTP response from ${serverName}: status=${response.status}, contentType=${response.headers.get('content-type')}`);
+
+      if (!response.ok) {
+        result.status = 'failed';
+        result.error = `HTTP ${response.status}: ${response.statusText}`;
+        log('warn', `HTTP error for ${serverName}:`, result.error);
+        return result;
+      }
+
+      const responseText = await response.text();
+      log('debug', `HTTP response body for ${serverName}:`, responseText.substring(0, 500));
+
+      // 尝试解析响应
+      try {
+        const data = JSON.parse(responseText);
+        if (data.result && data.result.serverInfo) {
+          result.status = 'connected';
+          result.serverInfo = data.result.serverInfo;
+          log('info', `HTTP MCP ${serverName} connected:`, result.serverInfo);
+        } else if (data.error) {
+          result.status = 'failed';
+          result.error = data.error.message || JSON.stringify(data.error);
+          log('warn', `HTTP MCP ${serverName} error response:`, result.error);
+        } else if (data.jsonrpc || data.result !== undefined) {
+          // 有效的 JSON-RPC 响应，即使没有 serverInfo
+          result.status = 'connected';
+          log('info', `HTTP MCP ${serverName} connected (no serverInfo)`);
+        } else {
+          result.status = 'failed';
+          result.error = 'Invalid MCP response format: ' + responseText.substring(0, 100);
+          log('warn', `HTTP MCP ${serverName} invalid format:`, responseText.substring(0, 200));
+        }
+      } catch (parseError) {
+        // 如果响应包含 MCP 相关内容，认为是连接成功
+        if (hasValidMcpResponse(responseText)) {
+          result.status = 'connected';
+          log('info', `HTTP MCP ${serverName} connected (non-JSON response)`);
+        } else {
+          result.status = 'failed';
+          result.error = `Invalid JSON response: ${parseError.message}. Response: ${responseText.substring(0, 100)}`;
+          log('warn', `HTTP MCP ${serverName} parse error:`, parseError.message);
+        }
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        result.status = 'pending';
+        result.error = `Connection timeout after ${MCP_VERIFY_TIMEOUT}ms`;
+        log('warn', `HTTP MCP ${serverName} timeout`);
+      } else {
+        result.status = 'failed';
+        // 提供更详细的错误信息
+        let errorDetail = fetchError.message;
+        if (fetchError.cause) {
+          errorDetail += ` (${fetchError.cause.code || fetchError.cause.message || fetchError.cause})`;
+        }
+        result.error = errorDetail;
+        log('warn', `HTTP MCP ${serverName} fetch error:`, errorDetail);
+      }
+    }
+  } catch (error) {
+    result.status = 'failed';
+    result.error = `Unexpected error: ${error.message}`;
+    log('error', `HTTP MCP ${serverName} unexpected error:`, error);
+  }
+
+  return result;
+}
+
+/**
+ * 判断服务器配置是否为 HTTP/SSE 类型
+ * @param {Object} serverConfig - 服务器配置
+ * @returns {boolean}
+ */
+function isHttpServer(serverConfig) {
+  // 显式指定类型
+  if (serverConfig.type === 'http' || serverConfig.type === 'sse') {
+    log('debug', 'isHttpServer: true (explicit type)', serverConfig.type);
+    return true;
+  }
+  // 有 url 但没有 command
+  if (serverConfig.url && !serverConfig.command) {
+    log('debug', 'isHttpServer: true (has url, no command)', serverConfig.url);
+    return true;
+  }
+  log('debug', 'isHttpServer: false', { type: serverConfig.type, hasUrl: !!serverConfig.url, hasCommand: !!serverConfig.command });
+  return false;
+}
+
 // ============================================================================
 // 进程管理
 // ============================================================================
@@ -306,6 +403,14 @@ function sendInitializeRequest(child, serverName) {
  * @returns {Promise<Object>} 服务器状态信息 { name, status, serverInfo, error? }
  */
 export async function verifyMcpServerStatus(serverName, serverConfig) {
+  log('debug', `Verifying server ${serverName}, config:`, JSON.stringify(serverConfig).substring(0, 300));
+
+  // 检查是否为 HTTP/SSE 类型
+  if (isHttpServer(serverConfig)) {
+    return verifyHttpMcpServer(serverName, serverConfig);
+  }
+
+  // STDIO 类型的验证逻辑
   return new Promise((resolve) => {
     let resolved = false;
     let child = null;
@@ -359,10 +464,13 @@ export async function verifyMcpServerStatus(serverName, serverConfig) {
     }, MCP_VERIFY_TIMEOUT);
 
     // 尝试启动进程
+    // Windows 上需要 shell: true 来执行 .cmd/.bat 文件（如 npx.cmd, npm.cmd）
+    const isWindows = process.platform === 'win32';
     try {
       child = spawn(command, args, {
         env,
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: isWindows
       });
     } catch (spawnError) {
       log('debug', `Failed to spawn process for ${serverName}:`, spawnError.message);
