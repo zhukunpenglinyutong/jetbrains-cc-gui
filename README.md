@@ -281,10 +281,33 @@ Thanks to the following sponsors for their support ❤️
 <!-- SPONSORS:START -->
 | Name | Amount | Date |
 |------|--------|------|
-| Be the first! | - | - |
+| *k | ¥10 | 2026.1.27 |
+| *猫 | ¥6.66 | 2026.1.27 |
+| G*e | ¥20 | 2026.1.26 |
+| *鹏 | ¥10 | 2026.1.26 |
+| *尚 | ¥3.66 | 2026.1.25 |
+| *一 | ¥6.66 | 2026.1.24 |
+| *飞 | ¥3 | 2026.1.24 |
+| *宇 | ¥18 | 2026.1.23 |
+| M*s | ¥10 | 2026.1.23 |
+| I*n | ¥10 | 2026.1.23 |
+| *g | ¥100 | 2026.1.23 |
+| *大脚丫 | ¥5 | 2026.1.22 |
+| *川 | ¥20 | 2026.1.22 |
+| s*y | ¥50 | 2026.1.22 |
+| *生 | ¥50 | 2026.1.22 |
+| *春 | ¥15 | 2026.1.22 |
+| *桑 | ¥8.88 | 2026.1.22 |
+| *万 | ¥9.9 | 2026.1.22 |
 <!-- SPONSORS:END -->
 
 > No matter the amount, I will add you to the sponsors list. Thank you for your support!
+
+---
+
+## AtomGit
+
+https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui
 
 ---
 
