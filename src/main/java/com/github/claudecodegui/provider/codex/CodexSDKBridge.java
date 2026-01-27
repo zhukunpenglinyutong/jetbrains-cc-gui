@@ -236,6 +236,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
             StringBuilder assistantContent = new StringBuilder();
             final String[] lastNodeError = {null};
             final boolean[] hadSendError = {false};
+            final List<File> tempImageFiles = new ArrayList<>();  // Track temp images for cleanup
 
             try {
                 String node = nodeDetector.findNodeExecutable();
@@ -274,7 +275,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                 // Process attachments for Codex (images need to be saved as temp files)
                 // Codex SDK requires local file paths, not base64 data
-                JsonArray attachmentsArray = buildCodexAttachments(attachments, cwd);
+                JsonArray attachmentsArray = buildCodexAttachments(attachments, tempImageFiles);
                 if (attachmentsArray.size() > 0) {
                     stdinInput.add("attachments", attachmentsArray);
                     LOG.info("[Codex] ✓ Prepared " + attachmentsArray.size() + " image attachment(s)");
@@ -507,12 +508,14 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     processManager.unregisterProcess(channelId, process);
                     processManager.waitForProcessTermination(process);
                     processManager.cleanupClaudeTempFiles(processTempDir, existingTempMarkers);
+                    cleanupTempImages(tempImageFiles);  // Cleanup temp image files
                 }
 
             } catch (Exception e) {
                 result.success = false;
                 result.error = e.getMessage();
                 callback.onError(e.getMessage());
+                cleanupTempImages(tempImageFiles);  // Cleanup temp image files on error
                 return result;
             }
         });
@@ -534,25 +537,21 @@ public class CodexSDKBridge extends BaseSDKBridge {
      * Build Codex-compatible attachments array.
      * Codex SDK requires local file paths for images, not base64 data.
      * This method saves base64 image data to temporary files and returns file paths.
+     * Files are marked for deletion on JVM exit and tracked for cleanup after message send.
      *
      * @param attachments List of attachments from the UI
-     * @param cwd Working directory (used to determine temp file location)
+     * @param tempFiles List to collect temp files for cleanup after send (optional, can be null)
      * @return JsonArray with local_image entries for Codex SDK
      */
-    private JsonArray buildCodexAttachments(List<ClaudeSession.Attachment> attachments, String cwd) {
+    private JsonArray buildCodexAttachments(List<ClaudeSession.Attachment> attachments, List<File> tempFiles) {
         JsonArray result = new JsonArray();
 
         if (attachments == null || attachments.isEmpty()) {
             return result;
         }
 
-        // Determine temp directory
-        File tempDir;
-        if (cwd != null && !cwd.isEmpty()) {
-            tempDir = new File(cwd, ".codex-temp");
-        } else {
-            tempDir = new File(System.getProperty("java.io.tmpdir"), "codex-images");
-        }
+        // Use system temp directory (clean, no project pollution)
+        File tempDir = new File(System.getProperty("java.io.tmpdir"), "codex-images");
 
         // Create temp directory if not exists
         if (!tempDir.exists()) {
@@ -586,8 +585,16 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     fos.write(imageBytes);
                 }
 
-                LOG.info("[Codex] Saved image to temp file: " + imageFile.getAbsolutePath() +
-                         " (" + imageBytes.length + " bytes)");
+                // Mark for deletion on JVM exit (fallback cleanup)
+                imageFile.deleteOnExit();
+
+                // Track for immediate cleanup after send
+                if (tempFiles != null) {
+                    tempFiles.add(imageFile);
+                }
+
+                LOG.info("[Codex] Saved temp image: " + imageFile.getAbsolutePath() +
+                         " (" + imageBytes.length + " bytes, will auto-delete)");
 
                 // Add to result array in Codex SDK format
                 JsonObject imageEntry = new JsonObject();
@@ -601,6 +608,24 @@ public class CodexSDKBridge extends BaseSDKBridge {
         }
 
         return result;
+    }
+
+    /**
+     * Cleanup temporary image files after message send.
+     */
+    private void cleanupTempImages(List<File> tempFiles) {
+        if (tempFiles == null || tempFiles.isEmpty()) {
+            return;
+        }
+        for (File file : tempFiles) {
+            try {
+                if (file.exists() && file.delete()) {
+                    LOG.debug("[Codex] Cleaned up temp image: " + file.getName());
+                }
+            } catch (Exception e) {
+                LOG.debug("[Codex] Failed to cleanup temp image: " + e.getMessage());
+            }
+        }
     }
 
     /**
