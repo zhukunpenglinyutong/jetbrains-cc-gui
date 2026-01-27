@@ -8,10 +8,13 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * 从文件树发送文件路径到 CCG 输入框的 Action
@@ -123,15 +126,17 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
                     // 激活窗口
                     toolWindow.activate(() -> {
                         // 窗口激活后，延迟一小段时间确保界面加载完成，然后发送内容
-                        ApplicationManager.getApplication().invokeLater(() -> {
-                            try {
-                                Thread.sleep(300); // 等待300ms确保界面加载完成
-                                ClaudeSDKToolWindow.addSelectionFromExternal(project, filePaths);
-                                LOG.info("Window activated and sent file paths to project: " + project.getName());
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            }
-                        });
+                        AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
+                            ApplicationManager.getApplication().invokeLater(() -> {
+                                try {
+                                    if (project.isDisposed()) return;
+                                    ClaudeSDKToolWindow.addSelectionFromExternal(project, filePaths);
+                                    LOG.info("Window activated and sent file paths to project: " + project.getName());
+                                } catch (Exception ex) {
+                                    LOG.warn("Failed to send file paths after activation: " + ex.getMessage(), ex);
+                                }
+                            });
+                        }, 300, TimeUnit.MILLISECONDS);
                     }, true);
                 } else {
                     // 窗口已经打开，直接发送内容
