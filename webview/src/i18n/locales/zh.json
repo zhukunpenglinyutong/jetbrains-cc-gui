@@ -21,7 +21,8 @@
     "warning": "警告",
     "info": "信息",
     "seconds": "秒",
-    "minutes": "分"
+    "minutes": "分",
+    "optional": "可选"
   },
   "chat": {
     "sendMessage": "给 {{provider}} 发送消息",
@@ -319,7 +320,17 @@
         "configJsonError": "config.toml JSON 格式错误",
         "authJsonError": "auth.json JSON 格式错误",
         "configJsonHint": "包含 model_provider、model、model_providers 等配置项的 JSON 对象",
-        "authJsonHint": "包含 OPENAI_API_KEY 等认证信息的 JSON 对象"
+        "authJsonHint": "包含 OPENAI_API_KEY 等认证信息的 JSON 对象",
+        "customModels": "自定义模型",
+        "customModelsHint": "添加此供应商支持的额外模型，自定义模型将显示在模型选择列表的最前面",
+        "noCustomModels": "暂无自定义模型",
+        "addModel": "添加模型",
+        "modelIdPlaceholder": "模型 ID（必填，如 gpt-4o）",
+        "modelLabelPlaceholder": "显示名称（可选）",
+        "modelDescPlaceholder": "模型描述（可选）",
+        "modelIdRequired": "请输入模型 ID",
+        "modelIdInvalid": "模型 ID 格式无效（仅允许字母、数字、点、连字符、下划线、斜杠和冒号）",
+        "modelIdDuplicate": "模型 ID 已存在"
       }
     },
     "agent": {

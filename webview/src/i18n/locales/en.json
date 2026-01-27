@@ -21,7 +21,8 @@
     "warning": "Warning",
     "info": "Info",
     "seconds": "s",
-    "minutes": "m"
+    "minutes": "m",
+    "optional": "Optional"
   },
   "chat": {
     "sendMessage": "Send message to {{provider}}",
@@ -319,7 +320,17 @@
         "configJsonError": "config.toml JSON format error",
         "authJsonError": "auth.json JSON format error",
         "configJsonHint": "JSON object containing model_provider, model, model_providers, etc.",
-        "authJsonHint": "JSON object containing OPENAI_API_KEY and other auth info"
+        "authJsonHint": "JSON object containing OPENAI_API_KEY and other auth info",
+        "customModels": "Custom Models",
+        "customModelsHint": "Add extra models supported by this provider. Custom models will appear at the top of the model selection list",
+        "noCustomModels": "No custom models",
+        "addModel": "Add Model",
+        "modelIdPlaceholder": "Model ID (required, e.g., gpt-4o)",
+        "modelLabelPlaceholder": "Display name (optional)",
+        "modelDescPlaceholder": "Model description (optional)",
+        "modelIdRequired": "Model ID is required",
+        "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
+        "modelIdDuplicate": "Model ID already exists"
       }
     },
     "agent": {

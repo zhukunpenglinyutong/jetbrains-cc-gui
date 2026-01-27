@@ -347,3 +347,196 @@
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 1px var(--accent-primary);
 }
+
+/* Custom Models Editor Styles */
+.custom-models-editor {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.custom-models-editor .models-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.custom-models-editor .empty-models {
+    color: var(--text-tertiary);
+    font-size: 13px;
+    text-align: center;
+    padding: 16px;
+}
+
+.custom-models-editor .model-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.custom-models-editor .model-item:hover {
+    background: var(--bg-hover);
+}
+
+.custom-models-editor .model-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.custom-models-editor .model-id {
+    font-family: var(--idea-editor-font-family, monospace);
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.custom-models-editor .model-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.custom-models-editor .model-desc {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-left: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.custom-models-editor .model-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.custom-models-editor .btn-icon {
+    padding: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.custom-models-editor .btn-icon:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.custom-models-editor .btn-icon.btn-danger:hover {
+    background: rgba(255, 77, 79, 0.1);
+    color: var(--color-error, #ff4d4f);
+}
+
+.custom-models-editor .add-model-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+}
+
+.custom-models-editor .form-row {
+    display: flex;
+    gap: 8px;
+}
+
+.custom-models-editor .form-row .form-input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.custom-models-editor .form-row.form-actions {
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.custom-models-editor .add-model-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    justify-content: center;
+    padding: 8px 12px;
+    border: 1px dashed var(--border-secondary);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.custom-models-editor .add-model-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+/* Optional label styling */
+.form-group label .optional {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+/* Form error message */
+.custom-models-editor .form-error {
+    color: var(--color-error, #ff4d4f);
+    font-size: 12px;
+    padding: 4px 0;
+    margin-top: -4px;
+}
+
+/* Input error state */
+.custom-models-editor .input-error {
+    border-color: var(--color-error, #ff4d4f) !important;
+}
+
+.custom-models-editor .input-error:focus {
+    box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+}
+
+/* Form field layout */
+.custom-models-editor .form-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.custom-models-editor .form-field-full {
+    flex: 1;
+    width: 100%;
+}
+
+/* Screen reader only - for accessibility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
