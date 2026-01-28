@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
 import { getFileIcon } from '../../../utils/fileIcons.js';
 import { icon_folder, icon_terminal, icon_server } from '../../../utils/icons.js';
+import { perfTimer } from '../../../utils/debug.js';
+import {
+  TEXT_LENGTH_THRESHOLDS,
+  RENDERING_LIMITS,
+} from '../../../constants/performance.js';
 import type { FileTagInfo } from '../types.js';
 
 interface UseFileTagsOptions {
@@ -72,8 +77,14 @@ export function useFileTags({
   /**
    * Render file tags
    * Converts @filepath format text into file tag elements
+   *
+   * Performance optimization:
+   * - Uses array + join instead of string concatenation (O(n) vs O(n²))
+   * - Limits max file tags per render to avoid expensive DOM operations
+   * - Skips processing for very large text to prevent UI freeze
    */
   const renderFileTags = useCallback(() => {
+    const timer = perfTimer('renderFileTags');
     if (!editableRef.current) return;
 
     // Regex: match @filepath (ending with space or string end)
@@ -83,17 +94,42 @@ export function useFileTags({
     const fileRefRegex = /@([^\s@]+?)(\s|$)/g;
 
     const currentText = getTextContent();
+    timer.mark('getText');
+
+    // Performance optimization: Skip for very large text
+    // This prevents UI freeze when pasting massive content
+    if (currentText.length > TEXT_LENGTH_THRESHOLDS.FILE_TAG_RENDERING) {
+      // Log warning in debug mode so developers are aware
+      if (import.meta.env.DEV) {
+        console.warn(
+          `[useFileTags] Skipping file tag rendering for large text (${currentText.length} chars > ${TEXT_LENGTH_THRESHOLDS.FILE_TAG_RENDERING} threshold)`
+        );
+      }
+      timer.mark('skip-large-text');
+      timer.end();
+      return;
+    }
+
     const matches = Array.from(currentText.matchAll(fileRefRegex));
+    timer.mark('regex');
 
     if (matches.length === 0) {
       // No file references, keep as is
+      timer.end();
       return;
     }
+
+    // Performance optimization: Limit max file tags per render
+    const limitedMatches =
+      matches.length > RENDERING_LIMITS.MAX_FILE_TAGS_PER_RENDER
+        ? matches.slice(0, RENDERING_LIMITS.MAX_FILE_TAGS_PER_RENDER)
+        : matches;
 
     // Check if there are plain text @filepath in DOM that need conversion
     // Traverse all text nodes, looking for text containing @
     let hasUnrenderedReferences = false;
     const walk = (node: Node) => {
+      if (hasUnrenderedReferences) return; // Early exit if found
       if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent || '';
         if (text.includes('@')) {
@@ -111,14 +147,17 @@ export function useFileTags({
 
     // If no unrendered references, no need to re-render
     if (!hasUnrenderedReferences) {
+      timer.mark('no-unrendered');
+      timer.end();
       return;
     }
+    timer.mark('dom-check');
 
-    // Build new HTML content
-    let newHTML = '';
+    // Build new HTML content using array + join (O(n) vs O(n²) string concatenation)
+    const htmlParts: string[] = [];
     let lastIndex = 0;
 
-    matches.forEach((match) => {
+    limitedMatches.forEach((match) => {
       const fullMatch = match[0];
       const filePath = match[1];
       const matchIndex = match.index || 0;
@@ -126,7 +165,7 @@ export function useFileTags({
       // Add text before match
       if (matchIndex > lastIndex) {
         const textBefore = currentText.substring(lastIndex, matchIndex);
-        newHTML += escapeHtmlText(textBefore);
+        htmlParts.push(escapeHtmlText(textBefore));
       }
 
       // Separate path and line number (e.g., src/file.ts#L10-20 -> src/file.ts)
@@ -150,7 +189,7 @@ export function useFileTags({
 
       // If not a valid reference, keep original text, don't render as tag
       if (!isValidReference) {
-        newHTML += escapeHtmlText(fullMatch);
+        htmlParts.push(escapeHtmlText(fullMatch));
         lastIndex = matchIndex + fullMatch.length;
         return;
       }
@@ -205,23 +244,27 @@ export function useFileTags({
         filePath;
       const escapedFullPath = escapeHtmlAttr(fullPath);
 
-      // Create file tag HTML
-      newHTML += `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`;
-      newHTML += `<span class="file-tag-icon">${iconSvg}</span>`;
-      newHTML += `<span class="file-tag-text">${escapedDisplayFileName}</span>`;
-      newHTML += `<span class="file-tag-close">&times;</span>`;
-      newHTML += `</span>`;
-
-      // Add space
-      newHTML += ' ';
+      // Create file tag HTML - use array push instead of string concatenation
+      htmlParts.push(
+        `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`,
+        `<span class="file-tag-icon">${iconSvg}</span>`,
+        `<span class="file-tag-text">${escapedDisplayFileName}</span>`,
+        `<span class="file-tag-close">&times;</span>`,
+        `</span>`,
+        ' '
+      );
 
       lastIndex = matchIndex + fullMatch.length;
     });
 
     // Add remaining text
     if (lastIndex < currentText.length) {
-      newHTML += escapeHtmlText(currentText.substring(lastIndex));
+      htmlParts.push(escapeHtmlText(currentText.substring(lastIndex)));
     }
+
+    // Join all parts into final HTML
+    const newHTML = htmlParts.join('');
+    timer.mark('build-html');
 
     // Set flag before updating innerHTML to prevent triggering completion detection
     justRenderedTagRef.current = true;
@@ -229,6 +272,7 @@ export function useFileTags({
 
     // Update content
     editableRef.current.innerHTML = newHTML;
+    timer.mark('set-innerHTML');
 
     // Restore cursor position to end
     const selection = window.getSelection();
@@ -252,6 +296,8 @@ export function useFileTags({
     setTimeout(() => {
       justRenderedTagRef.current = false;
     }, 0);
+
+    timer.end();
   }, [editableRef, getTextContent, onCloseCompletions, escapeHtmlText]);
 
   /**

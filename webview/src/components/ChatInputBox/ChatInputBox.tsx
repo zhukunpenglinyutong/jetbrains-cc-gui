@@ -48,6 +48,8 @@ import {
   type AgentItem,
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
+import { perfTimer } from '../../utils/debug.js';
+import { TEXT_LENGTH_THRESHOLDS } from '../../constants/performance.js';
 import './styles.css';
 
 /**
@@ -307,6 +309,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
      * Detect and handle completion triggers (optimized: only start detection when @ or / or # is input)
      */
     const detectAndTriggerCompletion = useCallback(() => {
+      const timer = perfTimer('detectAndTriggerCompletion');
+
       if (!editableRef.current) return;
 
       // Don't detect completion during IME composition to avoid interfering with composition
@@ -324,7 +328,18 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       }
 
       const text = getTextContent();
-      const cursorPos = getCursorPosition(editableRef.current);
+      timer.mark('getText');
+
+      // Performance optimization: Skip completion detection for very large text
+      // This prevents expensive operations (cursor position calculation, trigger detection) on large inputs
+      if (text.length > TEXT_LENGTH_THRESHOLDS.COMPLETION_DETECTION) {
+        fileCompletion.close();
+        commandCompletion.close();
+        agentCompletion.close();
+        timer.mark('skip-large-text');
+        timer.end();
+        return;
+      }
 
       // Optimization: Quick check if text contains trigger characters, return immediately if not
       const hasAtSymbol = text.includes('@');
@@ -335,23 +350,33 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         fileCompletion.close();
         commandCompletion.close();
         agentCompletion.close();
+        timer.end();
         return;
       }
+      timer.mark('quickCheck');
+
+      const cursorPos = getCursorPosition(editableRef.current);
+      timer.mark('getCursorPos');
 
       // Pass element parameter so detectTrigger can skip file tags
       const trigger = detectTrigger(text, cursorPos, editableRef.current);
+      timer.mark('detectTrigger');
 
       // Close currently open completion
       if (!trigger) {
         fileCompletion.close();
         commandCompletion.close();
         agentCompletion.close();
+        timer.end();
         return;
       }
 
       // Get trigger position
       const position = getTriggerPosition(editableRef.current, trigger.start);
-      if (!position) return;
+      if (!position) {
+        timer.end();
+        return;
+      }
 
       // Open corresponding completion based on trigger symbol
       if (trigger.trigger === '@') {
@@ -382,6 +407,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           agentCompletion.updateQuery(trigger);
         }
       }
+
+      timer.end();
     }, [
       getTextContent,
       getCursorPosition,
@@ -425,6 +452,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
      */
     const handleInput = useCallback(
       (isComposingFromEvent?: boolean) => {
+        const timer = perfTimer('handleInput');
+
         // Use multiple checks to correctly detect IME state:
         // 1. Native event isComposing (most accurate, can detect before compositionStart)
         // 2. isComposingRef (sync ref, faster than React state)
@@ -440,8 +469,11 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
         // Invalidate cache since content changed
         invalidateCache();
+        timer.mark('invalidateCache');
 
         const text = getTextContent();
+        timer.mark('getTextContent');
+
         // Remove zero-width and other invisible characters before checking if empty, ensure placeholder shows when only zero-width characters remain
         const cleanText = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
         const isEmpty = !cleanText.trim();
@@ -453,6 +485,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
         // Adjust height
         adjustHeight();
+        timer.mark('adjustHeight');
 
         // Trigger completion detection and state update
         debouncedDetectCompletion();
@@ -461,6 +494,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         // Notify parent component (use debounced version to reduce re-renders)
         // If determined empty (only zero-width characters), pass empty string to parent
         debouncedOnInput(isEmpty ? '' : text);
+
+        timer.end();
       },
       [
         getTextContent,

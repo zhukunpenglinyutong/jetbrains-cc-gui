@@ -5,11 +5,14 @@
  * while triggering proper input events for state synchronization.
  */
 
+import { TEXT_LENGTH_THRESHOLDS } from '../../../constants/performance.js';
+
 /**
  * Insert text at current cursor position in a contenteditable element
  *
- * Uses document.execCommand('insertText') as primary method to preserve
- * browser's native undo/redo history. Falls back to Range API if execCommand fails.
+ * Uses document.execCommand('insertText') for small text to preserve
+ * browser's native undo/redo history. For large text (exceeds LARGE_TEXT_INSERTION threshold),
+ * uses Range API which is much faster but doesn't support native undo.
  *
  * @param text - Text to insert
  * @param element - Optional target contenteditable element (uses active element if not provided)
@@ -26,7 +29,13 @@ export function insertTextAtCursor(text: string, element?: HTMLElement | null): 
     return false;
   }
 
-  // Try execCommand first - this preserves browser's native undo/redo history
+  // For large text, use fast Range API method (sacrifices undo for performance)
+  // execCommand('insertText') is extremely slow for large text (6+ seconds for 50KB)
+  if (text.length > TEXT_LENGTH_THRESHOLDS.LARGE_TEXT_INSERTION) {
+    return insertTextFast(text, element, selection, range);
+  }
+
+  // For small text, try execCommand first - preserves browser's native undo/redo history
   // Although deprecated, it's still widely supported and essential for undo functionality
   const execCommandSuccess = document.execCommand('insertText', false, text);
 
@@ -36,8 +45,19 @@ export function insertTextAtCursor(text: string, element?: HTMLElement | null): 
   }
 
   // Fallback to Range API if execCommand fails (e.g., in some strict CSP environments)
-  // Note: This fallback does NOT support browser's native undo
+  return insertTextFast(text, element, selection, range);
+}
 
+/**
+ * Fast text insertion using Range API
+ * Much faster than execCommand for large text, but doesn't support native undo
+ */
+function insertTextFast(
+  text: string,
+  element: HTMLElement | null | undefined,
+  selection: Selection,
+  range: Range
+): boolean {
   // Delete any selected content first
   if (!range.collapsed) {
     range.deleteContents();
