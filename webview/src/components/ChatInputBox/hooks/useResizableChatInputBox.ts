@@ -17,6 +17,16 @@ interface Bounds {
 
 const STORAGE_KEY = 'chat-input-box:size-v1';
 
+const DEFAULT_MIN_WIDTH_PX = 320;
+const ABSOLUTE_MIN_WIDTH_PX = 240;
+const PARENT_BORDER_GAP_PX = 2;
+
+const VIEWPORT_HEIGHT_FALLBACK_PX = 800;
+const MAX_WRAPPER_HEIGHT_VIEWPORT_RATIO = 0.55;
+const MAX_WRAPPER_HEIGHT_CAP_PX = 520;
+const MIN_MAX_WRAPPER_HEIGHT_PX = 140;
+const DEFAULT_MIN_WRAPPER_HEIGHT_PX = 96;
+
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
@@ -24,13 +34,16 @@ function clamp(n: number, min: number, max: number): number {
 function getBounds(containerEl: HTMLElement): Bounds {
   const parent = containerEl.parentElement;
   const parentWidth = parent?.getBoundingClientRect().width ?? containerEl.getBoundingClientRect().width;
-  const maxWidthPx = Math.max(240, Math.floor(parentWidth - 2)); // keep within parent border
-  const minWidthPx = Math.min(320, maxWidthPx);
+  const maxWidthPx = Math.max(ABSOLUTE_MIN_WIDTH_PX, Math.floor(parentWidth - PARENT_BORDER_GAP_PX)); // keep within parent border
+  const minWidthPx = Math.min(DEFAULT_MIN_WIDTH_PX, maxWidthPx);
 
-  const viewportH = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const viewportH = typeof window !== 'undefined' ? window.innerHeight : VIEWPORT_HEIGHT_FALLBACK_PX;
   // Wrapper height controls the editable scroll region; keep a sane cap so the input doesn't take over the UI.
-  const maxWrapperHeightPx = Math.max(140, Math.floor(Math.min(viewportH * 0.55, 520)));
-  const minWrapperHeightPx = Math.min(96, maxWrapperHeightPx);
+  const maxWrapperHeightPx = Math.max(
+    MIN_MAX_WRAPPER_HEIGHT_PX,
+    Math.floor(Math.min(viewportH * MAX_WRAPPER_HEIGHT_VIEWPORT_RATIO, MAX_WRAPPER_HEIGHT_CAP_PX))
+  );
+  const minWrapperHeightPx = Math.min(DEFAULT_MIN_WRAPPER_HEIGHT_PX, maxWrapperHeightPx);
 
   return {
     minWidthPx,

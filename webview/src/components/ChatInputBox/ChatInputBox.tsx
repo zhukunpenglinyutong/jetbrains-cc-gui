@@ -14,11 +14,9 @@ import type {
   FileItem,
   PermissionMode,
 } from './types.js';
-import { ButtonArea } from './ButtonArea.js';
-import { AttachmentList } from './AttachmentList.js';
-import { ContextBar } from './ContextBar.js';
-import { CompletionDropdown } from './Dropdown/index.js';
-import { PromptEnhancerDialog } from './PromptEnhancerDialog.js';
+import { ChatInputBoxHeader } from './ChatInputBoxHeader.js';
+import { ChatInputBoxFooter } from './ChatInputBoxFooter.js';
+import { ResizeHandles } from './ResizeHandles.js';
 import {
   useCompletionDropdown,
   useTriggerDetection,
@@ -97,7 +95,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       selectedAgent,
       onAgentSelect,
       onOpenAgentSettings,
-      hasMessages,
+      hasMessages = false,
       onRewind,
       statusPanelExpanded = true,
       onToggleStatusPanel,
@@ -687,67 +685,26 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         ref={containerRef}
         style={containerStyle}
       >
-        {/* Resize handles (Augment-like interaction) */}
-        <div
-          className="resize-handle resize-handle--n"
-          {...getHandleProps('n')}
-          aria-label="Resize input height"
-        />
-        <div
-          className="resize-handle resize-handle--e"
-          {...getHandleProps('e')}
-          aria-label="Resize input width"
-        />
-        <div
-          className="resize-handle resize-handle--ne"
-          {...getHandleProps('ne')}
-          aria-label="Resize input size"
-        />
-        {/* SDK status loading or not installed warning bar */}
-        {(sdkStatusLoading || !sdkInstalled) && (
-          <div className={`sdk-warning-bar ${sdkStatusLoading ? 'sdk-loading' : ''}`}>
-            <span
-              className={`codicon ${sdkStatusLoading ? 'codicon-loading codicon-modifier-spin' : 'codicon-warning'}`}
-            />
-            <span className="sdk-warning-text">
-              {sdkStatusLoading
-                ? t('chat.sdkStatusLoading')
-                : t('chat.sdkNotInstalled', {
-                    provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
-                  })}
-            </span>
-            {!sdkStatusLoading && (
-              <button
-                className="sdk-install-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onInstallSdk?.();
-                }}
-              >
-                {t('chat.goInstallSdk')}
-              </button>
-            )}
-          </div>
-        )}
+        <ResizeHandles getHandleProps={getHandleProps} />
 
-        {/* Attachment list */}
-        {attachments.length > 0 && (
-          <AttachmentList attachments={attachments} onRemove={handleRemoveAttachment} />
-        )}
-
-        {/* Context bar (Top Control Bar) */}
-        <ContextBar
+        <ChatInputBoxHeader
+          sdkStatusLoading={sdkStatusLoading}
+          sdkInstalled={sdkInstalled}
+          currentProvider={currentProvider}
+          onInstallSdk={onInstallSdk}
+          t={t}
+          attachments={attachments}
+          onRemoveAttachment={handleRemoveAttachment}
           activeFile={activeFile}
           selectedLines={selectedLines}
-          percentage={usagePercentage}
-          usedTokens={usageUsedTokens}
-          maxTokens={usageMaxTokens}
+          usagePercentage={usagePercentage}
+          usageUsedTokens={usageUsedTokens}
+          usageMaxTokens={usageMaxTokens}
           showUsage={showUsage}
-          onClearFile={onClearContext}
+          onClearContext={onClearContext}
           onAddAttachment={handleAddAttachment}
           selectedAgent={selectedAgent}
           onClearAgent={() => onAgentSelect?.(null)}
-          currentProvider={currentProvider}
           hasMessages={hasMessages}
           onRewind={onRewind}
           statusPanelExpanded={statusPanelExpanded}
@@ -811,9 +768,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           />
         </div>
 
-        {/* Bottom button area */}
-        <ButtonArea
-          disabled={disabled || isLoading}
+        <ChatInputBoxFooter
+          disabled={disabled}
           hasInputContent={hasContent || attachments.length > 0}
           isLoading={isLoading}
           isEnhancing={isEnhancing}
@@ -836,75 +792,20 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           onAgentSelect={(agent) => onAgentSelect?.(agent)}
           onOpenAgentSettings={onOpenAgentSettings}
           onClearAgent={() => onAgentSelect?.(null)}
-        />
-
-        {/* @ file reference dropdown menu */}
-        <CompletionDropdown
-          isVisible={fileCompletion.isOpen}
-          position={fileCompletion.position}
-          items={fileCompletion.items}
-          selectedIndex={fileCompletion.activeIndex}
-          loading={fileCompletion.loading}
-          emptyText={t('chat.noMatchingFiles')}
-          onClose={fileCompletion.close}
-          onSelect={(_, index) => fileCompletion.selectIndex(index)}
-          onMouseEnter={fileCompletion.handleMouseEnter}
-        />
-
-        {/* / slash command dropdown menu */}
-        <CompletionDropdown
-          isVisible={commandCompletion.isOpen}
-          position={commandCompletion.position}
-          width={450}
-          items={commandCompletion.items}
-          selectedIndex={commandCompletion.activeIndex}
-          loading={commandCompletion.loading}
-          emptyText={t('chat.noMatchingCommands')}
-          onClose={commandCompletion.close}
-          onSelect={(_, index) => commandCompletion.selectIndex(index)}
-          onMouseEnter={commandCompletion.handleMouseEnter}
-        />
-
-        {/* # agent selection dropdown menu */}
-        <CompletionDropdown
-          isVisible={agentCompletion.isOpen}
-          position={agentCompletion.position}
-          width={350}
-          items={agentCompletion.items}
-          selectedIndex={agentCompletion.activeIndex}
-          loading={agentCompletion.loading}
-          emptyText={t('chat.noAvailableAgents')}
-          onClose={agentCompletion.close}
-          onSelect={(_, index) => agentCompletion.selectIndex(index)}
-          onMouseEnter={agentCompletion.handleMouseEnter}
-        />
-
-        {/* Floating Tooltip (uses Portal or Fixed positioning to break overflow limit) */}
-        {tooltip && tooltip.visible && (
-          <div
-            className={`tooltip-popup ${tooltip.isBar ? 'tooltip-bar' : ''}`}
-            style={{
-              top: `${tooltip.top}px`, // Use calculated top directly, no subtraction here
-              left: `${tooltip.left}px`,
-              width: tooltip.width ? `${tooltip.width}px` : undefined,
-              // @ts-expect-error CSS custom properties
-              '--tooltip-tx': tooltip.tx || '-50%',
-              '--arrow-left': tooltip.arrowLeft || '50%',
-            }}
-          >
-            {tooltip.text}
-          </div>
-        )}
-
-        {/* Prompt enhancer dialog */}
-        <PromptEnhancerDialog
-          isOpen={showEnhancerDialog}
-          isLoading={isEnhancing}
-          originalPrompt={originalPrompt}
-          enhancedPrompt={enhancedPrompt}
-          onUseEnhanced={handleUseEnhancedPrompt}
-          onKeepOriginal={handleKeepOriginalPrompt}
-          onClose={handleCloseEnhancerDialog}
+          fileCompletion={fileCompletion}
+          commandCompletion={commandCompletion}
+          agentCompletion={agentCompletion}
+          tooltip={tooltip}
+          promptEnhancer={{
+            isOpen: showEnhancerDialog,
+            isLoading: isEnhancing,
+            originalPrompt,
+            enhancedPrompt,
+            onUseEnhanced: handleUseEnhancedPrompt,
+            onKeepOriginal: handleKeepOriginalPrompt,
+            onClose: handleCloseEnhancerDialog,
+          }}
+          t={t}
         />
       </div>
     );
