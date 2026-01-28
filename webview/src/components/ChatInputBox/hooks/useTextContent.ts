@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { perfTimer } from '../../../utils/debug.js';
 
 interface TextContentCache {
   content: string;
@@ -44,8 +45,13 @@ export function useTextContent({
   /**
    * Get plain text content from editable element
    * Extracts text including file tag references in @path format
+   *
+   * Performance optimization:
+   * - Uses array + join instead of string concatenation (O(n) vs O(n²))
+   * - Tracks last character type to avoid repeated string operations
    */
   const getTextContent = useCallback((): string => {
+    const timer = perfTimer('getTextContent');
     if (!editableRef.current) return '';
 
     // Performance optimization: Check cache validity
@@ -54,32 +60,44 @@ export function useTextContent({
 
     // Return cached content if HTML hasn't changed (simple dirty check)
     if (currentHtmlLength === cache.htmlLength && cache.content !== '') {
+      timer.mark('cache-hit');
+      timer.end();
       return cache.content;
     }
+    timer.mark('cache-miss');
 
     // Extract plain text from DOM, including file tag references
-    let text = '';
+    // Use array + join for O(n) complexity instead of string concatenation O(n²)
+    const textParts: string[] = [];
+    let endsWithNewline = false;
 
     // Recursive traversal, but for file-tag only read data-file-path without descending
     const walk = (node: Node) => {
       if (node.nodeType === Node.TEXT_NODE) {
-        text += node.textContent || '';
+        const content = node.textContent || '';
+        if (content) {
+          textParts.push(content);
+          endsWithNewline = content.endsWith('\n');
+        }
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         const element = node as HTMLElement;
         const tagName = element.tagName.toLowerCase();
 
         // Handle line break elements
         if (tagName === 'br') {
-          text += '\n';
+          textParts.push('\n');
+          endsWithNewline = true;
         } else if (tagName === 'div' || tagName === 'p') {
-          // Add newline before div/p (if not first element)
-          if (text.length > 0 && !text.endsWith('\n')) {
-            text += '\n';
+          // Add newline before div/p (if not first element and doesn't already end with newline)
+          if (textParts.length > 0 && !endsWithNewline) {
+            textParts.push('\n');
+            endsWithNewline = true;
           }
           node.childNodes.forEach(walk);
         } else if (element.classList.contains('file-tag')) {
           const filePath = element.getAttribute('data-file-path') || '';
-          text += `@${filePath}`;
+          textParts.push(`@${filePath}`);
+          endsWithNewline = false;
           // Don't traverse file-tag children to avoid duplicate filename and close button text
         } else {
           // Continue traversing child nodes
@@ -89,6 +107,11 @@ export function useTextContent({
     };
 
     editableRef.current.childNodes.forEach(walk);
+    timer.mark('dom-walk');
+
+    // Join all parts into final text
+    let text = textParts.join('');
+    timer.mark('join');
 
     // Only remove trailing newline that JCEF might add (not user-entered newlines)
     // If there are multiple trailing newlines, only remove the last one (JCEF added)
@@ -110,6 +133,7 @@ export function useTextContent({
       timestamp: Date.now(),
     };
 
+    timer.end();
     return text;
   }, [editableRef]);
 

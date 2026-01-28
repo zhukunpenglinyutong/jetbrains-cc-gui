@@ -1116,6 +1116,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 File bridgeDir = getDirectoryResolver().findSdkDir();
                 if (bridgeDir == null || !bridgeDir.exists()) {
                     LOG.warn("[McpStatus] Bridge directory not ready or invalid");
+                    LOG.warn("[McpStatus] This is usually caused by missing node_modules in development environment.");
+                    LOG.warn("[McpStatus] Please run: cd ai-bridge && npm install");
                     return new ArrayList<>();
                 }
 
@@ -1223,6 +1225,140 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                         }
                     } finally {
                         processManager.unregisterProcess(MCP_STATUS_CHANNEL_ID, process);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Get MCP server tools list.
+     */
+    public CompletableFuture<JsonObject> getMcpServerTools(String serverId) {
+        return CompletableFuture.supplyAsync(() -> {
+            Process process = null;
+            long startTime = System.currentTimeMillis();
+            LOG.info("[McpTools] Starting getMcpServerTools, serverId=" + serverId);
+
+            try {
+                String node = nodeDetector.findNodeExecutable();
+
+                JsonObject stdinInput = new JsonObject();
+                stdinInput.addProperty("serverId", serverId != null ? serverId : "");
+                String stdinJson = this.gson.toJson(stdinInput);
+
+                File bridgeDir = getDirectoryResolver().findSdkDir();
+                if (bridgeDir == null || !bridgeDir.exists()) {
+                    LOG.warn("[McpTools] Bridge directory not ready or invalid");
+                    LOG.warn("[McpTools] This is usually caused by missing node_modules in development environment.");
+                    LOG.warn("[McpTools] Please run: cd ai-bridge && npm install");
+                    JsonObject errorResult = new JsonObject();
+                    errorResult.addProperty("serverId", serverId);
+                    errorResult.addProperty("error", "Bridge directory not ready");
+                    return errorResult;
+                }
+
+                List<String> command = new ArrayList<>();
+                command.add(node);
+                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                command.add("claude");
+                command.add("getMcpServerTools");
+
+                ProcessBuilder pb = new ProcessBuilder(command);
+                pb.directory(bridgeDir);
+                pb.redirectErrorStream(true);
+                envConfigurator.updateProcessEnvironment(pb, node);
+                pb.environment().put("CLAUDE_USE_STDIN", "true");
+
+                process = pb.start();
+                processManager.registerProcess("__mcp_tools__", process);
+                final Process finalProcess = process;
+
+                try (java.io.OutputStream stdin = process.getOutputStream()) {
+                    stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
+                    stdin.flush();
+                } catch (Exception e) {
+                    LOG.warn("[McpTools] Failed to write stdin: " + e.getMessage());
+                }
+
+                final boolean[] found = {false};
+                final String[] mcpToolsJson = {null};
+                final StringBuilder output = new StringBuilder();
+
+                Thread readerThread = new Thread(() -> {
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                        String line;
+                        while (!found[0] && (line = reader.readLine()) != null) {
+                            output.append(line).append("\n");
+
+                            if (line.startsWith("[MCP_SERVER_TOOLS]")) {
+                                mcpToolsJson[0] = line.substring("[MCP_SERVER_TOOLS]".length()).trim();
+                                found[0] = true;
+                                break;
+                            }
+                        }
+                    } catch (Exception e) {
+                        LOG.debug("[McpTools] Reader thread exception: " + e.getMessage());
+                    }
+                });
+                readerThread.start();
+
+                long deadline = System.currentTimeMillis() + 30000;
+                while (!found[0] && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(100);
+                }
+
+                long elapsed = System.currentTimeMillis() - startTime;
+
+                if (process.isAlive()) {
+                    PlatformUtils.terminateProcess(process);
+                }
+
+                if (found[0] && mcpToolsJson[0] != null && !mcpToolsJson[0].isEmpty()) {
+                    try {
+                        JsonObject result = this.gson.fromJson(mcpToolsJson[0], JsonObject.class);
+                        LOG.info("[McpTools] Successfully got tools for server " + serverId + " in " + elapsed + "ms");
+                        return result;
+                    } catch (Exception e) {
+                        LOG.warn("[McpTools] Failed to parse MCP tools JSON: " + e.getMessage());
+                    }
+                }
+
+                // Fallback: use extractLastJsonLine for multi-line output handling
+                String outputStr = output.toString().trim();
+                String jsonStr = extractLastJsonLine(outputStr);
+                if (jsonStr != null) {
+                    try {
+                        JsonObject jsonResult = this.gson.fromJson(jsonStr, JsonObject.class);
+                        if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
+                            return jsonResult;
+                        }
+                    } catch (Exception e) {
+                        LOG.debug("[McpTools] Fallback JSON parse failed: " + e.getMessage());
+                    }
+                }
+
+                // Return error result if nothing found
+                JsonObject errorResult = new JsonObject();
+                errorResult.addProperty("serverId", serverId);
+                errorResult.addProperty("error", "Failed to get tools list");
+                return errorResult;
+
+            } catch (Exception e) {
+                LOG.error("[McpTools] Exception: " + e.getMessage());
+                JsonObject errorResult = new JsonObject();
+                errorResult.addProperty("serverId", serverId);
+                errorResult.addProperty("error", e.getMessage());
+                return errorResult;
+            } finally {
+                if (process != null) {
+                    try {
+                        if (process.isAlive()) {
+                            PlatformUtils.terminateProcess(process);
+                        }
+                    } finally {
+                        processManager.unregisterProcess("__mcp_tools__", process);
                     }
                 }
             }

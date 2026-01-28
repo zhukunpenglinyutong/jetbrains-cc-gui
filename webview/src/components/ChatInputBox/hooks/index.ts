@@ -16,3 +16,4 @@ export { useControlledValueSync } from './useControlledValueSync.js';
 export { useAttachmentHandlers } from './useAttachmentHandlers.js';
 export { useChatInputImperativeHandle } from './useChatInputImperativeHandle.js';
 export { useSpaceKeyListener } from './useSpaceKeyListener.js';
+export { useResizableChatInputBox, computeResize } from './useResizableChatInputBox.js';

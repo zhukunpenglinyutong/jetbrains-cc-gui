@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { Attachment } from '../types.js';
 import { generateId } from '../utils/generateId.js';
+import { debugError } from '../../../utils/debug.js';
 
 export interface UseAttachmentHandlersOptions {
   externalAttachments: Attachment[] | undefined;
@@ -30,7 +31,11 @@ export function useAttachmentHandlers({
       Array.from(files).forEach((file) => {
         const reader = new FileReader();
         reader.onload = () => {
-          const base64 = (reader.result as string).split(',')[1];
+          const result = reader.result;
+          if (typeof result !== 'string') return;
+          const commaIndex = result.indexOf(',');
+          if (commaIndex === -1) return;
+          const base64 = result.substring(commaIndex + 1);
           const attachment: Attachment = {
             id: generateId(),
             fileName: file.name,
@@ -38,6 +43,12 @@ export function useAttachmentHandlers({
             data: base64,
           };
           setInternalAttachments((prev) => [...prev, attachment]);
+        };
+        reader.onerror = () => {
+          debugError('[useAttachmentHandlers] Failed to read file:', file.name);
+        };
+        reader.onabort = () => {
+          debugError('[useAttachmentHandlers] File read aborted:', file.name);
         };
         reader.readAsDataURL(file);
       });

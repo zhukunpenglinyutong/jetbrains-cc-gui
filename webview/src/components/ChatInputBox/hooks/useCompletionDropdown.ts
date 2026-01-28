@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DropdownItemData, DropdownPosition, TriggerQuery } from '../types.js';
+import { debugError, debugLog } from '../../../utils/debug.js';
 
 interface CompletionDropdownOptions<T> {
   /** Trigger symbol */
@@ -68,7 +69,7 @@ export function useCompletionDropdown<T>({
    * Open dropdown
    */
   const open = useCallback((position: DropdownPosition, triggerQuery: TriggerQuery) => {
-    console.log('[useCompletionDropdown] open:', { position, triggerQuery });
+    debugLog('[useCompletionDropdown] open:', { position, triggerQuery });
     setState(prev => ({
       ...prev,
       isOpen: true,
@@ -108,7 +109,7 @@ export function useCompletionDropdown<T>({
    */
   const search = useCallback(async (query: string) => {
     const startedAt = performance.now?.() ?? Date.now();
-    console.log('[useCompletionDropdown] search start:', { query });
+    debugLog('[useCompletionDropdown] search start:', { query });
     // Cancel previous request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -135,7 +136,7 @@ export function useCompletionDropdown<T>({
       const items = results.map(toDropdownItem);
       const endedAt = performance.now?.() ?? Date.now();
       const durationMs = (endedAt - startedAt).toFixed(1);
-      console.log('[useCompletionDropdown] search done:', { query, resultsCount: results.length, durationMs });
+      debugLog('[useCompletionDropdown] search done:', { query, resultsCount: results.length, durationMs });
 
       setState(prev => ({
         ...prev,
@@ -148,7 +149,7 @@ export function useCompletionDropdown<T>({
       // Ignore abort errors
       if ((error as Error).name === 'AbortError') return;
 
-      console.error('[useCompletionDropdown] Search error:', error);
+      debugError('[useCompletionDropdown] Search error:', error);
       setState(prev => ({ ...prev, items: [], rawItems: [], loading: false }));
     }
   }, [provider, toDropdownItem, minQueryLength]);
@@ -172,7 +173,7 @@ export function useCompletionDropdown<T>({
    * Update query
    */
   const updateQuery = useCallback((triggerQuery: TriggerQuery) => {
-    console.log('[useCompletionDropdown] updateQuery:', triggerQuery);
+    debugLog('[useCompletionDropdown] updateQuery:', triggerQuery);
     setState(prev => ({ ...prev, triggerQuery }));
     debouncedSearch(triggerQuery.query);
   }, [debouncedSearch]);

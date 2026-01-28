@@ -136,6 +136,9 @@ export const MessageItem = memo(function MessageItem({
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
 
+  // Track timeout to properly cleanup on unmount
+  const copyTimeoutRef = useRef<number | null>(null);
+
   // Manage thinking expansion state locally to avoid prop drilling and unnecessary re-renders
   const [expandedThinking, setExpandedThinking] = useState<Record<number, boolean>>({});
 
@@ -154,16 +157,45 @@ export const MessageItem = memo(function MessageItem({
   const isLastAssistantMessage = message.type === 'assistant' && isLast;
   const isMessageStreaming = streamingActive && isLastAssistantMessage;
 
-  const handleCopyMessage = useCallback(async () => {
-    const content = extractMarkdownContent(message);
-    if (!content.trim()) return;
+  // Cache markdown content extraction for better performance
+  const markdownContent = useMemo(() => {
+    // Only extract for user and assistant messages that need copy functionality
+    if (message.type === 'user' || message.type === 'assistant') {
+      return extractMarkdownContent(message);
+    }
+    return '';
+  }, [message, extractMarkdownContent]);
 
-    const success = await copyToClipboard(content);
+  const handleCopyMessage = useCallback(async () => {
+    // Prevent copying if message is empty or already in "copied" state
+    if (!markdownContent.trim() || copiedMessageIndex === messageIndex) return;
+
+    const success = await copyToClipboard(markdownContent);
     if (success) {
       setCopiedMessageIndex(messageIndex);
-      setTimeout(() => setCopiedMessageIndex(null), 1500);
+
+      // Clear any existing timeout before setting new one
+      if (copyTimeoutRef.current !== null) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+
+      // Set new timeout and store ID for cleanup
+      copyTimeoutRef.current = window.setTimeout(() => {
+        setCopiedMessageIndex(null);
+        copyTimeoutRef.current = null;
+      }, 1500);
     }
-  }, [message, messageIndex, extractMarkdownContent]);
+  }, [markdownContent, messageIndex, copiedMessageIndex]);
+
+  // Cleanup timeout on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current !== null) {
+        window.clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Memoize blocks and grouped blocks to avoid recalculation on every render
   const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
@@ -345,10 +377,11 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div className={`message ${message.type}`} style={messageStyle}>
-      {/* Copy button for assistant messages */}
-      {message.type === 'assistant' && !isMessageStreaming && (
+      {/* Copy button for user and assistant messages */}
+      {(message.type === 'user' || (message.type === 'assistant' && !isMessageStreaming)) && (
         <button
-          className={`message-copy-btn ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
+          type="button"
+          className={`message-copy-btn ${message.type === 'user' ? 'message-copy-btn-user' : ''} ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
           onClick={handleCopyMessage}
           title={t('markdown.copyMessage')}
           aria-label={t('markdown.copyMessage')}

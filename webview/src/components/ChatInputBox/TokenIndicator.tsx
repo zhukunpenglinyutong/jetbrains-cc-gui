@@ -43,7 +43,7 @@ export const TokenIndicator = ({
   const usedText = formatTokens(usedTokens);
   const maxText = formatTokens(maxTokens);
   const tooltip = usedText && maxText
-    ? `${formattedPercentage} · ${usedText} / ${maxText} ${t('chat.context')}`
+    ? `${formattedPercentage} · ${usedText} / ${maxText} ${' '}${t('chat.context')}`
     : t('chat.usagePercentage', { percentage: formattedPercentage });
 
   return (

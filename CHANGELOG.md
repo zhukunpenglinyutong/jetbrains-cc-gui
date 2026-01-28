@@ -1,36 +1,104 @@
-## [0.1.7-beta1] - 2026-01-27
+##### **2026年1月28日（v0.1.7-beta2）**
 
-### ✨ Features
+English:
+
+✨ Features
+- Add MCP server tools fetching and caching system with STDIO and HTTP/SSE support
+- Add resizable chat input box with vertical resize handles and localStorage persistence
+- Add copy button for user messages with performance optimization
+- Add project-specific MCP configuration support
+
+🐛 Fixes
+- Fix chat input box horizontal resize bug that caused width collapse
+- Fix loading panel removal causing close confirmation dialog race condition
+- Fix XSS vulnerability in file tag rendering with proper text escaping
+- Fix memory leak in copy button timeout cleanup
+- Fix FileReader error handling for file operations
+
+🔧 Improvements
+- Refactor ChatInputBox into modular components (header, footer, resize handles)
+- Optimize large text handling with array+join (6+ seconds → <100ms for 50KB text)
+- Add performance instrumentation with configurable thresholds and timing marks
+- Improve security with delegated event handlers to prevent listener leaks
+- Add text length thresholds to skip expensive operations (10K/50K/5K chars)
+- Limit max file tags per render to 50 to prevent UI freeze
+- Create centralized performance constants module (constants/performance.ts)
+- Improve accessibility for resize handles with ARIA roles and keyboard support
+- Add tools cache manager with expiry configuration for MCP servers
+- Create React hooks for MCP tools update and management (useToolsUpdate, useServerData, useServerManagement)
+- Refactor MCP status service into modular architecture (13+ new modules)
+- Add comprehensive TypeScript type definitions for MCP components
+- Reduce native listener re-subscriptions in ChatInputBox hooks
+- Replace string concatenation with array+join in file tags and text content extraction
+- Use fast Range API for text insertion >5K chars instead of slow execCommand
+
+中文：
+
+✨ Features
+- 新增 MCP 服务器工具获取和缓存系统，支持 STDIO 和 HTTP/SSE 协议
+- 新增聊天输入框垂直调整大小功能，支持 localStorage 持久化
+- 新增用户消息复制按钮，带性能优化
+- 新增项目特定 MCP 配置支持
+
+🐛 Fixes
+- 修复聊天输入框水平调整导致宽度崩溃的问题
+- 修复加载面板移除导致关闭确认对话框竞态条件的问题
+- 修复文件标签渲染中的 XSS 漏洞，正确转义文本
+- 修复复制按钮超时清理的内存泄漏问题
+- 修复 FileReader 文件操作错误处理
+
+🔧 Improvements
+- 重构 ChatInputBox 为模块化组件（header、footer、resize handles）
+- 优化大文本处理，使用数组+join（50KB 文本粘贴从 6+ 秒优化至 <100ms）
+- 添加性能监控工具，支持可配置阈值和计时标记
+- 改进安全性，使用委托事件处理器防止监听器泄漏
+- 添加文本长度阈值跳过昂贵操作（10K/50K/5K 字符）
+- 限制每次渲染最多 50 个文件标签，防止 UI 冻结
+- 创建集中式性能常量模块（constants/performance.ts）
+- 改进调整大小手柄的可访问性，支持 ARIA 角色和键盘操作
+- 添加 MCP 服务器工具缓存管理器，支持过期配置
+- 创建 MCP 工具更新和管理的 React hooks（useToolsUpdate、useServerData、useServerManagement）
+- 重构 MCP 状态服务为模块化架构（新增 13+ 个模块）
+- 添加 MCP 组件的完整 TypeScript 类型定义
+- 减少 ChatInputBox hooks 中的原生监听器重新订阅
+- 在文件标签和文本内容提取中用数组+join 替换字符串拼接
+- 对超过 5K 字符的文本插入使用快速 Range API 替代缓慢的 execCommand
+
+##### **2026年1月28日（v0.1.7-beta1）**
+
+English:
+
+✨ Features
 - Add chat input history navigation with ArrowUp/ArrowDown keys
 - Add tab rename and close confirmation features
 - Add AI-powered commit message generation
 - Add Codex SDK image attachment support
 
-### 🐛 Fixes
+🐛 Fixes
 - Fix MCP connection failure issue
 - Fix MCP invocation issue on Windows
 
-### 🔧 Improvements
+🔧 Improvements
 - Refactor ChatInputBox into modular hooks
 - Improve custom model input validation and security
 - Improve Action classes thread safety
 
-### ✨ Features
+中文：
+
+✨ Features
 - 聊天输入框支持上下箭头键历史记录导航
 - 支持标签页重命名和关闭确认
 - AI 智能生成 Git 提交消息
 - Codex SDK 支持图片附件
 
-### 🐛 Fixes
+🐛 Fixes
 - 修复 MCP 连接失败问题
 - 修复 Windows 系统 MCP 无法调用的问题
 
-### 🔧 Improvements
+🔧 Improvements
 - 重构 ChatInputBox 组件，拆分为独立 hooks
 - 改进自定义模型输入验证和安全性
 - Action 类线程安全性优化
-
----
 
 ##### **2026年1月25日（v0.1.6）**
 
