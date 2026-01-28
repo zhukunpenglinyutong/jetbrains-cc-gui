@@ -1,0 +1,204 @@
+.configSection {
+  max-width: 800px;
+  padding-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.sectionDesc {
+  color: var(--text-tertiary);
+  margin: 0 0 24px 0;
+  font-size: 13px;
+}
+
+.promptSection {
+  margin-bottom: 24px;
+}
+
+.fieldHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  .codicon {
+    font-size: 16px;
+    color: var(--accent-primary);
+  }
+}
+
+.fieldLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.promptInputWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.promptTextarea {
+  width: 100%;
+  max-width: 100%;
+  min-height: 120px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+  }
+
+  &::placeholder {
+    color: var(--text-placeholder);
+  }
+}
+
+.saveBtn {
+  align-self: flex-start;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-primary);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--accent-hover, #106ebe);
+  }
+
+  &:active {
+    background: var(--accent-active, #005a9e);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
+.formHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+
+  .codicon {
+    font-size: 12px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+}
+
+/* 预告功能区块 */
+.previewSection {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px dashed var(--border-secondary);
+  position: relative;
+  opacity: 0.7;
+
+  .fieldHeader .codicon {
+    color: var(--text-tertiary);
+  }
+}
+
+.previewBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #a78bfa;
+  margin-bottom: 16px;
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
+.promptTextarea.disabled {
+  background: var(--bg-secondary);
+  cursor: not-allowed;
+  opacity: 0.6;
+
+  &::placeholder {
+    color: var(--text-placeholder);
+    opacity: 0.8;
+  }
+}
+
+.saveBtn.disabledBtn {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-secondary);
+  cursor: not-allowed;
+  opacity: 0.5;
+
+  &:hover {
+    background: var(--bg-tertiary);
+  }
+}
+
+/* 响应式适配 */
+@media (max-width: 480px) {
+  .sectionTitle {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .sectionDesc {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .promptTextarea {
+    font-size: 12px;
+    padding: 10px;
+    min-height: 100px;
+  }
+
+  .saveBtn {
+    width: 100%;
+    padding: 10px 16px;
+  }
+
+  .formHint {
+    font-size: 11px;
+  }
+}

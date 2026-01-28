@@ -533,7 +533,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String agentPrompt,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, null, callback);
+        return sendMessage(channelId, message, sessionId, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, null, false, callback);
     }
 
     /**
@@ -550,6 +550,26 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             JsonObject openedFiles,
             String agentPrompt,
             Boolean streaming,
+            MessageCallback callback
+    ) {
+        return sendMessage(channelId, message, sessionId, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, streaming, false, callback);
+    }
+
+    /**
+     * Send message in existing channel (streaming response, with all options including streaming flag and disableThinking).
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -618,6 +638,11 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 if (streaming != null) {
                     stdinInput.addProperty("streaming", streaming);
                     LOG.info("[Streaming] ✓ Adding streaming to stdinInput: " + streaming);
+                }
+                // 🔧 禁用思考模式配置
+                if (disableThinking != null && disableThinking) {
+                    stdinInput.addProperty("disableThinking", true);
+                    LOG.info("[Thinking] ✓ Disabling thinking mode for this request");
                 }
                 String stdinJson = gson.toJson(stdinInput);
 

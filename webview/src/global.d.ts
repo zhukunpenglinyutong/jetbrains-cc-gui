@@ -220,6 +220,11 @@ interface Window {
   updateSendShortcut?: (json: string) => void;
 
   /**
+   * Update commit AI prompt configuration
+   */
+  updateCommitPrompt?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;

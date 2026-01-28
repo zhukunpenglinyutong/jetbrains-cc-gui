@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CodexProviderConfig } from '../types/provider';
+import type { CodexProviderConfig, CodexCustomModel } from '../types/provider';
+import { CustomModelEditor } from './settings/CustomModelEditor';
 
 interface CodexProviderDialogProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export default function CodexProviderDialog({
   const [providerName, setProviderName] = useState('');
   const [configTomlJson, setConfigTomlJson] = useState('');
   const [authJson, setAuthJson] = useState('');
+  const [customModels, setCustomModels] = useState<CodexCustomModel[]>([]);
 
   // Initialize form
   useEffect(() => {
@@ -32,6 +34,7 @@ export default function CodexProviderDialog({
         setProviderName(provider.name || '');
         setConfigTomlJson(provider.configToml || '');
         setAuthJson(provider.authJson || '');
+        setCustomModels(provider.customModels || []);
       } else {
         // Add mode - reset with default template
         setProviderName('');
@@ -48,6 +51,7 @@ wire_api = "responses"`);
         setAuthJson(`{
   "OPENAI_API_KEY": ""
 }`);
+        setCustomModels([]);
       }
     }
   }, [isOpen, provider]);
@@ -108,6 +112,7 @@ wire_api = "responses"`);
       createdAt: provider?.createdAt,
       configToml: configTomlJson.trim(),
       authJson: authJson.trim(),
+      customModels: customModels.length > 0 ? customModels : undefined,
     };
 
     onSave(providerData);
@@ -216,6 +221,22 @@ wire_api = "responses"`);
               }}
             />
             <small className="form-hint">{t('settings.codexProvider.dialog.authJsonHint')}</small>
+          </div>
+
+          {/* Custom Models */}
+          <div className="form-group">
+            <label>
+              {t('settings.codexProvider.dialog.customModels')}
+              <span className="optional">({t('common.optional')})</span>
+            </label>
+            <small className="form-hint" style={{ marginBottom: '8px', display: 'block' }}>
+              {t('settings.codexProvider.dialog.customModelsHint')}
+            </small>
+            <CustomModelEditor
+              models={customModels}
+              onModelsChange={setCustomModels}
+              t={t}
+            />
           </div>
         </div>
 

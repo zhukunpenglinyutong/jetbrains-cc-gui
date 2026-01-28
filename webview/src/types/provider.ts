@@ -2,6 +2,72 @@
  * 供应商配置相关类型定义
  */
 
+// ============ Constants ============
+
+/**
+ * localStorage keys for provider-related data
+ */
+export const STORAGE_KEYS = {
+  /** 自定义 Codex 模型列表 */
+  CODEX_CUSTOM_MODELS: 'codex-custom-models',
+  /** Claude 模型映射配置 */
+  CLAUDE_MODEL_MAPPING: 'claude-model-mapping',
+} as const;
+
+/**
+ * 模型 ID 验证正则表达式
+ * 允许: 字母、数字、连字符、下划线、点、斜杠、冒号
+ * 用于验证用户输入的模型 ID 格式
+ */
+export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\-/:]+$/;
+
+// ============ Validation Helpers ============
+
+/**
+ * 验证模型 ID 格式是否有效
+ * @param id 模型 ID
+ * @returns 是否有效
+ */
+export function isValidModelId(id: string): boolean {
+  if (!id || typeof id !== 'string') return false;
+  const trimmed = id.trim();
+  if (trimmed.length === 0 || trimmed.length > 256) return false;
+  return MODEL_ID_PATTERN.test(trimmed);
+}
+
+/**
+ * 验证 CodexCustomModel 对象是否有效
+ * @param model 待验证的对象
+ * @returns 是否为有效的 CodexCustomModel
+ */
+export function isValidCodexCustomModel(model: unknown): model is CodexCustomModel {
+  if (!model || typeof model !== 'object') return false;
+  const obj = model as Record<string, unknown>;
+
+  // id 必须是有效的模型 ID
+  if (typeof obj.id !== 'string' || !isValidModelId(obj.id)) return false;
+
+  // label 必须是字符串
+  if (typeof obj.label !== 'string' || obj.label.trim().length === 0) return false;
+
+  // description 可选，但如果存在必须是字符串
+  if (obj.description !== undefined && typeof obj.description !== 'string') return false;
+
+  return true;
+}
+
+/**
+ * 验证并过滤 CodexCustomModel 数组
+ * @param models 待验证的数组
+ * @returns 有效的 CodexCustomModel 数组
+ */
+export function validateCodexCustomModels(models: unknown): CodexCustomModel[] {
+  if (!Array.isArray(models)) return [];
+  return models.filter(isValidCodexCustomModel);
+}
+
+// ============ Types ============
+
 /**
  * 供应商配置（简化版，适配当前项目）
  */
@@ -44,6 +110,18 @@ export type ProviderCategory =
   | 'custom';       // 自定义
 
 /**
+ * Codex 自定义模型配置
+ */
+export interface CodexCustomModel {
+  /** 模型 ID（唯一标识） */
+  id: string;
+  /** 模型显示名称 */
+  label: string;
+  /** 模型描述 */
+  description?: string;
+}
+
+/**
  * Codex 供应商配置
  */
 export interface CodexProviderConfig {
@@ -61,4 +139,6 @@ export interface CodexProviderConfig {
   configToml?: string;
   /** auth.json 配置内容（原始字符串） */
   authJson?: string;
+  /** 自定义模型列表 */
+  customModels?: CodexCustomModel[];
 }

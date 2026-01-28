@@ -13,7 +13,17 @@ export async function handleCodexCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
-        const { message, threadId, cwd, permissionMode, model, baseUrl, apiKey, reasoningEffort } = stdinData;
+        const {
+          message,
+          threadId,
+          cwd,
+          permissionMode,
+          model,
+          baseUrl,
+          apiKey,
+          reasoningEffort,
+          attachments  // Image attachments (local_image format)
+        } = stdinData;
         await codexSendMessage(
           message,
           threadId || '',
@@ -22,7 +32,8 @@ export async function handleCodexCommand(command, args, stdinData) {
           model || '',
           baseUrl || '',
           apiKey || '',
-          reasoningEffort || 'medium'
+          reasoningEffort || 'medium',
+          attachments || []  // Pass attachments to message service
         );
       } else {
         await codexSendMessage(args[0], args[1], args[2], args[3], args[4]);

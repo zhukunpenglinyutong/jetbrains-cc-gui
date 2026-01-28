@@ -8,7 +8,7 @@
  * - Uses threadId instead of sessionId
  * - Permission model: skipGitRepoCheck + sandbox (not permissionMode string)
  * - Events: thread.*, turn.*, item.* (not system/assistant/user/result)
- * - No attachments support (text-only)
+ * - Supports images via local_image type (requires file paths)
  *
  * @author Crafted with geek spirit
  */
@@ -171,7 +171,9 @@ function collectAgentsInstructions(cwd) {
   let totalBytes = 0;
 
   // 1. 首先读取全局指令 (~/.codex/)
-  const codexHome = process.env.CODEX_HOME || join(homedir(), '.codex');
+  const codexHome = (process.env.CODEX_HOME && process.env.CODEX_HOME.trim())
+    ? process.env.CODEX_HOME.trim()
+    : join(homedir(), '.codex');
   const globalFile = findAgentsFileInDir(codexHome);
   if (globalFile) {
     const content = readAgentsFile(globalFile);
@@ -239,6 +241,8 @@ function collectAgentsInstructions(cwd) {
  * @param {string} model - Model name (optional)
  * @param {string} baseUrl - API base URL (optional, for custom endpoints)
  * @param {string} apiKey - API key (optional, for custom auth)
+ * @param {string} reasoningEffort - Reasoning effort level (optional)
+ * @param {Array} attachments - Image attachments in local_image format (optional)
  */
 export async function sendMessage(
   message,
@@ -248,7 +252,8 @@ export async function sendMessage(
   model = null,
   baseUrl = null,
   apiKey = null,
-  reasoningEffort = 'medium'
+  reasoningEffort = 'medium',
+  attachments = []
 ) {
   try {
     console.log('[DEBUG] Codex sendMessage called with params:', {
@@ -258,7 +263,8 @@ export async function sendMessage(
       model,
       reasoningEffort,
       hasBaseUrl: !!baseUrl,
-      hasApiKey: !!apiKey
+      hasApiKey: !!apiKey,
+      attachmentsCount: attachments?.length || 0
     });
 
     console.log('[MESSAGE_START]');
@@ -380,7 +386,35 @@ export async function sendMessage(
     // 6. Execute Streaming Query
     // ============================================================
 
-    const { events } = await thread.runStreamed(finalMessage);
+    // Build input for Codex SDK
+    // If we have attachments, use array format: [{ type: "text", text: ... }, { type: "local_image", path: ... }]
+    // Otherwise, use simple string format for backward compatibility
+    let runInput;
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      // Build array format input with text and images
+      runInput = [
+        { type: 'text', text: finalMessage }
+      ];
+
+      // Add image attachments
+      for (const attachment of attachments) {
+        if (attachment && attachment.type === 'local_image' && attachment.path) {
+          runInput.push({
+            type: 'local_image',
+            path: attachment.path
+          });
+          console.log('[DEBUG] Added local_image attachment:', attachment.path);
+        }
+      }
+
+      console.log('[DEBUG] Using array input format with', runInput.length, 'entries');
+    } else {
+      // Use simple string format
+      runInput = finalMessage;
+      console.log('[DEBUG] Using string input format');
+    }
+
+    const { events } = await thread.runStreamed(runInput);
 
     let currentThreadId = threadId;
     let finalResponse = '';

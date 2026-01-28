@@ -82,7 +82,6 @@
     color: var(--text-white);
     cursor: pointer;
     font-size: 12px;
-    flex-shrink: 0;
 }
 
 .mcp-header .help-btn:hover {
@@ -93,7 +92,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
 }
 
 .mcp-header .refresh-btn {
@@ -214,7 +212,6 @@
     padding: 12px 14px;
     cursor: pointer;
     user-select: none;
-    gap: 8px;
 }
 
 .card-header:hover {
@@ -227,7 +224,6 @@
     gap: 10px;
     flex: 1;
     min-width: 0;
-    overflow: hidden;
 }
 
 .expand-icon {
@@ -247,6 +243,15 @@
     font-weight: 600;
     color: #ffffff;
     flex-shrink: 0;
+}
+
+.server-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .status-indicator {
@@ -277,82 +282,6 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-}
-
-/* 确保服务器名称不会溢出 */
-.server-name {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex-shrink: 1;
-}
-
-/* 单个服务器刷新按钮 */
-.single-refresh-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid var(--border-primary);
-    border-radius: 6px;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.single-refresh-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
-    border-color: var(--accent-primary);
-}
-
-.single-refresh-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.single-refresh-btn .spinning {
-    animation: spin 1s linear infinite;
-}
-
-/* 图标按钮 */
-.icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.icon-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-}
-
-.icon-btn.edit-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--accent-primary);
-}
-
-.icon-btn.delete-btn:hover {
-    background: var(--color-danger);
-    color: var(--text-white);
-}
-
-.icon-btn .codicon {
-    font-size: 14px;
 }
 
 /* Toggle 开关 */
@@ -481,6 +410,25 @@
     align-items: center;
     gap: 4px;
     font-weight: 500;
+}
+
+/* 错误详情行 */
+.status-section .error-row {
+    flex-wrap: wrap;
+}
+
+.status-section .error-value {
+    color: var(--color-error);
+    font-family: var(--idea-editor-font-family, monospace);
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    word-break: break-all;
+    line-height: 1.4;
+    width: 100%;
+    margin-top: 4px;
 }
 
 /* 标签区 */
@@ -1186,6 +1134,10 @@
         font-size: 11px;
     }
 }
+
+/* 导入日志弹窗样式 */
+@import './mcp-log-dialog.less';
+
 
 /* ===== 刷新日志区域样式 ===== */
 

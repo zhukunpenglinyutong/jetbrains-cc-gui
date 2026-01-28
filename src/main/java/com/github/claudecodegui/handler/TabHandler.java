@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeSDKToolWindow;
+import com.github.claudecodegui.settings.TabStateService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -61,8 +62,22 @@ public class TabHandler extends BaseMessageHandler {
                 // Create a new chat window instance with skipRegister=true (don't replace the main instance)
                 ClaudeSDKToolWindow.ClaudeChatWindow newChatWindow = new ClaudeSDKToolWindow.ClaudeChatWindow(project, true);
 
-                // Create a tab name in the format "AIN"
-                String tabName = ClaudeSDKToolWindow.getNextTabName(toolWindow);
+                // Get tab index before adding content
+                ContentManager contentManager = toolWindow.getContentManager();
+                int tabIndex = contentManager.getContentCount();
+
+                // Check if there's a saved name for this tab index
+                TabStateService tabStateService = TabStateService.getInstance(project);
+                String savedName = tabStateService.getTabName(tabIndex);
+
+                // Create a tab name: use saved name or generate new one
+                String tabName;
+                if (savedName != null && !savedName.isEmpty()) {
+                    tabName = savedName;
+                    LOG.info("[TabHandler] Restored tab name from storage: " + tabName);
+                } else {
+                    tabName = ClaudeSDKToolWindow.getNextTabName(toolWindow);
+                }
 
                 // Create and add the new tab content
                 ContentFactory contentFactory = ContentFactory.getInstance();
@@ -70,7 +85,6 @@ public class TabHandler extends BaseMessageHandler {
                 content.setCloseable(true);
                 newChatWindow.setParentContent(content);
 
-                ContentManager contentManager = toolWindow.getContentManager();
                 contentManager.addContent(content);
                 contentManager.setSelectedContent(content);
 

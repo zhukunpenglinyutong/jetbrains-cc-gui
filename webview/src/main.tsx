@@ -8,6 +8,75 @@ import i18n from './i18n/config';
 import { setupSlashCommandsCallback } from './components/ChatInputBox/providers/slashCommandProvider';
 import { sendBridgeEvent } from './utils/bridge';
 
+// Silence console output in production (including third-party libs).
+// In dev, keep console for debugging.
+if (!import.meta.env.DEV) {
+  const noop = () => {};
+  console.log = noop;
+  console.debug = noop;
+  console.info = noop;
+  console.warn = noop;
+  console.error = noop;
+}
+
+function createBridgeHeartbeatStarter() {
+  let started = false;
+
+  return () => {
+    if (started) return;
+    started = true;
+
+    let lastRafAt = Date.now();
+    let rafId: number | null = null;
+    const rafLoop = () => {
+      lastRafAt = Date.now();
+      rafId = requestAnimationFrame(rafLoop);
+    };
+    rafId = requestAnimationFrame(rafLoop);
+
+    let sequence = 0;
+    const intervalMs = 5000;
+
+    let intervalId: number | null = null;
+    intervalId = window.setInterval(() => {
+      sequence += 1;
+      const payload = JSON.stringify({
+        ts: Date.now(),
+        raf: lastRafAt,
+        visibility: document.visibilityState,
+        focus: document.hasFocus(),
+        seq: sequence,
+      });
+      sendBridgeEvent('heartbeat', payload);
+    }, intervalMs);
+
+    const cleanup = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    // Explicitly cleanup timers on navigation/unload (best effort; helpful for long-running JCEF contexts).
+    window.addEventListener('beforeunload', cleanup, { once: true });
+    window.addEventListener('pagehide', cleanup, { once: true });
+
+    // Cleanup on Vite HMR (dev only).
+    if (import.meta.hot) {
+      import.meta.hot.dispose(() => cleanup());
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('[Main] Bridge heartbeat enabled');
+    }
+  };
+}
+
+const startBridgeHeartbeat = createBridgeHeartbeatStarter();
 // vConsole 调试工具
 const enableVConsole =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_VCONSOLE === 'true';
@@ -351,6 +420,7 @@ function waitForBridge(callback: () => void, maxAttempts = 50, interval = 100) {
 waitForBridge(() => {
   console.log('[Main] Bridge ready, setting up slash commands');
   setupSlashCommandsCallback();
+  startBridgeHeartbeat();
 
   console.log('[Main] Sending frontend_ready signal');
   sendBridgeEvent('frontend_ready');

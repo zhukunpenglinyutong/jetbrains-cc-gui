@@ -27,6 +27,7 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.util.FontConfigService;
@@ -90,6 +91,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -229,17 +231,53 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
         }
 
+        // Add Rename Tab action to tool window gear menu
+        com.intellij.openapi.actionSystem.AnAction renameTabAction =
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                        .getAction("ClaudeCodeGUI.RenameTabAction");
+        if (renameTabAction != null) {
+            toolWindow.setAdditionalGearActions(new com.intellij.openapi.actionSystem.DefaultActionGroup(renameTabAction));
+        }
+
         // Add listener to manage tab closeable state based on tab count
         // When there's only one tab, disable the close button to prevent closing the last tab
         contentManager.addContentManagerListener(new ContentManagerListener() {
             @Override
             public void contentAdded(@NotNull ContentManagerEvent event) {
                 updateTabCloseableState(contentManager);
+                // Save tab count when tab is added
+                TabStateService tabStateService = TabStateService.getInstance(project);
+                tabStateService.saveTabCount(contentManager.getContentCount());
             }
 
             @Override
             public void contentRemoved(@NotNull ContentManagerEvent event) {
                 updateTabCloseableState(contentManager);
+                // Update tab state service when tab is removed
+                int removedIndex = event.getIndex();
+                TabStateService tabStateService = TabStateService.getInstance(project);
+                tabStateService.onTabRemoved(removedIndex);
+            }
+
+            @Override
+            public void contentRemoveQuery(@NotNull ContentManagerEvent event) {
+                // Show confirmation dialog before closing tab
+                Content content = event.getContent();
+                String tabName = content.getDisplayName();
+
+                int result = com.intellij.openapi.ui.Messages.showYesNoDialog(
+                    project,
+                    ClaudeCodeGuiBundle.message("tab.close.confirm.message", tabName),
+                    ClaudeCodeGuiBundle.message("tab.close.confirm.title"),
+                    ClaudeCodeGuiBundle.message("tab.close.confirm.yes"),
+                    ClaudeCodeGuiBundle.message("tab.close.confirm.no"),
+                    com.intellij.openapi.ui.Messages.getQuestionIcon()
+                );
+
+                if (result != com.intellij.openapi.ui.Messages.YES) {
+                    // User cancelled, prevent closing
+                    event.consume();
+                }
             }
         });
 
@@ -330,22 +368,45 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             ContentFactory contentFactory,
             ContentManager contentManager
     ) {
-        ClaudeChatWindow chatWindow = new ClaudeChatWindow(project);
-        Content content = contentFactory.createContent(chatWindow.getContent(), TAB_NAME_PREFIX + "1", false);
+        TabStateService tabStateService = TabStateService.getInstance(project);
+        int savedTabCount = tabStateService.getTabCount();
+        LOG.info("[TabManager] Restoring " + savedTabCount + " tabs from storage");
 
-        // Set parent content for the first tab (important for multi-tab code snippet support)
-        chatWindow.setParentContent(content);
+        // Create multiple tabs based on saved count
+        for (int i = 0; i < savedTabCount; i++) {
+            // First tab uses the main instance, subsequent tabs use skipRegister=true
+            boolean isFirstTab = (i == 0);
+            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, !isFirstTab);
 
-        contentManager.addContent(content);
-
-        content.setDisposer(() -> {
-            ClaudeChatWindow window = instances.get(project);
-            if (window != null) {
-                window.dispose();
+            // Get saved tab name or use default
+            String tabName;
+            String savedName = tabStateService.getTabName(i);
+            if (savedName != null && !savedName.isEmpty()) {
+                tabName = savedName;
+                LOG.info("[TabManager] Restored tab " + i + " name from storage: " + tabName);
+            } else {
+                tabName = TAB_NAME_PREFIX + (i + 1);
             }
-        });
 
-        // Initialize closeable state for the first tab
+            Content content = contentFactory.createContent(chatWindow.getContent(), tabName, false);
+
+            // Set parent content for multi-tab code snippet support
+            chatWindow.setParentContent(content);
+
+            contentManager.addContent(content);
+
+            // Only set disposer for the first tab (main instance)
+            if (isFirstTab) {
+                content.setDisposer(() -> {
+                    ClaudeChatWindow window = instances.get(project);
+                    if (window != null) {
+                        window.dispose();
+                    }
+                });
+            }
+        }
+
+        // Initialize closeable state for all tabs
         updateTabCloseableState(contentManager);
     }
 
@@ -424,6 +485,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private JBCefBrowser browser;
         private ClaudeSession session;
+
+        // ===== Webview render watchdog (JCEF stall/black-screen recovery) =====
+        private static final long WEBVIEW_HEARTBEAT_TIMEOUT_MS = 45_000L;
+        private static final long WEBVIEW_WATCHDOG_INTERVAL_MS = 10_000L;
+        private static final long WEBVIEW_RECOVERY_COOLDOWN_MS = 60_000L;
+        private volatile long lastWebviewHeartbeatAtMs = System.currentTimeMillis();
+        private volatile long lastWebviewRafAtMs = System.currentTimeMillis();
+        private volatile String lastWebviewVisibility = null;
+        private volatile Boolean lastWebviewHasFocus = null;
+        private volatile int webviewStallCount = 0;
+        private volatile long lastWebviewRecoveryAtMs = 0L;
+        private volatile ScheduledFuture<?> webviewWatchdogFuture = null;
 
         // ===== 🔧 Streaming message update coalescing =====
         private static final int STREAM_MESSAGE_UPDATE_INTERVAL_MS = 50;
@@ -1013,6 +1086,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 browser.loadHTML(htmlContent);
 
+                // Reset webview health markers and start watchdog once the browser is created.
+                lastWebviewHeartbeatAtMs = System.currentTimeMillis();
+                lastWebviewRafAtMs = lastWebviewHeartbeatAtMs;
+                webviewStallCount = 0;
+                startWebviewWatchdog();
+
                 JComponent browserComponent = browser.getComponent();
 
                 // 设置 webview 容器背景色，防止 HTML 加载前闪白
@@ -1345,6 +1424,143 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
         }
 
+        private void handleWebviewHeartbeat(String content) {
+            long now = System.currentTimeMillis();
+            lastWebviewHeartbeatAtMs = now;
+
+            if (content == null || content.isEmpty()) {
+                lastWebviewRafAtMs = now;
+                lastWebviewVisibility = null;
+                lastWebviewHasFocus = null;
+                return;
+            }
+
+            try {
+                JsonObject json = new Gson().fromJson(content, JsonObject.class);
+                if (json != null) {
+                    if (json.has("raf")) {
+                        lastWebviewRafAtMs = json.get("raf").getAsLong();
+                    } else {
+                        lastWebviewRafAtMs = now;
+                    }
+                    if (json.has("visibility")) {
+                        lastWebviewVisibility = json.get("visibility").getAsString();
+                    }
+                    if (json.has("focus")) {
+                        lastWebviewHasFocus = json.get("focus").getAsBoolean();
+                    }
+                }
+            } catch (Exception ignored) {
+                // Non-JSON heartbeat payload (backward compatibility)
+                lastWebviewRafAtMs = now;
+            }
+        }
+
+        private void startWebviewWatchdog() {
+            if (webviewWatchdogFuture != null) {
+                return;
+            }
+
+            webviewWatchdogFuture = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(() -> {
+                try {
+                    checkWebviewHealth();
+                } catch (Exception e) {
+                    LOG.debug("[WebviewWatchdog] Unexpected error: " + e.getMessage(), e);
+                }
+            }, WEBVIEW_WATCHDOG_INTERVAL_MS, WEBVIEW_WATCHDOG_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        }
+
+        private void checkWebviewHealth() {
+            if (disposed) return;
+            if (!mainPanel.isShowing()) return;
+
+            long now = System.currentTimeMillis();
+            long heartbeatAgeMs = now - lastWebviewHeartbeatAtMs;
+            long rafAgeMs = now - lastWebviewRafAtMs;
+
+            boolean visible = lastWebviewVisibility == null || "visible".equals(lastWebviewVisibility);
+            boolean focused = lastWebviewHasFocus == null || lastWebviewHasFocus;
+            if (!visible || !focused) {
+                return;
+            }
+
+            if (now - lastWebviewRecoveryAtMs < WEBVIEW_RECOVERY_COOLDOWN_MS) {
+                return;
+            }
+
+            boolean stalled = heartbeatAgeMs > WEBVIEW_HEARTBEAT_TIMEOUT_MS || rafAgeMs > WEBVIEW_HEARTBEAT_TIMEOUT_MS;
+            if (!stalled) {
+                webviewStallCount = 0;
+                return;
+            }
+
+            if (disposed) return;
+
+            webviewStallCount += 1;
+            String reason = "heartbeatAgeMs=" + heartbeatAgeMs + ", rafAgeMs=" + rafAgeMs;
+            LOG.warn("[WebviewWatchdog] Webview appears stalled (" + webviewStallCount + "), attempting recovery. " + reason);
+
+            lastWebviewRecoveryAtMs = now;
+            // Give the webview a grace window after initiating recovery to avoid repeated triggers.
+            lastWebviewHeartbeatAtMs = now;
+            lastWebviewRafAtMs = now;
+
+            if (webviewStallCount <= 1) {
+                reloadWebview("watchdog_reload");
+            } else {
+                recreateWebview("watchdog_recreate");
+                webviewStallCount = 0;
+            }
+        }
+
+        private void reloadWebview(String reason) {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (disposed) return;
+                if (browser == null) {
+                    recreateWebview(reason + "_no_browser");
+                    return;
+                }
+                frontendReady = false;
+                try {
+                    browser.loadHTML(htmlLoader.loadChatHtml());
+                    mainPanel.revalidate();
+                    mainPanel.repaint();
+                } catch (Exception e) {
+                    LOG.warn("[WebviewWatchdog] Reload failed: " + e.getMessage(), e);
+                }
+            });
+        }
+
+        private void recreateWebview(String reason) {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (disposed) return;
+
+                frontendReady = false;
+                try {
+                    if (browser != null) {
+                        try {
+                            mainPanel.remove(browser.getComponent());
+                        } catch (Exception ignored) {
+                        }
+                        try {
+                            browser.dispose();
+                        } catch (Exception e) {
+                            LOG.debug("[WebviewWatchdog] Failed to dispose old browser: " + e.getMessage(), e);
+                        }
+                        browser = null;
+                    }
+
+                    LOG.info("[WebviewWatchdog] Recreating webview (" + reason + ")");
+                    mainPanel.removeAll();
+                    createUIComponents();
+                    mainPanel.revalidate();
+                    mainPanel.repaint();
+                } catch (Exception e) {
+                    LOG.warn("[WebviewWatchdog] Recreate failed: " + e.getMessage(), e);
+                }
+            });
+        }
+
         private void handleJavaScriptMessage(String message) {
             // long receiveTime = System.currentTimeMillis();
 
@@ -1382,6 +1598,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             String type = parts[0];
             String content = parts.length > 1 ? parts[1] : "";
+
+            // Webview heartbeat (used by watchdog to detect JCEF stalls/black screens)
+            if ("heartbeat".equals(type)) {
+                handleWebviewHeartbeat(content);
+                return;
+            }
 
             // [PERF] 性能日志：记录消息接收时间
             // if ("send_message".equals(type) || "send_message_with_attachments".equals(type)) {
@@ -1425,6 +1647,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         executePendingQuickFix(prompt, callback);
                     });
                 }
+
+                // Re-push the latest message snapshot after a webview reload/recreate.
+                // This ensures the UI can recover from a stalled/blank JCEF render state.
+                flushStreamMessageUpdates(null);
                 return;
             }
 
@@ -2462,6 +2688,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 streamMessageUpdateAlarm.dispose();
             } catch (Exception e) {
                 LOG.warn("Failed to dispose stream message update alarm: " + e.getMessage());
+            }
+
+            try {
+                if (webviewWatchdogFuture != null) {
+                    webviewWatchdogFuture.cancel(true);
+                    webviewWatchdogFuture = null;
+                }
+            } catch (Exception e) {
+                LOG.debug("Failed to cancel webview watchdog: " + e.getMessage(), e);
             }
 
             // 清理斜杠命令缓存

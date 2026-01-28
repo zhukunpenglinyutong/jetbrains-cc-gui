@@ -1,8 +1,35 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from './types';
 import { ConfigSelect, ModelSelect, ModeSelect, ReasoningSelect } from './selectors';
 import { CLAUDE_MODELS, CODEX_MODELS } from './types';
+import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
+
+/**
+ * 从 localStorage 获取自定义 Codex 模型列表
+ * 使用运行时类型验证确保数据安全
+ */
+function getCustomCodexModels(): ModelInfo[] {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEYS.CODEX_CUSTOM_MODELS);
+    if (!stored) {
+      return [];
+    }
+    const parsed = JSON.parse(stored);
+    // 使用运行时类型验证
+    const validModels = validateCodexCustomModels(parsed);
+    return validModels.map(m => ({
+      id: m.id,
+      label: m.label || m.id,
+      description: m.description,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 /**
  * ButtonArea - 底部工具栏组件
@@ -35,11 +62,39 @@ export const ButtonArea = ({
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 用于追踪 localStorage 中自定义模型的变化
+  // 当 localStorage 发生变化时，通过更新此版本号触发 useMemo 重新计算
+  const [customModelsVersion, setCustomModelsVersion] = useState(0);
+
+  // 监听 localStorage 变化（跨标签页同步 + 同标签页自定义事件）
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEYS.CODEX_CUSTOM_MODELS || e.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
+        setCustomModelsVersion(v => v + 1);
+      }
+    };
+
+    // 监听自定义事件（同标签页内的 localStorage 变化）
+    const handleCustomStorageChange = (e: CustomEvent<{ key: string }>) => {
+      if (e.detail.key === STORAGE_KEYS.CODEX_CUSTOM_MODELS || e.detail.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
+        setCustomModelsVersion(v => v + 1);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('localStorageChange', handleCustomStorageChange as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('localStorageChange', handleCustomStorageChange as EventListener);
+    };
+  }, []);
+
   /**
    * 应用模型名称映射
    * 将基础模型 ID 映射为实际的模型名称（如带容量后缀的版本）
    */
-  const applyModelMapping = (model: ModelInfo, mapping: { haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
+  const applyModelMapping = useCallback((model: ModelInfo, mapping: { haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
     const modelKeyMap: Record<string, keyof typeof mapping> = {
       'claude-sonnet-4-5': 'sonnet',
       'claude-opus-4-5-20251101': 'opus',
@@ -56,18 +111,28 @@ export const ButtonArea = ({
       }
     }
     return model;
-  };
+  }, []);
 
   // 根据当前提供商选择模型列表
-  const availableModels = (() => {
+  // customModelsVersion 用于在 localStorage 变化时触发重新计算
+  const availableModels = useMemo(() => {
     if (currentProvider === 'codex') {
-      return CODEX_MODELS;
+      // 合并内置模型和自定义模型
+      const customModels = getCustomCodexModels();
+      if (customModels.length === 0) {
+        return CODEX_MODELS;
+      }
+      // 自定义模型放在前面，内置模型放在后面
+      // 过滤掉与自定义模型重复的内置模型
+      const customIds = new Set(customModels.map(m => m.id));
+      const filteredBuiltIn = CODEX_MODELS.filter(m => !customIds.has(m.id));
+      return [...customModels, ...filteredBuiltIn];
     }
     if (typeof window === 'undefined' || !window.localStorage) {
       return CLAUDE_MODELS;
     }
     try {
-      const stored = window.localStorage.getItem('claude-model-mapping');
+      const stored = window.localStorage.getItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING);
       if (!stored) {
         return CLAUDE_MODELS;
       }
@@ -81,7 +146,7 @@ export const ButtonArea = ({
     } catch {
       return CLAUDE_MODELS;
     }
-  })();
+  }, [currentProvider, applyModelMapping, customModelsVersion]);
 
   /**
    * 处理提交按钮点击

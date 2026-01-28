@@ -1,6 +1,5 @@
 import { useCallback, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
-import { getCursorOffset, setCursorOffset } from '../utils/selectionUtils.js';
 import { getFileIcon } from '../../../utils/fileIcons.js';
 import { icon_folder, icon_terminal, icon_server } from '../../../utils/icons.js';
 import type { FileTagInfo } from '../types.js';
@@ -191,9 +190,6 @@ export function useFileTags({
       newHTML += currentText.substring(lastIndex);
     }
 
-    // Preserve cursor before updating innerHTML to avoid jumping to end
-    const cursorOffset = getCursorOffset(editableRef.current);
-
     // Set flag before updating innerHTML to prevent triggering completion detection
     justRenderedTagRef.current = true;
     onCloseCompletions();
@@ -215,23 +211,20 @@ export function useFileTags({
       });
     });
 
-    // Restore cursor position if possible, otherwise fall back to end
-    const restored = cursorOffset >= 0 && setCursorOffset(editableRef.current, cursorOffset);
-    if (!restored) {
-      const selection = window.getSelection();
-      if (selection && editableRef.current.childNodes.length > 0) {
-        try {
-          const range = document.createRange();
-          const lastChild = editableRef.current.lastChild;
-          if (lastChild) {
-            range.setStartAfter(lastChild);
-            range.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(range);
-          }
-        } catch {
-          // Ignore cursor restore errors
+    // Restore cursor position to end
+    const selection = window.getSelection();
+    if (selection && editableRef.current.childNodes.length > 0) {
+      try {
+        const range = document.createRange();
+        const lastChild = editableRef.current.lastChild;
+        if (lastChild) {
+          range.setStartAfter(lastChild);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
         }
+      } catch {
+        // Ignore cursor restore errors
       }
     }
 
@@ -250,22 +243,14 @@ export function useFileTags({
   const extractFileTags = useCallback((): FileTagInfo[] => {
     if (!editableRef.current) return [];
 
-    const fileTags: FileTagInfo[] = [];
-    const fileTagElements = editableRef.current.querySelectorAll('.file-tag');
-
-    fileTagElements.forEach((element) => {
-      const displayPath = element.getAttribute('data-file-path') || '';
-      const absolutePath = element.getAttribute('data-tooltip') || displayPath;
-
-      if (displayPath) {
-        fileTags.push({
-          displayPath,
-          absolutePath,
-        });
-      }
-    });
-
-    return fileTags;
+    return Array.from(editableRef.current.querySelectorAll('.file-tag'))
+      .map((element) => {
+        const displayPath = element.getAttribute('data-file-path') || '';
+        if (!displayPath) return null;
+        const absolutePath = element.getAttribute('data-tooltip') || displayPath;
+        return { displayPath, absolutePath } satisfies FileTagInfo;
+      })
+      .filter((tag): tag is FileTagInfo => tag !== null);
   }, [editableRef]);
 
   return {

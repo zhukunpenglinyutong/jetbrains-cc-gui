@@ -137,6 +137,24 @@ export interface McpServerStatusInfo {
     name: string;
     version: string;
   };
+  /** 错误信息 (连接失败时可用) */
+  error?: string;
+}
+
+/**
+ * MCP 连接日志条目
+ */
+export interface McpLogEntry {
+  /** 唯一标识符 */
+  id: string;
+  /** 时间戳 */
+  timestamp: Date;
+  /** 服务器名称 */
+  serverName: string;
+  /** 日志级别 */
+  level: 'info' | 'warn' | 'error' | 'success';
+  /** 日志消息 */
+  message: string;
 }
 
 /**
