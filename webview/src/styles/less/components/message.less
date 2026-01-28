@@ -30,6 +30,7 @@
     align-items: flex-end;
     padding-top: 16px;
     padding-bottom: 16px;
+    position: relative; /* Enable absolute positioning for copy button */
 }
 
 .message.user .message-content {
@@ -73,7 +74,7 @@
 /* Message Copy Button - appears on hover for assistant messages */
 .message-copy-btn {
     position: absolute;
-    top: 8px;
+    bottom: 8px;
     right: 8px;
     width: 28px;
     height: 28px;
@@ -150,6 +151,46 @@
 
     &:hover .message-copy-btn:hover {
         opacity: 1;
+    }
+}
+
+/* User message copy button - positioned outside bubble on the left */
+.message-copy-btn-user {
+    right: calc(15% + 8px); /* Position outside the 85% bubble, with 8px spacing */
+}
+
+/* Show copy button on hover for user messages */
+.message.user {
+    &:hover .message-copy-btn {
+        opacity: 0.7;
+        visibility: visible;
+    }
+
+    &:hover .message-copy-btn:hover {
+        opacity: 1;
+    }
+}
+
+/* Mobile responsiveness for copy button */
+@media (max-width: 768px) {
+    .message-copy-btn {
+        /* Show button by default on mobile */
+        opacity: 0.7;
+        visibility: visible;
+
+        /* Smaller button size for mobile */
+        width: 24px;
+        height: 24px;
+
+        .copy-icon svg {
+            width: 12px;
+            height: 12px;
+        }
+    }
+
+    /* User message button positioning on mobile - adjust for smaller screens */
+    .message-copy-btn-user {
+        right: 8px; /* Simplified positioning on mobile */
     }
 }
 
