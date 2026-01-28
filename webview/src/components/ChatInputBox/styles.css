@@ -109,10 +109,10 @@
 
 /* Top-center grip: vertical resize */
 .resize-handle--n {
-  top: 2px;
+  top: -20px;
   left: 50%;
-  width: 64px;
-  height: 18px;
+  width: 80px;
+  height: 14px;
   transform: translateX(-50%);
   cursor: ns-resize;
 }
