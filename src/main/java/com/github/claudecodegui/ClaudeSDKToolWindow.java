@@ -477,11 +477,19 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private final Project project;
         private final CodemossSettingsService settingsService;
         private final HtmlLoader htmlLoader;
+        // Tab answer status enum
+        public enum TabAnswerStatus {
+            IDLE,      // 空闲
+            ANSWERING, // 回答中
+            COMPLETED  // 已完成
+        }
+
         private Content parentContent;
 
         // Tab title management for loading indicator
         private String originalTabName;
-        private boolean isLoadingIndicatorVisible = false;
+        private TabAnswerStatus currentTabStatus = TabAnswerStatus.IDLE;
+        private ScheduledFuture<?> statusResetTask;
 
         // Session ID for permission service cleanup
         private volatile String sessionId = null;
@@ -584,7 +592,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 // Auto-initialize originalTabName if not set (for existing tabs)
                 if (this.originalTabName == null) {
-                    this.originalTabName = content.getDisplayName();
+                    String displayName = content.getDisplayName();
+                    // Remove "..." suffix if present (in case tab is already in loading state)
+                    this.originalTabName = displayName.endsWith("...")
+                        ? displayName.substring(0, displayName.length() - 3)
+                        : displayName;
                     LOG.info("[TabLoading] Auto-initialized original tab name: " + this.originalTabName);
                 }
             }
@@ -602,8 +614,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
          * Update tab loading state - shows loading indicator by adding "..." suffix to tab name
          */
         public void updateTabLoadingState(boolean loading) {
+            LOG.info("[TabLoading] updateTabLoadingState called - loading=" + loading +
+                    ", parentContent=" + (parentContent != null ? "not null" : "NULL") +
+                    ", originalTabName=" + (originalTabName != null ? "'" + originalTabName + "'" : "NULL"));
+
             if (parentContent == null || originalTabName == null) {
-                LOG.warn("[TabLoading] Cannot update - parentContent or originalTabName is null");
+                LOG.warn("[TabLoading] Cannot update - parentContent=" + (parentContent == null ? "NULL" : "not null") +
+                        ", originalTabName=" + (originalTabName == null ? "NULL" : "'" + originalTabName + "'"));
                 return;
             }
 
@@ -616,14 +633,16 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             isLoadingIndicatorVisible = loading;
 
             ApplicationManager.getApplication().invokeLater(() -> {
+                String currentDisplayName = parentContent.getDisplayName();
                 if (loading) {
                     // Add "..." suffix to tab name
-                    parentContent.setDisplayName(originalTabName + "...");
-                    LOG.info("[TabLoading] ✓ Set loading state for tab: " + originalTabName + "...");
+                    String newName = originalTabName + "...";
+                    parentContent.setDisplayName(newName);
+                    LOG.info("[TabLoading] ✓ Set loading state: '" + currentDisplayName + "' -> '" + newName + "'");
                 } else {
                     // Restore original tab name
                     parentContent.setDisplayName(originalTabName);
-                    LOG.info("[TabLoading] ✓ Restored original state for tab: " + originalTabName);
+                    LOG.info("[TabLoading] ✓ Restored original state: '" + currentDisplayName + "' -> '" + originalTabName + "'");
                 }
             });
         }
