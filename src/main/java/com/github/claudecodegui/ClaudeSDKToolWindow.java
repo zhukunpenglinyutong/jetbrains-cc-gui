@@ -581,6 +581,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             if (content != null) {
                 contentToWindowMap.put(content, this);
                 LOG.debug("[MultiTab] Registered Content -> ClaudeChatWindow mapping for: " + content.getDisplayName());
+
+                // Auto-initialize originalTabName if not set (for existing tabs)
+                if (this.originalTabName == null) {
+                    this.originalTabName = content.getDisplayName();
+                    LOG.info("[TabLoading] Auto-initialized original tab name: " + this.originalTabName);
+                }
             }
         }
 
