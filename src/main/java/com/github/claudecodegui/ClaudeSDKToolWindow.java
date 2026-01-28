@@ -393,6 +393,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // Set parent content for multi-tab code snippet support
             chatWindow.setParentContent(content);
 
+            // Initialize original tab name for loading indicator
+            chatWindow.setOriginalTabName(tabName);
+
             contentManager.addContent(content);
 
             // Only set disposer for the first tab (main instance)
@@ -475,6 +478,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private final CodemossSettingsService settingsService;
         private final HtmlLoader htmlLoader;
         private Content parentContent;
+
+        // Tab title management for loading indicator
+        private String originalTabName;
+        private boolean isLoadingIndicatorVisible = false;
 
         // Session ID for permission service cleanup
         private volatile String sessionId = null;
@@ -575,6 +582,44 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 contentToWindowMap.put(content, this);
                 LOG.debug("[MultiTab] Registered Content -> ClaudeChatWindow mapping for: " + content.getDisplayName());
             }
+        }
+
+        /**
+         * Set the original tab name (without loading indicator)
+         */
+        public void setOriginalTabName(String name) {
+            this.originalTabName = name;
+            LOG.debug("[TabLoading] Set original tab name: " + name);
+        }
+
+        /**
+         * Update tab loading state - shows loading indicator by adding "..." suffix to tab name
+         */
+        public void updateTabLoadingState(boolean loading) {
+            if (parentContent == null || originalTabName == null) {
+                LOG.warn("[TabLoading] Cannot update - parentContent or originalTabName is null");
+                return;
+            }
+
+            // Prevent redundant updates
+            if (loading == isLoadingIndicatorVisible) {
+                LOG.debug("[TabLoading] Skipping redundant update for tab: " + originalTabName);
+                return;
+            }
+
+            isLoadingIndicatorVisible = loading;
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (loading) {
+                    // Add "..." suffix to tab name
+                    parentContent.setDisplayName(originalTabName + "...");
+                    LOG.info("[TabLoading] ✓ Set loading state for tab: " + originalTabName + "...");
+                } else {
+                    // Restore original tab name
+                    parentContent.setDisplayName(originalTabName);
+                    LOG.info("[TabLoading] ✓ Restored original state for tab: " + originalTabName);
+                }
+            });
         }
 
         /**
@@ -1602,6 +1647,19 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // Webview heartbeat (used by watchdog to detect JCEF stalls/black screens)
             if ("heartbeat".equals(type)) {
                 handleWebviewHeartbeat(content);
+                return;
+            }
+
+            // Tab loading state change (for loading indicator in tab title)
+            if ("tab_loading_changed".equals(type)) {
+                try {
+                    JsonObject json = new Gson().fromJson(content, JsonObject.class);
+                    boolean loading = json.has("loading") && json.get("loading").getAsBoolean();
+                    LOG.info("[TabLoading] Received event in tab '" + originalTabName + "': loading=" + loading);
+                    updateTabLoadingState(loading);
+                } catch (Exception e) {
+                    LOG.warn("[TabLoading] Failed to parse loading state: " + e.getMessage());
+                }
                 return;
             }
 
