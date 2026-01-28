@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { Attachment } from '../types.js';
 import { generateId } from '../utils/generateId.js';
 import { insertTextAtCursor } from '../utils/selectionUtils.js';
+import { perfTimer } from '../../../utils/debug.js';
 
 declare global {
   interface Window {
@@ -148,11 +149,18 @@ export function usePasteAndDrop({
         }
 
         if (text && text.trim()) {
+          const timer = perfTimer('handlePaste-text');
+          timer.mark(`text-length:${text.length}`);
+
           // Use modern Selection API to insert plain text (maintains cursor position)
           insertTextAtCursor(text, editableRef.current);
+          timer.mark('insertText');
 
           // Trigger input event to update state
           handleInput();
+          timer.mark('handleInput');
+
+          timer.end();
         }
       }
     },

@@ -193,10 +193,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                         if (ready != null && ready) {
                             LOG.info("[ToolWindow] ai-bridge ready, replacing loading panel with chat window");
-                            // 移除加载界面
-                            contentManager.removeContent(loadingContent, true);
-                            // 创建聊天窗口
-                            createChatWindowContent(project, toolWindow, contentFactory, contentManager);
+                            // 替换加载面板为聊天窗口，而不是移除并重新创建
+                            replaceLoadingPanelWithChatWindow(project, toolWindow, contentFactory, contentManager, loadingContent);
                         } else {
                             LOG.error("[ToolWindow] ai-bridge preparation failed");
                             // 显示错误信息
@@ -357,6 +355,75 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         loadingPanel.add(centerPanel);
         loadingPanel.revalidate();
         loadingPanel.repaint();
+    }
+
+    /**
+     * 替换加载面板为聊天窗口内容（在原标签页上直接替换）
+     * 这样可以避免触发 contentRemoveQuery 事件和竞态条件问题
+     */
+    private void replaceLoadingPanelWithChatWindow(
+            @NotNull Project project,
+            @NotNull ToolWindow toolWindow,
+            ContentFactory contentFactory,
+            ContentManager contentManager,
+            Content loadingContent
+    ) {
+        TabStateService tabStateService = TabStateService.getInstance(project);
+        int savedTabCount = tabStateService.getTabCount();
+        LOG.info("[TabManager] Restoring " + savedTabCount + " tabs from storage");
+
+        // 创建第一个聊天窗口（主实例）
+        ClaudeChatWindow firstChatWindow = new ClaudeChatWindow(project, false);
+
+        // 获取保存的标签页名称
+        String firstTabName;
+        String savedFirstName = tabStateService.getTabName(0);
+        if (savedFirstName != null && !savedFirstName.isEmpty()) {
+            firstTabName = savedFirstName;
+            LOG.info("[TabManager] Restored tab 0 name from storage: " + firstTabName);
+        } else {
+            firstTabName = TAB_NAME_PREFIX + "1";
+        }
+
+        // 直接替换加载内容的组件和名称，而不是移除并重新创建
+        loadingContent.setComponent(firstChatWindow.getContent());
+        loadingContent.setDisplayName(firstTabName);
+
+        // 设置 parent content 以支持多标签页代码片段
+        firstChatWindow.setParentContent(loadingContent);
+
+        // 设置 disposer
+        loadingContent.setDisposer(() -> {
+            ClaudeChatWindow window = instances.get(project);
+            if (window != null) {
+                window.dispose();
+            }
+        });
+
+        // 如果有多个标签页，创建其余的标签页
+        for (int i = 1; i < savedTabCount; i++) {
+            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, true);
+
+            // 获取保存的标签页名称
+            String tabName;
+            String savedName = tabStateService.getTabName(i);
+            if (savedName != null && !savedName.isEmpty()) {
+                tabName = savedName;
+                LOG.info("[TabManager] Restored tab " + i + " name from storage: " + tabName);
+            } else {
+                tabName = TAB_NAME_PREFIX + (i + 1);
+            }
+
+            Content content = contentFactory.createContent(chatWindow.getContent(), tabName, false);
+
+            // 设置 parent content 以支持多标签页代码片段
+            chatWindow.setParentContent(content);
+
+            contentManager.addContent(content);
+        }
+
+        // 初始化所有标签页的可关闭状态
+        updateTabCloseableState(contentManager);
     }
 
     /**

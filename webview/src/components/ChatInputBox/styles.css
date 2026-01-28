@@ -83,10 +83,112 @@
   border: 1px solid var(--input-border);
   border-radius: 8px;
   overflow: visible;
+  position: relative;
+  margin: 0 auto;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .chat-input-box:focus-within {
   border-color: var(--input-focus-border);
+}
+
+.chat-input-box.is-resizing {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 1px var(--input-focus-border);
+}
+
+/* ============================================================
+   Resize handles (Augment-like)
+   ============================================================ */
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Top-center grip: vertical resize */
+.resize-handle--n {
+  top: -20px;
+  left: 50%;
+  width: 80px;
+  height: 14px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.resize-handle--n::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  width: 42px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--text-muted);
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.chat-input-box:hover .resize-handle--n::before,
+.chat-input-box.is-resizing .resize-handle--n::before {
+  opacity: 0.85;
+  background: var(--text-secondary);
+}
+
+/* Right edge: horizontal resize */
+.resize-handle--e {
+  top: 0;
+  right: -8px;
+  width: 14px;
+  height: 100%;
+  cursor: ew-resize;
+}
+
+.resize-handle--e::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0.0;
+  transition: opacity 0.15s ease;
+}
+
+.chat-input-box:hover .resize-handle--e::before,
+.chat-input-box.is-resizing .resize-handle--e::before {
+  opacity: 0.55;
+}
+
+/* Top-right corner: resize both */
+.resize-handle--ne {
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  cursor: nesw-resize;
+}
+
+.resize-handle--ne::before {
+  content: '';
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-muted);
+  border-top: 2px solid var(--text-muted);
+  opacity: 0.0;
+  transition: opacity 0.15s ease;
+}
+
+.chat-input-box:hover .resize-handle--ne::before,
+.chat-input-box.is-resizing .resize-handle--ne::before {
+  opacity: 0.55;
 }
 
 /* ============================================================

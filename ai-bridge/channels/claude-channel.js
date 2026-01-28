@@ -7,7 +7,8 @@ import {
   sendMessageWithAttachments as claudeSendMessageWithAttachments,
   getSlashCommands as claudeGetSlashCommands,
   rewindFiles as claudeRewindFiles,
-  getMcpServerStatus as claudeGetMcpServerStatus
+  getMcpServerStatus as claudeGetMcpServerStatus,
+  getMcpServerTools as claudeGetMcpServerTools
 } from '../services/claude/message-service.js';
 import { getSessionMessages as claudeGetSessionMessages } from '../services/claude/session-service.js';
 
@@ -89,11 +90,17 @@ export async function handleClaudeCommand(command, args, stdinData) {
       break;
     }
 
+    case 'getMcpServerTools': {
+      const serverId = stdinData?.serverId || args[0] || null;
+      await claudeGetMcpServerTools(serverId);
+      break;
+    }
+
     default:
       throw new Error(`Unknown Claude command: ${command}`);
   }
 }
 
 export function getClaudeCommandList() {
-  return ['send', 'sendWithAttachments', 'getSession', 'getSlashCommands', 'rewindFiles', 'getMcpServerStatus'];
+  return ['send', 'sendWithAttachments', 'getSession', 'getSlashCommands', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools'];
 }

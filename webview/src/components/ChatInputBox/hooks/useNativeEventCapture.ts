@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 
 interface CompletionOpenLike {
@@ -42,14 +42,45 @@ export function useNativeEventCapture({
   handleSubmit,
   handleEnhancePrompt,
 }: UseNativeEventCaptureOptions): void {
+  // Keep latest values without re-subscribing native listeners on every render.
+  const latestRef = useRef<UseNativeEventCaptureOptions>({
+    editableRef,
+    isComposing,
+    isComposingRef,
+    lastCompositionEndTimeRef,
+    sendShortcut,
+    fileCompletion,
+    commandCompletion,
+    agentCompletion,
+    completionSelectedRef,
+    submittedOnEnterRef,
+    handleSubmit,
+    handleEnhancePrompt,
+  });
+  latestRef.current = {
+    editableRef,
+    isComposing,
+    isComposingRef,
+    lastCompositionEndTimeRef,
+    sendShortcut,
+    fileCompletion,
+    commandCompletion,
+    agentCompletion,
+    completionSelectedRef,
+    submittedOnEnterRef,
+    handleSubmit,
+    handleEnhancePrompt,
+  };
+
   useEffect(() => {
     const el = editableRef.current;
     if (!el) return;
 
     const nativeKeyDown = (ev: KeyboardEvent) => {
+      const latest = latestRef.current;
       const isIMEProcessing = ev.keyCode === 229 || ev.isComposing;
       if (isIMEProcessing) {
-        isComposingRef.current = true;
+        latest.isComposingRef.current = true;
       }
 
       const isEnterKey = ev.key === 'Enter' || ev.keyCode === 13;
@@ -57,7 +88,7 @@ export function useNativeEventCapture({
       if (ev.key === '/' && ev.metaKey && !ev.shiftKey && !ev.altKey) {
         ev.preventDefault();
         ev.stopPropagation();
-        handleEnhancePrompt();
+        latest.handleEnhancePrompt();
         return;
       }
 
@@ -76,63 +107,65 @@ export function useNativeEventCapture({
         ((ev.key === 'e' || ev.key === 'E') && ev.ctrlKey && !ev.metaKey);
       if (isCursorMovementKey) return;
 
-      if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
+      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen) {
         return;
       }
 
-      const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
+      const isRecentlyComposing = Date.now() - latest.lastCompositionEndTimeRef.current < 100;
       const shift = (ev as KeyboardEvent).shiftKey === true;
       const metaOrCtrl = ev.metaKey || ev.ctrlKey;
       const isSendKey =
-        sendShortcut === 'cmdEnter'
-          ? isEnterKey && metaOrCtrl && !isComposingRef.current && !isComposing
+        latest.sendShortcut === 'cmdEnter'
+          ? isEnterKey && metaOrCtrl && !latest.isComposingRef.current && !latest.isComposing
           : isEnterKey &&
             !shift &&
-            !isComposingRef.current &&
-            !isComposing &&
+            !latest.isComposingRef.current &&
+            !latest.isComposing &&
             !isRecentlyComposing;
 
       if (!isSendKey) return;
 
       ev.preventDefault();
-      submittedOnEnterRef.current = true;
-      handleSubmit();
+      latest.submittedOnEnterRef.current = true;
+      latest.handleSubmit();
     };
 
     const nativeKeyUp = (ev: KeyboardEvent) => {
+      const latest = latestRef.current;
       const isEnterKey = ev.key === 'Enter' || ev.keyCode === 13;
       const shift = (ev as KeyboardEvent).shiftKey === true;
       const metaOrCtrl = ev.metaKey || ev.ctrlKey;
 
       const isSendKey =
-        sendShortcut === 'cmdEnter' ? isEnterKey && metaOrCtrl : isEnterKey && !shift;
+        latest.sendShortcut === 'cmdEnter' ? isEnterKey && metaOrCtrl : isEnterKey && !shift;
       if (!isSendKey) return;
 
       ev.preventDefault();
-      if (completionSelectedRef.current) {
-        completionSelectedRef.current = false;
+      if (latest.completionSelectedRef.current) {
+        latest.completionSelectedRef.current = false;
         return;
       }
-      if (submittedOnEnterRef.current) {
-        submittedOnEnterRef.current = false;
+      if (latest.submittedOnEnterRef.current) {
+        latest.submittedOnEnterRef.current = false;
       }
     };
 
     const nativeBeforeInput = (ev: InputEvent) => {
+      const latest = latestRef.current;
       const type = (ev as InputEvent).inputType;
       if (type !== 'insertParagraph') return;
 
-      if (sendShortcut === 'cmdEnter') return;
+      if (latest.sendShortcut === 'cmdEnter') return;
 
       ev.preventDefault();
-      if (completionSelectedRef.current) {
-        completionSelectedRef.current = false;
+      if (latest.completionSelectedRef.current) {
+        latest.completionSelectedRef.current = false;
         return;
       }
-      if (fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen) {
+      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen) {
         return;
       }
-      handleSubmit();
+      latest.handleSubmit();
     };
 
     el.addEventListener('keydown', nativeKeyDown, { capture: true });
@@ -146,16 +179,5 @@ export function useNativeEventCapture({
     };
   }, [
     editableRef,
-    isComposing,
-    isComposingRef,
-    lastCompositionEndTimeRef,
-    sendShortcut,
-    fileCompletion,
-    commandCompletion,
-    agentCompletion,
-    completionSelectedRef,
-    submittedOnEnterRef,
-    handleSubmit,
-    handleEnhancePrompt,
   ]);
 }
