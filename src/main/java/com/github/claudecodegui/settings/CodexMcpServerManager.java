@@ -4,9 +4,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.SystemInfo;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.*;
 
 /**
@@ -24,6 +28,7 @@ import java.util.*;
  */
 public class CodexMcpServerManager {
     private static final Logger LOG = Logger.getInstance(CodexMcpServerManager.class);
+    private static final int STATUS_CHECK_TIMEOUT_MS = 5000; // 5 seconds timeout for HTTP checks
 
     private final CodexSettingsManager settingsManager;
 
@@ -410,5 +415,201 @@ public class CodexMcpServerManager {
             }
         }
         return map;
+    }
+
+    /**
+     * Get status of all configured MCP servers
+     * Returns a list of status information for each server
+     */
+    public List<JsonObject> getMcpServerStatus() {
+        List<JsonObject> statusList = new ArrayList<>();
+
+        try {
+            List<JsonObject> servers = getMcpServers();
+
+            for (JsonObject server : servers) {
+                JsonObject status = checkServerStatus(server);
+                statusList.add(status);
+            }
+
+            LOG.info("[CodexMcpServerManager] Checked status of " + statusList.size() + " MCP servers");
+        } catch (Exception e) {
+            LOG.error("[CodexMcpServerManager] Failed to get MCP server status: " + e.getMessage(), e);
+        }
+
+        return statusList;
+    }
+
+    /**
+     * Check the status of a single MCP server
+     */
+    private JsonObject checkServerStatus(JsonObject server) {
+        JsonObject status = new JsonObject();
+        String serverId = server.has("id") ? server.get("id").getAsString() : "unknown";
+        String serverName = server.has("name") ? server.get("name").getAsString() : serverId;
+
+        status.addProperty("name", serverName);
+
+        // Check if server is enabled
+        boolean enabled = !server.has("enabled") || server.get("enabled").getAsBoolean();
+        if (!enabled) {
+            status.addProperty("status", "disabled");
+            return status;
+        }
+
+        // Get server configuration
+        if (!server.has("server") || !server.get("server").isJsonObject()) {
+            status.addProperty("status", "failed");
+            return status;
+        }
+
+        JsonObject serverConfig = server.getAsJsonObject("server");
+        String type = serverConfig.has("type") ? serverConfig.get("type").getAsString() : "stdio";
+
+        try {
+            if ("http".equals(type) || "sse".equals(type)) {
+                // HTTP/SSE server: try to connect
+                status.addProperty("status", checkHttpServer(serverConfig, serverName));
+            } else {
+                // STDIO server: check if command exists
+                status.addProperty("status", checkStdioServer(serverConfig, serverName));
+            }
+
+            // Add server info if available
+            if ("connected".equals(status.get("status").getAsString())) {
+                JsonObject serverInfo = new JsonObject();
+                serverInfo.addProperty("name", serverName);
+                serverInfo.addProperty("version", "unknown");
+                status.add("serverInfo", serverInfo);
+            }
+        } catch (Exception e) {
+            LOG.warn("[CodexMcpServerManager] Failed to check server " + serverName + ": " + e.getMessage());
+            status.addProperty("status", "failed");
+        }
+
+        return status;
+    }
+
+    /**
+     * Check HTTP/SSE MCP server status by attempting to connect
+     */
+    private String checkHttpServer(JsonObject serverConfig, String serverName) {
+        if (!serverConfig.has("url")) {
+            return "failed";
+        }
+
+        String url = serverConfig.get("url").getAsString();
+
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofMillis(STATUS_CHECK_TIMEOUT_MS))
+                .build();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(java.time.Duration.ofMillis(STATUS_CHECK_TIMEOUT_MS))
+                .GET()
+                .build();
+
+            HttpResponse<String> response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+            // If we get any response, consider the server reachable
+            if (response.statusCode() >= 200 && response.statusCode() < 500) {
+                return "connected";
+            } else {
+                return "failed";
+            }
+        } catch (Exception e) {
+            LOG.info("[CodexMcpServerManager] HTTP server " + serverName + " not reachable: " + e.getMessage());
+            return "failed";
+        }
+    }
+
+    /**
+     * Check STDIO MCP server status by verifying command exists
+     */
+    private String checkStdioServer(JsonObject serverConfig, String serverName) {
+        if (!serverConfig.has("command")) {
+            return "failed";
+        }
+
+        String command = serverConfig.get("command").getAsString();
+
+        // Check if command exists on system PATH
+        boolean commandExists = checkCommandExists(command);
+
+        if (commandExists) {
+            // For STDIO servers, we can't really test if they start without actually starting them
+            // So we return "pending" to indicate configuration looks good but not actually tested
+            return "pending";
+        } else {
+            return "failed";
+        }
+    }
+
+    /**
+     * Check if a command exists on the system PATH
+     */
+    private boolean checkCommandExists(String command) {
+        // Handle commands with arguments (e.g., "npx" - take only first part)
+        String commandName = command.split("\\s+")[0];
+
+        // Check for common commands that we know exist
+        if (isCommonCommand(commandName)) {
+            return true;
+        }
+
+        // Try to find the command on PATH
+        ProcessBuilder pb = new ProcessBuilder();
+        if (SystemInfo.isWindows) {
+            pb.command("where", commandName);
+        } else {
+            pb.command("which", commandName);
+        }
+
+        try {
+            Process process = pb.start();
+            int exitCode = process.waitFor();
+            return exitCode == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if this is a commonly available command
+     */
+    private boolean isCommonCommand(String command) {
+        // Common package managers
+        if ("npm".equals(command) || "npx".equals(command) ||
+            "yarn".equals(command) || "pnpx".equals(command) ||
+            "pnpm".equals(command)) {
+            return true;
+        }
+
+        // Common shell commands
+        if ("node".equals(command) || "python".equals(command) ||
+            "python3".equals(command) || "java".equals(command)) {
+            return true;
+        }
+
+        // Common on Windows
+        if (SystemInfo.isWindows) {
+            if ("cmd".equals(command) || "powershell".equals(command) ||
+                "pwsh".equals(command)) {
+                return true;
+            }
+        }
+
+        // Common on Unix
+        if (!SystemInfo.isWindows) {
+            if ("sh".equals(command) || "bash".equals(command) ||
+                "zsh".equals(command)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

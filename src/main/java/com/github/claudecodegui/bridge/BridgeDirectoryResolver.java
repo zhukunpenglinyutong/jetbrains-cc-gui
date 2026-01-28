@@ -173,6 +173,21 @@ public class BridgeDirectoryResolver {
         // 例如当 user.dir 为 "/" 时，会产生 "/ai-bridge" 这个无效路径
         LOG.error("[BridgeResolver] Failed to find valid ai-bridge directory. " +
                 "Please ensure the plugin is properly installed or set CLAUDE_BRIDGE_PATH environment variable.");
+
+        // 检查是否是开发环境（源码目录缺少 node_modules）
+        for (File dir : possibleDirs) {
+            if (dir.exists() && dir.isDirectory()) {
+                File nodeModules = new File(dir, "node_modules");
+                File packageJson = new File(dir, "package.json");
+                if (packageJson.exists() && !nodeModules.exists()) {
+                    LOG.warn("[BridgeResolver] Found ai-bridge directory at: " + dir.getAbsolutePath());
+                    LOG.warn("[BridgeResolver] But node_modules is missing. This is a development environment issue.");
+                    LOG.warn("[BridgeResolver] Please run: cd \"" + dir.getAbsolutePath() + "\" && npm install");
+                    break;
+                }
+            }
+        }
+
         return null;
     }
 
