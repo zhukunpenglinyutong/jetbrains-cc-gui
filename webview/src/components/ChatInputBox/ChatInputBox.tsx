@@ -38,6 +38,7 @@ import {
   useAttachmentHandlers,
   useChatInputImperativeHandle,
   useSpaceKeyListener,
+  useResizableChatInputBox,
 } from './hooks/index.js';
 import {
   commandToDropdownItem,
@@ -116,6 +117,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
     // Input element refs and state
     const containerRef = useRef<HTMLDivElement>(null);
     const editableRef = useRef<HTMLDivElement>(null);
+    const editableWrapperRef = useRef<HTMLDivElement>(null);
     const submittedOnEnterRef = useRef(false);
     const completionSelectedRef = useRef(false);
     const [hasContent, setHasContent] = useState(false);
@@ -668,8 +670,39 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
     useSpaceKeyListener({ editableRef, onKeyDown: handleKeyDownForTagRendering });
 
+    const {
+      isResizing: isResizingInputBox,
+      containerStyle,
+      editableWrapperStyle,
+      getHandleProps,
+    } = useResizableChatInputBox({
+      containerRef,
+      editableWrapperRef,
+    });
+
     return (
-      <div className="chat-input-box" onClick={focusInput} ref={containerRef}>
+      <div
+        className={`chat-input-box ${isResizingInputBox ? 'is-resizing' : ''}`}
+        onClick={focusInput}
+        ref={containerRef}
+        style={containerStyle}
+      >
+        {/* Resize handles (Augment-like interaction) */}
+        <div
+          className="resize-handle resize-handle--n"
+          {...getHandleProps('n')}
+          aria-label="Resize input height"
+        />
+        <div
+          className="resize-handle resize-handle--e"
+          {...getHandleProps('e')}
+          aria-label="Resize input width"
+        />
+        <div
+          className="resize-handle resize-handle--ne"
+          {...getHandleProps('ne')}
+          aria-label="Resize input size"
+        />
         {/* SDK status loading or not installed warning bar */}
         {(sdkStatusLoading || !sdkInstalled) && (
           <div className={`sdk-warning-bar ${sdkStatusLoading ? 'sdk-loading' : ''}`}>
@@ -723,9 +756,11 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
         {/* Input area */}
         <div
+          ref={editableWrapperRef}
           className="input-editable-wrapper"
           onMouseOver={handleMouseOver}
           onMouseLeave={handleMouseLeave}
+          style={editableWrapperStyle}
         >
           <div
             ref={editableRef}
