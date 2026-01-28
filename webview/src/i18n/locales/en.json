@@ -607,7 +607,22 @@
         "unrecognizedFormat": "Unrecognized configuration format",
         "jsonParseError": "JSON parse error: {{message}}"
       }
-    }
+    },
+    "tools": "Tools",
+    "loadTools": "Load Tool List",
+    "notConnected": "Not Connected",
+    "loadFailed": "Load Failed",
+    "noTools": "No Tools",
+    "clickToLoad": "Click to Load",
+    "refreshLogs": "Refresh Logs",
+    "clearLogs": "Clear Logs",
+    "clear": "Clear",
+    "noRefreshLogs": "No Refresh Logs",
+    "refreshLogsHint": "After clicking the refresh button, detailed refresh process information will be displayed here",
+    "noParams": "No Parameters",
+    "required": "Required",
+    "optional": "Optional",
+    "refreshServer": "Refresh {{name}}"
   },
   "tools": {
     "toolCall": "Tool Call",

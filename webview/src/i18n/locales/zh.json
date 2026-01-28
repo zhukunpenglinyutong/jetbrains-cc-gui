@@ -607,7 +607,22 @@
         "unrecognizedFormat": "无法识别的配置格式",
         "jsonParseError": "JSON 解析错误: {{message}}"
       }
-    }
+    },
+    "tools": "工具",
+    "loadTools": "加载工具列表",
+    "notConnected": "未连接",
+    "loadFailed": "加载失败",
+    "noTools": "无工具",
+    "clickToLoad": "点击刷新加载",
+    "refreshLogs": "刷新日志",
+    "clearLogs": "清空日志",
+    "clear": "清空",
+    "noRefreshLogs": "暂无刷新日志",
+    "refreshLogsHint": "点击刷新按钮后，这里会显示详细的刷新过程信息",
+    "noParams": "无参数",
+    "required": "必填",
+    "optional": "可选",
+    "refreshServer": "刷新 {{name}}"
   },
   "tools": {
     "toolCall": "工具调用",

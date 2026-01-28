@@ -57,7 +57,7 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 
-import { getMcpServersStatus } from './mcp-status-service.js';
+import { getMcpServersStatus, loadMcpServersConfig, getMcpServerTools as getMcpServerToolsImpl } from './mcp-status-service.js';
 
 import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
@@ -938,7 +938,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     if (sdkStderrLines.length > 0) {
       const sdkErrorText = sdkStderrLines.slice(-10).join('\n');
       // 在错误信息最前面添加 SDK-STDERR
-      payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
+      payload.error = `SDK-STDERR:
+\`\`\`
+${sdkErrorText}
+\`\`\`
+
+${payload.error}`;
       payload.details.sdkError = sdkErrorText;
     }
     console.error('[SEND_ERROR]', JSON.stringify(payload));
@@ -1046,7 +1051,12 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 
       const errorContent = [{
         type: 'text',
-        text: `API error: ${errorMsg}\n\nPossible causes:\n1. API Key is not configured correctly\n2. Third-party proxy service configuration issue\n3. Please check the configuration in ~/.claude/settings.json`
+        text: `API error: ${errorMsg}
+
+Possible causes:
+1. API Key is not configured correctly
+2. Third-party proxy service configuration issue
+3. Please check the configuration in ~/.claude/settings.json`
       }];
 
       const assistantMsg = {
@@ -1611,7 +1621,12 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     if (sdkStderrLines.length > 0) {
       const sdkErrorText = sdkStderrLines.slice(-10).join('\n');
       // 在错误信息最前面添加 SDK-STDERR
-      payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
+      payload.error = `SDK-STDERR:
+\`\`\`
+${sdkErrorText}
+\`\`\`
+
+${payload.error}`;
       payload.details.sdkError = sdkErrorText;
     }
     console.error('[SEND_ERROR]', JSON.stringify(payload));
@@ -1712,30 +1727,72 @@ export async function getSlashCommands(cwd = null) {
 /**
  * 获取 MCP 服务器连接状态
  * 直接验证每个 MCP 服务器的真实连接状态（通过 mcp-status-service 模块）
- * @param {string} [_cwd=null] - 工作目录（已废弃，保留仅为 API 兼容性，实际不使用）
- * @deprecated cwd 参数已不再使用，状态检测直接读取 ~/.claude.json 配置
+ * @param {string} [cwd=null] - 工作目录（用于检测项目特定的 MCP 配置）
  */
-export async function getMcpServerStatus(_cwd = null) {
+export async function getMcpServerStatus(cwd = null) {
   try {
-    console.log('[McpStatus] Getting MCP server status...');
+    // 使用 mcp-status-service 模块获取状态，传入 cwd 以支持项目特定配置
+    const mcpStatus = await getMcpServersStatus(cwd);
 
-    // 使用 mcp-status-service 模块获取状态
-    const mcpStatus = await getMcpServersStatus();
-
-    // 输出 MCP 服务器状态
-    console.log('[MCP_SERVER_STATUS]', JSON.stringify(mcpStatus));
-
+    // 直接输出 JSON 结果，避免混合输出导致解析错误
     console.log(JSON.stringify({
       success: true,
       servers: mcpStatus
     }));
-
   } catch (error) {
     console.error('[GET_MCP_SERVER_STATUS_ERROR]', error.message);
     console.log(JSON.stringify({
       success: false,
       error: error.message,
       servers: []
+    }));
+  }
+}
+
+/**
+ * 获取指定 MCP 服务器的工具列表
+ * 直接连接 MCP 服务器并获取其可用工具（通过 mcp-status-service 模块）
+ * @param {string} serverId - MCP 服务器 ID
+ * @param {string} [cwd=null] - 工作目录（用于检测项目特定的 MCP 配置）
+ */
+export async function getMcpServerTools(serverId, cwd = null) {
+  try {
+    console.log('[McpTools] Getting tools for MCP server:', serverId);
+
+    // 首先需要读取服务器配置，传入 cwd 以支持项目特定配置
+    const mcpServers = await loadMcpServersConfig(cwd);
+    const targetServer = mcpServers.find(s => s.name === serverId);
+
+    if (!targetServer) {
+      console.log(JSON.stringify({
+        success: false,
+        serverId,
+        error: `Server not found: ${serverId}`
+      }));
+      return;
+    }
+
+    // 调用 mcp-status-service 获取工具列表
+    const toolsResult = await getMcpServerToolsImpl(serverId, targetServer.config);
+
+    // 输出带前缀的结果，供 Java 后端快速识别
+    const resultJson = JSON.stringify({
+      success: true,
+      serverId,
+      serverName: toolsResult.name,
+      tools: toolsResult.tools || [],
+      error: toolsResult.error
+    });
+    console.log('[MCP_SERVER_TOOLS]', resultJson);
+    console.log(resultJson);
+
+  } catch (error) {
+    console.error('[GET_MCP_SERVER_TOOLS_ERROR]', error.message);
+    console.log(JSON.stringify({
+      success: false,
+      serverId,
+      error: error.message,
+      tools: []
     }));
   }
 }
