@@ -611,40 +611,63 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
-         * Update tab loading state - shows loading indicator by adding "..." suffix to tab name
+         * Update tab answer status - shows status indicator in tab name
          */
-        public void updateTabLoadingState(boolean loading) {
-            LOG.info("[TabLoading] updateTabLoadingState called - loading=" + loading +
-                    ", parentContent=" + (parentContent != null ? "not null" : "NULL") +
-                    ", originalTabName=" + (originalTabName != null ? "'" + originalTabName + "'" : "NULL"));
-
+        public void updateTabStatus(TabAnswerStatus status) {
             if (parentContent == null || originalTabName == null) {
-                LOG.warn("[TabLoading] Cannot update - parentContent=" + (parentContent == null ? "NULL" : "not null") +
-                        ", originalTabName=" + (originalTabName == null ? "NULL" : "'" + originalTabName + "'"));
+                LOG.warn("[TabStatus] Cannot update - parentContent or originalTabName is null");
                 return;
             }
 
             // Prevent redundant updates
-            if (loading == isLoadingIndicatorVisible) {
-                LOG.debug("[TabLoading] Skipping redundant update for tab: " + originalTabName);
+            if (status == currentTabStatus) {
+                LOG.debug("[TabStatus] Skipping redundant update for tab: " + originalTabName);
                 return;
             }
 
-            isLoadingIndicatorVisible = loading;
+            currentTabStatus = status;
+
+            // Cancel pending status reset task if any
+            if (statusResetTask != null && !statusResetTask.isDone()) {
+                statusResetTask.cancel(false);
+                statusResetTask = null;
+            }
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                String currentDisplayName = parentContent.getDisplayName();
-                if (loading) {
-                    // Add "..." suffix to tab name
-                    String newName = originalTabName + "...";
-                    parentContent.setDisplayName(newName);
-                    LOG.info("[TabLoading] ✓ Set loading state: '" + currentDisplayName + "' -> '" + newName + "'");
-                } else {
-                    // Restore original tab name
-                    parentContent.setDisplayName(originalTabName);
-                    LOG.info("[TabLoading] ✓ Restored original state: '" + currentDisplayName + "' -> '" + originalTabName + "'");
+                String displayName;
+                switch (status) {
+                    case ANSWERING:
+                        String answeringText = com.github.claudecodegui.ClaudeCodeGuiBundle.message("tab.status.answering");
+                        displayName = originalTabName + " (" + answeringText + ")";
+                        LOG.info("[TabStatus] ✓ Set answering state for tab: " + displayName);
+                        break;
+                    case COMPLETED:
+                        String completedText = com.github.claudecodegui.ClaudeCodeGuiBundle.message("tab.status.completed");
+                        displayName = originalTabName + " (" + completedText + ")";
+                        LOG.info("[TabStatus] ✓ Set completed state for tab: " + displayName);
+
+                        // Schedule auto-reset to IDLE after 5 seconds
+                        statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
+                            updateTabStatus(TabAnswerStatus.IDLE);
+                        }, 5, TimeUnit.SECONDS);
+                        break;
+                    case IDLE:
+                    default:
+                        displayName = originalTabName;
+                        LOG.info("[TabStatus] ✓ Restored idle state for tab: " + displayName);
+                        break;
                 }
+                parentContent.setDisplayName(displayName);
             });
+        }
+
+        /**
+         * Update tab loading state - backward compatibility wrapper
+         * @deprecated Use updateTabStatus(TabAnswerStatus) instead
+         */
+        @Deprecated
+        public void updateTabLoadingState(boolean loading) {
+            updateTabStatus(loading ? TabAnswerStatus.ANSWERING : TabAnswerStatus.IDLE);
         }
 
         /**
@@ -1676,6 +1699,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             // Tab loading state change (for loading indicator in tab title)
+            // Backward compatibility - converts to new tab status system
             if ("tab_loading_changed".equals(type)) {
                 try {
                     JsonObject json = new Gson().fromJson(content, JsonObject.class);
@@ -1684,6 +1708,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     updateTabLoadingState(loading);
                 } catch (Exception e) {
                     LOG.warn("[TabLoading] Failed to parse loading state: " + e.getMessage());
+                }
+                return;
+            }
+
+            // Tab answer status change (new system for showing answering/completed states)
+            if ("tab_status_changed".equals(type)) {
+                try {
+                    JsonObject json = new Gson().fromJson(content, JsonObject.class);
+                    String statusStr = json.has("status") ? json.get("status").getAsString() : "idle";
+                    TabAnswerStatus status;
+                    switch (statusStr) {
+                        case "answering":
+                            status = TabAnswerStatus.ANSWERING;
+                            break;
+                        case "completed":
+                            status = TabAnswerStatus.COMPLETED;
+                            break;
+                        case "idle":
+                        default:
+                            status = TabAnswerStatus.IDLE;
+                            break;
+                    }
+                    LOG.info("[TabStatus] Received status change in tab '" + originalTabName + "': status=" + statusStr);
+                    updateTabStatus(status);
+                } catch (Exception e) {
+                    LOG.warn("[TabStatus] Failed to parse tab status: " + e.getMessage());
                 }
                 return;
             }
@@ -2759,6 +2809,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         public void dispose() {
             if (disposed) return;
+
+            // Cancel pending tab status reset task
+            if (statusResetTask != null && !statusResetTask.isDone()) {
+                statusResetTask.cancel(false);
+                statusResetTask = null;
+                LOG.debug("[TabStatus] Cancelled pending status reset task");
+            }
 
             if (connection != null) {
                 connection.disconnect();
