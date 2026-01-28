@@ -673,6 +673,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       containerStyle,
       editableWrapperStyle,
       getHandleProps,
+      nudge,
     } = useResizableChatInputBox({
       containerRef,
       editableWrapperRef,
@@ -685,7 +686,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         ref={containerRef}
         style={containerStyle}
       >
-        <ResizeHandles getHandleProps={getHandleProps} />
+        <ResizeHandles getHandleProps={getHandleProps} nudge={nudge} />
 
         <ChatInputBoxHeader
           sdkStatusLoading={sdkStatusLoading}

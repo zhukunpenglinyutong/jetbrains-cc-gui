@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
 import { getFileIcon } from '../../../utils/fileIcons.js';
 import { icon_folder, icon_terminal, icon_server } from '../../../utils/icons.js';
@@ -36,6 +36,38 @@ export function useFileTags({
   const pathMappingRef = useRef<Map<string, string>>(new Map());
   // Flag for just rendered file tags (skip completion detection)
   const justRenderedTagRef = useRef(false);
+
+  const escapeHtmlText = useCallback((str: string): string => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }, []);
+
+  // Event delegation for closing tags to avoid accumulating per-tag listeners.
+  useEffect(() => {
+    const el = editableRef.current;
+    if (!el) return;
+
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const closeEl = target?.closest?.('.file-tag-close') as HTMLElement | null;
+      if (!closeEl) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const tag = closeEl.closest('.file-tag') as HTMLElement | null;
+      if (tag) {
+        tag.remove();
+      }
+    };
+
+    el.addEventListener('click', onClick);
+    return () => el.removeEventListener('click', onClick);
+  }, [editableRef]);
 
   /**
    * Render file tags
@@ -94,7 +126,7 @@ export function useFileTags({
       // Add text before match
       if (matchIndex > lastIndex) {
         const textBefore = currentText.substring(lastIndex, matchIndex);
-        newHTML += textBefore;
+        newHTML += escapeHtmlText(textBefore);
       }
 
       // Separate path and line number (e.g., src/file.ts#L10-20 -> src/file.ts)
@@ -118,13 +150,14 @@ export function useFileTags({
 
       // If not a valid reference, keep original text, don't render as tag
       if (!isValidReference) {
-        newHTML += fullMatch;
+        newHTML += escapeHtmlText(fullMatch);
         lastIndex = matchIndex + fullMatch.length;
         return;
       }
 
       // Get display filename (with line number, for display)
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
+      const escapedDisplayFileName = escapeHtmlText(displayFileName);
 
       /**
        * Protocol type detection for special references.
@@ -175,8 +208,8 @@ export function useFileTags({
       // Create file tag HTML
       newHTML += `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`;
       newHTML += `<span class="file-tag-icon">${iconSvg}</span>`;
-      newHTML += `<span class="file-tag-text">${displayFileName}</span>`;
-      newHTML += `<span class="file-tag-close">×</span>`;
+      newHTML += `<span class="file-tag-text">${escapedDisplayFileName}</span>`;
+      newHTML += `<span class="file-tag-close">&times;</span>`;
       newHTML += `</span>`;
 
       // Add space
@@ -187,7 +220,7 @@ export function useFileTags({
 
     // Add remaining text
     if (lastIndex < currentText.length) {
-      newHTML += currentText.substring(lastIndex);
+      newHTML += escapeHtmlText(currentText.substring(lastIndex));
     }
 
     // Set flag before updating innerHTML to prevent triggering completion detection
@@ -196,20 +229,6 @@ export function useFileTags({
 
     // Update content
     editableRef.current.innerHTML = newHTML;
-
-    // Add event listeners for file tag close buttons
-    const tags = editableRef.current.querySelectorAll('.file-tag-close');
-    tags.forEach((closeBtn) => {
-      closeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const tag = (e.target as HTMLElement).closest('.file-tag');
-        if (tag) {
-          tag.remove();
-          // Don't call handleInput here to avoid loops
-        }
-      });
-    });
 
     // Restore cursor position to end
     const selection = window.getSelection();
@@ -233,7 +252,7 @@ export function useFileTags({
     setTimeout(() => {
       justRenderedTagRef.current = false;
     }, 0);
-  }, [editableRef, getTextContent, onCloseCompletions]);
+  }, [editableRef, getTextContent, onCloseCompletions, escapeHtmlText]);
 
   /**
    * Extract all file tags from current input

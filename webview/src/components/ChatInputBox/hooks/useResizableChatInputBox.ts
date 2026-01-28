@@ -108,6 +108,7 @@ export function useResizableChatInputBox({
   containerStyle: CSSProperties;
   editableWrapperStyle: CSSProperties;
   getHandleProps: (dir: ResizeDirection) => ComponentPropsWithoutRef<'div'>;
+  nudge: (delta: { widthPx?: number; wrapperHeightPx?: number }) => void;
 } {
   const [size, setSize] = useState<SizeState>(() => {
     try {
@@ -118,6 +119,8 @@ export function useResizableChatInputBox({
       return { widthPx: null, wrapperHeightPx: null };
     }
   });
+  const sizeRef = useRef<SizeState>(size);
+  sizeRef.current = size;
 
   const [isResizing, setIsResizing] = useState(false);
   const startRef = useRef<{
@@ -163,6 +166,35 @@ export function useResizableChatInputBox({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [containerRef]);
+
+  const nudge = useCallback(
+    (delta: { widthPx?: number; wrapperHeightPx?: number }) => {
+      const containerEl = containerRef.current;
+      const wrapperEl = editableWrapperRef.current;
+      if (!containerEl || !wrapperEl) return;
+
+      const bounds = getBounds(containerEl);
+      const containerRect = containerEl.getBoundingClientRect();
+      const wrapperRect = wrapperEl.getBoundingClientRect();
+
+      const currentWidth = sizeRef.current.widthPx ?? containerRect.width;
+      const currentHeight = sizeRef.current.wrapperHeightPx ?? wrapperRect.height;
+
+      const nextWidth =
+        delta.widthPx == null ? currentWidth : clamp(Math.round(currentWidth + delta.widthPx), bounds.minWidthPx, bounds.maxWidthPx);
+      const nextHeight =
+        delta.wrapperHeightPx == null
+          ? currentHeight
+          : clamp(Math.round(currentHeight + delta.wrapperHeightPx), bounds.minWrapperHeightPx, bounds.maxWrapperHeightPx);
+
+      setSize((prev) => ({
+        ...prev,
+        widthPx: delta.widthPx == null ? prev.widthPx : nextWidth,
+        wrapperHeightPx: delta.wrapperHeightPx == null ? prev.wrapperHeightPx : nextHeight,
+      }));
+    },
+    [containerRef, editableWrapperRef]
+  );
 
   const stopResize = useCallback(() => {
     const start = startRef.current;
@@ -223,8 +255,8 @@ export function useResizableChatInputBox({
           const containerRect = containerEl.getBoundingClientRect();
           const wrapperRect = wrapperEl.getBoundingClientRect();
 
-          const startWidthPx = size.widthPx ?? containerRect.width;
-          const startWrapperHeightPx = size.wrapperHeightPx ?? wrapperRect.height;
+          const startWidthPx = sizeRef.current.widthPx ?? containerRect.width;
+          const startWrapperHeightPx = sizeRef.current.wrapperHeightPx ?? wrapperRect.height;
 
           const prevUserSelect = document.body.style.userSelect;
           const prevCursor = document.body.style.cursor;
@@ -247,7 +279,7 @@ export function useResizableChatInputBox({
         },
       } satisfies ComponentPropsWithoutRef<'div'>;
     },
-    [containerRef, editableWrapperRef, size.widthPx, size.wrapperHeightPx]
+    [containerRef, editableWrapperRef]
   );
 
   const containerStyle = useMemo((): CSSProperties => {
@@ -268,5 +300,6 @@ export function useResizableChatInputBox({
     containerStyle,
     editableWrapperStyle,
     getHandleProps,
+    nudge,
   };
 }
