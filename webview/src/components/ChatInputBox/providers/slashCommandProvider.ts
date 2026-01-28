@@ -1,6 +1,7 @@
 import type { CommandItem, DropdownItemData } from '../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import i18n from '../../../i18n/config';
+import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
 /**
  * 本地命令列表（需要被过滤掉的命令）
@@ -43,7 +44,7 @@ export function resetSlashCommandsState() {
   retryCount = 0;
   pendingWaiters.forEach(w => w.reject(new Error('Slash commands state reset')));
   pendingWaiters = [];
-  console.log('[SlashCommand] State reset');
+  debugLog('[SlashCommand] State reset');
 }
 
 interface SDKSlashCommand {
@@ -56,7 +57,7 @@ export function setupSlashCommandsCallback() {
   if (callbackRegistered && window.updateSlashCommands) return;
 
   const handler = (json: string) => {
-    console.log('[SlashCommand] Received data from backend, length=' + json.length);
+    debugLog('[SlashCommand] Received data from backend, length=' + json.length);
 
     try {
       const parsed = JSON.parse(json);
@@ -88,19 +89,19 @@ export function setupSlashCommandsCallback() {
         retryCount = 0;
         pendingWaiters.forEach(w => w.resolve());
         pendingWaiters = [];
-        console.log('[SlashCommand] Successfully loaded ' + commands.length + ' commands');
+        debugLog('[SlashCommand] Successfully loaded ' + commands.length + ' commands');
       } else {
         loadingState = 'failed';
         const error = new Error('Slash commands payload is not an array');
         pendingWaiters.forEach(w => w.reject(error));
         pendingWaiters = [];
-        console.warn('[SlashCommand] Invalid commands payload');
+        debugWarn('[SlashCommand] Invalid commands payload');
       }
     } catch (error) {
       loadingState = 'failed';
       pendingWaiters.forEach(w => w.reject(error));
       pendingWaiters = [];
-      console.error('[SlashCommand] Failed to parse commands:', error);
+      debugError('[SlashCommand] Failed to parse commands:', error);
     }
   };
 
@@ -111,10 +112,10 @@ export function setupSlashCommandsCallback() {
     originalHandler?.(json);
   };
   callbackRegistered = true;
-  console.log('[SlashCommand] Callback registered');
+  debugLog('[SlashCommand] Callback registered');
 
   if (window.__pendingSlashCommands) {
-    console.log('[SlashCommand] Processing pending commands');
+    debugLog('[SlashCommand] Processing pending commands');
     const pending = window.__pendingSlashCommands;
     window.__pendingSlashCommands = undefined;
     handler(pending);
@@ -175,12 +176,12 @@ function requestRefresh(): boolean {
   const now = Date.now();
 
   if (now - lastRefreshTime < MIN_REFRESH_INTERVAL) {
-    console.log('[SlashCommand] Skipping refresh (too soon)');
+    debugLog('[SlashCommand] Skipping refresh (too soon)');
     return false;
   }
 
   if (retryCount >= MAX_RETRY_COUNT) {
-    console.warn('[SlashCommand] Max retry count reached');
+    debugWarn('[SlashCommand] Max retry count reached');
     loadingState = 'failed';
     return false;
   }
@@ -188,7 +189,7 @@ function requestRefresh(): boolean {
   const attempt = retryCount + 1;
   const sent = sendBridgeEvent('refresh_slash_commands');
   if (!sent) {
-    console.log('[SlashCommand] Bridge not available yet, refresh not sent');
+    debugLog('[SlashCommand] Bridge not available yet, refresh not sent');
     return false;
   }
 
@@ -196,7 +197,7 @@ function requestRefresh(): boolean {
   loadingState = 'loading';
   retryCount = attempt;
 
-  console.log('[SlashCommand] Requesting refresh from backend (attempt ' + retryCount + '/' + MAX_RETRY_COUNT + ')');
+  debugLog('[SlashCommand] Requesting refresh from backend (attempt ' + retryCount + '/' + MAX_RETRY_COUNT + ')');
   return true;
 }
 
@@ -245,7 +246,7 @@ export async function slashCommandProvider(
   if (loadingState === 'idle' || loadingState === 'failed') {
     requestRefresh();
   } else if (loadingState === 'loading' && now - lastRefreshTime > LOADING_TIMEOUT) {
-    console.warn('[SlashCommand] Loading timeout');
+    debugWarn('[SlashCommand] Loading timeout');
     loadingState = 'failed';
     requestRefresh();
   }
@@ -287,7 +288,7 @@ export function commandToDropdownItem(command: CommandItem): DropdownItemData {
 }
 
 export function forceRefreshSlashCommands(): void {
-  console.log('[SlashCommand] Force refresh requested');
+  debugLog('[SlashCommand] Force refresh requested');
   loadingState = 'idle';
   lastRefreshTime = 0;
   retryCount = 0;

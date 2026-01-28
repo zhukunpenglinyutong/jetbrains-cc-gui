@@ -148,6 +148,21 @@ export interface DropdownPosition {
 }
 
 /**
+ * Completion dropdown controller (returned by useCompletionDropdown)
+ * Used by ChatInputBoxFooter to render multiple completion menus.
+ */
+export interface CompletionController {
+  isOpen: boolean;
+  position: DropdownPosition | null;
+  items: DropdownItemData[];
+  activeIndex: number;
+  loading: boolean;
+  close: () => void;
+  selectIndex: (index: number) => void;
+  handleMouseEnter: (index: number) => void;
+}
+
+/**
  * Trigger query information
  */
 export interface TriggerQuery {
@@ -477,7 +492,7 @@ export interface ChatInputBoxProps {
   /** Open agent settings callback */
   onOpenAgentSettings?: () => void;
 
-  /** Whether has messages (for rewind button display) */
+  /** Whether has messages (for rewind button display). Default: false. */
   hasMessages?: boolean;
   /** Rewind file callback */
   onRewind?: () => void;

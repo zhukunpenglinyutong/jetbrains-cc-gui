@@ -120,19 +120,23 @@ export function useInputHistory({
       const el = editableRef.current;
       if (!el) return;
 
-      el.innerText = nextText;
+      try {
+        el.innerText = nextText;
 
-      // Move cursor to end
-      const range = document.createRange();
-      const selection = window.getSelection();
-      if (selection) {
-        range.selectNodeContents(el);
-        range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
+        // Move cursor to end
+        const range = document.createRange();
+        const selection = window.getSelection();
+        if (selection) {
+          range.selectNodeContents(el);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      } catch {
+        // Defensive: JCEF/IME edge cases can throw on DOM selection APIs.
+      } finally {
+        handleInput(false);
       }
-
-      handleInput(false);
     },
     [editableRef, handleInput]
   );
