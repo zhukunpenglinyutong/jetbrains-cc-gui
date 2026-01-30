@@ -21,6 +21,7 @@ export interface ServerCardProps {
   onToggleServer: (enabled: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onCopy: () => void;
   onRefresh: () => void;
   onLoadTools: (forceRefresh: boolean) => void;
   onCopyUrl: (url: string) => void;
@@ -42,6 +43,7 @@ export function ServerCard({
   onToggleServer,
   onEdit,
   onDelete,
+  onCopy,
   onRefresh,
   onLoadTools,
   onCopyUrl,
@@ -85,6 +87,17 @@ export function ServerCard({
           >
             <span className="codicon codicon-edit"></span>
           </button>
+          {/* 复制按钮 */}
+          <button
+            className="icon-btn copy-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy();
+            }}
+            title={t('chat.copyConfig')}
+          >
+            <span className="codicon codicon-copy"></span>
+          </button>
           {/* 删除按钮 */}
           <button
             className="icon-btn delete-btn"
@@ -98,7 +111,7 @@ export function ServerCard({
           </button>
           {/* 单个服务器刷新按钮 */}
           <button
-            className={`single-refresh-btn ${refreshState?.isRefreshing ? 'refreshing' : ''}`}
+            className={`icon-btn refresh-btn ${refreshState?.isRefreshing ? 'refreshing' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               onRefresh();
@@ -106,7 +119,7 @@ export function ServerCard({
             disabled={refreshState?.isRefreshing}
             title={refreshState?.step || t('mcp.refreshServer', { name: server.name || server.id })}
           >
-            <span className={`codicon codicon-refresh ${refreshState?.isRefreshing ? 'spinning' : ''}`}></span>
+            <span className={`codicon codicon-sync ${refreshState?.isRefreshing ? 'spinning' : ''}`}></span>
           </button>
           <label className="toggle-switch">
             <input

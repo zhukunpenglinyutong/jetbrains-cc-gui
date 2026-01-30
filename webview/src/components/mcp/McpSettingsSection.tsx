@@ -279,6 +279,24 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     }
   }, [addToast, t]);
 
+  // 复制服务器配置
+  const handleCopyConfig = useCallback(async (server: McpServer) => {
+    const config = {
+      mcpServers: {
+        [server.id]: {
+          ...server.server,
+        },
+      },
+    };
+    const jsonContent = JSON.stringify(config, null, 2);
+    const success = await copyToClipboard(jsonContent);
+    if (success) {
+      addToast(t('mcp.configCopied'), 'success');
+    } else {
+      addToast(t('mcp.copyFailed'), 'error');
+    }
+  }, [addToast, t]);
+
   // 工具悬停处理
   const handleToolHover = useCallback((tool: McpTool | null, position?: { x: number; y: number }, serverId?: string) => {
     if (tool && position && serverId) {
@@ -309,7 +327,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
             disabled={loading || statusLoading}
             title={t('mcp.refreshStatus')}
           >
-            <span className={`codicon codicon-refresh ${loading || statusLoading ? 'spinning' : ''}`}></span>
+            <span className={`codicon codicon-sync ${loading || statusLoading ? 'spinning' : ''}`}></span>
           </button>
           <div className="add-dropdown" ref={dropdownRef}>
             <button className="add-btn" onClick={() => setShowDropdown(!showDropdown)}>
@@ -354,6 +372,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
                   onToggleServer={(enabled) => handleToggleServer(server, enabled)}
                   onEdit={() => handleEdit(server)}
                   onDelete={() => handleDelete(server)}
+                  onCopy={() => handleCopyConfig(server)}
                   onRefresh={() => handleRefreshSingleServer(server)}
                   onLoadTools={(forceRefresh) => loadServerTools(server, forceRefresh)}
                   onCopyUrl={handleCopyUrl}
