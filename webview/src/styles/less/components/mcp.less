@@ -31,16 +31,10 @@
     max-height: 400px;
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border-primary);
+    border: 1px solid var(--border-secondary);
     border-radius: 8px;
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
     overflow: hidden;
-}
-
-.mcp-logs-panel .logs-header {
-    flex-shrink: 0;
-    border-bottom: 1px solid var(--border-primary);
-    background: var(--bg-tertiary);
 }
 
 .mcp-logs-panel .logs-content {
@@ -283,6 +277,41 @@
     gap: 8px;
     flex-shrink: 0;
 }
+
+/* 图标按钮 - 用于编辑、复制、删除、刷新等操作 */
+.icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.icon-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.icon-btn .codicon {
+    font-size: 14px;
+}
+
+.icon-btn .spinning {
+    animation: spin 1s linear infinite;
+}
+
 
 /* Toggle 开关 */
 .toggle-switch {
@@ -580,6 +609,33 @@
 
     .card-header {
         padding: 10px 12px;
+    }
+
+    .header-right-section {
+        flex-shrink: 1;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        flex-wrap: nowrap;
+    }
+
+    .header-right-section::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .header-right-section::-webkit-scrollbar-thumb {
+        background: var(--border-secondary);
+        border-radius: 2px;
+    }
+
+    .header-right-section .icon-btn {
+        flex: 0 0 32px;
+        width: 32px;
+        padding: 0;
+    }
+
+    .header-right-section .toggle-switch {
+        flex: 0 0 40px;
+        width: 40px;
     }
 
     .server-icon {
@@ -1116,6 +1172,25 @@
         justify-content: flex-end;
     }
 
+    /* 确认对话框按钮在小屏幕下的布局优化 */
+    .mcp-confirm-dialog .dialog-footer {
+        flex-direction: row;
+        gap: 8px;
+    }
+
+    .mcp-confirm-dialog .footer-actions {
+        display: flex;
+        flex: 1;
+        gap: 8px;
+    }
+
+    .mcp-confirm-dialog .footer-actions .btn {
+        flex: 1;
+        justify-content: center;
+        min-width: 0;
+        padding: 10px 12px;
+    }
+
     .preset-item {
         padding: 10px 12px;
     }
@@ -1145,9 +1220,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border-primary);
-    background: var(--bg-tertiary);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-secondary);
+    background: transparent;
 }
 
 .logs-header .header-left {
@@ -1161,42 +1236,44 @@
     align-items: center;
     gap: 6px;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-weight: 500;
+    color: var(--text-secondary);
 }
 
 .logs-title .codicon {
     font-size: 14px;
-    color: var(--accent-primary);
+    color: var(--text-tertiary);
 }
 
 .logs-count {
     font-size: 12px;
     color: var(--text-tertiary);
+    font-weight: normal;
 }
 
 .clear-logs-btn {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 8px;
-    border: 1px solid var(--border-primary);
+    padding: 4px 10px;
+    border: 1px solid var(--border-secondary);
     border-radius: 4px;
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
+    background: transparent;
+    color: var(--text-tertiary);
     cursor: pointer;
     font-size: 11px;
     transition: all 0.15s ease;
 }
 
 .clear-logs-btn:hover {
-    background: var(--bg-hover);
-    border-color: var(--accent-primary);
+    background: var(--bg-secondary);
+    border-color: var(--border-primary);
     color: var(--text-primary);
 }
 
 .clear-logs-btn .codicon {
     font-size: 12px;
+    opacity: 0.8;
 }
 
 .logs-content {

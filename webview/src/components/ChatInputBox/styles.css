@@ -289,10 +289,11 @@
   min-height: 32px;
 }
 
-/* 确保第一个子元素（通常是 ContextBar 或 AttachmentList）拥有圆角 */
-.chat-input-box > :first-child {
-  border-top-left-radius: 7px;
-  border-top-right-radius: 7px;
+/* 确保第一个可见子元素（通常是 ContextBar 或 AttachmentList）拥有圆角 */
+/* ResizeHandles 是绝对定位的 :first-child，需要选择紧随其后的可见元素 */
+.chat-input-box > .resize-handle + * {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 
 .context-tools {

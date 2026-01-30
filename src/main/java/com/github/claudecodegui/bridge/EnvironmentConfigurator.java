@@ -80,6 +80,7 @@ public class EnvironmentConfigurator {
             }
         } else {
             // macOS/Linux 常用路径
+            String userHome = System.getProperty("user.home");
             String[] unixPaths = {
                 "/usr/local/bin",
                 "/opt/homebrew/bin",
@@ -87,7 +88,11 @@ public class EnvironmentConfigurator {
                 "/bin",
                 "/usr/sbin",
                 "/sbin",
-                System.getProperty("user.home") + "/.nvm/current/bin"
+                userHome + "/.nvm/current/bin",
+                // Python / uv / pip 工具安装目录（uvx, uv 等）
+                userHome + "/.local/bin",
+                // Rust / cargo 工具安装目录
+                userHome + "/.cargo/bin",
             };
             for (String p : unixPaths) {
                 if (!pathContains(path, p)) {

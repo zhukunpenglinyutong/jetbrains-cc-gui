@@ -17,14 +17,14 @@
  */
 
 import { log } from './logger.js';
-import { loadMcpServersConfig } from './config-loader.js';
+import { loadMcpServersConfig, loadAllMcpServersInfo } from './config-loader.js';
 import { verifyHttpServerStatus } from './http-verifier.js';
 import { verifyStdioServerStatus } from './stdio-verifier.js';
 import { getHttpServerTools } from './http-tools-getter.js';
 import { getStdioServerTools } from './stdio-tools-getter.js';
 
 // 重新导出配置加载函数
-export { loadMcpServersConfig } from './config-loader.js';
+export { loadMcpServersConfig, loadAllMcpServersInfo } from './config-loader.js';
 
 /**
  * 验证单个 MCP 服务器的连接状态
@@ -46,23 +46,46 @@ export async function verifyMcpServerStatus(serverName, serverConfig) {
 
 /**
  * 获取所有 MCP 服务器的连接状态
+ * 包含启用、禁用和配置无效的服务器，确保前端能获取完整状态
  * @param {string} cwd - 当前工作目录（用于检测项目配置）
  * @returns {Promise<Object[]>} MCP 服务器状态列表
  */
 export async function getMcpServersStatus(cwd = null) {
   try {
-    const enabledServers = await loadMcpServersConfig(cwd);
+    const allServers = await loadAllMcpServersInfo(cwd);
 
-    log('info', 'Found', enabledServers.length, 'enabled MCP servers, verifying...');
-    log('info', '[MCP Parallel] Starting parallel verification of', enabledServers.length, 'servers using Promise.all');
-    log('info', '[MCP Parallel] Supports simultaneous processing of 10+ servers');
+    log('info', 'Found', allServers.enabled.length, 'enabled,',
+      allServers.disabled.length, 'disabled,',
+      allServers.invalid.length, 'invalid MCP servers');
 
-    // 并行验证所有服务器
-    const results = await Promise.all(
-      enabledServers.map(({ name, config }) => verifyMcpServerStatus(name, config))
-    );
+    // 并行验证所有启用的服务器
+    const enabledResults = allServers.enabled.length > 0
+      ? await Promise.all(
+          allServers.enabled.map(({ name, config }) => verifyMcpServerStatus(name, config))
+        )
+      : [];
 
-    log('info', '[MCP Parallel] Parallel verification completed for all', enabledServers.length, 'servers');
+    // 为禁用的服务器生成 failed 状态（附带原因）
+    const disabledResults = allServers.disabled.map(name => ({
+      name,
+      status: 'failed',
+      error: 'Server is disabled',
+    }));
+
+    // 为配置无效的服务器生成 failed 状态（附带原因）
+    const invalidResults = allServers.invalid.map(({ name, reason }) => ({
+      name,
+      status: 'failed',
+      error: `Invalid config: ${reason}`,
+    }));
+
+    const results = [...enabledResults, ...disabledResults, ...invalidResults];
+
+    log('info', '[MCP Status] Completed: total', results.length, 'servers (',
+      enabledResults.length, 'verified,',
+      disabledResults.length, 'disabled,',
+      invalidResults.length, 'invalid)');
+
     return results;
   } catch (error) {
     log('error', 'Failed to get MCP servers status:', error.message);

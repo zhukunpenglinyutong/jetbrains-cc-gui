@@ -68,6 +68,86 @@ function validateConfigStructure(config) {
 }
 
 /**
+ * 解析 MCP 配置文件中的服务器列表和禁用列表
+ * 抽离出公共逻辑，供 loadMcpServersConfig 和 loadAllMcpServersInfo 共享
+ * @param {string} cwd - 当前工作目录（用于检测项目）
+ * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} 解析结果，失败返回 null
+ */
+async function parseMcpConfig(cwd = null) {
+  const claudeJsonPath = join(homedir(), '.claude.json');
+
+  if (!existsSync(claudeJsonPath)) {
+    log('info', '~/.claude.json not found');
+    return null;
+  }
+
+  const content = await readFile(claudeJsonPath, 'utf8');
+  const config = JSON.parse(content);
+
+  // 验证配置结构
+  const validation = validateConfigStructure(config);
+  if (!validation.valid) {
+    log('error', 'Invalid config structure:', validation.reason);
+    return null;
+  }
+
+  // 规范化路径以匹配配置中的路径格式
+  let normalizedCwd = cwd;
+  if (cwd) {
+    normalizedCwd = cwd.replace(/\\/g, '/');
+    normalizedCwd = normalizedCwd.replace(/\/$/, '');
+  }
+
+  // 查找匹配的项目配置
+  let projectConfig = null;
+  if (normalizedCwd && config.projects) {
+    if (config.projects[normalizedCwd]) {
+      projectConfig = config.projects[normalizedCwd];
+    } else {
+      const cwdVariants = [
+        normalizedCwd,
+        normalizedCwd.replace(/\//g, '\\'),
+        '/' + normalizedCwd,
+      ];
+
+      for (const projectPath of Object.keys(config.projects)) {
+        const normalizedProjectPath = projectPath.replace(/\\/g, '/');
+        if (cwdVariants.includes(normalizedProjectPath)) {
+          projectConfig = config.projects[projectPath];
+          log('info', 'Found project config for:', projectPath);
+          break;
+        }
+      }
+    }
+  }
+
+  let mcpServers = {};
+  let disabledServers = new Set();
+
+  if (projectConfig) {
+    log('info', '[MCP Config] Using project-specific MCP configuration');
+
+    if (Object.keys(projectConfig.mcpServers || {}).length > 0) {
+      mcpServers = projectConfig.mcpServers;
+      disabledServers = new Set(projectConfig.disabledMcpServers || []);
+    } else {
+      log('info', '[MCP Config] Project has no MCP servers, using global config');
+      mcpServers = config.mcpServers || {};
+
+      const globalDisabled = config.disabledMcpServers || [];
+      const projectDisabled = projectConfig.disabledMcpServers || [];
+      disabledServers = new Set([...globalDisabled, ...projectDisabled]);
+    }
+  } else {
+    log('info', '[MCP Config] Using global MCP configuration');
+    mcpServers = config.mcpServers || {};
+    disabledServers = new Set(config.disabledMcpServers || []);
+  }
+
+  return { mcpServers, disabledServers };
+}
+
+/**
  * 从 ~/.claude.json 读取 MCP 服务器配置
  * 支持两种模式：
  * 1. 全局配置 - 使用全局 mcpServers
@@ -77,85 +157,10 @@ function validateConfigStructure(config) {
  */
 export async function loadMcpServersConfig(cwd = null) {
   try {
-    const claudeJsonPath = join(homedir(), '.claude.json');
+    const parsed = await parseMcpConfig(cwd);
+    if (!parsed) return [];
 
-    if (!existsSync(claudeJsonPath)) {
-      log('info', '~/.claude.json not found');
-      return [];
-    }
-
-    const content = await readFile(claudeJsonPath, 'utf8');
-    const config = JSON.parse(content);
-
-    // 验证配置结构
-    const validation = validateConfigStructure(config);
-    if (!validation.valid) {
-      log('error', 'Invalid config structure:', validation.reason);
-      return [];
-    }
-
-    // 规范化路径以匹配配置中的路径格式
-    let normalizedCwd = cwd;
-    if (cwd) {
-      // 将路径转换为绝对路径并统一使用正斜杠
-      normalizedCwd = cwd.replace(/\\/g, '/');
-      // 移除尾部斜杠
-      normalizedCwd = normalizedCwd.replace(/\/$/, '');
-    }
-
-    // 查找匹配的项目配置
-    let projectConfig = null;
-    if (normalizedCwd && config.projects) {
-      // 尝试精确匹配项目路径
-      if (config.projects[normalizedCwd]) {
-        projectConfig = config.projects[normalizedCwd];
-      } else {
-        // 尝试将 cwd 转换为不同的格式进行匹配
-        const cwdVariants = [
-          normalizedCwd,
-          normalizedCwd.replace(/\//g, '\\'),  // Windows 反斜杠格式
-          '/' + normalizedCwd,                  // Unix 绝对路径格式
-        ];
-
-        for (const projectPath of Object.keys(config.projects)) {
-          const normalizedProjectPath = projectPath.replace(/\\/g, '/');
-          if (cwdVariants.includes(normalizedProjectPath)) {
-            projectConfig = config.projects[projectPath];
-            log('info', 'Found project config for:', projectPath);
-            break;
-          }
-        }
-      }
-    }
-
-    let mcpServers = {};
-    let disabledServers = new Set();
-
-    if (projectConfig) {
-      // 模式 2: 使用项目特定的 MCP 配置
-      log('info', '[MCP Config] Using project-specific MCP configuration');
-
-      // 检查项目是否有自己的 mcpServers
-      if (Object.keys(projectConfig.mcpServers || {}).length > 0) {
-        mcpServers = projectConfig.mcpServers;
-        disabledServers = new Set(projectConfig.disabledMcpServers || []);
-      } else {
-        // 项目没有自己的 mcpServers，使用全局配置
-        // 但要应用项目级别的禁用列表
-        log('info', '[MCP Config] Project has no MCP servers, using global config');
-        mcpServers = config.mcpServers || {};
-
-        // 合并全局和项目的禁用列表
-        const globalDisabled = config.disabledMcpServers || [];
-        const projectDisabled = projectConfig.disabledMcpServers || [];
-        disabledServers = new Set([...globalDisabled, ...projectDisabled]);
-      }
-    } else {
-      // 模式 1: 使用全局 MCP 配置
-      log('info', '[MCP Config] Using global MCP configuration');
-      mcpServers = config.mcpServers || {};
-      disabledServers = new Set(config.disabledMcpServers || []);
-    }
+    const { mcpServers, disabledServers } = parsed;
 
     const enabledServers = [];
     for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
@@ -174,5 +179,68 @@ export async function loadMcpServersConfig(cwd = null) {
   } catch (error) {
     log('error', 'Failed to load MCP servers config:', error.message);
     return [];
+  }
+}
+
+/**
+ * 加载所有 MCP 服务器信息（包括被禁用和配置无效的）
+ * 合并全局和项目级别的 mcpServers，确保与 Java 端看到的服务器列表一致
+ * @param {string} cwd - 当前工作目录
+ * @returns {Promise<{enabled: Array, disabled: Array<string>, invalid: Array<{name: string, reason: string}>}>}
+ */
+export async function loadAllMcpServersInfo(cwd = null) {
+  const result = { enabled: [], disabled: [], invalid: [] };
+
+  try {
+    const parsed = await parseMcpConfig(cwd);
+    if (!parsed) return result;
+
+    const { mcpServers, disabledServers } = parsed;
+
+    // 收集项目范围内的服务器名
+    const processedNames = new Set();
+
+    // 先处理项目/全局解析出来的服务器（parseMcpConfig 的结果）
+    for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
+      processedNames.add(serverName);
+      classifyServer(serverName, serverConfig, disabledServers, result);
+    }
+
+    // 如果指定了 cwd，全局服务器可能被项目配置覆盖了
+    // 需要额外读取全局配置，补充那些只存在于全局的服务器
+    if (cwd) {
+      const globalParsed = await parseMcpConfig(null);
+      if (globalParsed) {
+        for (const [serverName, serverConfig] of Object.entries(globalParsed.mcpServers)) {
+          if (processedNames.has(serverName)) continue; // 项目配置已包含，跳过
+          processedNames.add(serverName);
+          classifyServer(serverName, serverConfig, globalParsed.disabledServers, result);
+        }
+      }
+    }
+
+    log('info', '[MCP Config] All servers:', result.enabled.length, 'enabled,', result.disabled.length, 'disabled,', result.invalid.length, 'invalid');
+    return result;
+  } catch (error) {
+    log('error', 'Failed to load all MCP servers info:', error.message);
+    return result;
+  }
+}
+
+/**
+ * 将服务器分类到 enabled/disabled/invalid
+ */
+function classifyServer(serverName, serverConfig, disabledServers, result) {
+  if (disabledServers.has(serverName)) {
+    result.disabled.push(serverName);
+  } else if (!isValidServerConfig(serverConfig)) {
+    const hasCommand = typeof serverConfig?.command === 'string' && serverConfig.command.length > 0;
+    const hasUrl = typeof serverConfig?.url === 'string' && serverConfig.url.length > 0;
+    const reason = !hasCommand && !hasUrl
+      ? 'Missing command or url'
+      : 'Invalid config structure';
+    result.invalid.push({ name: serverName, reason });
+  } else {
+    result.enabled.push({ name: serverName, config: serverConfig });
   }
 }
