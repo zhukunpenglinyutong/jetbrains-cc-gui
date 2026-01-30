@@ -405,20 +405,29 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     window.showLoading = (value) => {
       const isLoading = isTruthy(value);
 
+      // Notify backend about loading state change for tab indicator
+      sendBridgeEvent('tab_loading_changed', JSON.stringify({ loading: isLoading }));
+
       // FIX: 流式传输期间忽略 loading=false，由 onStreamEnd 统一处理
       if (!isLoading && isStreamingRef.current) {
         console.log('[Frontend] Ignoring showLoading(false) during streaming');
         return;
       }
 
-      setLoading(isLoading);
-      if (isLoading) {
-        // FIX: 只有当 loadingStartTime 为 null 时才重置计时器
-        // 避免重复调用 showLoading(true) 导致计时器重置
-        setLoadingStartTime((prev) => prev ?? Date.now());
-      } else {
-        setLoadingStartTime(null);
-      }
+      // FIX: 使用闭包捕获当前loading状态，确保状态转换时正确设置时间戳
+      setLoading((prevLoading) => {
+        if (isLoading) {
+          // 如果是从 false -> true 的转换，设置新的时间戳（新的loading周期）
+          // 如果是 true -> true 的转换，保持旧的时间戳（避免重复调用导致计时器重置）
+          if (!prevLoading) {
+            setLoadingStartTime(Date.now());
+          }
+        } else {
+          // loading结束，重置时间戳
+          setLoadingStartTime(null);
+        }
+        return isLoading;
+      });
     };
 
     window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
