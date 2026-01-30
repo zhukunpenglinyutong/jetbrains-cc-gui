@@ -11,6 +11,7 @@ import { McpServerDialog } from './McpServerDialog';
 import { McpPresetDialog } from './McpPresetDialog';
 import { McpHelpDialog } from './McpHelpDialog';
 import { McpConfirmDialog } from './McpConfirmDialog';
+import { McpLogDialog } from './McpLogDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
 import { copyToClipboard } from '../../utils/copyUtils';
 
@@ -25,7 +26,6 @@ import { useToolsUpdate } from './hooks/useToolsUpdate';
 
 // 子组件
 import { ServerCard } from './ServerCard';
-import { RefreshLogsPanel } from './RefreshLogsPanel';
 
 /**
  * MCP 服务器设置组件
@@ -53,6 +53,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showLogDialog, setShowLogDialog] = useState(false);
   const [editingServer, setEditingServer] = useState<McpServer | null>(null);
   const [deletingServer, setDeletingServer] = useState<McpServer | null>(null);
 
@@ -279,6 +280,34 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     }
   }, [addToast, t]);
 
+  // 复制服务器配置（脱敏处理 env/headers 中的敏感值）
+  const handleCopyConfig = useCallback(async (server: McpServer) => {
+    const { env, headers, ...safeFields } = server.server;
+    const serverConfig: Record<string, unknown> = { ...safeFields };
+    if (env) {
+      serverConfig.env = Object.fromEntries(
+        Object.keys(env).map(k => [k, '***'])
+      );
+    }
+    if (headers) {
+      serverConfig.headers = Object.fromEntries(
+        Object.keys(headers).map(k => [k, '***'])
+      );
+    }
+    const config = {
+      mcpServers: {
+        [server.id]: serverConfig,
+      },
+    };
+    const jsonContent = JSON.stringify(config, null, 2);
+    const success = await copyToClipboard(jsonContent);
+    if (success) {
+      addToast(t('mcp.configCopied'), 'success');
+    } else {
+      addToast(t('mcp.copyFailed'), 'error');
+    }
+  }, [addToast, t]);
+
   // 工具悬停处理
   const handleToolHover = useCallback((tool: McpTool | null, position?: { x: number; y: number }, serverId?: string) => {
     if (tool && position && serverId) {
@@ -304,12 +333,22 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         </div>
         <div className="header-right">
           <button
+            className="log-btn"
+            onClick={() => setShowLogDialog(true)}
+            title={t('mcp.logs.title')}
+          >
+            <span className="codicon codicon-output"></span>
+            {refreshLogs.length > 0 && (
+              <span className="log-badge">{refreshLogs.length}</span>
+            )}
+          </button>
+          <button
             className="refresh-btn"
             onClick={handleRefresh}
             disabled={loading || statusLoading}
             title={t('mcp.refreshStatus')}
           >
-            <span className={`codicon codicon-refresh ${loading || statusLoading ? 'spinning' : ''}`}></span>
+            <span className={`codicon codicon-sync ${loading || statusLoading ? 'spinning' : ''}`}></span>
           </button>
           <div className="add-dropdown" ref={dropdownRef}>
             <button className="add-btn" onClick={() => setShowDropdown(!showDropdown)}>
@@ -348,12 +387,12 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
                   serverStatus={serverStatus}
                   refreshState={serverRefreshStates[server.id]}
                   toolsInfo={serverTools[server.id]}
-                  cacheKeys={cacheKeys}
                   t={t}
                   onToggleExpand={() => toggleExpand(server.id)}
                   onToggleServer={(enabled) => handleToggleServer(server, enabled)}
                   onEdit={() => handleEdit(server)}
                   onDelete={() => handleDelete(server)}
+                  onCopy={() => handleCopyConfig(server)}
                   onRefresh={() => handleRefreshSingleServer(server)}
                   onLoadTools={(forceRefresh) => loadServerTools(server, forceRefresh)}
                   onCopyUrl={handleCopyUrl}
@@ -380,13 +419,6 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
             </div>
           )}
         </div>
-
-        {/* 下方面板：刷新日志 */}
-        <RefreshLogsPanel
-          logs={refreshLogs}
-          t={t}
-          onClear={clearLogs}
-        />
       </div>
 
       {/* 弹窗 */}
@@ -422,6 +454,20 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
           cancelText={t('mcp.cancel')}
           onConfirm={confirmDelete}
           onCancel={cancelDelete}
+        />
+      )}
+
+      {showLogDialog && (
+        <McpLogDialog
+          logs={refreshLogs.map(log => ({
+            id: log.id,
+            timestamp: log.timestamp,
+            serverName: log.serverName || '',
+            level: log.type === 'warning' ? 'warn' : log.type,
+            message: log.message
+          }))}
+          onClose={() => setShowLogDialog(false)}
+          onClear={clearLogs}
         />
       )}
 

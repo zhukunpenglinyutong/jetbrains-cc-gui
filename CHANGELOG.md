@@ -1,3 +1,61 @@
+##### **2026年1月30日（v0.1.7-beta3）**
+
+English:
+
+✨ Features
+- Add tab answering status indicator with multi-state support (ANSWERING, COMPLETED, IDLE) and auto-reset
+- Add copy server config button for MCP servers with clipboard integration and env/headers sanitization
+- Improve MCP server discovery: expose disabled and invalid servers alongside enabled ones
+- Merge global and project MCP server configurations for complete status display
+- Enhance PATH with ~/.local/bin and ~/.cargo/bin for uvx/cargo tool resolution
+
+🐛 Fixes
+- Fix EDT thread safety in tab status auto-reset callback
+- Fix loading state sync during streaming (check before sending event)
+- Fix chat input box border-radius selector for resize handles
+- Sanitize environment variables and headers when copying MCP server config
+- Remove unused cacheKeys prop from ServerCard
+
+🔧 Improvements
+- Replace boolean loading state with TabAnswerStatus enum for richer status display
+- Replace inline MCP log panel with dialog for cleaner UI
+- Relax command whitelist to warn instead of block user-configured servers
+- Add marker-based output parsing for Java-side process communication with early termination
+- Replace refresh icon with sync icon and unify icon button styling across MCP components
+- Reduce log verbosity (info → debug) for tab status events
+- Use language-neutral "..." suffix for answering state
+- Add mobile responsive styles for MCP header buttons
+- Remove per-server refresh button for cleaner UI
+- Add internationalization support for tab status messages
+
+中文：
+
+✨ Features
+- 新增标签页回答状态指示器，支持多状态显示（回答中、已完成、空闲）并自动重置
+- 新增 MCP 服务器配置复制按钮，支持剪贴板集成并自动清理敏感的环境变量和请求头
+- 改进 MCP 服务器发现：展示已禁用和无效的服务器完整状态
+- 合并全局和项目级 MCP 服务器配置，提供完整状态展示
+- 增强 PATH 环境变量，添加 ~/.local/bin 和 ~/.cargo/bin 以支持 uvx/cargo 工具解析
+
+🐛 Fixes
+- 修复标签页状态自动重置回调中的 EDT 线程安全问题
+- 修复流式传输期间加载状态同步问题（发送事件前先检查状态）
+- 修复聊天输入框 border-radius 选择器对调整手柄的影响
+- 复制 MCP 服务器配置时自动清理环境变量和请求头中的敏感信息
+- 移除 ServerCard 中未使用的 cacheKeys 属性
+
+🔧 Improvements
+- 用 TabAnswerStatus 枚举替换布尔加载状态，支持更丰富的状态展示
+- 用对话框替换内联 MCP 日志面板，界面更简洁
+- 放宽命令白名单限制，对用户配置的服务器改为警告而非阻止
+- Java 端进程通信添加基于标记的输出解析，支持提前终止
+- 统一 MCP 组件图标按钮样式，用同步图标替换刷新图标
+- 降低标签页状态事件日志级别（info → debug）
+- 回答状态使用语言无关的 "..." 后缀
+- 新增 MCP 头部按钮的移动端响应式样式
+- 移除每个服务器的独立刷新按钮，简化界面
+- 添加标签页状态消息的国际化支持
+
 ##### **2026年1月28日（v0.1.7-beta2）**
 
 English:

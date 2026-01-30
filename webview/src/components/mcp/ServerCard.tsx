@@ -4,7 +4,7 @@
  */
 
 import type { McpServer, McpServerStatusInfo } from '../../types/mcp';
-import type { ServerRefreshState, ServerToolsState, McpTool, CacheKeys } from './types';
+import type { ServerRefreshState, ServerToolsState, McpTool } from './types';
 import { getServerStatusInfo, getStatusIcon, getStatusColor, getStatusText, getIconColor, getServerInitial, isServerEnabled } from './utils';
 import { ServerToolsPanel } from './ServerToolsPanel';
 
@@ -15,12 +15,12 @@ export interface ServerCardProps {
   serverStatus: Map<string, McpServerStatusInfo>;
   refreshState?: ServerRefreshState[string];
   toolsInfo?: ServerToolsState[string];
-  cacheKeys: CacheKeys;
   t: (key: string, options?: Record<string, unknown>) => string;
   onToggleExpand: () => void;
   onToggleServer: (enabled: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onCopy: () => void;
   onRefresh: () => void;
   onLoadTools: (forceRefresh: boolean) => void;
   onCopyUrl: (url: string) => void;
@@ -35,14 +35,13 @@ export function ServerCard({
   isExpanded,
   isCodexMode,
   serverStatus,
-  refreshState,
   toolsInfo,
   t,
   onToggleExpand,
   onToggleServer,
   onEdit,
   onDelete,
-  onRefresh,
+  onCopy,
   onLoadTools,
   onCopyUrl,
   onToolHover,
@@ -85,6 +84,17 @@ export function ServerCard({
           >
             <span className="codicon codicon-edit"></span>
           </button>
+          {/* 复制按钮 */}
+          <button
+            className="icon-btn copy-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy();
+            }}
+            title={t('chat.copyConfig')}
+          >
+            <span className="codicon codicon-copy"></span>
+          </button>
           {/* 删除按钮 */}
           <button
             className="icon-btn delete-btn"
@@ -95,18 +105,6 @@ export function ServerCard({
             title={t('chat.deleteServer')}
           >
             <span className="codicon codicon-trash"></span>
-          </button>
-          {/* 单个服务器刷新按钮 */}
-          <button
-            className={`single-refresh-btn ${refreshState?.isRefreshing ? 'refreshing' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRefresh();
-            }}
-            disabled={refreshState?.isRefreshing}
-            title={refreshState?.step || t('mcp.refreshServer', { name: server.name || server.id })}
-          >
-            <span className={`codicon codicon-refresh ${refreshState?.isRefreshing ? 'spinning' : ''}`}></span>
           </button>
           <label className="toggle-switch">
             <input

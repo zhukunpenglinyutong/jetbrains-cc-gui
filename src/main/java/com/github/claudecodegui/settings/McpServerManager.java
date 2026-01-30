@@ -57,7 +57,8 @@ public class McpServerManager {
 
     /**
      * 获取所有 MCP 服务器（支持项目路径）
-     * @param projectPath 项目路径，用于读取项目级别的禁用列表
+     * 合并全局和项目级别的 mcpServers，项目级别同名服务器覆盖全局
+     * @param projectPath 项目路径，用于读取项目级别的 MCP 配置
      */
     public List<JsonObject> getMcpServersWithProjectPath(String projectPath) throws IOException {
         List<JsonObject> result = new ArrayList<>();
@@ -73,7 +74,28 @@ public class McpServerManager {
                     JsonObject claudeJson = JsonParser.parseReader(reader).getAsJsonObject();
 
                     if (claudeJson.has("mcpServers") && claudeJson.get("mcpServers").isJsonObject()) {
-                        JsonObject mcpServers = claudeJson.getAsJsonObject("mcpServers");
+                        JsonObject globalMcpServers = claudeJson.getAsJsonObject("mcpServers");
+
+                        // 合并全局和项目的 mcpServers（项目配置优先覆盖同名服务器）
+                        JsonObject mergedServers = new JsonObject();
+                        for (String key : globalMcpServers.keySet()) {
+                            mergedServers.add(key, globalMcpServers.get(key));
+                        }
+
+                        if (projectPath != null && claudeJson.has("projects")) {
+                            JsonObject projects = claudeJson.getAsJsonObject("projects");
+                            if (projects.has(projectPath)) {
+                                JsonObject projectConfig = projects.getAsJsonObject(projectPath);
+                                if (projectConfig.has("mcpServers")
+                                        && projectConfig.get("mcpServers").isJsonObject()) {
+                                    JsonObject projectMcpServers = projectConfig.getAsJsonObject("mcpServers");
+                                    for (String key : projectMcpServers.keySet()) {
+                                        mergedServers.add(key, projectMcpServers.get(key));
+                                    }
+                                    LOG.info("[McpServerManager] Merged project-level MCP servers from: " + projectPath);
+                                }
+                            }
+                        }
 
                         // 读取全局禁用的服务器列表
                         Set<String> disabledServers = new HashSet<>();
@@ -104,9 +126,9 @@ public class McpServerManager {
                             }
                         }
 
-                        // 将对象格式转换为列表格式
-                        for (String serverId : mcpServers.keySet()) {
-                            JsonElement serverElem = mcpServers.get(serverId);
+                        // 将合并后的服务器转换为列表格式
+                        for (String serverId : mergedServers.keySet()) {
+                            JsonElement serverElem = mergedServers.get(serverId);
                             if (serverElem.isJsonObject()) {
                                 JsonObject server = serverElem.getAsJsonObject();
 
