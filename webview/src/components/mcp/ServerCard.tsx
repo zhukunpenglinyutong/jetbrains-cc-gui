@@ -35,7 +35,6 @@ export function ServerCard({
   isExpanded,
   isCodexMode,
   serverStatus,
-  refreshState,
   toolsInfo,
   t,
   onToggleExpand,
@@ -43,7 +42,6 @@ export function ServerCard({
   onEdit,
   onDelete,
   onCopy,
-  onRefresh,
   onLoadTools,
   onCopyUrl,
   onToolHover,
@@ -107,18 +105,6 @@ export function ServerCard({
             title={t('chat.deleteServer')}
           >
             <span className="codicon codicon-trash"></span>
-          </button>
-          {/* 单个服务器刷新按钮 */}
-          <button
-            className={`icon-btn refresh-btn ${refreshState?.isRefreshing ? 'refreshing' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRefresh();
-            }}
-            disabled={refreshState?.isRefreshing}
-            title={refreshState?.step || t('mcp.refreshServer', { name: server.name || server.id })}
-          >
-            <span className={`codicon codicon-sync ${refreshState?.isRefreshing ? 'spinning' : ''}`}></span>
           </button>
           <label className="toggle-switch">
             <input

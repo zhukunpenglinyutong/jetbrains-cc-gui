@@ -11,6 +11,7 @@ import { McpServerDialog } from './McpServerDialog';
 import { McpPresetDialog } from './McpPresetDialog';
 import { McpHelpDialog } from './McpHelpDialog';
 import { McpConfirmDialog } from './McpConfirmDialog';
+import { McpLogDialog } from './McpLogDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
 import { copyToClipboard } from '../../utils/copyUtils';
 
@@ -25,7 +26,6 @@ import { useToolsUpdate } from './hooks/useToolsUpdate';
 
 // 子组件
 import { ServerCard } from './ServerCard';
-import { RefreshLogsPanel } from './RefreshLogsPanel';
 
 /**
  * MCP 服务器设置组件
@@ -53,6 +53,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showLogDialog, setShowLogDialog] = useState(false);
   const [editingServer, setEditingServer] = useState<McpServer | null>(null);
   const [deletingServer, setDeletingServer] = useState<McpServer | null>(null);
 
@@ -332,6 +333,16 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         </div>
         <div className="header-right">
           <button
+            className="log-btn"
+            onClick={() => setShowLogDialog(true)}
+            title={t('mcp.logs.title')}
+          >
+            <span className="codicon codicon-output"></span>
+            {refreshLogs.length > 0 && (
+              <span className="log-badge">{refreshLogs.length}</span>
+            )}
+          </button>
+          <button
             className="refresh-btn"
             onClick={handleRefresh}
             disabled={loading || statusLoading}
@@ -408,13 +419,6 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
             </div>
           )}
         </div>
-
-        {/* 下方面板：刷新日志 */}
-        <RefreshLogsPanel
-          logs={refreshLogs}
-          t={t}
-          onClear={clearLogs}
-        />
       </div>
 
       {/* 弹窗 */}
@@ -450,6 +454,20 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
           cancelText={t('mcp.cancel')}
           onConfirm={confirmDelete}
           onCancel={cancelDelete}
+        />
+      )}
+
+      {showLogDialog && (
+        <McpLogDialog
+          logs={refreshLogs.map(log => ({
+            id: log.id,
+            timestamp: log.timestamp,
+            serverName: log.serverName || '',
+            level: log.type === 'warning' ? 'warn' : log.type,
+            message: log.message
+          }))}
+          onClose={() => setShowLogDialog(false)}
+          onClear={clearLogs}
         />
       )}
 

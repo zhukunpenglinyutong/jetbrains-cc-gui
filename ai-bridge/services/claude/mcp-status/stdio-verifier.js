@@ -38,14 +38,11 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
       return;
     }
 
-    // 验证命令白名单
+    // 验证命令白名单（仅警告，不阻止）
     const validation = validateCommand(command);
     if (!validation.valid) {
-      log('warn', `Blocked command for ${serverName}: ${validation.reason}`);
-      result.status = 'failed';
-      result.error = validation.reason;
-      resolve(result);
-      return;
+      log('warn', `[MCP Verify] Non-whitelisted command for ${serverName}: ${command} (${validation.reason})`);
+      log('info', `[MCP Verify] Proceeding with verification for user-configured server: ${serverName}`);
     }
 
     log('info', 'Verifying STDIO server:', serverName, 'command:', command);

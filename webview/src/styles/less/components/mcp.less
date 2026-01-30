@@ -1172,6 +1172,25 @@
         justify-content: flex-end;
     }
 
+    /* 确认对话框按钮在小屏幕下的布局优化 */
+    .mcp-confirm-dialog .dialog-footer {
+        flex-direction: row;
+        gap: 8px;
+    }
+
+    .mcp-confirm-dialog .footer-actions {
+        display: flex;
+        flex: 1;
+        gap: 8px;
+    }
+
+    .mcp-confirm-dialog .footer-actions .btn {
+        flex: 1;
+        justify-content: center;
+        min-width: 0;
+        padding: 10px 12px;
+    }
+
     .preset-item {
         padding: 10px 12px;
     }

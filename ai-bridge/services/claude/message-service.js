@@ -1734,18 +1734,13 @@ export async function getMcpServerStatus(cwd = null) {
     // 使用 mcp-status-service 模块获取状态，传入 cwd 以支持项目特定配置
     const mcpStatus = await getMcpServersStatus(cwd);
 
-    // 直接输出 JSON 结果，避免混合输出导致解析错误
-    console.log(JSON.stringify({
-      success: true,
-      servers: mcpStatus
-    }));
+    // 使用 [MCP_SERVER_STATUS] 标记输出，Java 端通过此标记快速识别结果
+    // 同时保留兼容的 JSON 格式作为 fallback
+    console.log('[MCP_SERVER_STATUS]' + JSON.stringify(mcpStatus));
   } catch (error) {
     console.error('[GET_MCP_SERVER_STATUS_ERROR]', error.message);
-    console.log(JSON.stringify({
-      success: false,
-      error: error.message,
-      servers: []
-    }));
+    // 错误时也使用标记，确保 Java 端可以快速识别
+    console.log('[MCP_SERVER_STATUS]' + JSON.stringify([]));
   }
 }
 

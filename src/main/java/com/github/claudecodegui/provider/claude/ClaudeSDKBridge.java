@@ -1145,6 +1145,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 }
 
                 final boolean[] found = {false};
+                final boolean[] readerDone = {false};
                 final String[] mcpStatusJson = {null};
                 final StringBuilder output = new StringBuilder();
 
@@ -1163,12 +1164,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                         }
                     } catch (Exception e) {
                         LOG.debug("[McpStatus] Reader thread exception: " + e.getMessage());
+                    } finally {
+                        readerDone[0] = true;
                     }
                 });
                 readerThread.start();
 
-                long deadline = System.currentTimeMillis() + 30000;
-                while (!found[0] && System.currentTimeMillis() < deadline) {
+                // 使用 65 秒超时：STDIO 验证 30s + 进程启动/npm 下载开销
+                long deadline = System.currentTimeMillis() + 65000;
+                while (!found[0] && !readerDone[0] && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);
                 }
 
@@ -1193,8 +1197,27 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     }
                 }
 
-                // Fallback: use extractLastJsonLine for multi-line output handling
+                LOG.info("[McpStatus] Marker not found (found=" + found[0] + ", readerDone=" + readerDone[0] + ", elapsed=" + elapsed + "ms), trying fallback");
+
+                // Fallback: 先尝试从输出中查找 [MCP_SERVER_STATUS] 标记行
                 String outputStr = output.toString().trim();
+                for (String line : outputStr.split("\n")) {
+                    if (line.startsWith("[MCP_SERVER_STATUS]")) {
+                        String markerJson = line.substring("[MCP_SERVER_STATUS]".length()).trim();
+                        try {
+                            JsonArray serversArray = this.gson.fromJson(markerJson, JsonArray.class);
+                            for (var server : serversArray) {
+                                servers.add(server.getAsJsonObject());
+                            }
+                            LOG.info("[McpStatus] Fallback marker parse: " + servers.size() + " servers in " + elapsed + "ms");
+                            return servers;
+                        } catch (Exception e) {
+                            LOG.debug("[McpStatus] Fallback marker parse failed: " + e.getMessage());
+                        }
+                    }
+                }
+
+                // Fallback: use extractLastJsonLine for multi-line output handling
                 String jsonStr = extractLastJsonLine(outputStr);
                 if (jsonStr != null) {
                     try {
@@ -1282,6 +1305,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 }
 
                 final boolean[] found = {false};
+                final boolean[] readerDone = {false};
                 final String[] mcpToolsJson = {null};
                 final StringBuilder output = new StringBuilder();
 
@@ -1300,12 +1324,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                         }
                     } catch (Exception e) {
                         LOG.debug("[McpTools] Reader thread exception: " + e.getMessage());
+                    } finally {
+                        readerDone[0] = true;
                     }
                 });
                 readerThread.start();
 
-                long deadline = System.currentTimeMillis() + 30000;
-                while (!found[0] && System.currentTimeMillis() < deadline) {
+                // 使用 65 秒超时：工具获取可能需要更长时间
+                long deadline = System.currentTimeMillis() + 65000;
+                while (!found[0] && !readerDone[0] && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);
                 }
 

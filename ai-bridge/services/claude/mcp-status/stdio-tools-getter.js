@@ -38,11 +38,11 @@ export async function getStdioServerTools(serverName, serverConfig) {
       return;
     }
 
+    // 验证命令白名单（仅警告，不阻止）
     const validation = validateCommand(command);
     if (!validation.valid) {
-      result.error = validation.reason;
-      resolve(result);
-      return;
+      log('warn', `[MCP Tools] Non-whitelisted command for ${serverName}: ${command} (${validation.reason})`);
+      log('info', `[MCP Tools] Proceeding with tools fetch for user-configured server: ${serverName}`);
     }
 
     log('info', '[MCP Tools] Getting tools for STDIO server:', serverName);

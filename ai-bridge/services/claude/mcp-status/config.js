@@ -10,8 +10,8 @@
 /** HTTP/SSE 类型服务器验证超时时间（毫秒）- 网络请求通常较快，但需要考虑会话建立时间 */
 export const MCP_HTTP_VERIFY_TIMEOUT = parseInt(process.env.MCP_HTTP_VERIFY_TIMEOUT) || 6000;
 
-/** STDIO 类型服务器验证超时时间（毫秒）- 需要启动进程，时间较长 */
-export const MCP_STDIO_VERIFY_TIMEOUT = parseInt(process.env.MCP_STDIO_VERIFY_TIMEOUT) || 30000;
+/** STDIO 类型服务器验证超时时间（毫秒）- 需要启动进程，但 15 秒足够验证连通性 */
+export const MCP_STDIO_VERIFY_TIMEOUT = parseInt(process.env.MCP_STDIO_VERIFY_TIMEOUT) || 15000;
 
 /** 通用验证超时时间（毫秒），可通过环境变量配置 */
 export const MCP_VERIFY_TIMEOUT = parseInt(process.env.MCP_VERIFY_TIMEOUT) || 8000;
@@ -105,6 +105,7 @@ export const ALLOWED_ENV_VARS = new Set([
 /**
  * 创建安全的环境变量对象
  * 只包含白名单中的变量和用户配置的变量
+ * 同时确保 PATH 包含常见工具安装目录（uvx, cargo 等）
  * @param {Object} serverEnv - 服务器配置中的环境变量
  * @returns {Object} 安全的环境变量对象
  */
@@ -116,8 +117,39 @@ export function createSafeEnv(serverEnv = {}) {
       safeEnv[key] = process.env[key];
     }
   }
+  // 增强 PATH：确保常见工具目录被包含
+  // IDE 从 Dock 启动时不会加载 shell 配置文件，PATH 可能不完整
+  safeEnv.PATH = enhancePath(safeEnv.PATH || '');
   // 合并用户配置的环境变量（用户配置优先）
   return { ...safeEnv, ...serverEnv };
+}
+
+/**
+ * 增强 PATH，追加常见的工具安装目录
+ * 解决从 GUI 启动的 IDE 进程 PATH 不包含用户工具目录的问题
+ * @param {string} currentPath - 当前 PATH
+ * @returns {string} 增强后的 PATH
+ */
+function enhancePath(currentPath) {
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  if (!home) return currentPath;
+
+  const separator = process.platform === 'win32' ? ';' : ':';
+  const additionalPaths = [
+    `${home}/.local/bin`,     // Python / uv / pip（uvx, uv 等）
+    `${home}/.cargo/bin`,     // Rust / cargo
+  ];
+
+  const pathParts = currentPath.split(separator);
+  const pathSet = new Set(pathParts);
+
+  for (const p of additionalPaths) {
+    if (!pathSet.has(p)) {
+      pathParts.push(p);
+    }
+  }
+
+  return pathParts.join(separator);
 }
 
 // ============================================================================
