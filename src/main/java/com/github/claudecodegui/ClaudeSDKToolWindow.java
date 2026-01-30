@@ -537,6 +537,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     public static class ClaudeChatWindow {
         private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
         private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
+        // Tab status auto-reset delay (seconds)
+        private static final int STATUS_RESET_DELAY_SECONDS = 5;
 
         private final JPanel mainPanel;
         private final ClaudeSDKBridge claudeSDKBridge;
@@ -664,7 +666,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     this.originalTabName = displayName.endsWith("...")
                         ? displayName.substring(0, displayName.length() - 3)
                         : displayName;
-                    LOG.info("[TabLoading] Auto-initialized original tab name: " + this.originalTabName);
+                    LOG.debug("[TabLoading] Auto-initialized original tab name: " + this.originalTabName);
                 }
             }
         }
@@ -704,24 +706,27 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 String displayName;
                 switch (status) {
                     case ANSWERING:
-                        String answeringText = com.github.claudecodegui.ClaudeCodeGuiBundle.message("tab.status.answering");
-                        displayName = originalTabName + " (" + answeringText + ")";
-                        LOG.info("[TabStatus] ✓ Set answering state for tab: " + displayName);
+                        // Use "..." suffix for answering state (simple and language-neutral)
+                        displayName = originalTabName + "...";
+                        LOG.debug("[TabStatus] Set answering state for tab: " + displayName);
                         break;
                     case COMPLETED:
                         String completedText = com.github.claudecodegui.ClaudeCodeGuiBundle.message("tab.status.completed");
                         displayName = originalTabName + " (" + completedText + ")";
-                        LOG.info("[TabStatus] ✓ Set completed state for tab: " + displayName);
+                        LOG.debug("[TabStatus] Set completed state for tab: " + displayName);
 
-                        // Schedule auto-reset to IDLE after 5 seconds
+                        // Schedule auto-reset to IDLE after configured delay
+                        // FIX: Wrap callback in invokeLater to ensure EDT execution
                         statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
-                            updateTabStatus(TabAnswerStatus.IDLE);
-                        }, 5, TimeUnit.SECONDS);
+                            ApplicationManager.getApplication().invokeLater(() -> {
+                                updateTabStatus(TabAnswerStatus.IDLE);
+                            });
+                        }, STATUS_RESET_DELAY_SECONDS, TimeUnit.SECONDS);
                         break;
                     case IDLE:
                     default:
                         displayName = originalTabName;
-                        LOG.info("[TabStatus] ✓ Restored idle state for tab: " + displayName);
+                        LOG.debug("[TabStatus] Restored idle state for tab: " + displayName);
                         break;
                 }
                 parentContent.setDisplayName(displayName);
@@ -1771,7 +1776,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 try {
                     JsonObject json = new Gson().fromJson(content, JsonObject.class);
                     boolean loading = json.has("loading") && json.get("loading").getAsBoolean();
-                    LOG.info("[TabLoading] Received event in tab '" + originalTabName + "': loading=" + loading);
+                    LOG.debug("[TabLoading] Received event in tab '" + originalTabName + "': loading=" + loading);
                     updateTabLoadingState(loading);
                 } catch (Exception e) {
                     LOG.warn("[TabLoading] Failed to parse loading state: " + e.getMessage());
@@ -1797,7 +1802,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                             status = TabAnswerStatus.IDLE;
                             break;
                     }
-                    LOG.info("[TabStatus] Received status change in tab '" + originalTabName + "': status=" + statusStr);
+                    LOG.debug("[TabStatus] Received status change in tab '" + originalTabName + "': status=" + statusStr);
                     updateTabStatus(status);
                 } catch (Exception e) {
                     LOG.warn("[TabStatus] Failed to parse tab status: " + e.getMessage());

@@ -37,7 +37,6 @@
     overflow: hidden;
 }
 
-
 .mcp-logs-panel .logs-content {
     flex: 1;
     overflow-y: auto;
@@ -610,6 +609,33 @@
 
     .card-header {
         padding: 10px 12px;
+    }
+
+    .header-right-section {
+        flex-shrink: 1;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        flex-wrap: nowrap;
+    }
+
+    .header-right-section::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .header-right-section::-webkit-scrollbar-thumb {
+        background: var(--border-secondary);
+        border-radius: 2px;
+    }
+
+    .header-right-section .icon-btn {
+        flex: 0 0 32px;
+        width: 32px;
+        padding: 0;
+    }
+
+    .header-right-section .toggle-switch {
+        flex: 0 0 40px;
+        width: 40px;
     }
 
     .server-icon {

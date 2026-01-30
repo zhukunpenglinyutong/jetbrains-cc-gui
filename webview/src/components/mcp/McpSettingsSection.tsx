@@ -279,13 +279,23 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     }
   }, [addToast, t]);
 
-  // 复制服务器配置
+  // 复制服务器配置（脱敏处理 env/headers 中的敏感值）
   const handleCopyConfig = useCallback(async (server: McpServer) => {
+    const { env, headers, ...safeFields } = server.server;
+    const serverConfig: Record<string, unknown> = { ...safeFields };
+    if (env) {
+      serverConfig.env = Object.fromEntries(
+        Object.keys(env).map(k => [k, '***'])
+      );
+    }
+    if (headers) {
+      serverConfig.headers = Object.fromEntries(
+        Object.keys(headers).map(k => [k, '***'])
+      );
+    }
     const config = {
       mcpServers: {
-        [server.id]: {
-          ...server.server,
-        },
+        [server.id]: serverConfig,
       },
     };
     const jsonContent = JSON.stringify(config, null, 2);
@@ -366,7 +376,6 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
                   serverStatus={serverStatus}
                   refreshState={serverRefreshStates[server.id]}
                   toolsInfo={serverTools[server.id]}
-                  cacheKeys={cacheKeys}
                   t={t}
                   onToggleExpand={() => toggleExpand(server.id)}
                   onToggleServer={(enabled) => handleToggleServer(server, enabled)}

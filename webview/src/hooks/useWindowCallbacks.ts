@@ -405,14 +405,15 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     window.showLoading = (value) => {
       const isLoading = isTruthy(value);
 
-      // Notify backend about loading state change for tab indicator
-      sendBridgeEvent('tab_loading_changed', JSON.stringify({ loading: isLoading }));
-
       // FIX: 流式传输期间忽略 loading=false，由 onStreamEnd 统一处理
+      // 必须在发送事件之前检查，避免后端状态与前端不一致
       if (!isLoading && isStreamingRef.current) {
         console.log('[Frontend] Ignoring showLoading(false) during streaming');
         return;
       }
+
+      // Notify backend about loading state change for tab indicator
+      sendBridgeEvent('tab_loading_changed', JSON.stringify({ loading: isLoading }));
 
       // FIX: 使用闭包捕获当前loading状态，确保状态转换时正确设置时间戳
       setLoading((prevLoading) => {
@@ -610,6 +611,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       console.log('[Frontend] Stream ended');
       isStreamingRef.current = false;
       useBackendStreamingRenderRef.current = false;
+
+      // Notify backend about stream completion for tab status indicator
+      sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'completed' }));
 
       if (contentUpdateTimeoutRef.current) {
         clearTimeout(contentUpdateTimeoutRef.current);

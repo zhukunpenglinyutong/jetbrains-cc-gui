@@ -4,7 +4,7 @@
  */
 
 import type { McpServer, McpServerStatusInfo } from '../../types/mcp';
-import type { ServerRefreshState, ServerToolsState, McpTool, CacheKeys } from './types';
+import type { ServerRefreshState, ServerToolsState, McpTool } from './types';
 import { getServerStatusInfo, getStatusIcon, getStatusColor, getStatusText, getIconColor, getServerInitial, isServerEnabled } from './utils';
 import { ServerToolsPanel } from './ServerToolsPanel';
 
@@ -15,7 +15,6 @@ export interface ServerCardProps {
   serverStatus: Map<string, McpServerStatusInfo>;
   refreshState?: ServerRefreshState[string];
   toolsInfo?: ServerToolsState[string];
-  cacheKeys: CacheKeys;
   t: (key: string, options?: Record<string, unknown>) => string;
   onToggleExpand: () => void;
   onToggleServer: (enabled: boolean) => void;
