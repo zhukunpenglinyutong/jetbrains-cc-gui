@@ -377,11 +377,35 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div className={`message ${message.type}`} style={messageStyle}>
-      {/* Copy button for user and assistant messages */}
-      {(message.type === 'user' || (message.type === 'assistant' && !isMessageStreaming)) && (
+      {/* Timestamp and copy button for user messages */}
+      {message.type === 'user' && message.timestamp && (
+        <div className="message-header-row">
+          <div className="message-timestamp-header">
+            {formatTime(message.timestamp)}
+          </div>
+          <button
+            type="button"
+            className={`message-copy-btn message-copy-btn-inline ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
+            onClick={handleCopyMessage}
+            title={t('markdown.copyMessage')}
+            aria-label={t('markdown.copyMessage')}
+          >
+            <span className="copy-icon">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
+                <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
+              </svg>
+            </span>
+            <span className="copy-tooltip">{t('markdown.copySuccess')}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Copy button for assistant messages only */}
+      {message.type === 'assistant' && !isMessageStreaming && (
         <button
           type="button"
-          className={`message-copy-btn ${message.type === 'user' ? 'message-copy-btn-user' : ''} ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
+          className={`message-copy-btn ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
           onClick={handleCopyMessage}
           title={t('markdown.copyMessage')}
           aria-label={t('markdown.copyMessage')}
@@ -394,15 +418,6 @@ export const MessageItem = memo(function MessageItem({
           </span>
           <span className="copy-tooltip">{t('markdown.copySuccess')}</span>
         </button>
-      )}
-
-      {/* Timestamp for user messages */}
-      {message.type === 'user' && message.timestamp && (
-        <div className="message-header-row">
-          <div className="message-timestamp-header">
-            {formatTime(message.timestamp)}
-          </div>
-        </div>
       )}
 
       {/* Role label for non-user/assistant messages */}
