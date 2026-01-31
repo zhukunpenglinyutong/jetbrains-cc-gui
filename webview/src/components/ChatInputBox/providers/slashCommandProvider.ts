@@ -297,4 +297,29 @@ export function forceRefreshSlashCommands(): void {
   requestRefresh();
 }
 
+/**
+ * 应用初始化时预加载斜杠命令
+ * 在用户输入 "/" 之前就加载命令数据，提升体感性能
+ *
+ * 安全保证：
+ * - 如果已在加载中或已加载完成则跳过（检查 loadingState）
+ * - requestRefresh() 有 MIN_REFRESH_INTERVAL 防重复请求保护
+ * - 与 slashCommandProvider 共享状态，后续调用可直接命中缓存
+ */
+export function preloadSlashCommands(): void {
+  // 仅在空闲状态下预加载，不干扰正在进行或已完成的加载
+  if (loadingState !== 'idle') {
+    debugLog('[SlashCommand] Preload skipped (state=' + loadingState + ')');
+    return;
+  }
+
+  debugLog('[SlashCommand] Preloading commands on app init');
+
+  // 确保回调已注册后再请求刷新
+  setupSlashCommandsCallback();
+
+  // 请求刷新 — 内置防重复请求保护
+  requestRefresh();
+}
+
 export default slashCommandProvider;

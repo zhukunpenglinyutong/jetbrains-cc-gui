@@ -47,6 +47,7 @@ import {
   slashCommandProvider,
   agentProvider,
   agentToDropdownItem,
+  preloadSlashCommands,
   type AgentItem,
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
@@ -650,6 +651,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       commandCompletion,
       focusInput,
     });
+
+    // 组件挂载时预加载斜杠命令，提升体感性能
+    // 在用户输入 "/" 之前就加载命令数据，使其立即可用
+    useEffect(() => {
+      preloadSlashCommands();
+    }, []);
 
     useSpaceKeyListener({ editableRef, onKeyDown: handleKeyDownForTagRendering });
 
