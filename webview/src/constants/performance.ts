@@ -101,8 +101,41 @@ export const PERF_TIMING = {
 } as const;
 
 /**
+ * Debounce timing configuration for input handling.
+ */
+export const DEBOUNCE_TIMING = {
+  /**
+   * Debounce delay for completion trigger detection (ms).
+   *
+   * Controls how quickly the @ / / # trigger detection runs after user input.
+   * Lower values = more responsive, but higher CPU usage.
+   * Value: 80ms (reduced from 150ms for better responsiveness)
+   */
+  COMPLETION_DETECTION_MS: 80,
+
+  /**
+   * Debounce delay for file tag rendering (ms).
+   *
+   * Controls how quickly file tags (@filepath) are rendered after user input.
+   * Higher delay to reduce DOM manipulation frequency.
+   * Value: 300ms
+   */
+  FILE_TAG_RENDERING_MS: 300,
+
+  /**
+   * Debounce delay for onInput callback to parent (ms).
+   *
+   * Controls how often the parent component receives input updates.
+   * Reduces parent re-renders during rapid typing.
+   * Value: 100ms
+   */
+  ON_INPUT_CALLBACK_MS: 100,
+} as const;
+
+/**
  * Type definitions for external consumers
  */
 export type TextLengthThresholds = typeof TEXT_LENGTH_THRESHOLDS;
 export type RenderingLimits = typeof RENDERING_LIMITS;
 export type PerfTiming = typeof PERF_TIMING;
+export type DebounceTiming = typeof DEBOUNCE_TIMING;

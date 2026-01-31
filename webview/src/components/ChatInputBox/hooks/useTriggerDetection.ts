@@ -231,23 +231,37 @@ function isPositionInFileTag(element: HTMLElement, textPosition: number): boolea
 }
 
 /**
- * 检测 @ 文件引用触发
- * 注意：跳过已渲染的文件标签，避免在文件标签后输入时错误触发
+ * Pre-compiled regex for unicode whitespace detection (performance optimization)
+ * Matches: regular whitespace, non-breaking space, zero-width characters, and other unicode whitespace
+ */
+const UNICODE_WHITESPACE_REGEX = /^[\s\u00A0\u200B-\u200D\uFEFF\u2000-\u200A]$/;
+
+/**
+ * Helper function to check if a character is whitespace (including unicode whitespace)
+ * Uses pre-compiled regex for better performance in high-frequency calls
+ */
+function isWhitespace(char: string): boolean {
+  return UNICODE_WHITESPACE_REGEX.test(char);
+}
+
+/**
+ * Detect @ file reference trigger
+ * Note: Skip rendered file tags to avoid false triggers after file tags
  */
 function detectAtTrigger(text: string, cursorPosition: number, element?: HTMLElement): TriggerQuery | null {
-  // 从光标位置向前查找 @
+  // Search backward from cursor position for @
   let start = cursorPosition - 1;
   while (start >= 0) {
     const char = text[start];
-    // 遇到空格或换行，停止搜索
-    if (char === ' ' || char === '\n' || char === '\t') {
+    // Stop search on whitespace or newline
+    if (isWhitespace(char)) {
       return null;
     }
-    // 找到 @
+    // Found @
     if (char === '@') {
-      // 检查这个 @ 是否在文件标签内（已渲染的引用）
+      // Check if this @ is inside a file tag (already rendered reference)
       if (element && isPositionInFileTag(element, start)) {
-        // 在文件标签内，跳过这个 @，继续向前搜索
+        // Inside file tag, skip this @ and continue searching backward
         start--;
         continue;
       }
@@ -266,25 +280,25 @@ function detectAtTrigger(text: string, cursorPosition: number, element?: HTMLEle
 }
 
 /**
- * 检测 / 斜杠命令触发（仅行首）
+ * Detect / slash command trigger (only at line start)
  */
 function detectSlashTrigger(text: string, cursorPosition: number): TriggerQuery | null {
-  // 从光标位置向前查找 /
+  // Search backward from cursor position for /
   let start = cursorPosition - 1;
   while (start >= 0) {
     const char = text[start];
 
-    // 遇到空格或换行，停止搜索
-    if (char === ' ' || char === '\t') {
-      return null;
-    }
+    // Stop search on whitespace or newline
     if (char === '\n') {
       return null;
     }
+    if (isWhitespace(char)) {
+      return null;
+    }
 
-    // 找到 /
+    // Found /
     if (char === '/') {
-      // 检查 / 前是否为行首
+      // Check if / is at line start
       const isLineStart = start === 0 || text[start - 1] === '\n';
       if (isLineStart) {
         const query = text.slice(start + 1, cursorPosition);
@@ -303,25 +317,25 @@ function detectSlashTrigger(text: string, cursorPosition: number): TriggerQuery 
 }
 
 /**
- * 检测 # 智能体触发（仅行首）
+ * Detect # agent trigger (only at line start)
  */
 function detectHashTrigger(text: string, cursorPosition: number): TriggerQuery | null {
-  // 从光标位置向前查找 #
+  // Search backward from cursor position for #
   let start = cursorPosition - 1;
   while (start >= 0) {
     const char = text[start];
 
-    // 遇到空格或换行，停止搜索
-    if (char === ' ' || char === '\t') {
-      return null;
-    }
+    // Stop search on whitespace or newline
     if (char === '\n') {
       return null;
     }
+    if (isWhitespace(char)) {
+      return null;
+    }
 
-    // 找到 #
+    // Found #
     if (char === '#') {
-      // 检查 # 前是否为行首
+      // Check if # is at line start
       const isLineStart = start === 0 || text[start - 1] === '\n';
       if (isLineStart) {
         const query = text.slice(start + 1, cursorPosition);
@@ -340,27 +354,27 @@ function detectHashTrigger(text: string, cursorPosition: number): TriggerQuery |
 }
 
 /**
- * useTriggerDetection - 触发检测 Hook
- * 检测输入框中的 @、/ 或 # 触发符号
+ * useTriggerDetection - Trigger detection hook
+ * Detects @, / or # trigger symbols in the input box
  */
 export function useTriggerDetection() {
   /**
-   * 检测触发
+   * Detect trigger
    */
   const detectTrigger = useCallback((
     text: string,
     cursorPosition: number,
     element?: HTMLElement
   ): TriggerQuery | null => {
-    // 优先检测 @（传递 element 以便跳过文件标签）
+    // Prioritize @ detection (pass element to skip file tags)
     const atTrigger = detectAtTrigger(text, cursorPosition, element);
     if (atTrigger) return atTrigger;
 
-    // 检测 /
+    // Detect /
     const slashTrigger = detectSlashTrigger(text, cursorPosition);
     if (slashTrigger) return slashTrigger;
 
-    // 检测 # (智能体触发)
+    // Detect # (agent trigger)
     const hashTrigger = detectHashTrigger(text, cursorPosition);
     if (hashTrigger) return hashTrigger;
 
@@ -368,7 +382,7 @@ export function useTriggerDetection() {
   }, []);
 
   /**
-   * 获取触发位置
+   * Get trigger position
    */
   const getTriggerPosition = useCallback((
     element: HTMLElement,
@@ -386,9 +400,9 @@ export function useTriggerDetection() {
   }, []);
 
   /**
-   * 获取光标位置
-   * 注意：需要与 getTextContent 返回的文本格式一致
-   * 文件标签会被转换为 @文件路径 格式
+   * Get cursor position
+   * Note: Must be consistent with getTextContent return format
+   * File tags are converted to @filepath format
    */
   const getCursorPosition = useCallback((element: HTMLElement): number => {
     const selection = window.getSelection();
