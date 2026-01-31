@@ -25,7 +25,10 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 
 /**
  * 设置和使用统计相关消息处理器
@@ -1247,17 +1250,24 @@ public class SettingsHandler extends BaseMessageHandler {
                 functionName
             );
         } else {
-            // 单参数调用（字符串）
-            // 注意：必须先替换反斜杠，再替换单引号，否则会导致 \' 变成 \\'
-            String escapedParam = param.replace("\\", "\\\\").replace("'", "\\'");
+            // 单参数调用（通过 stdin 传递，避免转义问题）
             nodeScript = String.format(
                 "const { %s } = require('%s/services/input-history-service.cjs'); " +
-                "const result = %s('%s'); " +
-                "console.log(JSON.stringify(result));",
+                "let input = ''; " +
+                "process.stdin.on('data', chunk => input += chunk); " +
+                "process.stdin.on('end', () => { " +
+                "  try { " +
+                "    const param = input.trim(); " +
+                "    const result = %s(param); " +
+                "    console.log(JSON.stringify(result)); " +
+                "  } catch (err) { " +
+                "    console.error(JSON.stringify({ error: err.message })); " +
+                "    process.exit(1); " +
+                "  } " +
+                "});",
                 functionName,
                 bridgePath.replace("\\", "\\\\"),
-                functionName,
-                escapedParam
+                functionName
             );
         }
 
@@ -1266,9 +1276,18 @@ public class SettingsHandler extends BaseMessageHandler {
 
         Process process = pb.start();
 
+        // Write parameter to stdin if present
+        if (param != null && !param.isEmpty()) {
+            try (BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
+                writer.write(param);
+                writer.flush();
+            }
+        }
+
         StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream()))) {
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 output.append(line).append("\n");
@@ -1284,7 +1303,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
         int exitCode = process.exitValue();
         if (exitCode != 0) {
-            throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
+            throw new Exception("Node.js process exited with code " + exitCode + ": " + output);
         }
 
         String[] lines = output.toString().split("\n");
@@ -1298,15 +1317,24 @@ public class SettingsHandler extends BaseMessageHandler {
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
 
-        // 参数是 JSON 数组，直接传递
+        // Use stdin to pass JSON data, avoiding shell escaping issues with special characters
         String nodeScript = String.format(
             "const { %s } = require('%s/services/input-history-service.cjs'); " +
-            "const result = %s(%s); " +
-            "console.log(JSON.stringify(result));",
+            "let input = ''; " +
+            "process.stdin.on('data', chunk => input += chunk); " +
+            "process.stdin.on('end', () => { " +
+            "  try { " +
+            "    const data = JSON.parse(input); " +
+            "    const result = %s(data); " +
+            "    console.log(JSON.stringify(result)); " +
+            "  } catch (err) { " +
+            "    console.error(JSON.stringify({ error: err.message })); " +
+            "    process.exit(1); " +
+            "  } " +
+            "});",
             functionName,
             bridgePath.replace("\\", "\\\\"),
-            functionName,
-            jsonArrayParam
+            functionName
         );
 
         ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
@@ -1314,9 +1342,16 @@ public class SettingsHandler extends BaseMessageHandler {
 
         Process process = pb.start();
 
+        // Write JSON data to stdin
+        try (BufferedWriter writer = new BufferedWriter(
+                new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
+            writer.write(jsonArrayParam);
+            writer.flush();
+        }
+
         StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream()))) {
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 output.append(line).append("\n");
