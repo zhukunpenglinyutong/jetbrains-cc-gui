@@ -38,6 +38,161 @@
   margin-bottom: 24px;
 }
 
+/* 历史记录管理 */
+.historyManagement {
+  margin-top: 16px;
+}
+
+.expandButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: var(--accent-primary);
+  }
+
+  .codicon {
+    font-size: 12px;
+  }
+}
+
+.historyCount {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.historyListContainer {
+  margin-top: 12px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  max-height: 300px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.historyActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-tertiary);
+}
+
+.clearAllButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--color-error);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 0, 0, 0.1);
+  }
+
+  .codicon {
+    font-size: 12px;
+  }
+}
+
+.historyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.historyItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-secondary);
+  transition: background 0.15s ease;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--bg-tertiary);
+
+    .deleteButton {
+      opacity: 1;
+    }
+  }
+}
+
+.historyText {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.deleteButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--color-error);
+    background: rgba(255, 0, 0, 0.1);
+  }
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
+.emptyHistory {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: var(--text-tertiary);
+  gap: 8px;
+
+  .codicon {
+    font-size: 24px;
+    opacity: 0.5;
+  }
+
+  span:last-child {
+    font-size: 13px;
+  }
+}
+
 .toggleWrapper {
   display: flex;
   align-items: center;

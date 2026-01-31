@@ -209,7 +209,11 @@
         "label": "历史输入补全",
         "enabled": "已开启",
         "disabled": "已关闭",
-        "hint": "开启后，输入框会根据历史输入自动补全，按 Tab 键接受建议"
+        "hint": "开启后，输入框会根据历史输入自动补全，按 Tab 键接受建议",
+        "manageHistory": "管理历史记录",
+        "empty": "暂无历史记录",
+        "clearAll": "清空全部",
+        "delete": "删除"
       }
     },
     "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",

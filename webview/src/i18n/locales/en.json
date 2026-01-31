@@ -209,7 +209,11 @@
         "label": "History Input Completion",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, the input box will auto-complete based on input history. Press Tab to accept the suggestion."
+        "hint": "When enabled, the input box will auto-complete based on input history. Press Tab to accept the suggestion.",
+        "manageHistory": "Manage History",
+        "empty": "No history records",
+        "clearAll": "Clear All",
+        "delete": "Delete"
       }
     },
     "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",
