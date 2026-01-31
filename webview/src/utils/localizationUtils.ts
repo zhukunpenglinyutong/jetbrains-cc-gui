@@ -75,6 +75,15 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
       );
     }
 
+    // Match "[Uploaded Attachments: file1, file2, ...]"
+    const uploadedAttachmentsListMatch = result.match(/\[Uploaded Attachments: (.+)\]/);
+    if (uploadedAttachmentsListMatch) {
+      result = result.replace(
+        uploadedAttachmentsListMatch[0],
+        t('chat.uploadedFiles', { files: uploadedAttachmentsListMatch[1] })
+      );
+    }
+
     // Handle labels in multi-line error messages
     result = result
       .replace(/- Error message:/g, `- ${t('aiBridge.errorMessage')}:`)

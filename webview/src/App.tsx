@@ -637,9 +637,9 @@ const App = () => {
       }
     }
 
-    // 过滤占位文本：如果已有图片附件且文本是"已上传附件:"开头的占位文本，则不添加
+    // 过滤占位文本：如果已有图片附件且文本是附件占位文本，则不添加
     // Filter placeholder text: skip if there are image attachments and text is placeholder
-    const isPlaceholderText = text && text.trim().startsWith('已上传附件:');
+    const isPlaceholderText = text && text.trim().startsWith('[Uploaded ');
 
     if (text && !(hasImageAttachments && isPlaceholderText)) {
       blocks.push({ type: 'text', text });
