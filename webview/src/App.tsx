@@ -1239,20 +1239,6 @@ const App = () => {
       }
     };
 
-    // Handle update file stats in edits list (called when user partially reverts changes)
-    // Note: Since fileChanges is computed from messages, we can't directly update stats.
-    // The stats will be recalculated when messages are updated.
-    // This callback is kept for future extensibility.
-    window.handleUpdateFileInEdits = (jsonStr: string) => {
-      try {
-        const data = JSON.parse(jsonStr);
-        // For now, just log the update - actual stats come from message parsing
-        console.log('[EditableDiff] File stats update received:', data.filePath, data.additions, data.deletions);
-      } catch {
-        // JSON parse failed, ignore
-      }
-    };
-
     // Handle interactive diff result (Apply/Reject from the new interactive diff view)
     window.handleDiffResult = (jsonStr: string) => {
       try {
@@ -1296,7 +1282,6 @@ const App = () => {
 
     return () => {
       delete window.handleRemoveFileFromEdits;
-      delete window.handleUpdateFileInEdits;
       delete window.handleDiffResult;
     };
   }, []);
@@ -1315,11 +1300,12 @@ const App = () => {
     // Keep only the most recent 50 sessions' data
     const MAX_STORED_SESSIONS = 50;
     try {
-      const processedKeys = Object.keys(localStorage)
-        .filter(k => k.startsWith('processed-files-'));
-      if (processedKeys.length > MAX_STORED_SESSIONS) {
+      // Clean up both processed-files and keep-all-base keys
+      const keysToCheck = Object.keys(localStorage)
+        .filter(k => k.startsWith('processed-files-') || k.startsWith('keep-all-base-'));
+      if (keysToCheck.length > MAX_STORED_SESSIONS) {
         // Remove oldest entries (simple FIFO, not perfect but good enough)
-        const toRemove = processedKeys.slice(0, processedKeys.length - MAX_STORED_SESSIONS);
+        const toRemove = keysToCheck.slice(0, keysToCheck.length - MAX_STORED_SESSIONS);
         toRemove.forEach(k => localStorage.removeItem(k));
       }
     } catch {

@@ -467,11 +467,6 @@ interface Window {
   handleRemoveFileFromEdits?: (json: string) => void;
 
   /**
-   * Handle update file stats in edits list - 更新编辑列表中文件的统计信息（用户在 diff 视图中部分撤销更改时调用）
-   */
-  handleUpdateFileInEdits?: (json: string) => void;
-
-  /**
    * Handle interactive diff result - 处理交互式 Diff 操作结果（Apply/Reject）
    * @param json JSON string containing { filePath, action, content?, error? }
    */

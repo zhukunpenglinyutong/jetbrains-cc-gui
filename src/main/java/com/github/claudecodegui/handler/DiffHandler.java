@@ -1,11 +1,11 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeCodeGuiBundle;
-import com.github.claudecodegui.handler.diff.DiffResult;
+import com.github.claudecodegui.handler.diff.DiffBrowserBridge;
 import com.github.claudecodegui.handler.diff.InteractiveDiffManager;
 import com.github.claudecodegui.handler.diff.InteractiveDiffRequest;
+import com.github.claudecodegui.util.ContentRebuildUtil;
 import com.github.claudecodegui.util.EditorFileUtils;
-import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -15,8 +15,6 @@ import com.intellij.diff.contents.DiffContent;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -27,7 +25,6 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -38,6 +35,7 @@ public class DiffHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(DiffHandler.class);
     private final Gson gson = new Gson();
+    private final DiffBrowserBridge browserBridge;
 
     private static final String[] SUPPORTED_TYPES = {
         "refresh_file",
@@ -51,6 +49,7 @@ public class DiffHandler extends BaseMessageHandler {
 
     public DiffHandler(HandlerContext context) {
         super(context);
+        this.browserBridge = new DiffBrowserBridge(context, gson);
     }
 
     @Override
@@ -241,7 +240,7 @@ public class DiffHandler extends BaseMessageHandler {
                     }
 
                     // 反向重建编辑前内容
-                    String beforeContent = rebuildBeforeContent(afterContent, edits);
+                    String beforeContent = ContentRebuildUtil.rebuildBeforeContent(afterContent, edits);
 
                     String fileName = new File(filePath).getName();
                     FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
@@ -276,139 +275,6 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
-     * 反向重建编辑前内容
-     * 通过反向应用编辑操作，从编辑后内容推导出编辑前内容
-     *
-     * 注意：如果文件被 linter/formatter 修改过，newString 可能无法精确匹配。
-     * 此时会尝试标准化空白后再匹配，如果仍失败则跳过该操作继续处理。
-     */
-    private String rebuildBeforeContent(String afterContent, JsonArray edits) {
-        String content = afterContent;
-
-        // 反向遍历编辑操作
-        for (int i = edits.size() - 1; i >= 0; i--) {
-            JsonObject edit = edits.get(i).getAsJsonObject();
-            String oldString = edit.has("oldString") ? edit.get("oldString").getAsString() : "";
-            String newString = edit.has("newString") ? edit.get("newString").getAsString() : "";
-            boolean replaceAll = edit.has("replaceAll") && edit.get("replaceAll").getAsBoolean();
-
-            if (replaceAll) {
-                // 全局替换：newString → oldString
-                if (content.contains(newString)) {
-                    content = content.replace(newString, oldString);
-                } else {
-                    // 尝试标准化空白后匹配
-                    String normalizedNew = normalizeWhitespace(newString);
-                    String normalizedContent = normalizeWhitespace(content);
-                    if (normalizedContent.contains(normalizedNew)) {
-                        // 找到标准化匹配，使用原始 oldString 替换
-                        content = replaceNormalized(content, newString, oldString);
-                    } else {
-                        LOG.warn("rebuildBeforeContent: newString not found (replace_all), skipping operation");
-                    }
-                }
-            } else {
-                // 单次替换：找到第一个 newString，替换为 oldString
-                int index = content.indexOf(newString);
-                if (index >= 0) {
-                    content = content.substring(0, index) + oldString + content.substring(index + newString.length());
-                } else {
-                    // 尝试标准化空白后匹配
-                    int fuzzyIndex = findNormalizedIndex(content, newString);
-                    if (fuzzyIndex >= 0) {
-                        // 找到模糊匹配位置，计算实际结束位置
-                        int actualEnd = findActualEndIndex(content, fuzzyIndex, newString);
-                        content = content.substring(0, fuzzyIndex) + oldString + content.substring(actualEnd);
-                    } else {
-                        LOG.warn("rebuildBeforeContent: newString not found, skipping operation");
-                    }
-                }
-            }
-        }
-
-        LOG.info("Successfully rebuilt before content (" + edits.size() + " operations)");
-        return content;
-    }
-
-    /**
-     * 标准化空白字符（用于模糊匹配）
-     * 将连续空白替换为单个空格，并去除首尾空白
-     */
-    private String normalizeWhitespace(String s) {
-        if (s == null) return "";
-        return s.replaceAll("\\s+", " ").trim();
-    }
-
-    /**
-     * 在标准化空白后查找子串位置
-     */
-    private int findNormalizedIndex(String content, String target) {
-        String normalizedTarget = normalizeWhitespace(target);
-        String[] lines = content.split("\n", -1);
-        int charIndex = 0;
-
-        for (int lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-            // 尝试在当前行开始的多行区域中匹配
-            StringBuilder remainingBuilder = new StringBuilder();
-            for (int j = lineIdx; j < lines.length; j++) {
-                if (j > lineIdx) remainingBuilder.append("\n");
-                remainingBuilder.append(lines[j]);
-            }
-            String remainingContent = remainingBuilder.toString();
-            String normalizedRemaining = normalizeWhitespace(remainingContent);
-
-            if (normalizedRemaining.startsWith(normalizedTarget) ||
-                normalizedRemaining.contains(normalizedTarget)) {
-                // 找到了匹配的起始位置
-                return charIndex;
-            }
-            charIndex += lines[lineIdx].length() + 1; // +1 for newline
-        }
-        return -1;
-    }
-
-    /**
-     * 找到实际的结束索引（考虑空白差异）
-     */
-    private int findActualEndIndex(String content, int startIndex, String target) {
-        String normalizedTarget = normalizeWhitespace(target);
-        int targetNormalizedLen = normalizedTarget.length();
-
-        int normalizedCount = 0;
-        int actualIndex = startIndex;
-
-        while (actualIndex < content.length() && normalizedCount < targetNormalizedLen) {
-            char c = content.charAt(actualIndex);
-            if (!Character.isWhitespace(c) ||
-                (normalizedCount > 0 && normalizedCount < normalizedTarget.length() &&
-                 normalizedTarget.charAt(normalizedCount) == ' ')) {
-                normalizedCount++;
-            }
-            actualIndex++;
-        }
-
-        // 跳过尾部空白（但不跳过换行符）
-        while (actualIndex < content.length() &&
-               Character.isWhitespace(content.charAt(actualIndex)) &&
-               content.charAt(actualIndex) != '\n') {
-            actualIndex++;
-        }
-
-        return actualIndex;
-    }
-
-    /**
-     * 使用标准化匹配进行替换
-     */
-    private String replaceNormalized(String content, String target, String replacement) {
-        int index = findNormalizedIndex(content, target);
-        if (index < 0) return content;
-
-        int endIndex = findActualEndIndex(content, index, target);
-        return content.substring(0, index) + replacement + content.substring(endIndex);
-    }
-
-    /**
      * 显示可编辑的 Diff 视图
      * 用户可以在 diff 视图中选择性接受或拒绝更改
      * 使用新的 InteractiveDiffManager 实现，带有 Apply/Reject 按钮
@@ -437,21 +303,20 @@ public class DiffHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
                     // Read current file content (this is the content AFTER modifications)
+                    // For both new and modified files, Claude Code has already written the file to disk
                     String currentContent = "";
                     Charset charset = StandardCharsets.UTF_8;
 
-                    if (!isNewFile) {
-                        VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
-                        if (vFile != null) {
-                            vFile.refresh(false, false);
-                            charset = vFile.getCharset() != null ? vFile.getCharset() : StandardCharsets.UTF_8;
-                            try {
-                                currentContent = new String(vFile.contentsToByteArray(), charset);
-                            } catch (IOException e) {
-                                LOG.error("Failed to read file content: " + filePath, e);
-                                showErrorToast(ClaudeCodeGuiBundle.message("diff.fileReadFailedDetail", e.getMessage()));
-                                return;
-                            }
+                    VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
+                    if (vFile != null) {
+                        vFile.refresh(false, false);
+                        charset = vFile.getCharset() != null ? vFile.getCharset() : StandardCharsets.UTF_8;
+                        try {
+                            currentContent = new String(vFile.contentsToByteArray(), charset);
+                        } catch (IOException e) {
+                            LOG.error("Failed to read file content: " + filePath, e);
+                            showErrorToast(ClaudeCodeGuiBundle.message("diff.fileReadFailedDetail", e.getMessage()));
+                            return;
                         }
                     }
 
@@ -462,7 +327,7 @@ public class DiffHandler extends BaseMessageHandler {
                         originalContent = "";
                     } else {
                         // Modified file: rebuild original content by reverse-applying operations
-                        originalContent = rebuildBeforeContent(currentContent, operations);
+                        originalContent = ContentRebuildUtil.rebuildBeforeContent(currentContent, operations);
                     }
 
                     // Create diff request using InteractiveDiffManager
@@ -490,8 +355,13 @@ public class DiffHandler extends BaseMessageHandler {
                                     writeContentToFile(finalFilePath, result.getFinalContent());
                                     sendDiffResult(finalFilePath, "APPLY", result.getFinalContent(), null);
                                 } else if (result.isRejected()) {
-                                    // User explicitly rejected - restore original content
-                                    writeContentToFile(finalFilePath, finalOriginalContent);
+                                    if (isNewFile) {
+                                        // New file rejected: delete the file (it didn't exist before)
+                                        deleteFile(finalFilePath);
+                                    } else {
+                                        // Modified file rejected: restore original content
+                                        writeContentToFile(finalFilePath, finalOriginalContent);
+                                    }
                                     sendRemoveFileFromEdits(finalFilePath);
                                     sendDiffResult(finalFilePath, "REJECT", null, null);
                                 } else {
@@ -517,143 +387,16 @@ public class DiffHandler extends BaseMessageHandler {
         }
     }
 
-    /**
-     * Schedule periodic check for file changes after diff is opened
-     */
-    private void scheduleFileChangeCheck(String filePath, String beforeContent, Path tempFile, Path tempDir, Charset charset) {
-        // Use a simple approach: check file content after a delay
-        // In a more sophisticated implementation, you could use VirtualFileListener
-        CompletableFuture.runAsync(() -> {
-            try {
-                // Wait for user to make changes and close diff
-                // This is a simplified approach - the temp file will be cleaned up on JVM exit
-                // A more robust solution would use IDEA's Disposer mechanism
-
-                // For now, just ensure temp files are registered for cleanup
-                LOG.info("Editable diff session started for: " + filePath);
-
-            } catch (Exception e) {
-                LOG.error("Error in file change check: " + e.getMessage(), e);
-            }
-        });
-    }
-
-    /**
-     * Clean up temporary files
-     */
-    private void cleanupTempFiles(Path tempFile, Path tempDir) {
-        try {
-            if (tempFile != null && Files.exists(tempFile)) {
-                Files.delete(tempFile);
-            }
-            if (tempDir != null && Files.exists(tempDir)) {
-                Files.delete(tempDir);
-            }
-        } catch (IOException e) {
-            LOG.warn("Failed to cleanup temp files: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Show error toast notification to user via WebView
-     */
     private void showErrorToast(String message) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            try {
-                if (context.getBrowser() == null || context.isDisposed()) {
-                    LOG.warn("Cannot show error toast: browser is null or disposed");
-                    return;
-                }
-                String escapedMsg = JsUtils.escapeJs(message);
-                String js = "if (window.addToast) { window.addToast('" + escapedMsg + "', 'error'); }";
-                context.getBrowser().getCefBrowser().executeJavaScript(js, context.getBrowser().getCefBrowser().getURL(), 0);
-            } catch (Exception e) {
-                LOG.error("Failed to show error toast: " + e.getMessage(), e);
-            }
-        });
+        browserBridge.showErrorToast(message);
     }
 
-    /**
-     * Send message to frontend to remove file from edits list
-     */
     private void sendRemoveFileFromEdits(String filePath) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            try {
-                if (context.getBrowser() == null || context.isDisposed()) {
-                    LOG.warn("Cannot send remove_file_from_edits: browser is null or disposed");
-                    return;
-                }
-                JsonObject payload = new JsonObject();
-                payload.addProperty("filePath", filePath);
-                String payloadJson = gson.toJson(payload);
-                String js = "(function() {" +
-                        "  if (typeof window.handleRemoveFileFromEdits === 'function') {" +
-                        "    window.handleRemoveFileFromEdits('" + JsUtils.escapeJs(payloadJson) + "');" +
-                        "  }" +
-                        "})();";
-                context.getBrowser().getCefBrowser().executeJavaScript(js, context.getBrowser().getCefBrowser().getURL(), 0);
-            } catch (Exception e) {
-                LOG.error("Failed to send remove_file_from_edits message: " + e.getMessage(), e);
-            }
-        });
+        browserBridge.sendRemoveFileFromEdits(filePath);
     }
 
-    /**
-     * Send message to frontend to update file stats in edits list
-     */
-    private void sendUpdateFileInEdits(String filePath, int additions, int deletions) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            try {
-                if (context.getBrowser() == null || context.isDisposed()) {
-                    LOG.warn("Cannot send update_file_in_edits: browser is null or disposed");
-                    return;
-                }
-                JsonObject payload = new JsonObject();
-                payload.addProperty("filePath", filePath);
-                payload.addProperty("additions", additions);
-                payload.addProperty("deletions", deletions);
-                String payloadJson = gson.toJson(payload);
-                String js = "(function() {" +
-                        "  if (typeof window.handleUpdateFileInEdits === 'function') {" +
-                        "    window.handleUpdateFileInEdits('" + JsUtils.escapeJs(payloadJson) + "');" +
-                        "  }" +
-                        "})();";
-                context.getBrowser().getCefBrowser().executeJavaScript(js, context.getBrowser().getCefBrowser().getURL(), 0);
-            } catch (Exception e) {
-                LOG.error("Failed to send update_file_in_edits message: " + e.getMessage(), e);
-            }
-        });
-    }
-
-    /**
-     * Compute diff statistics between two strings
-     */
-    private int[] computeDiffStats(String before, String after) {
-        String[] beforeLines = before.split("\n", -1);
-        String[] afterLines = after.split("\n", -1);
-
-        // Simple line-based diff counting
-        int additions = 0;
-        int deletions = 0;
-
-        // Use LCS-based approach for accurate counting
-        int[][] dp = new int[beforeLines.length + 1][afterLines.length + 1];
-
-        for (int i = 1; i <= beforeLines.length; i++) {
-            for (int j = 1; j <= afterLines.length; j++) {
-                if (beforeLines[i - 1].equals(afterLines[j - 1])) {
-                    dp[i][j] = dp[i - 1][j - 1] + 1;
-                } else {
-                    dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-                }
-            }
-        }
-
-        int lcsLength = dp[beforeLines.length][afterLines.length];
-        deletions = beforeLines.length - lcsLength;
-        additions = afterLines.length - lcsLength;
-
-        return new int[]{additions, deletions};
+    private void sendDiffResult(String filePath, String action, String content, String error) {
+        browserBridge.sendDiffResult(filePath, action, content, error);
     }
 
     /**
@@ -668,6 +411,11 @@ public class DiffHandler extends BaseMessageHandler {
             String title = json.has("title") ? json.get("title").getAsString() : null;
 
             LOG.info("Showing edit preview diff for file: " + filePath + " with " + edits.size() + " edits");
+
+            if (!isPathWithinProject(filePath)) {
+                LOG.warn("Security: file path outside project directory: " + filePath);
+                return;
+            }
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
@@ -719,13 +467,13 @@ public class DiffHandler extends BaseMessageHandler {
                     DiffContent rightContent = DiffContentFactory.getInstance()
                         .create(context.getProject(), afterContent, fileType);
 
-                    String diffTitle = title != null ? title : "编辑预览: " + fileName;
+                    String diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.editPreview", fileName);
                     SimpleDiffRequest diffRequest = new SimpleDiffRequest(
                         diffTitle,
                         leftContent,
                         rightContent,
-                        fileName + " (当前)",
-                        fileName + " (编辑后)"
+                        ClaudeCodeGuiBundle.message("diff.editPreviewCurrent", fileName),
+                        ClaudeCodeGuiBundle.message("diff.editPreviewAfter", fileName)
                     );
 
                     DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
@@ -754,6 +502,11 @@ public class DiffHandler extends BaseMessageHandler {
             String title = json.has("title") ? json.get("title").getAsString() : null;
 
             LOG.info("Showing edit full diff for file: " + filePath);
+
+            if (!isPathWithinProject(filePath)) {
+                LOG.warn("Security: file path outside project directory: " + filePath);
+                return;
+            }
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
@@ -811,14 +564,14 @@ public class DiffHandler extends BaseMessageHandler {
                     String rightLabel;
 
                     if (originalContent == null || originalContent.isEmpty()) {
-                        // 无缓存时显示"Edit Only"标记
-                        diffTitle = (title != null ? title : "编辑: " + fileName) + " (仅编辑部分)";
+                        diffTitle = (title != null ? title : ClaudeCodeGuiBundle.message("diff.edit", fileName))
+                            + " " + ClaudeCodeGuiBundle.message("diff.editOnly");
                         leftLabel = "old_string";
                         rightLabel = "new_string";
                     } else {
-                        diffTitle = title != null ? title : "编辑: " + fileName;
-                        leftLabel = fileName + " (修改前)";
-                        rightLabel = fileName + " (修改后)";
+                        diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.edit", fileName);
+                        leftLabel = ClaudeCodeGuiBundle.message("diff.editBefore", fileName);
+                        rightLabel = ClaudeCodeGuiBundle.message("diff.editAfter", fileName);
                     }
 
                     SimpleDiffRequest diffRequest = new SimpleDiffRequest(
@@ -942,6 +695,66 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
+     * Check if a file path is within the project directory.
+     * Uses canonical paths to prevent path traversal attacks.
+     */
+    private boolean isPathWithinProject(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            return false;
+        }
+        String projectBasePath = context.getProject().getBasePath();
+        if (projectBasePath == null) {
+            LOG.warn("Security: Cannot validate path - project base path is null");
+            return false;
+        }
+        try {
+            String canonicalFilePath = new File(filePath).getCanonicalPath();
+            String canonicalBasePath = new File(projectBasePath).getCanonicalPath();
+            return canonicalFilePath.startsWith(canonicalBasePath + File.separator)
+                || canonicalFilePath.equals(canonicalBasePath);
+        } catch (IOException e) {
+            LOG.error("Failed to validate file path: " + filePath, e);
+            return false;
+        }
+    }
+
+    /**
+     * Delete a file and refresh VFS.
+     * Used when rejecting a newly created file to fully undo the creation.
+     */
+    private void deleteFile(String filePath) {
+        if (!isPathWithinProject(filePath)) {
+            LOG.warn("Security: Attempted to delete file outside project directory: " + filePath);
+            return;
+        }
+
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                VirtualFile file = LocalFileSystem.getInstance()
+                        .refreshAndFindFileByPath(filePath.replace('\\', '/'));
+                if (file != null) {
+                    ApplicationManager.getApplication().runWriteAction(() -> {
+                        try {
+                            file.delete(this);
+                            LOG.info("File deleted (reject new file): " + filePath);
+                        } catch (IOException e) {
+                            LOG.error("Failed to delete file: " + filePath, e);
+                        }
+                    });
+                } else {
+                    // Fallback: delete via java.io.File
+                    File javaFile = new File(filePath);
+                    if (javaFile.exists() && javaFile.delete()) {
+                        LOG.info("File deleted via fallback (reject new file): " + filePath);
+                    }
+                }
+            } catch (Exception e) {
+                LOG.error("Failed to delete file: " + filePath, e);
+            }
+        });
+    }
+
+    /**
      * Write content to file and refresh VFS.
      * Validates that the file path is within the project directory for security.
      */
@@ -950,20 +763,9 @@ public class DiffHandler extends BaseMessageHandler {
             return;
         }
 
-        // Security: Validate path is within project directory
-        String projectBasePath = context.getProject().getBasePath();
-        if (projectBasePath != null) {
-            try {
-                java.nio.file.Path normalizedPath = java.nio.file.Paths.get(filePath).toAbsolutePath().normalize();
-                java.nio.file.Path projectPath = java.nio.file.Paths.get(projectBasePath).toAbsolutePath().normalize();
-                if (!normalizedPath.startsWith(projectPath)) {
-                    LOG.warn("Security: Attempted to write file outside project directory: " + filePath);
-                    return;
-                }
-            } catch (java.nio.file.InvalidPathException e) {
-                LOG.error("Invalid file path: " + filePath, e);
-                return;
-            }
+        if (!isPathWithinProject(filePath)) {
+            LOG.warn("Security: Attempted to write file outside project directory: " + filePath);
+            return;
         }
 
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -999,41 +801,6 @@ public class DiffHandler extends BaseMessageHandler {
                 }
             } catch (Exception e) {
                 LOG.error("Failed to write content to file: " + filePath, e);
-            }
-        });
-    }
-
-    /**
-     * Send diff result to frontend.
-     */
-    private void sendDiffResult(String filePath, String action, String content, String error) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            try {
-                if (context.getBrowser() == null || context.isDisposed()) {
-                    LOG.warn("Cannot send diff_result: browser is null or disposed");
-                    return;
-                }
-
-                JsonObject payload = new JsonObject();
-                payload.addProperty("filePath", filePath);
-                payload.addProperty("action", action);
-                if (content != null) {
-                    payload.addProperty("content", content);
-                }
-                if (error != null) {
-                    payload.addProperty("error", error);
-                }
-
-                String payloadJson = gson.toJson(payload);
-                String js = "(function() {" +
-                        "  if (typeof window.handleDiffResult === 'function') {" +
-                        "    window.handleDiffResult('" + JsUtils.escapeJs(payloadJson) + "');" +
-                        "  }" +
-                        "})();";
-                context.getBrowser().getCefBrowser().executeJavaScript(js, context.getBrowser().getCefBrowser().getURL(), 0);
-                LOG.info("Diff result sent to frontend: " + action + " for " + filePath);
-            } catch (Exception e) {
-                LOG.error("Failed to send diff_result message: " + e.getMessage(), e);
             }
         });
     }

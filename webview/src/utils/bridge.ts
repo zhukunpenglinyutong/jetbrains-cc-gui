@@ -1,13 +1,7 @@
 const BRIDGE_UNAVAILABLE_WARNED = new Set<string>();
 
-/** Path traversal patterns to detect (including URL-encoded variants) */
-const PATH_TRAVERSAL_PATTERNS = [
-  '..',           // Direct traversal
-  '~',            // Home directory reference
-  '%2e%2e',       // URL-encoded ..
-  '%2E%2E',       // URL-encoded .. (uppercase)
-  '%252e%252e',   // Double URL-encoded ..
-];
+/** Regex to detect path traversal: matches ".." as a path segment, not as part of filenames */
+const PATH_TRAVERSAL_REGEX = /(^|[\\/])\.\.($|[\\/])/;
 
 /**
  * Validate file path doesn't contain path traversal patterns
@@ -15,12 +9,13 @@ const PATH_TRAVERSAL_PATTERNS = [
  */
 const isValidPath = (filePath: string): boolean => {
   if (!filePath) return false;
-  // Check both original and decoded path for traversal patterns
-  const decodedPath = decodeURIComponent(filePath);
-  return !PATH_TRAVERSAL_PATTERNS.some(pattern =>
-    filePath.toLowerCase().includes(pattern.toLowerCase()) ||
-    decodedPath.toLowerCase().includes(pattern.toLowerCase())
-  );
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(filePath);
+  } catch {
+    return false;
+  }
+  return !PATH_TRAVERSAL_REGEX.test(filePath) && !PATH_TRAVERSAL_REGEX.test(decodedPath);
 };
 
 const callBridge = (payload: string) => {
