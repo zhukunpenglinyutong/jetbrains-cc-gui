@@ -35,6 +35,45 @@ type GroupedBlock =
   | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number }
   | { type: 'bash_group'; blocks: ClaudeContentBlock[]; startIndex: number };
 
+/** Shared copy icon SVG used by both user and assistant message copy buttons */
+const CopyIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
+    <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
+  </svg>
+);
+
+interface CopyButtonProps {
+  className?: string;
+  isCopied: boolean;
+  onClick: () => void;
+  copyLabel: string;
+  copySuccessText: string;
+}
+
+const CopyButton = memo(function CopyButton({
+  className,
+  isCopied,
+  onClick,
+  copyLabel,
+  copySuccessText,
+}: CopyButtonProps) {
+  return (
+    <button
+      type="button"
+      className={`message-copy-btn${className ? ` ${className}` : ''} ${isCopied ? 'copied' : ''}`}
+      onClick={onClick}
+      title={copyLabel}
+      aria-label={copyLabel}
+    >
+      <span className="copy-icon">
+        <CopyIcon />
+      </span>
+      <span className="copy-tooltip">{copySuccessText}</span>
+    </button>
+  );
+});
+
 function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): boolean {
   return block.type === 'tool_use' && isToolName(block.name, toolNames);
 }
@@ -383,41 +422,24 @@ export const MessageItem = memo(function MessageItem({
           <div className="message-timestamp-header">
             {formatTime(message.timestamp)}
           </div>
-          <button
-            type="button"
-            className={`message-copy-btn message-copy-btn-inline ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
+          <CopyButton
+            className="message-copy-btn-inline"
+            isCopied={copiedMessageIndex === messageIndex}
             onClick={handleCopyMessage}
-            title={t('markdown.copyMessage')}
-            aria-label={t('markdown.copyMessage')}
-          >
-            <span className="copy-icon">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
-                <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
-              </svg>
-            </span>
-            <span className="copy-tooltip">{t('markdown.copySuccess')}</span>
-          </button>
+            copyLabel={t('markdown.copyMessage')}
+            copySuccessText={t('markdown.copySuccess')}
+          />
         </div>
       )}
 
       {/* Copy button for assistant messages only */}
       {message.type === 'assistant' && !isMessageStreaming && (
-        <button
-          type="button"
-          className={`message-copy-btn ${copiedMessageIndex === messageIndex ? 'copied' : ''}`}
+        <CopyButton
+          isCopied={copiedMessageIndex === messageIndex}
           onClick={handleCopyMessage}
-          title={t('markdown.copyMessage')}
-          aria-label={t('markdown.copyMessage')}
-        >
-          <span className="copy-icon">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
-              <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
-            </svg>
-          </span>
-          <span className="copy-tooltip">{t('markdown.copySuccess')}</span>
-        </button>
+          copyLabel={t('markdown.copyMessage')}
+          copySuccessText={t('markdown.copySuccess')}
+        />
       )}
 
       {/* Role label for non-user/assistant messages */}
