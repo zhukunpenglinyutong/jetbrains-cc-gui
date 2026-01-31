@@ -55,6 +55,7 @@
     "parseError": "無法解析內容",
     "noMatchingFiles": "無匹配檔案",
     "noMatchingCommands": "無匹配指令",
+    "noMatchingHistory": "無匹配歷史",
     "noAvailableAgents": "無可用代理程式",
     "collapse": "收起",
     "expand": "展開",
@@ -172,6 +173,16 @@
     "agentsDesc": "管理和配置AI代理",
     "skills": "Skills",
     "skillsDesc": "管理和配置技能模組",
+    "other": {
+      "title": "其他設定",
+      "description": "配置其他雜項設定",
+      "historyCompletion": {
+        "label": "歷史輸入補全",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，輸入框會根據歷史輸入自動補全，按 Tab 鍵接受建議"
+      }
+    },
     "codexFeatureUnavailable": "Codex 暫未適配此功能，請切換到 Claude Code 使用",
     "community": "官方交流群",
     "communityDesc": "掃描下方二維碼加入官方微信交流群，獲取最新資訊和技術支援",

@@ -694,6 +694,14 @@
   outline: none;
 }
 
+/* Inline history completion hint - displays gray suggestion text after user input */
+.input-editable[data-completion-suffix]::after {
+  content: attr(data-completion-suffix);
+  color: var(--input-placeholder);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 /* ============================================================
    底部工具栏
    ============================================================ */

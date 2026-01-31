@@ -55,6 +55,7 @@
     "parseError": "Error al analizar el contenido",
     "noMatchingFiles": "Sin archivos coincidentes",
     "noMatchingCommands": "Sin comandos coincidentes",
+    "noMatchingHistory": "Sin historial coincidente",
     "noAvailableAgents": "Sin agentes disponibles",
     "collapse": "Colapsar",
     "expand": "Expandir",
@@ -172,6 +173,16 @@
     "agentsDesc": "Gestionar y configurar agentes de IA",
     "skills": "Habilidades",
     "skillsDesc": "Gestionar y configurar módulos de habilidades",
+    "other": {
+      "title": "Otros ajustes",
+      "description": "Configurar ajustes varios",
+      "historyCompletion": {
+        "label": "Autocompletado del historial",
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado",
+        "hint": "Cuando está habilitado, el cuadro de entrada se autocompletará según el historial de entrada. Presiona Tab para aceptar la sugerencia."
+      }
+    },
     "codexFeatureUnavailable": "Esta sección de configuración aún no está disponible en Codex. Cambia a Claude Code.",
     "community": "Comunidad oficial",
     "communityDesc": "Escanea el código QR a continuación para unirte al grupo oficial de WeChat para obtener las últimas noticias y soporte técnico",
