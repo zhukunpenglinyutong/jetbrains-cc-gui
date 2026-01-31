@@ -499,6 +499,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       sdkInstalled,
       currentProvider,
       clearInput,
+      cancelPendingInput: debouncedOnInput.cancel,
       externalAttachments,
       setInternalAttachments,
       fileCompletion,
