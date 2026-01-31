@@ -436,6 +436,12 @@ interface Window {
   __deniedToolIds?: Set<string>;
 
   /**
+   * 会话过渡抑制标志
+   * 在创建新会话期间为 true，防止旧会话回调通过 updateMessages 写回旧消息
+   */
+  __sessionTransitioning?: boolean;
+
+  /**
    * Update streaming enabled configuration - 接收流式传输配置
    */
   updateStreamingEnabled?: (json: string) => void;

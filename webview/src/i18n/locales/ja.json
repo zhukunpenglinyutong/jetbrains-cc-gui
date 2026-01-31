@@ -79,6 +79,7 @@
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
     "goInstallSdk": "インストールへ",
     "commandNotImplemented": "`{{command}}` 機能はまだ実装されていません。",
+    "clearCommandDescription": "会話履歴をクリアして新しいセッションを開始",
     "attachmentFile": "[添付ファイル: {{fileName}}]",
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
     "streamingConnected": "Claudeに接続しました、質問を理解しています"

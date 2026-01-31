@@ -79,6 +79,7 @@
     "sdkNotInstalled": "{{provider}} SDK n'est pas installé. Veuillez installer le SDK pour commencer à discuter.",
     "goInstallSdk": "Aller installer",
     "commandNotImplemented": "La fonctionnalité `{{command}}` n'est pas encore implémentée.",
+    "clearCommandDescription": "Effacer l'historique et démarrer une nouvelle session",
     "attachmentFile": "[Pièce jointe: {{fileName}}]",
     "attachmentsUploaded": "[Pièces jointes téléchargées]",
     "streamingConnected": "Claude connecté, en train de comprendre votre question"

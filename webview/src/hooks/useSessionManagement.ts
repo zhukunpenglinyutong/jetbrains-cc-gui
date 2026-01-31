@@ -27,6 +27,7 @@ interface UseSessionManagementReturn {
   showInterruptConfirm: boolean;
   suppressNextStatusToastRef: React.MutableRefObject<boolean>;
   createNewSession: () => void;
+  forceCreateNewSession: () => void;
   handleConfirmNewSession: () => void;
   handleCancelNewSession: () => void;
   handleConfirmInterrupt: () => void;
@@ -77,6 +78,17 @@ export function useSessionManagement({
       sendBridgeEvent('create_new_session');
     }
   }, [messages.length, loading]);
+
+  // Force create new session (no confirmation, used by /clear /new /reset commands)
+  const forceCreateNewSession = useCallback(() => {
+    if (loading) {
+      sendBridgeEvent('interrupt_session');
+    }
+    // 设置过渡标志，防止后端旧会话回调通过 updateMessages 写回旧消息
+    window.__sessionTransitioning = true;
+    setMessages([]);
+    sendBridgeEvent('create_new_session');
+  }, [setMessages, loading]);
 
   // Confirm new session
   const handleConfirmNewSession = useCallback(() => {
@@ -234,6 +246,7 @@ export function useSessionManagement({
     showInterruptConfirm,
     suppressNextStatusToastRef,
     createNewSession,
+    forceCreateNewSession,
     handleConfirmNewSession,
     handleCancelNewSession,
     handleConfirmInterrupt,

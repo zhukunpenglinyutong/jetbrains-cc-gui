@@ -472,6 +472,7 @@ const App = () => {
     showInterruptConfirm,
     suppressNextStatusToastRef,
     createNewSession,
+    forceCreateNewSession,
     handleConfirmNewSession,
     handleCancelNewSession,
     handleConfirmInterrupt,
@@ -560,6 +561,25 @@ const App = () => {
     openAskUserQuestionDialog,
     openPlanApprovalDialog,
   });
+
+  /**
+   * 新建会话的命令集合（/new, /clear, /reset 均可触发）
+   */
+  const NEW_SESSION_COMMANDS = new Set(['/new', '/clear', '/reset']);
+
+  /**
+   * 检查是否是新建会话命令
+   * @returns true 如果是新建会话命令（已处理），false 否则
+   */
+  const checkNewSessionCommand = useCallback((text: string): boolean => {
+    if (!text.startsWith('/')) return false;
+    const command = text.split(/\s+/)[0].toLowerCase();
+    if (NEW_SESSION_COMMANDS.has(command)) {
+      forceCreateNewSession();
+      return true;
+    }
+    return false;
+  }, [forceCreateNewSession]);
 
   /**
    * 检查未实现的斜杠命令
@@ -665,6 +685,10 @@ const App = () => {
 
     // 验证输入
     if (!text && !hasAttachments) return;
+
+    // 检查新建会话命令（/new, /clear, /reset）- 无需 SDK，无需二次确认，即使 loading 也可执行
+    if (checkNewSessionCommand(text)) return;
+
     if (loading) return;
 
     // 检查 SDK 状态

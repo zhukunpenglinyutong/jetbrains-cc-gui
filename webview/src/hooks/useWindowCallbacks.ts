@@ -232,6 +232,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Message Callbacks ==========
     window.updateMessages = (json) => {
+      // 会话过渡期间，忽略旧会话回调发来的消息更新，防止已清空的消息被写回
+      if (window.__sessionTransitioning) return;
+
       try {
         const parsed = JSON.parse(json) as ClaudeMessage[];
 
@@ -394,6 +397,10 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     };
 
     window.updateStatus = (text) => {
+      // 后端创建新会话完成后会发送 updateStatus，解除消息更新抑制
+      if (window.__sessionTransitioning) {
+        window.__sessionTransitioning = false;
+      }
       setStatus(text);
       if (suppressNextStatusToastRef.current) {
         suppressNextStatusToastRef.current = false;

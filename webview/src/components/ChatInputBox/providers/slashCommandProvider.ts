@@ -7,7 +7,6 @@ import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
  * 本地命令列表（需要被过滤掉的命令）
  */
 const HIDDEN_COMMANDS = new Set([
-  '/clear',
   '/context',
   '/cost',
   '/pr-comments',
@@ -15,6 +14,21 @@ const HIDDEN_COMMANDS = new Set([
   '/security-review',
   '/todo',
 ]);
+
+/**
+ * 本地新建会话命令（/clear, /new, /reset 是同一个命令的别名）
+ * 这些命令在前端直接处理，不需要发送到 SDK
+ */
+const NEW_SESSION_COMMAND_ALIASES = new Set(['/clear', '/new', '/reset']);
+
+function getLocalNewSessionCommands(): CommandItem[] {
+  return [{
+    id: 'clear',
+    label: '/clear',
+    description: i18n.t('chat.clearCommandDescription'),
+    category: 'system',
+  }];
+}
 
 // ============================================================================
 // 状态管理
@@ -204,8 +218,10 @@ function requestRefresh(): boolean {
 function isHiddenCommand(name: string): boolean {
   const normalized = name.startsWith('/') ? name : `/${name}`;
   if (HIDDEN_COMMANDS.has(normalized)) return true;
+  // 隐藏 SDK 返回的 /clear（使用本地版本替代）
+  if (NEW_SESSION_COMMAND_ALIASES.has(normalized)) return true;
   const baseName = normalized.split(' ')[0];
-  return HIDDEN_COMMANDS.has(baseName);
+  return HIDDEN_COMMANDS.has(baseName) || NEW_SESSION_COMMAND_ALIASES.has(baseName);
 }
 
 function getCategoryFromCommand(name: string): string {
@@ -220,11 +236,13 @@ function getCategoryFromCommand(name: string): string {
 
 function filterCommands(commands: CommandItem[], query: string): CommandItem[] {
   const visibleCommands = commands.filter(cmd => !isHiddenCommand(cmd.label));
+  const localCommands = getLocalNewSessionCommands();
+  const merged = [...localCommands, ...visibleCommands];
 
-  if (!query) return visibleCommands;
+  if (!query) return merged;
 
   const lowerQuery = query.toLowerCase();
-  return visibleCommands.filter(cmd =>
+  return merged.filter(cmd =>
     cmd.label.toLowerCase().includes(lowerQuery) ||
     cmd.description?.toLowerCase().includes(lowerQuery) ||
     cmd.id.toLowerCase().includes(lowerQuery)
