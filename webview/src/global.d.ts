@@ -455,6 +455,22 @@ interface Window {
    */
   onUndoAllFileResult?: (json: string) => void;
 
+  /**
+   * Handle remove file from edits list - 从编辑列表中移除文件（用户在 diff 视图中完全撤销更改时调用）
+   */
+  handleRemoveFileFromEdits?: (json: string) => void;
+
+  /**
+   * Handle update file stats in edits list - 更新编辑列表中文件的统计信息（用户在 diff 视图中部分撤销更改时调用）
+   */
+  handleUpdateFileInEdits?: (json: string) => void;
+
+  /**
+   * Handle interactive diff result - 处理交互式 Diff 操作结果（Apply/Reject）
+   * @param json JSON string containing { filePath, action, content?, error? }
+   */
+  handleDiffResult?: (json: string) => void;
+
   // ============================================================================
   // 🔧 依赖管理回调函数
   // ============================================================================
