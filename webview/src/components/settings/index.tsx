@@ -22,6 +22,7 @@ import PlaceholderSection from './PlaceholderSection';
 import CommunitySection from './CommunitySection';
 import AgentSection from './AgentSection';
 import CommitSection from './CommitSection';
+import OtherSettingsSection from './OtherSettingsSection';
 import { SkillsSettingsSection } from '../skills';
 
 // 导入自定义 hooks
@@ -230,6 +231,12 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
   // Commit AI 提示词配置
   const [commitPrompt, setCommitPrompt] = useState('');
   const [savingCommitPrompt, setSavingCommitPrompt] = useState(false);
+
+  // 历史补全开关配置
+  const [historyCompletionEnabled, setHistoryCompletionEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('historyCompletionEnabled');
+    return saved !== 'false'; // 默认开启
+  });
 
   const handleTabChange = (tab: SettingsTab) => {
     if (isCodexMode && disabledTabs.includes(tab)) {
@@ -914,6 +921,17 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
           {/* Skills */}
           <div style={{ display: currentTab === 'skills' ? 'block' : 'none' }}>
             <SkillsSettingsSection />
+          </div>
+
+          {/* 其他设置 */}
+          <div style={{ display: currentTab === 'other' ? 'block' : 'none' }}>
+            <OtherSettingsSection
+              historyCompletionEnabled={historyCompletionEnabled}
+              onHistoryCompletionEnabledChange={(enabled) => {
+                setHistoryCompletionEnabled(enabled);
+                localStorage.setItem('historyCompletionEnabled', enabled.toString());
+              }}
+            />
           </div>
 
           {/* 官方交流群 */}

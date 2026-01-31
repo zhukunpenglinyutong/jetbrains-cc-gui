@@ -16,6 +16,7 @@ interface CompletionController {
   handleMouseEnter: (index: number) => void;
 }
 
+
 export function ChatInputBoxFooter({
   disabled,
   hasInputContent,

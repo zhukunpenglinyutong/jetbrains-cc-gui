@@ -6,6 +6,10 @@ interface CompletionWithKeyDown {
   handleKeyDown: (ev: KeyboardEvent) => boolean;
 }
 
+interface InlineCompletionHandler {
+  applySuggestion: () => boolean;
+}
+
 export interface UseKeyboardHandlerOptions {
   isComposing: boolean;
   lastCompositionEndTimeRef: MutableRefObject<number>;
@@ -25,6 +29,8 @@ export interface UseKeyboardHandlerOptions {
     preventDefault: () => void;
     stopPropagation: () => void;
   }) => boolean;
+  /** Inline history completion (Tab to apply) */
+  inlineCompletion?: InlineCompletionHandler;
   completionSelectedRef: MutableRefObject<boolean>;
   submittedOnEnterRef: MutableRefObject<boolean>;
   handleSubmit: () => void;
@@ -50,6 +56,7 @@ export function useKeyboardHandler({
   agentCompletion,
   handleMacCursorMovement,
   handleHistoryKeyDown,
+  inlineCompletion,
   completionSelectedRef,
   submittedOnEnterRef,
   handleSubmit,
@@ -100,6 +107,16 @@ export function useKeyboardHandler({
         }
       }
 
+      // Handle inline history completion (Tab key)
+      if (e.key === 'Tab' && inlineCompletion) {
+        const applied = inlineCompletion.applySuggestion();
+        if (applied) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+
       if (handleHistoryKeyDown(e)) return;
 
       const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
@@ -123,6 +140,7 @@ export function useKeyboardHandler({
       commandCompletion,
       agentCompletion,
       handleHistoryKeyDown,
+      inlineCompletion,
       lastCompositionEndTimeRef,
       sendShortcut,
       sdkStatusLoading,

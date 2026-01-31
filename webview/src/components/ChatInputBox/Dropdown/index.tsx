@@ -70,9 +70,13 @@ export const Dropdown = ({
   }
 
   // 计算位置（优先在上方显示）
+  // 确保 position.top 不超过视口高度，避免 bottom 变成负值
+  const windowHeight = window.innerHeight;
+  const effectiveTop = Math.min(position.top, windowHeight - offsetY);
+  
   const style: React.CSSProperties = {
     position: 'fixed',
-    bottom: `calc(100vh - ${position.top}px + ${offsetY}px)`,
+    bottom: `calc(100vh - ${effectiveTop}px + ${offsetY}px)`,
     left,
     width,
     zIndex: 1001,

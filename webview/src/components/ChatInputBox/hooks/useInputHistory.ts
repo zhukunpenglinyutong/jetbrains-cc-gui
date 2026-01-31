@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 
-const STORAGE_KEY = 'chat-input-history';
+/** localStorage key for chat input history */
+export const HISTORY_STORAGE_KEY = 'chat-input-history';
+/** localStorage key for history usage counts */
+export const HISTORY_COUNTS_KEY = 'chat-input-history-counts';
+/** localStorage key for history completion enabled setting */
+export const HISTORY_ENABLED_KEY = 'historyCompletionEnabled';
+
 /**
  * Keep the stored history bounded to avoid unbounded localStorage growth.
  * 50 is enough for quick recall while staying small even with multi-line prompts.
@@ -41,10 +47,13 @@ function isQuotaExceededError(err: unknown): boolean {
   );
 }
 
-function loadHistory(): string[] {
+/**
+ * Load history items from localStorage
+ */
+export function loadHistory(): string[] {
   if (!canUseLocalStorage()) return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -58,7 +67,7 @@ function saveHistory(items: string[]): string[] {
   if (!canUseLocalStorage()) return items;
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items));
     return items;
   } catch (err) {
     // If quota exceeded, drop older entries and retry, keeping the most recent.
@@ -66,7 +75,7 @@ function saveHistory(items: string[]): string[] {
       for (let startIndex = 1; startIndex < items.length; startIndex++) {
         try {
           const subset = items.slice(startIndex);
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(subset));
+          window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(subset));
           return subset;
         } catch (retryErr) {
           if (!isQuotaExceededError(retryErr)) {
@@ -80,6 +89,49 @@ function saveHistory(items: string[]): string[] {
     }
 
     return items;
+  }
+}
+
+/**
+ * Load usage counts from localStorage
+ */
+export function loadCounts(): Record<string, number> {
+  if (!canUseLocalStorage()) return {};
+  try {
+    const raw = window.localStorage.getItem(HISTORY_COUNTS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || parsed === null) return {};
+    return parsed as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Check if history completion is enabled
+ */
+export function isHistoryCompletionEnabled(): boolean {
+  if (!canUseLocalStorage()) return true;
+  try {
+    const value = window.localStorage.getItem(HISTORY_ENABLED_KEY);
+    return value !== 'false'; // Default to enabled
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Increment usage count for a text
+ */
+function incrementCount(text: string): void {
+  if (!canUseLocalStorage()) return;
+  try {
+    const counts = loadCounts();
+    counts[text] = (counts[text] || 0) + 1;
+    window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
+  } catch {
+    // Ignore errors
   }
 }
 
@@ -145,13 +197,18 @@ export function useInputHistory({
     const sanitized = text.replace(INVISIBLE_CHARS_RE, '');
     if (!sanitized.trim()) return;
 
+    // Always increment usage count
+    incrementCount(sanitized);
+
     const currentItems = historyRef.current;
     if (currentItems.length > 0 && currentItems[currentItems.length - 1] === sanitized) {
       historyIndexRef.current = -1;
       return;
     }
 
-    const newItems = [...currentItems, sanitized].slice(-MAX_HISTORY_ITEMS);
+    // Remove existing occurrence to avoid duplicates, then add to end
+    const filteredItems = currentItems.filter(item => item !== sanitized);
+    const newItems = [...filteredItems, sanitized].slice(-MAX_HISTORY_ITEMS);
     const persistedItems = saveHistory(newItems);
     historyRef.current = persistedItems;
     historyIndexRef.current = -1;

@@ -56,6 +56,7 @@
     "usagePercentage": "Usage: {{percentage}}",
     "noMatchingFiles": "No matching files",
     "noMatchingCommands": "No matching commands",
+    "noMatchingHistory": "No matching history",
     "noAvailableAgents": "No available agents",
     "collapse": "Collapse",
     "expand": "Expand",
@@ -201,6 +202,16 @@
     "agentsDesc": "Manage and configure AI agents",
     "skills": "Skills",
     "skillsDesc": "Manage and configure skill modules",
+    "other": {
+      "title": "Other Settings",
+      "description": "Configure miscellaneous settings",
+      "historyCompletion": {
+        "label": "History Input Completion",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, the input box will auto-complete based on input history. Press Tab to accept the suggestion."
+      }
+    },
     "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",
     "sidebar": {
       "expand": "Expand Sidebar",

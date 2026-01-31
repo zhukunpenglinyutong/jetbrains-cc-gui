@@ -37,6 +37,7 @@ import {
   useChatInputImperativeHandle,
   useSpaceKeyListener,
   useResizableChatInputBox,
+  useInlineHistoryCompletion,
 } from './hooks/index.js';
 import {
   commandToDropdownItem,
@@ -273,6 +274,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       },
     });
 
+    // Inline history completion hook (simple tab-complete style)
+    const inlineCompletion = useInlineHistoryCompletion({
+      debounceMs: 100,
+      minQueryLength: 2,
+    });
+
     // Tooltip hook
     const { tooltip, handleMouseOver, handleMouseLeave } = useTooltip();
 
@@ -491,6 +498,15 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         debouncedDetectCompletion();
         setHasContent(!isEmpty);
 
+        // Update inline history completion
+        // Only if no other completion menu is open
+        const isOtherCompletionOpen = fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen;
+        if (!isOtherCompletionOpen) {
+          inlineCompletion.updateQuery(text);
+        } else {
+          inlineCompletion.clear();
+        }
+
         // Notify parent component (use debounced version to reduce re-renders)
         // If determined empty (only zero-width characters), pass empty string to parent
         debouncedOnInput(isEmpty ? '' : text);
@@ -503,8 +519,35 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         debouncedDetectCompletion,
         debouncedOnInput,
         invalidateCache,
+        fileCompletion.isOpen,
+        commandCompletion.isOpen,
+        agentCompletion.isOpen,
+        inlineCompletion,
       ]
     );
+
+    /**
+     * Apply inline history completion (Tab key)
+     */
+    const applyInlineCompletion = useCallback(() => {
+      const fullText = inlineCompletion.applySuggestion();
+      if (!fullText || !editableRef.current) return false;
+
+      // Fill the input with the complete text
+      editableRef.current.innerText = fullText;
+
+      // Set cursor to end
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.selectNodeContents(editableRef.current);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      // Update state
+      handleInput();
+      return true;
+    }, [inlineCompletion, handleInput]);
 
     // IME composition hook
     const {
@@ -593,6 +636,10 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       agentCompletion,
       handleMacCursorMovement,
       handleHistoryKeyDown,
+      // Inline completion: Tab key applies suggestion
+      inlineCompletion: inlineCompletion.hasSuggestion ? {
+        applySuggestion: applyInlineCompletion,
+      } : undefined,
       completionSelectedRef,
       submittedOnEnterRef,
       handleSubmit,
@@ -760,6 +807,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
             className="input-editable"
             contentEditable={!disabled}
             data-placeholder={placeholder}
+            data-completion-suffix={inlineCompletion.suffix || ''}
             onInput={(e) => {
               // Pass native event isComposing state, more accurate than React state
               // Can correctly capture input before compositionStart

@@ -56,6 +56,7 @@
     "usagePercentage": "上下文: {{percentage}}",
     "noMatchingFiles": "无匹配文件",
     "noMatchingCommands": "无匹配命令",
+    "noMatchingHistory": "无匹配历史",
     "noAvailableAgents": "无可用智能体",
     "collapse": "收起",
     "expand": "展开",
@@ -201,6 +202,16 @@
     "agentsDesc": "管理和配置AI代理",
     "skills": "Skills",
     "skillsDesc": "管理和配置技能模块",
+    "other": {
+      "title": "其他设置",
+      "description": "配置其他杂项设置",
+      "historyCompletion": {
+        "label": "历史输入补全",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，输入框会根据历史输入自动补全，按 Tab 键接受建议"
+      }
+    },
     "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",
     "sidebar": {
       "expand": "展开侧边栏",
