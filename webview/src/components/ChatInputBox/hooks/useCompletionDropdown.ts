@@ -70,6 +70,7 @@ export function useCompletionDropdown<T>({
    */
   const open = useCallback((position: DropdownPosition, triggerQuery: TriggerQuery) => {
     debugLog('[useCompletionDropdown] open:', { position, triggerQuery });
+    // Clear items when opening to ensure fresh data for new trigger session
     setState(prev => ({
       ...prev,
       isOpen: true,
@@ -77,6 +78,9 @@ export function useCompletionDropdown<T>({
       triggerQuery,
       activeIndex: 0,
       navigationMode: 'keyboard',
+      items: [],
+      rawItems: [],
+      loading: true, // Set loading immediately on open
     }));
   }, []);
 
@@ -91,14 +95,14 @@ export function useCompletionDropdown<T>({
     }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+      // Don't set to null here - keep the reference for proper cleanup
     }
 
+    // Fix: Don't clear items/rawItems when closing to prevent flickering
+    // when switching between different completion types (@, /, #)
     setState(prev => ({
       ...prev,
       isOpen: false,
-      items: [],
-      rawItems: [],
       triggerQuery: null,
       loading: false,
     }));

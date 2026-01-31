@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FileChangeSummary } from '../../types';
-import { openFile, showMultiEditDiff } from '../../utils/bridge';
+import { openFile, showEditableDiff } from '../../utils/bridge';
 import FileIcon from './FileIcon';
 
 interface FileChangesListProps {
@@ -28,12 +28,14 @@ const FileChangesList = memo(({
   }, []);
 
   const handleShowDiff = useCallback((fileChange: FileChangeSummary) => {
-    const edits = fileChange.operations.map((op) => ({
+    const operations = fileChange.operations.map((op) => ({
       oldString: op.oldString,
       newString: op.newString,
       replaceAll: op.replaceAll,
     }));
-    showMultiEditDiff(fileChange.filePath, edits);
+    // Use editable diff view for selective accept/reject of changes
+    const status = fileChange.status === 'A' ? 'A' : 'M';
+    showEditableDiff(fileChange.filePath, operations, status);
   }, []);
 
   if (fileChanges.length === 0) {

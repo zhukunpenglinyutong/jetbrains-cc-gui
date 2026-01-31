@@ -23,6 +23,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 
 /**
  * 设置和使用统计相关消息处理器
@@ -53,7 +59,11 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_send_shortcut",
         "get_ide_theme",
         "get_commit_prompt",
-        "set_commit_prompt"
+        "set_commit_prompt",
+        "get_input_history",
+        "record_input_history",
+        "delete_input_history_item",
+        "clear_input_history"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -142,6 +152,18 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_commit_prompt":
                 handleSetCommitPrompt(content);
+                return true;
+            case "get_input_history":
+                handleGetInputHistory();
+                return true;
+            case "record_input_history":
+                handleRecordInputHistory(content);
+                return true;
+            case "delete_input_history_item":
+                handleDeleteInputHistoryItem(content);
+                return true;
+            case "clear_input_history":
+                handleClearInputHistory();
                 return true;
             default:
                 return false;
@@ -1136,5 +1158,219 @@ public class SettingsHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get IDE theme: " + e.getMessage(), e);
         }
+    }
+
+    // ==================== 输入历史记录管理 ====================
+
+    /**
+     * 获取输入历史记录
+     */
+    private void handleGetInputHistory() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String result = callInputHistoryService("getAllHistoryData", null);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onInputHistoryLoaded", escapeJs(result));
+                });
+            } catch (Exception e) {
+                LOG.error("[SettingsHandler] Failed to get input history: " + e.getMessage(), e);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onInputHistoryLoaded", escapeJs("{\"items\":[],\"counts\":{}}"));
+                });
+            }
+        });
+    }
+
+    /**
+     * 记录输入历史
+     * @param content JSON 数组格式的片段列表
+     */
+    private void handleRecordInputHistory(String content) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String result = callInputHistoryServiceWithArray("recordHistory", content);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onInputHistoryRecorded", escapeJs(result));
+                });
+            } catch (Exception e) {
+                LOG.error("[SettingsHandler] Failed to record input history: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * 删除单条输入历史
+     * @param content 要删除的历史记录项
+     */
+    private void handleDeleteInputHistoryItem(String content) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String result = callInputHistoryService("deleteHistoryItem", content);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onInputHistoryDeleted", escapeJs(result));
+                });
+            } catch (Exception e) {
+                LOG.error("[SettingsHandler] Failed to delete input history item: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * 清空所有输入历史
+     */
+    private void handleClearInputHistory() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String result = callInputHistoryService("clearAllHistory", null);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onInputHistoryCleared", escapeJs(result));
+                });
+            } catch (Exception e) {
+                LOG.error("[SettingsHandler] Failed to clear input history: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * 调用 Node.js input-history-service（单参数版本）
+     */
+    private String callInputHistoryService(String functionName, String param) throws Exception {
+        String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
+        String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+
+        String nodeScript;
+        if (param == null || param.isEmpty()) {
+            // 无参数调用
+            nodeScript = String.format(
+                "const { %s } = require('%s/services/input-history-service.cjs'); " +
+                "const result = %s(); " +
+                "console.log(JSON.stringify(result));",
+                functionName,
+                bridgePath.replace("\\", "\\\\"),
+                functionName
+            );
+        } else {
+            // 单参数调用（通过 stdin 传递，避免转义问题）
+            nodeScript = String.format(
+                "const { %s } = require('%s/services/input-history-service.cjs'); " +
+                "let input = ''; " +
+                "process.stdin.on('data', chunk => input += chunk); " +
+                "process.stdin.on('end', () => { " +
+                "  try { " +
+                "    const param = input.trim(); " +
+                "    const result = %s(param); " +
+                "    console.log(JSON.stringify(result)); " +
+                "  } catch (err) { " +
+                "    console.error(JSON.stringify({ error: err.message })); " +
+                "    process.exit(1); " +
+                "  } " +
+                "});",
+                functionName,
+                bridgePath.replace("\\", "\\\\"),
+                functionName
+            );
+        }
+
+        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+
+        // Write parameter to stdin if present
+        if (param != null && !param.isEmpty()) {
+            try (BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
+                writer.write(param);
+                writer.flush();
+            }
+        }
+
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        // 添加超时控制，避免进程无限等待
+        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new Exception("Node.js process timeout after 30 seconds");
+        }
+
+        int exitCode = process.exitValue();
+        if (exitCode != 0) {
+            throw new Exception("Node.js process exited with code " + exitCode + ": " + output);
+        }
+
+        String[] lines = output.toString().split("\n");
+        return lines.length > 0 ? lines[lines.length - 1] : "{}";
+    }
+
+    /**
+     * 调用 Node.js input-history-service（数组参数版本，用于 recordHistory）
+     */
+    private String callInputHistoryServiceWithArray(String functionName, String jsonArrayParam) throws Exception {
+        String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
+        String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+
+        // Use stdin to pass JSON data, avoiding shell escaping issues with special characters
+        String nodeScript = String.format(
+            "const { %s } = require('%s/services/input-history-service.cjs'); " +
+            "let input = ''; " +
+            "process.stdin.on('data', chunk => input += chunk); " +
+            "process.stdin.on('end', () => { " +
+            "  try { " +
+            "    const data = JSON.parse(input); " +
+            "    const result = %s(data); " +
+            "    console.log(JSON.stringify(result)); " +
+            "  } catch (err) { " +
+            "    console.error(JSON.stringify({ error: err.message })); " +
+            "    process.exit(1); " +
+            "  } " +
+            "});",
+            functionName,
+            bridgePath.replace("\\", "\\\\"),
+            functionName
+        );
+
+        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+
+        // Write JSON data to stdin
+        try (BufferedWriter writer = new BufferedWriter(
+                new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
+            writer.write(jsonArrayParam);
+            writer.flush();
+        }
+
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        // 添加超时控制，避免进程无限等待
+        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new Exception("Node.js process timeout after 30 seconds");
+        }
+
+        int exitCode = process.exitValue();
+        if (exitCode != 0) {
+            throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
+        }
+
+        String[] lines = output.toString().split("\n");
+        return lines.length > 0 ? lines[lines.length - 1] : "{}";
     }
 }

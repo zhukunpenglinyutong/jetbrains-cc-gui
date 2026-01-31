@@ -1,7 +1,7 @@
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 
-export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'commit' | 'mcp' | 'agents' | 'skills' | 'community';
+export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'commit' | 'mcp' | 'agents' | 'skills' | 'other' | 'community';
 
 interface SidebarItem {
   key: SettingsTab;
@@ -19,6 +19,7 @@ const sidebarItems: SidebarItem[] = [
   { key: 'commit', icon: 'codicon-git-commit', labelKey: 'settings.commit.title' },
   { key: 'agents', icon: 'codicon-robot', labelKey: 'settings.agents' },
   { key: 'skills', icon: 'codicon-book', labelKey: 'settings.skills' },
+  { key: 'other', icon: 'codicon-ellipsis', labelKey: 'settings.other.title' },
   { key: 'community', icon: 'codicon-comment-discussion', labelKey: 'settings.community' },
 ];
 

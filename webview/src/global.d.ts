@@ -436,6 +436,12 @@ interface Window {
   __deniedToolIds?: Set<string>;
 
   /**
+   * 会话过渡抑制标志
+   * 在创建新会话期间为 true，防止旧会话回调通过 updateMessages 写回旧消息
+   */
+  __sessionTransitioning?: boolean;
+
+  /**
    * Update streaming enabled configuration - 接收流式传输配置
    */
   updateStreamingEnabled?: (json: string) => void;
@@ -454,6 +460,17 @@ interface Window {
    * Undo all files result callback - 批量撤销操作结果回调
    */
   onUndoAllFileResult?: (json: string) => void;
+
+  /**
+   * Handle remove file from edits list - 从编辑列表中移除文件（用户在 diff 视图中完全撤销更改时调用）
+   */
+  handleRemoveFileFromEdits?: (json: string) => void;
+
+  /**
+   * Handle interactive diff result - 处理交互式 Diff 操作结果（Apply/Reject）
+   * @param json JSON string containing { filePath, action, content?, error? }
+   */
+  handleDiffResult?: (json: string) => void;
 
   // ============================================================================
   // 🔧 依赖管理回调函数

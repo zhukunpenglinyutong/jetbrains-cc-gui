@@ -14,6 +14,8 @@ export interface UseSubmitHandlerOptions {
   sdkInstalled: boolean;
   currentProvider: string;
   clearInput: () => void;
+  /** Cancel any pending debounced input callbacks to prevent stale values from refilling the input */
+  cancelPendingInput: () => void;
   externalAttachments: Attachment[] | undefined;
   setInternalAttachments: Dispatch<SetStateAction<Attachment[]>>;
   fileCompletion: CompletionLike;
@@ -42,6 +44,7 @@ export function useSubmitHandler({
   sdkInstalled,
   currentProvider,
   clearInput,
+  cancelPendingInput,
   externalAttachments,
   setInternalAttachments,
   fileCompletion,
@@ -86,6 +89,9 @@ export function useSubmitHandler({
 
     const attachmentsToSend = attachments.length > 0 ? [...attachments] : undefined;
 
+    // Cancel any pending debounced input callbacks before clearing
+    // This prevents stale values from refilling the input after submit
+    cancelPendingInput();
     clearInput();
     if (externalAttachments === undefined) {
       setInternalAttachments([]);
@@ -102,6 +108,7 @@ export function useSubmitHandler({
     sdkInstalled,
     currentProvider,
     clearInput,
+    cancelPendingInput,
     externalAttachments,
     setInternalAttachments,
     fileCompletion,

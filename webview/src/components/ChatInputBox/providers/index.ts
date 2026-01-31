@@ -9,6 +9,7 @@ export {
   commandToDropdownItem,
   setupSlashCommandsCallback,
   resetSlashCommandsState,
+  preloadSlashCommands,
 } from './slashCommandProvider';
 
 export {

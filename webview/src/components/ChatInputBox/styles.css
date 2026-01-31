@@ -88,8 +88,16 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* hover 时显示蓝色边框发光效果 */
+.chat-input-box:hover {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 1px var(--input-focus-border);
+}
+
+/* focus 时显示蓝色边框效果（与 hover 保持一致） */
 .chat-input-box:focus-within {
   border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 1px var(--input-focus-border);
 }
 
 .chat-input-box.is-resizing {
@@ -111,7 +119,7 @@
 .resize-handle--n {
   top: -20px;
   left: 50%;
-  width: 80px;
+  width: 112px;
   height: 14px;
   transform: translateX(-50%);
   cursor: ns-resize;
@@ -122,7 +130,7 @@
   position: absolute;
   left: 50%;
   top: 7px;
-  width: 42px;
+  width: 60px;
   height: 4px;
   transform: translateX(-50%);
   border-radius: 999px;
@@ -131,7 +139,8 @@
   transition: opacity 0.15s ease, background 0.15s ease;
 }
 
-.chat-input-box:hover .resize-handle--n::before,
+/* 只有 hover 在 resize handle 本身或拖拽时才高亮 */
+.resize-handle--n:hover::before,
 .chat-input-box.is-resizing .resize-handle--n::before {
   opacity: 0.85;
   background: var(--text-secondary);
@@ -159,7 +168,8 @@
   transition: opacity 0.15s ease;
 }
 
-.chat-input-box:hover .resize-handle--e::before,
+/* 只有 hover 在 resize handle 本身或拖拽时才显示 */
+.resize-handle--e:hover::before,
 .chat-input-box.is-resizing .resize-handle--e::before {
   opacity: 0.55;
 }
@@ -186,7 +196,8 @@
   transition: opacity 0.15s ease;
 }
 
-.chat-input-box:hover .resize-handle--ne::before,
+/* 只有 hover 在 resize handle 本身或拖拽时才显示 */
+.resize-handle--ne:hover::before,
 .chat-input-box.is-resizing .resize-handle--ne::before {
   opacity: 0.55;
 }
@@ -674,7 +685,7 @@
 /* 输入框滚动条样式 */
 
 .input-editable {
-  min-height: calc(1.5em * 3);
+  min-height: calc(1.5em * 4);
   outline: none;
   color: var(--text-primary);
   font-size: 14px;
@@ -692,6 +703,14 @@
 
 .input-editable:focus {
   outline: none;
+}
+
+/* Inline history completion hint - displays gray suggestion text after user input */
+.input-editable[data-completion-suffix]::after {
+  content: attr(data-completion-suffix);
+  color: var(--input-placeholder);
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 /* ============================================================

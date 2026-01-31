@@ -1,0 +1,305 @@
+.configSection {
+  max-width: 800px;
+  padding-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.sectionDesc {
+  color: var(--text-tertiary);
+  margin: 0 0 24px 0;
+  font-size: 13px;
+}
+
+.fieldHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  .codicon {
+    font-size: 16px;
+    color: var(--accent-primary);
+  }
+}
+
+.fieldLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.historyCompletionSection {
+  margin-bottom: 24px;
+}
+
+/* 历史记录管理 */
+.historyManagement {
+  margin-top: 16px;
+}
+
+.expandButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: var(--accent-primary);
+  }
+
+  .codicon {
+    font-size: 12px;
+  }
+}
+
+.historyCount {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.historyListContainer {
+  margin-top: 12px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  max-height: 300px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.historyActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-tertiary);
+}
+
+.clearAllButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--color-error);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 0, 0, 0.1);
+  }
+
+  .codicon {
+    font-size: 12px;
+  }
+}
+
+.historyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.historyItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-secondary);
+  transition: background 0.15s ease;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--bg-tertiary);
+
+    .deleteButton {
+      opacity: 1;
+    }
+  }
+}
+
+.historyText {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.deleteButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--color-error);
+    background: rgba(255, 0, 0, 0.1);
+  }
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
+.emptyHistory {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: var(--text-tertiary);
+  gap: 8px;
+
+  .codicon {
+    font-size: 24px;
+    opacity: 0.5;
+  }
+
+  span:last-child {
+    font-size: 13px;
+  }
+}
+
+.toggleWrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+
+.toggleInput {
+  display: none;
+}
+
+.toggleSlider {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: var(--text-tertiary);
+    border-radius: 50%;
+    transition: all 0.2s ease;
+  }
+}
+
+.toggleInput:checked + .toggleSlider {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+
+  &::after {
+    left: 22px;
+    background: #ffffff;
+  }
+}
+
+.toggleInput:focus + .toggleSlider {
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.3);
+}
+
+.toggleLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.formHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+
+  .codicon {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  code {
+    background: var(--color-code-bg);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: var(--idea-editor-font-family, monospace);
+    font-size: 11px;
+  }
+}
+
+/* 响应式适配 */
+@media (max-width: 480px) {
+  .sectionTitle {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .sectionDesc {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .formHint {
+    font-size: 11px;
+  }
+}
+
+/* 错误回退 */
+.errorFallback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: var(--color-warning-bg, rgba(255, 193, 7, 0.1));
+  border: 1px solid var(--color-warning-border, rgba(255, 193, 7, 0.3));
+  border-radius: 6px;
+  color: var(--color-warning-text, #856404);
+  font-size: 13px;
+
+  .codicon {
+    font-size: 16px;
+    color: var(--color-warning, #ffc107);
+  }
+}
