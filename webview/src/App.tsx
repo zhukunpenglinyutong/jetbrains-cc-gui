@@ -597,6 +597,9 @@ const App = () => {
   ): ClaudeContentBlock[] => {
     const blocks: ClaudeContentBlock[] = [];
 
+    const hasImageAttachments = Array.isArray(attachments) &&
+      attachments.some(att => att.mediaType?.startsWith('image/'));
+
     if (Array.isArray(attachments) && attachments.length > 0) {
       for (const att of attachments) {
         if (att.mediaType?.startsWith('image/')) {
@@ -614,7 +617,11 @@ const App = () => {
       }
     }
 
-    if (text) {
+    // 过滤占位文本：如果已有图片附件且文本是"已上传附件:"开头的占位文本，则不添加
+    // Filter placeholder text: skip if there are image attachments and text is placeholder
+    const isPlaceholderText = text && text.trim().startsWith('已上传附件:');
+
+    if (text && !(hasImageAttachments && isPlaceholderText)) {
       blocks.push({ type: 'text', text });
     }
 
@@ -690,9 +697,11 @@ const App = () => {
     if (userContentBlocks.length === 0) return;
 
     // 创建并添加用户消息（乐观更新）
+    // 注意：content 字段应该只包含用户输入的文本，不要添加占位文本
+    // userContentBlocks 中已经包含了所有需要显示的内容（图片块和文本块）
     const userMessage: ClaudeMessage = {
       type: 'user',
-      content: text || (hasAttachments ? t('chat.attachmentsUploaded') : ''),
+      content: text || '',
       timestamp: new Date().toISOString(),
       isOptimistic: true,
       raw: { message: { content: userContentBlocks } },
