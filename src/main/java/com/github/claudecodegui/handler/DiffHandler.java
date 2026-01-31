@@ -185,13 +185,13 @@ public class DiffHandler extends BaseMessageHandler {
                         .create(context.getProject(), newContent, fileType);
 
                     // 创建 Diff 请求
-                    String diffTitle = title != null ? title : "文件变更: " + fileName;
+                    String diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.fileChange", fileName);
                     SimpleDiffRequest diffRequest = new SimpleDiffRequest(
                         diffTitle,
                         leftContent,
                         rightContent,
-                        fileName + " (修改前)",
-                        fileName + " (修改后)"
+                        ClaudeCodeGuiBundle.message("diff.editBefore", fileName),
+                        ClaudeCodeGuiBundle.message("diff.editAfter", fileName)
                     );
 
                     // 显示 Diff 窗口
@@ -252,7 +252,7 @@ public class DiffHandler extends BaseMessageHandler {
                         .create(context.getProject(), afterContent, fileType);
 
                     // 创建 Diff 请求
-                    String diffTitle = "文件变更: " + fileName + " (" + edits.size() + " 处编辑)";
+                    String diffTitle = ClaudeCodeGuiBundle.message("diff.tabName", fileName, edits.size());
                     SimpleDiffRequest diffRequest = new SimpleDiffRequest(
                         diffTitle,
                         leftContent,

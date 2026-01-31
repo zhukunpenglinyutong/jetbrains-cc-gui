@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Component, type ReactNode } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import {
@@ -6,6 +6,45 @@ import {
   deleteHistoryItem,
   clearAllHistory,
 } from '../../ChatInputBox/hooks/useInputHistory.js';
+
+/**
+ * Error boundary for OtherSettingsSection
+ * Catches localStorage and other errors to prevent crash
+ */
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class OtherSettingsErrorBoundary extends Component<
+  { children: ReactNode; fallbackMessage: string },
+  ErrorBoundaryState
+> {
+  constructor(props: { children: ReactNode; fallbackMessage: string }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[OtherSettingsSection] Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className={styles.errorFallback}>
+          <span className="codicon codicon-warning" />
+          <span>{this.props.fallbackMessage}</span>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface OtherSettingsSectionProps {
   historyCompletionEnabled: boolean;
@@ -23,18 +62,31 @@ const OtherSettingsSection = ({
   // Load history items when expanding the list
   useEffect(() => {
     if (showHistoryList) {
-      setHistoryItems(loadHistory());
+      try {
+        setHistoryItems(loadHistory());
+      } catch (e) {
+        console.error('[OtherSettingsSection] Failed to load history:', e);
+        setHistoryItems([]);
+      }
     }
   }, [showHistoryList]);
 
   const handleDeleteItem = useCallback((item: string) => {
-    deleteHistoryItem(item);
-    setHistoryItems((prev) => prev.filter((i) => i !== item));
+    try {
+      deleteHistoryItem(item);
+      setHistoryItems((prev) => prev.filter((i) => i !== item));
+    } catch (e) {
+      console.error('[OtherSettingsSection] Failed to delete history item:', e);
+    }
   }, []);
 
   const handleClearAll = useCallback(() => {
-    clearAllHistory();
-    setHistoryItems([]);
+    try {
+      clearAllHistory();
+      setHistoryItems([]);
+    } catch (e) {
+      console.error('[OtherSettingsSection] Failed to clear history:', e);
+    }
   }, []);
 
   return (
@@ -127,4 +179,17 @@ const OtherSettingsSection = ({
   );
 };
 
-export default OtherSettingsSection;
+/**
+ * Wrapped component with error boundary
+ */
+const OtherSettingsSectionWithErrorBoundary = (props: OtherSettingsSectionProps) => {
+  const { t } = useTranslation();
+  return (
+    <OtherSettingsErrorBoundary fallbackMessage={t('settings.other.loadError', 'Failed to load settings')}>
+      <OtherSettingsSection {...props} />
+    </OtherSettingsErrorBoundary>
+  );
+};
+
+export default OtherSettingsSectionWithErrorBoundary;
+export { OtherSettingsSection, OtherSettingsErrorBoundary };

@@ -285,3 +285,21 @@
     font-size: 11px;
   }
 }
+
+/* 错误回退 */
+.errorFallback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: var(--color-warning-bg, rgba(255, 193, 7, 0.1));
+  border: 1px solid var(--color-warning-border, rgba(255, 193, 7, 0.3));
+  border-radius: 6px;
+  color: var(--color-warning-text, #856404);
+  font-size: 13px;
+
+  .codicon {
+    font-size: 16px;
+    color: var(--color-warning, #ffc107);
+  }
+}
