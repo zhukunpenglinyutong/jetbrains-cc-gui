@@ -1642,6 +1642,36 @@ ${payload.error}`;
  * 这个方法不需要发送消息，可以在插件启动时调用
  */
 export async function getSlashCommands(cwd = null) {
+  // 默认的命令列表（作为 fallback）
+  const defaultCommands = [
+    { name: '/help', description: 'Get help with using Claude Code' },
+    { name: '/clear', description: 'Clear conversation history' },
+    { name: '/compact', description: 'Toggle compact mode' },
+    { name: '/config', description: 'View or modify configuration' },
+    { name: '/cost', description: 'Show current session cost' },
+    { name: '/doctor', description: 'Run diagnostic checks' },
+    { name: '/init', description: 'Initialize a new project' },
+    { name: '/login', description: 'Log in to your account' },
+    { name: '/logout', description: 'Log out of your account' },
+    { name: '/memory', description: 'View or manage memory' },
+    { name: '/model', description: 'Change the current model' },
+    { name: '/permissions', description: 'View or modify permissions' },
+    { name: '/review', description: 'Review changes before applying' },
+    { name: '/status', description: 'Show current status' },
+    { name: '/terminal-setup', description: 'Set up terminal integration' },
+    { name: '/vim', description: 'Toggle vim mode' },
+  ];
+
+  // 创建一个超时 Promise
+  const withTimeout = (promise, ms, fallback) => {
+    return Promise.race([
+      promise,
+      new Promise((resolve) => {
+        setTimeout(() => resolve(fallback), ms);
+      })
+    ]);
+  };
+
   try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
@@ -1665,29 +1695,34 @@ export async function getSlashCommands(cwd = null) {
     // 创建一个空的输入流
     const inputStream = new AsyncStream();
 
-    // 动态加载 Claude SDK
-    const sdk = await ensureClaudeSdk();
+    // 动态加载 Claude SDK（带超时）
+    const loadSdkPromise = ensureClaudeSdk();
+    const sdk = await withTimeout(loadSdkPromise, 30000, null);
+
+    if (!sdk) {
+      console.log('[SLASH_COMMANDS]', JSON.stringify(defaultCommands));
+      return;
+    }
+
     const query = sdk?.query;
     if (typeof query !== 'function') {
-      throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
+      console.log('[SLASH_COMMANDS]', JSON.stringify(defaultCommands));
+      return;
     }
 
     // 调用 query 函数，使用空输入流
-    // 这样不会发送任何消息，只是初始化 SDK 以获取配置
     const result = query({
       prompt: inputStream,
       options: {
         cwd: workingDirectory,
         permissionMode: 'default',
-        maxTurns: 0,  // 不需要进行任何轮次
+        maxTurns: 0,
         canUseTool: async () => ({
           behavior: 'deny',
           message: 'Config loading only'
         }),
-        // 明确启用默认工具集
         tools: { type: 'preset', preset: 'claude_code' },
         settingSources: ['user', 'project', 'local'],
-        // 捕获 SDK stderr 调试日志，帮助定位 CLI 初始化问题
         stderr: (data) => {
           if (data && data.trim()) {
             console.log(`[SDK-STDERR] ${data.trim()}`);
@@ -1696,30 +1731,33 @@ export async function getSlashCommands(cwd = null) {
       }
     });
 
-    // 立即关闭输入流，告诉 SDK 我们没有消息要发送
+    // 立即关闭输入流
     inputStream.done();
 
-    // 获取支持的命令列表
-    // SDK 返回的格式是 SlashCommand[]，包含 name 和 description
-    const slashCommands = await result.supportedCommands?.() || [];
+    // 获取支持的命令列表（带超时）
+    const getCommandsPromise = result.supportedCommands?.() || Promise.resolve([]);
+    const slashCommands = await withTimeout(getCommandsPromise, 15000, defaultCommands);
 
-    // 清理资源
-    await result.return?.();
+    // 清理资源（带超时，不阻塞）
+    withTimeout(result.return?.() || Promise.resolve(), 5000, null).catch(() => {});
 
-    // 输出命令列表（包含 name 和 description）
-    console.log('[SLASH_COMMANDS]', JSON.stringify(slashCommands));
+    // 输出命令列表
+    const finalCommands = slashCommands.length > 0 ? slashCommands : defaultCommands;
+    console.log('[SLASH_COMMANDS]', JSON.stringify(finalCommands));
 
     console.log(JSON.stringify({
       success: true,
-      commands: slashCommands
+      commands: finalCommands
     }));
 
   } catch (error) {
     console.error('[GET_SLASH_COMMANDS_ERROR]', error.message);
+    console.error('[GET_SLASH_COMMANDS_ERROR_STACK]', error.stack);
+    // 出错时返回默认命令列表，而不是空列表
+    console.log('[SLASH_COMMANDS]', JSON.stringify(defaultCommands));
     console.log(JSON.stringify({
-      success: false,
-      error: error.message,
-      commands: []
+      success: true, // 使用默认命令，不算失败
+      commands: defaultCommands
     }));
   }
 }

@@ -42,9 +42,8 @@ let lastRefreshTime = 0;
 let callbackRegistered = false;
 let retryCount = 0;
 let pendingWaiters: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
-
 const MIN_REFRESH_INTERVAL = 2000;
-const LOADING_TIMEOUT = 8000;
+const LOADING_TIMEOUT = 30000; // 增加到30秒，解决部分Windows用户首次加载慢的问题
 const MAX_RETRY_COUNT = 3;
 
 // ============================================================================

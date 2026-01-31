@@ -971,8 +971,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     public CompletableFuture<List<JsonObject>> getSlashCommands(String cwd) {
         return CompletableFuture.supplyAsync(() -> {
             Process process = null;
-            long startTime = System.currentTimeMillis();
-            LOG.info("[SlashCommands] Starting getSlashCommands, cwd=" + cwd);
 
             try {
                 String node = nodeDetector.findNodeExecutable();
@@ -983,13 +981,18 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
                 File bridgeDir = getDirectoryResolver().findSdkDir();
                 if (bridgeDir == null || !bridgeDir.exists()) {
-                    LOG.warn("[SlashCommands] Bridge directory not ready or invalid");
+                    return new ArrayList<>();
+                }
+
+                File channelScript = new File(bridgeDir, CHANNEL_SCRIPT);
+                if (!channelScript.exists()) {
+                    LOG.error("channel-manager.js not found at: " + channelScript.getAbsolutePath());
                     return new ArrayList<>();
                 }
 
                 List<String> command = new ArrayList<>();
                 command.add(node);
-                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                command.add(channelScript.getAbsolutePath());
                 command.add("claude");
                 command.add("getSlashCommands");
 
@@ -1007,7 +1010,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                     stdin.flush();
                 } catch (Exception e) {
-                    LOG.warn("[SlashCommands] Failed to write stdin: " + e.getMessage());
+                    // Ignore stdin write error
                 }
 
                 final boolean[] found = {false};
@@ -1028,17 +1031,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                             }
                         }
                     } catch (Exception e) {
-                        LOG.debug("[SlashCommands] Reader thread exception: " + e.getMessage());
+                        // Reader thread exception, ignore
                     }
                 });
                 readerThread.start();
 
-                long deadline = System.currentTimeMillis() + 20000;
+                long deadline = System.currentTimeMillis() + 60000; // 60秒超时
                 while (!found[0] && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);
                 }
-
-                long elapsed = System.currentTimeMillis() - startTime;
 
                 if (process.isAlive()) {
                     PlatformUtils.terminateProcess(process);
@@ -1052,10 +1053,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                         for (var cmd : commandsArray) {
                             commands.add(cmd.getAsJsonObject());
                         }
-                        LOG.info("[SlashCommands] Successfully parsed " + commands.size() + " commands in " + elapsed + "ms");
                         return commands;
                     } catch (Exception e) {
-                        LOG.warn("[SlashCommands] Failed to parse commands JSON: " + e.getMessage());
+                        LOG.warn("Failed to parse commands JSON: " + e.getMessage());
                     }
                 }
 
@@ -1074,14 +1074,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                             }
                         }
                     } catch (Exception e) {
-                        LOG.debug("[SlashCommands] Fallback JSON parse failed: " + e.getMessage());
+                        // Fallback JSON parse failed, ignore
                     }
                 }
 
                 return commands;
 
             } catch (Exception e) {
-                LOG.error("[SlashCommands] Exception: " + e.getMessage());
+                LOG.error("getSlashCommands exception: " + e.getMessage());
                 return new ArrayList<>();
             } finally {
                 if (process != null) {
