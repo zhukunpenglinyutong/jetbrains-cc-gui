@@ -175,8 +175,8 @@ const App = () => {
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
   // StatusPanel 展开/收起状态（默认收起，有内容时自动展开）
   const [statusPanelExpanded, setStatusPanelExpanded] = useState(false);
-  // 已撤销的文件路径列表（用于从 fileChanges 中过滤）
-  const [undoneFiles, setUndoneFiles] = useState<string[]>([]);
+  // 已处理的文件路径列表（Apply/Reject 后从 fileChanges 中过滤，持久化到 localStorage）
+  const [processedFiles, setProcessedFiles] = useState<string[]>([]);
   // 基准消息索引（用于 Keep All 功能，只统计该索引之后的改动）
   const [baseMessageIndex, setBaseMessageIndex] = useState(0);
 
@@ -189,6 +189,12 @@ const App = () => {
   useEffect(() => {
     currentProviderRef.current = currentProvider;
   }, [currentProvider]);
+
+  // 使用 useRef 存储最新的 sessionId 值，用于回调中访问
+  const currentSessionIdRef = useRef(currentSessionId);
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
 
   // Context state (active file and selection) - 保留用于 ContextBar 显示
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
@@ -472,6 +478,7 @@ const App = () => {
     showInterruptConfirm,
     suppressNextStatusToastRef,
     createNewSession,
+    forceCreateNewSession,
     handleConfirmNewSession,
     handleCancelNewSession,
     handleConfirmInterrupt,
@@ -562,6 +569,25 @@ const App = () => {
   });
 
   /**
+   * 新建会话的命令集合（/new, /clear, /reset 均可触发）
+   */
+  const NEW_SESSION_COMMANDS = new Set(['/new', '/clear', '/reset']);
+
+  /**
+   * 检查是否是新建会话命令
+   * @returns true 如果是新建会话命令（已处理），false 否则
+   */
+  const checkNewSessionCommand = useCallback((text: string): boolean => {
+    if (!text.startsWith('/')) return false;
+    const command = text.split(/\s+/)[0].toLowerCase();
+    if (NEW_SESSION_COMMANDS.has(command)) {
+      forceCreateNewSession();
+      return true;
+    }
+    return false;
+  }, [forceCreateNewSession]);
+
+  /**
    * 检查未实现的斜杠命令
    * @returns true 如果是未实现的命令（已处理），false 否则
    */
@@ -597,6 +623,9 @@ const App = () => {
   ): ClaudeContentBlock[] => {
     const blocks: ClaudeContentBlock[] = [];
 
+    const hasImageAttachments = Array.isArray(attachments) &&
+      attachments.some(att => att.mediaType?.startsWith('image/'));
+
     if (Array.isArray(attachments) && attachments.length > 0) {
       for (const att of attachments) {
         if (att.mediaType?.startsWith('image/')) {
@@ -614,7 +643,11 @@ const App = () => {
       }
     }
 
-    if (text) {
+    // 过滤占位文本：如果已有图片附件且文本是附件占位文本，则不添加
+    // Filter placeholder text: skip if there are image attachments and text is placeholder
+    const isPlaceholderText = text && text.trim().startsWith('[Uploaded ');
+
+    if (text && !(hasImageAttachments && isPlaceholderText)) {
       blocks.push({ type: 'text', text });
     }
 
@@ -665,6 +698,10 @@ const App = () => {
 
     // 验证输入
     if (!text && !hasAttachments) return;
+
+    // 检查新建会话命令（/new, /clear, /reset）- 无需 SDK，无需二次确认，即使 loading 也可执行
+    if (checkNewSessionCommand(text)) return;
+
     if (loading) return;
 
     // 检查 SDK 状态
@@ -690,9 +727,11 @@ const App = () => {
     if (userContentBlocks.length === 0) return;
 
     // 创建并添加用户消息（乐观更新）
+    // 注意：content 字段应该只包含用户输入的文本，不要添加占位文本
+    // userContentBlocks 中已经包含了所有需要显示的内容（图片块和文本块）
     const userMessage: ClaudeMessage = {
       type: 'user',
-      content: text || (hasAttachments ? t('chat.attachmentsUploaded') : ''),
+      content: text || '',
       timestamp: new Date().toISOString(),
       isOptimistic: true,
       raw: { message: { content: userContentBlocks } },
@@ -1095,50 +1134,200 @@ const App = () => {
     startFromIndex: baseMessageIndex,
   });
 
-  // 过滤掉已撤销的文件
+  // 过滤掉已处理的文件（Apply/Reject）
   const filteredFileChanges = useMemo(() => {
-    if (undoneFiles.length === 0) return fileChanges;
-    return fileChanges.filter(fc => !undoneFiles.includes(fc.filePath));
-  }, [fileChanges, undoneFiles]);
+    if (processedFiles.length === 0) return fileChanges;
+    return fileChanges.filter(fc => !processedFiles.includes(fc.filePath));
+  }, [fileChanges, processedFiles]);
 
-  // 文件撤销成功后的回调
+  // 文件撤销成功后的回调（从 StatusPanel 触发）
   const handleUndoFile = useCallback((filePath: string) => {
-    setUndoneFiles(prev => [...prev, filePath]);
-  }, []);
+    setProcessedFiles(prev => {
+      if (prev.includes(filePath)) return prev;
+      const newList = [...prev, filePath];
+
+      // Persist to localStorage
+      if (currentSessionId) {
+        try {
+          localStorage.setItem(
+            `processed-files-${currentSessionId}`,
+            JSON.stringify(newList)
+          );
+        } catch (e) {
+          console.error('Failed to persist processed files:', e);
+        }
+      }
+
+      return newList;
+    });
+  }, [currentSessionId]);
 
   // 批量撤销成功后的回调（Discard All）
   const handleDiscardAll = useCallback(() => {
-    // 将所有当前显示的文件添加到已撤销列表
-    setUndoneFiles(prev => [...prev, ...filteredFileChanges.map(fc => fc.filePath)]);
-  }, [filteredFileChanges]);
+    // 将所有当前显示的文件添加到已处理列表
+    setProcessedFiles(prev => {
+      const filesToAdd = filteredFileChanges.map(fc => fc.filePath);
+      const newList = [...prev, ...filesToAdd.filter(f => !prev.includes(f))];
+
+      // Persist to localStorage
+      if (currentSessionId) {
+        try {
+          localStorage.setItem(
+            `processed-files-${currentSessionId}`,
+            JSON.stringify(newList)
+          );
+        } catch (e) {
+          console.error('Failed to persist processed files:', e);
+        }
+      }
+
+      return newList;
+    });
+  }, [filteredFileChanges, currentSessionId]);
 
   // 保存全部的回调（Keep All）- 将当前改动作为新基准
   const handleKeepAll = useCallback(() => {
     // 设置新的基准消息索引为当前消息长度
     const newBaseIndex = messages.length;
     setBaseMessageIndex(newBaseIndex);
-    // 清空已撤销文件列表
-    setUndoneFiles([]);
+    // 清空已处理文件列表
+    setProcessedFiles([]);
 
     // 持久化到 localStorage（按 sessionId 存储）
     if (currentSessionId) {
       try {
         localStorage.setItem(`keep-all-base-${currentSessionId}`, String(newBaseIndex));
+        // 同时清空 processed-files
+        localStorage.removeItem(`processed-files-${currentSessionId}`);
       } catch (e) {
         console.error('Failed to persist Keep All state:', e);
       }
     }
   }, [messages.length, currentSessionId]);
 
-  // 会话切换时恢复/重置 Keep All 基准，避免历史加载时被清空
+  // Register window callbacks for editable diff operations from Java backend
   useEffect(() => {
-    setUndoneFiles([]);
+    // Handle remove file from edits list (legacy callback, now uses handleDiffResult)
+    // Kept for backward compatibility with older Java code paths
+    window.handleRemoveFileFromEdits = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        const filePath = data.filePath;
+        if (filePath) {
+          setProcessedFiles(prev => {
+            if (prev.includes(filePath)) return prev;
+            const newList = [...prev, filePath];
+
+            // Persist to localStorage
+            const sessionId = currentSessionIdRef.current;
+            if (sessionId) {
+              try {
+                localStorage.setItem(
+                  `processed-files-${sessionId}`,
+                  JSON.stringify(newList)
+                );
+              } catch (e) {
+                console.error('Failed to persist processed files:', e);
+              }
+            }
+
+            return newList;
+          });
+        }
+      } catch {
+        // JSON parse failed, ignore
+      }
+    };
+
+    // Handle interactive diff result (Apply/Reject from the new interactive diff view)
+    window.handleDiffResult = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        const { filePath, action, error } = data;
+        // Note: 'content' is also available in data but not used here
+
+        if (error) {
+          console.error('[InteractiveDiff] Error:', error);
+          return;
+        }
+
+        if (action === 'APPLY' || action === 'REJECT') {
+          // Both APPLY and REJECT mark the file as processed (user has taken action)
+          setProcessedFiles(prev => {
+            if (prev.includes(filePath)) return prev;
+            const newList = [...prev, filePath];
+
+            // Persist to localStorage
+            const sessionId = currentSessionIdRef.current;
+            if (sessionId) {
+              try {
+                localStorage.setItem(
+                  `processed-files-${sessionId}`,
+                  JSON.stringify(newList)
+                );
+              } catch (e) {
+                console.error('Failed to persist processed files:', e);
+              }
+            }
+
+            return newList;
+          });
+          console.log(`[InteractiveDiff] ${action} changes to:`, filePath);
+        }
+        // DISMISS: Do nothing, file remains in list for later processing
+      } catch {
+        // JSON parse failed, ignore
+      }
+    };
+
+    return () => {
+      delete window.handleRemoveFileFromEdits;
+      delete window.handleDiffResult;
+    };
+  }, []);
+
+  // 会话切换时恢复/重置状态，避免历史加载时被清空
+  useEffect(() => {
+    // Reset processed files for new session (will be restored from localStorage below)
+    setProcessedFiles([]);
 
     if (!currentSessionId) {
       setBaseMessageIndex(0);
       return;
     }
 
+    // Cleanup old localStorage entries to prevent infinite growth
+    // Keep only the most recent 50 sessions' data
+    const MAX_STORED_SESSIONS = 50;
+    try {
+      // Clean up both processed-files and keep-all-base keys
+      const keysToCheck = Object.keys(localStorage)
+        .filter(k => k.startsWith('processed-files-') || k.startsWith('keep-all-base-'));
+      if (keysToCheck.length > MAX_STORED_SESSIONS) {
+        // Remove oldest entries (simple FIFO, not perfect but good enough)
+        const toRemove = keysToCheck.slice(0, keysToCheck.length - MAX_STORED_SESSIONS);
+        toRemove.forEach(k => localStorage.removeItem(k));
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    // Restore processed files from localStorage
+    try {
+      const savedProcessedFiles = localStorage.getItem(
+        `processed-files-${currentSessionId}`
+      );
+      if (savedProcessedFiles) {
+        const files = JSON.parse(savedProcessedFiles);
+        if (Array.isArray(files)) {
+          setProcessedFiles(files);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load processed files:', e);
+    }
+
+    // Restore Keep All base index
     try {
       const savedBaseIndex = localStorage.getItem(`keep-all-base-${currentSessionId}`);
       if (savedBaseIndex) {

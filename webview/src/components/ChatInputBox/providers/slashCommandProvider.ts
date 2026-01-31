@@ -7,7 +7,6 @@ import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
  * 本地命令列表（需要被过滤掉的命令）
  */
 const HIDDEN_COMMANDS = new Set([
-  '/clear',
   '/context',
   '/cost',
   '/pr-comments',
@@ -15,6 +14,21 @@ const HIDDEN_COMMANDS = new Set([
   '/security-review',
   '/todo',
 ]);
+
+/**
+ * 本地新建会话命令（/clear, /new, /reset 是同一个命令的别名）
+ * 这些命令在前端直接处理，不需要发送到 SDK
+ */
+const NEW_SESSION_COMMAND_ALIASES = new Set(['/clear', '/new', '/reset']);
+
+function getLocalNewSessionCommands(): CommandItem[] {
+  return [{
+    id: 'clear',
+    label: '/clear',
+    description: i18n.t('chat.clearCommandDescription'),
+    category: 'system',
+  }];
+}
 
 // ============================================================================
 // 状态管理
@@ -204,8 +218,10 @@ function requestRefresh(): boolean {
 function isHiddenCommand(name: string): boolean {
   const normalized = name.startsWith('/') ? name : `/${name}`;
   if (HIDDEN_COMMANDS.has(normalized)) return true;
+  // 隐藏 SDK 返回的 /clear（使用本地版本替代）
+  if (NEW_SESSION_COMMAND_ALIASES.has(normalized)) return true;
   const baseName = normalized.split(' ')[0];
-  return HIDDEN_COMMANDS.has(baseName);
+  return HIDDEN_COMMANDS.has(baseName) || NEW_SESSION_COMMAND_ALIASES.has(baseName);
 }
 
 function getCategoryFromCommand(name: string): string {
@@ -220,11 +236,13 @@ function getCategoryFromCommand(name: string): string {
 
 function filterCommands(commands: CommandItem[], query: string): CommandItem[] {
   const visibleCommands = commands.filter(cmd => !isHiddenCommand(cmd.label));
+  const localCommands = getLocalNewSessionCommands();
+  const merged = [...localCommands, ...visibleCommands];
 
-  if (!query) return visibleCommands;
+  if (!query) return merged;
 
   const lowerQuery = query.toLowerCase();
-  return visibleCommands.filter(cmd =>
+  return merged.filter(cmd =>
     cmd.label.toLowerCase().includes(lowerQuery) ||
     cmd.description?.toLowerCase().includes(lowerQuery) ||
     cmd.id.toLowerCase().includes(lowerQuery)
@@ -294,6 +312,31 @@ export function forceRefreshSlashCommands(): void {
   retryCount = 0;
   pendingWaiters.forEach(w => w.reject(new Error('Slash commands refresh requested')));
   pendingWaiters = [];
+  requestRefresh();
+}
+
+/**
+ * 应用初始化时预加载斜杠命令
+ * 在用户输入 "/" 之前就加载命令数据，提升体感性能
+ *
+ * 安全保证：
+ * - 如果已在加载中或已加载完成则跳过（检查 loadingState）
+ * - requestRefresh() 有 MIN_REFRESH_INTERVAL 防重复请求保护
+ * - 与 slashCommandProvider 共享状态，后续调用可直接命中缓存
+ */
+export function preloadSlashCommands(): void {
+  // 仅在空闲状态下预加载，不干扰正在进行或已完成的加载
+  if (loadingState !== 'idle') {
+    debugLog('[SlashCommand] Preload skipped (state=' + loadingState + ')');
+    return;
+  }
+
+  debugLog('[SlashCommand] Preloading commands on app init');
+
+  // 确保回调已注册后再请求刷新
+  setupSlashCommandsCallback();
+
+  // 请求刷新 — 内置防重复请求保护
   requestRefresh();
 }
 

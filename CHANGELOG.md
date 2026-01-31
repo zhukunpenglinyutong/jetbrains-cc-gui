@@ -1,3 +1,59 @@
+##### **2026年1月31日（v0.1.7-beta4）**
+
+English:
+
+✨ Features
+- Add input history recording with Tab key completion and configurable settings toggle
+- Add persistent storage for input history in ~/.codemoss/inputHistory.json with management UI in settings
+- Add interactive Diff view with Apply/Reject buttons and state persistence across sessions
+- Add local handling for new session commands (/clear, /new, /reset) to bypass confirmation dialog
+- Add disk cache for slash commands with 7-day TTL and preload on component mount
+
+🐛 Fixes
+- Fix placeholder text filtering when uploading images (avoid "已上传附件:" in content)
+- Fix user message copy button position overlap issue
+- Fix stale input values during submission by adding cancelPendingInput
+- Fix stdin handling for parameter passing in node scripts
+- Fix attachment placeholder i18n (replace hardcoded Chinese with standardized English format)
+- Fix new file rejection in diff view: delete file instead of restoring empty content
+
+🔧 Improvements
+- Extract completion trigger detection to dedicated useCompletionTriggerDetection hook
+- Improve history completion code quality: add MAX_COUNT_RECORDS limit, custom event sync, boundary checks
+- Improve chat input hover and resize handle interactions with border glow effect
+- Extract reusable CopyButton component from duplicate implementations
+- Refactor diff utilities: extract DiffBrowserBridge and ContentRebuildUtil classes
+- Add path security validation with isPathWithinProject method and improved traversal detection
+- Increase input box min-height from 3 lines to 4 lines
+- Add comprehensive i18n support for history management and diff operations
+
+中文：
+
+✨ Features
+- 新增输入历史记录功能，支持 Tab 键补全，可在设置中自由开关
+- 新增输入历史持久化存储（~/.codemoss/inputHistory.json），设置页面支持历史管理 UI
+- 新增交互式 Diff 视图，支持 Apply/Reject 按钮和跨会话状态持久化
+- 新增本地会话命令处理（/clear、/new、/reset），跳过确认对话框直接创建新会话
+- 新增斜杠命令磁盘缓存（7天 TTL），组件挂载时预加载
+
+🐛 Fixes
+- 修复上传图片时占位符文本过滤问题（避免内容中出现"已上传附件:"）
+- 修复用户消息复制按钮位置遮挡问题
+- 修复输入提交时的过期值问题，添加 cancelPendingInput 机制
+- 修复 node 脚本中 stdin 参数传递处理
+- 修复附件占位符国际化问题（将硬编码中文替换为标准化英文格式）
+- 修复 Diff 视图中新文件拒绝操作：删除文件而非恢复空内容
+
+🔧 Improvements
+- 重构补全触发检测到独立 hook（useCompletionTriggerDetection）
+- 改进历史补全代码质量：添加 MAX_COUNT_RECORDS 限制、自定义事件同步、边界检查
+- 改进输入框悬停和调整大小手柄交互，添加边框发光效果
+- 提取可复用的 CopyButton 组件，消除重复实现
+- 重构 Diff 工具类：提取 DiffBrowserBridge 和 ContentRebuildUtil 类
+- 添加路径安全验证（isPathWithinProject 方法）和改进的路径遍历检测
+- 输入框最小高度从 3 行增加到 4 行
+- 为历史管理和 Diff 操作添加完整的国际化支持
+
 ##### **2026年1月30日（v0.1.7-beta3）**
 
 English:

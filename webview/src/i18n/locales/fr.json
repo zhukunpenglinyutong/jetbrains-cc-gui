@@ -55,6 +55,7 @@
     "parseError": "Échec de l'analyse du contenu",
     "noMatchingFiles": "Aucun fichier correspondant",
     "noMatchingCommands": "Aucune commande correspondante",
+    "noMatchingHistory": "Aucun historique correspondant",
     "noAvailableAgents": "Aucun agent disponible",
     "collapse": "Réduire",
     "expand": "Développer",
@@ -78,6 +79,7 @@
     "sdkNotInstalled": "{{provider}} SDK n'est pas installé. Veuillez installer le SDK pour commencer à discuter.",
     "goInstallSdk": "Aller installer",
     "commandNotImplemented": "La fonctionnalité `{{command}}` n'est pas encore implémentée.",
+    "clearCommandDescription": "Effacer l'historique et démarrer une nouvelle session",
     "attachmentFile": "[Pièce jointe: {{fileName}}]",
     "attachmentsUploaded": "[Pièces jointes téléchargées]",
     "streamingConnected": "Claude connecté, en train de comprendre votre question"
@@ -172,6 +174,16 @@
     "agentsDesc": "Gérer et configurer les agents IA",
     "skills": "Compétences",
     "skillsDesc": "Gérer et configurer les modules de compétences",
+    "other": {
+      "title": "Autres paramètres",
+      "description": "Configurer les paramètres divers",
+      "historyCompletion": {
+        "label": "Complétion de l'historique",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "hint": "Lorsqu'elle est activée, la zone de saisie se complétera automatiquement en fonction de l'historique de saisie. Appuyez sur Tab pour accepter la suggestion."
+      }
+    },
     "codexFeatureUnavailable": "Cette section des paramètres n'est pas encore disponible dans Codex. Passez à Claude Code.",
     "community": "Communauté officielle",
     "communityDesc": "Scannez le code QR ci-dessous pour rejoindre le groupe WeChat officiel pour obtenir les dernières nouvelles et le support technique",

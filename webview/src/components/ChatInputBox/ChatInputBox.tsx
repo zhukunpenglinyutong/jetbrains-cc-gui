@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -19,7 +20,7 @@ import { ChatInputBoxFooter } from './ChatInputBoxFooter.js';
 import { ResizeHandles } from './ResizeHandles.js';
 import {
   useCompletionDropdown,
-  useTriggerDetection,
+  useCompletionTriggerDetection,
   useTextContent,
   useFileTags,
   useTooltip,
@@ -37,6 +38,7 @@ import {
   useChatInputImperativeHandle,
   useSpaceKeyListener,
   useResizableChatInputBox,
+  useInlineHistoryCompletion,
 } from './hooks/index.js';
 import {
   commandToDropdownItem,
@@ -45,11 +47,12 @@ import {
   slashCommandProvider,
   agentProvider,
   agentToDropdownItem,
+  preloadSlashCommands,
   type AgentItem,
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
 import { perfTimer } from '../../utils/debug.js';
-import { TEXT_LENGTH_THRESHOLDS } from '../../constants/performance.js';
+import { DEBOUNCE_TIMING } from '../../constants/performance.js';
 import './styles.css';
 
 /**
@@ -125,11 +128,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
     // Flag to track if we're updating from external value
     const isExternalUpdateRef = useRef(false);
 
+    // Shared composing state ref - created early so it can be used by detectAndTriggerCompletion
+    // This ref is synced with useIMEComposition's isComposingRef
+    const sharedComposingRef = useRef(false);
+
     // Text content hook
     const { getTextContent, invalidateCache } = useTextContent({ editableRef });
-
-    // Trigger detection hook
-    const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
 
     // Close all completions helper
     const closeAllCompletions = useCallback(() => {
@@ -273,6 +277,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       },
     });
 
+    // Inline history completion hook (simple tab-complete style)
+    const inlineCompletion = useInlineHistoryCompletion({
+      debounceMs: 100,
+      minQueryLength: 2,
+    });
+
     // Tooltip hook
     const { tooltip, handleMouseOver, handleMouseLeave } = useTooltip();
 
@@ -305,131 +315,22 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       el.style.overflowY = 'hidden';
     }, []);
 
-    /**
-     * Detect and handle completion triggers (optimized: only start detection when @ or / or # is input)
-     */
-    const detectAndTriggerCompletion = useCallback(() => {
-      const timer = perfTimer('detectAndTriggerCompletion');
-
-      if (!editableRef.current) return;
-
-      // Don't detect completion during IME composition to avoid interfering with composition
-      if (isComposing) {
-        return;
-      }
-
-      // If file tags were just rendered, skip this completion detection
-      if (justRenderedTagRef.current) {
-        justRenderedTagRef.current = false;
-        fileCompletion.close();
-        commandCompletion.close();
-        agentCompletion.close();
-        return;
-      }
-
-      const text = getTextContent();
-      timer.mark('getText');
-
-      // Performance optimization: Skip completion detection for very large text
-      // This prevents expensive operations (cursor position calculation, trigger detection) on large inputs
-      if (text.length > TEXT_LENGTH_THRESHOLDS.COMPLETION_DETECTION) {
-        fileCompletion.close();
-        commandCompletion.close();
-        agentCompletion.close();
-        timer.mark('skip-large-text');
-        timer.end();
-        return;
-      }
-
-      // Optimization: Quick check if text contains trigger characters, return immediately if not
-      const hasAtSymbol = text.includes('@');
-      const hasSlashSymbol = text.includes('/');
-      const hasHashSymbol = text.includes('#');
-
-      if (!hasAtSymbol && !hasSlashSymbol && !hasHashSymbol) {
-        fileCompletion.close();
-        commandCompletion.close();
-        agentCompletion.close();
-        timer.end();
-        return;
-      }
-      timer.mark('quickCheck');
-
-      const cursorPos = getCursorPosition(editableRef.current);
-      timer.mark('getCursorPos');
-
-      // Pass element parameter so detectTrigger can skip file tags
-      const trigger = detectTrigger(text, cursorPos, editableRef.current);
-      timer.mark('detectTrigger');
-
-      // Close currently open completion
-      if (!trigger) {
-        fileCompletion.close();
-        commandCompletion.close();
-        agentCompletion.close();
-        timer.end();
-        return;
-      }
-
-      // Get trigger position
-      const position = getTriggerPosition(editableRef.current, trigger.start);
-      if (!position) {
-        timer.end();
-        return;
-      }
-
-      // Open corresponding completion based on trigger symbol
-      if (trigger.trigger === '@') {
-        commandCompletion.close();
-        agentCompletion.close();
-        if (!fileCompletion.isOpen) {
-          fileCompletion.open(position, trigger);
-          fileCompletion.updateQuery(trigger);
-        } else {
-          fileCompletion.updateQuery(trigger);
-        }
-      } else if (trigger.trigger === '/') {
-        fileCompletion.close();
-        agentCompletion.close();
-        if (!commandCompletion.isOpen) {
-          commandCompletion.open(position, trigger);
-          commandCompletion.updateQuery(trigger);
-        } else {
-          commandCompletion.updateQuery(trigger);
-        }
-      } else if (trigger.trigger === '#') {
-        fileCompletion.close();
-        commandCompletion.close();
-        if (!agentCompletion.isOpen) {
-          agentCompletion.open(position, trigger);
-          agentCompletion.updateQuery(trigger);
-        } else {
-          agentCompletion.updateQuery(trigger);
-        }
-      }
-
-      timer.end();
-    }, [
-      getTextContent,
-      getCursorPosition,
-      detectTrigger,
-      getTriggerPosition,
-      fileCompletion,
-      commandCompletion,
-      agentCompletion,
-    ]);
-
-    // Create debounced version of renderFileTags (300ms delay)
+    // Create debounced version of renderFileTags
     const debouncedRenderFileTags = useMemo(
-      () => debounce(renderFileTags, 300),
+      () => debounce(renderFileTags, DEBOUNCE_TIMING.FILE_TAG_RENDERING_MS),
       [renderFileTags]
     );
 
-    // Create debounced version of detectAndTriggerCompletion (150ms delay)
-    const debouncedDetectCompletion = useMemo(
-      () => debounce(detectAndTriggerCompletion, 150),
-      [detectAndTriggerCompletion]
-    );
+    // Completion trigger detection hook
+    const { debouncedDetectCompletion } = useCompletionTriggerDetection({
+      editableRef,
+      sharedComposingRef,
+      justRenderedTagRef,
+      getTextContent,
+      fileCompletion,
+      commandCompletion,
+      agentCompletion,
+    });
 
     // Performance optimization: Debounced onInput callback
     // Reduces parent component re-renders during rapid typing
@@ -442,7 +343,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
             return;
           }
           onInput?.(text);
-        }, 100),
+        }, DEBOUNCE_TIMING.ON_INPUT_CALLBACK_MS),
       [onInput]
     );
 
@@ -491,20 +392,60 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         debouncedDetectCompletion();
         setHasContent(!isEmpty);
 
+        // Update inline history completion
+        // Only if no other completion menu is open
+        // Note: Access isOpen directly from the completion objects at call time
+        // to avoid unnecessary re-renders when isOpen changes
+        const isOtherCompletionOpen = fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen;
+        if (!isOtherCompletionOpen) {
+          inlineCompletion.updateQuery(text);
+        } else {
+          inlineCompletion.clear();
+        }
+
         // Notify parent component (use debounced version to reduce re-renders)
         // If determined empty (only zero-width characters), pass empty string to parent
         debouncedOnInput(isEmpty ? '' : text);
 
         timer.end();
       },
+      // Note: fileCompletion/commandCompletion/agentCompletion objects are stable references
+      // We access .isOpen at call time, so we don't need .isOpen in deps
       [
         getTextContent,
         adjustHeight,
         debouncedDetectCompletion,
         debouncedOnInput,
         invalidateCache,
+        fileCompletion,
+        commandCompletion,
+        agentCompletion,
+        inlineCompletion,
       ]
     );
+
+    /**
+     * Apply inline history completion (Tab key)
+     */
+    const applyInlineCompletion = useCallback(() => {
+      const fullText = inlineCompletion.applySuggestion();
+      if (!fullText || !editableRef.current) return false;
+
+      // Fill the input with the complete text
+      editableRef.current.innerText = fullText;
+
+      // Set cursor to end
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.selectNodeContents(editableRef.current);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      // Update state
+      handleInput();
+      return true;
+    }, [inlineCompletion, handleInput]);
 
     // IME composition hook
     const {
@@ -517,6 +458,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       handleInput,
       renderFileTags,
     });
+
+    // Sync sharedComposingRef with isComposingRef for reliable composing state access
+    // This ensures detectAndTriggerCompletion always has the latest composing state
+    useEffect(() => {
+      sharedComposingRef.current = isComposing;
+    }, [isComposing]);
 
     const { record: recordInputHistory, handleKeyDown: handleHistoryKeyDown } = useInputHistory({
       editableRef,
@@ -552,6 +499,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       sdkInstalled,
       currentProvider,
       clearInput,
+      cancelPendingInput: debouncedOnInput.cancel,
       externalAttachments,
       setInternalAttachments,
       fileCompletion,
@@ -593,6 +541,10 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       agentCompletion,
       handleMacCursorMovement,
       handleHistoryKeyDown,
+      // Inline completion: Tab key applies suggestion
+      inlineCompletion: inlineCompletion.hasSuggestion ? {
+        applySuggestion: applyInlineCompletion,
+      } : undefined,
       completionSelectedRef,
       submittedOnEnterRef,
       handleSubmit,
@@ -701,6 +653,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       focusInput,
     });
 
+    // 组件挂载时预加载斜杠命令，提升体感性能
+    // 在用户输入 "/" 之前就加载命令数据，使其立即可用
+    useEffect(() => {
+      preloadSlashCommands();
+    }, []);
+
     useSpaceKeyListener({ editableRef, onKeyDown: handleKeyDownForTagRendering });
 
     const {
@@ -760,6 +718,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
             className="input-editable"
             contentEditable={!disabled}
             data-placeholder={placeholder}
+            data-completion-suffix={inlineCompletion.suffix || ''}
             onInput={(e) => {
               // Pass native event isComposing state, more accurate than React state
               // Can correctly capture input before compositionStart

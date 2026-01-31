@@ -1,12 +1,76 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { sendToJava } from '../../../utils/bridge.js';
 
-const STORAGE_KEY = 'chat-input-history';
+/** localStorage key for chat input history */
+export const HISTORY_STORAGE_KEY = 'chat-input-history';
+/** localStorage key for history usage counts */
+export const HISTORY_COUNTS_KEY = 'chat-input-history-counts';
+/** localStorage key for history completion enabled setting */
+export const HISTORY_ENABLED_KEY = 'historyCompletionEnabled';
+
 /**
  * Keep the stored history bounded to avoid unbounded localStorage growth.
- * 50 is enough for quick recall while staying small even with multi-line prompts.
+ * Note: The actual limit is 200 in the backend (.codemoss)
  */
-const MAX_HISTORY_ITEMS = 50;
+const MAX_HISTORY_ITEMS = 200;
 const INVISIBLE_CHARS_RE = /[\u200B-\u200D\uFEFF]/g;
+
+/**
+ * Separator regex for splitting text into fragments
+ * Includes: comma, period, semicolon, Chinese punctuation, whitespace, newlines
+ */
+const SEPARATORS_RE = /[,，.。;；、\s\n\r]+/;
+
+/**
+ * Maximum text length to perform fragment splitting
+ * Longer texts are stored as-is without splitting
+ */
+const MAX_SPLIT_LENGTH = 300;
+
+/**
+ * Minimum fragment length to be recorded
+ * Fragments shorter than this are ignored
+ */
+const MIN_FRAGMENT_LENGTH = 3;
+
+/**
+ * Split text into fragments by separators for fine-grained history matching
+ *
+ * Rules:
+ * - If text length > MAX_SPLIT_LENGTH, return empty array (skip recording entirely)
+ * - Split by separators (comma, period, semicolon, whitespace, etc.)
+ * - Filter out fragments shorter than MIN_FRAGMENT_LENGTH
+ * - Include the original text as well (if >= MIN_FRAGMENT_LENGTH)
+ * - Deduplicate fragments
+ */
+function splitTextToFragments(text: string): string[] {
+  const trimmed = text.trim();
+
+  // Skip recording for long texts (e.g., code snippets)
+  if (trimmed.length > MAX_SPLIT_LENGTH) {
+    return [];
+  }
+
+  // Split by separators
+  const rawFragments = trimmed.split(SEPARATORS_RE);
+
+  // Filter and deduplicate
+  const result = new Set<string>();
+
+  for (const fragment of rawFragments) {
+    const cleaned = fragment.trim();
+    if (cleaned.length >= MIN_FRAGMENT_LENGTH) {
+      result.add(cleaned);
+    }
+  }
+
+  // Also include the original text if it's long enough
+  if (trimmed.length >= MIN_FRAGMENT_LENGTH) {
+    result.add(trimmed);
+  }
+
+  return Array.from(result);
+}
 
 type EditableRef = RefObject<HTMLDivElement | null>;
 
@@ -41,10 +105,13 @@ function isQuotaExceededError(err: unknown): boolean {
   );
 }
 
-function loadHistory(): string[] {
+/**
+ * Load history items from localStorage
+ */
+export function loadHistory(): string[] {
   if (!canUseLocalStorage()) return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -54,11 +121,55 @@ function loadHistory(): string[] {
   }
 }
 
+/**
+ * Delete a specific history item
+ * Dual-write: localStorage + .codemoss
+ */
+export function deleteHistoryItem(item: string): void {
+  // Write to localStorage (sync)
+  if (canUseLocalStorage()) {
+    try {
+      const items = loadHistory();
+      const filtered = items.filter((i) => i !== item);
+      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(filtered));
+
+      // Also remove from counts
+      const counts = loadCounts();
+      delete counts[item];
+      window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  // Also sync to .codemoss (async)
+  sendToJava('delete_input_history_item', item);
+}
+
+/**
+ * Clear all history items
+ * Dual-write: localStorage + .codemoss
+ */
+export function clearAllHistory(): void {
+  // Write to localStorage (sync)
+  if (canUseLocalStorage()) {
+    try {
+      window.localStorage.removeItem(HISTORY_STORAGE_KEY);
+      window.localStorage.removeItem(HISTORY_COUNTS_KEY);
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  // Also sync to .codemoss (async)
+  sendToJava('clear_input_history', {});
+}
+
 function saveHistory(items: string[]): string[] {
   if (!canUseLocalStorage()) return items;
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items));
     return items;
   } catch (err) {
     // If quota exceeded, drop older entries and retry, keeping the most recent.
@@ -66,7 +177,7 @@ function saveHistory(items: string[]): string[] {
       for (let startIndex = 1; startIndex < items.length; startIndex++) {
         try {
           const subset = items.slice(startIndex);
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(subset));
+          window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(subset));
           return subset;
         } catch (retryErr) {
           if (!isQuotaExceededError(retryErr)) {
@@ -81,6 +192,63 @@ function saveHistory(items: string[]): string[] {
 
     return items;
   }
+}
+
+/**
+ * Load usage counts from localStorage
+ */
+export function loadCounts(): Record<string, number> {
+  if (!canUseLocalStorage()) return {};
+  try {
+    const raw = window.localStorage.getItem(HISTORY_COUNTS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+
+    // Validate that all values are numbers
+    const result: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        result[key] = value;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Check if history completion is enabled
+ */
+export function isHistoryCompletionEnabled(): boolean {
+  if (!canUseLocalStorage()) return true;
+  try {
+    const value = window.localStorage.getItem(HISTORY_ENABLED_KEY);
+    return value !== 'false'; // Default to enabled
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Maximum number of count records to keep in localStorage
+ * Prevents unbounded growth
+ * Note: Must match backend MAX_COUNT_RECORDS (200) in input-history-service.cjs
+ */
+const MAX_COUNT_RECORDS = 200;
+
+/**
+ * Clean up counts to keep only the most frequently used records
+ */
+function cleanupCounts(counts: Record<string, number>): Record<string, number> {
+  const entries = Object.entries(counts);
+  if (entries.length <= MAX_COUNT_RECORDS) return counts;
+
+  // Sort by count descending, keep top MAX_COUNT_RECORDS
+  entries.sort((a, b) => b[1] - a[1]);
+  const kept = entries.slice(0, MAX_COUNT_RECORDS);
+  return Object.fromEntries(kept);
 }
 
 export interface UseInputHistoryOptions {
@@ -145,17 +313,42 @@ export function useInputHistory({
     const sanitized = text.replace(INVISIBLE_CHARS_RE, '');
     if (!sanitized.trim()) return;
 
-    const currentItems = historyRef.current;
-    if (currentItems.length > 0 && currentItems[currentItems.length - 1] === sanitized) {
-      historyIndexRef.current = -1;
-      return;
+    // Split text into fragments for fine-grained history matching
+    // Returns empty array for long texts (> MAX_SPLIT_LENGTH), skipping recording
+    const fragments = splitTextToFragments(sanitized);
+    if (fragments.length === 0) return;
+
+    // Batch increment usage count for all fragments (performance optimization)
+    if (canUseLocalStorage()) {
+      try {
+        let counts = loadCounts();
+        for (const fragment of fragments) {
+          counts[fragment] = (counts[fragment] || 0) + 1;
+        }
+        counts = cleanupCounts(counts);
+        window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
+      } catch {
+        // Ignore errors
+      }
     }
 
-    const newItems = [...currentItems, sanitized].slice(-MAX_HISTORY_ITEMS);
+    const currentItems = historyRef.current;
+
+    // Create a set of new fragments for quick lookup
+    const newFragmentsSet = new Set(fragments);
+
+    // Remove existing occurrences of any fragment to avoid duplicates
+    const filteredItems = currentItems.filter(item => !newFragmentsSet.has(item));
+
+    // Add all fragments to the end, maintaining order (fragments first, then original)
+    const newItems = [...filteredItems, ...fragments].slice(-MAX_HISTORY_ITEMS);
     const persistedItems = saveHistory(newItems);
     historyRef.current = persistedItems;
     historyIndexRef.current = -1;
     draftRef.current = '';
+
+    // Also sync to .codemoss (async)
+    sendToJava('record_input_history', JSON.stringify(fragments));
   }, []);
 
   const handleKeyDown = useCallback(

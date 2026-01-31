@@ -55,6 +55,7 @@
     "parseError": "सामग्री पार्स करने में विफल",
     "noMatchingFiles": "कोई मेल खाने वाली फाइलें नहीं",
     "noMatchingCommands": "कोई मेल खाने वाली कमांड नहीं",
+    "noMatchingHistory": "कोई मेल खाने वाली इतिहास नहीं",
     "noAvailableAgents": "कोई उपलब्ध एजेंट नहीं",
     "collapse": "संक्षिप्त करें",
     "expand": "विस्तार करें",
@@ -78,6 +79,7 @@
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
     "goInstallSdk": "इंस्टॉल करने जाएं",
     "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
+    "clearCommandDescription": "बातचीत इतिहास साफ़ करें और नया सत्र शुरू करें",
     "attachmentFile": "[अटैचमेंट: {{fileName}}]",
     "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
     "streamingConnected": "Claude कनेक्ट हो गया, आपके प्रश्न को समझ रहा है"
@@ -170,6 +172,16 @@
     "agentsDesc": "AI एजेंट प्रबंधित और कॉन्फ़िगर करें",
     "skills": "Skills",
     "skillsDesc": "कौशल मॉड्यूल प्रबंधित और कॉन्फ़िगर करें",
+    "other": {
+      "title": "अन्य सेटिंग्स",
+      "description": "विविध सेटिंग्स कॉन्फ़िगर करें",
+      "historyCompletion": {
+        "label": "इतिहास इनपुट स्वतः पूर्ण",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "सक्षम होने पर, इनपुट बॉक्स इनपुट इतिहास के आधार पर स्वतः पूर्ण होगा। सुझाव स्वीकार करने के लिए Tab दबाएं।"
+      }
+    },
     "codexFeatureUnavailable": "यह सेटिंग अनुभाग अभी Codex में उपलब्ध नहीं है। कृपया Claude Code पर स्विच करें।",
     "community": "आधिकारिक समुदाय",
     "communityDesc": "नवीनतम जानकारी और तकनीकी सहायता के लिए आधिकारिक WeChat समूह में शामिल होने के लिए नीचे QR कोड स्कैन करें",

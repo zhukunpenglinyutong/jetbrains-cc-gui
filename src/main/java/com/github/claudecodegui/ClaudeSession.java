@@ -573,18 +573,19 @@ public class ClaudeSession {
             }
         }
 
-        String nameSummary;
+        // Use standardized English bracket format for frontend localization
+        // These patterns are handled by localizationUtils.ts
         if (names.isEmpty()) {
-            nameSummary = imageCount > 0 ? (imageCount + " 张图片") : (attachments.size() + " 个附件");
-        } else {
-            if (names.size() > 3) {
-                nameSummary = String.join(", ", names.subList(0, 3)) + " 等";
-            } else {
-                nameSummary = String.join(", ", names);
+            if (imageCount > 0) {
+                return "[Uploaded " + imageCount + " image(s)]";
             }
+            return "[Uploaded attachment(s)]";
         }
 
-        return "已上传附件: " + nameSummary;
+        if (names.size() > 3) {
+            return "[Uploaded Attachments: " + String.join(", ", names.subList(0, 3)) + ", ...]";
+        }
+        return "[Uploaded Attachments: " + String.join(", ", names) + "]";
     }
 
     /**

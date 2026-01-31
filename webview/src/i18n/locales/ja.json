@@ -55,6 +55,7 @@
     "parseError": "コンテンツの解析に失敗しました",
     "noMatchingFiles": "一致するファイルがありません",
     "noMatchingCommands": "一致するコマンドがありません",
+    "noMatchingHistory": "一致する履歴がありません",
     "noAvailableAgents": "利用可能なエージェントがいません",
     "collapse": "折りたたむ",
     "expand": "展開",
@@ -78,6 +79,7 @@
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
     "goInstallSdk": "インストールへ",
     "commandNotImplemented": "`{{command}}` 機能はまだ実装されていません。",
+    "clearCommandDescription": "会話履歴をクリアして新しいセッションを開始",
     "attachmentFile": "[添付ファイル: {{fileName}}]",
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
     "streamingConnected": "Claudeに接続しました、質問を理解しています"
@@ -177,6 +179,16 @@
     "agentsDesc": "AIエージェントを管理および設定",
     "skills": "スキル",
     "skillsDesc": "スキルモジュールを管理および設定",
+    "other": {
+      "title": "その他の設定",
+      "description": "その他の設定を構成",
+      "historyCompletion": {
+        "label": "入力履歴補完",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "有効にすると、入力ボックスは入力履歴に基づいて自動補完します。Tabキーで提案を受け入れます。"
+      }
+    },
     "codexFeatureUnavailable": "Codexではこの設定セクションは未対応です。Claude Codeに切り替えてください。",
     "community": "コミュニティ",
     "communityDesc": "下のQRコードをスキャンして、公式WeChatグループに参加し、最新ニュースと技術サポートを入手",

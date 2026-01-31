@@ -46,12 +46,17 @@
     white-space: pre-wrap;
 }
 
+.message-header-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
 .message-timestamp-header {
     font-size: 11px;
     color: var(--text-tertiary);
-    margin-bottom: 2px;
     line-height: 1;
-    margin-right: 2px;
 }
 
 /* Assistant Message: Row layout for alignment */
@@ -140,27 +145,48 @@
     }
 }
 
+/* Inline copy button for user messages (in header row) */
+.message-copy-btn-inline {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    opacity: 0.7;
+    visibility: visible;
+    bottom: auto;
+    right: auto;
+    padding: 2px;
+
+    .copy-icon svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    &:hover {
+        opacity: 1;
+    }
+
+    .copy-tooltip {
+        top: calc(100% + 4px);
+        right: -4px;
+
+        &::after {
+            top: -4px;
+            bottom: auto;
+            right: 8px;
+            border-width: 0 4px 4px;
+            border-color: transparent transparent var(--border-secondary) transparent;
+        }
+    }
+
+    &.copied .copy-tooltip {
+        transform: translateY(2px);
+    }
+}
+
 /* Show copy button on message hover */
 .message.assistant {
     position: relative;
 
-    &:hover .message-copy-btn {
-        opacity: 0.7;
-        visibility: visible;
-    }
-
-    &:hover .message-copy-btn:hover {
-        opacity: 1;
-    }
-}
-
-/* User message copy button - positioned outside bubble on the left */
-.message-copy-btn-user {
-    right: calc(15% + 8px); /* Position outside the 85% bubble, with 8px spacing */
-}
-
-/* Show copy button on hover for user messages */
-.message.user {
     &:hover .message-copy-btn {
         opacity: 0.7;
         visibility: visible;
@@ -186,11 +212,6 @@
             width: 12px;
             height: 12px;
         }
-    }
-
-    /* User message button positioning on mobile - adjust for smaller screens */
-    .message-copy-btn-user {
-        right: 8px; /* Simplified positioning on mobile */
     }
 }
 
@@ -302,10 +323,10 @@
 .code-block-wrapper {
     position: relative;
     margin: 10px 0;
-    
+
     pre {
-        margin: 0; /* wrapper 处理了 margin */
-        padding-right: 40px; /* 仍然保留，防止内容被按钮遮挡 */
+        margin: 0;
+        padding-right: 40px;
     }
 }
 
@@ -327,7 +348,7 @@
     transition: all 0.2s;
     z-index: 10;
     opacity: 0.7;
-    
+
     &:hover {
         background: var(--bg-hover);
         color: var(--text-primary);
@@ -359,8 +380,7 @@
     pointer-events: none;
     white-space: nowrap;
     z-index: 20;
-    
-    // 小三角
+
     &::after {
         content: '';
         position: absolute;

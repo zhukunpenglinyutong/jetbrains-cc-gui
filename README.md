@@ -169,6 +169,7 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
       <a href="https://github.com/hpstream">
         <img src="https://avatars.githubusercontent.com/u/18394192?size=100" width="100" height="100" alt="hpstream" style="border-radius: 50%;" />
       </a>
+      <div>🔥</div>
     </td>
     <td align="center">
       <a href="https://github.com/imblowsnow">
