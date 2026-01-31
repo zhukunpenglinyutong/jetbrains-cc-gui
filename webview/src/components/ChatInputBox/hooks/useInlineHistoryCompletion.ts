@@ -1,25 +1,6 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { loadHistory, loadCounts, isHistoryCompletionEnabled, HISTORY_ENABLED_KEY } from './useInputHistory.js';
 
-/**
- * Maximum number of count records to keep in localStorage
- * Prevents unbounded growth
- */
-const MAX_COUNT_RECORDS = 100;
-
-/**
- * Clean up counts to keep only the most frequently used records
- */
-function cleanupCounts(counts: Record<string, number>): Record<string, number> {
-  const entries = Object.entries(counts);
-  if (entries.length <= MAX_COUNT_RECORDS) return counts;
-
-  // Sort by count descending, keep top MAX_COUNT_RECORDS
-  entries.sort((a, b) => b[1] - a[1]);
-  const kept = entries.slice(0, MAX_COUNT_RECORDS);
-  return Object.fromEntries(kept);
-}
-
 export interface UseInlineHistoryCompletionOptions {
   /** Debounce delay in milliseconds */
   debounceMs?: number;
@@ -63,7 +44,7 @@ export function useInlineHistoryCompletion({
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastQueryRef = useRef('');
 
-  // Listen for storage changes to sync enabled state
+  // Listen for storage changes to sync enabled state (cross-tab)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === HISTORY_ENABLED_KEY) {
@@ -75,19 +56,15 @@ export function useInlineHistoryCompletion({
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Also check on mount and periodically (for same-tab changes)
+  // Listen for custom event to sync enabled state (same-tab)
   useEffect(() => {
-    const checkEnabled = () => {
-      const currentEnabled = isHistoryCompletionEnabled();
-      setEnabled(currentEnabled);
+    const handleCustomEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled: boolean }>;
+      setEnabled(customEvent.detail.enabled);
     };
 
-    // Check immediately
-    checkEnabled();
-
-    // Check periodically for same-tab localStorage changes
-    const interval = setInterval(checkEnabled, 1000);
-    return () => clearInterval(interval);
+    window.addEventListener('historyCompletionChanged', handleCustomEvent);
+    return () => window.removeEventListener('historyCompletionChanged', handleCustomEvent);
   }, []);
 
   const findBestMatch = useCallback((query: string): string | null => {
@@ -95,17 +72,6 @@ export function useInlineHistoryCompletion({
 
     const history = loadHistory();
     const counts = loadCounts();
-
-    // Clean up counts if needed (will be saved next time incrementCount is called)
-    const cleanedCounts = cleanupCounts(counts);
-    if (Object.keys(cleanedCounts).length !== Object.keys(counts).length) {
-      try {
-        // Save cleaned counts
-        localStorage.setItem('chat-input-history-counts', JSON.stringify(cleanedCounts));
-      } catch {
-        // Ignore errors
-      }
-    }
 
     // Find all history items that start with the query (case-insensitive)
     const queryLower = query.toLowerCase();
@@ -119,8 +85,8 @@ export function useInlineHistoryCompletion({
 
     // Sort by usage count (descending), then by length (shorter first)
     matches.sort((a, b) => {
-      const countA = cleanedCounts[a] || 0;
-      const countB = cleanedCounts[b] || 0;
+      const countA = counts[a] || 0;
+      const countB = counts[b] || 0;
       if (countB !== countA) return countB - countA;
       return a.length - b.length;
     });

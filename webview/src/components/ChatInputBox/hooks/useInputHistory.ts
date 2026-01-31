@@ -101,8 +101,16 @@ export function loadCounts(): Record<string, number> {
     const raw = window.localStorage.getItem(HISTORY_COUNTS_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed !== 'object' || parsed === null) return {};
-    return parsed as Record<string, number>;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+
+    // Validate that all values are numbers
+    const result: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        result[key] = value;
+      }
+    }
+    return result;
   } catch {
     return {};
   }
@@ -122,13 +130,36 @@ export function isHistoryCompletionEnabled(): boolean {
 }
 
 /**
+ * Maximum number of count records to keep in localStorage
+ * Prevents unbounded growth
+ */
+const MAX_COUNT_RECORDS = 100;
+
+/**
+ * Clean up counts to keep only the most frequently used records
+ */
+function cleanupCounts(counts: Record<string, number>): Record<string, number> {
+  const entries = Object.entries(counts);
+  if (entries.length <= MAX_COUNT_RECORDS) return counts;
+
+  // Sort by count descending, keep top MAX_COUNT_RECORDS
+  entries.sort((a, b) => b[1] - a[1]);
+  const kept = entries.slice(0, MAX_COUNT_RECORDS);
+  return Object.fromEntries(kept);
+}
+
+/**
  * Increment usage count for a text
  */
 function incrementCount(text: string): void {
   if (!canUseLocalStorage()) return;
   try {
-    const counts = loadCounts();
+    let counts = loadCounts();
     counts[text] = (counts[text] || 0) + 1;
+
+    // Clean up counts if needed to prevent unbounded growth
+    counts = cleanupCounts(counts);
+
     window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
   } catch {
     // Ignore errors

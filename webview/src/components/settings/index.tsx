@@ -930,6 +930,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
               onHistoryCompletionEnabledChange={(enabled) => {
                 setHistoryCompletionEnabled(enabled);
                 localStorage.setItem('historyCompletionEnabled', enabled.toString());
+                // Dispatch custom event for same-tab sync (localStorage 'storage' event only fires for cross-tab)
+                window.dispatchEvent(new CustomEvent('historyCompletionChanged', { detail: { enabled } }));
               }}
             />
           </div>
