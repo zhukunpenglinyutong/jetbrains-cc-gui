@@ -500,6 +500,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
         // Update inline history completion
         // Only if no other completion menu is open
+        // Note: Access isOpen directly from the completion objects at call time
+        // to avoid unnecessary re-renders when isOpen changes
         const isOtherCompletionOpen = fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen;
         if (!isOtherCompletionOpen) {
           inlineCompletion.updateQuery(text);
@@ -513,15 +515,17 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
         timer.end();
       },
+      // Note: fileCompletion/commandCompletion/agentCompletion objects are stable references
+      // We access .isOpen at call time, so we don't need .isOpen in deps
       [
         getTextContent,
         adjustHeight,
         debouncedDetectCompletion,
         debouncedOnInput,
         invalidateCache,
-        fileCompletion.isOpen,
-        commandCompletion.isOpen,
-        agentCompletion.isOpen,
+        fileCompletion,
+        commandCompletion,
+        agentCompletion,
         inlineCompletion,
       ]
     );
