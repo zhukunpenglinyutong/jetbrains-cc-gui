@@ -1750,7 +1750,7 @@
 .sidebar-tool-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     padding: 8px 12px;
     border-radius: 6px;
     cursor: pointer;
@@ -1781,20 +1781,20 @@
 
 .tool-icon {
     flex-shrink: 0;
-    width: auto;
-    min-width: 200px;
-    height: 22px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
-    background: var(--bg-tertiary);
     color: var(--accent-primary);
-    font-size: 13px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.sidebar-tool-item:hover .tool-icon {
+    color: var(--accent-primary-hover);
 }
 
 .sidebar-tool-item.active .tool-icon {
-    background: rgba(255, 255, 255, 0.2);
+    color: var(--text-white);
 }
 
 .tool-info {
@@ -2103,17 +2103,15 @@
 }
 
 .mcp-tool-tooltip .tooltip-icon {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: auto;
-    min-width: 200px;
-    height: 24px;
-    border-radius: 4px;
-    background: var(--bg-tertiary);
-    color: var(--accent-primary);
-    font-size: 14px;
     flex-shrink: 0;
+}
+
+.mcp-tool-tooltip .tooltip-icon .tool-icon {
+    color: var(--accent-primary);
+    font-size: 16px;
 }
 
 .mcp-tool-tooltip .tooltip-name {
