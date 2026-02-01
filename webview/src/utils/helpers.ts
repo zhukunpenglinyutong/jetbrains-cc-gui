@@ -35,3 +35,14 @@ export const formatTime = (timestamp?: string): string => {
   }
 };
 
+/**
+ * Format seconds to countdown string (mm:ss)
+ * @param seconds - Total seconds to format
+ * @returns Formatted countdown string (e.g., "4:59")
+ */
+export const formatCountdown = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+

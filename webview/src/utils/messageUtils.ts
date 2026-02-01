@@ -137,6 +137,12 @@ export function normalizeBlocks(
         if (src) {
           blocks.push({ type: 'image', src, mediaType });
         }
+      } else if (type === 'attachment') {
+        blocks.push({
+          type: 'attachment',
+          fileName: typeof candidate.fileName === 'string' ? candidate.fileName : undefined,
+          mediaType: typeof candidate.mediaType === 'string' ? candidate.mediaType : undefined,
+        });
       }
     });
     return blocks;

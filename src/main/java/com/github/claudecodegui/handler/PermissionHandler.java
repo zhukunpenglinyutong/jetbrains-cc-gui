@@ -335,9 +335,10 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // 超时处理（60秒）
-            CompletableFuture.delayedExecutor(60, TimeUnit.SECONDS).execute(() -> {
+            // 超时处理（与普通权限请求保持一致：5 分钟）
+            CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
                 if (!future.isDone()) {
+                    LOG.warn("[ASK_USER_QUESTION][SHOW_DIALOG] Timeout! Removing pending request for requestId=" + requestId);
                     pendingAskUserQuestionRequests.remove(requestId);
                     // 超时返回空答案
                     future.complete(new JsonObject());
@@ -411,8 +412,8 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // 超时处理（300秒，因为计划审核可能需要更长时间）
-            CompletableFuture.delayedExecutor(300, TimeUnit.SECONDS).execute(() -> {
+            // 超时处理（与其他权限请求保持一致：5 分钟）
+            CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
                 if (!future.isDone()) {
                     pendingPlanApprovalRequests.remove(requestId);
                     // 超时返回拒绝

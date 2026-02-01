@@ -204,15 +204,46 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       if (!lastPrev?.isOptimistic) return nextList;
 
       const optimisticMsg = lastPrev;
-      const isIncluded = nextList.some((m) =>
+
+      const matchFn = (m: ClaudeMessage) =>
         m.type === 'user' &&
         (m.content === optimisticMsg.content || m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
         m.timestamp && optimisticMsg.timestamp &&
-        Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < OPTIMISTIC_MESSAGE_TIME_WINDOW
-      );
+        Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
 
-      if (isIncluded) return nextList;
-      return [...nextList, optimisticMsg];
+      const matchedIndex = nextList.findIndex(matchFn);
+      if (matchedIndex < 0) {
+        return [...nextList, optimisticMsg];
+      }
+
+      // 后端消息已匹配到乐观消息。将乐观消息中的 attachment 块保留到后端消息的 raw 中，
+      // 否则用户上传的非图片文件附件在气泡中不可见。
+      const optimisticRaw = optimisticMsg.raw as any;
+      const optimisticContent: unknown[] | undefined = optimisticRaw?.message?.content;
+      if (Array.isArray(optimisticContent)) {
+        const attachmentBlocks = optimisticContent.filter(
+          (b: any) => b && typeof b === 'object' && b.type === 'attachment'
+        );
+        if (attachmentBlocks.length > 0) {
+          const backendMsg = nextList[matchedIndex];
+          const backendRaw = (backendMsg.raw ?? {}) as any;
+          const backendContent: unknown[] = Array.isArray(backendRaw?.message?.content)
+            ? backendRaw.message.content
+            : Array.isArray(backendRaw?.content)
+              ? backendRaw.content
+              : [];
+          const mergedContent = [...attachmentBlocks, ...backendContent];
+          const mergedRaw = {
+            ...backendRaw,
+            message: { ...(backendRaw?.message ?? {}), content: mergedContent },
+          };
+          const result = [...nextList];
+          result[matchedIndex] = { ...backendMsg, raw: mergedRaw };
+          return result;
+        }
+      }
+
+      return nextList;
     };
 
     const preserveLastAssistantIdentity = (prevList: ClaudeMessage[], nextList: ClaudeMessage[]): ClaudeMessage[] => {

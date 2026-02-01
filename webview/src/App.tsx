@@ -636,8 +636,9 @@ const App = () => {
           });
         } else {
           blocks.push({
-            type: 'text',
-            text: t('chat.attachmentFile', { fileName: att.fileName }),
+            type: 'attachment',
+            fileName: att.fileName,
+            mediaType: att.mediaType,
           });
         }
       }
@@ -725,6 +726,26 @@ const App = () => {
     // 构建用户消息内容块
     const userContentBlocks = buildUserContentBlocks(text, attachments);
     if (userContentBlocks.length === 0) return;
+
+    // 持久化存储非图片附件元数据，确保后端消息替换乐观消息后仍可显示文件芯片
+    const nonImageAttachments = Array.isArray(attachments)
+      ? attachments.filter(a => !a.mediaType?.startsWith('image/'))
+      : [];
+    if (nonImageAttachments.length > 0) {
+      // 限制缓存大小，防止内存无限增长（保留最近 100 条）
+      const MAX_ATTACHMENT_CACHE_SIZE = 100;
+      if (sentAttachmentsRef.current.size >= MAX_ATTACHMENT_CACHE_SIZE) {
+        // 删除最早的条目（Map 保持插入顺序）
+        const firstKey = sentAttachmentsRef.current.keys().next().value;
+        if (firstKey !== undefined) {
+          sentAttachmentsRef.current.delete(firstKey);
+        }
+      }
+      sentAttachmentsRef.current.set(text || '', nonImageAttachments.map(a => ({
+        fileName: a.fileName,
+        mediaType: a.mediaType,
+      })));
+    }
 
     // 创建并添加用户消息（乐观更新）
     // 注意：content 字段应该只包含用户输入的文本，不要添加占位文本
@@ -913,11 +934,14 @@ const App = () => {
   const normalizeBlocksCache = useRef(new WeakMap<object, ClaudeContentBlock[]>());
   const shouldShowMessageCache = useRef(new WeakMap<object, boolean>());
   const mergedAssistantMessageCache = useRef(new Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>());
+  // 持久化存储：发送消息时的非图片附件元数据，用于在后端消息替换后仍能在气泡中显示文件芯片
+  const sentAttachmentsRef = useRef(new Map<string, Array<{ fileName: string; mediaType: string }>>());
   // Clear cache when dependencies change
   useEffect(() => {
     normalizeBlocksCache.current = new WeakMap();
     shouldShowMessageCache.current = new WeakMap();
     mergedAssistantMessageCache.current = new Map();
+    sentAttachmentsRef.current.clear();
   }, [localizeMessage, t, currentSessionId]);
 
   const normalizeBlocks = useCallback(
@@ -963,7 +987,22 @@ const App = () => {
   );
 
   const getContentBlocks = useCallback(
-    (message: ClaudeMessage) => getContentBlocksUtil(message, normalizeBlocks, localizeMessage),
+    (message: ClaudeMessage) => {
+      const blocks = getContentBlocksUtil(message, normalizeBlocks, localizeMessage);
+      // 从持久化存储中注入附件块：后端消息不含 attachment 块，需要用发送时保存的元数据补回
+      if (message.type === 'user' && !blocks.some(b => b.type === 'attachment')) {
+        const meta = sentAttachmentsRef.current.get(message.content || '');
+        if (meta && meta.length > 0) {
+          const attachmentBlocks: ClaudeContentBlock[] = meta.map(a => ({
+            type: 'attachment' as const,
+            fileName: a.fileName,
+            mediaType: a.mediaType,
+          }));
+          return [...attachmentBlocks, ...blocks];
+        }
+      }
+      return blocks;
+    },
     [normalizeBlocks, localizeMessage]
   );
 
@@ -1369,7 +1408,7 @@ const App = () => {
     }
     const text = getMessageText(firstUserMessage);
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;
-  }, [messages, t]);
+  }, [messages, t, getMessageText]);
 
   return (
     <>

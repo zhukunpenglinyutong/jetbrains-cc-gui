@@ -143,8 +143,8 @@ async function requestAskUserQuestionAnswers(input) {
       return null;
     }
 
-    // 等待响应文件（最多60秒）
-    const timeout = 60000;
+    // 等待响应文件（与 PERMISSION_TIMEOUT_MS 保持一致：5分钟）
+    const timeout = PERMISSION_TIMEOUT_MS;
     let pollCount = 0;
     const pollInterval = 100;
 
