@@ -33,6 +33,16 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
   const [toastMessage, setToastMessage] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup toast timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (provider !== displayProvider) {
@@ -95,10 +105,15 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
    * Show toast message
    */
   const showToastMessage = (message: string) => {
+    // Clear previous toast timeout
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
     setToastMessage(message);
     setShowToast(true);
-    setTimeout(() => {
+    toastTimeoutRef.current = setTimeout(() => {
       setShowToast(false);
+      toastTimeoutRef.current = null;
     }, 1500);
   };
 

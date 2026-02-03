@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { AgentConfig } from '../../../types/agent';
 
 const sendToJava = (message: string) => {
@@ -87,6 +87,16 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
       clearTimeout(agentsLoadingTimeoutRef.current);
       agentsLoadingTimeoutRef.current = null;
     }
+  }, []);
+
+  // 组件卸载时清理超时定时器
+  useEffect(() => {
+    return () => {
+      if (agentsLoadingTimeoutRef.current) {
+        clearTimeout(agentsLoadingTimeoutRef.current);
+        agentsLoadingTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   // 打开添加 Agent 弹窗

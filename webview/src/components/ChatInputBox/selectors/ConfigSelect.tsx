@@ -61,14 +61,29 @@ export const ConfigSelect = ({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const agentAbortControllerRef = useRef<AbortController | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentProviderInfo = AVAILABLE_PROVIDERS.find(p => p.id === providerId) || AVAILABLE_PROVIDERS[0];
 
+  // Cleanup toast timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const showToastMessage = useCallback((message: string) => {
+    // Clear previous toast timeout
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
     setToastMessage(message);
     setShowToast(true);
-    setTimeout(() => {
+    toastTimeoutRef.current = setTimeout(() => {
       setShowToast(false);
+      toastTimeoutRef.current = null;
     }, 1500);
   }, []);
 

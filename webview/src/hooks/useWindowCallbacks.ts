@@ -954,6 +954,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // Request initial settings with retry mechanism
     let settingsRetryCount = 0;
+    let settingsTimeoutId: ReturnType<typeof setTimeout> | undefined;
     const requestInitialSettings = () => {
       if (window.sendToJava) {
         window.sendToJava('get_streaming_enabled:');
@@ -961,11 +962,11 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       } else {
         settingsRetryCount++;
         if (settingsRetryCount < MAX_RETRIES) {
-          setTimeout(requestInitialSettings, 100);
+          settingsTimeoutId = setTimeout(requestInitialSettings, 100);
         }
       }
     };
-    setTimeout(requestInitialSettings, 200);
+    settingsTimeoutId = setTimeout(requestInitialSettings, 200);
 
     // ========== Permission Dialog Callbacks ==========
     window.showPermissionDialog = (json) => {
@@ -1144,29 +1145,44 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     // ========== Request Initial States ==========
     let retryCount = 0;
     const MAX_RETRIES = 30;
+    let providerTimeoutId: ReturnType<typeof setTimeout> | undefined;
     const requestActiveProvider = () => {
       if (window.sendToJava) {
         sendBridgeEvent('get_active_provider');
       } else {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
-          setTimeout(requestActiveProvider, 100);
+          providerTimeoutId = setTimeout(requestActiveProvider, 100);
         }
       }
     };
-    setTimeout(requestActiveProvider, 200);
+    providerTimeoutId = setTimeout(requestActiveProvider, 200);
 
     let thinkingRetryCount = 0;
+    let thinkingTimeoutId: ReturnType<typeof setTimeout> | undefined;
     const requestThinkingEnabled = () => {
       if (window.sendToJava) {
         sendBridgeEvent('get_thinking_enabled');
       } else {
         thinkingRetryCount++;
         if (thinkingRetryCount < MAX_RETRIES) {
-          setTimeout(requestThinkingEnabled, 100);
+          thinkingTimeoutId = setTimeout(requestThinkingEnabled, 100);
         }
       }
     };
-    setTimeout(requestThinkingEnabled, 200);
+    thinkingTimeoutId = setTimeout(requestThinkingEnabled, 200);
+
+    // Cleanup function to clear all timeouts
+    return () => {
+      if (settingsTimeoutId !== undefined) {
+        clearTimeout(settingsTimeoutId);
+      }
+      if (providerTimeoutId !== undefined) {
+        clearTimeout(providerTimeoutId);
+      }
+      if (thinkingTimeoutId !== undefined) {
+        clearTimeout(thinkingTimeoutId);
+      }
+    };
   }, []);
 }

@@ -153,19 +153,33 @@ export async function fileReferenceProvider(
     pendingReject = reject;
     lastQuery = query;
 
-    // 监听取消信号
-    signal.addEventListener('abort', () => {
+    // 清理函数：清除定时器、移除监听器、重置状态
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      signal.removeEventListener('abort', onAbort);
       pendingResolve = null;
       pendingReject = null;
+    };
+
+    // 命名函数处理 abort 事件，避免闭包捕获大型对象
+    const onAbort = () => {
+      cleanup();
       reject(new DOMException('Aborted', 'AbortError'));
-    });
+    };
+
+    // 使用 { once: true } 注册监听器
+    signal.addEventListener('abort', onAbort, { once: true });
 
     // 检查 sendToJava 是否可用
     if (!window.sendToJava) {
       // 使用默认文件列表进行本地过滤
       const filtered = filterFiles(DEFAULT_FILES, searchQuery);
-      pendingResolve = null;
-      pendingReject = null;
+      cleanup();
       resolve(filtered);
       return;
     }
@@ -177,10 +191,9 @@ export async function fileReferenceProvider(
     });
 
     // 超时处理（3秒），超时后使用默认文件列表
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       if (pendingResolve === resolve) {
-        pendingResolve = null;
-        pendingReject = null;
+        cleanup();
         // 超时时返回过滤后的默认文件列表
         resolve(filterFiles(DEFAULT_FILES, searchQuery));
       }

@@ -318,6 +318,7 @@ const App = () => {
     // 请求 IDE 主题（带重试机制）- 仍然需要，用于处理动态主题变化
     let retryCount = 0;
     const MAX_RETRIES = 20; // 最多重试 20 次 (2 秒)
+    let ideThemeTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const requestIdeTheme = () => {
       if (window.sendToJava) {
@@ -325,7 +326,7 @@ const App = () => {
       } else {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
-          setTimeout(requestIdeTheme, 100);
+          ideThemeTimeoutId = setTimeout(requestIdeTheme, 100);
         } else {
           // 如果是 Follow IDE 模式且无法获取 IDE 主题，使用注入的主题或 dark 作为 fallback
           if (savedTheme === null || savedTheme === 'system') {
@@ -337,7 +338,13 @@ const App = () => {
     };
 
     // 延迟 100ms 开始请求，给 bridge 初始化时间
-    setTimeout(requestIdeTheme, 100);
+    ideThemeTimeoutId = setTimeout(requestIdeTheme, 100);
+
+    return () => {
+      if (ideThemeTimeoutId !== undefined) {
+        clearTimeout(ideThemeTimeoutId);
+      }
+    };
   }, []);
 
   // 当 IDE 主题变化时，重新应用主题（如果用户选择了"跟随 IDE"）
@@ -395,6 +402,7 @@ const App = () => {
       // 初始化时同步模型状态到后端，确保前后端一致
       let syncRetryCount = 0;
       const MAX_SYNC_RETRIES = 30; // 最多重试30次（3秒）
+      let syncTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
       const syncToBackend = () => {
         if (window.sendToJava) {
@@ -408,12 +416,18 @@ const App = () => {
           // 如果 sendToJava 还没准备好，稍后重试
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
-            setTimeout(syncToBackend, 100);
+            syncTimeoutId = setTimeout(syncToBackend, 100);
           }
         }
       };
       // 延迟同步，等待 bridge 准备好
-      setTimeout(syncToBackend, 200);
+      syncTimeoutId = setTimeout(syncToBackend, 200);
+
+      return () => {
+        if (syncTimeoutId !== undefined) {
+          clearTimeout(syncTimeoutId);
+        }
+      };
     } catch {
       // Failed to load model selection state
     }

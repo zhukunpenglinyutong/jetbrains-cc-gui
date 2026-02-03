@@ -42,14 +42,33 @@ const MAX_SINGLE_RELATED_FILE_LENGTH = 500; // 单个相关文件最大长度
 async function readStdin() {
   return new Promise((resolve, reject) => {
     let data = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => {
+    const stdin = process.stdin;
+    stdin.setEncoding('utf8');
+
+    // 清理函数：移除所有监听器
+    const cleanup = () => {
+      stdin.removeListener('data', onData);
+      stdin.removeListener('end', onEnd);
+      stdin.removeListener('error', onError);
+    };
+
+    const onData = (chunk) => {
       data += chunk;
-    });
-    process.stdin.on('end', () => {
+    };
+
+    const onEnd = () => {
+      cleanup();
       resolve(data);
-    });
-    process.stdin.on('error', reject);
+    };
+
+    const onError = (err) => {
+      cleanup();
+      reject(err);
+    };
+
+    stdin.on('data', onData);
+    stdin.on('end', onEnd);
+    stdin.on('error', onError);
   });
 }
 
