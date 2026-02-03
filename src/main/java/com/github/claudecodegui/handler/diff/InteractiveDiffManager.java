@@ -19,7 +19,6 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
-import com.intellij.openapi.fileEditor.impl.LoadTextUtil;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.fileTypes.FileTypes;
@@ -99,23 +98,28 @@ public class InteractiveDiffManager {
     ) {
         // Use the original content from the request (before modifications)
         String originalContent = request.getOriginalContent();
-        String lineSeparator = null;
+        String newContent = request.getNewFileContents();
         Charset charset = StandardCharsets.UTF_8;
         FileType fileType = null;
 
-        // Try to get file type and line separator from the actual file
+        // Try to get file type from the actual file
         VirtualFile actualFile = LocalFileSystem.getInstance()
                 .refreshAndFindFileByPath(request.getFilePath().replace('\\', '/'));
 
         if (actualFile != null && actualFile.exists()) {
             try {
                 charset = actualFile.getCharset() != null ? actualFile.getCharset() : StandardCharsets.UTF_8;
-                lineSeparator = LoadTextUtil.detectLineSeparator(actualFile, true);
                 fileType = actualFile.getFileType();
             } catch (Exception e) {
                 LOG.warn("Failed to read file metadata: " + request.getFilePath(), e);
             }
         }
+
+        // Normalize both contents to LF for consistent diff comparison
+        // IntelliJ Document internally uses LF, so this ensures correct diff positioning
+        // and prevents every line from showing as changed when original file uses CRLF
+        originalContent = normalizeLineSeparators(originalContent, "\n");
+        newContent = normalizeLineSeparators(newContent, "\n");
 
         // Detect file type from filename if not already detected
         String fileName = new File(request.getFilePath()).getName();
@@ -124,10 +128,9 @@ public class InteractiveDiffManager {
         }
 
         // Create LightVirtualFile for proposed content (new content after modifications)
-        LightVirtualFile proposedFile = new LightVirtualFile(fileName, fileType, request.getNewFileContents());
-        if (lineSeparator != null) {
-            proposedFile.setDetectedLineSeparator(lineSeparator);
-        }
+        LightVirtualFile proposedFile = new LightVirtualFile(fileName, fileType, newContent);
+        // Set line separator to LF since content is normalized to LF
+        proposedFile.setDetectedLineSeparator("\n");
 
         // Create diff contents
         DiffContentFactory contentFactory = DiffContentFactory.getInstance();
@@ -368,5 +371,33 @@ public class InteractiveDiffManager {
                 LOG.debug("Failed to close diff view", e);
             }
         });
+    }
+
+    /**
+     * Normalize line separators in the content to the specified separator.
+     * This prevents "Wrong line separators" errors in the diff view.
+     *
+     * @param content       the content to normalize
+     * @param lineSeparator the target line separator
+     * @return the normalized content
+     */
+    @NotNull
+    private static String normalizeLineSeparators(@NotNull String content, @NotNull String lineSeparator) {
+        if (content.isEmpty()) {
+            return content;
+        }
+
+        // First, normalize all line separators to \n, then replace with target
+        // This handles mixed line separators (e.g., \r\n and \n mixed)
+        String normalized = content
+                .replace("\r\n", "\n")  // Windows -> Unix
+                .replace("\r", "\n");   // Old Mac -> Unix
+
+        // If target is not Unix, replace with target
+        if (!"\n".equals(lineSeparator)) {
+            normalized = normalized.replace("\n", lineSeparator);
+        }
+
+        return normalized;
     }
 }
