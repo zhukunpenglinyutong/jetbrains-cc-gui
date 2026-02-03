@@ -25,14 +25,14 @@
   gap: 16px;
 }
 
-.header-left {
+.plan-approval-dialog-header .header-left {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.header-right {
+.plan-approval-dialog-header .header-right {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -342,7 +342,7 @@
     gap: 12px;
   }
 
-  .header-right {
+  .plan-approval-dialog-header .header-right {
     width: 100%;
     justify-content: space-between;
   }

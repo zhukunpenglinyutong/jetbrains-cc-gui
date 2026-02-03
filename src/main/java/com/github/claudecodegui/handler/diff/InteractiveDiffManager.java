@@ -22,6 +22,7 @@ import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.fileTypes.FileTypes;
+import com.github.claudecodegui.util.LineSeparatorUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -118,8 +119,8 @@ public class InteractiveDiffManager {
         // Normalize both contents to LF for consistent diff comparison
         // IntelliJ Document internally uses LF, so this ensures correct diff positioning
         // and prevents every line from showing as changed when original file uses CRLF
-        originalContent = normalizeLineSeparators(originalContent, "\n");
-        newContent = normalizeLineSeparators(newContent, "\n");
+        originalContent = LineSeparatorUtil.normalizeToLF(originalContent);
+        newContent = LineSeparatorUtil.normalizeToLF(newContent);
 
         // Detect file type from filename if not already detected
         String fileName = new File(request.getFilePath()).getName();
@@ -373,31 +374,4 @@ public class InteractiveDiffManager {
         });
     }
 
-    /**
-     * Normalize line separators in the content to the specified separator.
-     * This prevents "Wrong line separators" errors in the diff view.
-     *
-     * @param content       the content to normalize
-     * @param lineSeparator the target line separator
-     * @return the normalized content
-     */
-    @NotNull
-    private static String normalizeLineSeparators(@NotNull String content, @NotNull String lineSeparator) {
-        if (content.isEmpty()) {
-            return content;
-        }
-
-        // First, normalize all line separators to \n, then replace with target
-        // This handles mixed line separators (e.g., \r\n and \n mixed)
-        String normalized = content
-                .replace("\r\n", "\n")  // Windows -> Unix
-                .replace("\r", "\n");   // Old Mac -> Unix
-
-        // If target is not Unix, replace with target
-        if (!"\n".equals(lineSeparator)) {
-            normalized = normalized.replace("\n", lineSeparator);
-        }
-
-        return normalized;
-    }
 }

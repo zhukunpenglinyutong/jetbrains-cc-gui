@@ -49,9 +49,9 @@ public final class ContentRebuildUtil {
         }
 
         // Try matching with normalized line separators (CRLF vs LF)
-        String normalizedNewString = normalizeLineSeparators(newString, content);
+        String normalizedNewString = LineSeparatorUtil.normalizeToMatch(newString, content);
         if (!normalizedNewString.equals(newString) && content.contains(normalizedNewString)) {
-            String normalizedOldString = normalizeLineSeparators(oldString, content);
+            String normalizedOldString = LineSeparatorUtil.normalizeToMatch(oldString, content);
             return content.replace(normalizedNewString, normalizedOldString);
         }
 
@@ -73,11 +73,11 @@ public final class ContentRebuildUtil {
         }
 
         // Try matching with normalized line separators (CRLF vs LF)
-        String normalizedNewString = normalizeLineSeparators(newString, content);
+        String normalizedNewString = LineSeparatorUtil.normalizeToMatch(newString, content);
         if (!normalizedNewString.equals(newString)) {
             index = content.indexOf(normalizedNewString);
             if (index >= 0) {
-                String normalizedOldString = normalizeLineSeparators(oldString, content);
+                String normalizedOldString = LineSeparatorUtil.normalizeToMatch(oldString, content);
                 return content.substring(0, index) + normalizedOldString
                         + content.substring(index + normalizedNewString.length());
             }
@@ -94,34 +94,6 @@ public final class ContentRebuildUtil {
     }
 
     /**
-     * Normalize line separators in target string to match content's line separator style.
-     *
-     * @param target  the string to normalize
-     * @param content the content whose line separator style to match
-     * @return the normalized string
-     */
-    private static String normalizeLineSeparators(String target, String content) {
-        if (target == null || target.isEmpty()) {
-            return target;
-        }
-
-        // Detect line separator in content
-        boolean hasCRLF = content.contains("\r\n");
-        boolean hasLF = content.contains("\n") && !hasCRLF;
-
-        if (hasCRLF) {
-            // Content uses CRLF, convert target's LF to CRLF
-            // First normalize to LF, then convert to CRLF
-            return target.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n");
-        } else if (hasLF) {
-            // Content uses LF, convert target's CRLF to LF
-            return target.replace("\r\n", "\n").replace("\r", "\n");
-        }
-
-        return target;
-    }
-
-    /**
      * 标准化空白字符（用于模糊匹配）
      */
     static String normalizeWhitespace(String s) {
@@ -135,7 +107,7 @@ public final class ContentRebuildUtil {
     static int findNormalizedIndex(String content, String target) {
         String normalizedTarget = normalizeWhitespace(target);
         // Normalize line separators to LF for consistent processing
-        String normalizedContent = content.replace("\r\n", "\n").replace("\r", "\n");
+        String normalizedContent = LineSeparatorUtil.normalizeToLF(content);
         String[] lines = normalizedContent.split("\n", -1);
         int charIndex = 0;
 
@@ -150,39 +122,11 @@ public final class ContentRebuildUtil {
             if (normalizedRemaining.startsWith(normalizedTarget) ||
                 normalizedRemaining.contains(normalizedTarget)) {
                 // Map back to original content position
-                return mapToOriginalPosition(content, normalizedContent, charIndex);
+                return LineSeparatorUtil.mapToOriginalPosition(content, normalizedContent, charIndex);
             }
             charIndex += lines[lineIdx].length() + 1;
         }
         return -1;
-    }
-
-    /**
-     * Map position from normalized content to original content.
-     * Handles CRLF vs LF differences.
-     */
-    private static int mapToOriginalPosition(String original, String normalized, int normalizedPos) {
-        int originalPos = 0;
-        int normalizedIdx = 0;
-
-        while (normalizedIdx < normalizedPos && originalPos < original.length()) {
-            if (original.charAt(originalPos) == '\r' &&
-                originalPos + 1 < original.length() &&
-                original.charAt(originalPos + 1) == '\n') {
-                // CRLF in original, LF in normalized
-                originalPos += 2;
-                normalizedIdx += 1;
-            } else if (original.charAt(originalPos) == '\r') {
-                // CR in original, LF in normalized
-                originalPos += 1;
-                normalizedIdx += 1;
-            } else {
-                originalPos += 1;
-                normalizedIdx += 1;
-            }
-        }
-
-        return originalPos;
     }
 
     /**
