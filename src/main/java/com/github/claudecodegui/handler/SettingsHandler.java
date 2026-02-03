@@ -68,9 +68,26 @@ public class SettingsHandler extends BaseMessageHandler {
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
     static {
+        // Claude 模型
         MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-5-20251101", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-haiku-4-5", 200_000);
+        // Codex/OpenAI 模型
+        MODEL_CONTEXT_LIMITS.put("gpt-5.2-codex", 258_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-5.1-codex-max", 258_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-5.1-codex-mini", 258_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-5.2", 258_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-5.1", 128_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-5.1-codex", 128_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-4o", 128_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-4o-mini", 128_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-4-turbo", 128_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-4", 8_192);
+        MODEL_CONTEXT_LIMITS.put("o3", 200_000);
+        MODEL_CONTEXT_LIMITS.put("o3-mini", 200_000);
+        MODEL_CONTEXT_LIMITS.put("o1", 200_000);
+        MODEL_CONTEXT_LIMITS.put("o1-mini", 128_000);
+        MODEL_CONTEXT_LIMITS.put("o1-preview", 128_000);
     }
 
     public SettingsHandler(HandlerContext context) {
@@ -359,7 +376,16 @@ public class SettingsHandler extends BaseMessageHandler {
             int cacheReadTokens = lastUsage != null && lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
             int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
 
-            int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+            // 根据 provider 计算已用 token 数
+            // Codex/OpenAI: input_tokens 已经包含了 cached_input_tokens，不需要重复加
+            // Claude: input_tokens 不包含缓存，需要加上 cache_creation 和 cache_read
+            String currentProvider = context.getCurrentProvider();
+            int usedTokens;
+            if ("codex".equals(currentProvider)) {
+                usedTokens = inputTokens + outputTokens;
+            } else {
+                usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+            }
 
             // 发送更新
             sendUsageUpdate(usedTokens, newMaxTokens);

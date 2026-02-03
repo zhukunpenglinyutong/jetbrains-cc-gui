@@ -2457,11 +2457,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 int cacheReadTokens = lastUsage != null && lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
                 int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
 
-                int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+                // 根据 provider 计算已用 token 数
+                // Codex/OpenAI: input_tokens 已经包含了 cached_input_tokens，不需要重复加
+                // Claude: input_tokens 不包含缓存，需要加上 cache_creation 和 cache_read
+                String currentProvider = handlerContext.getCurrentProvider();
+                int usedTokens;
+                if ("codex".equals(currentProvider)) {
+                    // Codex: input_tokens 已包含缓存读取的 token，不要重复计算
+                    usedTokens = inputTokens + outputTokens;
+                } else {
+                    // Claude: 需要加上缓存相关的 token
+                    usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+                }
                 int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                 int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 
-                LOG.debug("Pushing usage update: input=" + inputTokens + ", cacheWrite=" + cacheWriteTokens + ", cacheRead=" + cacheReadTokens + ", output=" + outputTokens + ", total=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
+                LOG.debug("Pushing usage update: provider=" + currentProvider + ", input=" + inputTokens + ", cacheWrite=" + cacheWriteTokens + ", cacheRead=" + cacheReadTokens + ", output=" + outputTokens + ", total=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
 
 
                 JsonObject usageUpdate = new JsonObject();

@@ -833,9 +833,19 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       try {
         const data = JSON.parse(json);
         if (typeof data.percentage === 'number') {
-          const used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
+          let used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
           const max = typeof data.maxTokens === 'number' ? data.maxTokens : (typeof data.limit === 'number' ? data.limit : undefined);
-          setUsagePercentage(data.percentage);
+
+          // 数据校验：如果 usedTokens 超过 maxTokens 的 2 倍，说明数据可能有问题
+          // 记录警告但仍然显示（不强制截断，以便用户能看到异常）
+          if (used !== undefined && max !== undefined && used > max * 2) {
+            console.warn('[Frontend] Usage data may be incorrect: used=' + used + ', max=' + max);
+          }
+
+          // 百分比限制在 0-100 之间
+          const safePercentage = Math.max(0, Math.min(100, data.percentage));
+
+          setUsagePercentage(safePercentage);
           setUsageUsedTokens(used);
           setUsageMaxTokens(max);
         }
