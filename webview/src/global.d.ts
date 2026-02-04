@@ -220,6 +220,11 @@ interface Window {
   updateSendShortcut?: (json: string) => void;
 
   /**
+   * Update auto open file enabled setting
+   */
+  updateAutoOpenFileEnabled?: (json: string) => void;
+
+  /**
    * Update commit AI prompt configuration
    */
   updateCommitPrompt?: (json: string) => void;
@@ -525,6 +530,11 @@ interface Window {
    * Pending send shortcut status before React initialization
    */
   __pendingSendShortcut?: string;
+
+  /**
+   * Pending auto open file enabled status before React initialization
+   */
+  __pendingAutoOpenFileEnabled?: string;
 
   __pendingPermissionDialogRequests?: string[];
 

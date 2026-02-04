@@ -56,6 +56,7 @@ export interface UseWindowCallbacksOptions {
   setClaudeSettingsAlwaysThinkingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setStreamingEnabledSetting: React.Dispatch<React.SetStateAction<boolean>>;
   setSendShortcut: React.Dispatch<React.SetStateAction<'enter' | 'cmdEnter'>>;
+  setAutoOpenFileEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSdkStatus: React.Dispatch<React.SetStateAction<Record<string, { installed?: boolean; status?: string }>>>;
   setSdkStatusLoaded: React.Dispatch<React.SetStateAction<boolean>>;
   setIsRewinding: (loading: boolean) => void;
@@ -126,6 +127,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     setClaudeSettingsAlwaysThinkingEnabled,
     setStreamingEnabledSetting,
     setSendShortcut,
+    setAutoOpenFileEnabled,
     setSdkStatus,
     setSdkStatusLoaded,
     setIsRewinding,
@@ -911,12 +913,29 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       window.updateSendShortcut?.(pending);
     }
 
+    window.updateAutoOpenFileEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setAutoOpenFileEnabled(data.autoOpenFileEnabled ?? true);
+      } catch (error) {
+        console.error('[Frontend] Failed to parse auto open file enabled:', error);
+      }
+    };
+
+    // Handle pending auto open file enabled data (from main.tsx pre-registration)
+    if ((window as unknown as Record<string, unknown>).__pendingAutoOpenFileEnabled) {
+      const pending = (window as unknown as Record<string, unknown>).__pendingAutoOpenFileEnabled as string;
+      delete (window as unknown as Record<string, unknown>).__pendingAutoOpenFileEnabled;
+      window.updateAutoOpenFileEnabled?.(pending);
+    }
+
     // Request initial settings with retry mechanism
     let settingsRetryCount = 0;
     const requestInitialSettings = () => {
       if (window.sendToJava) {
         window.sendToJava('get_streaming_enabled:');
         window.sendToJava('get_send_shortcut:');
+        window.sendToJava('get_auto_open_file_enabled:');
       } else {
         settingsRetryCount++;
         if (settingsRetryCount < MAX_RETRIES) {

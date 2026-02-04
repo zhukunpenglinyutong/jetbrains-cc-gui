@@ -987,6 +987,24 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // Ensure we are on EDT (Alarm.ThreadToUse.SWING_THREAD guarantees this, but being safe)
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (disposed) return;
+
+                // 检查是否启用自动打开文件
+                try {
+                    String projectPath = project.getBasePath();
+                    if (projectPath != null) {
+                        com.github.claudecodegui.CodemossSettingsService settingsService =
+                            new com.github.claudecodegui.CodemossSettingsService();
+                        boolean autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
+                        if (!autoOpenFileEnabled) {
+                            // 如果关闭了自动打开文件，清除 ContextBar 显示
+                            clearSelectionInfo();
+                            return;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Failed to check autoOpenFileEnabled: " + e.getMessage());
+                }
+
                 try {
                     FileEditorManager editorManager = FileEditorManager.getInstance(project);
                     Editor editor = editorManager.getSelectedTextEditor();

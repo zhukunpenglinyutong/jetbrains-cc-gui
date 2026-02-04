@@ -57,6 +57,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_streaming_enabled",
         "get_send_shortcut",
         "set_send_shortcut",
+        "get_auto_open_file_enabled",
+        "set_auto_open_file_enabled",
         "get_ide_theme",
         "get_commit_prompt",
         "set_commit_prompt",
@@ -143,6 +145,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_send_shortcut":
                 handleSetSendShortcut(content);
+                return true;
+            case "get_auto_open_file_enabled":
+                handleGetAutoOpenFileEnabled();
+                return true;
+            case "set_auto_open_file_enabled":
+                handleSetAutoOpenFileEnabled(content);
                 return true;
             case "get_ide_theme":
                 handleGetIdeTheme();
@@ -438,6 +446,19 @@ public class SettingsHandler extends BaseMessageHandler {
             try {
                 if (context.getProject() == null) {
                     return;
+                }
+
+                // 检查是否启用自动打开文件
+                String projectPath = context.getProject().getBasePath();
+                if (projectPath != null) {
+                    com.github.claudecodegui.CodemossSettingsService settingsService =
+                        new com.github.claudecodegui.CodemossSettingsService();
+                    boolean autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
+                    if (!autoOpenFileEnabled) {
+                        // 如果关闭了自动打开文件，清除 ContextBar 显示
+                        callJavaScript("clearSelectionInfo");
+                        return;
+                    }
                 }
 
                 FileEditorManager editorManager = FileEditorManager.getInstance(context.getProject());
@@ -888,6 +909,82 @@ public class SettingsHandler extends BaseMessageHandler {
             LOG.error("[SettingsHandler] Failed to set streaming enabled: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("保存流式传输配置失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 获取自动打开文件配置
+     */
+    private void handleGetAutoOpenFileEnabled() {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    JsonObject response = new JsonObject();
+                    response.addProperty("autoOpenFileEnabled", true);
+                    callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+                });
+                return;
+            }
+
+            com.github.claudecodegui.CodemossSettingsService settingsService =
+                new com.github.claudecodegui.CodemossSettingsService();
+            boolean autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("autoOpenFileEnabled", autoOpenFileEnabled);
+                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get auto open file enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("autoOpenFileEnabled", true);
+                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+            });
+        }
+    }
+
+    /**
+     * 设置自动打开文件配置
+     */
+    private void handleSetAutoOpenFileEnabled(String content) {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.showError", escapeJs("无法获取项目路径"));
+                });
+                return;
+            }
+
+            Gson gson = new Gson();
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean autoOpenFileEnabled = true;
+
+            if (json != null && json.has("autoOpenFileEnabled") && !json.get("autoOpenFileEnabled").isJsonNull()) {
+                autoOpenFileEnabled = json.get("autoOpenFileEnabled").getAsBoolean();
+            }
+
+            com.github.claudecodegui.CodemossSettingsService settingsService =
+                new com.github.claudecodegui.CodemossSettingsService();
+            settingsService.setAutoOpenFileEnabled(projectPath, autoOpenFileEnabled);
+
+            LOG.info("[SettingsHandler] Set auto open file enabled: " + autoOpenFileEnabled);
+
+            // 返回更新后的状态
+            final boolean finalAutoOpenFileEnabled = autoOpenFileEnabled;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("autoOpenFileEnabled", finalAutoOpenFileEnabled);
+                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set auto open file enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("保存自动打开文件配置失败: " + e.getMessage()));
             });
         }
     }

@@ -173,6 +173,8 @@ const App = () => {
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(true);
   // 发送快捷键设置
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
+  // 自动打开文件设置
+  const [autoOpenFileEnabled, setAutoOpenFileEnabled] = useState(true);
   // StatusPanel 展开/收起状态（默认收起，有内容时自动展开）
   const [statusPanelExpanded, setStatusPanelExpanded] = useState(false);
   // 已处理的文件路径列表（Apply/Reject 后从 fileChanges 中过滤，持久化到 localStorage）
@@ -533,6 +535,7 @@ const App = () => {
     setClaudeSettingsAlwaysThinkingEnabled,
     setStreamingEnabledSetting,
     setSendShortcut,
+    setAutoOpenFileEnabled,
     setSdkStatus,
     setSdkStatusLoaded,
     setIsRewinding,
@@ -894,6 +897,16 @@ const App = () => {
     const payload = { sendShortcut: shortcut };
     sendBridgeEvent('set_send_shortcut', JSON.stringify(payload));
   }, []);
+
+  /**
+   * 处理自动打开文件开关切换
+   */
+  const handleAutoOpenFileEnabledChange = useCallback((enabled: boolean) => {
+    setAutoOpenFileEnabled(enabled);
+    const payload = { autoOpenFileEnabled: enabled };
+    sendBridgeEvent('set_auto_open_file_enabled', JSON.stringify(payload));
+    addToast(enabled ? t('settings.basic.autoOpenFile.enabled') : t('settings.basic.autoOpenFile.disabled'), 'success');
+  }, [t, addToast]);
 
   const interruptSession = () => {
     // FIX: 立即重置前端状态，不等待后端回调
@@ -1397,6 +1410,8 @@ const App = () => {
           onStreamingEnabledChange={handleStreamingEnabledChange}
           sendShortcut={sendShortcut}
           onSendShortcutChange={handleSendShortcutChange}
+          autoOpenFileEnabled={autoOpenFileEnabled}
+          onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
         />
       ) : currentView === 'chat' ? (
         <>
