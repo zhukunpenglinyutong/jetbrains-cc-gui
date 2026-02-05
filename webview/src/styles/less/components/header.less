@@ -1,3 +1,6 @@
+/* 导入公共 mixins */
+@import '../mixins.less';
+
 /* New Header Styles */
 .header {
     display: flex;
@@ -13,23 +16,21 @@
 .header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
     flex: 1;
     min-width: 0; /* Allow flex items to shrink below their minimum content size */
     overflow: hidden;
+    .flex-gap-horizontal(12px);
+
+    > * {
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
 }
 
 .header-right {
     display: flex;
     align-items: center;
-    gap: 0px;
     flex-shrink: 0; /* Prevent buttons from shrinking */
-}
-
-/* Header tabs/titles */
-.header-left > * {
-    color: var(--text-secondary);
-    font-weight: 500;
 }
 
 .new-chat-button {
@@ -44,56 +45,14 @@
     font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 6px;
     position: relative;
+    .flex-gap-horizontal(6px);
+    .tooltip-bottom-center(32px);
 }
 
 .new-chat-button:hover {
     background: var(--bg-hover);
     border-color: var(--accent-secondary);
-}
-
-/* New chat button tooltip */
-.new-chat-button::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: -32px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--bg-elevated);
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1000;
-    box-shadow: var(--shadow-md);
-}
-
-.new-chat-button:hover::after {
-    opacity: 1;
-}
-
-.new-chat-button::before {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--bg-elevated);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1001;
-}
-
-.new-chat-button:hover::before {
-    opacity: 1;
 }
 
 .back-button {
@@ -106,56 +65,14 @@
     border-radius: 4px;
     display: flex;
     align-items: center;
-    gap: 4px;
     position: relative;
+    .flex-gap-horizontal(4px);
+    .tooltip-bottom-center(32px);
 }
 
 .back-button:hover {
     background: var(--bg-hover);
     color: var(--text-secondary);
-}
-
-/* Back button tooltip */
-.back-button::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: -32px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--bg-elevated);
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1000;
-    box-shadow: var(--shadow-md);
-}
-
-.back-button:hover::after {
-    opacity: 1;
-}
-
-.back-button::before {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--bg-elevated);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1001;
-}
-
-.back-button:hover::before {
-    opacity: 1;
 }
 
 .icon-button {
@@ -171,6 +88,7 @@
     cursor: pointer;
     transition: all 0.2s;
     position: relative;
+    .tooltip-bottom-center(32px);
 }
 
 .icon-button:hover {
@@ -185,48 +103,4 @@
 
 .icon-button .codicon {
     font-size: 18px;
-}
-
-/* Tooltip 样式 */
-.icon-button::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: -32px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--bg-elevated);
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1000;
-    box-shadow: var(--shadow-md);
-}
-
-.icon-button:hover::after {
-    opacity: 1;
-}
-
-/* Tooltip 小箭头 */
-.icon-button::before {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--bg-elevated);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1001;
-}
-
-.icon-button:hover::before {
-    opacity: 1;
 }

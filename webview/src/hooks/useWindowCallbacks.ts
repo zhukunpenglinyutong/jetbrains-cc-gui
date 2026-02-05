@@ -56,6 +56,7 @@ export interface UseWindowCallbacksOptions {
   setClaudeSettingsAlwaysThinkingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setStreamingEnabledSetting: React.Dispatch<React.SetStateAction<boolean>>;
   setSendShortcut: React.Dispatch<React.SetStateAction<'enter' | 'cmdEnter'>>;
+  setAutoOpenFileEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSdkStatus: React.Dispatch<React.SetStateAction<Record<string, { installed?: boolean; status?: string }>>>;
   setSdkStatusLoaded: React.Dispatch<React.SetStateAction<boolean>>;
   setIsRewinding: (loading: boolean) => void;
@@ -126,6 +127,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     setClaudeSettingsAlwaysThinkingEnabled,
     setStreamingEnabledSetting,
     setSendShortcut,
+    setAutoOpenFileEnabled,
     setSdkStatus,
     setSdkStatusLoaded,
     setIsRewinding,
@@ -204,15 +206,46 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       if (!lastPrev?.isOptimistic) return nextList;
 
       const optimisticMsg = lastPrev;
-      const isIncluded = nextList.some((m) =>
+
+      const matchFn = (m: ClaudeMessage) =>
         m.type === 'user' &&
         (m.content === optimisticMsg.content || m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
         m.timestamp && optimisticMsg.timestamp &&
-        Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < OPTIMISTIC_MESSAGE_TIME_WINDOW
-      );
+        Math.abs(new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime()) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
 
-      if (isIncluded) return nextList;
-      return [...nextList, optimisticMsg];
+      const matchedIndex = nextList.findIndex(matchFn);
+      if (matchedIndex < 0) {
+        return [...nextList, optimisticMsg];
+      }
+
+      // 后端消息已匹配到乐观消息。将乐观消息中的 attachment 块保留到后端消息的 raw 中，
+      // 否则用户上传的非图片文件附件在气泡中不可见。
+      const optimisticRaw = optimisticMsg.raw as any;
+      const optimisticContent: unknown[] | undefined = optimisticRaw?.message?.content;
+      if (Array.isArray(optimisticContent)) {
+        const attachmentBlocks = optimisticContent.filter(
+          (b: any) => b && typeof b === 'object' && b.type === 'attachment'
+        );
+        if (attachmentBlocks.length > 0) {
+          const backendMsg = nextList[matchedIndex];
+          const backendRaw = (backendMsg.raw ?? {}) as any;
+          const backendContent: unknown[] = Array.isArray(backendRaw?.message?.content)
+            ? backendRaw.message.content
+            : Array.isArray(backendRaw?.content)
+              ? backendRaw.content
+              : [];
+          const mergedContent = [...attachmentBlocks, ...backendContent];
+          const mergedRaw = {
+            ...backendRaw,
+            message: { ...(backendRaw?.message ?? {}), content: mergedContent },
+          };
+          const result = [...nextList];
+          result[matchedIndex] = { ...backendMsg, raw: mergedRaw };
+          return result;
+        }
+      }
+
+      return nextList;
     };
 
     const preserveLastAssistantIdentity = (prevList: ClaudeMessage[], nextList: ClaudeMessage[]): ClaudeMessage[] => {
@@ -802,9 +835,19 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       try {
         const data = JSON.parse(json);
         if (typeof data.percentage === 'number') {
-          const used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
+          let used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
           const max = typeof data.maxTokens === 'number' ? data.maxTokens : (typeof data.limit === 'number' ? data.limit : undefined);
-          setUsagePercentage(data.percentage);
+
+          // 数据校验：如果 usedTokens 超过 maxTokens 的 2 倍，说明数据可能有问题
+          // 记录警告但仍然显示（不强制截断，以便用户能看到异常）
+          if (used !== undefined && max !== undefined && used > max * 2) {
+            console.warn('[Frontend] Usage data may be incorrect: used=' + used + ', max=' + max);
+          }
+
+          // 百分比限制在 0-100 之间
+          const safePercentage = Math.max(0, Math.min(100, data.percentage));
+
+          setUsagePercentage(safePercentage);
           setUsageUsedTokens(used);
           setUsageMaxTokens(max);
         }
@@ -911,12 +954,29 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       window.updateSendShortcut?.(pending);
     }
 
+    window.updateAutoOpenFileEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        setAutoOpenFileEnabled(data.autoOpenFileEnabled ?? true);
+      } catch (error) {
+        console.error('[Frontend] Failed to parse auto open file enabled:', error);
+      }
+    };
+
+    // Handle pending auto open file enabled data (from main.tsx pre-registration)
+    if ((window as unknown as Record<string, unknown>).__pendingAutoOpenFileEnabled) {
+      const pending = (window as unknown as Record<string, unknown>).__pendingAutoOpenFileEnabled as string;
+      delete (window as unknown as Record<string, unknown>).__pendingAutoOpenFileEnabled;
+      window.updateAutoOpenFileEnabled?.(pending);
+    }
+
     // Request initial settings with retry mechanism
     let settingsRetryCount = 0;
     const requestInitialSettings = () => {
       if (window.sendToJava) {
         window.sendToJava('get_streaming_enabled:');
         window.sendToJava('get_send_shortcut:');
+        window.sendToJava('get_auto_open_file_enabled:');
       } else {
         settingsRetryCount++;
         if (settingsRetryCount < MAX_RETRIES) {

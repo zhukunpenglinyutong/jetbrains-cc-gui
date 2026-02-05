@@ -181,7 +181,24 @@
         "label": "Complétion de l'historique",
         "enabled": "Activé",
         "disabled": "Désactivé",
-        "hint": "Lorsqu'elle est activée, la zone de saisie se complétera automatiquement en fonction de l'historique de saisie. Appuyez sur Tab pour accepter la suggestion."
+        "hint": "Lorsqu'elle est activée, la zone de saisie se complétera automatiquement en fonction de l'historique de saisie. Appuyez sur Tab pour accepter la suggestion.",
+        "manageHistory": "Gérer l'historique",
+        "empty": "Aucun enregistrement d'historique",
+        "clearAll": "Tout effacer",
+        "clearLow": "Effacer faible importance",
+        "clearLowHint": "Supprimer les enregistrements avec importance ≤ 1",
+        "delete": "Supprimer",
+        "edit": "Modifier",
+        "add": "Ajouter",
+        "importance": "Importance",
+        "editor": {
+          "addTitle": "Ajouter un enregistrement d'historique",
+          "editTitle": "Modifier l'enregistrement d'historique",
+          "contentLabel": "Contenu",
+          "contentPlaceholder": "Entrez le contenu de l'enregistrement...",
+          "importanceLabel": "Importance",
+          "importanceHint": "Une importance plus élevée signifie une priorité plus élevée dans l'auto-complétion"
+        }
       }
     },
     "codexFeatureUnavailable": "Cette section des paramètres n'est pas encore disponible dans Codex. Passez à Claude Code.",
@@ -377,13 +394,17 @@
     "title": "Claude a quelques questions pour vous",
     "progress": "Question {{current}} / {{total}}",
     "multiSelectHint": "Vous pouvez sélectionner plusieurs options",
-    "cancel": "Auto",
+    "cancel": "Annuler",
     "back": "Retour",
     "next": "Suivant",
     "submit": "Soumettre",
     "otherOption": "Autre",
     "otherOptionDesc": "Entrez une réponse personnalisée",
-    "customInputPlaceholder": "Entrez votre réponse..."
+    "customInputPlaceholder": "Entrez votre réponse...",
+    "timeoutWarning": "Veuillez répondre rapidement, la boîte de dialogue se fermera dans {{seconds}} secondes",
+    "expand": "Développer",
+    "collapse": "Réduire",
+    "clickToAnswer": "Cliquez pour répondre"
   },
   "toast": {
     "switchSuccess": "Changement réussi",

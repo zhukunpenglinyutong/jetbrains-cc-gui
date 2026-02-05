@@ -7,13 +7,46 @@
   border-radius: 8px;
   padding: 24px;
   width: 100%;
-  max-width: 600px;
-  max-height: min(400px, 50vh);
-  overflow-y: auto;
+  max-width: 100%;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
   gap: 20px;
+  transition: all 0.3s ease;
+}
+
+/* 展开状态 - 无高度限制，可滚动 */
+.ask-user-question-dialog.expanded {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* 收起状态 - 紧凑显示 */
+.ask-user-question-dialog.collapsed {
+  padding: 16px 24px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* 收起模式下的 overlay - 不遮挡页面内容 */
+.permission-dialog-overlay.collapsed-mode {
+  background: transparent;
+  pointer-events: none;
+  align-items: flex-end;
+  padding-bottom: 20px;
+}
+
+.permission-dialog-overlay.collapsed-mode .ask-user-question-dialog {
+  pointer-events: auto;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* 标题区域（带收起按钮） */
+.ask-user-question-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .ask-user-question-dialog-title {
@@ -21,12 +54,151 @@
   font-weight: 600;
   color: var(--vscode-foreground, #cccccc);
   margin: 0;
+  flex: 1;
+}
+
+/* 收起/展开切换按钮 */
+.collapse-toggle-button {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  border: 1px solid var(--vscode-button-border, #454545);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--vscode-foreground, #cccccc);
+  transition: all 0.2s;
+}
+
+.collapse-toggle-button:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+  color: var(--vscode-textLink-foreground, #4daafc);
+}
+
+/* 倒计时显示 */
+.countdown-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #999999);
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--vscode-input-background, #3c3c3c);
+  border: 1px solid var(--vscode-widget-border, #454545);
+  transition: all 0.3s ease;
+}
+
+.countdown-timer .codicon {
+  font-size: 14px;
+}
+
+.countdown-time {
+  font-variant-numeric: tabular-nums;
+  min-width: 40px;
+  text-align: center;
+}
+
+/* 倒计时警告状态 */
+.countdown-timer.warning {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  background: rgba(204, 167, 0, 0.1);
+  border-color: var(--vscode-editorWarning-foreground, #cca700);
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 超时警告横幅 */
+.timeout-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(204, 167, 0, 0.15);
+  border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
+  border-radius: 6px;
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  font-size: 13px;
+  margin: -8px 0 0 0;
+  animation: slideIn 0.3s ease-out;
+}
+
+.timeout-warning-banner .codicon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 对话框警告状态边框 */
+.ask-user-question-dialog.time-warning {
+  border-color: var(--vscode-editorWarning-foreground, #cca700);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--vscode-editorWarning-foreground, #cca700);
+}
+
+/* 收起状态下的倒计时 */
+.collapsed-timer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #999999);
+  font-variant-numeric: tabular-nums;
+}
+
+.collapsed-timer.warning {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+.collapsed-timer .codicon {
+  font-size: 14px;
+}
+
+/* 收起状态下的提示区域 */
+.collapsed-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.collapsed-progress {
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #999999);
+}
+
+.expand-button {
+  flex-shrink: 0;
+}
+
+/* 进度行（包含进度文本和倒计时） */
+.ask-user-question-dialog-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -8px 0 0 0;
 }
 
 .ask-user-question-dialog-progress {
   font-size: 13px;
   color: var(--vscode-descriptionForeground, #999999);
-  margin: -8px 0 0 0;
 }
 
 .ask-user-question-dialog-question {

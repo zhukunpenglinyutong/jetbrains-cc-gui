@@ -181,7 +181,24 @@
         "label": "歷史輸入補全",
         "enabled": "已開啟",
         "disabled": "已關閉",
-        "hint": "開啟後，輸入框會根據歷史輸入自動補全，按 Tab 鍵接受建議"
+        "hint": "開啟後，輸入框會根據歷史輸入自動補全，按 Tab 鍵接受建議",
+        "manageHistory": "管理歷史記錄",
+        "empty": "暫無歷史記錄",
+        "clearAll": "清空全部",
+        "clearLow": "清空低重要度",
+        "clearLowHint": "刪除重要度 ≤ 1 的記錄",
+        "delete": "刪除",
+        "edit": "編輯",
+        "add": "新增",
+        "importance": "重要度",
+        "editor": {
+          "addTitle": "新增歷史記錄",
+          "editTitle": "編輯歷史記錄",
+          "contentLabel": "內容",
+          "contentPlaceholder": "輸入歷史記錄內容...",
+          "importanceLabel": "重要度",
+          "importanceHint": "重要度越高，自動補全時越靠前"
+        }
       }
     },
     "codexFeatureUnavailable": "Codex 暫未適配此功能，請切換到 Claude Code 使用",
@@ -382,13 +399,17 @@
     "title": "Claude 有一些問題想問你",
     "progress": "問題 {{current}} / {{total}}",
     "multiSelectHint": "可以選擇多個選項",
-    "cancel": "Auto",
+    "cancel": "取消",
     "back": "上一步",
     "next": "下一步",
     "submit": "提交",
     "otherOption": "其他",
     "otherOptionDesc": "輸入自訂答案",
-    "customInputPlaceholder": "請輸入您的答案..."
+    "customInputPlaceholder": "請輸入您的答案...",
+    "timeoutWarning": "請儘快回答，對話框將在 {{seconds}} 秒後自動關閉",
+    "expand": "展開",
+    "collapse": "收起",
+    "clickToAnswer": "點擊回答"
   },
   "toast": {
     "switchSuccess": "切換成功",

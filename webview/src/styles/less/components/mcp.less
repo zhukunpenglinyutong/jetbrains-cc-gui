@@ -1,3 +1,6 @@
+/* 导入公共 mixins */
+@import '../mixins.less';
+
 .mcp-settings-section {
     display: flex;
     flex-direction: column;
@@ -47,14 +50,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
 }
 
 .mcp-header .header-left {
     display: flex;
     align-items: center;
-    gap: 8px;
     flex-shrink: 0;
+    .flex-gap-horizontal(8px);
 }
 
 .mcp-header .header-title {
@@ -85,7 +87,7 @@
 .mcp-header .header-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    .flex-gap-horizontal(8px);
 }
 
 .mcp-header .refresh-btn {
@@ -123,7 +125,6 @@
 .add-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
     padding: 6px 12px;
     border: none;
     border-radius: 6px;
@@ -131,6 +132,7 @@
     color: var(--text-white);
     cursor: pointer;
     font-size: 13px;
+    .flex-gap-horizontal(6px);
 }
 
 .add-btn:hover {
@@ -154,11 +156,11 @@
 .dropdown-item {
     display: flex;
     align-items: center;
-    gap: 8px;
     padding: 10px 14px;
     cursor: pointer;
     font-size: 13px;
     color: var(--text-primary);
+    .flex-gap-horizontal(8px);
 }
 
 .dropdown-item:hover {
@@ -215,9 +217,9 @@
 .header-left-section {
     display: flex;
     align-items: center;
-    gap: 10px;
     flex: 1;
     min-width: 0;
+    .flex-gap-horizontal(10px);
 }
 
 .expand-icon {
@@ -274,8 +276,8 @@
 .header-right-section {
     display: flex;
     align-items: center;
-    gap: 8px;
     flex-shrink: 0;
+    .flex-gap-horizontal(8px);
 }
 
 /* 图标按钮 - 用于编辑、复制、删除、刷新等操作 */
@@ -730,7 +732,7 @@
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    .flex-gap-horizontal(12px);
 }
 
 .mode-btn {
@@ -856,14 +858,14 @@
 .footer-hint {
     display: flex;
     align-items: center;
-    gap: 6px;
     font-size: 12px;
     color: var(--vscode-descriptionForeground, var(--text-secondary));
+    .flex-gap-horizontal(6px);
 }
 
 .footer-actions {
     display: flex;
-    gap: 8px;
+    .flex-gap-horizontal(8px);
 }
 
 .btn {
@@ -874,8 +876,8 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 6px;
     transition: background-color 0.2s;
+    .flex-gap-horizontal(6px);
 }
 
 .btn-primary {
@@ -915,12 +917,12 @@
 .provider-dialog .dialog-footer {
     display: flex;
     align-items: center;
-    gap: 8px;
+    .flex-gap-horizontal(8px);
 }
 
 .provider-dialog .footer-actions {
     display: flex;
-    gap: 8px;
+    .flex-gap-horizontal(8px);
 }
 
 /* 预设列表弹窗样式 */
@@ -932,19 +934,19 @@
 .preset-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    .flex-gap-vertical(8px);
 }
 
 .preset-item {
     display: flex;
     align-items: center;
-    gap: 12px;
     padding: 12px 14px;
     border: 1px solid var(--vscode-panel-border, var(--border-primary));
     border-radius: 8px;
     background: var(--vscode-sideBar-background, var(--bg-secondary));
     cursor: pointer;
     transition: all 0.15s ease;
+    .flex-gap-horizontal(12px);
 }
 
 .preset-item:hover {
@@ -1750,7 +1752,7 @@
 .sidebar-tool-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     padding: 8px 12px;
     border-radius: 6px;
     cursor: pointer;
@@ -1781,20 +1783,20 @@
 
 .tool-icon {
     flex-shrink: 0;
-    width: auto;
-    min-width: 200px;
-    height: 22px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
-    background: var(--bg-tertiary);
     color: var(--accent-primary);
-    font-size: 13px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.sidebar-tool-item:hover .tool-icon {
+    color: var(--accent-primary-hover);
 }
 
 .sidebar-tool-item.active .tool-icon {
-    background: rgba(255, 255, 255, 0.2);
+    color: var(--text-white);
 }
 
 .tool-info {
@@ -2103,17 +2105,15 @@
 }
 
 .mcp-tool-tooltip .tooltip-icon {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: auto;
-    min-width: 200px;
-    height: 24px;
-    border-radius: 4px;
-    background: var(--bg-tertiary);
-    color: var(--accent-primary);
-    font-size: 14px;
     flex-shrink: 0;
+}
+
+.mcp-tool-tooltip .tooltip-icon .tool-icon {
+    color: var(--accent-primary);
+    font-size: 16px;
 }
 
 .mcp-tool-tooltip .tooltip-name {

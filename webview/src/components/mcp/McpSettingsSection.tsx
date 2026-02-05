@@ -486,7 +486,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         >
           <div className="tooltip-header">
             <span className="tooltip-icon">
-              <span className="codicon">{getToolIcon(hoveredTool.tool.name)}</span>
+              <span className={`codicon tool-icon ${getToolIcon(hoveredTool.tool.name)}`}></span>
             </span>
             <span className="tooltip-name">{hoveredTool.tool.name}</span>
           </div>

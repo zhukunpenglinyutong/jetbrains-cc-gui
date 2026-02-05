@@ -186,7 +186,24 @@
         "label": "入力履歴補完",
         "enabled": "有効",
         "disabled": "無効",
-        "hint": "有効にすると、入力ボックスは入力履歴に基づいて自動補完します。Tabキーで提案を受け入れます。"
+        "hint": "有効にすると、入力ボックスは入力履歴に基づいて自動補完します。Tabキーで提案を受け入れます。",
+        "manageHistory": "履歴を管理",
+        "empty": "履歴記録がありません",
+        "clearAll": "すべてクリア",
+        "clearLow": "低重要度をクリア",
+        "clearLowHint": "重要度 ≤ 1 の記録を削除",
+        "delete": "削除",
+        "edit": "編集",
+        "add": "追加",
+        "importance": "重要度",
+        "editor": {
+          "addTitle": "履歴記録を追加",
+          "editTitle": "履歴記録を編集",
+          "contentLabel": "内容",
+          "contentPlaceholder": "履歴記録の内容を入力...",
+          "importanceLabel": "重要度",
+          "importanceHint": "重要度が高いほど、自動補完で優先されます"
+        }
       }
     },
     "codexFeatureUnavailable": "Codexではこの設定セクションは未対応です。Claude Codeに切り替えてください。",
@@ -387,13 +404,17 @@
     "title": "Claudeからの質問があります",
     "progress": "質問 {{current}} / {{total}}",
     "multiSelectHint": "複数のオプションを選択できます",
-    "cancel": "Auto",
+    "cancel": "キャンセル",
     "back": "戻る",
     "next": "次へ",
     "submit": "送信",
     "otherOption": "その他",
     "otherOptionDesc": "カスタム回答を入力",
-    "customInputPlaceholder": "回答を入力してください..."
+    "customInputPlaceholder": "回答を入力してください...",
+    "timeoutWarning": "お早めにご回答ください。ダイアログは {{seconds}} 秒後に自動的に閉じます",
+    "expand": "展開",
+    "collapse": "折りたたむ",
+    "clickToAnswer": "クリックして回答"
   },
   "toast": {
     "switchSuccess": "切り替えが成功しました",

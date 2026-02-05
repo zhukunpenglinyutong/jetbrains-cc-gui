@@ -13,7 +13,7 @@
 import { loadClaudeSdk, isClaudeSdkAvailable } from '../utils/sdk-loader.js';
 import { setupApiKey, loadClaudeSettings } from '../config/api-config.js';
 import { mapModelIdToSdkName } from '../utils/model-utils.js';
-import { homedir } from 'os';
+import { getRealHomeDir } from '../utils/path-utils.js';
 
 let claudeSdk = null;
 
@@ -259,7 +259,7 @@ async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
     console.log(`[PromptEnhancer] 模型映射: ${model} -> ${sdkModelName}`);
 
     // 使用用户主目录作为工作目录
-    const workingDirectory = homedir();
+    const workingDirectory = getRealHomeDir();
 
     // 构建包含上下文信息的完整提示词
     const fullPrompt = buildFullPrompt(originalPrompt, context);

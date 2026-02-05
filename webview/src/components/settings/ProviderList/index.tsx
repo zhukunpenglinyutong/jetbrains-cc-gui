@@ -348,11 +348,6 @@ export default function ProviderList({
               <div className={styles.name}>
                 <span className="codicon codicon-file" style={{ marginRight: '8px' }} />
                 {t('settings.provider.localProviderName')}
-                <span
-                  className="codicon codicon-info"
-                  style={{ marginLeft: '8px', cursor: 'help', opacity: 0.7 }}
-                  title={t('settings.provider.localProviderHelp')}
-                />
               </div>
               <div className={styles.website} title={t('settings.provider.localProviderDescription')}>
                 {t('settings.provider.localProviderDescription')}

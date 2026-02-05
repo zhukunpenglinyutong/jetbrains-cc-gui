@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
 import VirtualList from './VirtualList';
 import { Claude, OpenAI } from '@lobehub/icons';
 import { extractCommandMessageContent } from '../../utils/messageUtils';
+import { sendBridgeEvent } from '../../utils/bridge';
+
+// 深度搜索超时时间（毫秒）
+const DEEP_SEARCH_TIMEOUT_MS = 30000;
 
 interface HistoryViewProps {
   historyData: HistoryData | null;
@@ -37,7 +41,7 @@ const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string
   return `${Math.max(seconds, 1)} ${t('history.timeAgo.secondsAgo')}`;
 };
 
-const HistoryView = ({ historyData, currentProvider: _currentProvider, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // 记录待删除的会话ID
@@ -45,6 +49,18 @@ const HistoryView = ({ historyData, currentProvider: _currentProvider, onLoadSes
   const [searchQuery, setSearchQuery] = useState(''); // 实际用于搜索的关键词（防抖后）
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null); // 正在编辑的会话ID
   const [editingTitle, setEditingTitle] = useState(''); // 编辑中的标题内容
+  const [isDeepSearching, setIsDeepSearching] = useState(false); // 深度搜索中状态
+  const deepSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // 深度搜索超时 timer
+
+  // 清理深度搜索超时 timer
+  useEffect(() => {
+    return () => {
+      if (deepSearchTimeoutRef.current) {
+        clearTimeout(deepSearchTimeoutRef.current);
+        deepSearchTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setViewportHeight(window.innerHeight || 600);
@@ -60,6 +76,20 @@ const HistoryView = ({ historyData, currentProvider: _currentProvider, onLoadSes
 
     return () => clearTimeout(timer);
   }, [inputValue]);
+
+  // 当 historyData 更新时，停止深度搜索状态并清理超时 timer
+  // 使用函数式更新避免 isDeepSearching 依赖，同时清理对应的 timeout
+  useEffect(() => {
+    if (historyData) {
+      setIsDeepSearching(prev => {
+        if (prev && deepSearchTimeoutRef.current) {
+          clearTimeout(deepSearchTimeoutRef.current);
+          deepSearchTimeoutRef.current = null;
+        }
+        return false;
+      });
+    }
+  }, [historyData]);
 
   // 对会话进行排序和搜索过滤：收藏的在上面（按收藏时间倒序），未收藏的在下面（保持原顺序）
   const sessions = useMemo(() => {
@@ -221,6 +251,25 @@ const HistoryView = ({ historyData, currentProvider: _currentProvider, onLoadSes
     setEditingTitle('');
   };
 
+  // 深度搜索：清空缓存后重新加载历史记录
+  const handleDeepSearch = () => {
+    if (isDeepSearching) return;
+
+    setIsDeepSearching(true);
+    sendBridgeEvent('deep_search_history', currentProvider || 'claude');
+
+    // 清理之前的超时（如果存在）
+    if (deepSearchTimeoutRef.current) {
+      clearTimeout(deepSearchTimeoutRef.current);
+    }
+
+    // 设置超时自动恢复状态（防止异常情况下一直 loading）
+    deepSearchTimeoutRef.current = setTimeout(() => {
+      setIsDeepSearching(false);
+      deepSearchTimeoutRef.current = null;
+    }, DEEP_SEARCH_TIMEOUT_MS);
+  };
+
   // 高亮显示匹配的文本
   const highlightText = (text: string, query: string) => {
     if (!query.trim()) {
@@ -370,6 +419,15 @@ const HistoryView = ({ historyData, currentProvider: _currentProvider, onLoadSes
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="history-header">
         <div className="history-info">{infoBar}</div>
+        {/* 深度搜索按钮 */}
+        <button
+          className={`history-deep-search-btn ${isDeepSearching ? 'searching' : ''}`}
+          onClick={handleDeepSearch}
+          disabled={isDeepSearching}
+          title={t('history.deepSearchTooltip')}
+        >
+          <span className={`codicon ${isDeepSearching ? 'codicon-sync codicon-modifier-spin' : 'codicon-refresh'}`}></span>
+        </button>
         {/* 搜索框 */}
         <div className="history-search-container">
           <input

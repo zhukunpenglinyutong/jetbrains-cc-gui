@@ -6,7 +6,7 @@
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { homedir } from 'os';
+import { getRealHomeDir } from '../../../utils/path-utils.js';
 import { log } from './logger.js';
 
 /**
@@ -74,7 +74,7 @@ function validateConfigStructure(config) {
  * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} 解析结果，失败返回 null
  */
 async function parseMcpConfig(cwd = null) {
-  const claudeJsonPath = join(homedir(), '.claude.json');
+  const claudeJsonPath = join(getRealHomeDir(), '.claude.json');
 
   if (!existsSync(claudeJsonPath)) {
     log('info', '~/.claude.json not found');

@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatCountdown } from '../utils/helpers';
 import './AskUserQuestionDialog.css';
 
 // 用于标识"其他"选项的特殊标记
@@ -7,6 +8,10 @@ const OTHER_OPTION_MARKER = '__OTHER__';
 
 // 自定义输入的最大长度限制
 const MAX_CUSTOM_INPUT_LENGTH = 2000;
+
+// 超时配置（与后端 PermissionHandler.java 和 permission-handler.js 保持一致）
+const TIMEOUT_SECONDS = 300; // 5 分钟
+const WARNING_THRESHOLD_SECONDS = 30; // 剩余 30 秒时显示警告
 
 export interface QuestionOption {
   label: string;
@@ -65,33 +70,106 @@ const AskUserQuestionDialog = ({
   // 存储每个问题的自定义输入文本：question -> customText
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  // 控制弹窗是否收起（紧凑模式）
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  // 倒计时剩余秒数
+  const [remainingSeconds, setRemainingSeconds] = useState(TIMEOUT_SECONDS);
+  // 是否显示超时警告
+  const isTimeWarning = remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0;
+  // 是否已超时
+  const isTimedOut = remainingSeconds <= 0;
+
   const customInputRef = useRef<HTMLTextAreaElement>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const normalizedQuestions = (Array.isArray(request?.questions) ? request!.questions : [])
     .map(normalizeQuestion)
     .filter(Boolean) as Question[];
 
+  // 处理取消操作
+  const handleCancel = useCallback(() => {
+    if (request) {
+      onCancel(request.requestId);
+    }
+  }, [request, onCancel]);
+
+  // 重置状态 - 当请求变化时重新初始化
   useEffect(() => {
     if (isOpen && request) {
       // 初始化答案状态
+      const questions = (Array.isArray(request.questions) ? request.questions : [])
+        .map(normalizeQuestion)
+        .filter(Boolean) as Question[];
+
       const initialAnswers: Record<string, Set<string>> = {};
       const initialCustomInputs: Record<string, string> = {};
-      normalizedQuestions.forEach((q) => {
+      questions.forEach((q) => {
         initialAnswers[q.question] = new Set<string>();
         initialCustomInputs[q.question] = '';
       });
       setAnswers(initialAnswers);
       setCustomInputs(initialCustomInputs);
       setCurrentQuestionIndex(0);
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          handleCancel();
-        }
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
+      // 重置折叠状态，确保对话框打开时是展开的
+      setIsCollapsed(false);
+      // 重置倒计时
+      setRemainingSeconds(TIMEOUT_SECONDS);
     }
-  }, [isOpen]); // Remove 'request' from dependencies to prevent re-registering listeners
+  }, [isOpen, request?.requestId]);
+
+  // 键盘事件处理 - 单独的 effect 以避免频繁注册/注销监听器
+  useEffect(() => {
+    if (!isOpen || !request) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, request, handleCancel]);
+
+  // 倒计时定时器
+  useEffect(() => {
+    // 清除定时器的辅助函数
+    const clearTimer = () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+
+    // 如果对话框未打开或没有请求，清理并退出
+    if (!isOpen || !request) {
+      clearTimer();
+      return;
+    }
+
+    // 清除之前的定时器（防止重复）
+    clearTimer();
+
+    // 启动倒计时
+    timerRef.current = setInterval(() => {
+      setRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          // 超时，清除定时器
+          clearTimer();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // cleanup 函数
+    return clearTimer;
+  }, [isOpen, request?.requestId]);
+
+  // 超时自动关闭
+  useEffect(() => {
+    if (isTimedOut && isOpen && request) {
+      handleCancel();
+    }
+  }, [isTimedOut, isOpen, request, handleCancel]);
 
   if (!isOpen || !request) {
     return null;
@@ -225,10 +303,6 @@ const AskUserQuestionDialog = ({
     onSubmit(request.requestId, formattedAnswers);
   };
 
-  const handleCancel = () => {
-    onCancel(request.requestId);
-  };
-
   // 检查是否可以继续：
   // 1. 选中了普通选项（非"其他"）
   // 2. 或者选中了"其他"且有有效的自定义输入
@@ -237,123 +311,176 @@ const AskUserQuestionDialog = ({
   const canProceed = hasRegularSelection || hasValidCustomInput;
 
   return (
-    <div className="permission-dialog-overlay">
-      <div className="ask-user-question-dialog">
-        {/* 标题区域 */}
-        <h3 className="ask-user-question-dialog-title">
-          {t('askUserQuestion.title', 'Claude 有一些问题想问你')}
-        </h3>
-        <div className="ask-user-question-dialog-progress">
-          {t('askUserQuestion.progress', '问题 {{current}} / {{total}}', {
-            current: safeQuestionIndex + 1,
-            total: normalizedQuestions.length,
-          })}
+    <div className={`permission-dialog-overlay ${isCollapsed ? 'collapsed-mode' : ''}`}>
+      <div className={`ask-user-question-dialog ${isCollapsed ? 'collapsed' : 'expanded'} ${isTimeWarning ? 'time-warning' : ''}`}>
+        {/* 标题区域 - 带收起/展开按钮 */}
+        <div className="ask-user-question-dialog-header">
+          <h3 className="ask-user-question-dialog-title">
+            {t('askUserQuestion.title', 'Claude 有一些问题想问你')}
+          </h3>
+          <button
+            className="collapse-toggle-button"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            title={isCollapsed ? t('askUserQuestion.expand', '展开') : t('askUserQuestion.collapse', '收起')}
+            aria-label={isCollapsed ? t('askUserQuestion.expand', '展开') : t('askUserQuestion.collapse', '收起')}
+            aria-expanded={!isCollapsed}
+          >
+            <span className={`codicon codicon-chevron-${isCollapsed ? 'up' : 'down'}`} />
+          </button>
         </div>
 
-        {/* 问题区域 */}
-        <div className="ask-user-question-dialog-question">
-          <div className="question-header">
-            <span className="question-tag">{currentQuestion.header}</span>
+        {/* 超时警告提示 */}
+        {isTimeWarning && !isCollapsed && (
+          <div className="timeout-warning-banner">
+            <span className="codicon codicon-warning" />
+            <span>{t('askUserQuestion.timeoutWarning', '请尽快回答，对话框将在 {{seconds}} 秒后自动关闭', { seconds: remainingSeconds })}</span>
           </div>
-          <p className="question-text">{currentQuestion.question}</p>
+        )}
 
-          {/* 选项列表 */}
-          <div className="question-options">
-            {currentQuestion.options.map((option, index) => {
-              const isSelected = currentAnswerSet.has(option.label);
-              return (
+        {/* 收起状态下的简短提示 */}
+        {isCollapsed ? (
+          <div className="collapsed-hint">
+            <span className="collapsed-progress">
+              {t('askUserQuestion.progress', '问题 {{current}} / {{total}}', {
+                current: safeQuestionIndex + 1,
+                total: normalizedQuestions.length,
+              })}
+            </span>
+            {isTimeWarning && (
+              <span className="collapsed-timer warning">
+                <span className="codicon codicon-warning" />
+                {formatCountdown(remainingSeconds)}
+              </span>
+            )}
+            <button
+              className="action-button primary expand-button"
+              onClick={() => setIsCollapsed(false)}
+            >
+              {t('askUserQuestion.clickToAnswer', '点击回答')}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="ask-user-question-dialog-progress-row">
+              <span className="ask-user-question-dialog-progress">
+                {t('askUserQuestion.progress', '问题 {{current}} / {{total}}', {
+                  current: safeQuestionIndex + 1,
+                  total: normalizedQuestions.length,
+                })}
+              </span>
+              {/* 倒计时显示 */}
+              <span className={`countdown-timer ${isTimeWarning ? 'warning' : ''}`}>
+                <span className="codicon codicon-clock" />
+                <span className="countdown-time">{formatCountdown(remainingSeconds)}</span>
+              </span>
+            </div>
+
+            {/* 问题区域 */}
+            <div className="ask-user-question-dialog-question">
+              <div className="question-header">
+                <span className="question-tag">{currentQuestion.header}</span>
+              </div>
+              <p className="question-text">{currentQuestion.question}</p>
+
+              {/* 选项列表 */}
+              <div className="question-options">
+                {currentQuestion.options.map((option) => {
+                  const isSelected = currentAnswerSet.has(option.label);
+                  return (
+                    <button
+                      key={option.label}
+                      className={`question-option ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleOptionToggle(option.label)}
+                    >
+                      <div className="option-checkbox">
+                        {currentQuestion.multiSelect ? (
+                          <span className={`codicon codicon-${isSelected ? 'check' : 'blank'}`} />
+                        ) : (
+                          <span className={`codicon codicon-${isSelected ? 'circle-filled' : 'circle-outline'}`} />
+                        )}
+                      </div>
+                      <div className="option-content">
+                        <div className="option-label">{option.label}</div>
+                        <div className="option-description">{option.description}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {/* 其他选项 - 允许用户自定义输入 */}
                 <button
-                  key={index}
-                  className={`question-option ${isSelected ? 'selected' : ''}`}
-                  onClick={() => handleOptionToggle(option.label)}
+                  className={`question-option other-option ${isOtherSelected ? 'selected' : ''}`}
+                  onClick={() => handleOptionToggle(OTHER_OPTION_MARKER)}
                 >
                   <div className="option-checkbox">
                     {currentQuestion.multiSelect ? (
-                      <span className={`codicon codicon-${isSelected ? 'check' : 'blank'}`} />
+                      <span className={`codicon codicon-${isOtherSelected ? 'check' : 'blank'}`} />
                     ) : (
-                      <span className={`codicon codicon-${isSelected ? 'circle-filled' : 'circle-outline'}`} />
+                      <span className={`codicon codicon-${isOtherSelected ? 'circle-filled' : 'circle-outline'}`} />
                     )}
                   </div>
                   <div className="option-content">
-                    <div className="option-label">{option.label}</div>
-                    <div className="option-description">{option.description}</div>
+                    <div className="option-label">{t('askUserQuestion.otherOption', '其他')}</div>
+                    <div className="option-description">{t('askUserQuestion.otherOptionDesc', '输入自定义答案')}</div>
                   </div>
                 </button>
-              );
-            })}
-
-            {/* 其他选项 - 允许用户自定义输入 */}
-            <button
-              className={`question-option other-option ${isOtherSelected ? 'selected' : ''}`}
-              onClick={() => handleOptionToggle(OTHER_OPTION_MARKER)}
-            >
-              <div className="option-checkbox">
-                {currentQuestion.multiSelect ? (
-                  <span className={`codicon codicon-${isOtherSelected ? 'check' : 'blank'}`} />
-                ) : (
-                  <span className={`codicon codicon-${isOtherSelected ? 'circle-filled' : 'circle-outline'}`} />
-                )}
               </div>
-              <div className="option-content">
-                <div className="option-label">{t('askUserQuestion.otherOption', '其他')}</div>
-                <div className="option-description">{t('askUserQuestion.otherOptionDesc', '输入自定义答案')}</div>
-              </div>
-            </button>
-          </div>
 
-          {/* 自定义输入框 - 仅当选中"其他"时显示 */}
-          {isOtherSelected && (
-            <div className="custom-input-container">
-              <textarea
-                ref={customInputRef}
-                className="custom-input"
-                value={currentCustomInput}
-                onChange={(e) => handleCustomInputChange(e.target.value)}
-                placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
-                rows={3}
-                maxLength={MAX_CUSTOM_INPUT_LENGTH}
-              />
+              {/* 自定义输入框 - 仅当选中"其他"时显示 */}
+              {isOtherSelected && (
+                <div className="custom-input-container">
+                  <textarea
+                    ref={customInputRef}
+                    className="custom-input"
+                    value={currentCustomInput}
+                    onChange={(e) => handleCustomInputChange(e.target.value)}
+                    placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
+                    rows={3}
+                    maxLength={MAX_CUSTOM_INPUT_LENGTH}
+                  />
+                </div>
+              )}
+
+              {/* 提示文本 */}
+              {currentQuestion.multiSelect && (
+                <p className="question-hint">
+                  {t('askUserQuestion.multiSelectHint', '可以选择多个选项')}
+                </p>
+              )}
             </div>
-          )}
 
-          {/* 提示文本 */}
-          {currentQuestion.multiSelect && (
-            <p className="question-hint">
-              {t('askUserQuestion.multiSelectHint', '可以选择多个选项')}
-            </p>
-          )}
-        </div>
-
-        {/* 按钮区域 */}
-        <div className="ask-user-question-dialog-actions">
-          <button
-            className="action-button secondary"
-            onClick={handleCancel}
-          >
-            {t('askUserQuestion.cancel', '取消')}
-          </button>
-
-          <div className="action-buttons-right">
-            {safeQuestionIndex > 0 && (
+            {/* 按钮区域 */}
+            <div className="ask-user-question-dialog-actions">
               <button
                 className="action-button secondary"
-                onClick={handleBack}
+                onClick={handleCancel}
               >
-                {t('askUserQuestion.back', '上一步')}
+                {t('askUserQuestion.cancel', '取消')}
               </button>
-            )}
 
-            <button
-              className={`action-button primary ${!canProceed ? 'disabled' : ''}`}
-              onClick={handleNext}
-              disabled={!canProceed}
-            >
-              {isLastQuestion
-                ? t('askUserQuestion.submit', '提交')
-                : t('askUserQuestion.next', '下一步')}
-            </button>
-          </div>
-        </div>
+              <div className="action-buttons-right">
+                {safeQuestionIndex > 0 && (
+                  <button
+                    className="action-button secondary"
+                    onClick={handleBack}
+                  >
+                    {t('askUserQuestion.back', '上一步')}
+                  </button>
+                )}
+
+                <button
+                  className={`action-button primary ${!canProceed ? 'disabled' : ''}`}
+                  onClick={handleNext}
+                  disabled={!canProceed}
+                >
+                  {isLastQuestion
+                    ? t('askUserQuestion.submit', '提交')
+                    : t('askUserQuestion.next', '下一步')}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

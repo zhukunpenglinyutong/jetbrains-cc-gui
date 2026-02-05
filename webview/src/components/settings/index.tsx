@@ -44,6 +44,9 @@ interface SettingsViewProps {
   // Send shortcut configuration (passed from App.tsx for state sync)
   sendShortcut?: 'enter' | 'cmdEnter';
   onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
+  // Auto open file configuration (passed from App.tsx for state sync)
+  autoOpenFileEnabled?: boolean;
+  onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
 }
 
 const sendToJava = (message: string) => {
@@ -57,7 +60,17 @@ const sendToJava = (message: string) => {
 // 自动折叠阈值（窗口宽度）
 const AUTO_COLLAPSE_THRESHOLD = 900;
 
-const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: streamingEnabledProp, onStreamingEnabledChange: onStreamingEnabledChangeProp, sendShortcut: sendShortcutProp, onSendShortcutChange: onSendShortcutChangeProp }: SettingsViewProps) => {
+const SettingsView = ({
+  onClose,
+  initialTab,
+  currentProvider,
+  streamingEnabled: streamingEnabledProp,
+  onStreamingEnabledChange: onStreamingEnabledChangeProp,
+  sendShortcut: sendShortcutProp,
+  onSendShortcutChange: onSendShortcutChangeProp,
+  autoOpenFileEnabled: autoOpenFileEnabledProp,
+  onAutoOpenFileEnabledChange: onAutoOpenFileEnabledChangeProp
+}: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
   // Codex mode: allow providers, usage, and mcp tabs, disable other features
@@ -227,6 +240,10 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
   // 发送快捷键配置 - 优先使用 props，否则使用本地状态
   const [localSendShortcut, setLocalSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
   const sendShortcut = sendShortcutProp ?? localSendShortcut;
+
+  // 自动打开文件配置 - 优先使用 props，否则使用本地状态
+  const [localAutoOpenFileEnabled, setLocalAutoOpenFileEnabled] = useState<boolean>(true);
+  const autoOpenFileEnabled = autoOpenFileEnabledProp ?? localAutoOpenFileEnabled;
 
   // Commit AI 提示词配置
   const [commitPrompt, setCommitPrompt] = useState('');
@@ -642,6 +659,19 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
     }
   };
 
+  // 自动打开文件开关变更处理
+  const handleAutoOpenFileEnabledChange = (enabled: boolean) => {
+    // If prop callback is provided (from App.tsx), use it for centralized state management
+    if (onAutoOpenFileEnabledChangeProp) {
+      onAutoOpenFileEnabledChangeProp(enabled);
+    } else {
+      // Fallback to local state if no prop callback provided
+      setLocalAutoOpenFileEnabled(enabled);
+      const payload = { autoOpenFileEnabled: enabled };
+      sendToJava(`set_auto_open_file_enabled:${JSON.stringify(payload)}`);
+    }
+  };
+
   // Commit AI 提示词保存处理
   const handleSaveCommitPrompt = () => {
     setSavingCommitPrompt(true);
@@ -775,6 +805,8 @@ const SettingsView = ({ onClose, initialTab, currentProvider, streamingEnabled: 
               onStreamingEnabledChange={handleStreamingEnabledChange}
               sendShortcut={sendShortcut}
               onSendShortcutChange={handleSendShortcutChange}
+              autoOpenFileEnabled={autoOpenFileEnabled}
+              onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
             />
           </div>
 

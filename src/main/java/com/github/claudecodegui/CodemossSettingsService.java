@@ -392,6 +392,63 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set streaming enabled to " + enabled + " for project: " + projectPath);
     }
 
+    // ==================== 自动打开文件配置管理 ====================
+
+    /**
+     * 获取自动打开文件配置
+     * @param projectPath 项目路径
+     * @return 是否启用自动打开文件
+     */
+    public boolean getAutoOpenFileEnabled(String projectPath) throws IOException {
+        JsonObject config = readConfig();
+
+        // 检查是否有 autoOpenFile 配置
+        if (!config.has("autoOpenFile")) {
+            return true;
+        }
+
+        JsonObject autoOpenFile = config.getAsJsonObject("autoOpenFile");
+
+        // 先检查项目特定的配置
+        if (projectPath != null && autoOpenFile.has(projectPath)) {
+            return autoOpenFile.get(projectPath).getAsBoolean();
+        }
+
+        // 如果没有项目特定的配置，使用全局默认值
+        if (autoOpenFile.has("default")) {
+            return autoOpenFile.get("default").getAsBoolean();
+        }
+
+        return true;
+    }
+
+    /**
+     * 设置自动打开文件配置
+     * @param projectPath 项目路径
+     * @param enabled 是否启用
+     */
+    public void setAutoOpenFileEnabled(String projectPath, boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        // 确保 autoOpenFile 对象存在
+        JsonObject autoOpenFile;
+        if (config.has("autoOpenFile")) {
+            autoOpenFile = config.getAsJsonObject("autoOpenFile");
+        } else {
+            autoOpenFile = new JsonObject();
+            config.add("autoOpenFile", autoOpenFile);
+        }
+
+        // 保存项目特定配置（同时也作为默认值）
+        if (projectPath != null) {
+            autoOpenFile.addProperty(projectPath, enabled);
+        }
+        autoOpenFile.addProperty("default", enabled);
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set auto open file enabled to " + enabled + " for project: " + projectPath);
+    }
+
     // ==================== Provider 管理 ====================
 
     public List<JsonObject> getClaudeProviders() throws IOException {

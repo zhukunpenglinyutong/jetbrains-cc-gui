@@ -84,6 +84,7 @@
     "commandNotImplemented": "`{{command}}` feature is not yet implemented.",
     "clearCommandDescription": "Clear conversation history and start a new session",
     "attachmentFile": "[Attachment: {{fileName}}]",
+    "unknownFile": "Unknown file",
     "attachmentsUploaded": "[Attachments Uploaded]",
     "streamingConnected": "Claude connected, understanding your question"
   },
@@ -142,6 +143,12 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "When enabled, AI responses will appear character by character in real-time, instead of waiting for the complete response. May consume more resources."
+      },
+      "autoOpenFile": {
+        "label": "Auto Open File",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
       "sendShortcut": {
         "label": "Send Shortcut",
@@ -214,7 +221,20 @@
         "manageHistory": "Manage History",
         "empty": "No history records",
         "clearAll": "Clear All",
-        "delete": "Delete"
+        "clearLow": "Clear Low Importance",
+        "clearLowHint": "Delete records with importance ≤ 1",
+        "delete": "Delete",
+        "edit": "Edit",
+        "add": "Add",
+        "importance": "Importance",
+        "editor": {
+          "addTitle": "Add History Record",
+          "editTitle": "Edit History Record",
+          "contentLabel": "Content",
+          "contentPlaceholder": "Enter history record content...",
+          "importanceLabel": "Importance",
+          "importanceHint": "Higher importance means higher priority in auto-completion"
+        }
       }
     },
     "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",
@@ -423,6 +443,7 @@
     "messageCount": "{{count}} messages",
     "searchPlaceholder": "Search session titles...",
     "noSearchResults": "No matching sessions found",
+    "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "Edit title",
     "saveTitleButton": "Save",
     "cancelEditButton": "Cancel",
@@ -462,13 +483,17 @@
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
     "multiSelectHint": "You can select multiple options",
-    "cancel": "Auto",
+    "cancel": "Cancel",
     "back": "Back",
     "next": "Next",
     "submit": "Submit",
     "otherOption": "Other",
     "otherOptionDesc": "Enter a custom answer",
-    "customInputPlaceholder": "Enter your answer..."
+    "customInputPlaceholder": "Enter your answer...",
+    "timeoutWarning": "Please answer soon, dialog will close in {{seconds}} seconds",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "clickToAnswer": "Click to answer"
   },
   "planApproval": {
     "title": "Plan Ready for Approval",
@@ -479,7 +504,8 @@
     "approve": "Approve & Execute",
     "reject": "Reject",
     "toApprove": "to approve",
-    "toReject": "to reject"
+    "toReject": "to reject",
+    "timeoutWarning": "Please make a choice soon, dialog will close in {{seconds}} seconds"
   },
   "toast": {
     "switchSuccess": "Switched successfully",

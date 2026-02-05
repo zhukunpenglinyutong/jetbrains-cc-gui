@@ -6,14 +6,37 @@
   border: 1px solid var(--vscode-widget-border, #454545);
   border-radius: 8px;
   padding: 24px;
-  max-width: 550px;
-  width: 80%;
+  /* 改为 100% 宽度 */
+  max-width: 100%;
+  width: 100%;
   max-height: 80vh;
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Header 区域 */
+.plan-approval-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.plan-approval-dialog-header .header-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plan-approval-dialog-header .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .plan-approval-dialog-title {
@@ -26,8 +49,120 @@
 .plan-approval-dialog-subtitle {
   font-size: 13px;
   color: var(--vscode-descriptionForeground, #999999);
-  margin: -8px 0 0 0;
+  margin: 0;
   line-height: 1.4;
+}
+
+/* 倒计时显示 */
+.countdown-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--vscode-descriptionForeground, #999999);
+  padding: 4px 10px;
+  background: var(--vscode-input-background, #3c3c3c);
+  border-radius: 4px;
+}
+
+.countdown-timer .codicon {
+  font-size: 14px;
+}
+
+.countdown-time {
+  font-family: monospace;
+  font-weight: 500;
+}
+
+/* 倒计时警告状态 */
+.countdown-timer.warning {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  background: rgba(204, 167, 0, 0.15);
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 收起/展开按钮 */
+.collapse-button,
+.expand-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 4px;
+  background: var(--vscode-input-background, #3c3c3c);
+  color: var(--vscode-foreground, #cccccc);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.collapse-button:hover,
+.expand-button:hover {
+  background: var(--vscode-list-hoverBackground, #2a2d2e);
+  border-color: var(--vscode-focusBorder, #007acc);
+}
+
+/* 超时警告横幅 */
+.timeout-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(204, 167, 0, 0.15);
+  border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
+  border-radius: 6px;
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  font-size: 13px;
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+.timeout-warning-banner .codicon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* 收起模式样式 */
+.permission-dialog-overlay.collapsed-mode {
+  align-items: flex-end;
+  padding-bottom: 20px;
+}
+
+.plan-approval-dialog-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--vscode-editor-background, #1e1e1e);
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 100%;
+}
+
+.collapsed-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.collapsed-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+/* 警告模式下的 overlay */
+.permission-dialog-overlay.warning-mode {
+  background: rgba(204, 167, 0, 0.05);
 }
 
 /* Allowed Prompts Section */
@@ -191,7 +326,7 @@
 @media (max-width: 600px) {
   .plan-approval-dialog {
     padding: 16px;
-    width: 95%;
+    width: 100%;
   }
 
   .plan-approval-dialog-title {
@@ -200,5 +335,15 @@
 
   .mode-option {
     padding: 10px;
+  }
+
+  .plan-approval-dialog-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .plan-approval-dialog-header .header-right {
+    width: 100%;
+    justify-content: space-between;
   }
 }

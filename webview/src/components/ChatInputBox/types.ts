@@ -495,6 +495,11 @@ export interface ChatInputBoxProps {
   onInstallSdk?: () => void;
   /** Show toast message */
   addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+
+  /** Message queue items */
+  messageQueue?: QueuedMessage[];
+  /** Remove message from queue callback */
+  onRemoveFromQueue?: (id: string) => void;
 }
 
 /**
@@ -606,4 +611,23 @@ export interface DropdownItemProps {
   onClick?: () => void;
   /** Mouse enter callback */
   onMouseEnter?: () => void;
+}
+
+// ============================================================
+// Message Queue Types
+// ============================================================
+
+/**
+ * Queued message item
+ * When AI is processing (loading), new messages are queued here
+ */
+export interface QueuedMessage {
+  /** Unique identifier */
+  id: string;
+  /** Message content */
+  content: string;
+  /** Attachments (optional) */
+  attachments?: Attachment[];
+  /** Timestamp when queued */
+  queuedAt: number;
 }
