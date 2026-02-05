@@ -47,14 +47,20 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
 }
 
 .mcp-header .header-left {
     display: flex;
     align-items: center;
-    gap: 8px;
     flex-shrink: 0;
+}
+
+.mcp-header .header-left > * {
+    margin-right: 8px;
+}
+
+.mcp-header .header-left > *:last-child {
+    margin-right: 0;
 }
 
 .mcp-header .header-title {
@@ -85,7 +91,14 @@
 .mcp-header .header-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+}
+
+.mcp-header .header-right > * {
+    margin-right: 8px;
+}
+
+.mcp-header .header-right > *:last-child {
+    margin-right: 0;
 }
 
 .mcp-header .refresh-btn {
@@ -123,7 +136,6 @@
 .add-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
     padding: 6px 12px;
     border: none;
     border-radius: 6px;
@@ -131,6 +143,14 @@
     color: var(--text-white);
     cursor: pointer;
     font-size: 13px;
+}
+
+.add-btn > * {
+    margin-right: 6px;
+}
+
+.add-btn > *:last-child {
+    margin-right: 0;
 }
 
 .add-btn:hover {
@@ -154,11 +174,18 @@
 .dropdown-item {
     display: flex;
     align-items: center;
-    gap: 8px;
     padding: 10px 14px;
     cursor: pointer;
     font-size: 13px;
     color: var(--text-primary);
+}
+
+.dropdown-item > * {
+    margin-right: 8px;
+}
+
+.dropdown-item > *:last-child {
+    margin-right: 0;
 }
 
 .dropdown-item:hover {
@@ -215,9 +242,16 @@
 .header-left-section {
     display: flex;
     align-items: center;
-    gap: 10px;
     flex: 1;
     min-width: 0;
+}
+
+.header-left-section > * {
+    margin-right: 10px;
+}
+
+.header-left-section > *:last-child {
+    margin-right: 0;
 }
 
 .expand-icon {
@@ -274,8 +308,15 @@
 .header-right-section {
     display: flex;
     align-items: center;
-    gap: 8px;
     flex-shrink: 0;
+}
+
+.header-right-section > * {
+    margin-right: 8px;
+}
+
+.header-right-section > *:last-child {
+    margin-right: 0;
 }
 
 /* 图标按钮 - 用于编辑、复制、删除、刷新等操作 */
@@ -730,7 +771,14 @@
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+}
+
+.header-actions > * {
+    margin-right: 12px;
+}
+
+.header-actions > *:last-child {
+    margin-right: 0;
 }
 
 .mode-btn {
@@ -856,14 +904,28 @@
 .footer-hint {
     display: flex;
     align-items: center;
-    gap: 6px;
     font-size: 12px;
     color: var(--vscode-descriptionForeground, var(--text-secondary));
 }
 
+.footer-hint > * {
+    margin-right: 6px;
+}
+
+.footer-hint > *:last-child {
+    margin-right: 0;
+}
+
 .footer-actions {
     display: flex;
-    gap: 8px;
+}
+
+.footer-actions > * {
+    margin-right: 8px;
+}
+
+.footer-actions > *:last-child {
+    margin-right: 0;
 }
 
 .btn {
@@ -874,8 +936,15 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 6px;
     transition: background-color 0.2s;
+}
+
+.btn > * {
+    margin-right: 6px;
+}
+
+.btn > *:last-child {
+    margin-right: 0;
 }
 
 .btn-primary {
@@ -915,12 +984,26 @@
 .provider-dialog .dialog-footer {
     display: flex;
     align-items: center;
-    gap: 8px;
+}
+
+.provider-dialog .dialog-footer > * {
+    margin-right: 8px;
+}
+
+.provider-dialog .dialog-footer > *:last-child {
+    margin-right: 0;
 }
 
 .provider-dialog .footer-actions {
     display: flex;
-    gap: 8px;
+}
+
+.provider-dialog .footer-actions > * {
+    margin-right: 8px;
+}
+
+.provider-dialog .footer-actions > *:last-child {
+    margin-right: 0;
 }
 
 /* 预设列表弹窗样式 */
@@ -932,19 +1015,33 @@
 .preset-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+}
+
+.preset-list > * {
+    margin-bottom: 8px;
+}
+
+.preset-list > *:last-child {
+    margin-bottom: 0;
 }
 
 .preset-item {
     display: flex;
     align-items: center;
-    gap: 12px;
     padding: 12px 14px;
     border: 1px solid var(--vscode-panel-border, var(--border-primary));
     border-radius: 8px;
     background: var(--vscode-sideBar-background, var(--bg-secondary));
     cursor: pointer;
     transition: all 0.15s ease;
+}
+
+.preset-item > * {
+    margin-right: 12px;
+}
+
+.preset-item > *:last-child {
+    margin-right: 0;
 }
 
 .preset-item:hover {

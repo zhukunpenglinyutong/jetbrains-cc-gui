@@ -10,13 +10,19 @@
 .headerLeft {
   display: flex;
   align-items: center;
-  gap: 8px;
+}
+
+.headerLeft > * {
+  margin-right: 8px;
+}
+
+.headerLeft > *:last-child {
+  margin-right: 0;
 }
 
 .backBtn {
   display: flex;
   align-items: center;
-  gap: 4px;
   padding: 6px 8px;
   border: none;
   border-radius: 4px;
@@ -29,6 +35,14 @@
     background: var(--bg-hover);
     color: var(--text-secondary);
   }
+}
+
+.backBtn > * {
+  margin-right: 4px;
+}
+
+.backBtn > *:last-child {
+  margin-right: 0;
 }
 
 .title {

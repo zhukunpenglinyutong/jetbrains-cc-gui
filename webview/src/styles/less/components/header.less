@@ -13,23 +13,25 @@
 .header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
     flex: 1;
     min-width: 0; /* Allow flex items to shrink below their minimum content size */
     overflow: hidden;
 }
 
+.header-left > * {
+    margin-right: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.header-left > *:last-child {
+    margin-right: 0;
+}
+
 .header-right {
     display: flex;
     align-items: center;
-    gap: 0px;
     flex-shrink: 0; /* Prevent buttons from shrinking */
-}
-
-/* Header tabs/titles */
-.header-left > * {
-    color: var(--text-secondary);
-    font-weight: 500;
 }
 
 .new-chat-button {
@@ -44,8 +46,15 @@
     font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 6px;
     position: relative;
+}
+
+.new-chat-button > * {
+    margin-right: 6px;
+}
+
+.new-chat-button > *:last-child {
+    margin-right: 0;
 }
 
 .new-chat-button:hover {
@@ -59,7 +68,7 @@
     position: absolute;
     bottom: -32px;
     left: 50%;
-    transform: translateX(-50%);
+    margin-left: calc(-1 * (var(--tooltip-width, 100px) / 2));
     background: var(--bg-elevated);
     color: var(--text-secondary);
     padding: 4px 8px;
@@ -71,6 +80,8 @@
     transition: opacity 0.2s;
     z-index: 1000;
     box-shadow: var(--shadow-md);
+    /* Fallback for browsers that don't support CSS variables in calc */
+    transform: translateX(-50%);
 }
 
 .new-chat-button:hover::after {
@@ -82,7 +93,7 @@
     position: absolute;
     bottom: -8px;
     left: 50%;
-    transform: translateX(-50%);
+    margin-left: -5px;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
     border-bottom: 5px solid var(--bg-elevated);
@@ -106,8 +117,15 @@
     border-radius: 4px;
     display: flex;
     align-items: center;
-    gap: 4px;
     position: relative;
+}
+
+.back-button > * {
+    margin-right: 4px;
+}
+
+.back-button > *:last-child {
+    margin-right: 0;
 }
 
 .back-button:hover {
@@ -121,7 +139,7 @@
     position: absolute;
     bottom: -32px;
     left: 50%;
-    transform: translateX(-50%);
+    margin-left: calc(-1 * (var(--tooltip-width, 100px) / 2));
     background: var(--bg-elevated);
     color: var(--text-secondary);
     padding: 4px 8px;
@@ -133,6 +151,8 @@
     transition: opacity 0.2s;
     z-index: 1000;
     box-shadow: var(--shadow-md);
+    /* Fallback for browsers that don't support CSS variables in calc */
+    transform: translateX(-50%);
 }
 
 .back-button:hover::after {
@@ -144,7 +164,7 @@
     position: absolute;
     bottom: -8px;
     left: 50%;
-    transform: translateX(-50%);
+    margin-left: -5px;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
     border-bottom: 5px solid var(--bg-elevated);
@@ -193,7 +213,7 @@
     position: absolute;
     bottom: -32px;
     left: 50%;
-    transform: translateX(-50%);
+    margin-left: calc(-1 * (var(--tooltip-width, 100px) / 2));
     background: var(--bg-elevated);
     color: var(--text-secondary);
     padding: 4px 8px;
@@ -205,6 +225,8 @@
     transition: opacity 0.2s;
     z-index: 1000;
     box-shadow: var(--shadow-md);
+    /* Fallback for browsers that don't support CSS variables in calc */
+    transform: translateX(-50%);
 }
 
 .icon-button:hover::after {
@@ -217,7 +239,7 @@
     position: absolute;
     bottom: -8px;
     left: 50%;
-    transform: translateX(-50%);
+    margin-left: -5px;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
     border-bottom: 5px solid var(--bg-elevated);
