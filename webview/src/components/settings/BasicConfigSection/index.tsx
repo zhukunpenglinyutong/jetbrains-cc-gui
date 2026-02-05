@@ -51,6 +51,9 @@ interface BasicConfigSectionProps {
   // 流式传输配置
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
+  // 自动打开文件配置
+  autoOpenFileEnabled?: boolean;
+  onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
   // 发送快捷键配置
   sendShortcut?: 'enter' | 'cmdEnter';
   onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -75,6 +78,9 @@ const BasicConfigSection = ({
   // 流式传输配置
   streamingEnabled = true,
   onStreamingEnabledChange = () => {},
+  // 自动打开文件配置
+  autoOpenFileEnabled = true,
+  onAutoOpenFileEnabledChange = () => {},
   // 发送快捷键配置
   sendShortcut = 'enter',
   onSendShortcutChange = () => {},
@@ -325,6 +331,32 @@ const BasicConfigSection = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.streaming.hint')}</span>
+        </small>
+      </div>
+
+      {/* 自动打开文件配置 */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-file" />
+          <span className={styles.fieldLabel}>{t('settings.basic.autoOpenFile.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={autoOpenFileEnabled}
+            onChange={(e) => onAutoOpenFileEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {autoOpenFileEnabled
+              ? t('settings.basic.autoOpenFile.enabled')
+              : t('settings.basic.autoOpenFile.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.autoOpenFile.hint')}</span>
         </small>
       </div>
 
