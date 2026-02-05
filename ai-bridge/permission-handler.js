@@ -8,6 +8,7 @@
 import { writeFileSync, readFileSync, existsSync, unlinkSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
 import { tmpdir } from 'os';
+import { getRealHomeDir } from './utils/path-utils.js';
 
 // ========== 调试日志辅助函数 ==========
 function debugLog(tag, message, data = null) {
@@ -321,7 +322,7 @@ export async function requestPermissionFromJava(toolName, input) {
 
     // 对于某些明显的危险操作，直接拒绝
     // 获取用户主目录用于路径检查
-    const userHomeDir = process.env.HOME || process.env.USERPROFILE || require('os').homedir();
+    const userHomeDir = getRealHomeDir();
     const dangerousPatterns = [
       '/etc/',
       '/System/',

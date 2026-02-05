@@ -7,8 +7,8 @@ import fs from 'fs';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
+import { getClaudeDir } from '../../utils/path-utils.js';
 
 /**
  * 将一条消息追加到 JSONL 历史文件
@@ -16,7 +16,7 @@ import { randomUUID } from 'crypto';
  */
 export function persistJsonlMessage(sessionId, cwd, obj) {
   try {
-    const projectsDir = join(homedir(), '.claude', 'projects');
+    const projectsDir = join(getClaudeDir(), 'projects');
     const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
     const projectHistoryDir = join(projectsDir, sanitizedCwd);
     fs.mkdirSync(projectHistoryDir, { recursive: true });
@@ -43,7 +43,7 @@ export function persistJsonlMessage(sessionId, cwd, obj) {
  */
 export function loadSessionHistory(sessionId, cwd) {
   try {
-    const projectsDir = join(homedir(), '.claude', 'projects');
+    const projectsDir = join(getClaudeDir(), 'projects');
     const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
     const sessionFile = join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
 
@@ -92,7 +92,7 @@ export function loadSessionHistory(sessionId, cwd) {
  */
 export async function getSessionMessages(sessionId, cwd = null) {
   try {
-    const projectsDir = join(homedir(), '.claude', 'projects');
+    const projectsDir = join(getClaudeDir(), 'projects');
 
     // 转义项目路径（与 ClaudeSessionService.ts 相同逻辑）
     const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');

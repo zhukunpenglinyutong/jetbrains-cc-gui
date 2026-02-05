@@ -55,12 +55,11 @@ async function ensureBedrockSdk() {
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { homedir } from 'os';
 
 import { getMcpServersStatus, loadMcpServersConfig, getMcpServerTools as getMcpServerToolsImpl } from './mcp-status/index.js';
 
 import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
-import { selectWorkingDirectory } from '../../utils/path-utils.js';
+import { selectWorkingDirectory, getRealHomeDir, getClaudeDir } from '../../utils/path-utils.js';
 import { mapModelIdToSdkName } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
 import { canUseTool, requestPlanApproval } from '../../permission-handler.js';
@@ -164,7 +163,7 @@ function getRetryDelayMs(error) {
 }
 
 function getClaudeProjectSessionFilePath(sessionId, cwd) {
-  const projectsDir = join(homedir(), '.claude', 'projects');
+  const projectsDir = join(getClaudeDir(), 'projects');
   const sanitizedCwd = String(cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
   return join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
 }
@@ -1680,8 +1679,7 @@ export async function getSlashCommands(cwd = null) {
 
     // 确保 HOME 环境变量设置正确
     if (!process.env.HOME) {
-      const os = await import('os');
-      process.env.HOME = os.homedir();
+      process.env.HOME = getRealHomeDir();
     }
 
     // 智能确定工作目录
@@ -1859,8 +1857,7 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
         setupApiKey();
 
         if (!process.env.HOME) {
-          const os = await import('os');
-          process.env.HOME = os.homedir();
+          process.env.HOME = getRealHomeDir();
         }
 
         const workingDirectory = selectWorkingDirectory(cwd);
@@ -2074,7 +2071,7 @@ async function resolveRewindCandidateMessageIds(sessionId, cwd, providedMessageI
 
 async function readClaudeProjectSessionMessages(sessionId, cwd) {
   try {
-    const projectsDir = join(homedir(), '.claude', 'projects');
+    const projectsDir = join(getClaudeDir(), 'projects');
     const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
     const sessionFile = join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
     if (!existsSync(sessionFile)) {

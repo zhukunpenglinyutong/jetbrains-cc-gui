@@ -19,7 +19,7 @@ import { CodexPermissionMapper } from '../../utils/permission-mapper.js';
 import { randomUUID } from 'crypto';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { join, dirname } from 'path';
-import { homedir } from 'os';
+import { getRealHomeDir } from '../../utils/path-utils.js';
 
 // SDK 缓存
 let codexSdk = null;
@@ -173,7 +173,7 @@ function collectAgentsInstructions(cwd) {
   // 1. 首先读取全局指令 (~/.codex/)
   const codexHome = (process.env.CODEX_HOME && process.env.CODEX_HOME.trim())
     ? process.env.CODEX_HOME.trim()
-    : join(homedir(), '.codex');
+    : join(getRealHomeDir(), '.codex');
   const globalFile = findAgentsFileInDir(codexHome);
   if (globalFile) {
     const content = readAgentsFile(globalFile);
