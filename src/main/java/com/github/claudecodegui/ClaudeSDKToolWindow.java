@@ -2510,15 +2510,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 // 根据 provider 计算已用 token 数
                 // Codex/OpenAI: input_tokens 已经包含了 cached_input_tokens，不需要重复加
-                // Claude: input_tokens 不包含缓存，需要加上 cache_creation 和 cache_read
+                // Claude: input_tokens 不包含缓存，需要加上 cache_creation（缓存读取不占用新的上下文窗口）
                 String currentProvider = handlerContext.getCurrentProvider();
                 int usedTokens;
                 if ("codex".equals(currentProvider)) {
                     // Codex: input_tokens 已包含缓存读取的 token，不要重复计算
                     usedTokens = inputTokens + outputTokens;
                 } else {
-                    // Claude: 需要加上缓存相关的 token
-                    usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+                    // Claude: 缓存读取不占用新的上下文窗口，不计入 cacheReadTokens
+                    usedTokens = inputTokens + cacheWriteTokens + outputTokens;
                 }
                 int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                 int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
