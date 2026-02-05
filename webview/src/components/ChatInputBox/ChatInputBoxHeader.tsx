@@ -1,7 +1,8 @@
 import type { TFunction } from 'i18next';
-import type { Attachment, SelectedAgent } from './types.js';
+import type { Attachment, SelectedAgent, QueuedMessage } from './types.js';
 import { AttachmentList } from './AttachmentList.js';
 import { ContextBar } from './ContextBar.js';
+import { MessageQueue } from './MessageQueue.js';
 
 export function ChatInputBoxHeader({
   sdkStatusLoading,
@@ -25,6 +26,8 @@ export function ChatInputBoxHeader({
   onRewind,
   statusPanelExpanded,
   onToggleStatusPanel,
+  messageQueue,
+  onRemoveFromQueue,
 }: {
   sdkInstalled: boolean;
   sdkStatusLoading: boolean;
@@ -47,6 +50,8 @@ export function ChatInputBoxHeader({
   onRewind?: () => void;
   statusPanelExpanded: boolean;
   onToggleStatusPanel?: () => void;
+  messageQueue?: QueuedMessage[];
+  onRemoveFromQueue?: (id: string) => void;
 }) {
   return (
     <>
@@ -75,6 +80,14 @@ export function ChatInputBoxHeader({
             </button>
           )}
         </div>
+      )}
+
+      {/* Message queue */}
+      {messageQueue && messageQueue.length > 0 && (
+        <MessageQueue
+          queue={messageQueue}
+          onRemove={onRemoveFromQueue ?? (() => {})}
+        />
       )}
 
       {/* Attachment list */}

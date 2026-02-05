@@ -79,12 +79,13 @@ export function useSubmitHandler({
     }
 
     if (!cleanContent && attachments.length === 0) return;
-    if (isLoading) return;
 
+    // Close completions
     fileCompletion.close();
     commandCompletion.close();
     agentCompletion.close();
 
+    // Record input history
     recordInputHistory(content);
 
     const attachmentsToSend = attachments.length > 0 ? [...attachments] : undefined;
@@ -97,6 +98,7 @@ export function useSubmitHandler({
       setInternalAttachments([]);
     }
 
+    // Call onSubmit even when loading - let parent handle queueing
     setTimeout(() => {
       onSubmit?.(content, attachmentsToSend);
     }, 10);

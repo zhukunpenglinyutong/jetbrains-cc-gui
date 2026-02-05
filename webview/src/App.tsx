@@ -22,6 +22,7 @@ import {
   useUsageStats,
   useFileChanges,
   useSubagents,
+  useMessageQueue,
 } from './hooks';
 import type { ContextInfo } from './hooks';
 import { createLocalizeMessage } from './utils/localizationUtils';
@@ -694,19 +695,13 @@ const App = () => {
   }, []);
 
   /**
-   * 处理消息发送（来自 ChatInputBox）
+   * 执行消息发送（从队列或直接执行）
    */
-  const handleSubmit = (content: string, attachments?: Attachment[]) => {
+  const executeMessage = useCallback((content: string, attachments?: Attachment[]) => {
     const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-    // 验证输入
     if (!text && !hasAttachments) return;
-
-    // 检查新建会话命令（/new, /clear, /reset）- 无需 SDK，无需二次确认，即使 loading 也可执行
-    if (checkNewSessionCommand(text)) return;
-
-    if (loading) return;
 
     // 检查 SDK 状态
     if (!sdkStatusLoaded) {
@@ -722,9 +717,6 @@ const App = () => {
       setCurrentView('settings');
       return;
     }
-
-    // 检查未实现的命令
-    if (checkUnimplementedCommand(text)) return;
 
     // 构建用户消息内容块
     const userContentBlocks = buildUserContentBlocks(text, attachments);
@@ -751,8 +743,6 @@ const App = () => {
     }
 
     // 创建并添加用户消息（乐观更新）
-    // 注意：content 字段应该只包含用户输入的文本，不要添加占位文本
-    // userContentBlocks 中已经包含了所有需要显示的内容（图片块和文本块）
     const userMessage: ClaudeMessage = {
       type: 'user',
       content: text || '',
@@ -793,6 +783,53 @@ const App = () => {
 
     // 发送消息到后端
     sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo);
+  }, [
+    sdkStatusLoaded,
+    currentSdkInstalled,
+    currentProvider,
+    selectedAgent,
+    buildUserContentBlocks,
+    sendMessageToBackend,
+    addToast,
+    t,
+  ]);
+
+  /**
+   * 消息队列管理
+   */
+  const {
+    queue: messageQueue,
+    enqueue: enqueueMessage,
+    dequeue: dequeueMessage,
+  } = useMessageQueue({
+    isLoading: loading,
+    onExecute: executeMessage,
+  });
+
+  /**
+   * 处理消息发送（来自 ChatInputBox）
+   */
+  const handleSubmit = (content: string, attachments?: Attachment[]) => {
+    const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+
+    // 验证输入
+    if (!text && !hasAttachments) return;
+
+    // 检查新建会话命令（/new, /clear, /reset）- 无需 SDK，无需二次确认，即使 loading 也可执行
+    if (checkNewSessionCommand(text)) return;
+
+    // 如果正在 loading，加入队列
+    if (loading) {
+      enqueueMessage(content, attachments);
+      return;
+    }
+
+    // 检查未实现的命令
+    if (checkUnimplementedCommand(text)) return;
+
+    // 执行消息
+    executeMessage(content, attachments);
   };
 
   /**
@@ -1558,6 +1595,8 @@ const App = () => {
             statusPanelExpanded={statusPanelExpanded}
             onToggleStatusPanel={() => setStatusPanelExpanded(!statusPanelExpanded)}
             addToast={addToast}
+            messageQueue={messageQueue}
+            onRemoveFromQueue={dequeueMessage}
           />
         </div>
         </>
