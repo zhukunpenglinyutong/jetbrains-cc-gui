@@ -1,0 +1,103 @@
+/**
+ * 公共 LESS Mixins
+ * 用于减少重复代码，提高可维护性
+ */
+
+// ===== Flex Gap 兼容性 Mixins =====
+// 由于低版本浏览器不支持 CSS gap 属性，使用 margin 来模拟间距
+
+/**
+ * 水平间距 - 用于 flex 容器中的子元素水平间距
+ * @param spacing - 间距大小
+ *
+ * 使用方式：
+ * .my-container {
+ *     display: flex;
+ *     .flex-gap-horizontal(8px);
+ * }
+ */
+.flex-gap-horizontal(@spacing) {
+    > * {
+        margin-right: @spacing;
+    }
+    > *:last-child {
+        margin-right: 0;
+    }
+}
+
+/**
+ * 垂直间距 - 用于 flex 容器中的子元素垂直间距
+ * @param spacing - 间距大小
+ *
+ * 使用方式：
+ * .my-list {
+ *     display: flex;
+ *     flex-direction: column;
+ *     .flex-gap-vertical(8px);
+ * }
+ */
+.flex-gap-vertical(@spacing) {
+    > * {
+        margin-bottom: @spacing;
+    }
+    > *:last-child {
+        margin-bottom: 0;
+    }
+}
+
+// ===== Tooltip Mixins =====
+
+/**
+ * 底部居中 Tooltip 样式
+ * @param offset - tooltip 与触发元素的距离
+ *
+ * 使用方式：
+ * .my-button {
+ *     position: relative;
+ *     .tooltip-bottom-center(32px);
+ * }
+ */
+.tooltip-bottom-center(@offset: 32px) {
+    &::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: -@offset;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        z-index: 1000;
+        box-shadow: var(--shadow-md);
+    }
+
+    &:hover::after {
+        opacity: 1;
+    }
+
+    // Tooltip 箭头
+    &::before {
+        content: '';
+        position: absolute;
+        bottom: -8px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-bottom: 5px solid var(--bg-elevated);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        z-index: 1001;
+    }
+
+    &:hover::before {
+        opacity: 1;
+    }
+}

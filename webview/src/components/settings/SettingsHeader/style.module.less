@@ -1,3 +1,6 @@
+/* 导入公共 mixins */
+@import '../../../styles/less/mixins.less';
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -10,14 +13,7 @@
 .headerLeft {
   display: flex;
   align-items: center;
-}
-
-.headerLeft > * {
-  margin-right: 8px;
-}
-
-.headerLeft > *:last-child {
-  margin-right: 0;
+  .flex-gap-horizontal(8px);
 }
 
 .backBtn {
@@ -30,19 +26,12 @@
   color: var(--text-tertiary);
   cursor: pointer;
   font-size: 13px;
+  .flex-gap-horizontal(4px);
 
   &:hover {
     background: var(--bg-hover);
     color: var(--text-secondary);
   }
-}
-
-.backBtn > * {
-  margin-right: 4px;
-}
-
-.backBtn > *:last-child {
-  margin-right: 0;
 }
 
 .title {

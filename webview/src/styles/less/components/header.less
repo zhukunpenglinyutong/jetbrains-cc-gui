@@ -1,3 +1,6 @@
+/* 导入公共 mixins */
+@import '../mixins.less';
+
 /* New Header Styles */
 .header {
     display: flex;
@@ -16,16 +19,12 @@
     flex: 1;
     min-width: 0; /* Allow flex items to shrink below their minimum content size */
     overflow: hidden;
-}
+    .flex-gap-horizontal(12px);
 
-.header-left > * {
-    margin-right: 12px;
-    color: var(--text-secondary);
-    font-weight: 500;
-}
-
-.header-left > *:last-child {
-    margin-right: 0;
+    > * {
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
 }
 
 .header-right {
@@ -47,64 +46,13 @@
     display: flex;
     align-items: center;
     position: relative;
-}
-
-.new-chat-button > * {
-    margin-right: 6px;
-}
-
-.new-chat-button > *:last-child {
-    margin-right: 0;
+    .flex-gap-horizontal(6px);
+    .tooltip-bottom-center(32px);
 }
 
 .new-chat-button:hover {
     background: var(--bg-hover);
     border-color: var(--accent-secondary);
-}
-
-/* New chat button tooltip */
-.new-chat-button::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: -32px;
-    left: 50%;
-    margin-left: calc(-1 * (var(--tooltip-width, 100px) / 2));
-    background: var(--bg-elevated);
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1000;
-    box-shadow: var(--shadow-md);
-    /* Fallback for browsers that don't support CSS variables in calc */
-    transform: translateX(-50%);
-}
-
-.new-chat-button:hover::after {
-    opacity: 1;
-}
-
-.new-chat-button::before {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    left: 50%;
-    margin-left: -5px;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--bg-elevated);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1001;
-}
-
-.new-chat-button:hover::before {
-    opacity: 1;
 }
 
 .back-button {
@@ -118,64 +66,13 @@
     display: flex;
     align-items: center;
     position: relative;
-}
-
-.back-button > * {
-    margin-right: 4px;
-}
-
-.back-button > *:last-child {
-    margin-right: 0;
+    .flex-gap-horizontal(4px);
+    .tooltip-bottom-center(32px);
 }
 
 .back-button:hover {
     background: var(--bg-hover);
     color: var(--text-secondary);
-}
-
-/* Back button tooltip */
-.back-button::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: -32px;
-    left: 50%;
-    margin-left: calc(-1 * (var(--tooltip-width, 100px) / 2));
-    background: var(--bg-elevated);
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1000;
-    box-shadow: var(--shadow-md);
-    /* Fallback for browsers that don't support CSS variables in calc */
-    transform: translateX(-50%);
-}
-
-.back-button:hover::after {
-    opacity: 1;
-}
-
-.back-button::before {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    left: 50%;
-    margin-left: -5px;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--bg-elevated);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1001;
-}
-
-.back-button:hover::before {
-    opacity: 1;
 }
 
 .icon-button {
@@ -191,6 +88,7 @@
     cursor: pointer;
     transition: all 0.2s;
     position: relative;
+    .tooltip-bottom-center(32px);
 }
 
 .icon-button:hover {
@@ -205,50 +103,4 @@
 
 .icon-button .codicon {
     font-size: 18px;
-}
-
-/* Tooltip 样式 */
-.icon-button::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: -32px;
-    left: 50%;
-    margin-left: calc(-1 * (var(--tooltip-width, 100px) / 2));
-    background: var(--bg-elevated);
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1000;
-    box-shadow: var(--shadow-md);
-    /* Fallback for browsers that don't support CSS variables in calc */
-    transform: translateX(-50%);
-}
-
-.icon-button:hover::after {
-    opacity: 1;
-}
-
-/* Tooltip 小箭头 */
-.icon-button::before {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    left: 50%;
-    margin-left: -5px;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--bg-elevated);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1001;
-}
-
-.icon-button:hover::before {
-    opacity: 1;
 }
