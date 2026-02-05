@@ -5,10 +5,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { getCodemossDir } = require('../utils/path-utils.cjs');
 
-const HOME_DIR = os.homedir();
-const TITLES_DIR = path.join(HOME_DIR, '.codemoss');
+const TITLES_DIR = getCodemossDir();
 const TITLES_FILE = path.join(TITLES_DIR, 'session-titles.json');
 
 /**

@@ -1,3 +1,69 @@
+##### **2026年2月5日（v0.1.7-beta5）**
+
+English:
+
+✨ Features
+- Add message queue functionality: auto-queue messages when AI is processing, with queue UI above input box
+- Add 5-minute timeout countdown to AskUserQuestionDialog and PlanApprovalDialog with 30-second warning banner
+- Add collapse/expand functionality for permission dialogs
+- Add history item editor with importance settings in OtherSettingsSection
+- Add attachment block support for file chips display
+- Add "Auto Open File" toggle to control ContextBar display and AI context collection
+- Add history deep search feature: clears cache and reloads all session data from filesystem
+
+🐛 Fixes
+- Fix tool icon width and alignment in MCP settings
+- Fix line separator handling in diff view to prevent "Wrong line separators" errors
+- Fix token usage calculation for different providers (Codex/OpenAI vs Claude cache handling)
+- Fix useEffect dependency issues in dialog components
+- Fix potential timer memory leaks with improved cleanup logic
+- Fix autoOpenFile setting to properly control AI editor context collection
+
+🔧 Improvements
+- Refactor: use centralized path utilities for homedir resolution (fix Windows symlink issues)
+- Refactor: extract line separator handling to LineSeparatorUtil
+- Refactor: replace CSS gap property with margin-right pattern for better browser compatibility
+- Refactor: extract common LESS mixins to reduce code duplication (~254 lines reduced)
+- Refactor: remove SlashCommandCache class, fetch slash commands directly from SDK
+- Add Map cache size limit (100 entries) to prevent memory growth
+- Add OpenAI/Codex model context limits (GPT-5.x, o3, o1 series)
+- Add webfetch to collapsible tools list in GenericToolBlock
+- Add frontend data validation for usage percentage
+- Extract formatCountdown as shared utility function
+- Add comprehensive i18n support for new dialog features
+
+中文：
+
+✨ Features
+- 新增消息队列功能：AI 处理时自动排队新消息，队列 UI 显示在输入框上方
+- 新增 AskUserQuestionDialog 和 PlanApprovalDialog 的 5 分钟超时倒计时，剩余 30 秒时显示警告横幅
+- 新增权限对话框折叠/展开功能
+- 新增历史项编辑器，支持重要性设置（在其他设置中）
+- 新增附件块支持，用于文件标签显示
+- 新增"自动打开文件"开关，控制 ContextBar 显示和 AI 上下文收集
+- 新增历史深度搜索功能：清除缓存并从文件系统重新加载所有会话数据
+
+🐛 Fixes
+- 修复 MCP 设置中工具图标宽度和对齐问题
+- 修复 Diff 视图中行分隔符处理问题，防止"Wrong line separators"错误
+- 修复不同供应商的 token 使用量计算（Codex/OpenAI vs Claude 缓存处理）
+- 修复对话框组件中的 useEffect 依赖问题
+- 修复定时器内存泄漏问题，改进清理逻辑
+- 修复 autoOpenFile 设置对 AI 编辑器上下文收集的控制
+
+🔧 Improvements
+- 重构：使用集中式路径工具函数解析 homedir（修复 Windows 符号链接问题）
+- 重构：提取行分隔符处理到 LineSeparatorUtil
+- 重构：用 margin-right 模式替换 CSS gap 属性，提升浏览器兼容性
+- 重构：提取公共 LESS mixins 减少代码重复（约减少 254 行）
+- 重构：移除 SlashCommandCache 类，直接从 SDK 获取斜杠命令
+- 添加 Map 缓存大小限制（100 条）防止内存增长
+- 添加 OpenAI/Codex 模型上下文限制（GPT-5.x、o3、o1 系列）
+- 在 GenericToolBlock 添加 webfetch 到可折叠工具列表
+- 添加前端使用百分比数据验证
+- 提取 formatCountdown 为共享工具函数
+- 为新对话框功能添加完整的国际化支持
+
 ##### **2026年1月31日（v0.1.7-beta4）**
 
 English:

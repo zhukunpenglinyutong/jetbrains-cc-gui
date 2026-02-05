@@ -2,10 +2,15 @@ import { useState, useEffect, useCallback, Component, type ReactNode } from 'rea
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import {
-  loadHistory,
+  loadHistoryWithImportance,
   deleteHistoryItem,
   clearAllHistory,
+  addHistoryItem,
+  updateHistoryItem,
+  clearLowImportanceHistory,
+  type HistoryItem,
 } from '../../ChatInputBox/hooks/useInputHistory.js';
+import { HistoryItemEditor } from './HistoryItemEditor.js';
 
 /**
  * Error boundary for OtherSettingsSection
@@ -51,30 +56,45 @@ interface OtherSettingsSectionProps {
   onHistoryCompletionEnabledChange: (enabled: boolean) => void;
 }
 
+interface EditorState {
+  isOpen: boolean;
+  mode: 'add' | 'edit';
+  item?: HistoryItem;
+}
+
 const OtherSettingsSection = ({
   historyCompletionEnabled,
   onHistoryCompletionEnabledChange,
 }: OtherSettingsSectionProps) => {
   const { t } = useTranslation();
-  const [historyItems, setHistoryItems] = useState<string[]>([]);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [showHistoryList, setShowHistoryList] = useState(false);
+  const [editorState, setEditorState] = useState<EditorState>({
+    isOpen: false,
+    mode: 'add',
+  });
+
+  // Reload history items
+  const reloadHistory = useCallback(() => {
+    try {
+      setHistoryItems(loadHistoryWithImportance());
+    } catch (e) {
+      console.error('[OtherSettingsSection] Failed to load history:', e);
+      setHistoryItems([]);
+    }
+  }, []);
 
   // Load history items when expanding the list
   useEffect(() => {
     if (showHistoryList) {
-      try {
-        setHistoryItems(loadHistory());
-      } catch (e) {
-        console.error('[OtherSettingsSection] Failed to load history:', e);
-        setHistoryItems([]);
-      }
+      reloadHistory();
     }
-  }, [showHistoryList]);
+  }, [showHistoryList, reloadHistory]);
 
-  const handleDeleteItem = useCallback((item: string) => {
+  const handleDeleteItem = useCallback((item: HistoryItem) => {
     try {
-      deleteHistoryItem(item);
-      setHistoryItems((prev) => prev.filter((i) => i !== item));
+      deleteHistoryItem(item.text);
+      setHistoryItems((prev) => prev.filter((i) => i.text !== item.text));
     } catch (e) {
       console.error('[OtherSettingsSection] Failed to delete history item:', e);
     }
@@ -88,6 +108,55 @@ const OtherSettingsSection = ({
       console.error('[OtherSettingsSection] Failed to clear history:', e);
     }
   }, []);
+
+  const handleClearLowImportance = useCallback(() => {
+    try {
+      const deleted = clearLowImportanceHistory(1);
+      if (deleted > 0) {
+        reloadHistory();
+      }
+    } catch (e) {
+      console.error('[OtherSettingsSection] Failed to clear low importance history:', e);
+    }
+  }, [reloadHistory]);
+
+  const handleOpenAddEditor = useCallback(() => {
+    setEditorState({
+      isOpen: true,
+      mode: 'add',
+    });
+  }, []);
+
+  const handleOpenEditEditor = useCallback((item: HistoryItem) => {
+    setEditorState({
+      isOpen: true,
+      mode: 'edit',
+      item,
+    });
+  }, []);
+
+  const handleCloseEditor = useCallback(() => {
+    setEditorState((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleSaveEditor = useCallback(
+    (text: string, importance: number) => {
+      try {
+        if (editorState.mode === 'add') {
+          addHistoryItem(text, importance);
+        } else if (editorState.item) {
+          updateHistoryItem(editorState.item.text, text, importance);
+        }
+        reloadHistory();
+      } catch (e) {
+        console.error('[OtherSettingsSection] Failed to save history item:', e);
+      }
+    },
+    [editorState.mode, editorState.item, reloadHistory]
+  );
+
+  // Count items with low importance for display
+  const lowImportanceCount = historyItems.filter((item) => item.importance <= 1).length;
 
   return (
     <div className={styles.configSection}>
@@ -145,6 +214,28 @@ const OtherSettingsSection = ({
                   <div className={styles.historyActions}>
                     <button
                       type="button"
+                      className={styles.addButton}
+                      onClick={handleOpenAddEditor}
+                    >
+                      <span className="codicon codicon-add" />
+                      <span>{t('settings.other.historyCompletion.add')}</span>
+                    </button>
+                    <div className={styles.actionsSpacer} />
+                    {lowImportanceCount > 0 && (
+                      <button
+                        type="button"
+                        className={styles.clearLowButton}
+                        onClick={handleClearLowImportance}
+                        title={t('settings.other.historyCompletion.clearLowHint')}
+                      >
+                        <span className="codicon codicon-filter" />
+                        <span>
+                          {t('settings.other.historyCompletion.clearLow')} ({lowImportanceCount})
+                        </span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
                       className={styles.clearAllButton}
                       onClick={handleClearAll}
                     >
@@ -153,28 +244,65 @@ const OtherSettingsSection = ({
                     </button>
                   </div>
                   <ul className={styles.historyList}>
-                    {historyItems.slice().reverse().map((item, index) => (
-                      <li key={index} className={styles.historyItem}>
-                        <span className={styles.historyText} title={item}>
-                          {item}
+                    {historyItems.map((item, index) => (
+                      <li key={`${item.text}-${index}`} className={styles.historyItem}>
+                        <span className={styles.importanceBadge} title={t('settings.other.historyCompletion.importance')}>
+                          [{item.importance}]
                         </span>
-                        <button
-                          type="button"
-                          className={styles.deleteButton}
-                          onClick={() => handleDeleteItem(item)}
-                          title={t('settings.other.historyCompletion.delete')}
-                        >
-                          <span className="codicon codicon-close" />
-                        </button>
+                        <span className={styles.historyText} title={item.text}>
+                          {item.text}
+                        </span>
+                        <div className={styles.itemActions}>
+                          <button
+                            type="button"
+                            className={styles.editButton}
+                            onClick={() => handleOpenEditEditor(item)}
+                            title={t('settings.other.historyCompletion.edit')}
+                          >
+                            <span className="codicon codicon-edit" />
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.deleteButton}
+                            onClick={() => handleDeleteItem(item)}
+                            title={t('settings.other.historyCompletion.delete')}
+                          >
+                            <span className="codicon codicon-close" />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
                 </>
               )}
+
+              {/* Add button when list is empty */}
+              {historyItems.length === 0 && (
+                <div className={styles.emptyActions}>
+                  <button
+                    type="button"
+                    className={styles.addButton}
+                    onClick={handleOpenAddEditor}
+                  >
+                    <span className="codicon codicon-add" />
+                    <span>{t('settings.other.historyCompletion.add')}</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Editor Dialog */}
+      <HistoryItemEditor
+        isOpen={editorState.isOpen}
+        onClose={handleCloseEditor}
+        onSave={handleSaveEditor}
+        mode={editorState.mode}
+        initialText={editorState.item?.text}
+        initialImportance={editorState.item?.importance}
+      />
     </div>
   );
 };

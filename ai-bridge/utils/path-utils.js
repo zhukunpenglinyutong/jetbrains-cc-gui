@@ -7,6 +7,49 @@ import fs from 'fs';
 import { resolve, join } from 'path';
 import { homedir, tmpdir } from 'os';
 
+// 缓存真实的用户目录路径，避免重复计算
+let cachedRealHomeDir = null;
+
+/**
+ * 获取真实的用户目录路径.
+ * 解决 Windows 上用户目录被移动或使用符号链接/Junction 的问题。
+ * 使用 fs.realpathSync 获取物理路径，确保与文件系统实际路径一致。
+ * @returns {string} 真实的用户目录路径
+ */
+export function getRealHomeDir() {
+  if (cachedRealHomeDir) {
+    return cachedRealHomeDir;
+  }
+
+  const rawHome = homedir();
+  try {
+    // 使用 realpathSync 获取真实的物理路径，解决符号链接/Junction 问题
+    cachedRealHomeDir = fs.realpathSync(rawHome);
+  } catch {
+    // 如果 realpath 失败，回退到原始路径
+    console.warn('[path-utils] Failed to resolve real home path, using raw path:', rawHome);
+    cachedRealHomeDir = rawHome;
+  }
+
+  return cachedRealHomeDir;
+}
+
+/**
+ * 获取 .codemoss 配置目录路径.
+ * @returns {string} ~/.codemoss 目录路径
+ */
+export function getCodemossDir() {
+  return join(getRealHomeDir(), '.codemoss');
+}
+
+/**
+ * 获取 .claude 配置目录路径.
+ * @returns {string} ~/.claude 目录路径
+ */
+export function getClaudeDir() {
+  return join(getRealHomeDir(), '.claude');
+}
+
 /**
  * 获取系统临时目录前缀列表
  * 支持 Windows、macOS 和 Linux
@@ -117,7 +160,7 @@ export function selectWorkingDirectory(requestedCwd) {
   }
 
   candidates.push(process.cwd());
-  candidates.push(homedir());
+  candidates.push(getRealHomeDir());
 
   console.log('[DEBUG] selectWorkingDirectory candidates:', JSON.stringify(candidates));
 
@@ -143,5 +186,5 @@ export function selectWorkingDirectory(requestedCwd) {
   }
 
   console.log('[DEBUG] selectWorkingDirectory fallback triggered');
-  return envProjectPath || homedir();
+  return envProjectPath || getRealHomeDir();
 }

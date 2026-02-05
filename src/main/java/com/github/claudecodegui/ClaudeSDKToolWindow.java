@@ -1,7 +1,6 @@
 package com.github.claudecodegui;
 
 import com.github.claudecodegui.bridge.NodeDetector;
-import com.github.claudecodegui.cache.SlashCommandCache;
 import com.github.claudecodegui.handler.AgentHandler;
 import com.github.claudecodegui.handler.CodexMcpServerHandler;
 import com.github.claudecodegui.handler.DependencyHandler;
@@ -603,9 +602,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private volatile String pendingQuickFixPrompt = null;
         private volatile MessageCallback pendingQuickFixCallback = null;
 
-        // 斜杠命令智能缓存
-        private SlashCommandCache slashCommandCache;
-
         // Handler 相关
         private HandlerContext handlerContext;
         private MessageDispatcher messageDispatcher;
@@ -987,6 +983,24 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // Ensure we are on EDT (Alarm.ThreadToUse.SWING_THREAD guarantees this, but being safe)
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (disposed) return;
+
+                // 检查是否启用自动打开文件
+                try {
+                    String projectPath = project.getBasePath();
+                    if (projectPath != null) {
+                        com.github.claudecodegui.CodemossSettingsService settingsService =
+                            new com.github.claudecodegui.CodemossSettingsService();
+                        boolean autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
+                        if (!autoOpenFileEnabled) {
+                            // 如果关闭了自动打开文件，清除 ContextBar 显示
+                            clearSelectionInfo();
+                            return;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Failed to check autoOpenFileEnabled: " + e.getMessage());
+                }
+
                 try {
                     FileEditorManager editorManager = FileEditorManager.getInstance(project);
                     Editor editor = editorManager.getSelectedTextEditor();
@@ -1834,12 +1848,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 // 发送当前权限模式到前端
                 sendCurrentPermissionMode();
 
-                // 如果缓存中已有数据，立即发送
-                if (slashCommandCache != null && !slashCommandCache.isEmpty()) {
-                    LOG.info("Cache has data, sending immediately");
-                    sendCachedSlashCommands();
-                }
-
                 // [FIX] Process pending QuickFix message if exists
                 if (pendingQuickFixPrompt != null && pendingQuickFixCallback != null) {
                     LOG.info("Processing pending QuickFix message after frontend ready");
@@ -2227,8 +2235,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
-         * 在启动时初始化斜杠命令智能缓存
-         * 使用智能缓存系统：内存缓存 + 文件监听 + 定期检查
+         * 在启动时获取斜杠命令列表
+         * 直接从 SDK 获取，不使用缓存
          */
         private void fetchSlashCommandsOnStartup() {
             String cwd = session.getCwd();
@@ -2236,38 +2244,28 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 cwd = project.getBasePath();
             }
 
-            LOG.info("Initializing slash command cache, cwd=" + cwd);
+            LOG.info("Fetching slash commands from SDK, cwd=" + cwd);
 
-            // 如果缓存已存在，先清理
-            if (slashCommandCache != null) {
-                LOG.debug("Disposing existing slash command cache");
-                slashCommandCache.dispose();
-            }
-
-            // 创建并初始化缓存
-            slashCommandCache = new SlashCommandCache(project, claudeSDKBridge, cwd);
-
-            // 添加更新监听器：缓存更新时自动通知前端
-            slashCommandCache.addUpdateListener(commands -> {
+            final String finalCwd = cwd;
+            claudeSDKBridge.getSlashCommands(cwd).thenAccept(commands -> {
                 fetchedSlashCommandsCount = commands.size();
                 slashCommandsFetched = true;
-                LOG.debug("Slash command cache listener triggered, count=" + commands.size());
+                LOG.info("Slash commands fetched from SDK: " + commands.size() + " commands");
+
                 ApplicationManager.getApplication().invokeLater(() -> {
                     try {
                         Gson gson = new Gson();
                         String commandsJson = gson.toJson(commands);
                         LOG.debug("Calling updateSlashCommands with JSON length=" + commandsJson.length());
                         callJavaScript("updateSlashCommands", JsUtils.escapeJs(commandsJson));
-                        LOG.info("Slash commands updated: " + commands.size() + " commands");
                     } catch (Exception e) {
                         LOG.warn("Failed to send slash commands to frontend: " + e.getMessage(), e);
                     }
                 });
+            }).exceptionally(e -> {
+                LOG.warn("Failed to fetch slash commands from SDK: " + e.getMessage(), e);
+                return null;
             });
-
-            // 初始化缓存（开始加载 + 启动文件监听 + 定期检查）
-            LOG.debug("Starting slash command cache initialization");
-            slashCommandCache.init();
         }
 
         /**
@@ -2296,34 +2294,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             } catch (Exception e) {
                 LOG.error("Failed to send current permission mode: " + e.getMessage(), e);
             }
-        }
-
-        /**
-         * 发送缓存中的斜杠命令到前端
-         * 用于前端准备好后立即发送已缓存的数据
-         */
-        private void sendCachedSlashCommands() {
-            if (slashCommandCache == null || slashCommandCache.isEmpty()) {
-                LOG.debug("sendCachedSlashCommands: cache is empty or null");
-                return;
-            }
-
-            List<JsonObject> commands = slashCommandCache.getCommands();
-            if (commands.isEmpty()) {
-                LOG.debug("sendCachedSlashCommands: no commands in cache");
-                return;
-            }
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                try {
-                    Gson gson = new Gson();
-                    String commandsJson = gson.toJson(commands);
-                    LOG.info("sendCachedSlashCommands: sending " + commands.size() + " cached commands to frontend");
-                    callJavaScript("updateSlashCommands", JsUtils.escapeJs(commandsJson));
-                } catch (Exception e) {
-                    LOG.warn("sendCachedSlashCommands: failed to send: " + e.getMessage(), e);
-                }
-            });
         }
 
         private String convertMessagesToJson(List<ClaudeSession.Message> messages) {
@@ -2457,11 +2427,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 int cacheReadTokens = lastUsage != null && lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
                 int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
 
-                int usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+                // 根据 provider 计算已用 token 数
+                // Codex/OpenAI: input_tokens 已经包含了 cached_input_tokens，不需要重复加
+                // Claude: input_tokens 不包含缓存，需要加上 cache_creation 和 cache_read
+                String currentProvider = handlerContext.getCurrentProvider();
+                int usedTokens;
+                if ("codex".equals(currentProvider)) {
+                    // Codex: input_tokens 已包含缓存读取的 token，不要重复计算
+                    usedTokens = inputTokens + outputTokens;
+                } else {
+                    // Claude: 需要加上缓存相关的 token
+                    usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+                }
                 int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                 int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 
-                LOG.debug("Pushing usage update: input=" + inputTokens + ", cacheWrite=" + cacheWriteTokens + ", cacheRead=" + cacheReadTokens + ", output=" + outputTokens + ", total=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
+                LOG.debug("Pushing usage update: provider=" + currentProvider + ", input=" + inputTokens + ", cacheWrite=" + cacheWriteTokens + ", cacheRead=" + cacheReadTokens + ", output=" + outputTokens + ", total=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
 
 
                 JsonObject usageUpdate = new JsonObject();
@@ -2909,12 +2890,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 }
             } catch (Exception e) {
                 LOG.debug("Failed to cancel webview watchdog: " + e.getMessage(), e);
-            }
-
-            // 清理斜杠命令缓存
-            if (slashCommandCache != null) {
-                slashCommandCache.dispose();
-                slashCommandCache = null;
             }
 
             // 注销权限服务的 dialogShower、askUserQuestionDialogShower 和 planApprovalDialogShower，防止内存泄漏

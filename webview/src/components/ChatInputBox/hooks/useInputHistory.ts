@@ -3,10 +3,20 @@ import { sendToJava } from '../../../utils/bridge.js';
 
 /** localStorage key for chat input history */
 export const HISTORY_STORAGE_KEY = 'chat-input-history';
-/** localStorage key for history usage counts */
+/** localStorage key for history usage counts (importance) */
 export const HISTORY_COUNTS_KEY = 'chat-input-history-counts';
 /** localStorage key for history completion enabled setting */
 export const HISTORY_ENABLED_KEY = 'historyCompletionEnabled';
+
+/**
+ * History item with importance (usage count)
+ */
+export interface HistoryItem {
+  /** Content text */
+  text: string;
+  /** Importance level (usage count, higher = more important) */
+  importance: number;
+}
 
 /**
  * Keep the stored history bounded to avoid unbounded localStorage growth.
@@ -409,4 +419,166 @@ export function useInputHistory({
   );
 
   return { record, handleKeyDown };
+}
+
+// ============================================================================
+// History Management APIs (for Settings page)
+// ============================================================================
+
+/**
+ * Load history items with their importance (usage count)
+ * Returns items sorted by importance (descending)
+ */
+export function loadHistoryWithImportance(): HistoryItem[] {
+  const items = loadHistory();
+  const counts = loadCounts();
+
+  // Merge items with their counts, default importance is 1
+  const result: HistoryItem[] = items.map((text) => ({
+    text,
+    importance: counts[text] || 1,
+  }));
+
+  // Sort by importance descending
+  result.sort((a, b) => b.importance - a.importance);
+
+  return result;
+}
+
+/**
+ * Add a new history item manually
+ * @param text Content text
+ * @param importance Initial importance (default: 1)
+ */
+export function addHistoryItem(text: string, importance: number = 1): void {
+  const sanitized = text.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  if (!sanitized) return;
+
+  if (!canUseLocalStorage()) return;
+
+  try {
+    // Add to history list
+    const items = loadHistory();
+    // Remove if already exists (to avoid duplicates)
+    const filtered = items.filter((i) => i !== sanitized);
+    const newItems = [...filtered, sanitized].slice(-MAX_HISTORY_ITEMS);
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(newItems));
+
+    // Set importance
+    const counts = loadCounts();
+    counts[sanitized] = Math.max(1, Math.floor(importance));
+    const cleaned = cleanupCounts(counts);
+    window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(cleaned));
+  } catch {
+    // Ignore errors
+  }
+
+  // Sync to backend
+  sendToJava('record_input_history', JSON.stringify([sanitized]));
+}
+
+/**
+ * Update an existing history item's content and/or importance
+ * @param oldText Original content
+ * @param newText New content (if different from oldText)
+ * @param importance New importance value
+ */
+export function updateHistoryItem(
+  oldText: string,
+  newText: string,
+  importance: number
+): void {
+  if (!canUseLocalStorage()) return;
+
+  const sanitizedNew = newText.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  if (!sanitizedNew) return;
+
+  try {
+    const items = loadHistory();
+    const counts = loadCounts();
+
+    // Find and update the item
+    const index = items.indexOf(oldText);
+    if (index === -1) {
+      // Item not found, add as new
+      addHistoryItem(sanitizedNew, importance);
+      return;
+    }
+
+    // Update content if changed
+    if (oldText !== sanitizedNew) {
+      // Check if new text already exists
+      const existingIndex = items.indexOf(sanitizedNew);
+      if (existingIndex !== -1 && existingIndex !== index) {
+        // Merge: remove old, update existing with higher importance
+        items.splice(index, 1);
+        delete counts[oldText];
+        counts[sanitizedNew] = Math.max(
+          counts[sanitizedNew] || 1,
+          Math.max(1, Math.floor(importance))
+        );
+      } else {
+        // Update in place
+        items[index] = sanitizedNew;
+        delete counts[oldText];
+        counts[sanitizedNew] = Math.max(1, Math.floor(importance));
+      }
+    } else {
+      // Only update importance
+      counts[oldText] = Math.max(1, Math.floor(importance));
+    }
+
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items));
+    const cleaned = cleanupCounts(counts);
+    window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(cleaned));
+  } catch {
+    // Ignore errors
+  }
+
+  // Sync deletion of old item and addition of new
+  if (oldText !== sanitizedNew) {
+    sendToJava('delete_input_history_item', oldText);
+    sendToJava('record_input_history', JSON.stringify([sanitizedNew]));
+  }
+}
+
+/**
+ * Clear history items with low importance (importance <= threshold)
+ * @param threshold Items with importance <= this value will be deleted (default: 1)
+ * @returns Number of items deleted
+ */
+export function clearLowImportanceHistory(threshold: number = 1): number {
+  if (!canUseLocalStorage()) return 0;
+
+  try {
+    const items = loadHistory();
+    const counts = loadCounts();
+
+    let deletedCount = 0;
+    const itemsToKeep: string[] = [];
+    const itemsToDelete: string[] = [];
+
+    for (const item of items) {
+      const importance = counts[item] || 1;
+      if (importance <= threshold) {
+        itemsToDelete.push(item);
+        delete counts[item];
+        deletedCount++;
+      } else {
+        itemsToKeep.push(item);
+      }
+    }
+
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(itemsToKeep));
+    window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
+
+    // Sync deletions to backend
+    for (const item of itemsToDelete) {
+      sendToJava('delete_input_history_item', item);
+    }
+
+    return deletedCount;
+  } catch {
+    return 0;
+  }
 }

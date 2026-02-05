@@ -5,10 +5,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { getCodemossDir } = require('../utils/path-utils.cjs');
 
-const HOME_DIR = os.homedir();
-const FAVORITES_DIR = path.join(HOME_DIR, '.codemoss');
+const FAVORITES_DIR = getCodemossDir();
 const FAVORITES_FILE = path.join(FAVORITES_DIR, 'favorites.json');
 
 /**

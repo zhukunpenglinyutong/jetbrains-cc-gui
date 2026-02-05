@@ -6,6 +6,8 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonArray;
 import com.intellij.openapi.diagnostic.Logger;
 
+import com.google.gson.JsonElement;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -13,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Set;
 
 /**
  * Claude Settings 管理器
@@ -20,6 +23,33 @@ import java.nio.file.Paths;
  */
 public class ClaudeSettingsManager {
     private static final Logger LOG = Logger.getInstance(ClaudeSettingsManager.class);
+
+    /**
+     * 系统保护字段 - 这些字段不应被供应商配置覆盖，始终从原有配置保留
+     */
+    private static final Set<String> PROTECTED_SYSTEM_FIELDS = Set.of(
+        "mcpServers",           // MCP 服务器配置
+        "disabledMcpServers",   // 禁用的 MCP 服务器
+        "plugins",              // Skills/Plugins 配置
+        "trustedDirectories",   // 信任的目录
+        "trustedFiles"          // 信任的文件
+    );
+
+    /**
+     * 供应商可管理的字段 - 只有这些字段会被供应商配置覆盖
+     * 其他用户自定义字段将被保留
+     */
+    private static final Set<String> PROVIDER_MANAGED_FIELDS = Set.of(
+        "env",                      // 环境变量配置
+        "model",                    // 模型选择
+        "alwaysThinkingEnabled",    // 思考模式
+        "codemossProviderId",       // Codemoss 供应商标识
+        "ccSwitchProviderId",       // CC-Switch 供应商标识
+        "maxContextLengthTokens",   // 最大上下文长度
+        "temperature",              // 温度参数
+        "topP",                     // Top-P 参数
+        "topK"                      // Top-K 参数
+    );
 
     private final Gson gson;
     private final ConfigPathManager pathManager;
@@ -210,6 +240,10 @@ public class ClaudeSettingsManager {
 
     /**
      * 应用供应商配置到 Claude settings.json
+     * 采用增量合并策略：
+     * - 用户自定义字段保留
+     * - 供应商管理的字段（env, model 等）整体覆盖
+     * - 系统保护字段（mcpServers, plugins 等）不受影响
      */
     public void applyProviderToClaudeSettings(JsonObject provider) throws IOException {
         if (provider == null) {
@@ -223,34 +257,43 @@ public class ClaudeSettingsManager {
         JsonObject settingsConfig = provider.getAsJsonObject("settingsConfig");
         JsonObject oldClaudeSettings = readClaudeSettings();
 
-        // 创建新的配置对象(完整替换,而不是合并)
-        JsonObject claudeSettings = new JsonObject();
+        // ========== 增量合并策略 ==========
+        // 从现有配置开始，保留用户的所有自定义配置
+        JsonObject claudeSettings = oldClaudeSettings.deepCopy();
 
-        // 1. 复制 settingsConfig 中的所有字段到新配置
+        LOG.info("[ClaudeSettingsManager] Applying provider config with incremental merge strategy");
+        LOG.info("[ClaudeSettingsManager] Original settings keys: " + oldClaudeSettings.keySet());
+
+        // 1. 只覆盖供应商需要管理的字段
         for (String key : settingsConfig.keySet()) {
-            if (!settingsConfig.get(key).isJsonNull()) {
-                claudeSettings.add(key, settingsConfig.get(key));
+            JsonElement value = settingsConfig.get(key);
+
+            // 跳过 null 值
+            if (value == null || value.isJsonNull()) {
+                continue;
             }
+
+            // 跳过系统保护字段（这些字段由系统管理，供应商不应覆盖）
+            if (PROTECTED_SYSTEM_FIELDS.contains(key)) {
+                LOG.debug("[ClaudeSettingsManager] Skipping protected system field: " + key);
+                continue;
+            }
+
+            // 只处理供应商可管理的字段
+            if (PROVIDER_MANAGED_FIELDS.contains(key)) {
+                // 所有供应商字段（包括 env）都整体覆盖
+                claudeSettings.add(key, value);
+                LOG.debug("[ClaudeSettingsManager] Set provider field: " + key);
+            }
+            // 注意：不在 PROVIDER_MANAGED_FIELDS 中的字段会被忽略，不会覆盖用户配置
         }
 
-        // 2. 保留系统字段(这些字段不应该被供应商配置覆盖)
-        // 保留 MCP 服务器配置
-        if (oldClaudeSettings.has("mcpServers")) {
-            claudeSettings.add("mcpServers", oldClaudeSettings.get("mcpServers"));
-        }
-        if (oldClaudeSettings.has("disabledMcpServers")) {
-            claudeSettings.add("disabledMcpServers", oldClaudeSettings.get("disabledMcpServers"));
-        }
-        // 保留 Skills/Plugins 配置
-        if (oldClaudeSettings.has("plugins")) {
-            claudeSettings.add("plugins", oldClaudeSettings.get("plugins"));
-        }
-
-        // 3. 添加供应商 ID 标识
+        // 2. 添加供应商 ID 标识
         if (provider.has("id") && !provider.get("id").isJsonNull()) {
             claudeSettings.addProperty("codemossProviderId", provider.get("id").getAsString());
         }
 
+        LOG.info("[ClaudeSettingsManager] Final settings keys: " + claudeSettings.keySet());
         writeClaudeSettings(claudeSettings);
     }
 

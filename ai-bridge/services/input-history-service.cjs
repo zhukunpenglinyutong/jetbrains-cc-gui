@@ -6,10 +6,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { getCodemossDir } = require('../utils/path-utils.cjs');
 
-const HOME_DIR = os.homedir();
-const CODEMOSS_DIR = path.join(HOME_DIR, '.codemoss');
+const CODEMOSS_DIR = getCodemossDir();
 const HISTORY_FILE = path.join(CODEMOSS_DIR, 'inputHistory.json');
 
 /** 最大历史记录条数 */

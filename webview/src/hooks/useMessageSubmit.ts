@@ -113,8 +113,9 @@ export function useMessageSubmit({
           });
         } else {
           blocks.push({
-            type: 'text',
-            text: t('chat.attachmentFile', { fileName: att.fileName }),
+            type: 'attachment',
+            fileName: att.fileName,
+            mediaType: att.mediaType,
           });
         }
       }

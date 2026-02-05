@@ -56,6 +56,47 @@
     color: var(--text-tertiary);
 }
 
+/* 深度搜索按钮样式 */
+.history-deep-search-btn {
+    background: transparent;
+    border: 1px solid var(--border-secondary);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+
+    .codicon {
+        font-size: 14px;
+    }
+
+    &:hover:not(:disabled) {
+        background-color: rgba(10, 132, 255, 0.1);
+        border-color: #0a84ff;
+        color: #0a84ff;
+    }
+
+    &:active:not(:disabled) {
+        transform: scale(0.95);
+        background-color: rgba(10, 132, 255, 0.2);
+    }
+
+    &:disabled {
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+
+    &.searching {
+        color: #0a84ff;
+        border-color: #0a84ff;
+    }
+}
+
 /* 搜索容器样式 */
 .history-search-container {
     position: relative;

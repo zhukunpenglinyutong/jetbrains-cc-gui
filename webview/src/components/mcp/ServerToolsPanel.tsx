@@ -101,7 +101,7 @@ export function ServerToolsPanel({
                       onToolHover(null);
                     }}
                   >
-                    <span className="codicon tool-icon">{getToolIcon(tool.name)}</span>
+                    <span className={`codicon tool-icon ${getToolIcon(tool.name)}`}></span>
                     <div className="tool-info">
                       <span className="tool-name-text">{tool.name}</span>
                     </div>

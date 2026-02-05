@@ -26,6 +26,7 @@ public class EditorContextCollector {
 
     private final Project project;
     private boolean psiContextEnabled = true;
+    private boolean autoOpenFileEnabled = true;
 
     private boolean isQuickFix = false;
 
@@ -42,10 +43,26 @@ public class EditorContextCollector {
     }
 
     /**
+     * 设置是否启用自动打开文件（编辑器上下文收集）
+     * 如果关闭，collectContext() 将返回空对象，AI 不会收到任何编辑器上下文信息
+     */
+    public void setAutoOpenFileEnabled(boolean enabled) {
+        this.autoOpenFileEnabled = enabled;
+    }
+
+    /**
      * 异步收集编辑器上下文信息
+     * 如果 autoOpenFileEnabled 为 false，则返回空对象，AI 不会收到任何编辑器上下文
      */
     public CompletableFuture<JsonObject> collectContext() {
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
+
+        // 如果用户关闭了"自动打开文件"开关，不收集任何编辑器上下文
+        if (!autoOpenFileEnabled) {
+            LOG.info("Auto open file disabled, skipping editor context collection");
+            future.complete(new JsonObject());
+            return future;
+        }
 
         // First, get editor on EDT (required for getSelectedTextEditor)
         AtomicReference<Editor> editorRef = new AtomicReference<>();

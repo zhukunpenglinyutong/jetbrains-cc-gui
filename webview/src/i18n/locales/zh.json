@@ -84,6 +84,7 @@
     "commandNotImplemented": "`{{command}}` 功能暂未实现。",
     "clearCommandDescription": "清除对话历史并新建会话",
     "attachmentFile": "[附件: {{fileName}}]",
+    "unknownFile": "未知文件",
     "attachmentsUploaded": "[已上传附件]",
     "streamingConnected": "Claude 已成功连接，正在理解问题"
   },
@@ -142,6 +143,12 @@
         "enabled": "已开启",
         "disabled": "已关闭",
         "hint": "开启后，AI 回复将实时逐字显示，而非等待完整响应后一次性展示。可能会消耗更多资源。"
+      },
+      "autoOpenFile": {
+        "label": "自动打开文件",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，在项目树选择文件时会自动在编辑器中打开。关闭后需要手动操作才能打开文件。"
       },
       "sendShortcut": {
         "label": "发送快捷键",
@@ -214,7 +221,20 @@
         "manageHistory": "管理历史记录",
         "empty": "暂无历史记录",
         "clearAll": "清空全部",
-        "delete": "删除"
+        "clearLow": "清空低重要度",
+        "clearLowHint": "删除重要度 ≤ 1 的记录",
+        "delete": "删除",
+        "edit": "编辑",
+        "add": "添加",
+        "importance": "重要度",
+        "editor": {
+          "addTitle": "添加历史记录",
+          "editTitle": "编辑历史记录",
+          "contentLabel": "内容",
+          "contentPlaceholder": "输入历史记录内容...",
+          "importanceLabel": "重要度",
+          "importanceHint": "重要度越高，自动补全时越靠前"
+        }
       }
     },
     "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",
@@ -423,6 +443,7 @@
     "messageCount": "{{count}} 条消息",
     "searchPlaceholder": "搜索会话标题...",
     "noSearchResults": "未找到匹配的会话",
+    "deepSearchTooltip": "深度搜索（清空缓存后重新加载）",
     "editTitle": "编辑标题",
     "saveTitleButton": "保存",
     "cancelEditButton": "取消",
@@ -462,13 +483,17 @@
     "title": "Claude 有一些问题想问你",
     "progress": "问题 {{current}} / {{total}}",
     "multiSelectHint": "可以选择多个选项",
-    "cancel": "Auto",
+    "cancel": "取消",
     "back": "上一步",
     "next": "下一步",
     "submit": "提交",
     "otherOption": "其他",
     "otherOptionDesc": "输入自定义答案",
-    "customInputPlaceholder": "请输入您的答案..."
+    "customInputPlaceholder": "请输入您的答案...",
+    "timeoutWarning": "请尽快回答，对话框将在 {{seconds}} 秒后自动关闭",
+    "expand": "展开",
+    "collapse": "收起",
+    "clickToAnswer": "点击回答"
   },
   "planApproval": {
     "title": "计划已准备就绪",
@@ -479,7 +504,8 @@
     "approve": "批准并执行",
     "reject": "拒绝",
     "toApprove": "批准",
-    "toReject": "拒绝"
+    "toReject": "拒绝",
+    "timeoutWarning": "请尽快做出选择，对话框将在 {{seconds}} 秒后自动关闭"
   },
   "toast": {
     "switchSuccess": "切换成功",

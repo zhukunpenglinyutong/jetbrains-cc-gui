@@ -22,6 +22,7 @@ import {
   useUsageStats,
   useFileChanges,
   useSubagents,
+  useMessageQueue,
 } from './hooks';
 import type { ContextInfo } from './hooks';
 import { createLocalizeMessage } from './utils/localizationUtils';
@@ -173,6 +174,8 @@ const App = () => {
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(true);
   // 发送快捷键设置
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
+  // 自动打开文件设置
+  const [autoOpenFileEnabled, setAutoOpenFileEnabled] = useState(true);
   // StatusPanel 展开/收起状态（默认收起，有内容时自动展开）
   const [statusPanelExpanded, setStatusPanelExpanded] = useState(false);
   // 已处理的文件路径列表（Apply/Reject 后从 fileChanges 中过滤，持久化到 localStorage）
@@ -533,6 +536,7 @@ const App = () => {
     setClaudeSettingsAlwaysThinkingEnabled,
     setStreamingEnabledSetting,
     setSendShortcut,
+    setAutoOpenFileEnabled,
     setSdkStatus,
     setSdkStatusLoaded,
     setIsRewinding,
@@ -636,8 +640,9 @@ const App = () => {
           });
         } else {
           blocks.push({
-            type: 'text',
-            text: t('chat.attachmentFile', { fileName: att.fileName }),
+            type: 'attachment',
+            fileName: att.fileName,
+            mediaType: att.mediaType,
           });
         }
       }
@@ -690,19 +695,13 @@ const App = () => {
   }, []);
 
   /**
-   * 处理消息发送（来自 ChatInputBox）
+   * 执行消息发送（从队列或直接执行）
    */
-  const handleSubmit = (content: string, attachments?: Attachment[]) => {
+  const executeMessage = useCallback((content: string, attachments?: Attachment[]) => {
     const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-    // 验证输入
     if (!text && !hasAttachments) return;
-
-    // 检查新建会话命令（/new, /clear, /reset）- 无需 SDK，无需二次确认，即使 loading 也可执行
-    if (checkNewSessionCommand(text)) return;
-
-    if (loading) return;
 
     // 检查 SDK 状态
     if (!sdkStatusLoaded) {
@@ -719,16 +718,31 @@ const App = () => {
       return;
     }
 
-    // 检查未实现的命令
-    if (checkUnimplementedCommand(text)) return;
-
     // 构建用户消息内容块
     const userContentBlocks = buildUserContentBlocks(text, attachments);
     if (userContentBlocks.length === 0) return;
 
+    // 持久化存储非图片附件元数据，确保后端消息替换乐观消息后仍可显示文件芯片
+    const nonImageAttachments = Array.isArray(attachments)
+      ? attachments.filter(a => !a.mediaType?.startsWith('image/'))
+      : [];
+    if (nonImageAttachments.length > 0) {
+      // 限制缓存大小，防止内存无限增长（保留最近 100 条）
+      const MAX_ATTACHMENT_CACHE_SIZE = 100;
+      if (sentAttachmentsRef.current.size >= MAX_ATTACHMENT_CACHE_SIZE) {
+        // 删除最早的条目（Map 保持插入顺序）
+        const firstKey = sentAttachmentsRef.current.keys().next().value;
+        if (firstKey !== undefined) {
+          sentAttachmentsRef.current.delete(firstKey);
+        }
+      }
+      sentAttachmentsRef.current.set(text || '', nonImageAttachments.map(a => ({
+        fileName: a.fileName,
+        mediaType: a.mediaType,
+      })));
+    }
+
     // 创建并添加用户消息（乐观更新）
-    // 注意：content 字段应该只包含用户输入的文本，不要添加占位文本
-    // userContentBlocks 中已经包含了所有需要显示的内容（图片块和文本块）
     const userMessage: ClaudeMessage = {
       type: 'user',
       content: text || '',
@@ -769,6 +783,53 @@ const App = () => {
 
     // 发送消息到后端
     sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo);
+  }, [
+    sdkStatusLoaded,
+    currentSdkInstalled,
+    currentProvider,
+    selectedAgent,
+    buildUserContentBlocks,
+    sendMessageToBackend,
+    addToast,
+    t,
+  ]);
+
+  /**
+   * 消息队列管理
+   */
+  const {
+    queue: messageQueue,
+    enqueue: enqueueMessage,
+    dequeue: dequeueMessage,
+  } = useMessageQueue({
+    isLoading: loading,
+    onExecute: executeMessage,
+  });
+
+  /**
+   * 处理消息发送（来自 ChatInputBox）
+   */
+  const handleSubmit = (content: string, attachments?: Attachment[]) => {
+    const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+
+    // 验证输入
+    if (!text && !hasAttachments) return;
+
+    // 检查新建会话命令（/new, /clear, /reset）- 无需 SDK，无需二次确认，即使 loading 也可执行
+    if (checkNewSessionCommand(text)) return;
+
+    // 如果正在 loading，加入队列
+    if (loading) {
+      enqueueMessage(content, attachments);
+      return;
+    }
+
+    // 检查未实现的命令
+    if (checkUnimplementedCommand(text)) return;
+
+    // 执行消息
+    executeMessage(content, attachments);
   };
 
   /**
@@ -895,6 +956,16 @@ const App = () => {
     sendBridgeEvent('set_send_shortcut', JSON.stringify(payload));
   }, []);
 
+  /**
+   * 处理自动打开文件开关切换
+   */
+  const handleAutoOpenFileEnabledChange = useCallback((enabled: boolean) => {
+    setAutoOpenFileEnabled(enabled);
+    const payload = { autoOpenFileEnabled: enabled };
+    sendBridgeEvent('set_auto_open_file_enabled', JSON.stringify(payload));
+    addToast(enabled ? t('settings.basic.autoOpenFile.enabled') : t('settings.basic.autoOpenFile.disabled'), 'success');
+  }, [t, addToast]);
+
   const interruptSession = () => {
     // FIX: 立即重置前端状态，不等待后端回调
     // 这样可以让用户立即看到停止效果
@@ -913,11 +984,14 @@ const App = () => {
   const normalizeBlocksCache = useRef(new WeakMap<object, ClaudeContentBlock[]>());
   const shouldShowMessageCache = useRef(new WeakMap<object, boolean>());
   const mergedAssistantMessageCache = useRef(new Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>());
+  // 持久化存储：发送消息时的非图片附件元数据，用于在后端消息替换后仍能在气泡中显示文件芯片
+  const sentAttachmentsRef = useRef(new Map<string, Array<{ fileName: string; mediaType: string }>>());
   // Clear cache when dependencies change
   useEffect(() => {
     normalizeBlocksCache.current = new WeakMap();
     shouldShowMessageCache.current = new WeakMap();
     mergedAssistantMessageCache.current = new Map();
+    sentAttachmentsRef.current.clear();
   }, [localizeMessage, t, currentSessionId]);
 
   const normalizeBlocks = useCallback(
@@ -963,7 +1037,22 @@ const App = () => {
   );
 
   const getContentBlocks = useCallback(
-    (message: ClaudeMessage) => getContentBlocksUtil(message, normalizeBlocks, localizeMessage),
+    (message: ClaudeMessage) => {
+      const blocks = getContentBlocksUtil(message, normalizeBlocks, localizeMessage);
+      // 从持久化存储中注入附件块：后端消息不含 attachment 块，需要用发送时保存的元数据补回
+      if (message.type === 'user' && !blocks.some(b => b.type === 'attachment')) {
+        const meta = sentAttachmentsRef.current.get(message.content || '');
+        if (meta && meta.length > 0) {
+          const attachmentBlocks: ClaudeContentBlock[] = meta.map(a => ({
+            type: 'attachment' as const,
+            fileName: a.fileName,
+            mediaType: a.mediaType,
+          }));
+          return [...attachmentBlocks, ...blocks];
+        }
+      }
+      return blocks;
+    },
     [normalizeBlocks, localizeMessage]
   );
 
@@ -1369,7 +1458,7 @@ const App = () => {
     }
     const text = getMessageText(firstUserMessage);
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;
-  }, [messages, t]);
+  }, [messages, t, getMessageText]);
 
   return (
     <>
@@ -1397,6 +1486,8 @@ const App = () => {
           onStreamingEnabledChange={handleStreamingEnabledChange}
           sendShortcut={sendShortcut}
           onSendShortcutChange={handleSendShortcutChange}
+          autoOpenFileEnabled={autoOpenFileEnabled}
+          onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
         />
       ) : currentView === 'chat' ? (
         <>
@@ -1504,6 +1595,8 @@ const App = () => {
             statusPanelExpanded={statusPanelExpanded}
             onToggleStatusPanel={() => setStatusPanelExpanded(!statusPanelExpanded)}
             addToast={addToast}
+            messageQueue={messageQueue}
+            onRemoveFromQueue={dequeueMessage}
           />
         </div>
         </>

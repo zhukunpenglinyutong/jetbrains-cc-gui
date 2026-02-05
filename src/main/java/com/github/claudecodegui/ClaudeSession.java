@@ -340,6 +340,21 @@ public class ClaudeSession {
         return launchClaude().thenCompose(chId -> {
             // 设置是否启用PSI语义上下文收集
             contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
+
+            // 读取"自动打开文件"设置，决定是否收集编辑器上下文
+            boolean autoOpenFileEnabled = true;
+            try {
+                String projectPath = project.getBasePath();
+                if (projectPath != null) {
+                    CodemossSettingsService settingsService = new CodemossSettingsService();
+                    autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
+                    LOG.info("[EditorContext] Auto open file enabled: " + autoOpenFileEnabled);
+                }
+            } catch (Exception e) {
+                LOG.warn("[EditorContext] Failed to read autoOpenFileEnabled setting: " + e.getMessage());
+            }
+            contextCollector.setAutoOpenFileEnabled(autoOpenFileEnabled);
+
             return contextCollector.collectContext().thenCompose(openedFilesJson ->
                 sendMessageToProvider(chId, userMessage.content, attachments, openedFilesJson, finalAgentPrompt, finalFileTagPaths)
             );

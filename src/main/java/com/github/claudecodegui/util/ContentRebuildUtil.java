@@ -43,9 +43,18 @@ public final class ContentRebuildUtil {
     }
 
     private static String reverseReplaceAll(String content, String oldString, String newString) {
+        // First try exact match
         if (content.contains(newString)) {
             return content.replace(newString, oldString);
         }
+
+        // Try matching with normalized line separators (CRLF vs LF)
+        String normalizedNewString = LineSeparatorUtil.normalizeToMatch(newString, content);
+        if (!normalizedNewString.equals(newString) && content.contains(normalizedNewString)) {
+            String normalizedOldString = LineSeparatorUtil.normalizeToMatch(oldString, content);
+            return content.replace(normalizedNewString, normalizedOldString);
+        }
+
         // 尝试标准化空白后匹配
         String normalizedNew = normalizeWhitespace(newString);
         String normalizedContent = normalizeWhitespace(content);
@@ -57,10 +66,23 @@ public final class ContentRebuildUtil {
     }
 
     private static String reverseReplaceSingle(String content, String oldString, String newString) {
+        // First try exact match
         int index = content.indexOf(newString);
         if (index >= 0) {
             return content.substring(0, index) + oldString + content.substring(index + newString.length());
         }
+
+        // Try matching with normalized line separators (CRLF vs LF)
+        String normalizedNewString = LineSeparatorUtil.normalizeToMatch(newString, content);
+        if (!normalizedNewString.equals(newString)) {
+            index = content.indexOf(normalizedNewString);
+            if (index >= 0) {
+                String normalizedOldString = LineSeparatorUtil.normalizeToMatch(oldString, content);
+                return content.substring(0, index) + normalizedOldString
+                        + content.substring(index + normalizedNewString.length());
+            }
+        }
+
         // 尝试标准化空白后匹配
         int fuzzyIndex = findNormalizedIndex(content, newString);
         if (fuzzyIndex >= 0) {
@@ -84,7 +106,9 @@ public final class ContentRebuildUtil {
      */
     static int findNormalizedIndex(String content, String target) {
         String normalizedTarget = normalizeWhitespace(target);
-        String[] lines = content.split("\n", -1);
+        // Normalize line separators to LF for consistent processing
+        String normalizedContent = LineSeparatorUtil.normalizeToLF(content);
+        String[] lines = normalizedContent.split("\n", -1);
         int charIndex = 0;
 
         for (int lineIdx = 0; lineIdx < lines.length; lineIdx++) {
@@ -97,7 +121,8 @@ public final class ContentRebuildUtil {
 
             if (normalizedRemaining.startsWith(normalizedTarget) ||
                 normalizedRemaining.contains(normalizedTarget)) {
-                return charIndex;
+                // Map back to original content position
+                return LineSeparatorUtil.mapToOriginalPosition(content, normalizedContent, charIndex);
             }
             charIndex += lines[lineIdx].length() + 1;
         }
@@ -124,10 +149,11 @@ public final class ContentRebuildUtil {
             actualIndex++;
         }
 
-        // 跳过尾部空白（但不跳过换行符）
+        // 跳过尾部空白（但不跳过换行符，包括 \r 和 \n）
         while (actualIndex < content.length() &&
                Character.isWhitespace(content.charAt(actualIndex)) &&
-               content.charAt(actualIndex) != '\n') {
+               content.charAt(actualIndex) != '\n' &&
+               content.charAt(actualIndex) != '\r') {
             actualIndex++;
         }
 
