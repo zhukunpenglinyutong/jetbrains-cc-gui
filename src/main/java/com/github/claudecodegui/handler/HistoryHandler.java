@@ -25,7 +25,8 @@ public class HistoryHandler extends BaseMessageHandler {
         "delete_session",  // 新增:删除会话
         "export_session",  // 新增:导出会话
         "toggle_favorite", // 新增:切换收藏状态
-        "update_title"     // 新增:更新会话标题
+        "update_title",    // 新增:更新会话标题
+        "deep_search_history" // 新增:深度搜索(清空缓存后重新加载)
     };
 
     // 会话加载回调接口
@@ -75,6 +76,10 @@ public class HistoryHandler extends BaseMessageHandler {
             case "update_title":
                 LOG.info("[HistoryHandler] 处理: update_title");
                 handleUpdateTitle(content);
+                return true;
+            case "deep_search_history":
+                LOG.info("[HistoryHandler] 处理: deep_search_history, provider=" + content);
+                handleDeepSearchHistory(content);
                 return true;
             default:
                 return false;
@@ -164,6 +169,44 @@ public class HistoryHandler extends BaseMessageHandler {
                 });
             }
         });
+    }
+
+    /**
+     * 深度搜索历史记录
+     * 清空缓存后重新从文件系统加载完整的历史记录
+     * @param provider 提供商标识 ("claude" 或 "codex")
+     */
+    private void handleDeepSearchHistory(String provider) {
+        String projectPath = context.getProject().getBasePath();
+        LOG.info("[HistoryHandler] ========== 开始深度搜索 ========== provider=" + provider);
+
+        try {
+            // 1. 清空内存缓存
+            if ("codex".equals(provider)) {
+                SessionIndexCache.getInstance().clearAllCodexCache();
+                LOG.info("[HistoryHandler] 已清空 Codex 内存缓存");
+            } else {
+                SessionIndexCache.getInstance().clearProject(projectPath);
+                LOG.info("[HistoryHandler] 已清空 Claude 项目内存缓存: " + projectPath);
+            }
+
+            // 2. 清空磁盘索引
+            if ("codex".equals(provider)) {
+                SessionIndexManager.getInstance().clearAllCodexIndex();
+                LOG.info("[HistoryHandler] 已清空 Codex 磁盘索引");
+            } else {
+                SessionIndexManager.getInstance().clearProjectIndex("claude", projectPath);
+                LOG.info("[HistoryHandler] 已清空 Claude 项目磁盘索引: " + projectPath);
+            }
+
+            LOG.info("[HistoryHandler] 缓存清理完成，开始重新加载历史数据...");
+
+        } catch (Exception e) {
+            LOG.warn("[HistoryHandler] 清理缓存时出错（继续加载）: " + e.getMessage());
+        }
+
+        // 3. 重新加载历史数据（使用现有方法）
+        handleLoadHistoryData(provider);
     }
 
     /**
