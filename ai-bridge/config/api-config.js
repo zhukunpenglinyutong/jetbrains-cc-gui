@@ -5,15 +5,16 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir, platform } from 'os';
+import { platform } from 'os';
 import { execSync } from 'child_process';
+import { getClaudeDir } from '../utils/path-utils.js';
 
 /**
  * 读取 Claude Code 配置
  */
 export function loadClaudeSettings() {
   try {
-    const settingsPath = join(homedir(), '.claude', 'settings.json');
+    const settingsPath = join(getClaudeDir(), 'settings.json');
     const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
     return settings;
   } catch (error) {
@@ -62,7 +63,7 @@ function readMacKeychainCredentials() {
  */
 function readFileCredentials() {
   try {
-    const credentialsPath = join(homedir(), '.claude', '.credentials.json');
+    const credentialsPath = join(getClaudeDir(), '.credentials.json');
 
     if (!existsSync(credentialsPath)) {
       console.log('[DEBUG] No CLI session found: .credentials.json does not exist');

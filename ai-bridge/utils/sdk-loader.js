@@ -7,16 +7,28 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { pathToFileURL } from 'url';
+import { getRealHomeDir, getCodemossDir } from './path-utils.js';
 
-// 依赖目录基路径
-const DEPS_BASE = join(homedir(), '.codemoss', 'dependencies');
+// 依赖目录基路径 - 使用统一的路径工具函数
+const DEPS_BASE = join(getCodemossDir(), 'dependencies');
 
 // SDK 缓存
 const sdkCache = new Map();
 // 🔧 加载中的 Promise 缓存，防止并发加载同一 SDK
 const loadingPromises = new Map();
+
+// SDK 定义（与 DependencyManager.SdkDefinition 保持一致）
+const SDK_DEFINITIONS = {
+    CLAUDE: {
+        id: 'claude-sdk',
+        npmPackage: '@anthropic-ai/claude-agent-sdk'
+    },
+    CODEX: {
+        id: 'codex-sdk',
+        npmPackage: '@openai/codex-sdk'
+    }
+};
 
 function getSdkRootDir(sdkId) {
     return join(DEPS_BASE, sdkId);
@@ -24,6 +36,7 @@ function getSdkRootDir(sdkId) {
 
 function getPackageDirFromRoot(sdkRootDir, pkgName) {
     // pkgName like: "@anthropic-ai/claude-agent-sdk" or "@openai/codex-sdk"
+    // 与 DependencyManager.getPackageDir() 保持一致的逻辑
     const parts = pkgName.split('/');
     return join(sdkRootDir, 'node_modules', ...parts);
 }
@@ -90,33 +103,36 @@ function resolveExternalPackageUrl(pkgName, sdkRootDir) {
 }
 
 /**
- * 获取 Claude SDK 的安装路径
- */
-export function getClaudeSdkPath() {
-    return join(DEPS_BASE, 'claude-sdk', 'node_modules', '@anthropic-ai', 'claude-agent-sdk');
-}
-
-/**
- * 获取 Codex SDK 的安装路径
- */
-export function getCodexSdkPath() {
-    return join(DEPS_BASE, 'codex-sdk', 'node_modules', '@openai', 'codex-sdk');
-}
-
-/**
  * 检查 Claude Code SDK 是否可用
+ * 与 DependencyManager.isInstalled("claude") 保持一致的逻辑
  */
 export function isClaudeSdkAvailable() {
-    const sdkPath = getClaudeSdkPath();
-    return existsSync(sdkPath);
+    const sdkId = 'claude-sdk';
+    const npmPackage = '@anthropic-ai/claude-agent-sdk';
+    const sdkPath = getPackageDirFromRoot(getSdkRootDir(sdkId), npmPackage);
+    const exists = existsSync(sdkPath);
+    console.log('[sdk-loader] isClaudeSdkAvailable:', {
+        path: sdkPath,
+        exists: exists,
+        depsBase: DEPS_BASE
+    });
+    return exists;
 }
 
 /**
  * 检查 Codex SDK 是否可用
+ * 与 DependencyManager.isInstalled("codex") 保持一致的逻辑
  */
 export function isCodexSdkAvailable() {
-    const sdkPath = getCodexSdkPath();
-    return existsSync(sdkPath);
+    const sdkId = 'codex-sdk';
+    const npmPackage = '@openai/codex-sdk';
+    const sdkPath = getPackageDirFromRoot(getSdkRootDir(sdkId), npmPackage);
+    const exists = existsSync(sdkPath);
+    console.log('[sdk-loader] isCodexSdkAvailable:', {
+        path: sdkPath,
+        exists: exists
+    });
+    return exists;
 }
 
 /**
@@ -139,7 +155,8 @@ export async function loadClaudeSdk() {
         return loadingPromises.get('claude');
     }
 
-    const sdkPath = getClaudeSdkPath();
+    const sdkRootDir = getSdkRootDir('claude-sdk');
+    const sdkPath = getPackageDirFromRoot(sdkRootDir, '@anthropic-ai/claude-agent-sdk');
     console.log('[DIAG-SDK] SDK path:', sdkPath);
     console.log('[DIAG-SDK] SDK path exists:', existsSync(sdkPath));
 
@@ -151,7 +168,6 @@ export async function loadClaudeSdk() {
     // 🔧 创建加载 Promise 并缓存
     const loadPromise = (async () => {
         try {
-            const sdkRootDir = getSdkRootDir('claude-sdk');
             console.log('[DIAG-SDK] SDK root dir:', sdkRootDir);
 
             // 🔧 Node ESM 不支持 import(目录)，必须解析到具体文件（如 sdk.mjs）
@@ -166,7 +182,7 @@ export async function loadClaudeSdk() {
             return sdk;
         } catch (error) {
             console.log('[DIAG-SDK] SDK import failed:', error.message);
-            const pkgDir = getClaudeSdkPath();
+            const pkgDir = getPackageDirFromRoot(sdkRootDir, '@anthropic-ai/claude-agent-sdk');
             const hintFile = join(pkgDir, 'sdk.mjs');
             const hint = existsSync(hintFile) ? ` Did you mean to import ${hintFile}?` : '';
             throw new Error(`Failed to load Claude SDK: ${error.message}${hint}`);
@@ -196,7 +212,8 @@ export async function loadCodexSdk() {
         return loadingPromises.get('codex');
     }
 
-    const sdkPath = getCodexSdkPath();
+    const sdkRootDir = getSdkRootDir('codex-sdk');
+    const sdkPath = getPackageDirFromRoot(sdkRootDir, '@openai/codex-sdk');
 
     if (!existsSync(sdkPath)) {
         throw new Error('SDK_NOT_INSTALLED:codex');
@@ -205,7 +222,6 @@ export async function loadCodexSdk() {
     // 🔧 创建加载 Promise 并缓存
     const loadPromise = (async () => {
         try {
-            const sdkRootDir = getSdkRootDir('codex-sdk');
             const resolvedUrl = resolveExternalPackageUrl('@openai/codex-sdk', sdkRootDir);
             const sdk = await import(resolvedUrl);
 
@@ -308,14 +324,18 @@ export async function loadBedrockSdk() {
  * 获取所有 SDK 的状态
  */
 export function getSdkStatus() {
+    // 使用与 DependencyManager 相同的路径计算逻辑
+    const claudeInstalled = isClaudeSdkAvailable();
+    const codexInstalled = isCodexSdkAvailable();
+
     return {
         claude: {
-            installed: isClaudeSdkAvailable(),
-            path: getClaudeSdkPath()
+            installed: claudeInstalled,
+            path: getPackageDirFromRoot(getSdkRootDir('claude-sdk'), '@anthropic-ai/claude-agent-sdk')
         },
         codex: {
-            installed: isCodexSdkAvailable(),
-            path: getCodexSdkPath()
+            installed: codexInstalled,
+            path: getPackageDirFromRoot(getSdkRootDir('codex-sdk'), '@openai/codex-sdk')
         }
     };
 }
