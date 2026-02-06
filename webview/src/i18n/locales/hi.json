@@ -724,6 +724,10 @@
         "label": "Sonnet 4.5",
         "description": "Sonnet 4.5 · डिफ़ॉल्ट अनुशंसित मॉडल"
       },
+      "opus46": {
+        "label": "Opus 4.6",
+        "description": "Opus 4.6 · नवीनतम और सबसे सक्षम"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 4.5 · जटिल कार्यों के लिए सबसे सक्षम"
@@ -734,6 +738,14 @@
       }
     },
     "codex": {
+      "gpt53codex": {
+        "label": "gpt-5.3-codex",
+        "description": "नवीनतम फ्रंटियर एजेंटिक कोडिंग मॉडल, उन्नत क्षमताओं के साथ।"
+      },
+      "gpt53": {
+        "label": "gpt-5.3",
+        "description": "नवीनतम फ्रंटियर मॉडल, महत्वपूर्ण सुधारों के साथ।"
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "नवीनतम फ्रंटियर एजेंटिक कोडिंग मॉडल।"

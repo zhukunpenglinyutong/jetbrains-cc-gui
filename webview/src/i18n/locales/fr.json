@@ -727,6 +727,10 @@
         "label": "Sonnet 4.5",
         "description": "Sonnet 4.5 · Modèle recommandé par défaut"
       },
+      "opus46": {
+        "label": "Opus 4.6",
+        "description": "Opus 4.6 · Le plus récent et le plus performant"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 4.5 · Le plus performant pour les tâches complexes"
@@ -737,6 +741,14 @@
       }
     },
     "codex": {
+      "gpt53codex": {
+        "label": "gpt-5.3-codex",
+        "description": "Dernier modèle de codage agentique avec des capacités améliorées."
+      },
+      "gpt53": {
+        "label": "gpt-5.3",
+        "description": "Dernier modèle de pointe avec des améliorations significatives."
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "Dernier modèle de codage agentique de pointe."

@@ -893,6 +893,10 @@
         "label": "Sonnet 4.5",
         "description": "Sonnet 默认推荐模型"
       },
+      "opus46": {
+        "label": "Opus 4.6",
+        "description": "Opus 4.6 · 最新最强大的模型"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 复杂任务最强性能"
@@ -903,6 +907,14 @@
       }
     },
     "codex": {
+      "gpt53codex": {
+        "label": "gpt-5.3-codex",
+        "description": "最新前沿智能编程模型，能力全面增强"
+      },
+      "gpt53": {
+        "label": "gpt-5.3",
+        "description": "最新前沿模型，性能显著提升"
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "最新前沿智能编程模型"
