@@ -249,6 +249,11 @@ export const CLAUDE_MODELS: ModelInfo[] = [
     description: 'Opus 4.6 · Latest and most capable',
   },
   {
+    id: 'claude-opus-4-6[1m]',
+    label: 'Opus (1M context)',
+    description: 'Opus 4.6 for long sessions',
+  },
+  {
     id: 'claude-opus-4-5-20251101',
     label: 'Opus 4.5',
     description: 'Opus 4.5 · Most capable for complex work',

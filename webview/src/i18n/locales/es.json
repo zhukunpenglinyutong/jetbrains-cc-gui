@@ -731,6 +731,10 @@
         "label": "Opus 4.6",
         "description": "Opus 4.6 · El más reciente y capaz"
       },
+      "opus46_1m": {
+        "label": "Opus (1M contexto)",
+        "description": "Opus 4.6 para sesiones largas"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 4.5 · Más capaz para trabajos complejos"

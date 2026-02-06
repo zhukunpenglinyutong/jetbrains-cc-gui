@@ -736,6 +736,10 @@
         "label": "Opus 4.6",
         "description": "Opus 4.6 · 最新最強大的模型"
       },
+      "opus46_1m": {
+        "label": "Opus (1M 上下文)",
+        "description": "Opus 4.6 長對話模式"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 4.5 · 處理複雜任務最強性能"

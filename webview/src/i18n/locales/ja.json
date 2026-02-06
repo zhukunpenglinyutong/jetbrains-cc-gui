@@ -750,6 +750,10 @@
         "label": "Opus 4.6",
         "description": "Opus 4.6 · 最新かつ最も優れたモデル"
       },
+      "opus46_1m": {
+        "label": "Opus (1M コンテキスト)",
+        "description": "Opus 4.6 長時間セッション向け"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 4.5 · 複雑な作業に最も有能"
