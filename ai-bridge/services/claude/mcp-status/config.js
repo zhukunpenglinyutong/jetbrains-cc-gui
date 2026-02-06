@@ -10,6 +10,12 @@
 /** HTTP/SSE 类型服务器验证超时时间（毫秒）- 网络请求通常较快，但需要考虑会话建立时间 */
 export const MCP_HTTP_VERIFY_TIMEOUT = parseInt(process.env.MCP_HTTP_VERIFY_TIMEOUT) || 6000;
 
+/** SSE 类型服务器验证超时时间（毫秒）- SSE 需要建立事件流 + endpoint 发现 + initialize 握手 */
+export const MCP_SSE_VERIFY_TIMEOUT = parseInt(process.env.MCP_SSE_VERIFY_TIMEOUT, 10) || 10000;
+
+/** SSE 类型服务器工具列表获取超时时间（毫秒）- 需要完成握手 + initialize + tools/list */
+export const MCP_SSE_TOOLS_TIMEOUT = parseInt(process.env.MCP_SSE_TOOLS_TIMEOUT, 10) || 30000;
+
 /** STDIO 类型服务器验证超时时间（毫秒）- 需要启动进程，但 15 秒足够验证连通性 */
 export const MCP_STDIO_VERIFY_TIMEOUT = parseInt(process.env.MCP_STDIO_VERIFY_TIMEOUT) || 15000;
 
