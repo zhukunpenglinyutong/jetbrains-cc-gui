@@ -107,6 +107,14 @@ export async function getSseServerTools(serverName, serverConfig) {
 
     log('info', '[MCP Tools] SSE server initialized:', serverName);
 
+    // Step 3.5: Send initialized notification (required by MCP protocol)
+    await fetch(messageEndpoint, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+      signal: controller.signal
+    });
+
     // Step 4: Send tools/list request
     const toolsResult = await sendAndReceive(
       messageEndpoint, headers, {

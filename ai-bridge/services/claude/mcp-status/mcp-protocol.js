@@ -114,8 +114,9 @@ export function resolveSseEndpointUrl(endpointUrl, sseUrl) {
 export function sanitizeUrlForLogging(url) {
   try {
     const urlObj = new URL(url);
-    for (const key of ['Authorization', 'token', 'key', 'secret']) {
-      if (urlObj.searchParams.has(key)) {
+    const sensitiveKeys = new Set(['authorization', 'token', 'key', 'secret', 'api_key', 'apikey', 'password']);
+    for (const [key] of urlObj.searchParams) {
+      if (sensitiveKeys.has(key.toLowerCase())) {
         urlObj.searchParams.set(key, '[REDACTED]');
       }
     }
@@ -286,6 +287,10 @@ export function extractJsonRpcData(event, context = 'SSE response') {
 /** Predicate that matches JSON-RPC responses (have "id"), skipping notifications */
 export function isJsonRpcResponse(evt) {
   if (evt.event !== 'message' || evt.data == null) return false;
-  const d = typeof evt.data === 'object' ? evt.data : {};
+  let d = evt.data;
+  if (typeof d === 'string') {
+    try { d = JSON.parse(d); } catch { return false; }
+  }
+  if (typeof d !== 'object' || d === null) return false;
   return d.id != null;
 }

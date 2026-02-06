@@ -124,6 +124,18 @@ export async function verifySseServerStatus(serverName, serverConfig) {
       throw new Error('Server error: ' + (data.error.message || JSON.stringify(data.error)));
     }
 
+    // Step 4.5: Send initialized notification (required by MCP protocol)
+    try {
+      await fetch(messageEndpoint, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+        signal: controller.signal
+      });
+    } catch {
+      // Non-critical: verifier does not need further communication
+    }
+
     if (data?.result?.serverInfo) {
       result.serverInfo = data.result.serverInfo;
       log('info', '[MCP Verify] SSE server connected:', serverName);
