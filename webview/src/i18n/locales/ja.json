@@ -746,6 +746,10 @@
         "label": "Sonnet 4.5",
         "description": "Sonnet 4.5 · デフォルトモデルを使用"
       },
+      "opus46": {
+        "label": "Opus 4.6",
+        "description": "Opus 4.6 · 最新かつ最も優れたモデル"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 4.5 · 複雑な作業に最も有能"
@@ -756,6 +760,14 @@
       }
     },
     "codex": {
+      "gpt53codex": {
+        "label": "gpt-5.3-codex",
+        "description": "最新の最先端エージェントコーディングモデル（機能強化版）"
+      },
+      "gpt53": {
+        "label": "gpt-5.3",
+        "description": "最新の最先端モデル、大幅な性能向上"
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "最新の最先端エージェントコーディングモデル"

@@ -60,7 +60,7 @@ import { getMcpServersStatus, loadMcpServersConfig, getMcpServerTools as getMcpS
 
 import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
 import { selectWorkingDirectory, getRealHomeDir, getClaudeDir } from '../../utils/path-utils.js';
-import { mapModelIdToSdkName } from '../../utils/model-utils.js';
+import { mapModelIdToSdkName, setModelEnvironmentVariables } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
 import { canUseTool, requestPlanApproval } from '../../permission-handler.js';
 import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
@@ -499,6 +499,11 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     // 将模型 ID 映射为 SDK 期望的名称
     const sdkModelName = mapModelIdToSdkName(model);
     console.log('[DEBUG] Model mapping:', model, '->', sdkModelName);
+
+    // 🔧 FIX: 设置模型环境变量，让 SDK 知道具体使用哪个版本
+    // 例如：用户选择 claude-opus-4-6 时，需要设置 ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-6
+    // 否则 SDK 只知道使用 'opus'，但不知道是 4.5 还是 4.6
+    setModelEnvironmentVariables(model);
 
 	    // Build systemPrompt.append content (for adding opened files context and agent prompt)
 	    // 使用统一的提示词管理模块构建 IDE 上下文提示词（包括智能体提示词）
@@ -1218,6 +1223,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     };
 
     const sdkModelName = mapModelIdToSdkName(model);
+    // 🔧 FIX: 设置模型环境变量，让 SDK 知道具体使用哪个版本
+    setModelEnvironmentVariables(model);
     // 不再查找系统 CLI，使用 SDK 内置 cli.js
     console.log('[DEBUG] (withAttachments) Using SDK built-in Claude CLI (cli.js)');
 
