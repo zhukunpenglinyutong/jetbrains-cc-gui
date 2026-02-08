@@ -85,8 +85,8 @@ export function resolveSseEndpointUrl(endpointUrl, sseUrl) {
   try {
     resolved = new URL(endpointUrl);
   } catch {
-    // Relative path — resolve against the SSE URL origin
-    resolved = new URL(endpointUrl, base.origin);
+    // Relative path — resolve against the full SSE URL for correct path resolution
+    resolved = new URL(endpointUrl, sseUrl);
   }
 
   // Enforce protocol whitelist

@@ -108,12 +108,17 @@ export async function getSseServerTools(serverName, serverConfig) {
     log('info', '[MCP Tools] SSE server initialized:', serverName);
 
     // Step 3.5: Send initialized notification (required by MCP protocol)
-    await fetch(messageEndpoint, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
-      signal: controller.signal
-    });
+    // Non-critical: failure should not prevent subsequent tools/list request
+    try {
+      await fetch(messageEndpoint, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+        signal: controller.signal
+      });
+    } catch {
+      log('debug', '[MCP Tools] initialized notification failed for', serverName, '(non-critical)');
+    }
 
     // Step 4: Send tools/list request
     const toolsResult = await sendAndReceive(
@@ -132,8 +137,14 @@ export async function getSseServerTools(serverName, serverConfig) {
         'returned', result.tools.length, 'tools');
     }
   } catch (error) {
-    log('error', '[MCP Tools] SSE server', serverName, 'failed:', error.message);
-    result.error = error.message;
+    if (error?.name === 'AbortError') {
+      log('debug', '[MCP Tools] SSE server timeout:', serverName);
+      result.error = 'Connection timeout';
+    } else {
+      const errorMsg = error?.message || String(error);
+      log('error', '[MCP Tools] SSE server', serverName, 'failed:', errorMsg);
+      result.error = errorMsg;
+    }
   } finally {
     clearTimeout(timeoutId);
     controller.abort();
