@@ -8,6 +8,8 @@
 
 ![][github-contributors-shield] ![][github-forks-shield] ![][github-stars-shield] ![][github-issues-shield]
 
+<a href="https://trendshift.io/repositories/19332" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19332" alt="zhukunpenglinyutong%2Fidea-claude-code-gui | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 </div>
 
 A powerful IntelliJ IDEA plugin that provides a visual interface for **Claude Code** and **OpenAI Codex** dual AI tools, making AI-assisted programming more efficient and intuitive.
