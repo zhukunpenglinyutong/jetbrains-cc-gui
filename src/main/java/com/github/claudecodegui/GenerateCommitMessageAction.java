@@ -200,7 +200,6 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
      * - This allows graceful degradation when the API is unavailable
      */
     @Nullable
-    @SuppressWarnings("unchecked")
     private Collection<Change> getIncludedChangesViaReflection(@NotNull Object workflowHandler) {
         try {
             // Get the 'ui' property from AbstractCommitWorkflowHandler
@@ -218,12 +217,13 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
             Method getIncludedChangesMethod = ui.getClass().getMethod("getIncludedChanges");
             Object result = getIncludedChangesMethod.invoke(ui);
 
-            if (result instanceof List) {
-                List<Change> changes = new ArrayList<>((List<Change>) result);
-                LOG.debug("Successfully retrieved " + changes.size() + " included changes via reflection");
-                return changes;
-            } else if (result instanceof Collection) {
-                Collection<Change> changes = (Collection<Change>) result;
+            if (result instanceof Collection<?> col) {
+                List<Change> changes = new ArrayList<>();
+                for (Object item : col) {
+                    if (item instanceof Change change) {
+                        changes.add(change);
+                    }
+                }
                 LOG.debug("Successfully retrieved " + changes.size() + " included changes via reflection");
                 return changes;
             }
