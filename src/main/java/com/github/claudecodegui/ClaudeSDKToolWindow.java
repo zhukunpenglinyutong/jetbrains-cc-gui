@@ -2303,13 +2303,48 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 JsonObject msgObj = new JsonObject();
                 msgObj.addProperty("type", msg.type.toString().toLowerCase());
                 msgObj.addProperty("timestamp", msg.timestamp);
-                msgObj.addProperty("content", msg.content != null ? msg.content : "");
+                msgObj.addProperty("content", truncateErrorContent(msg.content != null ? msg.content : ""));
                 if (msg.raw != null) {
                     msgObj.add("raw", truncateRawForTransport(msg.raw));
                 }
                 messagesArray.add(msgObj);
             }
             return gson.toJson(messagesArray);
+        }
+
+        private static final int MAX_ERROR_CONTENT_CHARS = 1000;
+        private static final String[] ERROR_CONTENT_PREFIXES = {
+            "API Error", "API error", "Error:", "Error "
+        };
+
+        /**
+         * Truncate content only if it looks like an error message.
+         * Normal assistant responses are never truncated.
+         */
+        private static String truncateErrorContent(String content) {
+            if (content == null || content.length() <= MAX_ERROR_CONTENT_CHARS) {
+                return content;
+            }
+            for (String prefix : ERROR_CONTENT_PREFIXES) {
+                if (content.startsWith(prefix)) {
+                    return content.substring(0, MAX_ERROR_CONTENT_CHARS)
+                        + "... [truncated, total " + content.length() + " chars]";
+                }
+            }
+            return content;
+        }
+
+        /**
+         * Check if content starts with a known error prefix.
+         */
+        private static boolean isErrorContent(String content) {
+            if (content == null) return false;
+            for (String prefix : ERROR_CONTENT_PREFIXES) {
+                if (content.startsWith(prefix)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static final int MAX_TOOL_RESULT_CHARS = 20000;
@@ -2325,7 +2360,27 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 }
             }
 
-            if (contentEl == null || !contentEl.isJsonArray()) {
+            if (contentEl == null) {
+                return raw;
+            }
+
+            // Handle string content (frontend normalizeBlocks also handles this case)
+            if (contentEl.isJsonPrimitive() && contentEl.getAsJsonPrimitive().isString()) {
+                String s = contentEl.getAsString();
+                if (s.length() > MAX_ERROR_CONTENT_CHARS && isErrorContent(s)) {
+                    JsonObject copied = raw.deepCopy();
+                    String truncated = truncateErrorContent(s);
+                    if (copied.has("content")) {
+                        copied.addProperty("content", truncated);
+                    } else if (copied.has("message") && copied.get("message").isJsonObject()) {
+                        copied.getAsJsonObject("message").addProperty("content", truncated);
+                    }
+                    return copied;
+                }
+                return raw;
+            }
+
+            if (!contentEl.isJsonArray()) {
                 return raw;
             }
 
@@ -2335,14 +2390,27 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 if (!el.isJsonObject()) continue;
                 JsonObject block = el.getAsJsonObject();
                 if (!block.has("type") || block.get("type").isJsonNull()) continue;
-                if (!"tool_result".equals(block.get("type").getAsString())) continue;
-                if (!block.has("content") || block.get("content").isJsonNull()) continue;
-                JsonElement c = block.get("content");
-                if (c.isJsonPrimitive() && c.getAsJsonPrimitive().isString()) {
-                    String s = c.getAsString();
-                    if (s.length() > MAX_TOOL_RESULT_CHARS) {
-                        needsCopy = true;
-                        break;
+                String blockType = block.get("type").getAsString();
+                // Check tool_result blocks for oversized content
+                if ("tool_result".equals(blockType)) {
+                    if (!block.has("content") || block.get("content").isJsonNull()) continue;
+                    JsonElement c = block.get("content");
+                    if (c.isJsonPrimitive() && c.getAsJsonPrimitive().isString()) {
+                        if (c.getAsString().length() > MAX_TOOL_RESULT_CHARS) {
+                            needsCopy = true;
+                            break;
+                        }
+                    }
+                }
+                // Check text blocks for oversized error content
+                if ("text".equals(blockType) && block.has("text") && !block.get("text").isJsonNull()) {
+                    JsonElement t = block.get("text");
+                    if (t.isJsonPrimitive() && t.getAsJsonPrimitive().isString()) {
+                        String s = t.getAsString();
+                        if (s.length() > MAX_ERROR_CONTENT_CHARS && isErrorContent(s)) {
+                            needsCopy = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -2371,18 +2439,31 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 if (!el.isJsonObject()) continue;
                 JsonObject block = el.getAsJsonObject();
                 if (!block.has("type") || block.get("type").isJsonNull()) continue;
-                if (!"tool_result".equals(block.get("type").getAsString())) continue;
-                if (!block.has("content") || block.get("content").isJsonNull()) continue;
-                JsonElement c = block.get("content");
-                if (c.isJsonPrimitive() && c.getAsJsonPrimitive().isString()) {
-                    String s = c.getAsString();
-                    if (s.length() > MAX_TOOL_RESULT_CHARS) {
-                        int head = (int) Math.floor(MAX_TOOL_RESULT_CHARS * 0.65);
-                        int tail = MAX_TOOL_RESULT_CHARS - head;
-                        String prefix = s.substring(0, Math.min(head, s.length()));
-                        String suffix = tail > 0 ? s.substring(Math.max(0, s.length() - tail)) : "";
-                        String truncated = prefix + "\n...\n(truncated, original length: " + s.length() + " chars)\n...\n" + suffix;
-                        block.addProperty("content", truncated);
+                String blockType = block.get("type").getAsString();
+                // Truncate oversized tool_result content
+                if ("tool_result".equals(blockType)) {
+                    if (!block.has("content") || block.get("content").isJsonNull()) continue;
+                    JsonElement c = block.get("content");
+                    if (c.isJsonPrimitive() && c.getAsJsonPrimitive().isString()) {
+                        String s = c.getAsString();
+                        if (s.length() > MAX_TOOL_RESULT_CHARS) {
+                            int head = (int) Math.floor(MAX_TOOL_RESULT_CHARS * 0.65);
+                            int tail = MAX_TOOL_RESULT_CHARS - head;
+                            String prefix = s.substring(0, Math.min(head, s.length()));
+                            String suffix = tail > 0 ? s.substring(Math.max(0, s.length() - tail)) : "";
+                            String truncated = prefix + "\n...\n(truncated, original length: " + s.length() + " chars)\n...\n" + suffix;
+                            block.addProperty("content", truncated);
+                        }
+                    }
+                }
+                // Truncate error content in text blocks
+                if ("text".equals(blockType) && block.has("text") && !block.get("text").isJsonNull()) {
+                    JsonElement t = block.get("text");
+                    if (t.isJsonPrimitive() && t.getAsJsonPrimitive().isString()) {
+                        String s = t.getAsString();
+                        if (s.length() > MAX_ERROR_CONTENT_CHARS && isErrorContent(s)) {
+                            block.addProperty("text", truncateErrorContent(s));
+                        }
                     }
                 }
             }
