@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { TriggerQuery, DropdownPosition } from '../types';
+import { getVirtualCursorPosition } from '../utils/virtualCursorUtils.js';
 
 /**
  * 辅助函数：检查文本是否以换行符结尾
@@ -400,144 +401,12 @@ export function useTriggerDetection() {
   }, []);
 
   /**
-   * Get cursor position
+   * Get cursor position (delegates to shared virtual cursor utility)
    * Note: Must be consistent with getTextContent return format
    * File tags are converted to @filepath format
    */
   const getCursorPosition = useCallback((element: HTMLElement): number => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return 0;
-
-    const range = selection.getRangeAt(0);
-
-    // 遍历 DOM 节点计算光标位置，与 getTextContent 保持一致
-    let position = 0;
-    let found = false;
-    // 跟踪当前是否以换行结尾，与 getTextContent 的 text.endsWith('\n') 逻辑一致
-    let endsWithNewline = false;
-
-    const walk = (node: Node): boolean => {
-      if (found) return true;
-
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent ?? '';
-        // 检查光标是否在这个文本节点中
-        if (range.endContainer === node) {
-          position += range.endOffset;
-          found = true;
-          return true;
-        }
-        position += text.length;
-        endsWithNewline = textEndsWithNewline(text);
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as HTMLElement;
-        const tagName = el.tagName.toLowerCase();
-
-        // 处理 <br> 标签 - 与 getTextContent 保持一致
-        if (tagName === 'br') {
-          // 检查光标是否在 br 元素上
-          if (range.endContainer === el || (range.endContainer === element && el === element.childNodes[range.endOffset - 1])) {
-            found = true;
-            return true;
-          }
-          position += 1;
-          endsWithNewline = true;
-          return false;
-        }
-
-        // 处理块级元素 (div, p) - 与 getTextContent 保持一致
-        if (tagName === 'div' || tagName === 'p') {
-          // 只有在 position > 0 且不以换行结尾时才添加隐式换行
-          if (position > 0 && !endsWithNewline) {
-            position += 1; // 块级元素前的隐式换行
-            endsWithNewline = true;
-          }
-
-          // 检查光标是否直接在这个元素上
-          if (range.endContainer === el) {
-            // 光标在元素节点中，计算到 endOffset 位置的子节点
-            const children = Array.from(el.childNodes);
-            for (let i = 0; i < range.endOffset && i < children.length; i++) {
-              const child = children[i];
-              if (child.nodeType === Node.TEXT_NODE) {
-                position += child.textContent?.length || 0;
-              } else if (child.nodeType === Node.ELEMENT_NODE) {
-                const childEl = child as HTMLElement;
-                const childTag = childEl.tagName.toLowerCase();
-                if (childTag === 'br') {
-                  position += 1;
-                } else if (childEl.classList.contains('file-tag')) {
-                  const filePath = childEl.getAttribute('data-file-path') || '';
-                  position += filePath.length + 1;
-                } else {
-                  position += childEl.textContent?.length || 0;
-                }
-              }
-            }
-            found = true;
-            return true;
-          }
-
-          // 递归处理子节点
-          for (const child of Array.from(el.childNodes)) {
-            if (walk(child)) return true;
-          }
-          return false;
-        }
-
-        // 如果是文件标签，计算其转换后的长度 (@ + 文件路径)
-        if (el.classList.contains('file-tag')) {
-          const filePath = el.getAttribute('data-file-path') || '';
-          const tagLength = filePath.length + 1; // @ + 文件路径（空格由后面的文本节点提供）
-
-          // 检查光标是否在文件标签内部或之后
-          if (el.contains(range.endContainer)) {
-            // 光标在文件标签内部，视为在标签末尾
-            position += tagLength;
-            found = true;
-            return true;
-          }
-          position += tagLength;
-          endsWithNewline = false;
-        } else {
-          // 检查光标是否在这个元素节点中（但不是文件标签）
-          if (range.endContainer === el) {
-            // 光标在元素节点中，计算到 endOffset 位置的子节点
-            const children = Array.from(el.childNodes);
-            for (let i = 0; i < range.endOffset && i < children.length; i++) {
-              const child = children[i];
-              if (child.nodeType === Node.TEXT_NODE) {
-                position += child.textContent?.length || 0;
-              } else if (child.nodeType === Node.ELEMENT_NODE) {
-                const childEl = child as HTMLElement;
-                const childTag = childEl.tagName.toLowerCase();
-                if (childTag === 'br') {
-                  position += 1;
-                } else if (childEl.classList.contains('file-tag')) {
-                  const filePath = childEl.getAttribute('data-file-path') || '';
-                  position += filePath.length + 1;
-                } else {
-                  position += childEl.textContent?.length || 0;
-                }
-              }
-            }
-            found = true;
-            return true;
-          }
-          // 递归处理子节点
-          for (const child of Array.from(node.childNodes)) {
-            if (walk(child)) return true;
-          }
-        }
-      }
-      return false;
-    };
-
-    for (const child of Array.from(element.childNodes)) {
-      if (walk(child)) break;
-    }
-
-    return position;
+    return getVirtualCursorPosition(element);
   }, []);
 
   return {

@@ -160,6 +160,17 @@ export function usePasteAndDrop({
           handleInput();
           timer.mark('handleInput');
 
+          // Scroll to make cursor visible after paste
+          // Use requestAnimationFrame to ensure DOM updates are complete
+          requestAnimationFrame(() => {
+            // Get the wrapper element that has overflow scroll
+            const wrapper = editableRef.current?.parentElement;
+            if (wrapper && editableRef.current) {
+              // Scroll wrapper to bottom to show pasted content
+              wrapper.scrollTop = wrapper.scrollHeight;
+            }
+          });
+
           timer.end();
         }
       }
