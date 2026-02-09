@@ -110,6 +110,8 @@ sourceSets {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // Ensure consistent source/target compatibility
+    options.release.set(17)
 }
 
 // Ensure plugin.xml is patched with the correct since/until build and change notes
