@@ -492,8 +492,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
-    // 设置 API Key 并获取配置信息（包含认证类型）
-    const { baseUrl, authType, apiKeySource, baseUrlSource } = setupApiKey();
+    // 设置 API Key 并获取配置信息
+    const { baseUrl, apiKeySource, baseUrlSource } = setupApiKey();
 
     // 检测是否使用自定义 Base URL
     if (isCustomBaseUrl(baseUrl)) {
@@ -667,7 +667,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     let retryAttempt = 0;
     let lastRetryError = null;
 
-    retryLoop: while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
+    while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
       // Reset state for each attempt (important for retry)
       let currentSessionId = resumeSessionId;
       let messageCount = 0;
@@ -702,7 +702,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
             console.log(`[RETRY] Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
             console.log(`[RETRY] Reason: ${queryError.message || String(queryError)}, messageCount: ${messageCount}`);
             await sleep(retryDelayMs);
-            continue retryLoop;
+            continue;
           }
           throw queryError;
         }
@@ -930,7 +930,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
         // Wait before retry
         await sleep(retryDelayMs);
-        continue retryLoop; // Go to next retry attempt
+        continue; // Go to next retry attempt
       }
 
       // Not retryable or max retries exceeded - throw to outer catch
@@ -956,7 +956,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    }));
 
     // Success - exit retry loop
-    break retryLoop;
+    break;
 
       } catch (retryError) {
         // Catch errors from within the retry attempt (outer try of retryLoop)
@@ -1213,8 +1213,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
   try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
-    // 设置 API Key 并获取配置信息（包含认证类型）
-    const { baseUrl, authType } = setupApiKey();
+    // 设置 API Key
+    setupApiKey();
 
     console.log('[MESSAGE_START]');
 
@@ -1382,7 +1382,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     let lastRetryError = null;
     let messageCount = 0;  // Track messages for retry decision
 
-    retryLoop: while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
+    while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
       // Reset state for each attempt (important for retry)
       let currentSessionId = resumeSessionId;
       messageCount = 0;
@@ -1424,7 +1424,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
               streamStarted = false;
             }
             await sleep(retryDelayMs);
-            continue retryLoop;
+            continue;
           }
           throw queryError;
         }
@@ -1618,7 +1618,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
             // Wait before retry
             await sleep(retryDelayMs);
-            continue retryLoop; // Go to next retry attempt
+            continue; // Go to next retry attempt
           }
 
           // Not retryable or max retries exceeded - throw to outer catch
@@ -1643,7 +1643,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    }));
 
     // Success - exit retry loop
-    break retryLoop;
+    break;
 
       } catch (retryError) {
         // Catch errors from within the retry attempt (outer try of retryLoop)
@@ -1851,11 +1851,15 @@ export async function getMcpServerTools(serverId, cwd = null) {
     const toolsResult = await getMcpServerToolsImpl(serverId, targetServer.config);
 
     // 输出带前缀的结果，供 Java 后端快速识别
+    const tools = toolsResult.tools || [];
+    const hasError = !!toolsResult.error;
+    // success=true means tools are usable; error may still contain warnings
+    // success=false only when no tools AND has error (e.g. timeout, connection failure)
     const resultJson = JSON.stringify({
-      success: true,
+      success: !hasError || tools.length > 0,
       serverId,
       serverName: toolsResult.name,
-      tools: toolsResult.tools || [],
+      tools,
       error: toolsResult.error
     });
     console.log('[MCP_SERVER_TOOLS]', resultJson);
@@ -1877,6 +1881,7 @@ export async function getMcpServerTools(serverId, cwd = null) {
  * Uses the SDK's rewindFiles() API to restore files to their state at a given message
  * @param {string} sessionId - Session ID
  * @param {string} userMessageId - User message UUID to rewind to
+ * @param {string} cwd - Working directory (optional)
  */
 export async function rewindFiles(sessionId, userMessageId, cwd = null) {
   let result = null;

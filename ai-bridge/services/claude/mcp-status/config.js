@@ -8,16 +8,19 @@
 // ============================================================================
 
 /** HTTP/SSE 类型服务器验证超时时间（毫秒）- 网络请求通常较快，但需要考虑会话建立时间 */
-export const MCP_HTTP_VERIFY_TIMEOUT = parseInt(process.env.MCP_HTTP_VERIFY_TIMEOUT) || 6000;
+export const MCP_HTTP_VERIFY_TIMEOUT = parseInt(process.env.MCP_HTTP_VERIFY_TIMEOUT, 10) || 6000;
+
+/** SSE 类型服务器验证超时时间（毫秒）- SSE 需要建立事件流 + endpoint 发现 + initialize 握手 */
+export const MCP_SSE_VERIFY_TIMEOUT = parseInt(process.env.MCP_SSE_VERIFY_TIMEOUT, 10) || 10000;
+
+/** SSE 类型服务器工具列表获取超时时间（毫秒）- 需要完成握手 + initialize + tools/list */
+export const MCP_SSE_TOOLS_TIMEOUT = parseInt(process.env.MCP_SSE_TOOLS_TIMEOUT, 10) || 30000;
 
 /** STDIO 类型服务器验证超时时间（毫秒）- 需要启动进程，但 15 秒足够验证连通性 */
-export const MCP_STDIO_VERIFY_TIMEOUT = parseInt(process.env.MCP_STDIO_VERIFY_TIMEOUT) || 15000;
-
-/** 通用验证超时时间（毫秒），可通过环境变量配置 */
-export const MCP_VERIFY_TIMEOUT = parseInt(process.env.MCP_VERIFY_TIMEOUT) || 8000;
+export const MCP_STDIO_VERIFY_TIMEOUT = parseInt(process.env.MCP_STDIO_VERIFY_TIMEOUT, 10) || 15000;
 
 /** 工具列表获取超时时间（毫秒） */
-export const MCP_TOOLS_TIMEOUT = parseInt(process.env.MCP_TOOLS_TIMEOUT) || 45000;
+export const MCP_TOOLS_TIMEOUT = parseInt(process.env.MCP_TOOLS_TIMEOUT, 10) || 45000;
 
 // ============================================================================
 // 调试配置
@@ -50,6 +53,9 @@ export const ALLOWED_COMMANDS = new Set([
   'docker',
   'cargo',
   'go',
+  'java',
+  'javaw',
+  'kotlin',
 ]);
 
 /**
@@ -156,5 +162,8 @@ function enhancePath(currentPath) {
 // 其他常量
 // ============================================================================
 
-/** 最大输出行长度限制（防止 ReDoS 攻击） */
+/** 最大输出行长度限制（防止 ReDoS 攻击，用于 server-info-parser 的正则匹配） */
 export const MAX_LINE_LENGTH = 10000;
+
+/** STDIO 工具获取的最大行长度限制（1MB，仅做 JSON.parse 无 ReDoS 风险，但需防止内存耗尽） */
+export const STDIO_TOOLS_MAX_LINE_LENGTH = 1024 * 1024;

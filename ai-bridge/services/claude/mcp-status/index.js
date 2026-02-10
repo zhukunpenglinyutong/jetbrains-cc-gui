@@ -9,18 +9,22 @@
  * - command-validator.js: 命令白名单验证
  * - server-info-parser.js: 服务器信息解析
  * - process-manager.js: 进程管理
- * - http-verifier.js: HTTP/SSE 服务器验证
+ * - http-verifier.js: HTTP/Streamable HTTP 服务器验证
+ * - sse-verifier.js: SSE 传输服务器验证
  * - stdio-verifier.js: STDIO 服务器验证
  * - config-loader.js: 配置加载
  * - http-tools-getter.js: HTTP 工具获取
+ * - sse-tools-getter.js: SSE 工具获取
  * - stdio-tools-getter.js: STDIO 工具获取
  */
 
 import { log } from './logger.js';
 import { loadMcpServersConfig, loadAllMcpServersInfo } from './config-loader.js';
 import { verifyHttpServerStatus } from './http-verifier.js';
+import { verifySseServerStatus } from './sse-verifier.js';
 import { verifyStdioServerStatus } from './stdio-verifier.js';
 import { getHttpServerTools } from './http-tools-getter.js';
+import { getSseServerTools } from './sse-tools-getter.js';
 import { getStdioServerTools } from './stdio-tools-getter.js';
 
 // 重新导出配置加载函数
@@ -35,8 +39,13 @@ export { loadMcpServersConfig, loadAllMcpServersInfo } from './config-loader.js'
 export async function verifyMcpServerStatus(serverName, serverConfig) {
   const serverType = serverConfig.type || 'stdio';
 
-  // HTTP/SSE 类型服务器使用不同的验证逻辑
-  if (serverType === 'http' || serverType === 'sse' || serverType === 'streamable-http') {
+  // SSE transport uses a different handshake (GET stream → endpoint discovery → POST)
+  if (serverType === 'sse') {
+    return verifySseServerStatus(serverName, serverConfig);
+  }
+
+  // Streamable HTTP / generic HTTP use direct POST
+  if (serverType === 'http' || serverType === 'streamable-http') {
     return verifyHttpServerStatus(serverName, serverConfig);
   }
 
@@ -102,8 +111,13 @@ export async function getMcpServersStatus(cwd = null) {
 export async function getMcpServerTools(serverName, serverConfig) {
   const serverType = serverConfig.type || 'stdio';
 
-  // Support multiple HTTP-based server types
-  if (serverType === 'http' || serverType === 'sse' || serverType === 'streamable-http') {
+  // SSE transport uses endpoint discovery before sending requests
+  if (serverType === 'sse') {
+    return getSseServerTools(serverName, serverConfig);
+  }
+
+  // Streamable HTTP / generic HTTP use direct POST
+  if (serverType === 'http' || serverType === 'streamable-http') {
     return getHttpServerTools(serverName, serverConfig);
   }
 
