@@ -96,13 +96,15 @@ export const DropdownItem = ({
   const renderTooltip = () => {
     if (!showTooltip || !item.description) return null;
 
+    const viewportHeight = window.innerHeight;
+
     const tooltipStyle: React.CSSProperties = {
       position: 'fixed',
       left: tooltipPosition.left,
       transform: 'translateX(-50%)',
       ...(tooltipPosition.placement === 'bottom'
         ? { top: tooltipPosition.top }
-        : { bottom: window.innerHeight - tooltipPosition.top, transform: 'translateX(-50%)' }
+        : { bottom: viewportHeight - tooltipPosition.top, transform: 'translateX(-50%)' }
       ),
       zIndex: 9999,
       maxWidth: '400px',
@@ -134,7 +136,7 @@ export const DropdownItem = ({
             borderBottom: '6px solid var(--dropdown-border)'
           }
         : {
-            bottom: window.innerHeight - tooltipPosition.top - 6,
+            bottom: viewportHeight - tooltipPosition.top - 6,
             borderLeft: '6px solid transparent',
             borderRight: '6px solid transparent',
             borderTop: '6px solid var(--dropdown-border)'
