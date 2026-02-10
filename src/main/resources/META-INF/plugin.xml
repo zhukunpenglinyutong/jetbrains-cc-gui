@@ -100,6 +100,9 @@
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
                                 implementation="com.github.claudecodegui.notifications.ClaudeStatusBarWidget$Factory"/>
+
+        <!-- Notification group for DevTools and other balloon notifications -->
+        <notificationGroup id="Claude Code GUI Notifications" displayType="BALLOON"/>
     </extensions>
 
     <actions>
@@ -143,6 +146,7 @@
         <!-- Open DevTools Action for JCEF debugging -->
         <action id="ClaudeCodeGUI.OpenDevToolsAction"
                 class="com.github.claudecodegui.OpenDevToolsAction"
+                icon="AllIcons.Xml.Browsers.Chromium"
                 text="Open DevTools"
                 description="Open JCEF DevTools for debugging"/>
 
