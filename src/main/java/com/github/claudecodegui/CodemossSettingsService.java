@@ -599,6 +599,91 @@ public class CodemossSettingsService {
         agentManager.setSelectedAgentId(agentId);
     }
 
+    // ==================== 提示音配置管理 ====================
+
+    /**
+     * 获取是否启用提示音
+     * @return 是否启用提示音，默认关闭
+     */
+    public boolean getSoundNotificationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return false; // 默认关闭
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("enabled")) {
+            return soundConfig.get("enabled").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * 设置是否启用提示音
+     * @param enabled 是否启用
+     */
+    public void setSoundNotificationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("enabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set sound notification enabled: " + enabled);
+    }
+
+    /**
+     * 获取自定义提示音文件路径
+     * @return 自定义提示音路径，为空表示使用默认提示音
+     */
+    public String getCustomSoundPath() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return null;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("customSoundPath") && !soundConfig.get("customSoundPath").isJsonNull()) {
+            return soundConfig.get("customSoundPath").getAsString();
+        }
+
+        return null;
+    }
+
+    /**
+     * 设置自定义提示音文件路径
+     * @param path 文件路径，为空表示使用默认提示音
+     */
+    public void setCustomSoundPath(String path) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        if (path == null || path.isEmpty()) {
+            soundConfig.remove("customSoundPath");
+        } else {
+            soundConfig.addProperty("customSoundPath", path);
+        }
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set custom sound path: " + path);
+    }
+
     // ==================== Codex Provider 管理 ====================
 
     public List<JsonObject> getCodexProviders() throws IOException {

@@ -185,9 +185,9 @@ const SettingsView = ({
   const [alertDialog, setAlertDialog] = useState<{
     isOpen: boolean;
     type: AlertType;
-    title: string;
+    titleKey: string; // i18n key for title
     message: string;
-  }>({ isOpen: false, type: 'info', title: '', message: '' });
+  }>({ isOpen: false, type: 'info', titleKey: '', message: '' });
 
   // 主题状态
   const [themePreference, setThemePreference] = useState<'light' | 'dark' | 'system'>(() => {
@@ -255,6 +255,10 @@ const SettingsView = ({
     return saved !== 'false'; // 默认开启
   });
 
+  // 提示音配置
+  const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
+  const [customSoundPath, setCustomSoundPath] = useState<string>('');
+
   const handleTabChange = (tab: SettingsTab) => {
     if (isCodexMode && disabledTabs.includes(tab)) {
       addToast(t('settings.codexFeatureUnavailable'), 'warning');
@@ -264,19 +268,19 @@ const SettingsView = ({
   };
 
   // 显示页面内弹窗的帮助函数
-  const showAlert = (type: AlertType, title: string, message: string) => {
-    console.log('[SettingsView] showAlert called:', { type, title, message });
-    setAlertDialog({ isOpen: true, type, title, message });
+  const showAlert = (type: AlertType, titleKey: string, message: string) => {
+    console.log('[SettingsView] showAlert called:', { type, titleKey, message });
+    setAlertDialog({ isOpen: true, type, titleKey, message });
   };
 
   const closeAlert = () => {
-    setAlertDialog({ ...alertDialog, isOpen: false });
+    setAlertDialog(prev => ({ ...prev, isOpen: false }));
   };
 
   // 显示切换成功弹窗
   const showSwitchSuccess = (message: string) => {
     console.log('[SettingsView] showSwitchSuccess called:', message);
-    showAlert('success', t('toast.switchSuccess'), message);
+    showAlert('success', 'toast.switchSuccess', message);
   };
 
   useEffect(() => {
@@ -316,7 +320,7 @@ const SettingsView = ({
 
     window.showError = (message: string) => {
       console.log('[SettingsView] window.showError called:', message);
-      showAlert('error', t('toast.operationFailed'), message);
+      showAlert('error', 'toast.operationFailed', message);
       setLoading(false);
       setSavingNodePath(false);
       setSavingWorkingDirectory(false);
@@ -359,7 +363,14 @@ const SettingsView = ({
 
     window.showSuccess = (message: string) => {
       console.log('[SettingsView] window.showSuccess called:', message);
-      showAlert('success', t('toast.operationSuccess'), message);
+      showAlert('success', 'toast.operationSuccess', message);
+      setSavingNodePath(false);
+      setSavingWorkingDirectory(false);
+    };
+
+    window.showSuccessI18n = (i18nKey: string) => {
+      console.log('[SettingsView] window.showSuccessI18n called:', i18nKey);
+      showAlert('success', 'toast.operationSuccess', t(i18nKey));
       setSavingNodePath(false);
       setSavingWorkingDirectory(false);
     };
@@ -413,6 +424,21 @@ const SettingsView = ({
         }
       };
     }
+
+    // 提示音配置回调
+    window.updateSoundNotificationConfig = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        if (data.enabled !== undefined) {
+          setSoundNotificationEnabled(data.enabled);
+        }
+        if (data.customSoundPath !== undefined) {
+          setCustomSoundPath(data.customSoundPath);
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse sound notification config:', error);
+      }
+    };
 
     // Commit AI 提示词回调
     window.updateCommitPrompt = (jsonStr: string) => {
@@ -502,6 +528,8 @@ const SettingsView = ({
     sendToJava('get_streaming_enabled:');
     // 加载 Commit AI 提示词
     sendToJava('get_commit_prompt:');
+    // 加载提示音配置
+    sendToJava('get_sound_notification_config:');
 
     return () => {
       // 清理 Agent 超时定时器 - 使用 hook 提供的清理函数
@@ -515,6 +543,7 @@ const SettingsView = ({
       window.updateNodePath = undefined;
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
+      window.showSuccessI18n = undefined;
       window.onEditorFontConfigReceived = undefined;
       // 恢复之前的 IDE 主题回调（App.tsx 的回调）
       window.onIdeThemeReceived = previousOnIdeThemeReceived;
@@ -527,6 +556,7 @@ const SettingsView = ({
         window.updateSendShortcut = previousUpdateSendShortcut;
       }
       window.updateCommitPrompt = undefined;
+      window.updateSoundNotificationConfig = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       // Cleanup Codex callbacks
@@ -672,6 +702,35 @@ const SettingsView = ({
     }
   };
 
+  // 提示音开关变更处理
+  const handleSoundNotificationEnabledChange = (enabled: boolean) => {
+    setSoundNotificationEnabled(enabled);
+    const payload = { enabled };
+    sendToJava(`set_sound_notification_enabled:${JSON.stringify(payload)}`);
+  };
+
+  // 自定义提示音路径变更处理
+  const handleCustomSoundPathChange = (path: string) => {
+    setCustomSoundPath(path);
+  };
+
+  // 保存自定义提示音路径
+  const handleSaveCustomSoundPath = () => {
+    const payload = { path: customSoundPath };
+    sendToJava(`set_custom_sound_path:${JSON.stringify(payload)}`);
+  };
+
+  // 测试提示音
+  const handleTestSound = () => {
+    const payload = { path: customSoundPath };
+    sendToJava(`test_sound:${JSON.stringify(payload)}`);
+  };
+
+  // 浏览提示音文件
+  const handleBrowseSound = () => {
+    sendToJava('browse_sound_file:');
+  };
+
   // Commit AI 提示词保存处理
   const handleSaveCommitPrompt = () => {
     setSavingCommitPrompt(true);
@@ -807,6 +866,13 @@ const SettingsView = ({
               onSendShortcutChange={handleSendShortcutChange}
               autoOpenFileEnabled={autoOpenFileEnabled}
               onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+              soundNotificationEnabled={soundNotificationEnabled}
+              onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
+              customSoundPath={customSoundPath}
+              onCustomSoundPathChange={handleCustomSoundPathChange}
+              onSaveCustomSoundPath={handleSaveCustomSoundPath}
+              onTestSound={handleTestSound}
+              onBrowseSound={handleBrowseSound}
             />
           </div>
 
@@ -979,7 +1045,7 @@ const SettingsView = ({
       <AlertDialog
         isOpen={alertDialog.isOpen}
         type={alertDialog.type}
-        title={alertDialog.title}
+        title={alertDialog.titleKey ? t(alertDialog.titleKey) : ''}
         message={alertDialog.message}
         onClose={closeAlert}
       />

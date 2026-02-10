@@ -156,6 +156,19 @@
         "enterDesc": "Press Enter to send message, Shift+Enter for new line",
         "cmdEnter": "⌘/Ctrl+Enter to Send",
         "cmdEnterDesc": "Press ⌘/Ctrl+Enter to send message, Enter for new line"
+      },
+      "soundNotification": {
+        "label": "Task Completion Sound",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, a notification sound will play when AI completes a task, so you'll know even when away from the screen.",
+        "customSound": "Custom Sound",
+        "customSoundPlaceholder": "Leave empty for default sound",
+        "customSoundHint": "Supports WAV, MP3, AIFF formats",
+        "testSound": "Test",
+        "browse": "Browse",
+        "useDefault": "Use Default",
+        "customSoundSaved": "Custom sound saved"
       }
     },
     "providers": "Provider Management",

@@ -230,6 +230,11 @@ interface Window {
   updateCommitPrompt?: (json: string) => void;
 
   /**
+   * Update sound notification configuration
+   */
+  updateSoundNotificationConfig?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;
@@ -258,6 +263,11 @@ interface Window {
    * Show success message
    */
   showSuccess?: (message: string) => void;
+
+  /**
+   * Show success message with i18n key
+   */
+  showSuccessI18n?: (i18nKey: string) => void;
 
   /**
    * Update skills list

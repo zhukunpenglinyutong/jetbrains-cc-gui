@@ -7,6 +7,7 @@ import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.util.FontConfigService;
+import com.github.claudecodegui.util.SoundNotificationService;
 import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -65,7 +66,13 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_input_history",
         "record_input_history",
         "delete_input_history_item",
-        "clear_input_history"
+        "clear_input_history",
+        // 提示音配置
+        "get_sound_notification_config",
+        "set_sound_notification_enabled",
+        "set_custom_sound_path",
+        "test_sound",
+        "browse_sound_file"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -189,6 +196,22 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "clear_input_history":
                 handleClearInputHistory();
+                return true;
+            // 提示音配置
+            case "get_sound_notification_config":
+                handleGetSoundNotificationConfig();
+                return true;
+            case "set_sound_notification_enabled":
+                handleSetSoundNotificationEnabled(content);
+                return true;
+            case "set_custom_sound_path":
+                handleSetCustomSoundPath(content);
+                return true;
+            case "test_sound":
+                handleTestSound(content);
+                return true;
+            case "browse_sound_file":
+                handleBrowseSoundFile();
                 return true;
             default:
                 return false;
@@ -1495,5 +1518,180 @@ public class SettingsHandler extends BaseMessageHandler {
 
         String[] lines = output.toString().split("\n");
         return lines.length > 0 ? lines[lines.length - 1] : "{}";
+    }
+
+    // ==================== 提示音配置管理 ====================
+
+    /**
+     * 获取提示音配置
+     */
+    private void handleGetSoundNotificationConfig() {
+        try {
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            boolean enabled = settingsService.getSoundNotificationEnabled();
+            String customPath = settingsService.getCustomSoundPath();
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("enabled", enabled);
+                response.addProperty("customSoundPath", customPath != null ? customPath : "");
+                callJavaScript("window.updateSoundNotificationConfig", escapeJs(new Gson().toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to get sound notification config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("enabled", false);
+                response.addProperty("customSoundPath", "");
+                callJavaScript("window.updateSoundNotificationConfig", escapeJs(new Gson().toJson(response)));
+            });
+        }
+    }
+
+    /**
+     * 设置提示音启用状态
+     */
+    private void handleSetSoundNotificationEnabled(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean enabled = json != null && json.has("enabled") && json.get("enabled").getAsBoolean();
+
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            settingsService.setSoundNotificationEnabled(enabled);
+
+            LOG.info("[SettingsHandler] Set sound notification enabled: " + enabled);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("enabled", enabled);
+                try {
+                    response.addProperty("customSoundPath", settingsService.getCustomSoundPath() != null ? settingsService.getCustomSoundPath() : "");
+                } catch (Exception e) {
+                    response.addProperty("customSoundPath", "");
+                }
+                callJavaScript("window.updateSoundNotificationConfig", escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set sound notification enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("保存提示音配置失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 设置自定义提示音路径
+     */
+    private void handleSetCustomSoundPath(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String path = json != null && json.has("path") && !json.get("path").isJsonNull()
+                ? json.get("path").getAsString() : null;
+
+            // 验证文件
+            if (path != null && !path.isEmpty()) {
+                SoundNotificationService.ValidationResult validation =
+                    SoundNotificationService.getInstance().validateSoundFile(path);
+
+                if (!validation.isValid()) {
+                    final String errorMsg = validation.getErrorMessage();
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.showError", escapeJs("无效的音频文件: " + errorMsg));
+                    });
+                    return;
+                }
+            }
+
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            settingsService.setCustomSoundPath(path);
+
+            LOG.info("[SettingsHandler] Set custom sound path: " + path);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                try {
+                    response.addProperty("enabled", settingsService.getSoundNotificationEnabled());
+                } catch (Exception e) {
+                    response.addProperty("enabled", false);
+                }
+                response.addProperty("customSoundPath", path != null ? path : "");
+                callJavaScript("window.updateSoundNotificationConfig", escapeJs(gson.toJson(response)));
+                callJavaScript("window.showSuccessI18n", escapeJs("settings.basic.soundNotification.customSoundSaved"));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set custom sound path: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("保存自定义提示音失败: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * 测试播放提示音
+     */
+    private void handleTestSound(String content) {
+        try {
+            String path = null;
+            if (content != null && !content.isEmpty()) {
+                Gson gson = new Gson();
+                JsonObject json = gson.fromJson(content, JsonObject.class);
+                path = json != null && json.has("path") && !json.get("path").isJsonNull()
+                    ? json.get("path").getAsString() : null;
+            }
+
+            LOG.info("[SettingsHandler] Testing sound: " + (path != null ? path : "default"));
+            SoundNotificationService.getInstance().testPlaySound(path);
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to test sound: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 打开文件选择器选择音频文件
+     */
+    private void handleBrowseSoundFile() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                com.intellij.openapi.fileChooser.FileChooserDescriptor descriptor =
+                    new com.intellij.openapi.fileChooser.FileChooserDescriptor(
+                        true, false, false, false, false, false
+                    )
+                    .withFileFilter(file -> {
+                        String ext = file.getExtension();
+                        return ext != null && (
+                            ext.equalsIgnoreCase("wav") ||
+                            ext.equalsIgnoreCase("mp3") ||
+                            ext.equalsIgnoreCase("aiff")
+                        );
+                    })
+                    .withTitle("选择提示音文件")
+                    .withDescription("选择 WAV、MP3 或 AIFF 格式的音频文件");
+
+                com.intellij.openapi.fileChooser.FileChooser.chooseFile(
+                    descriptor,
+                    context.getProject(),
+                    null,
+                    file -> {
+                        if (file != null) {
+                            String path = file.getPath();
+                            JsonObject response = new JsonObject();
+                            try {
+                                CodemossSettingsService settingsService = new CodemossSettingsService();
+                                response.addProperty("enabled", settingsService.getSoundNotificationEnabled());
+                            } catch (Exception e) {
+                                response.addProperty("enabled", false);
+                            }
+                            response.addProperty("customSoundPath", path);
+                            callJavaScript("window.updateSoundNotificationConfig",
+                                escapeJs(new Gson().toJson(response)));
+                        }
+                    }
+                );
+            } catch (Exception e) {
+                LOG.error("[SettingsHandler] Failed to open file chooser: " + e.getMessage(), e);
+            }
+        });
     }
 }

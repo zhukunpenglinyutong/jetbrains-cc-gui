@@ -156,6 +156,19 @@
         "enterDesc": "按 Enter 发送消息，Shift+Enter 换行",
         "cmdEnter": "⌘/Ctrl+Enter 发送",
         "cmdEnterDesc": "按 ⌘/Ctrl+Enter 发送消息，Enter 换行"
+      },
+      "soundNotification": {
+        "label": "任务完成提示音",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，AI 完成任务时会播放提示音，方便您离开屏幕时也能知道任务已完成。",
+        "customSound": "自定义提示音",
+        "customSoundPlaceholder": "留空使用默认提示音",
+        "customSoundHint": "支持 WAV、MP3、AIFF 格式",
+        "testSound": "试听",
+        "browse": "浏览",
+        "useDefault": "使用默认",
+        "customSoundSaved": "自定义提示音已保存"
       }
     },
     "providers": "供应商管理",
