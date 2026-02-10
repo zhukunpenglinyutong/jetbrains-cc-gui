@@ -84,14 +84,22 @@ function t(key: string, fallback: string): string {
  * and displays a fallback UI instead of crashing the whole app
  */
 class ErrorBoundary extends Component<Props, State> {
+  private copyTimerId: ReturnType<typeof setTimeout> | null = null;
+
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, copied: false };
   }
 
+  componentWillUnmount() {
+    if (this.copyTimerId) {
+      clearTimeout(this.copyTimerId);
+    }
+  }
+
   static getDerivedStateFromError(error: Error): Partial<State> {
     // Update state so the next render will show the fallback UI
-    return { hasError: true, error };
+    return { hasError: true, error, copied: false };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
@@ -113,16 +121,23 @@ class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
+  private setCopiedWithAutoReset = () => {
+    if (this.copyTimerId) {
+      clearTimeout(this.copyTimerId);
+    }
+    this.setState({ copied: true });
+    this.copyTimerId = setTimeout(() => {
+      this.setState({ copied: false });
+      this.copyTimerId = null;
+    }, 2000);
+  };
+
   handleCopyError = async () => {
     const errorDetails = formatErrorDetails(this.state.error, this.state.errorInfo);
 
     try {
       await navigator.clipboard.writeText(errorDetails);
-      this.setState({ copied: true });
-      // Reset copied state after 2 seconds
-      setTimeout(() => {
-        this.setState({ copied: false });
-      }, 2000);
+      this.setCopiedWithAutoReset();
     } catch (err) {
       // Fallback: create a textarea and copy from there
       const textarea = document.createElement('textarea');
@@ -133,10 +148,7 @@ class ErrorBoundary extends Component<Props, State> {
       textarea.select();
       try {
         document.execCommand('copy');
-        this.setState({ copied: true });
-        setTimeout(() => {
-          this.setState({ copied: false });
-        }, 2000);
+        this.setCopiedWithAutoReset();
       } catch {
         console.error('Failed to copy error details');
       }
