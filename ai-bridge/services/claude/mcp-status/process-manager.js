@@ -98,13 +98,13 @@ export function createProcessHandlers(context) {
 
 /**
  * 发送初始化请求到子进程
+ * Caller is responsible for closing stdin when appropriate.
  * @param {import('child_process').ChildProcess} child - 子进程
  * @param {string} serverName - 服务器名称
  */
 export function sendInitializeRequest(child, serverName) {
   try {
     child.stdin.write(createInitializeRequest());
-    child.stdin.end();
   } catch (e) {
     log('debug', `Failed to write to stdin for ${serverName}:`, e.message);
   }

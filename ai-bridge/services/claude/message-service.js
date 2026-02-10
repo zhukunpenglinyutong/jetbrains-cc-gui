@@ -327,12 +327,45 @@ function createPreToolUseHook(permissionMode) {
 }
 
 /**
- * 发送消息（支持会话恢复）
- * @param {string} message - 要发送的消息
- * @param {string} resumeSessionId - 要恢复的会话ID
- * @param {string} cwd - 工作目录
- * @param {string} permissionMode - 权限模式（可选）
- * @param {string} model - 模型名称（可选）
+ * Truncate a string to a maximum length, appending a suffix if truncated.
+ * @param {string} str - The string to truncate
+ * @param {number} maxLen - Maximum allowed length (default 1000)
+ * @returns {string} The original or truncated string
+ */
+function truncateString(str, maxLen = 1000) {
+  if (!str || str.length <= maxLen) return str;
+  return str.substring(0, maxLen) + `... [truncated, total ${str.length} chars]`;
+}
+
+/**
+ * Error prefixes that indicate the content is an error message from SDK or API.
+ * When content starts with one of these prefixes and exceeds maxLen, it will be truncated.
+ */
+const ERROR_CONTENT_PREFIXES = [
+  'API Error',
+  'API error',
+  'Error:',
+  'Error ',
+];
+
+/**
+ * Truncate content only if it looks like an error message (starts with known error prefixes).
+ * Normal assistant responses are never truncated.
+ * @param {string} content - The content to check and possibly truncate
+ * @param {number} maxLen - Maximum allowed length (default 1000)
+ * @returns {string} The original or truncated content
+ */
+function truncateErrorContent(content, maxLen = 1000) {
+  if (!content || content.length <= maxLen) return content;
+  const isError = ERROR_CONTENT_PREFIXES.some(prefix => content.startsWith(prefix));
+  if (!isError) return content;
+  return content.substring(0, maxLen) + `... [truncated, total ${content.length} chars]`;
+}
+
+/**
+ * Build error payload for configuration errors
+ * @param {Error} error - The error object to build payload from
+ * @returns {Object} Error payload with error message and details
  */
 	function buildConfigErrorPayload(error) {
 			  try {
@@ -395,7 +428,7 @@ function createPreToolUseHook(permissionMode) {
 
 		    const userMessage = [
 	      heading,
-	      `- Error message: ${rawError}`,
+	      `- Error message: ${truncateString(rawError)}`,
 	      `- Current API Key source: ${keySource}`,
 	      `- Current API Key preview: ${keyPreview}`,
 	      `- Current Base URL: ${baseUrl} (source: ${baseUrlSource})`,
@@ -421,7 +454,7 @@ function createPreToolUseHook(permissionMode) {
     const rawError = error?.message || String(error);
     return {
       success: false,
-      error: rawError,
+      error: truncateString(rawError),
       details: {
         rawError,
         buildErrorFailed: String(innerError)
@@ -459,8 +492,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
     console.log('[DEBUG] CLAUDE_CODE_ENTRYPOINT:', process.env.CLAUDE_CODE_ENTRYPOINT);
 
-    // 设置 API Key 并获取配置信息（包含认证类型）
-    const { baseUrl, authType, apiKeySource, baseUrlSource } = setupApiKey();
+    // 设置 API Key 并获取配置信息
+    const { baseUrl, apiKeySource, baseUrlSource } = setupApiKey();
 
     // 检测是否使用自定义 Base URL
     if (isCustomBaseUrl(baseUrl)) {
@@ -634,7 +667,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     let retryAttempt = 0;
     let lastRetryError = null;
 
-    retryLoop: while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
+    while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
       // Reset state for each attempt (important for retry)
       let currentSessionId = resumeSessionId;
       let messageCount = 0;
@@ -669,7 +702,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
             console.log(`[RETRY] Will retry (attempt ${retryAttempt}/${AUTO_RETRY_CONFIG.maxRetries}) after ${retryDelayMs}ms delay`);
             console.log(`[RETRY] Reason: ${queryError.message || String(queryError)}, messageCount: ${messageCount}`);
             await sleep(retryDelayMs);
-            continue retryLoop;
+            continue;
           }
           throw queryError;
         }
@@ -773,7 +806,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
                 }
               } else if (!streamingEnabled) {
                 // 非流式模式：输出完整内容
-                console.log('[CONTENT]', currentText);
+                console.log('[CONTENT]', truncateErrorContent(currentText));
               }
             } else if (block.type === 'thinking') {
               // 输出思考过程
@@ -809,7 +842,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
               lastAssistantContent = content;
             }
           } else if (!streamingEnabled) {
-            console.log('[CONTENT]', content);
+            console.log('[CONTENT]', truncateErrorContent(content));
           }
         }
       }
@@ -897,7 +930,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
         // Wait before retry
         await sleep(retryDelayMs);
-        continue retryLoop; // Go to next retry attempt
+        continue; // Go to next retry attempt
       }
 
       // Not retryable or max retries exceeded - throw to outer catch
@@ -923,7 +956,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    }));
 
     // Success - exit retry loop
-    break retryLoop;
+    break;
 
       } catch (retryError) {
         // Catch errors from within the retry attempt (outer try of retryLoop)
@@ -950,6 +983,8 @@ ${sdkErrorText}
 ${payload.error}`;
       payload.details.sdkError = sdkErrorText;
     }
+    // Truncate final payload.error to prevent webview freezing
+    payload.error = truncateString(payload.error);
     console.error('[SEND_ERROR]', JSON.stringify(payload));
     console.log(JSON.stringify(payload));
   } finally {
@@ -1078,7 +1113,7 @@ Possible causes:
         uuid: randomUUID()
       };
       console.log('[MESSAGE]', JSON.stringify(assistantMsg));
-      console.log('[CONTENT]', errorContent[0].text);
+      console.log('[CONTENT]', truncateErrorContent(errorContent[0].text));
 
       const resultMsg = {
         type: 'result',
@@ -1129,7 +1164,7 @@ Possible causes:
 
     for (const block of respContent) {
       if (block.type === 'text') {
-        console.log('[CONTENT]', block.text);
+        console.log('[CONTENT]', truncateErrorContent(block.text));
       }
     }
 
@@ -1178,8 +1213,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
   try {
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
-    // 设置 API Key 并获取配置信息（包含认证类型）
-    const { baseUrl, authType } = setupApiKey();
+    // 设置 API Key
+    setupApiKey();
 
     console.log('[MESSAGE_START]');
 
@@ -1347,7 +1382,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     let lastRetryError = null;
     let messageCount = 0;  // Track messages for retry decision
 
-    retryLoop: while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
+    while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
       // Reset state for each attempt (important for retry)
       let currentSessionId = resumeSessionId;
       messageCount = 0;
@@ -1389,7 +1424,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
               streamStarted = false;
             }
             await sleep(retryDelayMs);
-            continue retryLoop;
+            continue;
           }
           throw queryError;
         }
@@ -1476,7 +1511,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	                  lastAssistantContent = currentText;
 	    	                }
 	    	              } else if (!streamingEnabled) {
-	    	                console.log('[CONTENT]', currentText);
+	    	                console.log('[CONTENT]', truncateErrorContent(currentText));
 	    	              }
 	    	            } else if (block.type === 'thinking') {
 	    	              const thinkingText = block.thinking || block.text || '';
@@ -1513,7 +1548,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	              lastAssistantContent = content;
 	    	            }
 	    	          } else if (!streamingEnabled) {
-	    	            console.log('[CONTENT]', content);
+	    	            console.log('[CONTENT]', truncateErrorContent(content));
 	    	          }
 	    	        }
 	    	      }
@@ -1583,7 +1618,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
             // Wait before retry
             await sleep(retryDelayMs);
-            continue retryLoop; // Go to next retry attempt
+            continue; // Go to next retry attempt
           }
 
           // Not retryable or max retries exceeded - throw to outer catch
@@ -1608,7 +1643,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    }));
 
     // Success - exit retry loop
-    break retryLoop;
+    break;
 
       } catch (retryError) {
         // Catch errors from within the retry attempt (outer try of retryLoop)
@@ -1635,6 +1670,8 @@ ${sdkErrorText}
 ${payload.error}`;
       payload.details.sdkError = sdkErrorText;
     }
+    // Truncate final payload.error to prevent webview freezing
+    payload.error = truncateString(payload.error);
     console.error('[SEND_ERROR]', JSON.stringify(payload));
     console.log(JSON.stringify(payload));
 	  } finally {
@@ -1814,11 +1851,15 @@ export async function getMcpServerTools(serverId, cwd = null) {
     const toolsResult = await getMcpServerToolsImpl(serverId, targetServer.config);
 
     // 输出带前缀的结果，供 Java 后端快速识别
+    const tools = toolsResult.tools || [];
+    const hasError = !!toolsResult.error;
+    // success=true means tools are usable; error may still contain warnings
+    // success=false only when no tools AND has error (e.g. timeout, connection failure)
     const resultJson = JSON.stringify({
-      success: true,
+      success: !hasError || tools.length > 0,
       serverId,
       serverName: toolsResult.name,
-      tools: toolsResult.tools || [],
+      tools,
       error: toolsResult.error
     });
     console.log('[MCP_SERVER_TOOLS]', resultJson);
@@ -1840,6 +1881,7 @@ export async function getMcpServerTools(serverId, cwd = null) {
  * Uses the SDK's rewindFiles() API to restore files to their state at a given message
  * @param {string} sessionId - Session ID
  * @param {string} userMessageId - User message UUID to rewind to
+ * @param {string} cwd - Working directory (optional)
  */
 export async function rewindFiles(sessionId, userMessageId, cwd = null) {
   let result = null;

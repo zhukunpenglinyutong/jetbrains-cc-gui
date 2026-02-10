@@ -22,6 +22,7 @@ const DEFAULT_MODEL_MAP: Record<string, ModelInfo> = AVAILABLE_MODELS.reduce(
 const MODEL_LABEL_KEYS: Record<string, string> = {
   'claude-sonnet-4-5': 'models.claude.sonnet45.label',
   'claude-opus-4-6': 'models.claude.opus46.label',
+  'claude-opus-4-6[1m]': 'models.claude.opus46_1m.label',
   'claude-opus-4-5-20251101': 'models.claude.opus45.label',
   'claude-haiku-4-5': 'models.claude.haiku45.label',
   'gpt-5.3-codex': 'models.codex.gpt53codex.label',
@@ -35,6 +36,7 @@ const MODEL_LABEL_KEYS: Record<string, string> = {
 const MODEL_DESCRIPTION_KEYS: Record<string, string> = {
   'claude-sonnet-4-5': 'models.claude.sonnet45.description',
   'claude-opus-4-6': 'models.claude.opus46.description',
+  'claude-opus-4-6[1m]': 'models.claude.opus46_1m.description',
   'claude-opus-4-5-20251101': 'models.claude.opus45.description',
   'claude-haiku-4-5': 'models.claude.haiku45.description',
   'gpt-5.3-codex': 'models.codex.gpt53codex.description',

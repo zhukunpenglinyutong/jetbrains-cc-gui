@@ -14,6 +14,10 @@
 @rem limitations under the License.
 @rem
 
+@rem Fix Windows console encoding issues - use English locale for all Java processes
+@rem This prevents garbled characters when running on Windows with non-English locale
+@set JAVA_TOOL_OPTIONS=-Duser.language=en -Dfile.encoding=UTF-8
+
 @if "%DEBUG%" == "" @echo off
 @rem ##########################################################################
 @rem

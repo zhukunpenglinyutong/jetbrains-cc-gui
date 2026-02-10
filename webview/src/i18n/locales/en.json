@@ -896,6 +896,10 @@
         "label": "Opus 4.6",
         "description": "Opus 4.6 · Latest and most capable"
       },
+      "opus46_1m": {
+        "label": "Opus (1M context)",
+        "description": "Opus 4.6 for long sessions"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 4.5 · Most capable for complex work"
@@ -1043,6 +1047,20 @@
       "label": "Max",
       "description": "Maximum reasoning depth"
     }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "The application encountered an unexpected error. Please copy the error details below and share them with the developer for troubleshooting.",
+    "possibleCauses": "Possible causes:",
+    "cause1": "Node.js is not installed or not configured correctly",
+    "cause2": "Network connection issues",
+    "cause3": "Plugin or IDE compatibility issues",
+    "cause4": "Insufficient system resources",
+    "errorDetails": "Error Details",
+    "copyError": "Copy Error Info",
+    "copied": "Copied!",
+    "reload": "Reload Application",
+    "helpText": "If the problem persists, please copy the error information and submit it as an issue on GitHub, or share it in the community group."
   },
   "aiBridge": {
     "claudeCodeInterrupted": "Claude Code was interrupted (possibly response timeout or user cancellation):",

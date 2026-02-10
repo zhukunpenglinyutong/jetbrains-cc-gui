@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DropdownProps, DropdownItemData } from '../types';
 import { DropdownItem } from './DropdownItem';
+import { getAppViewport } from '../../../utils/viewport';
 
 interface CompletionDropdownProps extends Omit<DropdownProps, 'children'> {
   items: DropdownItemData[];
@@ -55,29 +56,35 @@ export const Dropdown = ({
     return null;
   }
 
-  // 计算 left 位置，确保不超出视口右侧
-  let left = position.left + offsetX;
-  const windowWidth = window.innerWidth;
-  const rightPadding = 10; // 距离右边缘的最小距离
+  // Use #app's bounding rect as the reference viewport.
+  // Both #app's rect and position (from getBoundingClientRect on child elements)
+  // are in the same coordinate space, so they can be safely compared regardless
+  // of the zoom factor applied to #app.
+  const { width: viewportWidth, height: viewportHeight, top: viewportTop, left: viewportLeft, fixedPosDivisor } = getAppViewport();
 
-  if (left + width + rightPadding > windowWidth) {
-    left = windowWidth - width - rightPadding;
-  }
-  
-  // 确保不超出视口左侧
-  if (left < rightPadding) {
-    left = rightPadding;
+  // Calculate left position, ensure it doesn't exceed viewport right edge
+  let left = position.left - viewportLeft + offsetX;
+  const edgePadding = 10;
+
+  if (left + width + edgePadding > viewportWidth) {
+    left = viewportWidth - width - edgePadding;
   }
 
-  // 计算位置（优先在上方显示）
-  // 确保 position.top 在有效范围内，避免 bottom 变成负值或超出视口
-  const windowHeight = window.innerHeight;
-  const effectiveTop = Math.max(offsetY, Math.min(position.top, windowHeight - offsetY));
+  // Ensure it doesn't exceed viewport left edge
+  if (left < edgePadding) {
+    left = edgePadding;
+  }
+
+  // Display above cursor: use bottom positioning
+  // position.top is relative to viewport; convert to relative to #app bottom
+  const posInApp = position.top - viewportTop;
+  const effectiveTop = Math.max(offsetY, Math.min(posInApp, viewportHeight - offsetY));
+  const bottomValue = viewportHeight - effectiveTop + offsetY;
 
   const style: React.CSSProperties = {
     position: 'fixed',
-    bottom: `calc(100vh - ${effectiveTop}px + ${offsetY}px)`,
-    left,
+    bottom: `${bottomValue / fixedPosDivisor}px`,
+    left: left / fixedPosDivisor,
     width,
     zIndex: 1001,
   };

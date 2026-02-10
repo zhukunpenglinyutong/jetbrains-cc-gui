@@ -727,6 +727,8 @@
   /* Enable container queries for responsive button behavior */
   container-type: inline-size;
   container-name: button-area;
+  position: relative;
+  z-index: 20;
 }
 
 .button-area-left {

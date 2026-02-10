@@ -14,10 +14,13 @@ import com.intellij.openapi.vcs.CommitMessageI;
 import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.vcs.changes.Change;
 import com.intellij.openapi.vcs.changes.ChangeListManager;
-import com.intellij.openapi.vcs.ui.Refreshable;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * Generate Commit Message with AI Action
@@ -48,60 +51,13 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
         LOG.info("Project: " + project.getName());
 
-        // 尝试多种方式获取 Commit Panel 和 Changes
-        CommitMessageI commitMessagePanel = null;
-        Collection<Change> changes = null;
+        // Get CommitMessageI for setting the commit message
+        CommitMessageI commitMessagePanel = getCommitMessagePanel(e);
 
-        // 方式 1: 使用 COMMIT_WORKFLOW_HANDLER (新版本 IDEA)
-        Object workflowHandler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER);
-        LOG.info("COMMIT_WORKFLOW_HANDLER: " + (workflowHandler != null ? workflowHandler.getClass().getName() : "null"));
+        // Get user-selected changes using the new method with proper fallback chain
+        Collection<Change> changes = getUserSelectedChanges(e, project);
 
-        if (workflowHandler instanceof CommitMessageI) {
-            commitMessagePanel = (CommitMessageI) workflowHandler;
-            LOG.info("Successfully obtained CommitMessageI from COMMIT_WORKFLOW_HANDLER");
-        }
-
-        // 方式 2: 使用 COMMIT_MESSAGE_CONTROL
-        Object messageControl = e.getData(VcsDataKeys.COMMIT_MESSAGE_CONTROL);
-        LOG.info("COMMIT_MESSAGE_CONTROL: " + (messageControl != null ? messageControl.getClass().getName() : "null"));
-
-        if (messageControl instanceof CheckinProjectPanel) {
-            CheckinProjectPanel checkinPanel = (CheckinProjectPanel) messageControl;
-            changes = checkinPanel.getSelectedChanges();
-            LOG.info("Got changes from CheckinProjectPanel: " + changes.size());
-
-            if (commitMessagePanel == null && messageControl instanceof CommitMessageI) {
-                commitMessagePanel = (CommitMessageI) messageControl;
-                LOG.info("Successfully obtained CommitMessageI from COMMIT_MESSAGE_CONTROL (CheckinProjectPanel)");
-            }
-        }
-
-        // 方式 3: 直接检查 COMMIT_MESSAGE_CONTROL 是否为 CommitMessageI (新版 IDEA 中 CommitMessage 实现了此接口)
-        if (commitMessagePanel == null && messageControl instanceof CommitMessageI) {
-            commitMessagePanel = (CommitMessageI) messageControl;
-            LOG.info("Successfully obtained CommitMessageI from COMMIT_MESSAGE_CONTROL directly");
-        }
-
-        // 方式 4: 使用 VcsDataKeys.CHANGES 直接获取 changes
-        if (changes == null || changes.isEmpty()) {
-            Change[] changesArray = e.getData(VcsDataKeys.CHANGES);
-            if (changesArray != null && changesArray.length > 0) {
-                changes = java.util.Arrays.asList(changesArray);
-                LOG.info("Got changes from VcsDataKeys.CHANGES: " + changes.size());
-            }
-        }
-
-        // 方式 5: 使用 ChangeListManager 获取所有 changes (作为兜底方案)
-        if (changes == null || changes.isEmpty()) {
-            ChangeListManager changeListManager = ChangeListManager.getInstance(project);
-            Collection<Change> allChanges = changeListManager.getAllChanges();
-            if (allChanges != null && !allChanges.isEmpty()) {
-                changes = allChanges;
-                LOG.info("Got changes from ChangeListManager.getAllChanges: " + changes.size());
-            }
-        }
-
-        // 检查是否成功获取必需的对象
+        // Check if we successfully obtained required objects
         if (commitMessagePanel == null) {
             LOG.error("Cannot access commit message panel");
             ClaudeNotifier.showWarning(project, ClaudeCodeGuiBundle.message("commit.cannotAccessPanel"));
@@ -116,15 +72,15 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
         LOG.info("Successfully obtained CommitMessageI and changes, proceeding to generate commit message");
 
-        // 保存 commitMessagePanel 的引用，用于后续设置消息
+        // Save references for async callback
         final CommitMessageI finalCommitMessagePanel = commitMessagePanel;
         final Collection<Change> finalChanges = changes;
 
-        // 在提交消息框中显示"正在生成中..."占位文案
+        // Show "generating..." placeholder in commit message box
         String generatingText = ClaudeCodeGuiBundle.message("commit.generating");
         commitMessagePanel.setCommitMessage(generatingText);
 
-        // 异步生成 commit message
+        // Generate commit message asynchronously
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
                 GitCommitMessageService service = new GitCommitMessageService(project);
@@ -156,6 +112,132 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
                 });
             }
         });
+    }
+
+    /**
+     * Get CommitMessageI from available data sources.
+     */
+    @Nullable
+    private CommitMessageI getCommitMessagePanel(@NotNull AnActionEvent e) {
+        // Try COMMIT_WORKFLOW_HANDLER first (newer IDEA versions)
+        Object workflowHandler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER);
+        if (workflowHandler instanceof CommitMessageI) {
+            LOG.info("Got CommitMessageI from COMMIT_WORKFLOW_HANDLER");
+            return (CommitMessageI) workflowHandler;
+        }
+
+        // Try COMMIT_MESSAGE_CONTROL
+        CommitMessageI messageControl = e.getData(VcsDataKeys.COMMIT_MESSAGE_CONTROL);
+        if (messageControl != null) {
+            LOG.info("Got CommitMessageI from COMMIT_MESSAGE_CONTROL");
+            return messageControl;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get user-selected changes from the commit dialog.
+     * Uses a fallback chain to support different IDEA versions:
+     * 1. COMMIT_WORKFLOW_HANDLER.ui.getIncludedChanges() - preferred, gets user-checked files
+     * 2. CheckinProjectPanel.getSelectedChanges() - legacy fallback
+     * 3. VcsDataKeys.CHANGES - context-based fallback
+     * 4. ChangeListManager.getAllChanges() - last resort fallback
+     */
+    @Nullable
+    private Collection<Change> getUserSelectedChanges(@NotNull AnActionEvent e, @NotNull Project project) {
+        Collection<Change> changes;
+
+        // Method 1: Try COMMIT_WORKFLOW_HANDLER.ui.getIncludedChanges() via reflection
+        // This is the preferred method as it returns only user-checked files in the commit dialog
+        Object workflowHandler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER);
+        if (workflowHandler != null) {
+            changes = getIncludedChangesViaReflection(workflowHandler);
+            if (changes != null && !changes.isEmpty()) {
+                LOG.info("Got " + changes.size() + " changes from COMMIT_WORKFLOW_HANDLER.ui.getIncludedChanges()");
+                return changes;
+            }
+        }
+
+        // Method 2: Try CheckinProjectPanel.getSelectedChanges() (legacy)
+        Object messageControl = e.getData(VcsDataKeys.COMMIT_MESSAGE_CONTROL);
+        if (messageControl instanceof CheckinProjectPanel checkinPanel) {
+            changes = checkinPanel.getSelectedChanges();
+            if (changes != null && !changes.isEmpty()) {
+                LOG.info("Got " + changes.size() + " changes from CheckinProjectPanel.getSelectedChanges() (fallback)");
+                return changes;
+            }
+        }
+
+        // Method 3: Try VcsDataKeys.CHANGES
+        Change[] changesArray = e.getData(VcsDataKeys.CHANGES);
+        if (changesArray != null && changesArray.length > 0) {
+            changes = java.util.Arrays.asList(changesArray);
+            LOG.info("Got " + changes.size() + " changes from VcsDataKeys.CHANGES (fallback)");
+            return changes;
+        }
+
+        // Method 4: Last resort - get all changes from ChangeListManager
+        ChangeListManager changeListManager = ChangeListManager.getInstance(project);
+        Collection<Change> allChanges = changeListManager.getAllChanges();
+        if (!allChanges.isEmpty()) {
+            LOG.info("Got " + allChanges.size() + " changes from ChangeListManager.getAllChanges() (last resort fallback)");
+            return allChanges;
+        }
+
+        LOG.warn("Failed to get changes from any data source");
+        return null;
+    }
+
+    /**
+     * Get included changes from AbstractCommitWorkflowHandler via reflection.
+     * This method uses reflection to call handler.ui.getIncludedChanges() which returns
+     * only the files that the user has checked in the commit dialog.
+     * <p>
+     * The reflection approach is necessary because:
+     * - AbstractCommitWorkflowHandler.ui.getIncludedChanges() was introduced in newer IDEA versions
+     * - Direct method call would cause ClassNotFoundException in older IDEA versions
+     * - This allows graceful degradation when the API is unavailable
+     */
+    @Nullable
+    private Collection<Change> getIncludedChangesViaReflection(@NotNull Object workflowHandler) {
+        try {
+            // Get the 'ui' property from AbstractCommitWorkflowHandler
+            // The ui property is of type CommitWorkflowUi which has getIncludedChanges() method
+            Method getUiMethod = workflowHandler.getClass().getMethod("getUi");
+            Object ui = getUiMethod.invoke(workflowHandler);
+
+            if (ui == null) {
+                LOG.debug("workflowHandler.getUi() returned null");
+                return null;
+            }
+
+            // Call getIncludedChanges() on the ui object
+            // This returns List<Change> containing only user-checked files
+            Method getIncludedChangesMethod = ui.getClass().getMethod("getIncludedChanges");
+            Object result = getIncludedChangesMethod.invoke(ui);
+
+            if (result instanceof Collection<?> col) {
+                List<Change> changes = new ArrayList<>();
+                for (Object item : col) {
+                    if (item instanceof Change change) {
+                        changes.add(change);
+                    }
+                }
+                LOG.debug("Successfully retrieved " + changes.size() + " included changes via reflection");
+                return changes;
+            }
+
+            return null;
+        } catch (NoSuchMethodException e) {
+            // Expected on older IDEA versions that don't have this API
+            LOG.debug("getIncludedChanges() method not available (older IDEA version): " + e.getMessage());
+            return null;
+        } catch (Exception e) {
+            // Log other reflection errors for debugging
+            LOG.debug("Failed to get included changes via reflection: " + e.getMessage());
+            return null;
+        }
     }
 
     @Override

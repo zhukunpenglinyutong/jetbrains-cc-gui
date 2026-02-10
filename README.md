@@ -134,7 +134,7 @@ Run in IDEA:
 
 ## License
 
-AGPL-3.0
+MIT
 
 ---
 

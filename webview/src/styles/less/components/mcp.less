@@ -1657,11 +1657,14 @@
     border-radius: 8px;
     background: var(--bg-primary);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* 侧边栏 */
 .server-sidebar {
-    flex: none;
+    flex: 1;
+    min-height: 0; /* Allow flex item to shrink and enable scrolling */
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border-primary);

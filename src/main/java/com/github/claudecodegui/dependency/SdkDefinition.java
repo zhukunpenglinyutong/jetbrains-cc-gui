@@ -23,7 +23,7 @@ public enum SdkDefinition {
         "codex-sdk",
         "Codex SDK",
         "@openai/codex-sdk",
-        "^0.80.0",
+        "latest",
         Collections.emptyList(),
         "Codex AI 提供商所需。"
     );

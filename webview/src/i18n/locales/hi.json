@@ -728,6 +728,10 @@
         "label": "Opus 4.6",
         "description": "Opus 4.6 · नवीनतम और सबसे सक्षम"
       },
+      "opus46_1m": {
+        "label": "Opus (1M संदर्भ)",
+        "description": "Opus 4.6 लंबे सत्रों के लिए"
+      },
       "opus45": {
         "label": "Opus 4.5",
         "description": "Opus 4.5 · जटिल कार्यों के लिए सबसे सक्षम"

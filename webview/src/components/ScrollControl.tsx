@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getAppViewport } from '../utils/viewport';
 
 interface ScrollControlProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -31,8 +32,9 @@ export const ScrollControl = ({ containerRef, inputAreaRef }: ScrollControlProps
   const updatePosition = useCallback(() => {
     if (inputAreaRef?.current) {
       const inputRect = inputAreaRef.current.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      const newBottom = windowHeight - inputRect.top + 20;
+      // Use #app's rect as reference - both rects are in the same coordinate space
+      const { height: viewportHeight, top: viewportTop, fixedPosDivisor } = getAppViewport();
+      const newBottom = (viewportHeight - (inputRect.top - viewportTop) + 20) / fixedPosDivisor;
       setBottomOffset(newBottom);
     }
   }, [inputAreaRef]);
