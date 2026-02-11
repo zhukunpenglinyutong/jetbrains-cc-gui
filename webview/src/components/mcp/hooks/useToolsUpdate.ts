@@ -41,6 +41,31 @@ export function useToolsUpdate({
           return;
         }
 
+        const toolList: McpTool[] = tools || [];
+
+        // When tools are available, treat as (partial) success even if error exists
+        if (toolList.length > 0) {
+          setServerTools(prev => ({
+            ...prev,
+            [serverId]: {
+              tools: toolList,
+              loading: false,
+              error: error || undefined
+            }
+          }));
+
+          writeToolsCache(serverId, toolList, cacheKeys);
+
+          onLog(
+            `工具列表加载完成: ${toolList.length} 个工具`,
+            error ? 'warning' : 'success',
+            `工具: ${toolList.slice(0, 5).map(t => t.name).join(', ')}${toolList.length > 5 ? '...' : ''}`,
+            serverName || serverId
+          );
+          return;
+        }
+
+        // No tools and has error — full failure
         if (error) {
           setServerTools(prev => ({
             ...prev,
@@ -59,25 +84,20 @@ export function useToolsUpdate({
           return;
         }
 
-        const toolList: McpTool[] = tools || [];
-
-        // 更新状态
+        // No tools, no error — empty result
         setServerTools(prev => ({
           ...prev,
           [serverId]: {
-            tools: toolList,
+            tools: [],
             loading: false,
             error: undefined
           }
         }));
 
-        // 写入缓存
-        writeToolsCache(serverId, toolList, cacheKeys);
-
         onLog(
-          `工具列表加载完成: ${toolList.length} 个工具`,
+          `工具列表加载完成: 0 个工具`,
           'success',
-          toolList.length > 0 ? `工具: ${toolList.slice(0, 5).map(t => t.name).join(', ')}${toolList.length > 5 ? '...' : ''}` : undefined,
+          undefined,
           serverName || serverId
         );
       } catch (e) {

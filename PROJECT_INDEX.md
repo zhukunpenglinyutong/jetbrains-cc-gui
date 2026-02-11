@@ -2,7 +2,7 @@
 
 **Generated**: 2025-12-14
 **Version**: v0.1.1 (branch)
-**License**: AGPL-3.0
+**License**: MIT
 
 ---
 

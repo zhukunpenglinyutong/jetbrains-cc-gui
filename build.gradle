@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.1.7-fix'
+version = '0.1.8-beta1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -85,6 +85,11 @@ dependencies {
         } else if (targetIde == 'PY') {
             pycharmProfessional('2024.3')
             bundledPlugin('Pythonid')
+        } else if (targetIde == 'RD') {
+            // Rider 2025.3.2
+            rider('2025.3.2')
+            // Enable Terminal Plugin support
+            bundledPlugin('org.jetbrains.plugins.terminal')
         } else {
             intellijIdeaCommunity('2024.3.1')
             bundledPlugin('com.intellij.java')
@@ -101,8 +106,15 @@ dependencies {
 sourceSets {
     main {
         java {
-            if (project.findProperty('targetIde') == 'PC' || project.findProperty('targetIde') == 'PY') {
+            def targetIde = project.findProperty('targetIde') ?: 'IC'
+            // PyCharm: exclude Java context collector
+            if (targetIde == 'PC' || targetIde == 'PY') {
                 exclude '**/JavaContextCollector.java'
+            }
+            // Rider: exclude both Java and Python context collectors (no PSI support)
+            if (targetIde == 'RD') {
+                exclude '**/JavaContextCollector.java'
+                exclude '**/PythonContextCollector.java'
             }
         }
     }
@@ -110,6 +122,8 @@ sourceSets {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // Ensure consistent source/target compatibility
+    options.release.set(17)
 }
 
 // Ensure plugin.xml is patched with the correct since/until build and change notes

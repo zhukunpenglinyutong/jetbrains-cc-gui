@@ -7,6 +7,10 @@ import {
   TEXT_LENGTH_THRESHOLDS,
   RENDERING_LIMITS,
 } from '../../../constants/performance.js';
+import {
+  getVirtualCursorPosition,
+  setVirtualCursorPosition,
+} from '../utils/virtualCursorUtils.js';
 import type { FileTagInfo } from '../types.js';
 
 interface UseFileTagsOptions {
@@ -24,6 +28,8 @@ interface UseFileTagsReturn {
   justRenderedTagRef: React.MutableRefObject<boolean>;
   /** Extract all file tags from current input (for sending to backend) */
   extractFileTags: () => FileTagInfo[];
+  /** Set the path to place cursor after on next renderFileTags call */
+  setCursorAfterPath: (path: string | null) => void;
 }
 
 /**
@@ -41,6 +47,8 @@ export function useFileTags({
   const pathMappingRef = useRef<Map<string, string>>(new Map());
   // Flag for just rendered file tags (skip completion detection)
   const justRenderedTagRef = useRef(false);
+  // Path to place cursor after on next renderFileTags call
+  const cursorAfterPathRef = useRef<string | null>(null);
 
   const escapeHtmlText = useCallback((str: string): string => {
     return str
@@ -266,6 +274,10 @@ export function useFileTags({
     const newHTML = htmlParts.join('');
     timer.mark('build-html');
 
+    // Save virtual cursor position before DOM replacement
+    const savedVirtualOffset = getVirtualCursorPosition(editableRef.current);
+    timer.mark('save-cursor');
+
     // Set flag before updating innerHTML to prevent triggering completion detection
     justRenderedTagRef.current = true;
     onCloseCompletions();
@@ -274,22 +286,51 @@ export function useFileTags({
     editableRef.current.innerHTML = newHTML;
     timer.mark('set-innerHTML');
 
-    // Restore cursor position to end
-    const selection = window.getSelection();
-    if (selection && editableRef.current.childNodes.length > 0) {
-      try {
-        const range = document.createRange();
-        const lastChild = editableRef.current.lastChild;
-        if (lastChild) {
-          range.setStartAfter(lastChild);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
+    // Restore cursor position
+    // If we have a specific path to place cursor after, find that file tag
+    const targetPath = cursorAfterPathRef.current;
+    let cursorRestored = false;
+
+    if (targetPath) {
+      // Find the file tag with the matching path
+      const fileTags = editableRef.current.querySelectorAll('.file-tag');
+      for (const tag of fileTags) {
+        const tagPath = tag.getAttribute('data-file-path');
+        // Match by exact path or by filename
+        if (tagPath === targetPath || tagPath?.endsWith(targetPath.split(/[/\\]/).pop() || '')) {
+          // Place cursor after this tag (and its trailing space)
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            // Find the next sibling (usually a text node with space) or the tag itself
+            const nextSibling = tag.nextSibling;
+            if (nextSibling) {
+              if (nextSibling.nodeType === Node.TEXT_NODE) {
+                // Place cursor after the space
+                range.setStart(nextSibling, Math.min(1, nextSibling.textContent?.length || 0));
+              } else {
+                range.setStartAfter(nextSibling);
+              }
+            } else {
+              range.setStartAfter(tag);
+            }
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            cursorRestored = true;
+          }
+          break;
         }
-      } catch {
-        // Ignore cursor restore errors
       }
+      // Clear the ref after use
+      cursorAfterPathRef.current = null;
     }
+
+    // Fallback: restore cursor to saved virtual position
+    if (!cursorRestored) {
+      setVirtualCursorPosition(editableRef.current, savedVirtualOffset);
+    }
+    timer.mark('restore-cursor');
 
     // After rendering, reset flag to allow subsequent completion detection
     // Use setTimeout 0 to ensure reset after current event loop
@@ -318,10 +359,18 @@ export function useFileTags({
       .filter((tag): tag is FileTagInfo => tag !== null);
   }, [editableRef]);
 
+  /**
+   * Set the path to place cursor after on next renderFileTags call
+   */
+  const setCursorAfterPath = useCallback((path: string | null) => {
+    cursorAfterPathRef.current = path;
+  }, []);
+
   return {
     renderFileTags,
     pathMappingRef,
     justRenderedTagRef,
     extractFileTags,
+    setCursorAfterPath,
   };
 }

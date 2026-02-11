@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { getAppViewport } from '../../../utils/viewport';
 
 export interface TooltipState {
   visible: boolean;
@@ -41,8 +42,9 @@ export function useTooltip(): UseTooltipReturn {
       if (text) {
         // Use small floating tooltip (same effect as context-item)
         const rect = fileTag.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
-        const tagCenterX = rect.left + rect.width / 2; // File tag center X coordinate
+        // Use #app's rect as reference - both rects are in the same coordinate space
+        const { width: viewportWidth, top: viewportTop, left: viewportLeft, fixedPosDivisor } = getAppViewport();
+        const tagCenterX = rect.left - viewportLeft + rect.width / 2; // File tag center X coordinate (relative to #app)
 
         // Estimate tooltip width (based on text length)
         const estimatedTooltipWidth = Math.min(text.length * 7 + 24, 400);
@@ -74,8 +76,8 @@ export function useTooltip(): UseTooltipReturn {
         setTooltip({
           visible: true,
           text,
-          top: rect.top,
-          left: tooltipLeft,
+          top: (rect.top - viewportTop) / fixedPosDivisor,
+          left: tooltipLeft / fixedPosDivisor,
           tx,
           arrowLeft,
           isBar: false,

@@ -31,20 +31,24 @@ public final class JBCefBrowserFactory {
      */
     public static JBCefBrowser create() {
         boolean isOffScreenRendering = determineOsrMode();
+        boolean isDevMode = PlatformUtils.isPluginDevMode();
         LOG.info("Creating JBCefBrowser with OSR=" + isOffScreenRendering
-                + " (platform=" + getPlatformName() + ", ideaVersion=" + getIdeaMajorVersion() + ")");
+                + " (platform=" + getPlatformName() + ", ideaVersion=" + getIdeaMajorVersion()
+                + ", devMode=" + isDevMode + ")");
 
         try {
             JBCefBrowser browser = JBCefBrowser.createBuilder()
                     .setOffScreenRendering(isOffScreenRendering)
+                    .setEnableOpenDevToolsMenuItem(isDevMode)
+                    .setCreateImmediately(true)
                     .build();
-            configureContextMenu(browser);
+            configureContextMenu(browser, isDevMode);
             LOG.info("JBCefBrowser created successfully using builder");
             return browser;
         } catch (Exception e) {
             LOG.warn("JBCefBrowser builder failed, falling back to default constructor: " + e.getMessage());
             JBCefBrowser browser = new JBCefBrowser();
-            configureContextMenu(browser);
+            configureContextMenu(browser, isDevMode);
             return browser;
         }
     }
@@ -57,14 +61,17 @@ public final class JBCefBrowserFactory {
      */
     public static JBCefBrowser create(String url) {
         boolean isOffScreenRendering = determineOsrMode();
-        LOG.info("Creating JBCefBrowser with URL and OSR=" + isOffScreenRendering);
+        boolean isDevMode = PlatformUtils.isPluginDevMode();
+        LOG.info("Creating JBCefBrowser with URL and OSR=" + isOffScreenRendering + ", devMode=" + isDevMode);
 
         try {
             JBCefBrowser browser = JBCefBrowser.createBuilder()
                     .setOffScreenRendering(isOffScreenRendering)
+                    .setEnableOpenDevToolsMenuItem(isDevMode)
+                    .setCreateImmediately(true)
                     .setUrl(url)
                     .build();
-            configureContextMenu(browser);
+            configureContextMenu(browser, isDevMode);
             LOG.info("JBCefBrowser created successfully with URL");
             return browser;
         } catch (Exception e) {
@@ -73,7 +80,7 @@ public final class JBCefBrowserFactory {
             if (url != null && !url.isEmpty()) {
                 browser.loadURL(url);
             }
-            configureContextMenu(browser);
+            configureContextMenu(browser, isDevMode);
             return browser;
         }
     }
@@ -154,8 +161,7 @@ public final class JBCefBrowserFactory {
      *
      * @param browser JBCefBrowser 实例
      */
-    private static void configureContextMenu(JBCefBrowser browser) {
-        boolean isDevMode = PlatformUtils.isPluginDevMode();
+    private static void configureContextMenu(JBCefBrowser browser, boolean isDevMode) {
         browser.setProperty(JBCefBrowserBase.Properties.NO_CONTEXT_MENU, !isDevMode);
         LOG.info("Context menu " + (isDevMode ? "enabled" : "disabled") + " (devMode=" + isDevMode + ")");
     }

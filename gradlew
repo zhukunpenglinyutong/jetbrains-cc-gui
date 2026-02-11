@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# Fix Windows console encoding issues - use English locale for all Java processes
+# This prevents garbled characters when running on Windows with non-English locale
+export JAVA_TOOL_OPTIONS="-Duser.language=en -Dfile.encoding=UTF-8"
+
 #
 # Copyright © 2015-2021 the original authors.
 #

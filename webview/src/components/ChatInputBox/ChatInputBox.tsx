@@ -51,6 +51,7 @@ import {
   type AgentItem,
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
+import { setCursorOffset } from './utils/selectionUtils.js';
 import { perfTimer } from '../../utils/debug.js';
 import { DEBOUNCE_TIMING } from '../../constants/performance.js';
 import './styles.css';
@@ -145,7 +146,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
     }, []);
 
     // File tags hook
-    const { renderFileTags, pathMappingRef, justRenderedTagRef, extractFileTags } = useFileTags({
+    const { renderFileTags, pathMappingRef, justRenderedTagRef, extractFileTags, setCursorAfterPath } = useFileTags({
       editableRef,
       getTextContent,
       onCloseCompletions: closeAllCompletions,
@@ -177,15 +178,14 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         // Update input box content
         editableRef.current.innerText = newText;
 
-        // Set cursor to end of inserted text
-        const range = document.createRange();
-        const selection = window.getSelection();
-        range.selectNodeContents(editableRef.current);
-        range.collapse(false);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
+        // Set cursor to correct position after the replacement text
+        const cursorPos = query.start + replacement.length;
+        setCursorOffset(editableRef.current, cursorPos);
 
         handleInput();
+
+        // Tell renderFileTags to place cursor after this file tag
+        setCursorAfterPath(path);
 
         // Immediately try to render file tags (no need for user to manually input space)
         // Use setTimeout to ensure DOM update and cursor position are ready
@@ -210,13 +210,9 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         // Update input box content
         editableRef.current.innerText = newText;
 
-        // Set cursor to end of inserted text
-        const range = document.createRange();
-        const selection = window.getSelection();
-        range.selectNodeContents(editableRef.current);
-        range.collapse(false);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
+        // Set cursor to correct position after the replacement text
+        const cursorPos = query.start + replacement.length;
+        setCursorOffset(editableRef.current, cursorPos);
 
         handleInput();
       },
@@ -245,12 +241,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
             const newText = agentCompletion.replaceText(text, '', query);
             editableRef.current.innerText = newText;
 
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.selectNodeContents(editableRef.current);
-            range.collapse(false);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
+            // Set cursor to the position where trigger was removed
+            setCursorOffset(editableRef.current, query.start);
 
             handleInput();
           }
@@ -266,13 +258,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           const newText = agentCompletion.replaceText(text, '', query);
           editableRef.current.innerText = newText;
 
-          // Set cursor position
-          const range = document.createRange();
-          const selection = window.getSelection();
-          range.selectNodeContents(editableRef.current);
-          range.collapse(false);
-          selection?.removeAllRanges();
-          selection?.addRange(range);
+          // Set cursor to the position where trigger was removed
+          setCursorOffset(editableRef.current, query.start);
 
           handleInput();
         }

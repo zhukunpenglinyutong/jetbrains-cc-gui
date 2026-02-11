@@ -1049,6 +1049,20 @@
       "description": "最深推理，最高精度"
     }
   },
+  "errorBoundary": {
+    "title": "出错了",
+    "description": "应用程序遇到了意外错误。请复制以下错误详情并分享给开发者以便排查问题。",
+    "possibleCauses": "可能的原因：",
+    "cause1": "Node.js 未安装或配置不正确",
+    "cause2": "网络连接问题",
+    "cause3": "插件或 IDE 兼容性问题",
+    "cause4": "系统资源不足",
+    "errorDetails": "错误详情",
+    "copyError": "复制错误信息",
+    "copied": "已复制！",
+    "reload": "重新加载",
+    "helpText": "如果问题持续存在，请复制错误信息并在 GitHub 上提交 Issue，或在社区群中分享。"
+  },
   "aiBridge": {
     "claudeCodeInterrupted": "Claude Code 运行被中断（可能是响应超时或用户取消）：",
     "claudeCodeError": "Claude Code 出现错误：",

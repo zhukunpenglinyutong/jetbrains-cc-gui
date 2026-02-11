@@ -4,10 +4,11 @@
  */
 
 import { spawn } from 'child_process';
-import { MAX_LINE_LENGTH, MCP_TOOLS_TIMEOUT, createSafeEnv } from './config.js';
+import { MCP_TOOLS_TIMEOUT, createSafeEnv, STDIO_TOOLS_MAX_LINE_LENGTH } from './config.js';
 import { log } from './logger.js';
 import { validateCommand } from './command-validator.js';
 import { safeKillProcess } from './process-manager.js';
+import { MCP_PROTOCOL_VERSION, MCP_CLIENT_INFO } from './mcp-protocol.js';
 
 /**
  * 获取 STDIO 类型服务器的工具列表
@@ -66,7 +67,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
       if (error) {
         log('error', '[MCP Tools] ' + serverName + ' failed:', error);
       } else {
-        log('info', '[MCP Tools] ' + serverName + ' completed:', tools.length + ' tools');
+        log('info', '[MCP Tools] ' + serverName + ' completed:', (tools ? tools.length : 0) + ' tools');
       }
       resolve(result);
     };
@@ -110,7 +111,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
       state.buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (!line.trim() || line.length > MAX_LINE_LENGTH) continue;
+        if (!line.trim() || line.length > STDIO_TOOLS_MAX_LINE_LENGTH) continue;
 
         log('debug', '[MCP Tools] ' + serverName + ' stdout:', line.substring(0, 100));
 
@@ -208,9 +209,9 @@ export async function getStdioServerTools(serverName, serverConfig) {
           id: 1,
           method: 'initialize',
           params: {
-            protocolVersion: '2024-11-05',
+            protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: {},
-            clientInfo: { name: 'codemoss-ide', version: '1.0.0' }
+            clientInfo: MCP_CLIENT_INFO
           }
         }) + '\n';
         log('info', '[MCP Tools] ' + serverName + ' sending initialize request');

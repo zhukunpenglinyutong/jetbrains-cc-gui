@@ -386,13 +386,14 @@ public class SettingsHandler extends BaseMessageHandler {
 
             // 根据 provider 计算已用 token 数
             // Codex/OpenAI: input_tokens 已经包含了 cached_input_tokens，不需要重复加
-            // Claude: input_tokens 不包含缓存，需要加上 cache_creation 和 cache_read
+            // Claude: input_tokens 不包含缓存，需要加上 cache_creation（缓存读取不占用新的上下文窗口）
             String currentProvider = context.getCurrentProvider();
             int usedTokens;
             if ("codex".equals(currentProvider)) {
                 usedTokens = inputTokens + outputTokens;
             } else {
-                usedTokens = inputTokens + cacheWriteTokens + cacheReadTokens + outputTokens;
+                // Claude: 缓存读取不占用新的上下文窗口，不计入 cacheReadTokens
+                usedTokens = inputTokens + cacheWriteTokens + outputTokens;
             }
 
             // 发送更新

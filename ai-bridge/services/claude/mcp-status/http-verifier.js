@@ -5,7 +5,7 @@
 
 import { MCP_HTTP_VERIFY_TIMEOUT } from './config.js';
 import { log } from './logger.js';
-import { parseSSE } from './mcp-protocol.js';
+import { parseSSE, MCP_PROTOCOL_VERSION, MCP_CLIENT_INFO, buildSseRequestContext } from './mcp-protocol.js';
 
 /**
  * 验证 HTTP/SSE 类型 MCP 服务器的连接状态
@@ -40,32 +40,16 @@ export async function verifyHttpServerStatus(serverName, serverConfig) {
       id: 1,
       method: 'initialize',
       params: {
-        protocolVersion: '2024-11-05',
+        protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: 'codemoss-ide', version: '1.0.0' }
+        clientInfo: MCP_CLIENT_INFO
       }
     };
 
-    // 构建请求头，包含授权信息（如果提供）
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-      ...(serverConfig.headers || {})
-    };
-
-    // 如果 URL 的查询字符串中包含 Authorization，提取并添加到请求头
-    let fetchUrl = url;
-    try {
-      const urlObj = new URL(url);
-      const authParam = urlObj.searchParams.get('Authorization');
-      if (authParam) {
-        headers['Authorization'] = authParam;
-        urlObj.searchParams.delete('Authorization');
-        fetchUrl = urlObj.toString();
-      }
-    } catch (e) {
-      // URL 无效，使用原始 URL
-    }
+    // Use shared helper to sanitize headers and extract Authorization from query string
+    const { fetchUrl, headers } = buildSseRequestContext(url, serverConfig);
+    headers['Content-Type'] = 'application/json';
+    headers['Accept'] = 'application/json, text/event-stream';
 
     const response = await fetch(fetchUrl, {
       method: 'POST',
