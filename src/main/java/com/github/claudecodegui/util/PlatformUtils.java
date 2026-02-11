@@ -2,10 +2,12 @@ package com.github.claudecodegui.util;
 
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
 
 import java.io.File;
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,10 +21,12 @@ public class PlatformUtils {
 
     private static final Logger LOG = Logger.getInstance(PlatformUtils.class);
 
-    // 平台类型缓存
+    // Platform type cache
     private static volatile PlatformType cachedPlatformType = null;
-    // 插件 ID 缓存
+    // Plugin ID cache
     private static volatile String cachedPluginId = null;
+    // Dev mode cache: null = not initialized, Boolean = cached result
+    private static volatile Boolean cachedDevMode = null;
 
     /**
      * 平台类型枚举
@@ -117,28 +121,66 @@ public class PlatformUtils {
     }
 
     /**
-     * 检查插件是否在开发模式下运行.
-     * 通过多个标志判断：插件路径、系统路径、内部标志等。
+     * Check if the plugin is running in development mode.
+     * Detection is based on multiple indicators: IDE Internal Mode, debugger attachment,
+     * sandbox paths, build directories, etc.
+     * <p>
+     * The result is cached on first call to avoid repeated checks.
+     * Uses double-checked locking for thread safety.
      *
-     * @return true 表示开发模式
+     * @return true if running in development mode
      */
     public static boolean isPluginDevMode() {
+        // Fast path: return cached value if already computed
+        if (cachedDevMode != null) {
+            return cachedDevMode;
+        }
+
+        // Double-checked locking to ensure single computation
+        synchronized (PlatformUtils.class) {
+            if (cachedDevMode == null) {
+                cachedDevMode = computeDevMode();
+            }
+        }
+        return cachedDevMode;
+    }
+
+    /**
+     * Compute whether the plugin is running in development mode.
+     * This method performs the actual detection logic.
+     *
+     * @return true if running in development mode
+     */
+    private static boolean computeDevMode() {
         try {
-            // 检查系统路径是否包含 sandbox（runIde 的典型特征）
+            // Check if IDE is running in Internal Mode
+            var app = ApplicationManager.getApplication();
+            if (app != null && app.isInternal()) {
+                LOG.info("Dev mode detected: IDE Internal Mode enabled");
+                return true;
+            }
+
+            // Check if a debugger is attached to the JVM
+            if (isDebuggerAttached()) {
+                LOG.info("Dev mode detected: debugger attached");
+                return true;
+            }
+
+            // Check if system path contains sandbox (typical for runIde)
             String systemPath = System.getProperty("idea.system.path");
             if (systemPath != null && systemPath.contains("sandbox")) {
                 LOG.info("Dev mode detected: sandbox system path");
                 return true;
             }
 
-            // 检查插件路径是否包含 build
+            // Check if plugins path contains build
             String pluginsPath = System.getProperty("idea.plugins.path");
             if (pluginsPath != null && pluginsPath.contains("build")) {
                 LOG.info("Dev mode detected: build plugins path");
                 return true;
             }
 
-            // 检查插件实际路径
+            // Check plugin actual path
             IdeaPluginDescriptor plugin = PluginManagerCore.getPlugin(
                     PluginId.getId(getPluginId())
             );
@@ -151,6 +193,26 @@ public class PlatformUtils {
             }
         } catch (Exception e) {
             LOG.warn("Failed to detect plugin dev mode: " + e.getMessage());
+        }
+
+        LOG.info("Dev mode not detected, running in production mode");
+        return false;
+    }
+
+    /**
+     * Check if a debugger is attached to the JVM.
+     * Detection is based on common debug agent flags in JVM input arguments.
+     *
+     * @return true if debugger is detected
+     */
+    private static boolean isDebuggerAttached() {
+        try {
+            return ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
+                    .anyMatch(arg -> arg.contains("-agentlib:jdwp") ||
+                            arg.contains("-Xdebug") ||
+                            arg.contains("-Xrunjdwp"));
+        } catch (Exception e) {
+            LOG.warn("Failed to check debugger attachment: " + e.getMessage());
         }
         return false;
     }
