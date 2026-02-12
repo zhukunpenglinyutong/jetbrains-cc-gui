@@ -40,7 +40,7 @@ public final class JBCefBrowserFactory {
             JBCefBrowser browser = JBCefBrowser.createBuilder()
                     .setOffScreenRendering(isOffScreenRendering)
                     .setEnableOpenDevToolsMenuItem(isDevMode)
-                    .setCreateImmediately(true)
+                    // .setCreateImmediately(true) // 此处会导致 新开标签页永远卡在"正在检查 SDK 状态...” 先注释 恢复为默认的懒加载模式
                     .build();
             configureContextMenu(browser, isDevMode);
             LOG.info("JBCefBrowser created successfully using builder");
