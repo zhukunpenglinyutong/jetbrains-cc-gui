@@ -308,7 +308,16 @@
         "codeView": "コード",
         "visualView": "ビジュアル",
         "formatJson": "フォーマット",
-        "invalidJson": "無効なJSON形式です。コードビューに切り替えて修正してください"
+        "invalidJson": "無効なJSON形式です。コードビューに切り替えて修正してください",
+        "presetGroup": "クイックプリセット"
+      },
+      "presets": {
+        "custom": "カスタム",
+        "zhipu": "Zhipu GLM",
+        "kimi": "Kimi K2",
+        "deepseek": "DeepSeek",
+        "minimax": "MiniMax",
+        "xiaomi": "Xiaomi MiMo"
       }
     },
     "comingSoon": "近日公開予定...",

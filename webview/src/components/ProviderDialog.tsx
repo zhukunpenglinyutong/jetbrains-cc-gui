@@ -46,23 +46,26 @@ export default function ProviderDialog({
 
   const updateEnvField = (key: string, value: string) => {
     try {
-      const config = jsonConfig ? JSON.parse(jsonConfig) : {};
-      if (!config.env) config.env = {};
-      const env = config.env as Record<string, any>;
+      const parsed = jsonConfig ? JSON.parse(jsonConfig) : {};
+      const prevEnv = (parsed.env || {}) as Record<string, any>;
       const trimmed = typeof value === 'string' ? value.trim() : value;
+
+      let nextEnv: Record<string, any>;
       if (!trimmed) {
-        if (Object.prototype.hasOwnProperty.call(env, key)) {
-          delete env[key];
-        }
-        if (Object.keys(env).length === 0) {
-          delete config.env;
-        }
+        const { [key]: _, ...rest } = prevEnv;
+        nextEnv = rest;
       } else {
-        env[key] = value;
+        nextEnv = { ...prevEnv, [key]: value };
       }
-      setJsonConfig(JSON.stringify(config, null, 2));
+
+      const nextConfig = Object.keys(nextEnv).length > 0
+        ? { ...parsed, env: nextEnv }
+        : Object.fromEntries(Object.entries(parsed).filter(([k]) => k !== 'env'));
+
+      setJsonConfig(JSON.stringify(nextConfig, null, 2));
       setJsonError('');
-    } catch {
+    } catch (err) {
+      console.error('[ProviderDialog] Failed to update env field:', err);
     }
   };
 
@@ -108,6 +111,19 @@ export default function ProviderDialog({
     setJsonError('');
   };
 
+  // 根据环境变量自动检测匹配的预设
+  const detectMatchingPreset = (env: Record<string, string | undefined>): string => {
+    for (const preset of PROVIDER_PRESETS) {
+      if (preset.id === 'custom') continue;
+      const baseUrl = env.ANTHROPIC_BASE_URL || '';
+      const presetBaseUrl = preset.env.ANTHROPIC_BASE_URL || '';
+      if (baseUrl && presetBaseUrl && baseUrl === presetBaseUrl) {
+        return preset.id;
+      }
+    }
+    return 'custom';
+  };
+
   // 格式化 JSON
   const handleFormatJson = () => {
     try {
@@ -122,9 +138,6 @@ export default function ProviderDialog({
   // 初始化表单
   useEffect(() => {
     if (isOpen) {
-      // 重置预设选择
-      setActivePreset('custom');
-
       if (provider) {
         // 编辑模式
         setProviderName(provider.name || '');
@@ -133,6 +146,9 @@ export default function ProviderDialog({
         // 编辑模式下不填充默认值，避免覆盖用户实际使用的第三方代理 URL
         setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '');
         const env = provider.settingsConfig?.env || {};
+
+        // 自动检测匹配的预设
+        setActivePreset(detectMatchingPreset(env));
 
         setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
         setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
@@ -151,6 +167,7 @@ export default function ProviderDialog({
         setJsonConfig(JSON.stringify(config, null, 2));
       } else {
         // 添加模式
+        setActivePreset('custom');
         setProviderName('');
         setRemark('');
         setApiKey('');
@@ -298,15 +315,17 @@ export default function ProviderDialog({
           </p>
 
           {/* 快捷配置按钮组 */}
-          <div className="preset-buttons">
+          <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.presetGroup')}>
             {PROVIDER_PRESETS.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
+                role="radio"
+                aria-checked={activePreset === preset.id}
                 className={`preset-btn ${activePreset === preset.id ? 'active' : ''}`}
                 onClick={() => handlePresetClick(preset.id)}
               >
-                {preset.name}
+                {t(preset.nameKey)}
               </button>
             ))}
           </div>

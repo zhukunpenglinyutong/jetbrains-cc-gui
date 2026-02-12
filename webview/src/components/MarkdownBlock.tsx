@@ -1,5 +1,5 @@
 import { marked } from 'marked';
-import { useMemo, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openFile } from '../utils/bridge';
 import hljs from 'highlight.js';
@@ -194,30 +194,31 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   }, []);
 
   // 在 HTML 更新后渲染 mermaid 图表
-  // 使用 useLayoutEffect 确保在 DOM 更新后同步执行
-  useLayoutEffect(() => {
-    // 使用 requestAnimationFrame 确保 DOM 已完全渲染
-    let rafId = requestAnimationFrame(() => {
-      // 双重 raf 确保浏览器已完成布局
-      rafId = requestAnimationFrame(() => {
+  useEffect(() => {
+    let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let retryRafId: number | null = null;
+
+    // 使用双重 requestAnimationFrame 确保 DOM 已完全渲染
+    let rafId1 = requestAnimationFrame(() => {
+      rafId1 = requestAnimationFrame(() => {
         renderMermaidDiagrams().then((rendered) => {
           // 如果没有渲染任何图表且重试次数未达到上限，延迟重试
           if (!rendered && mermaidRetryRef.current < MERMAID_MAX_RETRIES) {
             mermaidRetryRef.current++;
-            setTimeout(() => {
-              requestAnimationFrame(() => {
+            retryTimeoutId = setTimeout(() => {
+              retryRafId = requestAnimationFrame(() => {
                 renderMermaidDiagrams();
               });
-            }, 100 * mermaidRetryRef.current); // 递增延迟
+            }, 100 * mermaidRetryRef.current);
           }
         });
       });
     });
 
     return () => {
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
+      cancelAnimationFrame(rafId1);
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
+      if (retryRafId) cancelAnimationFrame(retryRafId);
     };
   }, [content, renderMermaidDiagrams]);
 
@@ -320,34 +321,33 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // 流式结束时强制刷新 DOM，修复流式渲染可能导致的布局错乱
   useEffect(() => {
     if (prevIsStreamingRef.current && !isStreaming && containerRef.current) {
-      // 流式从 true 变为 false，使用双重 requestAnimationFrame 确保 DOM 完全更新
-      // 第一帧：React 完成 DOM 更新
-      // 第二帧：浏览器完成布局计算
-      let rafId1 = requestAnimationFrame(() => {
-        let rafId2 = requestAnimationFrame(() => {
-          if (containerRef.current) {
-            containerRef.current.innerHTML = html;
-            // 刷新后重新渲染 mermaid 图表
-            renderMermaidDiagrams();
-          }
+      let rafId2: number | null = null;
+      let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+      let done = false;
+
+      const applyRefresh = () => {
+        if (done || !containerRef.current) return;
+        done = true;
+        containerRef.current.innerHTML = html;
+        renderMermaidDiagrams();
+      };
+
+      // 使用双重 requestAnimationFrame 确保 DOM 完全更新
+      const rafId1 = requestAnimationFrame(() => {
+        rafId2 = requestAnimationFrame(() => {
+          applyRefresh();
         });
         // 备用方案：如果 raf 不生效（某些环境），使用 setTimeout
-        const fallbackTimer = setTimeout(() => {
-          if (containerRef.current) {
-            containerRef.current.innerHTML = html;
-            renderMermaidDiagrams();
-          }
+        fallbackTimer = setTimeout(() => {
+          applyRefresh();
         }, 100);
-
-        return () => {
-          cancelAnimationFrame(rafId2);
-          clearTimeout(fallbackTimer);
-        };
       });
 
       prevIsStreamingRef.current = isStreaming;
       return () => {
         cancelAnimationFrame(rafId1);
+        if (rafId2) cancelAnimationFrame(rafId2);
+        if (fallbackTimer) clearTimeout(fallbackTimer);
       };
     }
     prevIsStreamingRef.current = isStreaming;

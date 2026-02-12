@@ -486,14 +486,13 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     // 历史消息加载完成回调 - 触发 Markdown 重新渲染
     // 解决历史记录首次加载时 Markdown 不渲染的问题
     window.historyLoadComplete = () => {
-      console.log('[Frontend] History load complete, triggering re-render');
-      // 使用双重 requestAnimationFrame 确保 DOM 完全更新后再触发重渲染
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          // 通过设置一个临时的状态变化来触发组件重新渲染
-          // 这会使得 MarkdownBlock 组件重新执行渲染逻辑
-          setMessages((prev) => [...prev]);
-        });
+      // 通过递增版本号触发组件重新渲染，避免 O(n) 数组浅拷贝
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        // 更新最后一条消息的引用以触发渲染
+        const updated = [...prev];
+        updated[updated.length - 1] = { ...updated[updated.length - 1] };
+        return updated;
       });
     };
 

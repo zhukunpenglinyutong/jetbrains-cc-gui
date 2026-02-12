@@ -151,8 +151,8 @@ export interface CodexProviderConfig {
 export interface ProviderPreset {
   /** 预设唯一 ID */
   id: string;
-  /** 预设显示名称 */
-  name: string;
+  /** i18n key for preset name, resolved at render time */
+  nameKey: string;
   /** 环境变量配置 */
   env: Record<string, string>;
 }
@@ -160,16 +160,18 @@ export interface ProviderPreset {
 /**
  * 供应商预设配置列表
  * 用于快捷配置供应商
+ *
+ * nameKey 在渲染时通过 t() 解析为对应语言的显示名称
  */
 export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     id: 'custom',
-    name: '自定义配置',
+    nameKey: 'settings.provider.presets.custom',
     env: {},
   },
   {
     id: 'zhipu',
-    name: '智普GLM',
+    nameKey: 'settings.provider.presets.zhipu',
     env: {
       ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/api/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
@@ -181,7 +183,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'kimi',
-    name: 'Kimi K2',
+    nameKey: 'settings.provider.presets.kimi',
     env: {
       ANTHROPIC_BASE_URL: 'https://api.moonshot.cn/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
@@ -193,7 +195,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'deepseek',
-    name: 'DeepSeek',
+    nameKey: 'settings.provider.presets.deepseek',
     env: {
       ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
@@ -205,10 +207,11 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'minimax',
-    name: 'MiniMax',
+    nameKey: 'settings.provider.presets.minimax',
     env: {
       ANTHROPIC_BASE_URL: 'https://api.minimaxi.com/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
+      // MiniMax 模型响应较慢，需要 50 分钟超时（3,000,000ms）以避免长推理请求被截断
       API_TIMEOUT_MS: '3000000',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       ANTHROPIC_MODEL: 'MiniMax-M2.1',
@@ -219,7 +222,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   },
   {
     id: 'xiaomi',
-    name: 'Xiaomi MiMo',
+    nameKey: 'settings.provider.presets.xiaomi',
     env: {
       ANTHROPIC_BASE_URL: 'https://api.xiaomimimo.com/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',

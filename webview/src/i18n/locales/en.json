@@ -351,7 +351,16 @@
         "codeView": "Code",
         "visualView": "Visual",
         "formatJson": "Format",
-        "invalidJson": "Invalid JSON format, please switch to code view to fix"
+        "invalidJson": "Invalid JSON format, please switch to code view to fix",
+        "presetGroup": "Quick Presets"
+      },
+      "presets": {
+        "custom": "Custom",
+        "zhipu": "Zhipu GLM",
+        "kimi": "Kimi K2",
+        "deepseek": "DeepSeek",
+        "minimax": "MiniMax",
+        "xiaomi": "Xiaomi MiMo"
       }
     },
     "comingSoon": "Coming soon...",
