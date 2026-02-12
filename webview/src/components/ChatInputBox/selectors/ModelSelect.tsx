@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Claude, OpenAI, Gemini } from '@lobehub/icons';
 import { AVAILABLE_MODELS } from '../types';
 import type { ModelInfo } from '../types';
+import { STORAGE_KEYS } from '../../../types/provider';
 
 interface ModelSelectProps {
   value: string;
@@ -48,6 +49,35 @@ const MODEL_DESCRIPTION_KEYS: Record<string, string> = {
 };
 
 /**
+ * Maps model IDs to mapping keys for looking up actual model names
+ * from the 'claude-model-mapping' localStorage entry.
+ * The opus 1M variant uses a separate 'opus_1m' key, falling back to 'opus'.
+ */
+const MODEL_ID_TO_MAPPING_KEY: Record<string, string> = {
+  'claude-sonnet-4-5': 'sonnet',
+  'claude-opus-4-6': 'opus',
+  'claude-opus-4-6[1m]': 'opus_1m',
+  'claude-opus-4-5-20251101': 'opus',
+  'claude-haiku-4-5': 'haiku',
+};
+
+/**
+ * Retrieves model mapping from localStorage.
+ * Returns format: { main: '', haiku: '', sonnet: '', opus: '' }
+ */
+const getModelMapping = (): Record<string, string> => {
+  try {
+    const mappingStr = localStorage.getItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING);
+    if (mappingStr) {
+      return JSON.parse(mappingStr);
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return {};
+};
+
+/**
  * 模型图标组件 - 根据提供商类型显示不同图标
  */
 const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }) => {
@@ -74,7 +104,22 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
 
   const currentModel = models.find(m => m.id === value) || models[0];
 
+  // Cache model mapping to avoid redundant localStorage reads on every render
+  const modelMapping = useMemo(() => getModelMapping(), []);
+
   const getModelLabel = (model: ModelInfo): string => {
+    // Check model mapping first (from local settings.json or provider config)
+    const mappingKey = MODEL_ID_TO_MAPPING_KEY[model.id];
+    if (mappingKey) {
+      // opus_1m falls back to opus mapping
+      const mappedName = modelMapping[mappingKey]
+        || (mappingKey === 'opus_1m' ? modelMapping['opus'] : undefined);
+      if (mappedName && mappedName.trim()) {
+        return mappedName.trim();
+      }
+    }
+
+    // Fall back to default logic when no mapping is found
     const defaultModel = DEFAULT_MODEL_MAP[model.id];
     const labelKey = MODEL_LABEL_KEYS[model.id];
     const hasCustomLabel = defaultModel && model.label && model.label !== defaultModel.label;
