@@ -355,8 +355,40 @@ function detectHashTrigger(text: string, cursorPosition: number): TriggerQuery |
 }
 
 /**
+ * Detect ! prompt trigger (can be used anywhere, not just line start)
+ */
+function detectExclamationTrigger(text: string, cursorPosition: number): TriggerQuery | null {
+  // Search backward from cursor position for !
+  let start = cursorPosition - 1;
+  while (start >= 0) {
+    const char = text[start];
+
+    // Stop search on whitespace or newline
+    if (char === '\n') {
+      return null;
+    }
+    if (isWhitespace(char)) {
+      return null;
+    }
+
+    // Found !
+    if (char === '!') {
+      const query = text.slice(start + 1, cursorPosition);
+      return {
+        trigger: '!',
+        query,
+        start,
+        end: cursorPosition,
+      };
+    }
+    start--;
+  }
+  return null;
+}
+
+/**
  * useTriggerDetection - Trigger detection hook
- * Detects @, / or # trigger symbols in the input box
+ * Detects @, /, # or ! trigger symbols in the input box
  */
 export function useTriggerDetection() {
   /**
@@ -378,6 +410,10 @@ export function useTriggerDetection() {
     // Detect # (agent trigger)
     const hashTrigger = detectHashTrigger(text, cursorPosition);
     if (hashTrigger) return hashTrigger;
+
+    // Detect ! (prompt trigger)
+    const exclamationTrigger = detectExclamationTrigger(text, cursorPosition);
+    if (exclamationTrigger) return exclamationTrigger;
 
     return null;
   }, []);

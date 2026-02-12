@@ -14,6 +14,7 @@ export interface UseNativeEventCaptureOptions {
   fileCompletion: CompletionOpenLike;
   commandCompletion: CompletionOpenLike;
   agentCompletion: CompletionOpenLike;
+  promptCompletion: CompletionOpenLike;
   completionSelectedRef: MutableRefObject<boolean>;
   submittedOnEnterRef: MutableRefObject<boolean>;
   handleSubmit: () => void;
@@ -37,6 +38,7 @@ export function useNativeEventCapture({
   fileCompletion,
   commandCompletion,
   agentCompletion,
+  promptCompletion,
   completionSelectedRef,
   submittedOnEnterRef,
   handleSubmit,
@@ -52,6 +54,7 @@ export function useNativeEventCapture({
     fileCompletion,
     commandCompletion,
     agentCompletion,
+    promptCompletion,
     completionSelectedRef,
     submittedOnEnterRef,
     handleSubmit,
@@ -66,6 +69,7 @@ export function useNativeEventCapture({
     fileCompletion,
     commandCompletion,
     agentCompletion,
+    promptCompletion,
     completionSelectedRef,
     submittedOnEnterRef,
     handleSubmit,
@@ -107,7 +111,7 @@ export function useNativeEventCapture({
         ((ev.key === 'e' || ev.key === 'E') && ev.ctrlKey && !ev.metaKey);
       if (isCursorMovementKey) return;
 
-      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen) {
+      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen || latest.promptCompletion.isOpen) {
         return;
       }
 
@@ -162,7 +166,7 @@ export function useNativeEventCapture({
         latest.completionSelectedRef.current = false;
         return;
       }
-      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen) {
+      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen || latest.promptCompletion.isOpen) {
         return;
       }
       latest.handleSubmit();

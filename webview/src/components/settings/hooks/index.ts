@@ -22,3 +22,11 @@ export type {
   AgentDialogState,
   DeleteAgentConfirmState,
 } from './useAgentManagement';
+
+export { usePromptManagement } from './usePromptManagement';
+export type {
+  UsePromptManagementOptions,
+  UsePromptManagementReturn,
+  PromptDialogState,
+  DeletePromptConfirmState,
+} from './usePromptManagement';
