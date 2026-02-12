@@ -138,7 +138,11 @@
       }
     },
     "providers": "供應商管理",
-    "providersDesc": "管理 Claude API 供應商配置，切換不同的 API 服務提供商",
+    "providersDesc": "管理 Claude 和 Codex API 供應商配置，切換不同的 API 服務提供商",
+    "providerTab": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
     "dependencies": "SDK 依賴",
     "dependenciesDesc": "管理 AI SDK 依賴套件的安裝和更新",
     "dependency": {

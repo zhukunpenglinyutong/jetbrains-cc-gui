@@ -136,7 +136,11 @@
       }
     },
     "providers": "प्रदाता प्रबंधन",
-    "providersDesc": "Claude API प्रदाता कॉन्फ़िगरेशन प्रबंधित करें, विभिन्न API सेवा प्रदाताओं के बीच स्विच करें",
+    "providersDesc": "Claude और Codex API प्रदाता कॉन्फ़िगरेशन प्रबंधित करें, विभिन्न API सेवा प्रदाताओं के बीच स्विच करें",
+    "providerTab": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
     "dependencies": "SDK निर्भरताएं",
     "dependenciesDesc": "AI SDK निर्भरताओं की इंस्टॉलेशन और अपडेट प्रबंधित करें",
     "dependency": {

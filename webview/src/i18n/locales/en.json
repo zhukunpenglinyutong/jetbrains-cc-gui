@@ -159,7 +159,11 @@
       }
     },
     "providers": "Provider Management",
-    "providersDesc": "Manage Claude API provider configurations and switch between different API service providers",
+    "providersDesc": "Manage Claude and Codex API provider configurations and switch between different API service providers",
+    "providerTab": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
     "dependencies": "SDK Dependencies",
     "dependenciesDesc": "Manage AI SDK dependency installations and updates",
     "dependency": {

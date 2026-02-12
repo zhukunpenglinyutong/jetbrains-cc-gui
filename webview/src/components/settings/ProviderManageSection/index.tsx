@@ -14,6 +14,7 @@ interface ProviderManageSectionProps {
   onDeleteProvider: (provider: ProviderConfig) => void;
   onSwitchProvider: (id: string) => void;
   addToast: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+  showHeader?: boolean;
 }
 
 const ProviderManageSection = ({
@@ -26,13 +27,18 @@ const ProviderManageSection = ({
   onDeleteProvider,
   onSwitchProvider,
   addToast,
+  showHeader = true,
 }: ProviderManageSectionProps) => {
   const { t } = useTranslation();
 
   return (
     <div className={styles.configSection}>
-      <h3 className={styles.sectionTitle}>{t('settings.providers')}</h3>
-      <p className={styles.sectionDesc}>{t('settings.providersDesc')}</p>
+      {showHeader && (
+        <>
+          <h3 className={styles.sectionTitle}>{t('settings.providers')}</h3>
+          <p className={styles.sectionDesc}>{t('settings.providersDesc')}</p>
+        </>
+      )}
 
       {/* 当前 Claude CLI 配置信息展示 */}
       <div className={styles.configInfoWrapper}>

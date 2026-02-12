@@ -138,7 +138,11 @@
       }
     },
     "providers": "Gestión de proveedores",
-    "providersDesc": "Gestionar configuración de proveedores de API Claude, cambiar entre diferentes proveedores de servicio API",
+    "providersDesc": "Gestionar configuración de proveedores de API Claude y Codex, cambiar entre diferentes proveedores de servicio API",
+    "providerTab": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
     "dependencies": "Dependencias SDK",
     "dependenciesDesc": "Gestionar instalaciones y actualizaciones de dependencias AI SDK",
     "dependency": {
