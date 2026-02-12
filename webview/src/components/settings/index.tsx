@@ -15,7 +15,7 @@ import AgentDialog from '../AgentDialog';
 import SettingsHeader from './SettingsHeader';
 import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
 import BasicConfigSection from './BasicConfigSection';
-import ProviderManageSection from './ProviderManageSection';
+import ProviderTabSection from './ProviderTabSection';
 import DependencySection from './DependencySection';
 import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
@@ -810,9 +810,10 @@ const SettingsView = ({
             />
           </div>
 
-          {/* 供应商管理 */}
-          <div style={{ display: currentTab === 'providers' && !isCodexMode ? 'block' : 'none' }}>
-            <ProviderManageSection
+          {/* 供应商管理 (Claude + Codex 内部 Tab 切换) */}
+          <div style={{ display: currentTab === 'providers' ? 'block' : 'none' }}>
+            <ProviderTabSection
+              currentProvider={currentProvider}
               claudeConfig={claudeConfig}
               claudeConfigLoading={claudeConfigLoading}
               providers={providers}
@@ -821,92 +822,14 @@ const SettingsView = ({
               onEditProvider={handleEditProvider}
               onDeleteProvider={handleDeleteProvider}
               onSwitchProvider={handleSwitchProvider}
+              codexProviders={codexProviders}
+              codexLoading={codexLoading}
+              onAddCodexProvider={handleAddCodexProvider}
+              onEditCodexProvider={handleEditCodexProvider}
+              onDeleteCodexProvider={handleDeleteCodexProvider}
+              onSwitchCodexProvider={handleSwitchCodexProvider}
               addToast={addToast}
             />
-          </div>
-
-          {/* Codex 供应商管理 */}
-          <div style={{ display: currentTab === 'providers' && isCodexMode ? 'block' : 'none' }}>
-            <div className={styles.configSection}>
-              <h3 className={styles.sectionTitle}>{t('settings.codexProvider.title')}</h3>
-              <p className={styles.sectionDesc}>{t('settings.codexProvider.description')}</p>
-
-              {codexLoading && (
-                <div className={styles.tempNotice}>
-                  <span className="codicon codicon-loading codicon-modifier-spin" />
-                  <p>{t('settings.provider.loading')}</p>
-                </div>
-              )}
-
-              {!codexLoading && (
-                <div className={styles.providerListContainer}>
-                  <div className={styles.providerListHeader}>
-                    <h4>{t('settings.provider.allProviders')}</h4>
-                    <button className="btn btn-primary" onClick={handleAddCodexProvider}>
-                      <span className="codicon codicon-add" />
-                      {t('common.add')}
-                    </button>
-                  </div>
-
-                  <div className={styles.providerList}>
-                    {codexProviders.length > 0 ? (
-                      codexProviders.map((provider) => (
-                        <div
-                          key={provider.id}
-                          className={`${styles.providerCard} ${provider.isActive ? styles.active : ''}`}
-                        >
-                          <div className={styles.providerInfo}>
-                            <div className={styles.providerName}>{provider.name}</div>
-                            {provider.remark && (
-                              <div className={styles.providerRemark}>{provider.remark}</div>
-                            )}
-                          </div>
-
-                          <div className={styles.providerActions}>
-                            {provider.isActive ? (
-                              <div className={styles.activeBadge}>
-                                <span className="codicon codicon-check" />
-                                {t('settings.provider.inUse')}
-                              </div>
-                            ) : (
-                              <button
-                                className={styles.useButton}
-                                onClick={() => handleSwitchCodexProvider(provider.id)}
-                              >
-                                <span className="codicon codicon-play" />
-                                {t('settings.provider.enable')}
-                              </button>
-                            )}
-
-                            <div className={styles.actionButtons}>
-                              <button
-                                className={styles.iconBtn}
-                                onClick={() => handleEditCodexProvider(provider)}
-                                title={t('common.edit')}
-                              >
-                                <span className="codicon codicon-edit" />
-                              </button>
-                              <button
-                                className={styles.iconBtn}
-                                onClick={() => handleDeleteCodexProvider(provider)}
-                                title={t('common.delete')}
-                              >
-                                <span className="codicon codicon-trash" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className={styles.emptyState}>
-                        <span className="codicon codicon-info" />
-                        <p>{t('settings.codexProvider.emptyProvider')}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* SDK 依赖管理 */}

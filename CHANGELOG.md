@@ -1,3 +1,71 @@
+##### **2026年2月12日（v0.1.8）**
+
+English:
+
+✨ Features
+- Add Claude Opus 4.6 model support with 1M context window
+- Add preset buttons for quick provider configuration with one-click setup
+- Integrate Claude and Codex provider management with unified tab interface
+- Enhance DevTools action with Chrome remote debugging support
+- Change file click behavior in status panel and restore diff icon
+- Update Codex SDK to latest version
+- Add exception error notification for better user feedback
+
+🐛 Fixes
+- Fix MCP SSE transport verification and tools retrieval
+- Fix MCP STDIO server verification and improve protocol compliance
+- Fix SSE endpoint and error handling issues
+- Truncate long error messages to prevent webview freezing
+- Preserve cursor position after dropdown selection and file-tag rendering
+- Exclude cache read tokens from context window usage calculation
+- Disable immediate tab creation to fix tab loading stuck issue
+- Improve mermaid rendering on history load
+- Use #app rect as reference for fixed positioning in zoom container
+- Retrieve user-selected changes via reflection for diff operations
+- Fix compile encoding on Windows
+
+🔧 Improvements
+- Change license from AGPL-3.0 to MIT for broader compatibility
+- Add i18n support for provider presets and optimize rendering
+- Filter environment keys in local provider and optimize model mapping
+- Refactor reflection to safely handle collections
+- Fix ErrorBoundary timer cleanup to prevent memory leaks
+- Extract sponsors list to SPONSORS.md and simplify README
+- Add Trendshift badge to README files
+
+中文：
+
+✨ Features
+- 新增 Claude Opus 4.6 模型支持，提供 1M 上下文窗口
+- 新增供应商预设按钮，支持一键快速配置
+- 整合 Claude 和 Codex 供应商管理，统一标签页界面
+- 增强 DevTools 操作，支持 Chrome 远程调试
+- 修改状态面板文件点击行为，恢复 Diff 图标
+- 更新 Codex SDK 到最新版本
+- 新增异常错误通知，提供更好的用户反馈
+
+🐛 Fixes
+- 修复 MCP SSE 传输验证和工具获取问题
+- 修复 MCP STDIO 服务器验证，改进协议兼容性
+- 修复 SSE 端点和错误处理问题
+- 截断长错误消息，防止 webview 冻结
+- 修复下拉选择和文件标签渲染后的光标位置保持
+- 从上下文窗口使用量计算中排除缓存读取的 token
+- 禁用立即创建标签页，修复标签页加载卡住问题
+- 改进历史记录加载时的 mermaid 渲染
+- 使用 #app rect 作为缩放容器中固定定位的参考
+- 通过反射获取用户选择的更改用于 Diff 操作
+- 修复 Windows 下的编译编码问题
+
+🔧 Improvements
+- 许可证从 AGPL-3.0 更改为 MIT，提升兼容性
+- 为供应商预设添加国际化支持，优化渲染性能
+- 过滤本地供应商中的环境变量键，优化模型映射
+- 重构反射以安全处理集合类型
+- 修复 ErrorBoundary 定时器清理，防止内存泄漏
+- 提取赞助商列表到 SPONSORS.md，简化 README
+- 在 README 中添加 Trendshift 徽章
+
 ##### **2026年2月5日（v0.1.7-beta5）**
 
 English:

@@ -517,6 +517,45 @@
     box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
 }
 
+/* Provider Preset Buttons */
+.preset-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+
+.preset-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.preset-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.preset-btn.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+}
+
+.preset-btn.active:hover {
+    background: var(--accent-primary-hover, var(--accent-primary));
+}
+
 /* Form field layout */
 .custom-models-editor .form-field {
     flex: 1;

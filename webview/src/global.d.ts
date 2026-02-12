@@ -63,6 +63,12 @@ interface Window {
   addHistoryMessage?: (message: any) => void;
 
   /**
+   * History load complete callback - 历史消息加载完成时调用
+   * 用于触发 Markdown 重新渲染，解决历史记录首次加载时渲染不正确的问题
+   */
+  historyLoadComplete?: () => void;
+
+  /**
    * Add user message to chat (used for external Quick Fix feature)
    * Immediately shows the user's message in the chat UI before AI response
    */

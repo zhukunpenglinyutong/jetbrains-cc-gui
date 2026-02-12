@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../types/provider';
+import { PROVIDER_PRESETS } from '../types/provider';
 
 interface ProviderDialogProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ export default function ProviderDialog({
   const [remark, setRemark] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState('');
+  const [activePreset, setActivePreset] = useState<string>('custom');
 
   const [haikuModel, setHaikuModel] = useState('');
   const [sonnetModel, setSonnetModel] = useState('');
@@ -44,24 +46,82 @@ export default function ProviderDialog({
 
   const updateEnvField = (key: string, value: string) => {
     try {
-      const config = jsonConfig ? JSON.parse(jsonConfig) : {};
-      if (!config.env) config.env = {};
-      const env = config.env as Record<string, any>;
+      const parsed = jsonConfig ? JSON.parse(jsonConfig) : {};
+      const prevEnv = (parsed.env || {}) as Record<string, any>;
       const trimmed = typeof value === 'string' ? value.trim() : value;
+
+      let nextEnv: Record<string, any>;
       if (!trimmed) {
-        if (Object.prototype.hasOwnProperty.call(env, key)) {
-          delete env[key];
-        }
-        if (Object.keys(env).length === 0) {
-          delete config.env;
-        }
+        const { [key]: _, ...rest } = prevEnv;
+        nextEnv = rest;
       } else {
-        env[key] = value;
+        nextEnv = { ...prevEnv, [key]: value };
       }
-      setJsonConfig(JSON.stringify(config, null, 2));
+
+      const nextConfig = Object.keys(nextEnv).length > 0
+        ? { ...parsed, env: nextEnv }
+        : Object.fromEntries(Object.entries(parsed).filter(([k]) => k !== 'env'));
+
+      setJsonConfig(JSON.stringify(nextConfig, null, 2));
       setJsonError('');
-    } catch {
+    } catch (err) {
+      console.error('[ProviderDialog] Failed to update env field:', err);
     }
+  };
+
+  // 应用预设配置
+  const handlePresetClick = (presetId: string) => {
+    const preset = PROVIDER_PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+
+    setActivePreset(presetId);
+
+    if (presetId === 'custom') {
+      // 自定义配置：重置为空配置
+      const config = {
+        env: {
+          ANTHROPIC_AUTH_TOKEN: '',
+          ANTHROPIC_BASE_URL: '',
+          ANTHROPIC_MODEL: '',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: '',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: '',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
+        }
+      };
+      setJsonConfig(JSON.stringify(config, null, 2));
+      setApiKey('');
+      setApiUrl('');
+      setHaikuModel('');
+      setSonnetModel('');
+      setOpusModel('');
+      return;
+    }
+
+    // 应用预设配置
+    const config = { env: { ...preset.env } };
+    setJsonConfig(JSON.stringify(config, null, 2));
+
+    // 同步更新表单字段
+    const env = preset.env;
+    setApiUrl(env.ANTHROPIC_BASE_URL || '');
+    setApiKey(env.ANTHROPIC_AUTH_TOKEN || '');
+    setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
+    setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
+    setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
+    setJsonError('');
+  };
+
+  // 根据环境变量自动检测匹配的预设
+  const detectMatchingPreset = (env: Record<string, string | undefined>): string => {
+    for (const preset of PROVIDER_PRESETS) {
+      if (preset.id === 'custom') continue;
+      const baseUrl = env.ANTHROPIC_BASE_URL || '';
+      const presetBaseUrl = preset.env.ANTHROPIC_BASE_URL || '';
+      if (baseUrl && presetBaseUrl && baseUrl === presetBaseUrl) {
+        return preset.id;
+      }
+    }
+    return 'custom';
   };
 
   // 格式化 JSON
@@ -87,6 +147,9 @@ export default function ProviderDialog({
         setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '');
         const env = provider.settingsConfig?.env || {};
 
+        // 自动检测匹配的预设
+        setActivePreset(detectMatchingPreset(env));
+
         setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
         setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
         setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
@@ -104,6 +167,7 @@ export default function ProviderDialog({
         setJsonConfig(JSON.stringify(config, null, 2));
       } else {
         // 添加模式
+        setActivePreset('custom');
         setProviderName('');
         setRemark('');
         setApiKey('');
@@ -249,6 +313,22 @@ export default function ProviderDialog({
           <p className="dialog-desc">
             {isAdding ? t('settings.provider.dialog.addDescription') : t('settings.provider.dialog.editDescription')}
           </p>
+
+          {/* 快捷配置按钮组 */}
+          <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.presetGroup')}>
+            {PROVIDER_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                role="radio"
+                aria-checked={activePreset === preset.id}
+                className={`preset-btn ${activePreset === preset.id ? 'active' : ''}`}
+                onClick={() => handlePresetClick(preset.id)}
+              >
+                {t(preset.nameKey)}
+              </button>
+            ))}
+          </div>
 
           <div className="form-group">
             <label htmlFor="providerName">
