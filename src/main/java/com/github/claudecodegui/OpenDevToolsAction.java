@@ -17,6 +17,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.ui.popup.ListPopup;
 import com.intellij.openapi.ui.popup.PopupStep;
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep;
+import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
@@ -30,6 +31,7 @@ import java.awt.*;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -113,135 +115,136 @@ public class OpenDevToolsAction extends AnAction {
     }
 
     /**
+     * Get the JCEF remote debugging port from Registry.
+     * Uses 'ide.browser.jcef.debug.port' registry key which is available across all IntelliJ versions.
+     *
+     * @return the debug port, or -1 if not configured
+     */
+    private int getDebugPort() {
+        try {
+            int port = Registry.intValue("ide.browser.jcef.debug.port", -1);
+            return port > 0 ? port : -1;
+        } catch (Exception e) {
+            LOG.warn("[OpenDevToolsAction] Failed to read debug port from Registry", e);
+            return -1;
+        }
+    }
+
+    /**
      * Open Chrome DevTools by fetching the WebSocket debug URL from the remote debugging port.
      */
     private void openChromeDevTools(Project project) {
-        try {
-            JBCefApp.getInstance().getRemoteDebuggingPort(port -> {
-                if (port == null || port <= 0) {
+        int port = getDebugPort();
+        if (port <= 0) {
+            showNotification(project,
+                    "Remote debugging port not available.\n" +
+                            "Set 'ide.browser.jcef.debug.port' in Registry (Help > Find Action > Registry)",
+                    NotificationType.WARNING);
+            return;
+        }
+
+        // Fetch targets from /json endpoint in background
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                String jsonUrl = "http://127.0.0.1:" + port + "/json";
+                String jsonResponse = fetchUrl(jsonUrl);
+
+                if (jsonResponse == null || jsonResponse.isEmpty()) {
                     ApplicationManager.getApplication().invokeLater(() ->
-                            showNotification(project,
-                                    "Remote debugging port not available.\n" +
-                                            "Set 'ide.browser.jcef.debug.port' in Registry (Help > Find Action > Registry)",
-                                    NotificationType.WARNING));
+                            showNotification(project, "No response from debug port " + port, NotificationType.ERROR));
                     return;
                 }
 
-                // Fetch targets from /json endpoint in background
-                ApplicationManager.getApplication().executeOnPooledThread(() -> {
-                    try {
-                        String jsonUrl = "http://127.0.0.1:" + port + "/json";
-                        String jsonResponse = fetchUrl(jsonUrl);
+                // Parse JSON to find the devtools URL
+                JsonArray targets = JsonParser.parseString(jsonResponse).getAsJsonArray();
+                String devtoolsUrl = null;
 
-                        if (jsonResponse == null || jsonResponse.isEmpty()) {
-                            ApplicationManager.getApplication().invokeLater(() ->
-                                    showNotification(project, "No response from debug port " + port, NotificationType.ERROR));
-                            return;
+                for (JsonElement element : targets) {
+                    JsonObject target = element.getAsJsonObject();
+                    // Look for our webview page
+                    String targetUrl = target.has("url") ? target.get("url").getAsString() : "";
+                    if (targetUrl.contains("webview") || targetUrl.contains("claude")) {
+                        if (target.has("devtoolsFrontendUrl")) {
+                            devtoolsUrl = target.get("devtoolsFrontendUrl").getAsString();
+                            break;
                         }
-
-                        // Parse JSON to find the devtools URL
-                        JsonArray targets = JsonParser.parseString(jsonResponse).getAsJsonArray();
-                        String devtoolsUrl = null;
-
-                        for (JsonElement element : targets) {
-                            JsonObject target = element.getAsJsonObject();
-                            // Look for our webview page
-                            String targetUrl = target.has("url") ? target.get("url").getAsString() : "";
-                            if (targetUrl.contains("webview") || targetUrl.contains("claude")) {
-                                if (target.has("devtoolsFrontendUrl")) {
-                                    devtoolsUrl = target.get("devtoolsFrontendUrl").getAsString();
-                                    break;
-                                }
-                            }
-                        }
-
-                        // If not found, use the first available target
-                        if (devtoolsUrl == null && !targets.isEmpty()) {
-                            JsonObject firstTarget = targets.get(0).getAsJsonObject();
-                            if (firstTarget.has("devtoolsFrontendUrl")) {
-                                devtoolsUrl = firstTarget.get("devtoolsFrontendUrl").getAsString();
-                            }
-                        }
-
-                        if (devtoolsUrl != null) {
-                            // Convert to full URL if needed
-                            String finalUrl = devtoolsUrl;
-                            if (devtoolsUrl.startsWith("/")) {
-                                finalUrl = "http://127.0.0.1:" + port + devtoolsUrl;
-                            }
-                            String urlToOpen = finalUrl;
-                            LOG.info("[OpenDevToolsAction] Opening DevTools URL: " + urlToOpen);
-
-                            ApplicationManager.getApplication().invokeLater(() -> BrowserUtil.browse(urlToOpen));
-                        } else {
-                            // Fallback: open the json list page
-                            ApplicationManager.getApplication().invokeLater(() -> {
-                                BrowserUtil.browse("http://127.0.0.1:" + port);
-                                showNotification(project,
-                                        "DevTools URL not found. Opening target list.\n" +
-                                                "Click on 'inspect' link for any target.",
-                                        NotificationType.INFORMATION);
-                            });
-                        }
-
-                    } catch (Exception ex) {
-                        LOG.error("[OpenDevToolsAction] Failed to fetch DevTools URL", ex);
-                        ApplicationManager.getApplication().invokeLater(() ->
-                                showNotification(project, "Failed to fetch DevTools URL: " + ex.getMessage(), NotificationType.ERROR));
                     }
-                });
-            });
-        } catch (Exception ex) {
-            LOG.error("[OpenDevToolsAction] Failed to get remote debugging port", ex);
-            showNotification(project, "Failed to get remote debugging port: " + ex.getMessage(), NotificationType.ERROR);
-        }
+                }
+
+                // If not found, use the first available target
+                if (devtoolsUrl == null && !targets.isEmpty()) {
+                    JsonObject firstTarget = targets.get(0).getAsJsonObject();
+                    if (firstTarget.has("devtoolsFrontendUrl")) {
+                        devtoolsUrl = firstTarget.get("devtoolsFrontendUrl").getAsString();
+                    }
+                }
+
+                if (devtoolsUrl != null) {
+                    // Convert to full URL if needed
+                    String finalUrl = devtoolsUrl;
+                    if (devtoolsUrl.startsWith("/")) {
+                        finalUrl = "http://127.0.0.1:" + port + devtoolsUrl;
+                    }
+                    String urlToOpen = finalUrl;
+                    LOG.info("[OpenDevToolsAction] Opening DevTools URL: " + urlToOpen);
+
+                    ApplicationManager.getApplication().invokeLater(() -> BrowserUtil.browse(urlToOpen));
+                } else {
+                    // Fallback: open the json list page
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        BrowserUtil.browse("http://127.0.0.1:" + port);
+                        showNotification(project,
+                                "DevTools URL not found. Opening target list.\n" +
+                                        "Click on 'inspect' link for any target.",
+                                NotificationType.INFORMATION);
+                    });
+                }
+
+            } catch (Exception ex) {
+                LOG.error("[OpenDevToolsAction] Failed to fetch DevTools URL", ex);
+                ApplicationManager.getApplication().invokeLater(() ->
+                        showNotification(project, "Failed to fetch DevTools URL: " + ex.getMessage(), NotificationType.ERROR));
+            }
+        });
     }
 
     /**
      * Copy debug connection info to clipboard.
      */
     private void copyDebugInfo(Project project) {
-        try {
-            JBCefApp.getInstance().getRemoteDebuggingPort(port -> {
-                if (port == null || port <= 0) {
-                    ApplicationManager.getApplication().invokeLater(() ->
-                            showNotification(project,
-                                    "Remote debugging port not available.\n" +
-                                            "Set 'ide.browser.jcef.debug.port' in Registry",
-                                    NotificationType.WARNING));
-                    return;
-                }
-
-                String debugInfo = String.format(
-                        "JCEF Remote Debug Info:\n" +
-                                "━━━━━━━━━━━━━━━━━━━━━━\n" +
-                                "Port: %d\n" +
-                                "Target List: http://127.0.0.1:%d/json\n" +
-                                "━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-                                "To debug in Chrome:\n" +
-                                "1. Open chrome://inspect\n" +
-                                "2. Click 'Configure...' next to 'Discover network targets'\n" +
-                                "3. Add: 127.0.0.1:%d\n" +
-                                "4. Click 'inspect' on the target",
-                        port, port, port
-                );
-
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    copyToClipboard(debugInfo);
-                    showNotification(project, "Debug info copied to clipboard!\nPort: " + port, NotificationType.INFORMATION);
-                });
-                LOG.info("[OpenDevToolsAction] Copied debug info for port: " + port);
-            });
-        } catch (Exception ex) {
-            LOG.error("[OpenDevToolsAction] Failed to copy debug info", ex);
+        int port = getDebugPort();
+        if (port <= 0) {
+            showNotification(project,
+                    "Remote debugging port not available.\n" +
+                            "Set 'ide.browser.jcef.debug.port' in Registry",
+                    NotificationType.WARNING);
+            return;
         }
+
+        String debugInfo = String.format(
+                "JCEF Remote Debug Info:\n" +
+                        "━━━━━━━━━━━━━━━━━━━━━━\n" +
+                        "Port: %d\n" +
+                        "Target List: http://127.0.0.1:%d/json\n" +
+                        "━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                        "To debug in Chrome:\n" +
+                        "1. Open chrome://inspect\n" +
+                        "2. Click 'Configure...' next to 'Discover network targets'\n" +
+                        "3. Add: 127.0.0.1:%d\n" +
+                        "4. Click 'inspect' on the target",
+                port, port, port
+        );
+
+        copyToClipboard(debugInfo);
+        showNotification(project, "Debug info copied to clipboard!\nPort: " + port, NotificationType.INFORMATION);
+        LOG.info("[OpenDevToolsAction] Copied debug info for port: " + port);
     }
 
     @Nullable
     private String fetchUrl(String urlString) {
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(urlString);
+            URL url = URI.create(urlString).toURL();
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(3000);
