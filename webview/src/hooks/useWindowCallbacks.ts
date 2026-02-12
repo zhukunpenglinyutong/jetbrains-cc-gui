@@ -483,6 +483,20 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       setMessages((prev) => [...prev, message]);
     };
 
+    // 历史消息加载完成回调 - 触发 Markdown 重新渲染
+    // 解决历史记录首次加载时 Markdown 不渲染的问题
+    window.historyLoadComplete = () => {
+      console.log('[Frontend] History load complete, triggering re-render');
+      // 使用双重 requestAnimationFrame 确保 DOM 完全更新后再触发重渲染
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // 通过设置一个临时的状态变化来触发组件重新渲染
+          // 这会使得 MarkdownBlock 组件重新执行渲染逻辑
+          setMessages((prev) => [...prev]);
+        });
+      });
+    };
+
     window.addUserMessage = (content: string) => {
       const userMessage: ClaudeMessage = {
         type: 'user',

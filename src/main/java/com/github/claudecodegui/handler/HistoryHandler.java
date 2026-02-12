@@ -445,6 +445,18 @@ public class HistoryHandler extends BaseMessageHandler {
                     processAndInjectCodexMessage(msg);
                 }
 
+                // 通知前端历史消息加载完成，触发 Markdown 重新渲染
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    String jsCode = "if (window.historyLoadComplete) { " +
+                        "  try { " +
+                        "    window.historyLoadComplete(); " +
+                        "  } catch(e) { " +
+                        "    console.error('[HistoryHandler] historyLoadComplete callback failed:', e); " +
+                        "  } " +
+                        "}";
+                    context.executeJavaScriptOnEDT(jsCode);
+                });
+
                 LOG.info("[HistoryHandler] ========== Codex 会话加载完成 ==========");
 
             } catch (Exception e) {

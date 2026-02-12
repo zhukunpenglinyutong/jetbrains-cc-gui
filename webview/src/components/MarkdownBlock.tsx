@@ -1,5 +1,5 @@
 import { marked } from 'marked';
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { useMemo, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openFile } from '../utils/bridge';
 import hljs from 'highlight.js';
@@ -120,11 +120,23 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // 追踪上一次的 isStreaming 状态，用于检测流式结束
   const prevIsStreamingRef = useRef(isStreaming);
 
+  // 用于追踪重试次数的 ref
+  const mermaidRetryRef = useRef(0);
+  const MERMAID_MAX_RETRIES = 3;
+
   // 渲染 mermaid 图表
   const renderMermaidDiagrams = useCallback(async () => {
     if (!containerRef.current) return;
 
     const codeBlocks = containerRef.current.querySelectorAll('pre code');
+
+    // 如果没有代码块，重置重试计数
+    if (codeBlocks.length === 0) {
+      mermaidRetryRef.current = 0;
+      return;
+    }
+
+    let renderedAny = false;
 
     for (const codeBlock of codeBlocks) {
       const pre = codeBlock.parentElement;
@@ -167,15 +179,46 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
           newWrapper.appendChild(mermaidContainer);
           pre.parentNode?.replaceChild(newWrapper, pre);
         }
+        renderedAny = true;
       } catch {
         // Mermaid render error - silently skip invalid diagrams
       }
     }
+
+    // 如果渲染了任何图表，重置重试计数
+    if (renderedAny) {
+      mermaidRetryRef.current = 0;
+    }
+
+    return renderedAny;
   }, []);
 
   // 在 HTML 更新后渲染 mermaid 图表
-  useEffect(() => {
-    renderMermaidDiagrams();
+  // 使用 useLayoutEffect 确保在 DOM 更新后同步执行
+  useLayoutEffect(() => {
+    // 使用 requestAnimationFrame 确保 DOM 已完全渲染
+    let rafId = requestAnimationFrame(() => {
+      // 双重 raf 确保浏览器已完成布局
+      rafId = requestAnimationFrame(() => {
+        renderMermaidDiagrams().then((rendered) => {
+          // 如果没有渲染任何图表且重试次数未达到上限，延迟重试
+          if (!rendered && mermaidRetryRef.current < MERMAID_MAX_RETRIES) {
+            mermaidRetryRef.current++;
+            setTimeout(() => {
+              requestAnimationFrame(() => {
+                renderMermaidDiagrams();
+              });
+            }, 100 * mermaidRetryRef.current); // 递增延迟
+          }
+        });
+      });
+    });
+
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+    };
   }, [content, renderMermaidDiagrams]);
 
   // 复制图标 SVG
@@ -277,20 +320,39 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // 流式结束时强制刷新 DOM，修复流式渲染可能导致的布局错乱
   useEffect(() => {
     if (prevIsStreamingRef.current && !isStreaming && containerRef.current) {
-      // 流式从 true 变为 false，延迟一帧后强制刷新
-      const timer = setTimeout(() => {
-        if (containerRef.current) {
-          containerRef.current.innerHTML = html;
-          // 刷新后重新渲染 mermaid 图表
-          renderMermaidDiagrams();
-        }
-      }, 50);
+      // 流式从 true 变为 false，使用双重 requestAnimationFrame 确保 DOM 完全更新
+      // 第一帧：React 完成 DOM 更新
+      // 第二帧：浏览器完成布局计算
+      let rafId1 = requestAnimationFrame(() => {
+        let rafId2 = requestAnimationFrame(() => {
+          if (containerRef.current) {
+            containerRef.current.innerHTML = html;
+            // 刷新后重新渲染 mermaid 图表
+            renderMermaidDiagrams();
+          }
+        });
+        // 备用方案：如果 raf 不生效（某些环境），使用 setTimeout
+        const fallbackTimer = setTimeout(() => {
+          if (containerRef.current) {
+            containerRef.current.innerHTML = html;
+            renderMermaidDiagrams();
+          }
+        }, 100);
+
+        return () => {
+          cancelAnimationFrame(rafId2);
+          clearTimeout(fallbackTimer);
+        };
+      });
+
       prevIsStreamingRef.current = isStreaming;
-      return () => clearTimeout(timer);
+      return () => {
+        cancelAnimationFrame(rafId1);
+      };
     }
     prevIsStreamingRef.current = isStreaming;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStreaming, renderMermaidDiagrams]); // html 在流式结束时已是最新，无需作为依赖
+  }, [isStreaming, html, renderMermaidDiagrams]);
 
   const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
