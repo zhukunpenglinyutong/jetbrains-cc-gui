@@ -120,11 +120,23 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // 追踪上一次的 isStreaming 状态，用于检测流式结束
   const prevIsStreamingRef = useRef(isStreaming);
 
+  // 用于追踪重试次数的 ref
+  const mermaidRetryRef = useRef(0);
+  const MERMAID_MAX_RETRIES = 3;
+
   // 渲染 mermaid 图表
   const renderMermaidDiagrams = useCallback(async () => {
     if (!containerRef.current) return;
 
     const codeBlocks = containerRef.current.querySelectorAll('pre code');
+
+    // 如果没有代码块，重置重试计数
+    if (codeBlocks.length === 0) {
+      mermaidRetryRef.current = 0;
+      return;
+    }
+
+    let renderedAny = false;
 
     for (const codeBlock of codeBlocks) {
       const pre = codeBlock.parentElement;
@@ -167,15 +179,47 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
           newWrapper.appendChild(mermaidContainer);
           pre.parentNode?.replaceChild(newWrapper, pre);
         }
+        renderedAny = true;
       } catch {
         // Mermaid render error - silently skip invalid diagrams
       }
     }
+
+    // 如果渲染了任何图表，重置重试计数
+    if (renderedAny) {
+      mermaidRetryRef.current = 0;
+    }
+
+    return renderedAny;
   }, []);
 
   // 在 HTML 更新后渲染 mermaid 图表
   useEffect(() => {
-    renderMermaidDiagrams();
+    let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let retryRafId: number | null = null;
+
+    // 使用双重 requestAnimationFrame 确保 DOM 已完全渲染
+    let rafId1 = requestAnimationFrame(() => {
+      rafId1 = requestAnimationFrame(() => {
+        renderMermaidDiagrams().then((rendered) => {
+          // 如果没有渲染任何图表且重试次数未达到上限，延迟重试
+          if (!rendered && mermaidRetryRef.current < MERMAID_MAX_RETRIES) {
+            mermaidRetryRef.current++;
+            retryTimeoutId = setTimeout(() => {
+              retryRafId = requestAnimationFrame(() => {
+                renderMermaidDiagrams();
+              });
+            }, 100 * mermaidRetryRef.current);
+          }
+        });
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId1);
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
+      if (retryRafId) cancelAnimationFrame(retryRafId);
+    };
   }, [content, renderMermaidDiagrams]);
 
   // 复制图标 SVG
@@ -277,20 +321,38 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // 流式结束时强制刷新 DOM，修复流式渲染可能导致的布局错乱
   useEffect(() => {
     if (prevIsStreamingRef.current && !isStreaming && containerRef.current) {
-      // 流式从 true 变为 false，延迟一帧后强制刷新
-      const timer = setTimeout(() => {
-        if (containerRef.current) {
-          containerRef.current.innerHTML = html;
-          // 刷新后重新渲染 mermaid 图表
-          renderMermaidDiagrams();
-        }
-      }, 50);
+      let rafId2: number | null = null;
+      let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+      let done = false;
+
+      const applyRefresh = () => {
+        if (done || !containerRef.current) return;
+        done = true;
+        containerRef.current.innerHTML = html;
+        renderMermaidDiagrams();
+      };
+
+      // 使用双重 requestAnimationFrame 确保 DOM 完全更新
+      const rafId1 = requestAnimationFrame(() => {
+        rafId2 = requestAnimationFrame(() => {
+          applyRefresh();
+        });
+        // 备用方案：如果 raf 不生效（某些环境），使用 setTimeout
+        fallbackTimer = setTimeout(() => {
+          applyRefresh();
+        }, 100);
+      });
+
       prevIsStreamingRef.current = isStreaming;
-      return () => clearTimeout(timer);
+      return () => {
+        cancelAnimationFrame(rafId1);
+        if (rafId2) cancelAnimationFrame(rafId2);
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+      };
     }
     prevIsStreamingRef.current = isStreaming;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStreaming, renderMermaidDiagrams]); // html 在流式结束时已是最新，无需作为依赖
+  }, [isStreaming, html, renderMermaidDiagrams]);
 
   const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;

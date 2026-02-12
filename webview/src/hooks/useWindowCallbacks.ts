@@ -483,6 +483,19 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       setMessages((prev) => [...prev, message]);
     };
 
+    // 历史消息加载完成回调 - 触发 Markdown 重新渲染
+    // 解决历史记录首次加载时 Markdown 不渲染的问题
+    window.historyLoadComplete = () => {
+      // 通过递增版本号触发组件重新渲染，避免 O(n) 数组浅拷贝
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        // 更新最后一条消息的引用以触发渲染
+        const updated = [...prev];
+        updated[updated.length - 1] = { ...updated[updated.length - 1] };
+        return updated;
+      });
+    };
+
     window.addUserMessage = (content: string) => {
       const userMessage: ClaudeMessage = {
         type: 'user',

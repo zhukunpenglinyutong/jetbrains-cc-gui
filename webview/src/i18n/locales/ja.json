@@ -143,7 +143,11 @@
       }
     },
     "providers": "プロバイダー管理",
-    "providersDesc": "Claude APIプロバイダー設定を管理し、異なるAPIサービスプロバイダー間で切り替え",
+    "providersDesc": "ClaudeとCodex APIプロバイダー設定を管理し、異なるAPIサービスプロバイダー間で切り替え",
+    "providerTab": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
     "dependencies": "SDK依存関係",
     "dependenciesDesc": "AI SDK依存関係のインストールと更新を管理",
     "dependency": {
@@ -304,7 +308,16 @@
         "codeView": "コード",
         "visualView": "ビジュアル",
         "formatJson": "フォーマット",
-        "invalidJson": "無効なJSON形式です。コードビューに切り替えて修正してください"
+        "invalidJson": "無効なJSON形式です。コードビューに切り替えて修正してください",
+        "presetGroup": "クイックプリセット"
+      },
+      "presets": {
+        "custom": "カスタム",
+        "zhipu": "Zhipu GLM",
+        "kimi": "Kimi K2",
+        "deepseek": "DeepSeek",
+        "minimax": "MiniMax",
+        "xiaomi": "Xiaomi MiMo"
       }
     },
     "comingSoon": "近日公開予定...",

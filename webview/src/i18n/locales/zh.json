@@ -159,7 +159,11 @@
       }
     },
     "providers": "供应商管理",
-    "providersDesc": "管理 Claude API 供应商配置，切换不同的 API 服务提供商",
+    "providersDesc": "管理 Claude 和 Codex API 供应商配置，切换不同的 API 服务提供商",
+    "providerTab": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
     "dependencies": "SDK 依赖",
     "dependenciesDesc": "管理 AI SDK 依赖包的安装和更新",
     "dependency": {
@@ -347,7 +351,16 @@
         "codeView": "代码",
         "visualView": "可视化",
         "formatJson": "格式化",
-        "invalidJson": "JSON 格式错误，请切换到代码视图修正"
+        "invalidJson": "JSON 格式错误，请切换到代码视图修正",
+        "presetGroup": "快捷配置"
+      },
+      "presets": {
+        "custom": "自定义配置",
+        "zhipu": "智普GLM",
+        "kimi": "Kimi K2",
+        "deepseek": "DeepSeek",
+        "minimax": "MiniMax",
+        "xiaomi": "Xiaomi MiMo"
       }
     },
     "comingSoon": "功能即将推出...",

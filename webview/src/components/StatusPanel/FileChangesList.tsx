@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FileChangeSummary } from '../../types';
-import { showEditableDiff } from '../../utils/bridge';
+import { showEditableDiff, openFile } from '../../utils/bridge';
 import FileIcon from './FileIcon';
 
 interface FileChangesListProps {
@@ -22,6 +22,10 @@ const FileChangesList = memo(({
   onKeepAllClick,
 }: FileChangesListProps) => {
   const { t } = useTranslation();
+
+  const handleOpenFile = useCallback((filePath: string) => {
+    openFile(filePath);
+  }, []);
 
   const handleShowDiff = useCallback((fileChange: FileChangeSummary) => {
     const operations = fileChange.operations.map((op) => ({
@@ -84,7 +88,7 @@ const FileChangesList = memo(({
               {/* File name */}
               <span
                 className="file-change-name"
-                onClick={() => handleShowDiff(fileChange)}
+                onClick={() => handleOpenFile(fileChange.filePath)}
                 title={fileChange.filePath}
               >
                 {fileChange.fileName}
@@ -100,6 +104,13 @@ const FileChangesList = memo(({
 
               {/* Actions */}
               <div className="file-change-actions">
+                <button
+                  className="file-change-action-btn diff-btn"
+                  onClick={() => handleShowDiff(fileChange)}
+                  title={t('statusPanel.showDiff')}
+                >
+                  <span className="codicon codicon-diff" />
+                </button>
                 <button
                   className="file-change-action-btn undo-btn"
                   onClick={() => onUndoClick(fileChange)}

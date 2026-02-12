@@ -1,0 +1,73 @@
+.providerTabSection {
+  min-width: 400px;
+  padding-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.sectionDesc {
+  color: var(--text-tertiary);
+  margin: 0 0 16px 0;
+  font-size: 13px;
+}
+
+.tabSelector {
+  display: flex;
+  background: var(--bg-secondary);
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-secondary);
+  margin-bottom: 20px;
+}
+
+.tabBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  justify-content: center;
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+
+  &.active {
+    background: var(--button-primary-background, #0078d4);
+    color: #ffffff;
+  }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .providerTabSection {
+    min-width: auto;
+  }
+
+  .sectionTitle {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .sectionDesc {
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+
+  .tabBtn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}

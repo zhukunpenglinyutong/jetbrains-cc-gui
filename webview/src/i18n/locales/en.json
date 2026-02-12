@@ -159,7 +159,11 @@
       }
     },
     "providers": "Provider Management",
-    "providersDesc": "Manage Claude API provider configurations and switch between different API service providers",
+    "providersDesc": "Manage Claude and Codex API provider configurations and switch between different API service providers",
+    "providerTab": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
     "dependencies": "SDK Dependencies",
     "dependenciesDesc": "Manage AI SDK dependency installations and updates",
     "dependency": {
@@ -347,7 +351,16 @@
         "codeView": "Code",
         "visualView": "Visual",
         "formatJson": "Format",
-        "invalidJson": "Invalid JSON format, please switch to code view to fix"
+        "invalidJson": "Invalid JSON format, please switch to code view to fix",
+        "presetGroup": "Quick Presets"
+      },
+      "presets": {
+        "custom": "Custom",
+        "zhipu": "Zhipu GLM",
+        "kimi": "Kimi K2",
+        "deepseek": "DeepSeek",
+        "minimax": "MiniMax",
+        "xiaomi": "Xiaomi MiMo"
       }
     },
     "comingSoon": "Coming soon...",

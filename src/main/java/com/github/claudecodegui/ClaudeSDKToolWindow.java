@@ -1965,7 +1965,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 ? projectPath : determineWorkingDirectory();
             session.setSessionInfo(sessionId, workingDir);
 
-            session.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {}))
+            session.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
+                // 通知前端历史消息加载完成，触发 Markdown 重新渲染
+                callJavaScript("historyLoadComplete");
+            }))
                 .exceptionally(ex -> {
                     ApplicationManager.getApplication().invokeLater(() ->
                         callJavaScript("addErrorMessage", JsUtils.escapeJs("加载会话失败: " + ex.getMessage())));

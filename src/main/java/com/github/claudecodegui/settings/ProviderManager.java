@@ -613,6 +613,35 @@ public class ProviderManager {
         localProvider.addProperty("name", ClaudeCodeGuiBundle.message("provider.local.name"));
         localProvider.addProperty("isActive", isActive);
         localProvider.addProperty("isLocalProvider", true);
+
+        // Read env from local settings.json, only extract model-mapping related keys for frontend display
+        try {
+            JsonObject claudeSettings = claudeSettingsManager.readClaudeSettings();
+            if (claudeSettings != null && claudeSettings.has("env")) {
+                JsonObject fullEnv = claudeSettings.getAsJsonObject("env");
+                JsonObject filteredEnv = new JsonObject();
+                String[] modelMappingKeys = {
+                    "ANTHROPIC_MODEL",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                    "ANTHROPIC_DEFAULT_OPUS_MODEL"
+                };
+                for (String key : modelMappingKeys) {
+                    if (fullEnv.has(key) && !fullEnv.get(key).isJsonNull()) {
+                        filteredEnv.add(key, fullEnv.get(key));
+                    }
+                }
+                if (filteredEnv.size() > 0) {
+                    JsonObject settingsConfig = new JsonObject();
+                    settingsConfig.add("env", filteredEnv);
+                    localProvider.add("settingsConfig", settingsConfig);
+                    LOG.debug("[ProviderManager] Included model mapping env from local settings.json");
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[ProviderManager] Failed to read local settings.json env: " + e.getMessage());
+        }
+
         return localProvider;
     }
 
