@@ -142,3 +142,91 @@ export interface CodexProviderConfig {
   /** 自定义模型列表 */
   customModels?: CodexCustomModel[];
 }
+
+// ============ Provider Presets ============
+
+/**
+ * 供应商预设配置
+ */
+export interface ProviderPreset {
+  /** 预设唯一 ID */
+  id: string;
+  /** 预设显示名称 */
+  name: string;
+  /** 环境变量配置 */
+  env: Record<string, string>;
+}
+
+/**
+ * 供应商预设配置列表
+ * 用于快捷配置供应商
+ */
+export const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    id: 'custom',
+    name: '自定义配置',
+    env: {},
+  },
+  {
+    id: 'zhipu',
+    name: '智普GLM',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/api/anthropic',
+      ANTHROPIC_AUTH_TOKEN: '',
+      ANTHROPIC_MODEL: 'glm-4.7',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.7',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.7',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.7',
+    },
+  },
+  {
+    id: 'kimi',
+    name: 'Kimi K2',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://api.moonshot.cn/anthropic',
+      ANTHROPIC_AUTH_TOKEN: '',
+      ANTHROPIC_MODEL: 'kimi-k2.5',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5',
+    },
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
+      ANTHROPIC_AUTH_TOKEN: '',
+      ANTHROPIC_MODEL: 'DeepSeek-V3.2',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'DeepSeek-V3.2',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'DeepSeek-V3.2',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'DeepSeek-V3.2',
+    },
+  },
+  {
+    id: 'minimax',
+    name: 'MiniMax',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://api.minimaxi.com/anthropic',
+      ANTHROPIC_AUTH_TOKEN: '',
+      API_TIMEOUT_MS: '3000000',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      ANTHROPIC_MODEL: 'MiniMax-M2.1',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M2.1',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.1',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.1',
+    },
+  },
+  {
+    id: 'xiaomi',
+    name: 'Xiaomi MiMo',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://api.xiaomimimo.com/anthropic',
+      ANTHROPIC_AUTH_TOKEN: '',
+      ANTHROPIC_MODEL: 'mimo-v2-flash',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'mimo-v2-flash',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'mimo-v2-flash',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'mimo-v2-flash',
+    },
+  },
+];

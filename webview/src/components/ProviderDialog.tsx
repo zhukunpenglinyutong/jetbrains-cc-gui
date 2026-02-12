@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../types/provider';
+import { PROVIDER_PRESETS } from '../types/provider';
 
 interface ProviderDialogProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ export default function ProviderDialog({
   const [remark, setRemark] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState('');
+  const [activePreset, setActivePreset] = useState<string>('custom');
 
   const [haikuModel, setHaikuModel] = useState('');
   const [sonnetModel, setSonnetModel] = useState('');
@@ -64,6 +66,48 @@ export default function ProviderDialog({
     }
   };
 
+  // 应用预设配置
+  const handlePresetClick = (presetId: string) => {
+    const preset = PROVIDER_PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+
+    setActivePreset(presetId);
+
+    if (presetId === 'custom') {
+      // 自定义配置：重置为空配置
+      const config = {
+        env: {
+          ANTHROPIC_AUTH_TOKEN: '',
+          ANTHROPIC_BASE_URL: '',
+          ANTHROPIC_MODEL: '',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: '',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: '',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
+        }
+      };
+      setJsonConfig(JSON.stringify(config, null, 2));
+      setApiKey('');
+      setApiUrl('');
+      setHaikuModel('');
+      setSonnetModel('');
+      setOpusModel('');
+      return;
+    }
+
+    // 应用预设配置
+    const config = { env: { ...preset.env } };
+    setJsonConfig(JSON.stringify(config, null, 2));
+
+    // 同步更新表单字段
+    const env = preset.env;
+    setApiUrl(env.ANTHROPIC_BASE_URL || '');
+    setApiKey(env.ANTHROPIC_AUTH_TOKEN || '');
+    setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
+    setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
+    setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
+    setJsonError('');
+  };
+
   // 格式化 JSON
   const handleFormatJson = () => {
     try {
@@ -78,6 +122,9 @@ export default function ProviderDialog({
   // 初始化表单
   useEffect(() => {
     if (isOpen) {
+      // 重置预设选择
+      setActivePreset('custom');
+
       if (provider) {
         // 编辑模式
         setProviderName(provider.name || '');
@@ -249,6 +296,20 @@ export default function ProviderDialog({
           <p className="dialog-desc">
             {isAdding ? t('settings.provider.dialog.addDescription') : t('settings.provider.dialog.editDescription')}
           </p>
+
+          {/* 快捷配置按钮组 */}
+          <div className="preset-buttons">
+            {PROVIDER_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`preset-btn ${activePreset === preset.id ? 'active' : ''}`}
+                onClick={() => handlePresetClick(preset.id)}
+              >
+                {preset.name}
+              </button>
+            ))}
+          </div>
 
           <div className="form-group">
             <label htmlFor="providerName">
