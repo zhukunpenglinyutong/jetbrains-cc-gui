@@ -256,6 +256,7 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
 ## Sponsor
 
 If this project is helpful to you, you can invite the author to have a KFC or a cup of coffee~
+
 如果这个项目对你有帮助，想请作者吃顿肯德基（KFC）或者喝杯咖啡，都是可以的~
 
 [View Sponsors List →](./SPONSORS.md)
