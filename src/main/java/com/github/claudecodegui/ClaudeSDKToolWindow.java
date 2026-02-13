@@ -1290,14 +1290,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                                 List<File> files = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
 
                                 if (!files.isEmpty()) {
-                                    File file = files.get(0); // 只处理第一个文件
-                                    String filePath = file.getAbsolutePath();
-                                    LOG.debug("Dropped file path: " + filePath);
+                                    // Build JSON array using Gson for safe serialization
+                                    JsonArray jsonArray = new JsonArray();
+                                    for (File file : files) {
+                                        jsonArray.add(file.getAbsolutePath());
+                                    }
 
-                                    // 通过 JavaScript 将路径传递到前端
+                                    LOG.debug("Dropped " + files.size() + " file(s)");
+
+                                    // Pass JSON array to frontend for batch processing
                                     String jsCode = String.format(
-                                        "if (window.handleFilePathFromJava) { window.handleFilePathFromJava('%s'); }",
-                                        filePath.replace("\\", "\\\\").replace("'", "\\'")
+                                        "if (window.handleFilePathFromJava) { window.handleFilePathFromJava(%s); }",
+                                        jsonArray.toString()
                                     );
                                     browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
                                 }

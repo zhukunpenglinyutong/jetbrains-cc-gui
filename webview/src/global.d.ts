@@ -13,9 +13,9 @@ interface Window {
   getClipboardFilePath?: () => Promise<string>;
 
   /**
-   * Handle file path dropped from Java
+   * Handle file path(s) dropped from Java (supports batch files)
    */
-  handleFilePathFromJava?: (filePath: string) => void;
+  handleFilePathFromJava?: (filePathInput: string | string[]) => void;
 
   /**
    * Update messages from backend
