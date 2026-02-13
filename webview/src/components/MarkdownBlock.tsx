@@ -30,11 +30,7 @@ marked.use(
           // Silently fall through to auto-highlight
         }
       }
-      try {
-        return hljs.highlightAuto(code).value;
-      } catch (e) {
-        return code;
-      }
+      return hljs.highlightAuto(code).value;
     },
   })
 );
@@ -120,17 +116,6 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { t, i18n } = useTranslation();
-  
-  // 强制重新渲染状态，用于解决首次加载时库初始化可能未完成的问题
-  const [mountRetry, setMountRetry] = useState(0);
-
-  // 首次加载后延迟强制重新渲染，确保 marked/highlight.js 等库已完全就绪
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setMountRetry(c => c + 1);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
 
   // 追踪上一次的 isStreaming 状态，用于检测流式结束
   const prevIsStreamingRef = useRef(isStreaming);
@@ -328,16 +313,9 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
 
       return doc.body.innerHTML.trim();
     } catch (e) {
-      console.error('Markdown parsing error:', e);
-      // 如果解析失败，尝试返回被段落包裹的原始内容，而不是裸文本
-      // 这样至少保留了一些格式，而不是完全崩溃
-      try {
-        return `<p class="markdown-error">${content}</p>`;
-      } catch {
-        return content;
-      }
+      return content;
     }
-  }, [content, isStreaming, i18n.language, t, mountRetry]);
+  }, [content, isStreaming, i18n.language, t]);
 
   // 流式结束时强制刷新 DOM，修复流式渲染可能导致的布局错乱
   useEffect(() => {
