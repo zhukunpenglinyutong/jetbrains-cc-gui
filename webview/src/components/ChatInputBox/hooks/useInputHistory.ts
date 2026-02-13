@@ -5,17 +5,21 @@ import { sendToJava } from '../../../utils/bridge.js';
 export const HISTORY_STORAGE_KEY = 'chat-input-history';
 /** localStorage key for history usage counts (importance) */
 export const HISTORY_COUNTS_KEY = 'chat-input-history-counts';
+/** localStorage key for history timestamps */
+export const HISTORY_TIMESTAMPS_KEY = 'chat-input-history-timestamps';
 /** localStorage key for history completion enabled setting */
 export const HISTORY_ENABLED_KEY = 'historyCompletionEnabled';
 
 /**
- * History item with importance (usage count)
+ * History item with importance (usage count) and timestamp
  */
 export interface HistoryItem {
   /** Content text */
   text: string;
   /** Importance level (usage count, higher = more important) */
   importance: number;
+  /** Timestamp when the item was last used (ISO string) */
+  timestamp?: string;
 }
 
 /**
@@ -147,6 +151,11 @@ export function deleteHistoryItem(item: string): void {
       const counts = loadCounts();
       delete counts[item];
       window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
+
+      // Also remove from timestamps
+      const timestamps = loadTimestamps();
+      delete timestamps[item];
+      window.localStorage.setItem(HISTORY_TIMESTAMPS_KEY, JSON.stringify(timestamps));
     } catch {
       // Ignore errors
     }
@@ -166,6 +175,7 @@ export function clearAllHistory(): void {
     try {
       window.localStorage.removeItem(HISTORY_STORAGE_KEY);
       window.localStorage.removeItem(HISTORY_COUNTS_KEY);
+      window.localStorage.removeItem(HISTORY_TIMESTAMPS_KEY);
     } catch {
       // Ignore errors
     }
@@ -225,6 +235,53 @@ export function loadCounts(): Record<string, number> {
     return result;
   } catch {
     return {};
+  }
+}
+
+/**
+ * Load timestamps from localStorage
+ */
+export function loadTimestamps(): Record<string, string> {
+  if (!canUseLocalStorage()) return {};
+  try {
+    const raw = window.localStorage.getItem(HISTORY_TIMESTAMPS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+
+    // Validate that all values are strings
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'string') {
+        result[key] = value;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save timestamp for a history item
+ */
+function saveTimestamp(text: string): void {
+  if (!canUseLocalStorage()) return;
+  try {
+    const timestamps = loadTimestamps();
+    timestamps[text] = new Date().toISOString();
+    // Keep only MAX_COUNT_RECORDS timestamps
+    const entries = Object.entries(timestamps);
+    if (entries.length > MAX_COUNT_RECORDS) {
+      // Sort by timestamp descending and keep the most recent
+      entries.sort((a, b) => b[1].localeCompare(a[1]));
+      const kept = entries.slice(0, MAX_COUNT_RECORDS);
+      window.localStorage.setItem(HISTORY_TIMESTAMPS_KEY, JSON.stringify(Object.fromEntries(kept)));
+    } else {
+      window.localStorage.setItem(HISTORY_TIMESTAMPS_KEY, JSON.stringify(timestamps));
+    }
+  } catch {
+    // Ignore errors
   }
 }
 
@@ -328,12 +385,14 @@ export function useInputHistory({
     const fragments = splitTextToFragments(sanitized);
     if (fragments.length === 0) return;
 
-    // Batch increment usage count for all fragments (performance optimization)
+    // Batch increment usage count and save timestamps for all fragments
     if (canUseLocalStorage()) {
       try {
         let counts = loadCounts();
         for (const fragment of fragments) {
           counts[fragment] = (counts[fragment] || 0) + 1;
+          // Save timestamp for each fragment
+          saveTimestamp(fragment);
         }
         counts = cleanupCounts(counts);
         window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
@@ -426,17 +485,19 @@ export function useInputHistory({
 // ============================================================================
 
 /**
- * Load history items with their importance (usage count)
+ * Load history items with their importance (usage count) and timestamp
  * Returns items sorted by importance (descending)
  */
 export function loadHistoryWithImportance(): HistoryItem[] {
   const items = loadHistory();
   const counts = loadCounts();
+  const timestamps = loadTimestamps();
 
-  // Merge items with their counts, default importance is 1
+  // Merge items with their counts and timestamps, default importance is 1
   const result: HistoryItem[] = items.map((text) => ({
     text,
     importance: counts[text] || 1,
+    timestamp: timestamps[text],
   }));
 
   // Sort by importance descending
@@ -469,6 +530,9 @@ export function addHistoryItem(text: string, importance: number = 1): void {
     counts[sanitized] = Math.max(1, Math.floor(importance));
     const cleaned = cleanupCounts(counts);
     window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(cleaned));
+
+    // Save timestamp
+    saveTimestamp(sanitized);
   } catch {
     // Ignore errors
   }
@@ -496,6 +560,7 @@ export function updateHistoryItem(
   try {
     const items = loadHistory();
     const counts = loadCounts();
+    const timestamps = loadTimestamps();
 
     // Find and update the item
     const index = items.indexOf(oldText);
@@ -513,6 +578,7 @@ export function updateHistoryItem(
         // Merge: remove old, update existing with higher importance
         items.splice(index, 1);
         delete counts[oldText];
+        delete timestamps[oldText];
         counts[sanitizedNew] = Math.max(
           counts[sanitizedNew] || 1,
           Math.max(1, Math.floor(importance))
@@ -521,6 +587,11 @@ export function updateHistoryItem(
         // Update in place
         items[index] = sanitizedNew;
         delete counts[oldText];
+        // Transfer timestamp from old to new
+        if (timestamps[oldText]) {
+          timestamps[sanitizedNew] = timestamps[oldText];
+          delete timestamps[oldText];
+        }
         counts[sanitizedNew] = Math.max(1, Math.floor(importance));
       }
     } else {
@@ -531,6 +602,7 @@ export function updateHistoryItem(
     window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items));
     const cleaned = cleanupCounts(counts);
     window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(cleaned));
+    window.localStorage.setItem(HISTORY_TIMESTAMPS_KEY, JSON.stringify(timestamps));
   } catch {
     // Ignore errors
   }
@@ -553,6 +625,7 @@ export function clearLowImportanceHistory(threshold: number = 1): number {
   try {
     const items = loadHistory();
     const counts = loadCounts();
+    const timestamps = loadTimestamps();
 
     let deletedCount = 0;
     const itemsToKeep: string[] = [];
@@ -563,6 +636,7 @@ export function clearLowImportanceHistory(threshold: number = 1): number {
       if (importance <= threshold) {
         itemsToDelete.push(item);
         delete counts[item];
+        delete timestamps[item];
         deletedCount++;
       } else {
         itemsToKeep.push(item);
@@ -571,6 +645,7 @@ export function clearLowImportanceHistory(threshold: number = 1): number {
 
     window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(itemsToKeep));
     window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
+    window.localStorage.setItem(HISTORY_TIMESTAMPS_KEY, JSON.stringify(timestamps));
 
     // Sync deletions to backend
     for (const item of itemsToDelete) {
