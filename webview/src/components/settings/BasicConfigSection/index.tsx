@@ -114,6 +114,7 @@ const BasicConfigSection = ({
     { value: 'es', label: 'settings.basic.language.spanish' },
     { value: 'fr', label: 'settings.basic.language.french' },
     { value: 'ja', label: 'settings.basic.language.japanese' },
+    { value: 'ru', label: 'settings.basic.language.russian' },
   ];
 
   // 切换语言

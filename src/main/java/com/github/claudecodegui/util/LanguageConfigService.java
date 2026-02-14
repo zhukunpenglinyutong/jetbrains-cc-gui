@@ -17,7 +17,7 @@ public class LanguageConfigService {
     /**
      * 将 IDEA 语言代码映射到 i18n 支持的语言代码
      * IDEA 语言格式: zh_CN, en, ja, ko 等
-     * i18n 支持的语言: zh, en, zh-TW, hi, es, fr, ja
+     * i18n 支持的语言: zh, en, zh-TW, hi, es, fr, ja, ru
      *
      * @param ideaLocale IDEA 的 Locale
      * @return i18n 语言代码
@@ -50,6 +50,8 @@ public class LanguageConfigService {
                 return "fr";
             case "ja":
                 return "ja";
+            case "ru":
+                return "ru";
             default:
                 // 不支持的语言，返回英文
                 LOG.info("[LanguageConfig] 不支持的语言 '" + language + "'，使用英文作为 fallback");
@@ -100,7 +102,7 @@ public class LanguageConfigService {
     /**
      * 获取当前 i18n 语言代码
      *
-     * @return 语言代码 (zh, en, zh-TW, hi, es, fr, ja)
+     * @return 语言代码 (zh, en, zh-TW, hi, es, fr, ja, ru)
      */
     public static String getCurrentLanguage() {
         try {
