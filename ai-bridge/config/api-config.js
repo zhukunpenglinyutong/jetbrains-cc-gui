@@ -190,6 +190,15 @@ export function setupApiKey() {
         process.env.ANTHROPIC_BASE_URL = baseUrl;
       }
 
+      // CLI session 路径也需要注入代理环境变量
+      const PROXY_VARS = ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy'];
+      for (const varName of PROXY_VARS) {
+        if (settings?.env?.[varName] && !process.env[varName]) {
+          process.env[varName] = settings.env[varName];
+          console.log(`[DEBUG] Set ${varName} from settings.json`);
+        }
+      }
+
       console.log('[DEBUG] Auth type:', authType);
       return { apiKey: null, baseUrl, authType, apiKeySource, baseUrlSource };
     } else {
@@ -218,6 +227,17 @@ export function setupApiKey() {
 
   if (baseUrl) {
     process.env.ANTHROPIC_BASE_URL = baseUrl;
+  }
+
+  // 从 settings.json 注入代理环境变量到 process.env
+  // IDE 通过桌面启动器启动时不会继承 shell 中的代理配置，
+  // 因此需要从 settings.json 显式读取并设置
+  const PROXY_ENV_VARS = ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy'];
+  for (const varName of PROXY_ENV_VARS) {
+    if (settings?.env?.[varName] && !process.env[varName]) {
+      process.env[varName] = settings.env[varName];
+      console.log(`[DEBUG] Set ${varName} from settings.json`);
+    }
   }
 
   console.log('[DEBUG] Auth type:', authType);
