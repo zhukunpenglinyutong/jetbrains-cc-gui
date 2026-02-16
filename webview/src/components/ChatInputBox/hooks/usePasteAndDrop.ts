@@ -21,7 +21,9 @@ interface UsePasteAndDropOptions {
   onInput?: (content: string) => void;
   fileCompletion: { close: () => void };
   commandCompletion: { close: () => void };
-  handleInput: () => void;
+  handleInput: (isComposingFromEvent?: boolean) => void;
+  /** Immediately flush pending debounced onInput to sync parent state */
+  flushInput: () => void;
 }
 
 interface UsePasteAndDropReturn {
@@ -54,6 +56,7 @@ export function usePasteAndDrop({
   fileCompletion,
   commandCompletion,
   handleInput,
+  flushInput,
 }: UsePasteAndDropOptions): UsePasteAndDropReturn {
   /**
    * Handle paste event - detect images and plain text
@@ -138,7 +141,10 @@ export function usePasteAndDrop({
                 if (fullPath && fullPath.trim()) {
                   // Insert full path using modern Selection API
                   insertTextAtCursor(fullPath, editableRef.current);
-                  handleInput();
+                  // Bypass IME guard (isComposingRef may be stale after recent compositionEnd)
+                  handleInput(false);
+                  // Immediately sync parent state without waiting for debounce
+                  flushInput();
                 }
               })
               .catch(() => {
@@ -157,8 +163,12 @@ export function usePasteAndDrop({
           timer.mark('insertText');
 
           // Trigger input event to update state
-          handleInput();
+          // Pass false to bypass IME guard (isComposingRef may be stale after recent compositionEnd)
+          handleInput(false);
           timer.mark('handleInput');
+
+          // Immediately sync parent state without waiting for debounce
+          flushInput();
 
           // Scroll to make cursor visible after paste
           // Use requestAnimationFrame to ensure DOM updates are complete
@@ -175,7 +185,7 @@ export function usePasteAndDrop({
         }
       }
     },
-    [setInternalAttachments, handleInput]
+    [setInternalAttachments, handleInput, flushInput]
   );
 
   /**

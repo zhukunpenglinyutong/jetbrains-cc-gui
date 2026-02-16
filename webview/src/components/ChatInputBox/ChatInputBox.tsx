@@ -482,6 +482,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
     const handleSubmit = useSubmitHandler({
       getTextContent,
+      invalidateCache,
       attachments,
       isLoading,
       sdkStatusLoading,
@@ -578,6 +579,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       fileCompletion,
       commandCompletion,
       handleInput,
+      flushInput: debouncedOnInput.flush,
     });
 
     const { handleAddAttachment, handleRemoveAttachment } = useAttachmentHandlers({
