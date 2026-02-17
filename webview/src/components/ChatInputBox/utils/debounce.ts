@@ -38,7 +38,7 @@ export function debounce<Args extends unknown[]>(
       const ctx = lastThis;
       lastArgs = null;
       lastThis = null;
-      func.apply(ctx, a!);
+      if (a) func.apply(ctx, a);
     }, wait);
   } as DebouncedFunction<Args>;
 
