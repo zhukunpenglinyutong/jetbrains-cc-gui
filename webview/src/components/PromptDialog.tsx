@@ -49,7 +49,7 @@ export default function PromptDialog({
       window.addEventListener('keydown', handleEscape);
       return () => window.removeEventListener('keydown', handleEscape);
     }
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;

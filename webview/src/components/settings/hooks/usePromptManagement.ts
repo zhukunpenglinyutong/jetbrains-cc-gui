@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { PromptConfig } from '../../../types/prompt';
 
 const sendToJava = (message: string) => {
@@ -25,6 +26,7 @@ export interface UsePromptManagementOptions {
 
 export function usePromptManagement(options: UsePromptManagementOptions = {}) {
   const { onSuccess } = options;
+  const { t } = useTranslation();
 
   // 超时定时器引用（使用 useRef 避免全局变量污染）
   const promptsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -159,14 +161,14 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
     (result: { success: boolean; operation?: string; error?: string }) => {
       if (result.success) {
         const operationMessages: Record<string, string> = {
-          add: '提示词已添加',
-          update: '提示词已更新',
-          delete: '提示词已删除',
+          add: t('settings.prompt.addSuccess'),
+          update: t('settings.prompt.updateSuccess'),
+          delete: t('settings.prompt.deleteSuccess'),
         };
-        onSuccess?.(operationMessages[result.operation || ''] || '操作成功');
+        onSuccess?.(operationMessages[result.operation || ''] || t('settings.prompt.operationSuccess'));
       }
     },
-    [onSuccess]
+    [onSuccess, t]
   );
 
   return {

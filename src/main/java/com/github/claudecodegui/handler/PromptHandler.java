@@ -27,7 +27,7 @@ public class PromptHandler extends BaseMessageHandler {
 
     public PromptHandler(HandlerContext context) {
         super(context);
-        this.settingsService = new CodemossSettingsService();
+        this.settingsService = context.getSettingsService();
         this.gson = new Gson();
     }
 

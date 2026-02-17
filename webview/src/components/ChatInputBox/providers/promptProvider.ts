@@ -282,14 +282,4 @@ export function promptToDropdownItem(prompt: PromptItem): DropdownItemData {
   };
 }
 
-export function forceRefreshPrompts(): void {
-  debugLog('[PromptProvider] Force refresh requested');
-  loadingState = 'idle';
-  lastRefreshTime = 0;
-  retryCount = 0; // 重置重试计数
-  pendingWaiters.forEach(w => w.reject(new Error('Prompts refresh requested')));
-  pendingWaiters = [];
-  requestRefresh();
-}
-
 export default promptProvider;

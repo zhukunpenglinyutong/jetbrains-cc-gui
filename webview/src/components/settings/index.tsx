@@ -817,11 +817,6 @@ const SettingsView = ({
     handleSaveAgent(data);
   };
 
-  // 保存提示词（带验证逻辑的包装函数）
-  const handleSavePromptFromDialog = (data: { name: string; content: string }) => {
-    handleSavePrompt(data);
-  };
-
   return (
     <div className={styles.settingsPage}>
       {/* 顶部标题栏 */}
@@ -1022,7 +1017,7 @@ const SettingsView = ({
         isOpen={promptDialog.isOpen}
         prompt={promptDialog.prompt}
         onClose={handleClosePromptDialog}
-        onSave={handleSavePromptFromDialog}
+        onSave={handleSavePrompt}
       />
 
       {/* 提示词删除确认弹窗 */}

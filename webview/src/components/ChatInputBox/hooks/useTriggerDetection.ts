@@ -355,7 +355,9 @@ function detectHashTrigger(text: string, cursorPosition: number): TriggerQuery |
 }
 
 /**
- * Detect ! prompt trigger (can be used anywhere, not just line start)
+ * Detect ! prompt trigger
+ * Requires ! to be at line start or preceded by whitespace to avoid false triggers
+ * (e.g., "Hello!" should NOT trigger, but "!prompt" or "text !prompt" should)
  */
 function detectExclamationTrigger(text: string, cursorPosition: number): TriggerQuery | null {
   // Search backward from cursor position for !
@@ -373,13 +375,18 @@ function detectExclamationTrigger(text: string, cursorPosition: number): Trigger
 
     // Found !
     if (char === '!') {
-      const query = text.slice(start + 1, cursorPosition);
-      return {
-        trigger: '!',
-        query,
-        start,
-        end: cursorPosition,
-      };
+      // Require ! to be at line start or preceded by whitespace
+      const isValidPosition = start === 0 || text[start - 1] === '\n' || isWhitespace(text[start - 1]);
+      if (isValidPosition) {
+        const query = text.slice(start + 1, cursorPosition);
+        return {
+          trigger: '!',
+          query,
+          start,
+          end: cursorPosition,
+        };
+      }
+      return null;
     }
     start--;
   }

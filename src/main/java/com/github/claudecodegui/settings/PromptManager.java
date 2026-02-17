@@ -5,10 +5,11 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,16 +34,15 @@ public class PromptManager {
      */
     public JsonObject readPromptConfig() throws IOException {
         Path promptPath = pathManager.getPromptFilePath();
-        File promptFile = promptPath.toFile();
 
-        if (!promptFile.exists()) {
+        if (!Files.exists(promptPath)) {
             // 返回空的配置
             JsonObject config = new JsonObject();
             config.add("prompts", new JsonObject());
             return config;
         }
 
-        try (FileReader reader = new FileReader(promptFile)) {
+        try (BufferedReader reader = Files.newBufferedReader(promptPath, StandardCharsets.UTF_8)) {
             JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();
             // 确保 prompts 节点存在
             if (!config.has("prompts")) {
@@ -64,9 +64,9 @@ public class PromptManager {
         pathManager.ensureConfigDirectory();
 
         Path promptPath = pathManager.getPromptFilePath();
-        try (FileWriter writer = new FileWriter(promptPath.toFile())) {
+        try (BufferedWriter writer = Files.newBufferedWriter(promptPath, StandardCharsets.UTF_8)) {
             gson.toJson(config, writer);
-            LOG.info("[PromptManager] Successfully wrote prompt.json");
+            LOG.debug("[PromptManager] Successfully wrote prompt.json");
         } catch (Exception e) {
             LOG.warn("[PromptManager] Failed to write prompt.json: " + e.getMessage());
             throw e;
@@ -98,7 +98,7 @@ public class PromptManager {
             return Long.compare(timeB, timeA);
         });
 
-        LOG.info("[PromptManager] Loaded " + result.size() + " prompts from prompt.json");
+        LOG.debug("[PromptManager] Loaded " + result.size() + " prompts from prompt.json");
         return result;
     }
 
@@ -128,7 +128,7 @@ public class PromptManager {
         prompts.add(id, prompt);
 
         writePromptConfig(config);
-        LOG.info("[PromptManager] Added prompt: " + id);
+        LOG.debug("[PromptManager] Added prompt: " + id);
     }
 
     /**
@@ -159,7 +159,7 @@ public class PromptManager {
         }
 
         writePromptConfig(config);
-        LOG.info("[PromptManager] Updated prompt: " + id);
+        LOG.debug("[PromptManager] Updated prompt: " + id);
     }
 
     /**
@@ -170,7 +170,7 @@ public class PromptManager {
         JsonObject prompts = config.getAsJsonObject("prompts");
 
         if (!prompts.has(id)) {
-            LOG.info("[PromptManager] Prompt not found: " + id);
+            LOG.debug("[PromptManager] Prompt not found: " + id);
             return false;
         }
 
@@ -178,7 +178,7 @@ public class PromptManager {
         prompts.remove(id);
 
         writePromptConfig(config);
-        LOG.info("[PromptManager] Deleted prompt: " + id);
+        LOG.debug("[PromptManager] Deleted prompt: " + id);
         return true;
     }
 
