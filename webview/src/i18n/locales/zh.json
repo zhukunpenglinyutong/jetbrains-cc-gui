@@ -241,11 +241,11 @@
           "importanceHint": "重要度越高，自动补全时越靠前"
         },
         "timeAgo": {
-          "yearsAgo": "年前",
-          "monthsAgo": "个月前",
-          "daysAgo": "天前",
-          "hoursAgo": "小时前",
-          "minutesAgo": "分钟前",
+          "yearsAgo": "{{count}}年前",
+          "monthsAgo": "{{count}}个月前",
+          "daysAgo": "{{count}}天前",
+          "hoursAgo": "{{count}}小时前",
+          "minutesAgo": "{{count}}分钟前",
           "justNow": "刚刚"
         }
       }

@@ -65,23 +65,27 @@ interface EditorState {
 /**
  * Format timestamp to relative time string
  */
-const formatRelativeTime = (timestamp: string | undefined, t: (key: string) => string): string => {
+const formatRelativeTime = (timestamp: string | undefined, t: (key: string, options?: Record<string, unknown>) => string): string => {
   if (!timestamp) {
     return '';
   }
-  const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) {
+    return '';
+  }
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
   const units: [number, string][] = [
-    [31536000, t('settings.other.historyCompletion.timeAgo.yearsAgo')],
-    [2592000, t('settings.other.historyCompletion.timeAgo.monthsAgo')],
-    [86400, t('settings.other.historyCompletion.timeAgo.daysAgo')],
-    [3600, t('settings.other.historyCompletion.timeAgo.hoursAgo')],
-    [60, t('settings.other.historyCompletion.timeAgo.minutesAgo')],
+    [31536000, 'settings.other.historyCompletion.timeAgo.yearsAgo'],
+    [2592000, 'settings.other.historyCompletion.timeAgo.monthsAgo'],
+    [86400, 'settings.other.historyCompletion.timeAgo.daysAgo'],
+    [3600, 'settings.other.historyCompletion.timeAgo.hoursAgo'],
+    [60, 'settings.other.historyCompletion.timeAgo.minutesAgo'],
   ];
 
-  for (const [unitSeconds, label] of units) {
+  for (const [unitSeconds, key] of units) {
     const interval = Math.floor(seconds / unitSeconds);
     if (interval >= 1) {
-      return `${interval} ${label}`;
+      return t(key, { count: interval });
     }
   }
   return t('settings.other.historyCompletion.timeAgo.justNow');

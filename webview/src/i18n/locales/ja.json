@@ -210,11 +210,11 @@
           "importanceHint": "重要度が高いほど、自動補完で優先されます"
         },
         "timeAgo": {
-          "yearsAgo": "年前",
-          "monthsAgo": "ヶ月前",
-          "daysAgo": "日前",
-          "hoursAgo": "時間前",
-          "minutesAgo": "分前",
+          "yearsAgo": "{{count}}年前",
+          "monthsAgo": "{{count}}ヶ月前",
+          "daysAgo": "{{count}}日前",
+          "hoursAgo": "{{count}}時間前",
+          "minutesAgo": "{{count}}分前",
           "justNow": "たった今"
         }
       }

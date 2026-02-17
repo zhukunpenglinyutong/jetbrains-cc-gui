@@ -203,11 +203,16 @@
           "importanceHint": "उच्च महत्व का अर्थ है स्वतः पूर्ण में उच्च प्राथमिकता"
         },
         "timeAgo": {
-          "yearsAgo": "साल पहले",
-          "monthsAgo": "महीने पहले",
-          "daysAgo": "दिन पहले",
-          "hoursAgo": "घंटे पहले",
-          "minutesAgo": "मिनट पहले",
+          "yearsAgo_one": "{{count}} साल पहले",
+          "yearsAgo_other": "{{count}} साल पहले",
+          "monthsAgo_one": "{{count}} महीने पहले",
+          "monthsAgo_other": "{{count}} महीने पहले",
+          "daysAgo_one": "{{count}} दिन पहले",
+          "daysAgo_other": "{{count}} दिन पहले",
+          "hoursAgo_one": "{{count}} घंटे पहले",
+          "hoursAgo_other": "{{count}} घंटे पहले",
+          "minutesAgo_one": "{{count}} मिनट पहले",
+          "minutesAgo_other": "{{count}} मिनट पहले",
           "justNow": "अभी"
         }
       }

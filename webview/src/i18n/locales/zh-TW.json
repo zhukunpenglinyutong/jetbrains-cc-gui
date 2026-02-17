@@ -205,11 +205,11 @@
           "importanceHint": "重要度越高，自動補全時越靠前"
         },
         "timeAgo": {
-          "yearsAgo": "年前",
-          "monthsAgo": "個月前",
-          "daysAgo": "天前",
-          "hoursAgo": "小時前",
-          "minutesAgo": "分鐘前",
+          "yearsAgo": "{{count}}年前",
+          "monthsAgo": "{{count}}個月前",
+          "daysAgo": "{{count}}天前",
+          "hoursAgo": "{{count}}小時前",
+          "minutesAgo": "{{count}}分鐘前",
           "justNow": "剛剛"
         }
       }

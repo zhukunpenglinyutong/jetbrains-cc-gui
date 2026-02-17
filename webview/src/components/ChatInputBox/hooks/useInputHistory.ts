@@ -263,13 +263,17 @@ export function loadTimestamps(): Record<string, string> {
 }
 
 /**
- * Save timestamp for a history item
+ * Save timestamps for history items (batch operation)
+ * @param texts Array of text items to update timestamps for
  */
-function saveTimestamp(text: string): void {
-  if (!canUseLocalStorage()) return;
+function saveTimestamps(texts: string[]): void {
+  if (!canUseLocalStorage() || texts.length === 0) return;
   try {
     const timestamps = loadTimestamps();
-    timestamps[text] = new Date().toISOString();
+    const now = new Date().toISOString();
+    for (const text of texts) {
+      timestamps[text] = now;
+    }
     // Keep only MAX_COUNT_RECORDS timestamps
     const entries = Object.entries(timestamps);
     if (entries.length > MAX_COUNT_RECORDS) {
@@ -391,11 +395,10 @@ export function useInputHistory({
         let counts = loadCounts();
         for (const fragment of fragments) {
           counts[fragment] = (counts[fragment] || 0) + 1;
-          // Save timestamp for each fragment
-          saveTimestamp(fragment);
         }
         counts = cleanupCounts(counts);
         window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(counts));
+        saveTimestamps(fragments);
       } catch {
         // Ignore errors
       }
@@ -532,7 +535,7 @@ export function addHistoryItem(text: string, importance: number = 1): void {
     window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(cleaned));
 
     // Save timestamp
-    saveTimestamp(sanitized);
+    saveTimestamps([sanitized]);
   } catch {
     // Ignore errors
   }

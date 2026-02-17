@@ -205,11 +205,16 @@
           "importanceHint": "Une importance plus élevée signifie une priorité plus élevée dans l'auto-complétion"
         },
         "timeAgo": {
-          "yearsAgo": "ans",
-          "monthsAgo": "mois",
-          "daysAgo": "jours",
-          "hoursAgo": "heures",
-          "minutesAgo": "minutes",
+          "yearsAgo_one": "il y a {{count}} an",
+          "yearsAgo_other": "il y a {{count}} ans",
+          "monthsAgo_one": "il y a {{count}} mois",
+          "monthsAgo_other": "il y a {{count}} mois",
+          "daysAgo_one": "il y a {{count}} jour",
+          "daysAgo_other": "il y a {{count}} jours",
+          "hoursAgo_one": "il y a {{count}} heure",
+          "hoursAgo_other": "il y a {{count}} heures",
+          "minutesAgo_one": "il y a {{count}} minute",
+          "minutesAgo_other": "il y a {{count}} minutes",
           "justNow": "à l'instant"
         }
       }
