@@ -110,7 +110,8 @@
         "hindi": "हिन्दी",
         "spanish": "Español",
         "french": "Français",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "russian": "Русский"
       },
       "nodePath": {
         "label": "Node.js Path",

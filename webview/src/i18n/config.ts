@@ -7,6 +7,7 @@ import hi from './locales/hi.json';
 import es from './locales/es.json';
 import fr from './locales/fr.json';
 import ja from './locales/ja.json';
+import ru from './locales/ru.json';
 
 // 从 localStorage 获取保存的语言设置，如果没有则默认为英文
 const getInitialLanguage = (): string => {
@@ -25,6 +26,7 @@ i18n
       es: { translation: es }, // 西班牙语翻译资源
       fr: { translation: fr }, // 法语翻译资源
       ja: { translation: ja }, // 日语翻译资源
+      ru: { translation: ru }, // 俄语翻译资源
     },
     lng: getInitialLanguage(), // 默认语言
     fallbackLng: 'en', // 如果翻译缺失，回退到英文
