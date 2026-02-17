@@ -203,6 +203,14 @@
           "contentPlaceholder": "Entrez le contenu de l'enregistrement...",
           "importanceLabel": "Importance",
           "importanceHint": "Une importance plus élevée signifie une priorité plus élevée dans l'auto-complétion"
+        },
+        "timeAgo": {
+          "yearsAgo": "ans",
+          "monthsAgo": "mois",
+          "daysAgo": "jours",
+          "hoursAgo": "heures",
+          "minutesAgo": "minutes",
+          "justNow": "à l'instant"
         }
       }
     },

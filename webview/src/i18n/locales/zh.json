@@ -239,6 +239,14 @@
           "contentPlaceholder": "输入历史记录内容...",
           "importanceLabel": "重要度",
           "importanceHint": "重要度越高，自动补全时越靠前"
+        },
+        "timeAgo": {
+          "yearsAgo": "年前",
+          "monthsAgo": "个月前",
+          "daysAgo": "天前",
+          "hoursAgo": "小时前",
+          "minutesAgo": "分钟前",
+          "justNow": "刚刚"
         }
       }
     },

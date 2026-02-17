@@ -208,6 +208,14 @@
           "contentPlaceholder": "履歴記録の内容を入力...",
           "importanceLabel": "重要度",
           "importanceHint": "重要度が高いほど、自動補完で優先されます"
+        },
+        "timeAgo": {
+          "yearsAgo": "年前",
+          "monthsAgo": "ヶ月前",
+          "daysAgo": "日前",
+          "hoursAgo": "時間前",
+          "minutesAgo": "分前",
+          "justNow": "たった今"
         }
       }
     },

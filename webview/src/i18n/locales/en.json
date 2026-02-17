@@ -239,6 +239,14 @@
           "contentPlaceholder": "Enter history record content...",
           "importanceLabel": "Importance",
           "importanceHint": "Higher importance means higher priority in auto-completion"
+        },
+        "timeAgo": {
+          "yearsAgo": "years ago",
+          "monthsAgo": "months ago",
+          "daysAgo": "days ago",
+          "hoursAgo": "hours ago",
+          "minutesAgo": "minutes ago",
+          "justNow": "just now"
         }
       }
     },

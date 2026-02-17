@@ -203,6 +203,14 @@
           "contentPlaceholder": "Ingresa el contenido del registro...",
           "importanceLabel": "Importancia",
           "importanceHint": "Mayor importancia significa mayor prioridad en el autocompletado"
+        },
+        "timeAgo": {
+          "yearsAgo": "años",
+          "monthsAgo": "meses",
+          "daysAgo": "días",
+          "hoursAgo": "horas",
+          "minutesAgo": "minutos",
+          "justNow": "ahora mismo"
         }
       }
     },

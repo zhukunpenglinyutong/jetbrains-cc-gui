@@ -201,6 +201,14 @@
           "contentPlaceholder": "इतिहास रिकॉर्ड सामग्री दर्ज करें...",
           "importanceLabel": "महत्व",
           "importanceHint": "उच्च महत्व का अर्थ है स्वतः पूर्ण में उच्च प्राथमिकता"
+        },
+        "timeAgo": {
+          "yearsAgo": "साल पहले",
+          "monthsAgo": "महीने पहले",
+          "daysAgo": "दिन पहले",
+          "hoursAgo": "घंटे पहले",
+          "minutesAgo": "मिनट पहले",
+          "justNow": "अभी"
         }
       }
     },

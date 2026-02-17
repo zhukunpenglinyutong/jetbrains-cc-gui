@@ -203,6 +203,14 @@
           "contentPlaceholder": "輸入歷史記錄內容...",
           "importanceLabel": "重要度",
           "importanceHint": "重要度越高，自動補全時越靠前"
+        },
+        "timeAgo": {
+          "yearsAgo": "年前",
+          "monthsAgo": "個月前",
+          "daysAgo": "天前",
+          "hoursAgo": "小時前",
+          "minutesAgo": "分鐘前",
+          "justNow": "剛剛"
         }
       }
     },
