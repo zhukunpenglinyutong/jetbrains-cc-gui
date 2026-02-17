@@ -2,6 +2,7 @@ package com.github.claudecodegui;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.AgentHandler;
+import com.github.claudecodegui.handler.PromptHandler;
 import com.github.claudecodegui.handler.CodexMcpServerHandler;
 import com.github.claudecodegui.handler.DependencyHandler;
 import com.github.claudecodegui.handler.DiffHandler;
@@ -929,6 +930,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new DiffHandler(handlerContext));
             messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
             messageDispatcher.registerHandler(new AgentHandler(handlerContext));
+            messageDispatcher.registerHandler(new PromptHandler(handlerContext));
             messageDispatcher.registerHandler(new TabHandler(handlerContext));
             messageDispatcher.registerHandler(new RewindHandler(handlerContext));
             messageDispatcher.registerHandler(new UndoFileHandler(handlerContext));

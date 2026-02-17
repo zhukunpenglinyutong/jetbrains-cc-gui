@@ -77,6 +77,7 @@ export type CompletionType =
   | 'directory'
   | 'command'
   | 'agent'
+  | 'prompt'
   | 'terminal'
   | 'service'
   | 'info'
@@ -151,7 +152,7 @@ export interface DropdownPosition {
  * Trigger query information
  */
 export interface TriggerQuery {
-  /** Trigger symbol ('@' or '/' or '#') */
+  /** Trigger symbol ('@' or '/' or '#' or '!') */
   trigger: string;
   /** Search keyword */
   query: string;
@@ -496,6 +497,8 @@ export interface ChatInputBoxProps {
   onClearAgent?: () => void;
   /** Open agent settings callback */
   onOpenAgentSettings?: () => void;
+  /** Open prompt settings callback */
+  onOpenPromptSettings?: () => void;
 
   /** Whether has messages (for rewind button display) */
   hasMessages?: boolean;

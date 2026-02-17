@@ -384,6 +384,16 @@ interface Window {
   agentOperationResult?: (json: string) => void;
 
   /**
+   * Update prompts list
+   */
+  updatePrompts?: (json: string) => void;
+
+  /**
+   * Prompt operation result callback
+   */
+  promptOperationResult?: (json: string) => void;
+
+  /**
    * Selected agent received callback - 初始化时接收当前选中的智能体
    */
   onSelectedAgentReceived?: (json: string) => void;

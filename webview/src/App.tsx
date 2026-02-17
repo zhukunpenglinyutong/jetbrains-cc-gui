@@ -1590,6 +1590,10 @@ const App = () => {
               setSettingsInitialTab('agents');
               setCurrentView('settings');
             }}
+            onOpenPromptSettings={() => {
+              setSettingsInitialTab('prompts');
+              setCurrentView('settings');
+            }}
             hasMessages={messages.length > 0}
             onRewind={handleOpenRewindSelectDialog}
             statusPanelExpanded={statusPanelExpanded}

@@ -47,8 +47,11 @@ import {
   slashCommandProvider,
   agentProvider,
   agentToDropdownItem,
+  promptProvider,
+  promptToDropdownItem,
   preloadSlashCommands,
   type AgentItem,
+  type PromptItem,
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
 import { setCursorOffset } from './utils/selectionUtils.js';
@@ -101,6 +104,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       selectedAgent,
       onAgentSelect,
       onOpenAgentSettings,
+      onOpenPromptSettings,
       hasMessages = false,
       onRewind,
       statusPanelExpanded = true,
@@ -143,6 +147,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       fileCompletion.close();
       commandCompletion.close();
       agentCompletion.close();
+      promptCompletion.close();
     }, []);
 
     // File tags hook
@@ -266,6 +271,53 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       },
     });
 
+    // Prompt completion hook (! trigger)
+    const promptCompletion = useCompletionDropdown<PromptItem>({
+      trigger: '!',
+      provider: promptProvider,
+      toDropdownItem: promptToDropdownItem,
+      onSelect: (prompt, query) => {
+        // Skip loading and empty state special items
+        if (
+          prompt.id === '__loading__' ||
+          prompt.id === '__empty__' ||
+          prompt.id === '__empty_state__'
+        )
+          return;
+
+        // Handle create prompt
+        if (prompt.id === '__create_new__') {
+          onOpenPromptSettings?.();
+          // Clear ! trigger text from input box
+          if (editableRef.current && query) {
+            const text = getTextContent();
+            const newText = promptCompletion.replaceText(text, '', query);
+            editableRef.current.innerText = newText;
+
+            // Set cursor to the position where trigger was removed
+            setCursorOffset(editableRef.current, query.start);
+
+            handleInput();
+          }
+          return;
+        }
+
+        // Insert prompt content at cursor position
+        if (editableRef.current && query) {
+          const text = getTextContent();
+          // Replace trigger and query with the prompt content
+          const newText = promptCompletion.replaceText(text, prompt.content, query);
+          editableRef.current.innerText = newText;
+
+          // Set cursor to end of inserted prompt content
+          const cursorPos = query.start + prompt.content.length;
+          setCursorOffset(editableRef.current, cursorPos);
+
+          handleInput();
+        }
+      },
+    });
+
     // Inline history completion hook (simple tab-complete style)
     const inlineCompletion = useInlineHistoryCompletion({
       debounceMs: 100,
@@ -319,6 +371,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       fileCompletion,
       commandCompletion,
       agentCompletion,
+      promptCompletion,
     });
 
     // Performance optimization: Debounced onInput callback
@@ -385,7 +438,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         // Only if no other completion menu is open
         // Note: Access isOpen directly from the completion objects at call time
         // to avoid unnecessary re-renders when isOpen changes
-        const isOtherCompletionOpen = fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen;
+        const isOtherCompletionOpen = fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen || promptCompletion.isOpen;
         if (!isOtherCompletionOpen) {
           inlineCompletion.updateQuery(text);
         } else {
@@ -398,7 +451,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
         timer.end();
       },
-      // Note: fileCompletion/commandCompletion/agentCompletion objects are stable references
+      // Note: fileCompletion/commandCompletion/agentCompletion/promptCompletion objects are stable references
       // We access .isOpen at call time, so we don't need .isOpen in deps
       [
         getTextContent,
@@ -409,6 +462,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         fileCompletion,
         commandCompletion,
         agentCompletion,
+        promptCompletion,
         inlineCompletion,
       ]
     );
@@ -495,6 +549,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       fileCompletion,
       commandCompletion,
       agentCompletion,
+      promptCompletion,
       recordInputHistory,
       onSubmit,
       onInstallSdk,
@@ -529,6 +584,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       fileCompletion,
       commandCompletion,
       agentCompletion,
+      promptCompletion,
       handleMacCursorMovement,
       handleHistoryKeyDown,
       // Inline completion: Tab key applies suggestion
@@ -560,6 +616,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       fileCompletion,
       commandCompletion,
       agentCompletion,
+      promptCompletion,
       completionSelectedRef,
       submittedOnEnterRef,
       handleSubmit,
@@ -735,7 +792,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
                 if (
                   fileCompletion.isOpen ||
                   commandCompletion.isOpen ||
-                  agentCompletion.isOpen
+                  agentCompletion.isOpen ||
+                  promptCompletion.isOpen
                 ) {
                   return;
                 }
@@ -783,6 +841,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           fileCompletion={fileCompletion}
           commandCompletion={commandCompletion}
           agentCompletion={agentCompletion}
+          promptCompletion={promptCompletion}
           tooltip={tooltip}
           promptEnhancer={{
             isOpen: showEnhancerDialog,

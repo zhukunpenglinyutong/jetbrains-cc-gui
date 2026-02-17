@@ -23,6 +23,7 @@ export interface UseSubmitHandlerOptions {
   fileCompletion: CompletionLike;
   commandCompletion: CompletionLike;
   agentCompletion: CompletionLike;
+  promptCompletion: CompletionLike;
   recordInputHistory: (text: string) => void;
   onSubmit?: (content: string, attachmentsToSend?: Attachment[]) => void;
   onInstallSdk?: () => void;
@@ -53,6 +54,7 @@ export function useSubmitHandler({
   fileCompletion,
   commandCompletion,
   agentCompletion,
+  promptCompletion,
   recordInputHistory,
   onSubmit,
   onInstallSdk,
@@ -89,6 +91,7 @@ export function useSubmitHandler({
     fileCompletion.close();
     commandCompletion.close();
     agentCompletion.close();
+    promptCompletion.close();
 
     // Record input history
     recordInputHistory(content);
@@ -122,6 +125,7 @@ export function useSubmitHandler({
     fileCompletion,
     commandCompletion,
     agentCompletion,
+    promptCompletion,
     recordInputHistory,
     onSubmit,
     onInstallSdk,
