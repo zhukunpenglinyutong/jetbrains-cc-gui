@@ -1,5 +1,32 @@
+import { useState, useRef, useEffect, useMemo } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
+
+// 预设颜色（模块级常量，避免每次渲染重新创建）
+const DARK_PRESETS = [
+  { color: '#1e1e1e', label: 'Default' },
+  { color: '#1a1b26', label: 'Tokyo Night' },
+  { color: '#282c34', label: 'One Dark' },
+  { color: '#2b2d30', label: 'JetBrains' },
+  { color: '#0d1117', label: 'GitHub Dark' },
+  { color: '#1e1f29', label: 'Dracula' },
+  { color: '#262335', label: 'SynthWave' },
+  { color: '#292d3e', label: 'Palenight' },
+];
+
+const LIGHT_PRESETS = [
+  { color: '#ffffff', label: 'Default' },
+  { color: '#fafafa', label: 'Soft White' },
+  { color: '#f5f5f5', label: 'Light Gray' },
+  { color: '#faf4ed', label: 'Rose Pine' },
+  { color: '#f6f8fa', label: 'GitHub Light' },
+  { color: '#fffbf0', label: 'Warm' },
+  { color: '#f0f4f8', label: 'Cool Blue' },
+  { color: '#f5f0eb', label: 'Solarized' },
+];
+
+const DEFAULT_DARK_BG = '#1e1e1e';
+const DEFAULT_LIGHT_BG = '#ffffff';
 
 const SunIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -57,6 +84,9 @@ interface BasicConfigSectionProps {
   // 发送快捷键配置
   sendShortcut?: 'enter' | 'cmdEnter';
   onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
+  // 聊天背景色配置
+  chatBgColor?: string;
+  onChatBgColorChange?: (color: string) => void;
 }
 
 const BasicConfigSection = ({
@@ -84,8 +114,57 @@ const BasicConfigSection = ({
   // 发送快捷键配置
   sendShortcut = 'enter',
   onSendShortcutChange = () => {},
+  // 聊天背景色配置
+  chatBgColor = '',
+  onChatBgColorChange = () => {},
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
+  const colorInputRef = useRef<HTMLInputElement>(null);
+  const [hexInput, setHexInput] = useState(chatBgColor || '');
+
+  // H1 修复：当 chatBgColor prop 变化时同步 hexInput
+  useEffect(() => {
+    setHexInput(chatBgColor || '');
+  }, [chatBgColor]);
+
+  // L1 修复：使用 useMemo + data-theme 属性缓存，避免渲染阶段直接 DOM 读取
+  const resolvedTheme = useMemo(() => {
+    if (theme !== 'system') return theme;
+    return (document.documentElement.getAttribute('data-theme') as 'light' | 'dark') || 'dark';
+  }, [theme]);
+
+  // M4 修复：提取默认背景色常量
+  const defaultBgColor = resolvedTheme === 'light' ? DEFAULT_LIGHT_BG : DEFAULT_DARK_BG;
+  const presets = resolvedTheme === 'light' ? LIGHT_PRESETS : DARK_PRESETS;
+
+  const handlePresetClick = (color: string) => {
+    if (color === defaultBgColor) {
+      onChatBgColorChange('');
+    } else {
+      onChatBgColorChange(color);
+    }
+  };
+
+  const handleColorInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChatBgColorChange(e.target.value);
+  };
+
+  const handleHexInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setHexInput(value);
+    if (/^#[0-9a-fA-F]{6}$/.test(value)) {
+      onChatBgColorChange(value);
+    }
+  };
+
+  const handleResetBgColor = () => {
+    onChatBgColorChange('');
+  };
+
+  const isPresetActive = (presetColor: string) => {
+    if (presetColor === defaultBgColor && !chatBgColor) return true;
+    return chatBgColor.toLowerCase() === presetColor.toLowerCase();
+  };
 
   // 解析主版本号
   const parseMajorVersion = (version: string | null | undefined): number => {
@@ -172,6 +251,84 @@ const BasicConfigSection = ({
             <span className={styles.themeOptionLabel}>{t('settings.basic.theme.dark')}</span>
           </div>
         </div>
+      </div>
+
+      {/* 聊天背景色 */}
+      <div className={styles.bgColorSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-paintcan" />
+          <span className={styles.fieldLabel}>{t('settings.basic.chatBgColor.label')}</span>
+        </div>
+
+        {/* 预设颜色 */}
+        <div className={styles.colorPresets}>
+          {presets.map((preset) => (
+            <div
+              key={preset.color}
+              className={`${styles.colorSwatch} ${isPresetActive(preset.color) ? styles.active : ''}`}
+              onClick={() => handlePresetClick(preset.color)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handlePresetClick(preset.color);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title={preset.label}
+              aria-label={preset.label}
+            >
+              <div
+                className={styles.colorSwatchInner}
+                style={{ backgroundColor: preset.color }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* 自定义颜色 */}
+        <div className={styles.customColorRow}>
+          <span className={styles.customColorLabel}>{t('settings.basic.chatBgColor.custom')}</span>
+          <div
+            className={styles.colorPickerWrapper}
+            onClick={() => colorInputRef.current?.click()}
+          >
+            <div
+              className={styles.colorPickerPreview}
+              style={{ backgroundColor: chatBgColor || defaultBgColor }}
+            />
+            <input
+              ref={colorInputRef}
+              type="color"
+              className={styles.colorPickerInput}
+              value={chatBgColor || defaultBgColor}
+              onChange={handleColorInputChange}
+            />
+          </div>
+          <input
+            type="text"
+            className={styles.hexInput}
+            value={hexInput}
+            onChange={handleHexInputChange}
+            placeholder="#000000"
+            maxLength={7}
+          />
+          {chatBgColor && (
+            <button
+              className={styles.resetBtn}
+              onClick={handleResetBgColor}
+              title={t('settings.basic.chatBgColor.reset')}
+            >
+              <span className="codicon codicon-discard" />
+              {t('settings.basic.chatBgColor.reset')}
+            </button>
+          )}
+        </div>
+
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.chatBgColor.hint')}</span>
+        </small>
       </div>
 
       {/* 语言切换 */}

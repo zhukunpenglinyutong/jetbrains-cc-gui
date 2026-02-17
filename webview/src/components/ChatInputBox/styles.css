@@ -21,7 +21,7 @@
    ============================================================ */
 :root .chat-input-box,
 [data-theme="dark"] .chat-input-box {
-  --input-bg: #1e1e1e;
+  --input-bg: var(--bg-chat, #1e1e1e);
   --input-border: #3e3e42;
   --input-focus-border: #007fd4;
   --input-placeholder: #666;
@@ -49,7 +49,7 @@
    CSS 变量 - 亮色主题
    ============================================================ */
 [data-theme="light"] .chat-input-box {
-  --input-bg: #ffffff;
+  --input-bg: var(--bg-chat, #ffffff);
   --input-border: #d0d0d0;
   --input-focus-border: #0078d4;
   --input-placeholder: #999999;

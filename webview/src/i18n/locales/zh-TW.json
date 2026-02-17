@@ -136,6 +136,12 @@
         "enterDesc": "按 Enter 發送訊息，Shift+Enter 換行",
         "cmdEnter": "⌘/Ctrl+Enter 發送",
         "cmdEnterDesc": "按 ⌘/Ctrl+Enter 發送訊息，Enter 換行"
+      },
+      "chatBgColor": {
+        "label": "聊天背景色",
+        "custom": "自訂",
+        "reset": "恢復預設",
+        "hint": "自訂聊天區域的背景顏色，留空則跟隨主題預設顏色"
       }
     },
     "providers": "供應商管理",

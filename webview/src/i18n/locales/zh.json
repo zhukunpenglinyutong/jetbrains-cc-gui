@@ -157,6 +157,12 @@
         "enterDesc": "按 Enter 发送消息，Shift+Enter 换行",
         "cmdEnter": "⌘/Ctrl+Enter 发送",
         "cmdEnterDesc": "按 ⌘/Ctrl+Enter 发送消息，Enter 换行"
+      },
+      "chatBgColor": {
+        "label": "聊天背景色",
+        "custom": "自定义",
+        "reset": "恢复默认",
+        "hint": "自定义聊天区域的背景颜色，留空则跟随主题默认颜色"
       }
     },
     "providers": "供应商管理",

@@ -274,6 +274,11 @@ const SettingsView = ({
   const [commitPrompt, setCommitPrompt] = useState('');
   const [savingCommitPrompt, setSavingCommitPrompt] = useState(false);
 
+  // 聊天背景色配置
+  const [chatBgColor, setChatBgColor] = useState<string>(() => {
+    return localStorage.getItem('chatBgColor') || '';
+  });
+
   // 历史补全开关配置
   const [historyCompletionEnabled, setHistoryCompletionEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('historyCompletionEnabled');
@@ -663,6 +668,17 @@ const SettingsView = ({
     localStorage.setItem('fontSizeLevel', fontSizeLevel.toString());
   }, [fontSizeLevel]);
 
+  // 聊天背景色处理
+  useEffect(() => {
+    if (chatBgColor) {
+      document.documentElement.style.setProperty('--bg-chat', chatBgColor);
+      localStorage.setItem('chatBgColor', chatBgColor);
+    } else {
+      document.documentElement.style.removeProperty('--bg-chat');
+      localStorage.removeItem('chatBgColor');
+    }
+  }, [chatBgColor]);
+
   useEffect(() => {
     if (isCodexMode && disabledTabs.includes(currentTab)) {
       setCurrentTab('basic');
@@ -860,6 +876,8 @@ const SettingsView = ({
               onSendShortcutChange={handleSendShortcutChange}
               autoOpenFileEnabled={autoOpenFileEnabled}
               onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+              chatBgColor={chatBgColor}
+              onChatBgColorChange={setChatBgColor}
             />
           </div>
 

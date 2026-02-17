@@ -312,6 +312,12 @@ const App = () => {
     const scale = fontSizeMap[fontSizeLevel] || 1.0;
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
+    // 初始化聊天背景色（校验 hex 格式后再应用）
+    const savedChatBgColor = localStorage.getItem('chatBgColor');
+    if (savedChatBgColor && /^#[0-9a-fA-F]{6}$/.test(savedChatBgColor)) {
+      document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
+    }
+
     // 先应用用户明确选择的主题（light/dark），跟随 IDE 的情况等 ideTheme 更新后再处理
     const savedTheme = localStorage.getItem('theme');
 

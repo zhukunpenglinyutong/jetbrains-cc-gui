@@ -141,6 +141,12 @@
         "enterDesc": "Enterでメッセージを送信、Shift+Enterで改行",
         "cmdEnter": "⌘/Ctrl+Enterで送信",
         "cmdEnterDesc": "⌘/Ctrl+Enterでメッセージを送信、Enterで改行"
+      },
+      "chatBgColor": {
+        "label": "チャット背景色",
+        "custom": "カスタム",
+        "reset": "デフォルトに戻す",
+        "hint": "チャットエリアの背景色をカスタマイズします。空欄の場合はテーマのデフォルト色に従います。"
       }
     },
     "providers": "プロバイダー管理",

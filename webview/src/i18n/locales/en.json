@@ -157,6 +157,12 @@
         "enterDesc": "Press Enter to send message, Shift+Enter for new line",
         "cmdEnter": "⌘/Ctrl+Enter to Send",
         "cmdEnterDesc": "Press ⌘/Ctrl+Enter to send message, Enter for new line"
+      },
+      "chatBgColor": {
+        "label": "Chat Background",
+        "custom": "Custom",
+        "reset": "Reset",
+        "hint": "Customize the chat area background color. Leave empty to follow the theme default."
       }
     },
     "providers": "Provider Management",
