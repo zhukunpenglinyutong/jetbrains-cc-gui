@@ -72,7 +72,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
   (
     {
       isLoading = false,
-      selectedModel = 'claude-sonnet-4-5',
+      selectedModel = 'claude-sonnet-4-6',
       permissionMode = 'bypassPermissions',
       currentProvider = 'claude',
       usagePercentage = 0,

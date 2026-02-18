@@ -352,13 +352,13 @@
         "apiUrlHint": "Enter Claude API compatible service endpoint address",
         "modelMapping": "Model Mapping (will be injected into JSON env)",
         "mainModel": "Main Model",
-        "mainModelPlaceholder": "e.g., claude-sonnet-4-5",
+        "mainModelPlaceholder": "e.g., claude-sonnet-4-6",
         "haikuModel": "Haiku Default Model",
         "haikuModelPlaceholder": "e.g., claude-haiku-4-5",
         "sonnetModel": "Sonnet Default Model",
-        "sonnetModelPlaceholder": "e.g., claude-sonnet-4-5",
+        "sonnetModelPlaceholder": "e.g., claude-sonnet-4-6",
         "opusModel": "Opus Default Model",
-        "opusModelPlaceholder": "e.g., claude-opus-4-5-20251101",
+        "opusModelPlaceholder": "e.g., claude-opus-4-6",
         "modelMappingHint": "Optional: Specify default Claude models to use. Leave empty for system defaults.",
         "jsonConfig": "JSON Configuration",
         "jsonConfigDescription": "Configure complete settings.json content here, supporting all fields (e.g., model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.)",
@@ -955,9 +955,9 @@
   },
   "models": {
     "claude": {
-      "sonnet45": {
-        "label": "Sonnet 4.5",
-        "description": "Sonnet 4.5 · Use the default model"
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · Use the default model"
       },
       "opus46": {
         "label": "Opus 4.6",
@@ -966,10 +966,6 @@
       "opus46_1m": {
         "label": "Opus (1M context)",
         "description": "Opus 4.6 for long sessions"
-      },
-      "opus45": {
-        "label": "Opus 4.5",
-        "description": "Opus 4.5 · Most capable for complex work"
       },
       "haiku45": {
         "label": "Haiku 4.5",

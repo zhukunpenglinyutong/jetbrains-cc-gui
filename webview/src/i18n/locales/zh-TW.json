@@ -357,13 +357,13 @@
         "apiUrlHint": "填寫相容 Claude API 的服務端口位址",
         "modelMapping": "模型映射（會注入到 JSON 的 env 裡）",
         "mainModel": "主模型",
-        "mainModelPlaceholder": "例如：claude-sonnet-4-5",
+        "mainModelPlaceholder": "例如：claude-sonnet-4-6",
         "haikuModel": "Haiku 預設模型",
         "haikuModelPlaceholder": "例如：claude-haiku-4-5",
         "sonnetModel": "Sonnet 預設模型",
-        "sonnetModelPlaceholder": "例如：claude-sonnet-4-5",
+        "sonnetModelPlaceholder": "例如：claude-sonnet-4-6",
         "opusModel": "Opus 預設模型",
-        "opusModelPlaceholder": "例如：claude-opus-4-5-20251101",
+        "opusModelPlaceholder": "例如：claude-opus-4-6",
         "modelMappingHint": "選填：指定預設使用的 Claude 模型，留空則使用系統預設。",
         "jsonConfig": "配置 JSON",
         "jsonConfigDescription": "此處可配置完整的 settings.json 內容，支援所有欄位（如 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等）",
@@ -961,9 +961,9 @@
   },
   "models": {
     "claude": {
-      "sonnet45": {
-        "label": "Sonnet 4.5",
-        "description": "Sonnet 4.5 · 預設推薦模型"
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · 預設推薦模型"
       },
       "opus46": {
         "label": "Opus 4.6",
@@ -972,10 +972,6 @@
       "opus46_1m": {
         "label": "Opus (1M 上下文)",
         "description": "Opus 4.6 長對話模式"
-      },
-      "opus45": {
-        "label": "Opus 4.5",
-        "description": "Opus 4.5 · 處理複雜任務最強性能"
       },
       "haiku45": {
         "label": "Haiku 4.5",

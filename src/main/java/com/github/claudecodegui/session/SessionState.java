@@ -30,7 +30,7 @@ public class SessionState {
     // 配置
     // 默认使用 bypassPermissions 与前端保持一致，确保 Codex 模式下有写入权限
     private String permissionMode = "bypassPermissions";
-    private String model = "claude-sonnet-4-5";
+    private String model = "claude-sonnet-4-6";
     private String provider = "claude";
     // Codex reasoning effort (思考深度)
     private String reasoningEffort = "medium";

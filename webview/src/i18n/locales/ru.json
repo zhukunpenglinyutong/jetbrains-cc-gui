@@ -362,13 +362,13 @@
         "apiUrlHint": "Введите адрес сервиса, совместимого с Claude API",
         "modelMapping": "Маппинг моделей (будет добавлен в JSON env)",
         "mainModel": "Основная модель",
-        "mainModelPlaceholder": "например, claude-sonnet-4-5",
+        "mainModelPlaceholder": "например, claude-sonnet-4-6",
         "haikuModel": "Модель Haiku по умолчанию",
         "haikuModelPlaceholder": "например, claude-haiku-4-5",
         "sonnetModel": "Модель Sonnet по умолчанию",
-        "sonnetModelPlaceholder": "например, claude-sonnet-4-5",
+        "sonnetModelPlaceholder": "например, claude-sonnet-4-6",
         "opusModel": "Модель Opus по умолчанию",
-        "opusModelPlaceholder": "например, claude-opus-4-5-20251101",
+        "opusModelPlaceholder": "например, claude-opus-4-6",
         "modelMappingHint": "Необязательно: укажите модели Claude по умолчанию. Оставьте пустым для системных значений.",
         "jsonConfig": "JSON-конфигурация",
         "jsonConfigDescription": "Настройте полное содержимое settings.json, поддерживаются все поля (model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId и т.д.)",
@@ -965,9 +965,9 @@
   },
   "models": {
     "claude": {
-      "sonnet45": {
-        "label": "Sonnet 4.5",
-        "description": "Sonnet 4.5 · Модель по умолчанию"
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · Модель по умолчанию"
       },
       "opus46": {
         "label": "Opus 4.6",
@@ -976,10 +976,6 @@
       "opus46_1m": {
         "label": "Opus (1M контекст)",
         "description": "Opus 4.6 для длинных сессий"
-      },
-      "opus45": {
-        "label": "Opus 4.5",
-        "description": "Opus 4.5 · Самая мощная для сложных задач"
       },
       "haiku45": {
         "label": "Haiku 4.5",

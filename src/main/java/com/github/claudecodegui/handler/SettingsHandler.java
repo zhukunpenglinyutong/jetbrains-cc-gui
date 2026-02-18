@@ -71,8 +71,8 @@ public class SettingsHandler extends BaseMessageHandler {
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
     static {
         // Claude 模型
-        MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-5", 200_000);
-        MODEL_CONTEXT_LIMITS.put("claude-opus-4-5-20251101", 200_000);
+        MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-6", 200_000);
+        MODEL_CONTEXT_LIMITS.put("claude-opus-4-6", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-haiku-4-5", 200_000);
         // Codex/OpenAI 模型
         MODEL_CONTEXT_LIMITS.put("gpt-5.2-codex", 258_000);
@@ -279,9 +279,9 @@ public class SettingsHandler extends BaseMessageHandler {
      * 处理设置模型请求
      * 设置完成后向前端发送确认回调，确保前后端状态同步
      *
-     * 容量计算优化：当前端选择基础模型（如 claude-sonnet-4-5）时，
+     * 容量计算优化：当前端选择基础模型（如 claude-sonnet-4-6）时，
      * 会从设置中查找对应的实际模型配置（如 ANTHROPIC_DEFAULT_SONNET_MODEL），
-     * 以支持带容量后缀的自定义模型名称（如 claude-sonnet-4-5-20250929[1M]）
+     * 以支持带容量后缀的自定义模型名称（如 claude-sonnet-4-6[1M]）
      */
     private void handleSetModel(String content) {
         try {
@@ -1020,7 +1020,7 @@ public class SettingsHandler extends BaseMessageHandler {
      * 从设置中解析实际使用的模型名称
      * 支持从 ANTHROPIC_MODEL 或 ANTHROPIC_DEFAULT_*_MODEL 中读取带容量后缀的模型名称
      *
-     * @param baseModel 前端选择的基础模型 ID (如 claude-sonnet-4-5, claude-opus-4-5-20251101, claude-haiku-4-5)
+     * @param baseModel 前端选择的基础模型 ID (如 claude-sonnet-4-6, claude-haiku-4-5)
      * @return 设置中配置的实际模型名称，如果未配置则返回 null
      */
     private String resolveActualModelName(String baseModel) {
@@ -1098,10 +1098,10 @@ public class SettingsHandler extends BaseMessageHandler {
     /**
      * 获取模型上下文限制
      * 支持从模型名称中解析容量后缀，例如：
-     * - claude-sonnet-4-5[1M] → 1,000,000 tokens
-     * - claude-opus-4-5[2M] → 2,000,000 tokens
+     * - claude-sonnet-4-6[1M] → 1,000,000 tokens
+     * - claude-opus-4-6[2M] → 2,000,000 tokens
      * - claude-haiku-4-5[500k] → 500,000 tokens
-     * - claude-sonnet-4-5 [1.5M] → 1,500,000 tokens (支持空格和小数)
+     * - claude-sonnet-4-6 [1.5M] → 1,500,000 tokens (支持空格和小数)
      * - 支持大小写不敏感 (1m 和 1M 都可以)
      */
     public static int getModelContextLimit(String model) {

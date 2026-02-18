@@ -352,13 +352,13 @@
         "apiUrlHint": "Entrez l'adresse de l'endpoint du service compatible avec l'API Claude",
         "modelMapping": "Mappage des modèles (sera injecté dans l'env du JSON)",
         "mainModel": "Modèle principal",
-        "mainModelPlaceholder": "par ex., claude-sonnet-4-5",
+        "mainModelPlaceholder": "par ex., claude-sonnet-4-6",
         "haikuModel": "Modèle Haiku par défaut",
         "haikuModelPlaceholder": "par ex., claude-haiku-4-5",
         "sonnetModel": "Modèle Sonnet par défaut",
-        "sonnetModelPlaceholder": "par ex., claude-sonnet-4-5",
+        "sonnetModelPlaceholder": "par ex., claude-sonnet-4-6",
         "opusModel": "Modèle Opus par défaut",
-        "opusModelPlaceholder": "par ex., claude-opus-4-5-20251101",
+        "opusModelPlaceholder": "par ex., claude-opus-4-6",
         "modelMappingHint": "Optionnel: Spécifiez les modèles Claude par défaut à utiliser. Laissez vide pour les valeurs par défaut du système.",
         "jsonConfig": "Configuration JSON",
         "jsonConfigDescription": "Configurez ici le contenu complet de settings.json, prenant en charge tous les champs (par exemple, model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.)",
@@ -956,9 +956,9 @@
   },
   "models": {
     "claude": {
-      "sonnet45": {
-        "label": "Sonnet 4.5",
-        "description": "Sonnet 4.5 · Modèle recommandé par défaut"
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · Modèle recommandé par défaut"
       },
       "opus46": {
         "label": "Opus 4.6",
@@ -967,10 +967,6 @@
       "opus46_1m": {
         "label": "Opus (1M contexte)",
         "description": "Opus 4.6 pour les longues sessions"
-      },
-      "opus45": {
-        "label": "Opus 4.5",
-        "description": "Opus 4.5 · Le plus performant pour les tâches complexes"
       },
       "haiku45": {
         "label": "Haiku 4.5",

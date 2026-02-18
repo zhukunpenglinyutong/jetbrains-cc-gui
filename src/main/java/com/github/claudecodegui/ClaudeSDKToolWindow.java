@@ -836,7 +836,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 com.github.claudecodegui.notifications.ClaudeNotifier.setMode(project, mode);
 
                 // Set initial model
-                String model = session != null ? session.getModel() : "claude-sonnet-4-5";
+                String model = session != null ? session.getModel() : "claude-sonnet-4-6";
                 com.github.claudecodegui.notifications.ClaudeNotifier.setModel(project, model);
 
                 // Set initial agent
@@ -1938,7 +1938,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty()) ? savedMode.trim() : "bypassPermissions";
                 // provider 和 model 使用默认值，因为窗口刚打开时前端会主动同步
                 previousProvider = "claude";
-                previousModel = "claude-sonnet-4-5";
+                previousModel = "claude-sonnet-4-6";
             }
             LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
@@ -2559,7 +2559,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 保存当前的 permission mode、provider、model（如果存在旧 session）
             String previousPermissionMode = (session != null) ? session.getPermissionMode() : "bypassPermissions";
             String previousProvider = (session != null) ? session.getProvider() : "claude";
-            String previousModel = (session != null) ? session.getModel() : "claude-sonnet-4-5";
+            String previousModel = (session != null) ? session.getModel() : "claude-sonnet-4-6";
             LOG.info("Preserving session state: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
             // 清空前端消息显示（修复新建会话时消息不清空的bug）
