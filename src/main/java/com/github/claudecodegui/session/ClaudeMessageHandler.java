@@ -14,12 +14,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Claude消息回调处理器
- * 英文：Claude Message Callback Handler
- *
- * 解释：这个类专门负责处理Claude AI返回的各种消息
- * - 就像一个翻译官，把Claude说的话翻译成我们能理解的格式
- * - 处理思考过程、文本内容、工具调用结果等等
+ * Claude message callback handler.
+ * Processes various message types returned by Claude AI,
+ * including thinking content, text responses, and tool call results.
  */
 public class ClaudeMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(ClaudeMessageHandler.class);
@@ -31,36 +28,26 @@ public class ClaudeMessageHandler implements MessageCallback {
     private final MessageMerger messageMerger;
     private final Gson gson;
 
-    // 当前助手消息的内容累积器
-    // 英文：Current assistant message content accumulator
-    // 解释：就像一个大碗，把AI说的话一点点收集起来
+    // Content accumulator for the current assistant message
     private final StringBuilder assistantContent = new StringBuilder();
 
-    // 当前助手消息对象
-    // 英文：Current assistant message object
-    // 解释：正在处理的消息本身
+    // Current assistant message object being processed
     private Message currentAssistantMessage = null;
 
-    // 是否正在思考
-    // 英文：Whether AI is thinking
-    // 解释：AI是不是在想问题（还没开始说话）
+    // Whether the AI is currently in thinking mode
     private boolean isThinking = false;
 
-    // 🔧 流式传输状态追踪
-    // 英文：Whether streaming is active
-    // 解释：是否正在接收流式内容
+    // Streaming state tracking
     private boolean isStreaming = false;
 
     private boolean streamEndedThisTurn = false;
 
-    // 🔧 流式分段状态（用于在工具调用前/后切分 text/thinking）
+    // Streaming segment state (used to split text/thinking around tool calls)
     private boolean textSegmentActive = false;
     private boolean thinkingSegmentActive = false;
 
     /**
-     * 构造函数
-     * 英文：Constructor
-     * 解释：创建这个处理器时需要的材料
+     * Constructor.
      */
     public ClaudeMessageHandler(
         Project project,
@@ -79,15 +66,11 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理收到的消息
-     * 英文：Handle received message
-     * 解释：AI发来消息时，这个方法负责处理
+     * Handle a received message by dispatching to the appropriate handler based on type.
      */
     @Override
     public void onMessage(String type, String content) {
-        // 根据消息类型选择不同的处理方式
-        // 英文：Choose different handling based on message type
-        // 解释：就像分拣邮件，不同类型的信放到不同的格子里
+        // Route to the appropriate handler based on message type
         switch (type) {
             case "user":
                 handleUserMessage(content);
@@ -99,18 +82,18 @@ public class ClaudeMessageHandler implements MessageCallback {
                 handleThinkingMessage();
                 break;
             case "content":
-                // 非流式模式：完整内容，更新消息
+                // Non-streaming mode: complete content block, update message
                 handleContent(content);
                 break;
             case "content_delta":
-                // 🔧 流式传输：增量内容，转发给前端
+                // Streaming: incremental content, forward to frontend
                 handleContentDelta(content);
                 break;
-            // 🔧 流式传输：思考增量
+            // Streaming: thinking delta
             case "thinking_delta":
                 handleThinkingDelta(content);
                 break;
-            // 🔧 流式传输：开始和结束标记
+            // Streaming: start and end markers
             case "stream_start":
                 handleStreamStart();
                 break;
@@ -143,9 +126,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理错误
-     * 英文：Handle error
-     * 解释：出错了怎么办
+     * Handle an error from the SDK.
      */
     @Override
     public void onError(String error) {
@@ -158,15 +139,13 @@ public class ClaudeMessageHandler implements MessageCallback {
         state.addMessage(errorMessage);
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
-        
+
         // Show error in status bar
         ClaudeNotifier.showError(project, error);
     }
 
     /**
-     * 处理完成
-     * 英文：Handle completion
-     * 解释：AI说完话了，收工
+     * Handle completion of a response turn.
      */
     @Override
     public void onComplete(SDKResult result) {
@@ -180,14 +159,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
-    // ===== 私有方法：处理各种消息类型 =====
-    // Private Methods: Handle different message types
-    // 解释：下面这些方法是具体处理每种消息的小帮手
+    // ===== Private methods: handle different message types =====
 
     /**
-     * 处理助手消息（完整JSON格式）
-     * 英文：Handle assistant message (full JSON format)
-     * 解释：处理AI发来的完整回复
+     * Handle an assistant message in full JSON format.
      */
     private void handleAssistantMessage(String content) {
         if (!content.startsWith("{")) {
@@ -195,7 +170,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         }
 
         try {
-            // 解析完整的 JSON 消息
+            // Parse the complete JSON message
             JsonObject messageJson = gson.fromJson(content, JsonObject.class);
             JsonObject previousRaw = currentAssistantMessage != null ? currentAssistantMessage.raw : null;
             JsonObject mergedRaw = messageMerger.mergeAssistantMessage(previousRaw, messageJson);
@@ -207,8 +182,9 @@ public class ClaudeMessageHandler implements MessageCallback {
                 currentAssistantMessage.raw = mergedRaw;
             }
 
-            // 🔧 流式模式：不要用完整消息覆盖已累积的流式内容（工具调用消息通常不含 text）
-            // 非流式模式：使用完整消息的 text 重建内容
+            // Streaming mode: do not overwrite accumulated streaming content with the full message
+            //   (tool call messages typically don't contain text)
+            // Non-streaming mode: rebuild content from the full message text
             String aggregatedText = messageParser.extractMessageContent(mergedRaw);
             if (!isStreaming) {
                 assistantContent.setLength(0);
@@ -217,15 +193,15 @@ public class ClaudeMessageHandler implements MessageCallback {
                 }
                 currentAssistantMessage.content = assistantContent.toString();
             } else if (aggregatedText != null && aggregatedText.length() > assistantContent.length()) {
-                // 保守同步：如果完整文本更长，更新累积器（避免极端情况下 delta 丢失）
+                // Conservative sync: if full text is longer, update accumulator (prevents delta loss edge cases)
                 assistantContent.setLength(0);
                 assistantContent.append(aggregatedText);
                 currentAssistantMessage.content = assistantContent.toString();
             }
             currentAssistantMessage.raw = mergedRaw;
 
-            // 🔧 流式传输：检查是否包含工具调用
-            // 如果包含 tool_use，即使在流式模式下也需要更新消息以显示工具块
+            // Streaming: check if the message contains tool calls
+            // If tool_use is present, we need to update messages even in streaming mode to render tool blocks
             boolean hasToolUse = false;
             if (mergedRaw.has("message") && mergedRaw.getAsJsonObject("message").has("content")) {
                 var contentArray = mergedRaw.getAsJsonObject("message").get("content");
@@ -242,13 +218,13 @@ public class ClaudeMessageHandler implements MessageCallback {
                 }
             }
 
-            // 🔧 工具调用是一个“分段边界”：后续的 text/thinking 应该进入新的块
+            // Tool calls act as segment boundaries: subsequent text/thinking should go into new blocks
             if (hasToolUse) {
                 textSegmentActive = false;
                 thinkingSegmentActive = false;
             }
 
-            // 🔧 流式传输：流式模式下跳过全量更新，除非有工具调用
+            // Streaming: skip full message update in streaming mode unless there is a tool call
             if (!isStreaming || hasToolUse) {
                 callbackHandler.notifyMessageUpdate(state.getMessages());
                 if (hasToolUse) {
@@ -263,9 +239,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理思考消息
-     * 英文：Handle thinking message
-     * 解释：AI在思考问题，还没开始说话
+     * Handle the thinking message indicating AI is reasoning.
      */
     private void handleThinkingMessage() {
         if (!isThinking) {
@@ -278,12 +252,10 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理完整内容（非流式模式）
-     * 英文：Handle complete content (non-streaming mode)
-     * 解释：AI发来完整的内容块，直接更新消息
+     * Handle complete content in non-streaming mode.
      */
     private void handleContent(String content) {
-        // 如果之前在思考，现在开始输出内容，说明思考完成
+        // If previously thinking, content output means thinking is complete
         if (isThinking) {
             isThinking = false;
             callbackHandler.notifyThinkingStatusChanged(false);
@@ -300,7 +272,7 @@ public class ClaudeMessageHandler implements MessageCallback {
             currentAssistantMessage.content = assistantContent.toString();
         }
 
-        // 🔧 流式传输：流式模式下跳过全量更新
+        // Streaming: skip full message update in streaming mode
         if (!isStreaming) {
             callbackHandler.notifyMessageUpdate(state.getMessages());
         } else {
@@ -309,15 +281,13 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理内容增量（流式输出）
-     * 英文：Handle content delta (streaming output)
-     * 解释：AI正在一字一字地说话
+     * Handle incremental content delta in streaming mode.
      */
     private void handleContentDelta(String content) {
         if (content == null || content.isEmpty()) {
             return;
         }
-        // 如果之前在思考，现在开始输出内容，说明思考完成
+        // If previously thinking, content output means thinking is complete
         if (isThinking) {
             isThinking = false;
             callbackHandler.notifyThinkingStatusChanged(false);
@@ -326,10 +296,10 @@ public class ClaudeMessageHandler implements MessageCallback {
             LOG.debug("Thinking completed, generating response");
         }
 
-        // 开始输出内容时，认为当前 thinking 段结束
+        // Content output means the current thinking segment has ended
         thinkingSegmentActive = false;
 
-        // 累积内容用于最终消息
+        // Accumulate content for the final message
         assistantContent.append(content);
 
         ensureCurrentAssistantMessageExists();
@@ -344,9 +314,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理会话ID
-     * 英文：Handle session ID
-     * 解释：保存这次对话的编号
+     * Handle session ID received from the SDK.
      */
     private void handleSessionId(String content) {
         state.setSessionId(content);
@@ -355,10 +323,9 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理用户消息（来自SDK）
-     * 英文：Handle user message from SDK
-     * 解释：SDK返回的用户消息包含uuid，需要更新已有的用户消息；
-     *       如果是包含 tool_result 的消息，需要添加到消息列表中
+     * Handle user message from SDK.
+     * SDK-returned user messages contain a uuid that needs to be applied to existing user messages.
+     * Messages containing tool_result need to be added to the message list.
      */
     private void handleUserMessage(String content) {
         if (!content.startsWith("{")) {
@@ -368,9 +335,9 @@ public class ClaudeMessageHandler implements MessageCallback {
         try {
             JsonObject userMsg = gson.fromJson(content, JsonObject.class);
 
-            // 检查是否包含 tool_result（工具调用结果）
+            // Check if the message contains a tool_result
             if (messageParser.hasToolResult(userMsg)) {
-                // 这是一个包含 tool_result 的 user 消息，需要添加到消息列表
+                // This is a user message with tool_result; add it to the message list
                 Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", userMsg);
                 state.addMessage(toolResultMessage);
                 LOG.debug("Added tool_result user message to state");
@@ -378,24 +345,24 @@ public class ClaudeMessageHandler implements MessageCallback {
                 return;
             }
 
-            // 提取 uuid（用于 rewind 功能）
+            // Extract uuid (used for rewind functionality)
             String uuid = userMsg.has("uuid") ? userMsg.get("uuid").getAsString() : null;
             if (uuid == null) {
                 LOG.debug("User message from SDK has no uuid, skipping update");
                 return;
             }
 
-            // 查找最后一个用户消息并更新其 raw 字段
+            // Find the last user message and update its raw field with the uuid
             List<Message> messages = state.getMessages();
             for (int i = messages.size() - 1; i >= 0; i--) {
                 Message msg = messages.get(i);
                 if (msg.type == Message.Type.USER && msg.raw != null) {
-                    // 检查这个消息是否已经有 uuid
+                    // Check if this message already has a uuid
                     if (!msg.raw.has("uuid")) {
-                        // 更新 raw 字段，添加 uuid
+                        // Update the raw field with the uuid
                         msg.raw.addProperty("uuid", uuid);
                         LOG.info("Updated user message with uuid: " + uuid);
-                        // 通知前端更新
+                        // Notify frontend of the update
                         callbackHandler.notifyMessageUpdate(messages);
                         break;
                     }
@@ -407,9 +374,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理工具调用结果
-     * 英文：Handle tool result
-     * 解释：AI用了某个工具（比如搜索、计算），这是工具的结果
+     * Handle a tool call result.
      */
     private void handleToolResult(String content) {
         if (!content.startsWith("{")) {
@@ -423,7 +388,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                 : null;
 
             if (toolUseId != null) {
-                // 构造包含 tool_result 的 user 消息
+                // Build a user message containing the tool_result
                 JsonArray contentArray = new JsonArray();
                 contentArray.add(toolResultBlock);
 
@@ -434,7 +399,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                 rawUser.addProperty("type", "user");
                 rawUser.add("message", messageObj);
 
-                // 创建 user 消息并添加到消息列表
+                // Create the user message and add it to the message list
                 Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", rawUser);
                 state.addMessage(toolResultMessage);
 
@@ -447,9 +412,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理消息结束
-     * 英文：Handle message end
-     * 解释：AI说完这条消息了
+     * Handle the end of a message.
      */
     private void handleMessageEnd() {
         if (isThinking) {
@@ -458,18 +421,16 @@ public class ClaudeMessageHandler implements MessageCallback {
         }
         ClaudeNotifier.clearStatus(project);
 
-        // FIX: handleMessageEnd 不应该重置 loading/busy 状态
-        // 无论是流式还是非流式模式，状态重置应该由以下回调统一处理：
-        // - 流式模式：onStreamEnd
-        // - 非流式模式：onComplete
-        // 这样可以避免消息处理过程中状态被意外重置
+        // FIX: handleMessageEnd should not reset loading/busy state.
+        // Regardless of streaming or non-streaming mode, state reset should be handled uniformly by:
+        // - Streaming mode: onStreamEnd
+        // - Non-streaming mode: onComplete
+        // This prevents state from being unexpectedly reset during message processing.
         LOG.debug("message_end received, deferring state cleanup to onComplete/onStreamEnd");
     }
 
     /**
-     * 处理结果消息（包含使用统计）
-     * 英文：Handle result message (contains usage stats)
-     * 解释：最终的统计信息，比如用了多少字符
+     * Handle the result message containing usage statistics.
      */
     private void handleResult(String content) {
         if (!content.startsWith("{")) {
@@ -483,26 +444,26 @@ public class ClaudeMessageHandler implements MessageCallback {
             // Always update status bar with token usage if available in result
             if (resultJson.has("usage")) {
                 JsonObject resultUsage = resultJson.getAsJsonObject("usage");
-                
+
                 int inputTokens = resultUsage.has("input_tokens") ? resultUsage.get("input_tokens").getAsInt() : 0;
                 int cacheWriteTokens = resultUsage.has("cache_creation_input_tokens") ? resultUsage.get("cache_creation_input_tokens").getAsInt() : 0;
                 int cacheReadTokens = resultUsage.has("cache_read_input_tokens") ? resultUsage.get("cache_read_input_tokens").getAsInt() : 0;
                 int outputTokens = resultUsage.has("output_tokens") ? resultUsage.get("output_tokens").getAsInt() : 0;
 
-                // 上下文消耗：不包含缓存读取的 token（缓存读取不占用新的上下文窗口）
+                // Context consumption: excludes cache read tokens (cache reads don't consume new context window)
                 int usedTokens = inputTokens + cacheWriteTokens + outputTokens;
                 int maxTokens = com.github.claudecodegui.handler.SettingsHandler.getModelContextLimit(state.getModel());
-                
+
                 ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
             }
 
-            // 如果当前消息的raw中usage为0，则用result中的usage进行更新
+            // If the current message's raw usage is all zeros, update it with the result's usage
             if (currentAssistantMessage != null && currentAssistantMessage.raw != null) {
                 JsonObject message = currentAssistantMessage.raw.has("message") && currentAssistantMessage.raw.get("message").isJsonObject()
                     ? currentAssistantMessage.raw.getAsJsonObject("message")
                     : null;
 
-                // 检查当前消息的usage是否全为0
+                // Check if the current message's usage is all zeros
                 boolean needsUsageUpdate = false;
                 if (message != null && message.has("usage")) {
                     JsonObject usage = message.getAsJsonObject("usage");
@@ -530,9 +491,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理斜杠命令列表
-     * 英文：Handle slash commands list
-     * 解释：可用的快捷命令列表（比如 /help, /clear）
+     * Handle the list of available slash commands.
      */
     private void handleSlashCommands(String content) {
         try {
@@ -550,14 +509,12 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理系统消息
-     * 英文：Handle system message
-     * 解释：系统级别的消息（不是AI说的话，是系统通知）
+     * Handle a system-level message (not from AI, but from the system).
      */
     private void handleSystemMessage(String content) {
         LOG.debug("System message: " + content);
 
-        // 解析 system 消息中的 slash_commands 字段
+        // Parse slash_commands field from the system message
         try {
             JsonObject systemObj = gson.fromJson(content, JsonObject.class);
             if (systemObj.has("slash_commands") && systemObj.get("slash_commands").isJsonArray()) {
@@ -575,18 +532,14 @@ public class ClaudeMessageHandler implements MessageCallback {
         }
     }
 
-    // ===== 🔧 流式传输处理方法 =====
-    // Streaming message handlers
-    // 解释：处理实时流式传输的消息
+    // ===== Streaming message handlers =====
 
     /**
-     * 处理流式开始
-     * 英文：Handle stream start
-     * 解释：流式传输开始，通知前端准备接收增量内容
+     * Handle stream start event. Notifies the frontend to prepare for incremental content.
      */
     private void handleStreamStart() {
         LOG.debug("Stream started");
-        isStreaming = true;  // 🔧 标记流式传输开始
+        isStreaming = true;  // Mark streaming as active
         streamEndedThisTurn = false;
         textSegmentActive = false;
         thinkingSegmentActive = false;
@@ -594,17 +547,15 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理流式结束
-     * 英文：Handle stream end
-     * 解释：流式传输结束，通知前端完成消息
+     * Handle stream end event. Notifies the frontend that the message is complete.
      */
     private void handleStreamEnd() {
         LOG.debug("Stream ended");
-        isStreaming = false;  // 🔧 标记流式传输结束
+        isStreaming = false;  // Mark streaming as inactive
         streamEndedThisTurn = true;
         textSegmentActive = false;
         thinkingSegmentActive = false;
-        // 流式结束后，发送最终的消息更新，确保消息列表同步
+        // After streaming ends, send a final message update to ensure the message list is in sync
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStreamEnd();
         state.setBusy(false);
@@ -614,20 +565,18 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理思考增量
-     * 英文：Handle thinking delta
-     * 解释：收到思考内容的增量，转发给前端实时显示
+     * Handle an incremental thinking delta. Forwards it to the frontend for real-time display.
      */
     private void handleThinkingDelta(String content) {
         if (content == null || content.isEmpty()) {
             return;
         }
-        // 确保思考状态已开启
+        // Ensure thinking state is enabled
         if (!isThinking) {
             isThinking = true;
             callbackHandler.notifyThinkingStatusChanged(true);
         }
-        // 🔧 流式思考：将 thinking delta 写入 raw，确保结束后不会丢失
+        // Write thinking delta to raw to prevent data loss after stream ends
         ensureCurrentAssistantMessageExists();
         applyThinkingDeltaToRaw(content);
         thinkingSegmentActive = true;

@@ -1,24 +1,24 @@
 /**
- * 模型工具模块
- * 负责模型 ID 映射和环境变量设置
+ * Model utilities module.
+ * Handles model ID mapping and environment variable configuration.
  */
 
 /**
- * 将完整的模型 ID 映射为 Claude SDK 期望的简短名称
- * @param {string} modelId - 完整的模型 ID（如 'claude-sonnet-4-5'）
- * @returns {string} SDK 期望的模型名称（如 'sonnet'）
+ * Map a full model ID to the short name expected by the Claude SDK.
+ * @param {string} modelId - Full model ID (e.g. 'claude-sonnet-4-5')
+ * @returns {string} SDK model name (e.g. 'sonnet')
  */
 export function mapModelIdToSdkName(modelId) {
   if (!modelId || typeof modelId !== 'string') {
-    return 'sonnet'; // 默认使用 sonnet
+    return 'sonnet'; // Default to sonnet
   }
 
   const lowerModel = modelId.toLowerCase();
 
-  // 映射规则：
-  // - 包含 'opus' -> 'opus'
-  // - 包含 'haiku' -> 'haiku'
-  // - 其他情况（包含 'sonnet' 或未知）-> 'sonnet'
+  // Mapping rules:
+  // - Contains 'opus' -> 'opus'
+  // - Contains 'haiku' -> 'haiku'
+  // - Otherwise (contains 'sonnet' or unknown) -> 'sonnet'
   if (lowerModel.includes('opus')) {
     return 'opus';
   } else if (lowerModel.includes('haiku')) {
@@ -29,11 +29,11 @@ export function mapModelIdToSdkName(modelId) {
 }
 
 /**
- * 根据完整模型 ID 设置 SDK 环境变量
- * Claude SDK 使用短名称（opus/sonnet/haiku）作为模型选择器，
- * 具体版本由 ANTHROPIC_DEFAULT_*_MODEL 环境变量指定
+ * Set SDK environment variables based on the full model ID.
+ * The Claude SDK uses short names (opus/sonnet/haiku) as model selectors,
+ * while the specific version is determined by ANTHROPIC_DEFAULT_*_MODEL environment variables.
  *
- * @param {string} modelId - 完整的模型 ID（如 'claude-opus-4-6'）
+ * @param {string} modelId - Full model ID (e.g. 'claude-opus-4-6')
  */
 export function setModelEnvironmentVariables(modelId) {
   if (!modelId || typeof modelId !== 'string') {
@@ -42,8 +42,8 @@ export function setModelEnvironmentVariables(modelId) {
 
   const lowerModel = modelId.toLowerCase();
 
-  // 根据模型类型设置对应的环境变量
-  // 这样 SDK 就能知道具体使用哪个版本
+  // Set the corresponding environment variable based on model type
+  // so the SDK knows which specific version to use
   if (lowerModel.includes('opus')) {
     process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = modelId;
     console.log('[MODEL_ENV] Set ANTHROPIC_DEFAULT_OPUS_MODEL =', modelId);
@@ -56,6 +56,6 @@ export function setModelEnvironmentVariables(modelId) {
   }
 }
 
-// 注意：getClaudeCliPath() 函数已被移除
-// 现在完全使用 SDK 内置的 cli.js（位于 node_modules/@anthropic-ai/claude-agent-sdk/cli.js）
-// 这样可以避免 Windows 下系统 CLI 路径问题（ENOENT 错误），且版本与 SDK 完全对齐
+// Note: getClaudeCliPath() has been removed.
+// Now using the SDK's built-in cli.js (at node_modules/@anthropic-ai/claude-agent-sdk/cli.js).
+// This avoids system CLI path issues on Windows (ENOENT errors) and keeps the version aligned with the SDK.

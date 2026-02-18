@@ -22,9 +22,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Provider（供应商）相关消息处理器
- * 处理供应商的增删改查和切换
- * Supports both Claude and Codex providers
+ * Provider management message handler.
+ * Handles provider CRUD operations and switching.
+ * Supports both Claude and Codex providers.
  */
 public class ProviderHandler extends BaseMessageHandler {
 
@@ -188,7 +188,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取所有供应商
+     * Get all providers.
      */
     private void handleGetProviders() {
         try {
@@ -205,7 +205,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取当前 Claude CLI 配置 (~/.claude/settings.json)
+     * Get current Claude CLI configuration (~/.claude/settings.json).
      */
     private void handleGetCurrentClaudeConfig() {
         try {
@@ -222,7 +222,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 添加供应商
+     * Add a provider.
      */
     private void handleAddProvider(String content) {
         try {
@@ -231,7 +231,7 @@ public class ProviderHandler extends BaseMessageHandler {
             context.getSettingsService().addClaudeProvider(provider);
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                handleGetProviders(); // 刷新列表
+                handleGetProviders(); // Refresh list
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to add provider: " + e.getMessage(), e);
@@ -242,7 +242,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 更新供应商
+     * Update a provider.
      */
     private void handleUpdateProvider(String content) {
         try {
@@ -264,9 +264,9 @@ public class ProviderHandler extends BaseMessageHandler {
 
             final boolean finalSynced = syncedActiveProvider;
             ApplicationManager.getApplication().invokeLater(() -> {
-                handleGetProviders(); // 刷新列表
+                handleGetProviders(); // Refresh list
                 if (finalSynced) {
-                    handleGetActiveProvider(); // 刷新当前激活的供应商配置
+                    handleGetActiveProvider(); // Refresh active provider config
                 }
             });
         } catch (Exception e) {
@@ -278,7 +278,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 删除供应商
+     * Delete a provider.
      */
     private void handleDeleteProvider(String content) {
         LOG.debug("[ProviderHandler] ========== handleDeleteProvider START ==========");
@@ -306,7 +306,7 @@ public class ProviderHandler extends BaseMessageHandler {
             if (result.isSuccess()) {
                 LOG.info("[ProviderHandler] Delete successful, refreshing provider list");
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    handleGetProviders(); // 刷新列表
+                    handleGetProviders(); // Refresh list
                 });
             } else {
                 String errorMsg = result.getUserFriendlyMessage();
@@ -329,7 +329,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 切换供应商
+     * Switch provider.
      */
     private void handleSwitchProvider(String content) {
         try {
@@ -402,7 +402,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取当前激活的供应商
+     * Get the currently active provider.
      */
     private void handleGetActiveProvider() {
         try {
@@ -419,7 +419,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 预览 cc-switch 导入
+     * Preview cc-switch import.
      */
     private void handlePreviewCcSwitchImport() {
         com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(() -> {
@@ -497,7 +497,7 @@ public class ProviderHandler extends BaseMessageHandler {
                     return name.endsWith(".db");
                 });
 
-                // 设置默认路径为用户主目录下的 .cc-switch
+                // Set default path to .cc-switch under user home directory
                 String userHome = System.getProperty("user.home");
                 File defaultDir = new File(userHome, ".cc-switch");
                 VirtualFile defaultVirtualFile = null;
@@ -509,7 +509,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 LOG.info("[ProviderHandler] 打开文件选择器，默认目录: " +
                     (defaultVirtualFile != null ? defaultVirtualFile.getPath() : "用户主目录"));
 
-                // 打开文件选择器
+                // Open file chooser
                 VirtualFile[] selectedFiles = FileChooser.chooseFiles(
                     descriptor,
                     context.getProject(),
@@ -545,7 +545,7 @@ public class ProviderHandler extends BaseMessageHandler {
                     return;
                 }
 
-                // 异步读取数据库
+                // Read database asynchronously
                 CompletableFuture.runAsync(() -> {
                     try {
                         LOG.info("[ProviderHandler] 开始读取用户选择的数据库文件...");
@@ -586,7 +586,7 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 保存导入的供应商
+     * Save imported providers.
      */
     private void handleSaveImportedProviders(String content) {
         CompletableFuture.runAsync(() -> {
@@ -609,7 +609,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 int count = context.getSettingsService().saveProviders(providers);
 
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    handleGetProviders(); // 刷新界面
+                    handleGetProviders(); // Refresh UI
                     sendInfoToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.importSuccessTitle"), com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.importSuccess", count));
                 });
 
@@ -621,18 +621,18 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
-     * 发送信息通知到前端
+     * Send info notification to the frontend.
      */
     private void sendInfoToFrontend(String title, String message) {
-        // 使用多参数传递，避免 JSON 嵌套解析问题
+        // Use multi-parameter passing to avoid JSON nested parsing issues
         callJavaScript("backend_notification", "info", escapeJs(title), escapeJs(message));
     }
 
     /**
-     * 发送错误通知到前端
+     * Send error notification to the frontend.
      */
     private void sendErrorToFrontend(String title, String message) {
-        // 使用多参数传递，避免 JSON 嵌套解析问题
+        // Use multi-parameter passing to avoid JSON nested parsing issues
         callJavaScript("backend_notification", "error", escapeJs(title), escapeJs(message));
     }
 

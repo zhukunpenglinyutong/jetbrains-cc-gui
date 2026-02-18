@@ -14,8 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Agent 管理器
- * 负责管理智能体配置(agent.json)
+ * Agent Manager.
+ * Manages agent configurations (agent.json).
  */
 public class AgentManager {
     private static final Logger LOG = Logger.getInstance(AgentManager.class);
@@ -29,14 +29,14 @@ public class AgentManager {
     }
 
     /**
-     * 读取 agent.json 文件
+     * Read the agent.json file.
      */
     public JsonObject readAgentConfig() throws IOException {
         Path agentPath = pathManager.getAgentFilePath();
         File agentFile = agentPath.toFile();
 
         if (!agentFile.exists()) {
-            // 返回空的配置
+            // Return an empty config
             JsonObject config = new JsonObject();
             config.add("agents", new JsonObject());
             return config;
@@ -44,7 +44,7 @@ public class AgentManager {
 
         try (FileReader reader = new FileReader(agentFile)) {
             JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();
-            // 确保 agents 节点存在
+            // Ensure the agents node exists
             if (!config.has("agents")) {
                 config.add("agents", new JsonObject());
             }
@@ -58,7 +58,7 @@ public class AgentManager {
     }
 
     /**
-     * 写入 agent.json 文件
+     * Write the agent.json file.
      */
     public void writeAgentConfig(JsonObject config) throws IOException {
         pathManager.ensureConfigDirectory();
@@ -74,8 +74,8 @@ public class AgentManager {
     }
 
     /**
-     * 获取所有智能体
-     * 按创建时间倒序排列(最新的在前)
+     * Get all agents.
+     * Sorted by creation time in descending order (newest first).
      */
     public List<JsonObject> getAgents() throws IOException {
         List<JsonObject> result = new ArrayList<>();
@@ -84,14 +84,14 @@ public class AgentManager {
         JsonObject agents = config.getAsJsonObject("agents");
         for (String key : agents.keySet()) {
             JsonObject agent = agents.getAsJsonObject(key);
-            // 确保 ID 存在
+            // Ensure ID exists
             if (!agent.has("id")) {
                 agent.addProperty("id", key);
             }
             result.add(agent);
         }
 
-        // 按创建时间倒序排序(最新的在前)
+        // Sort by creation time descending (newest first)
         result.sort((a, b) -> {
             long timeA = a.has("createdAt") ? a.get("createdAt").getAsLong() : 0;
             long timeB = b.has("createdAt") ? b.get("createdAt").getAsLong() : 0;
@@ -103,7 +103,7 @@ public class AgentManager {
     }
 
     /**
-     * 添加智能体
+     * Add an agent.
      */
     public void addAgent(JsonObject agent) throws IOException {
         if (!agent.has("id")) {
@@ -114,17 +114,17 @@ public class AgentManager {
         JsonObject agents = config.getAsJsonObject("agents");
         String id = agent.get("id").getAsString();
 
-        // 检查 ID 是否已存在
+        // Check if the ID already exists
         if (agents.has(id)) {
             throw new IllegalArgumentException("Agent with id '" + id + "' already exists");
         }
 
-        // 添加创建时间
+        // Add creation timestamp
         if (!agent.has("createdAt")) {
             agent.addProperty("createdAt", System.currentTimeMillis());
         }
 
-        // 添加智能体
+        // Add the agent
         agents.add(id, agent);
 
         writeAgentConfig(config);
@@ -132,7 +132,7 @@ public class AgentManager {
     }
 
     /**
-     * 更新智能体
+     * Update an agent.
      */
     public void updateAgent(String id, JsonObject updates) throws IOException {
         JsonObject config = readAgentConfig();
@@ -144,9 +144,9 @@ public class AgentManager {
 
         JsonObject agent = agents.getAsJsonObject(id);
 
-        // 合并更新
+        // Merge updates
         for (String key : updates.keySet()) {
-            // 不允许修改 id 和 createdAt
+            // Modification of id and createdAt is not allowed
             if (key.equals("id") || key.equals("createdAt")) {
                 continue;
             }
@@ -163,7 +163,7 @@ public class AgentManager {
     }
 
     /**
-     * 删除智能体
+     * Delete an agent.
      */
     public boolean deleteAgent(String id) throws IOException {
         JsonObject config = readAgentConfig();
@@ -174,7 +174,7 @@ public class AgentManager {
             return false;
         }
 
-        // 删除智能体
+        // Delete the agent
         agents.remove(id);
 
         writeAgentConfig(config);
@@ -183,7 +183,7 @@ public class AgentManager {
     }
 
     /**
-     * 获取单个智能体
+     * Get a single agent by ID.
      */
     public JsonObject getAgent(String id) throws IOException {
         JsonObject config = readAgentConfig();
@@ -202,7 +202,7 @@ public class AgentManager {
     }
 
     /**
-     * 获取当前选择的智能体 ID
+     * Get the currently selected agent ID.
      */
     public String getSelectedAgentId() throws IOException {
         JsonObject config = readAgentConfig();
@@ -213,7 +213,7 @@ public class AgentManager {
     }
 
     /**
-     * 设置当前选择的智能体 ID
+     * Set the currently selected agent ID.
      */
     public void setSelectedAgentId(String agentId) throws IOException {
         JsonObject config = readAgentConfig();

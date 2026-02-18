@@ -1,7 +1,7 @@
 package com.github.claudecodegui.dependency;
 
 /**
- * SDK 安装结果 DTO
+ * SDK installation result DTO.
  */
 public class InstallResult {
 
@@ -40,7 +40,7 @@ public class InstallResult {
     }
 
     /**
-     * 创建成功结果
+     * Creates a success result.
      */
     public static InstallResult success(String sdkId, String version, String logs) {
         return new Builder()
@@ -52,7 +52,7 @@ public class InstallResult {
     }
 
     /**
-     * 创建失败结果
+     * Creates a failure result.
      */
     public static InstallResult failure(String sdkId, String errorMessage, String logs) {
         return new Builder()

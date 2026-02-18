@@ -5,24 +5,24 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Node.js 检测结果类
- * 用于表示 Node.js 检测过程的详细结果
+ * Node.js detection result class.
+ * Represents the detailed outcome of a Node.js detection process.
  */
 public class NodeDetectionResult {
 
     /**
-     * 检测方法枚举
+     * Detection method enum.
      */
     public enum DetectionMethod {
-        /** Windows where 命令 */
+        /** Windows "where" command */
         WHERE_COMMAND,
-        /** Unix which 命令 */
+        /** Unix "which" command */
         WHICH_COMMAND,
-        /** 已知安装路径 */
+        /** Known installation path */
         KNOWN_PATH,
-        /** PATH 环境变量 */
+        /** PATH environment variable */
         PATH_VARIABLE,
-        /** 直接调用 node（回退方案） */
+        /** Direct node invocation (fallback) */
         FALLBACK
     }
 
@@ -34,7 +34,7 @@ public class NodeDetectionResult {
     private final String errorMessage;
 
     /**
-     * 私有构造函数
+     * Private constructor.
      */
     private NodeDetectionResult(boolean found, String nodePath, String nodeVersion,
                                 DetectionMethod method, List<String> triedPaths, String errorMessage) {
@@ -46,28 +46,28 @@ public class NodeDetectionResult {
         this.errorMessage = errorMessage;
     }
 
-    // ==================== 工厂方法 ====================
+    // ==================== Factory Methods ====================
 
     /**
-     * 创建成功结果
+     * Creates a successful result.
      *
-     * @param nodePath Node.js 可执行文件路径
-     * @param nodeVersion Node.js 版本
-     * @param method 检测方法
-     * @return 成功的 NodeDetectionResult
+     * @param nodePath path to the Node.js executable
+     * @param nodeVersion Node.js version string
+     * @param method the detection method used
+     * @return a successful NodeDetectionResult
      */
     public static NodeDetectionResult success(String nodePath, String nodeVersion, DetectionMethod method) {
         return new NodeDetectionResult(true, nodePath, nodeVersion, method, null, null);
     }
 
     /**
-     * 创建成功结果（带尝试路径列表）
+     * Creates a successful result with the list of paths that were tried.
      *
-     * @param nodePath Node.js 可执行文件路径
-     * @param nodeVersion Node.js 版本
-     * @param method 检测方法
-     * @param triedPaths 尝试过的路径列表
-     * @return 成功的 NodeDetectionResult
+     * @param nodePath path to the Node.js executable
+     * @param nodeVersion Node.js version string
+     * @param method the detection method used
+     * @param triedPaths list of paths that were attempted
+     * @return a successful NodeDetectionResult
      */
     public static NodeDetectionResult success(String nodePath, String nodeVersion,
                                               DetectionMethod method, List<String> triedPaths) {
@@ -75,81 +75,81 @@ public class NodeDetectionResult {
     }
 
     /**
-     * 创建失败结果
+     * Creates a failure result.
      *
-     * @param errorMessage 错误消息
-     * @return 失败的 NodeDetectionResult
+     * @param errorMessage the error message
+     * @return a failed NodeDetectionResult
      */
     public static NodeDetectionResult failure(String errorMessage) {
         return new NodeDetectionResult(false, null, null, null, null, errorMessage);
     }
 
     /**
-     * 创建失败结果（带尝试路径列表）
+     * Creates a failure result with the list of paths that were tried.
      *
-     * @param errorMessage 错误消息
-     * @param triedPaths 尝试过的路径列表
-     * @return 失败的 NodeDetectionResult
+     * @param errorMessage the error message
+     * @param triedPaths list of paths that were attempted
+     * @return a failed NodeDetectionResult
      */
     public static NodeDetectionResult failure(String errorMessage, List<String> triedPaths) {
         return new NodeDetectionResult(false, null, null, null, triedPaths, errorMessage);
     }
 
-    // ==================== Getter 方法 ====================
+    // ==================== Getters ====================
 
     /**
-     * 获取是否找到 Node.js
-     * @return true 如果找到
+     * Returns whether Node.js was found.
+     * @return true if Node.js was detected
      */
     public boolean isFound() {
         return found;
     }
 
     /**
-     * 获取 Node.js 可执行文件路径
-     * @return Node.js 路径，如果未找到返回 null
+     * Gets the path to the Node.js executable.
+     * @return the Node.js path, or null if not found
      */
     public String getNodePath() {
         return nodePath;
     }
 
     /**
-     * 获取 Node.js 版本
-     * @return 版本号（如 "v18.16.0"），如果未找到返回 null
+     * Gets the Node.js version.
+     * @return the version string (e.g. "v18.16.0"), or null if not found
      */
     public String getNodeVersion() {
         return nodeVersion;
     }
 
     /**
-     * 获取检测方法
-     * @return 检测方法枚举值，如果未找到返回 null
+     * Gets the detection method used.
+     * @return the detection method enum value, or null if not found
      */
     public DetectionMethod getMethod() {
         return method;
     }
 
     /**
-     * 获取尝试过的路径列表
-     * @return 路径列表（不可修改）
+     * Gets the list of paths that were tried during detection.
+     * @return an unmodifiable list of paths
      */
     public List<String> getTriedPaths() {
         return Collections.unmodifiableList(triedPaths);
     }
 
     /**
-     * 获取错误消息
-     * @return 错误消息，如果成功返回 null
+     * Gets the error message.
+     * @return the error message, or null if detection was successful
      */
     public String getErrorMessage() {
         return errorMessage;
     }
 
-    // ==================== 便捷方法 ====================
+    // ==================== Convenience Methods ====================
 
     /**
-     * 添加尝试过的路径（内部使用）
-     * @param path 尝试的路径
+     * Adds a path that was tried during detection (for internal use).
+     * @param path the path that was attempted
      */
     public void addTriedPath(String path) {
         if (path != null && !path.isEmpty()) {
@@ -158,8 +158,8 @@ public class NodeDetectionResult {
     }
 
     /**
-     * 获取用户友好的错误描述（用于显示给用户）
-     * @return 错误描述和解决建议
+     * Gets a user-friendly error description suitable for display.
+     * @return a description including error details and installation suggestions
      */
     public String getUserFriendlyMessage() {
         if (found) {
@@ -181,7 +181,7 @@ public class NodeDetectionResult {
             sb.append("\n");
         }
 
-        // 根据平台提供安装建议
+        // Provide platform-specific installation suggestions
         String osName = System.getProperty("os.name", "").toLowerCase();
         if (osName.contains("win")) {
             sb.append("Windows 安装建议：\n");
@@ -203,8 +203,8 @@ public class NodeDetectionResult {
     }
 
     /**
-     * 获取检测方法的中文描述
-     * @return 检测方法描述
+     * Gets a human-readable description of the detection method.
+     * @return detection method description
      */
     public String getMethodDescription() {
         if (method == null) {

@@ -6,39 +6,39 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 会话状态管理
- * 负责维护会话的所有状态信息
+ * Session state management.
+ * Maintains all state information for a conversation session.
  */
 public class SessionState {
-    // 会话标识
+    // Session identifiers
     private String sessionId;
     private String channelId;
 
-    // 会话状态
+    // Session state
     private boolean busy = false;
     private boolean loading = false;
     private String error = null;
 
-    // 消息历史
+    // Message history
     private final List<ClaudeSession.Message> messages = new ArrayList<>();
 
-    // 会话元数据
+    // Session metadata
     private String summary = null;
     private long lastModifiedTime = System.currentTimeMillis();
     private String cwd = null;
 
-    // 配置
-    // 默认使用 bypassPermissions 与前端保持一致，确保 Codex 模式下有写入权限
+    // Configuration
+    // Default to bypassPermissions to match frontend behavior and ensure write access in Codex mode
     private String permissionMode = "bypassPermissions";
     private String model = "claude-sonnet-4-6";
     private String provider = "claude";
-    // Codex reasoning effort (思考深度)
+    // Codex reasoning effort (thinking depth)
     private String reasoningEffort = "medium";
 
-    // 斜杠命令
+    // Slash commands
     private List<String> slashCommands = new ArrayList<>();
 
-    // PSI上下文收集开关
+    // PSI context collection toggle
     private boolean psiContextEnabled = true;
 
     // Getters
@@ -168,21 +168,21 @@ public class SessionState {
     }
 
     /**
-     * 添加消息
+     * Add a message to the history.
      */
     public void addMessage(ClaudeSession.Message message) {
         messages.add(message);
     }
 
     /**
-     * 清空消息
+     * Clear all messages.
      */
     public void clearMessages() {
         messages.clear();
     }
 
     /**
-     * 更新最后修改时间为当前时间
+     * Update the last modified time to the current time.
      */
     public void updateLastModifiedTime() {
         this.lastModifiedTime = System.currentTimeMillis();

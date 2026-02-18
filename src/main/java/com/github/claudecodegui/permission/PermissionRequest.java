@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 权限请求类，用于管理工具调用的权限询问
+ * Permission request class for managing tool invocation permission prompts.
  */
 public class PermissionRequest {
     private final String channelId;
@@ -27,9 +27,9 @@ public class PermissionRequest {
     }
 
     /**
-     * 兼容旧版本的构造函数（不包含 project）.
+     * Backward-compatible constructor (without project).
      *
-     * @deprecated 使用包含 project 参数的构造函数
+     * @deprecated Use the constructor that includes a project parameter.
      */
     @Deprecated
     public PermissionRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions) {
@@ -37,7 +37,7 @@ public class PermissionRequest {
     }
 
     /**
-     * 批准权限请求
+     * Approve the permission request.
      */
     public void accept(Map<String, Object> updatedInput, JsonObject updatedPermissions) {
         if (!resolved) {
@@ -54,14 +54,14 @@ public class PermissionRequest {
     }
 
     /**
-     * 批准权限请求（使用原始输入）
+     * Approve the permission request (using original inputs).
      */
     public void accept() {
         accept(null, null);
     }
 
     /**
-     * 拒绝权限请求
+     * Deny the permission request.
      */
     public void reject(String message, boolean interrupt) {
         if (!resolved) {
@@ -78,7 +78,7 @@ public class PermissionRequest {
     }
 
     /**
-     * 拒绝权限请求（使用默认参数）
+     * Deny the permission request (using default parameters).
      */
     public void reject() {
         reject(null, true);
@@ -113,7 +113,7 @@ public class PermissionRequest {
     }
 
     /**
-     * 权限结果类
+     * Permission result class.
      */
     public static class PermissionResult {
         public enum Behavior {

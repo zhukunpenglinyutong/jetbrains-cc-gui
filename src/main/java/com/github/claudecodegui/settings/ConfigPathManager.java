@@ -8,8 +8,8 @@ import java.nio.file.Paths;
 import com.intellij.openapi.diagnostic.Logger;
 
 /**
- * 配置文件路径管理器
- * 负责管理所有配置文件的路径
+ * Configuration Path Manager.
+ * Manages paths for all configuration files.
  */
 public class ConfigPathManager {
     private static final Logger LOG = Logger.getInstance(ConfigPathManager.class);
@@ -23,7 +23,7 @@ public class ConfigPathManager {
     private static final String CLAUDE_SETTINGS_FILE_NAME = "settings.json";
 
     /**
-     * 获取配置文件路径 (~/.codemoss/config.json)
+     * Get the configuration file path (~/.codemoss/config.json).
      */
     public String getConfigPath() {
         String homeDir = System.getProperty("user.home");
@@ -31,7 +31,7 @@ public class ConfigPathManager {
     }
 
     /**
-     * 获取备份文件路径
+     * Get the backup file path.
      */
     public String getBackupPath() {
         String homeDir = System.getProperty("user.home");
@@ -39,7 +39,7 @@ public class ConfigPathManager {
     }
 
     /**
-     * 获取配置目录 Path 对象
+     * Get the configuration directory as a Path object.
      */
     public Path getConfigDir() {
         String homeDir = System.getProperty("user.home");
@@ -47,28 +47,28 @@ public class ConfigPathManager {
     }
 
     /**
-     * 获取配置文件 Path 对象
+     * Get the configuration file as a Path object.
      */
     public Path getConfigFilePath() {
         return getConfigDir().resolve(CONFIG_FILE_NAME);
     }
 
     /**
-     * 获取 agent.json 文件路径
+     * Get the agent.json file path.
      */
     public Path getAgentFilePath() {
         return getConfigDir().resolve(AGENT_FILE_NAME);
     }
 
     /**
-     * 获取 prompt.json 文件路径
+     * Get the prompt.json file path.
      */
     public Path getPromptFilePath() {
         return getConfigDir().resolve(PROMPT_FILE_NAME);
     }
 
     /**
-     * 获取 Claude settings.json 路径
+     * Get the Claude settings.json path.
      */
     public Path getClaudeSettingsPath() {
         String homeDir = System.getProperty("user.home");
@@ -76,7 +76,7 @@ public class ConfigPathManager {
     }
 
     /**
-     * 确保配置目录存在
+     * Ensure the configuration directory exists.
      */
     public void ensureConfigDirectory() throws IOException {
         Path configDir = getConfigDir();

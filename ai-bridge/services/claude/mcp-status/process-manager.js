@@ -1,6 +1,6 @@
 /**
- * 进程管理模块
- * 提供进程创建、事件处理和安全终止功能
+ * Process management module
+ * Provides process creation, event handling, and safe termination
  */
 
 import { log } from './logger.js';
@@ -8,9 +8,9 @@ import { parseServerInfo } from './server-info-parser.js';
 import { hasValidMcpResponse, createInitializeRequest } from './mcp-protocol.js';
 
 /**
- * 安全地终止子进程
- * @param {import('child_process').ChildProcess | null} child - 子进程
- * @param {string} serverName - 服务器名称（用于日志）
+ * Safely terminate a child process
+ * @param {import('child_process').ChildProcess | null} child - Child process
+ * @param {string} serverName - Server name (for logging)
  */
 export function safeKillProcess(child, serverName) {
   if (!child) return;
@@ -18,8 +18,8 @@ export function safeKillProcess(child, serverName) {
   try {
     if (!child.killed) {
       child.kill('SIGTERM');
-      // 如果 SIGTERM 没有终止进程，500ms 后发送 SIGKILL
-      // 使用 unref() 确保此定时器不会阻止父进程退出
+      // If SIGTERM doesn't kill it, send SIGKILL after 500ms
+      // Use unref() so this timer won't prevent the parent process from exiting
       const killTimer = setTimeout(() => {
         try {
           if (!child.killed) {
@@ -38,12 +38,12 @@ export function safeKillProcess(child, serverName) {
 }
 
 /**
- * 创建进程事件处理器
- * @param {Object} context - 上下文对象
- * @param {string} context.serverName - 服务器名称
- * @param {import('child_process').ChildProcess} context.child - 子进程
- * @param {Function} context.finalize - 完成回调
- * @returns {Object} 事件处理器集合
+ * Create process event handlers
+ * @param {Object} context - Context object
+ * @param {string} context.serverName - Server name
+ * @param {import('child_process').ChildProcess} context.child - Child process
+ * @param {Function} context.finalize - Finalization callback
+ * @returns {Object} Collection of event handlers
  */
 export function createProcessHandlers(context) {
   const { serverName, finalize } = context;
@@ -63,7 +63,7 @@ export function createProcessHandlers(context) {
     stderr: {
       onData: (data) => {
         stderr += data.toString();
-        // 记录 stderr 输出用于诊断
+        // Log stderr output for diagnostics
         const stderrLine = data.toString().trim();
         if (stderrLine) {
           log('debug', `[${serverName}] stderr:`, stderrLine.substring(0, 200));
@@ -78,7 +78,7 @@ export function createProcessHandlers(context) {
       if (hasValidMcpResponse(stdout) || stdout.includes('MCP')) {
         finalize('connected', parseServerInfo(stdout));
       } else if (code !== 0) {
-        // 构建详细的错误信息
+        // Build a detailed error message
         let errorDetails = `Process exited with code ${code}`;
         if (stderr) {
           errorDetails += `. stderr: ${stderr.substring(0, 500)}`;
@@ -97,10 +97,10 @@ export function createProcessHandlers(context) {
 }
 
 /**
- * 发送初始化请求到子进程
+ * Send an initialize request to the child process
  * Caller is responsible for closing stdin when appropriate.
- * @param {import('child_process').ChildProcess} child - 子进程
- * @param {string} serverName - 服务器名称
+ * @param {import('child_process').ChildProcess} child - Child process
+ * @param {string} serverName - Server name
  */
 export function sendInitializeRequest(child, serverName) {
   try {

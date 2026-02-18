@@ -1,6 +1,6 @@
 /**
- * HTTP/SSE 服务器验证模块
- * 提供 HTTP/SSE 类型 MCP 服务器的连接状态验证功能
+ * HTTP/SSE server verification module
+ * Provides connection status verification for HTTP/SSE-based MCP servers
  */
 
 import { MCP_HTTP_VERIFY_TIMEOUT } from './config.js';
@@ -8,11 +8,11 @@ import { log } from './logger.js';
 import { parseSSE, MCP_PROTOCOL_VERSION, MCP_CLIENT_INFO, buildSseRequestContext } from './mcp-protocol.js';
 
 /**
- * 验证 HTTP/SSE 类型 MCP 服务器的连接状态
- * 实现基本的 MCP 初始化握手来验证服务器可用性
- * @param {string} serverName - 服务器名称
- * @param {Object} serverConfig - 服务器配置
- * @returns {Promise<Object>} 服务器状态信息
+ * Verify the connection status of an HTTP/SSE-based MCP server
+ * Performs a basic MCP initialization handshake to check server availability
+ * @param {string} serverName - Server name
+ * @param {Object} serverConfig - Server configuration
+ * @returns {Promise<Object>} Server status info
  */
 export async function verifyHttpServerStatus(serverName, serverConfig) {
   const result = {
@@ -30,7 +30,7 @@ export async function verifyHttpServerStatus(serverName, serverConfig) {
 
   log('info', '[MCP Verify] Verifying HTTP/SSE server:', serverName, 'URL:', url);
 
-  // 创建带超时的控制器
+  // Create an abort controller with timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), MCP_HTTP_VERIFY_TIMEOUT);
 
@@ -66,13 +66,13 @@ export async function verifyHttpServerStatus(serverName, serverConfig) {
 
     const responseText = await response.text();
 
-    // 首先尝试解析为 SSE 格式
+    // Try parsing as SSE format first
     const events = parseSSE(responseText);
     let data;
     if (events.length > 0 && events[0].data) {
       data = events[0].data;
     } else {
-      // 回退到 JSON 解析
+      // Fall back to JSON parsing
       try {
         data = JSON.parse(responseText);
       } catch (parseError) {
@@ -84,13 +84,13 @@ export async function verifyHttpServerStatus(serverName, serverConfig) {
       throw new Error('Server error: ' + (data.error.message || JSON.stringify(data.error)));
     }
 
-    // 检查是否有 serverInfo（某些服务器会返回）
+    // Check for serverInfo (some servers include it)
     if (data.result && data.result.serverInfo) {
       result.status = 'connected';
       result.serverInfo = data.result.serverInfo;
       log('info', '[MCP Verify] HTTP/SSE server connected:', serverName);
     } else if (data.result) {
-      // 服务器返回了有效的 result 但没有 serverInfo，也算连接成功
+      // Server returned a valid result without serverInfo -- still counts as connected
       result.status = 'connected';
       log('info', '[MCP Verify] HTTP/SSE server connected (no serverInfo):', serverName);
     } else {

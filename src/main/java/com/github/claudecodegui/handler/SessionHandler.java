@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 会话管理消息处理器
- * 处理消息发送、中断、重启、新建会话等
+ * Session management message handler.
+ * Handles sending messages, interrupting, restarting, and creating new sessions.
  */
 public class SessionHandler extends BaseMessageHandler {
 
@@ -28,7 +28,7 @@ public class SessionHandler extends BaseMessageHandler {
         "send_message_with_attachments",
         "interrupt_session",
         "restart_session"
-        // 注意：create_new_session 不应该在这里处理，应该由 ClaudeSDKToolWindow.createNewSession() 处理
+        // Note: create_new_session should not be handled here; it should be handled by ClaudeSDKToolWindow.createNewSession()
     };
 
     public SessionHandler(HandlerContext context) {
@@ -85,7 +85,7 @@ public class SessionHandler extends BaseMessageHandler {
             return;
         }
 
-        // 【FIX】Parse JSON format to extract text, agent info and file tags
+        // [FIX] Parse JSON format to extract text, agent info and file tags
         String prompt;
         String agentPrompt = null;
         java.util.List<String> fileTagPaths = null;
@@ -166,8 +166,8 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 发送带附件的消息
-     * 【FIX】Now extracts agent info and file tags from payload
+     * Send message with attachments.
+     * [FIX] Now extracts agent info and file tags from payload.
      */
     private void handleSendMessageWithAttachments(String content) {
         try {
@@ -289,7 +289,7 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 中断会话
+     * Interrupt the current session.
      */
     private void handleInterruptSession() {
         context.getSession().interrupt().thenRun(() -> {
@@ -303,7 +303,7 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 重启会话
+     * Restart the session.
      */
     private void handleRestartSession() {
         context.getSession().restart().thenRun(() -> {
@@ -312,32 +312,32 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 确定合适的工作目录
+     * Determine the appropriate working directory.
      */
     private String determineWorkingDirectory() {
         String projectPath = context.getProject().getBasePath();
 
-        // 如果项目路径无效，回退到用户主目录
+        // If the project path is invalid, fall back to the user home directory
         if (projectPath == null || !new File(projectPath).exists()) {
             String userHome = System.getProperty("user.home");
             LOG.warn("[SessionHandler] Using user home directory as fallback: " + userHome);
             return userHome;
         }
 
-        // 尝试从配置中读取自定义工作目录
+        // Try to read custom working directory from configuration
         try {
             com.github.claudecodegui.CodemossSettingsService settingsService =
                 new com.github.claudecodegui.CodemossSettingsService();
             String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
 
             if (customWorkingDir != null && !customWorkingDir.isEmpty()) {
-                // 如果是相对路径，拼接到项目根路径
+                // If it's a relative path, resolve it against the project root
                 File workingDirFile = new File(customWorkingDir);
                 if (!workingDirFile.isAbsolute()) {
                     workingDirFile = new File(projectPath, customWorkingDir);
                 }
 
-                // 验证目录是否存在
+                // Verify the directory exists
                 if (workingDirFile.exists() && workingDirFile.isDirectory()) {
                     String resolvedPath = workingDirFile.getAbsolutePath();
                     LOG.info("[SessionHandler] Using custom working directory: " + resolvedPath);
@@ -350,7 +350,7 @@ public class SessionHandler extends BaseMessageHandler {
             LOG.warn("[SessionHandler] Failed to read custom working directory: " + e.getMessage());
         }
 
-        // 默认使用项目根路径
+        // Default to the project root path
         return projectPath;
     }
 }

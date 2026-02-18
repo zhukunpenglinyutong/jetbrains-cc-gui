@@ -13,8 +13,8 @@ import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 文件导出处理器
- * 处理文件保存（支持 Markdown、JSON 等格式）
+ * File export handler.
+ * Handles saving files (supports Markdown, JSON, and other formats).
  */
 public class FileExportHandler extends BaseMessageHandler {
 
@@ -51,64 +51,64 @@ public class FileExportHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理保存文件（支持多种格式）
+     * Handle saving a file (supports multiple formats).
      */
     private void handleSaveFile(String jsonContent, String fileExtension, String dialogTitle) {
         try {
             LOG.info("[FileExportHandler] ========== 开始保存文件 ==========");
             LOG.info("[FileExportHandler] 文件类型: " + fileExtension);
 
-            // 解析 JSON
+            // Parse JSON
             JsonObject json = gson.fromJson(jsonContent, JsonObject.class);
             String content = json.get("content").getAsString();
             String filename = json.get("filename").getAsString();
 
             LOG.info("[FileExportHandler] 文件名: " + filename);
 
-            // 在 EDT 线程显示文件对话框并保存
+            // Show file dialog and save on the EDT thread
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
-                    // 获取项目路径作为默认目录
+                    // Get project path as the default directory
                     String projectPath = context.getProject().getBasePath();
 
-                    // 使用 FileDialog 以获得原生系统对话框
+                    // Use FileDialog for a native system dialog
                     FileDialog fileDialog = new FileDialog((Frame) null, dialogTitle, FileDialog.SAVE);
 
-                    // 设置默认目录
+                    // Set default directory
                     if (projectPath != null) {
                         fileDialog.setDirectory(projectPath);
                     }
 
-                    // 设置默认文件名
+                    // Set default filename
                     fileDialog.setFile(filename);
 
-                    // 设置文件过滤器
+                    // Set file filter
                     fileDialog.setFilenameFilter((dir, name) -> name.toLowerCase().endsWith(fileExtension));
 
-                    // 显示对话框
+                    // Show the dialog
                     fileDialog.setVisible(true);
 
-                    // 获取用户选择的文件
+                    // Get the user-selected file
                     String selectedDir = fileDialog.getDirectory();
                     String selectedFile = fileDialog.getFile();
 
                     if (selectedDir != null && selectedFile != null) {
                         File fileToSave = new File(selectedDir, selectedFile);
 
-                        // 确保文件扩展名正确
+                        // Ensure the file extension is correct
                         String path = fileToSave.getAbsolutePath();
                         if (!path.toLowerCase().endsWith(fileExtension)) {
                             fileToSave = new File(path + fileExtension);
                         }
 
-                        // 写入文件 (在后台线程执行IO操作)
+                        // Write the file (perform I/O on a background thread)
                         File finalFileToSave = fileToSave;
                         CompletableFuture.runAsync(() -> {
                             try (FileWriter writer = new FileWriter(finalFileToSave)) {
                                 writer.write(content);
                                 LOG.info("[FileExportHandler] ✅ 文件保存成功: " + finalFileToSave.getAbsolutePath());
 
-                                // 通知前端成功
+                                // Notify frontend of success
                                 ApplicationManager.getApplication().invokeLater(() -> {
                                     String successMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saved"));
                                     String jsCode = "if (window.addToast) { " +
@@ -120,7 +120,7 @@ public class FileExportHandler extends BaseMessageHandler {
                             } catch (IOException e) {
                                 LOG.error("[FileExportHandler] ❌ 保存文件失败: " + e.getMessage(), e);
 
-                                // 通知前端失败
+                                // Notify frontend of failure
                                 ApplicationManager.getApplication().invokeLater(() -> {
                                     String errorDetail = e.getMessage() != null ? e.getMessage() : com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saveFailed");
                                     String errorMsg = escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("file.saveFailedWithReason", errorDetail));

@@ -21,8 +21,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 环境配置器
- * 负责配置进程环境变量
+ * Environment configurator.
+ * Responsible for configuring process environment variables.
  */
 public class EnvironmentConfigurator {
 
@@ -38,13 +38,13 @@ public class EnvironmentConfigurator {
     private volatile Map<String, String> cachedCodexEnvVars = null;
 
     /**
-     * 更新进程的环境变量，确保 PATH 包含 Node.js 所在目录
-     * 支持 Windows (Path) 和 Unix (PATH) 环境变量命名
+     * Updates the process environment variables, ensuring PATH includes the Node.js directory.
+     * Supports both Windows (Path) and Unix (PATH) naming conventions.
      */
     public void updateProcessEnvironment(ProcessBuilder pb, String nodeExecutable) {
         Map<String, String> env = pb.environment();
 
-        // 使用 PlatformUtils 获取 PATH 环境变量（大小写不敏感）
+        // Use PlatformUtils to get the PATH variable (case-insensitive)
         String path = PlatformUtils.isWindows() ?
             PlatformUtils.getEnvIgnoreCase("PATH") :
             env.get("PATH");
@@ -56,7 +56,7 @@ public class EnvironmentConfigurator {
         StringBuilder newPath = new StringBuilder(path);
         String separator = File.pathSeparator;
 
-        // 1. 添加 Node.js 所在目录
+        // 1. Add the directory containing Node.js
         if (nodeExecutable != null && !nodeExecutable.equals("node")) {
             File nodeFile = new File(nodeExecutable);
             String nodeDir = nodeFile.getParent();
@@ -65,9 +65,9 @@ public class EnvironmentConfigurator {
             }
         }
 
-        // 2. 根据平台添加常用路径
+        // 2. Add common paths based on the platform
         if (PlatformUtils.isWindows()) {
-            // Windows 常用路径
+            // Common Windows paths
             String[] windowsPaths = {
                 System.getenv("ProgramFiles") + "\\nodejs",
                 System.getenv("APPDATA") + "\\npm",
@@ -79,7 +79,7 @@ public class EnvironmentConfigurator {
                 }
             }
         } else {
-            // macOS/Linux 常用路径
+            // Common macOS/Linux paths
             String userHome = System.getProperty("user.home");
             String[] unixPaths = {
                 "/usr/local/bin",
@@ -89,9 +89,9 @@ public class EnvironmentConfigurator {
                 "/usr/sbin",
                 "/sbin",
                 userHome + "/.nvm/current/bin",
-                // Python / uv / pip 工具安装目录（uvx, uv 等）
+                // Python / uv / pip tool installation directory (uvx, uv, etc.)
                 userHome + "/.local/bin",
-                // Rust / cargo 工具安装目录
+                // Rust / cargo tool installation directory
                 userHome + "/.cargo/bin",
             };
             for (String p : unixPaths) {
@@ -101,23 +101,23 @@ public class EnvironmentConfigurator {
             }
         }
 
-        // 3. 设置 PATH 环境变量
-        // Windows 需要同时设置 PATH 和 Path（某些程序只识别其中一个）
+        // 3. Set the PATH environment variable
+        // Windows requires setting both PATH and Path (some programs only recognize one)
         String newPathStr = newPath.toString();
         if (PlatformUtils.isWindows()) {
-            // 先移除可能存在的旧值，避免重复
+            // Remove potentially existing old values to avoid duplicates
             env.remove("PATH");
             env.remove("Path");
             env.remove("path");
-            // 同时设置多种大小写形式确保兼容性
+            // Set multiple case variations to ensure compatibility
             env.put("PATH", newPathStr);
             env.put("Path", newPathStr);
         } else {
             env.put("PATH", newPathStr);
         }
 
-        // 4. 确保 HOME 环境变量设置正确
-        // SDK 需要 HOME 环境变量来找到 ~/.claude/commands/ 目录
+        // 4. Ensure the HOME environment variable is set correctly
+        // The SDK needs HOME to locate the ~/.claude/commands/ directory
         String home = env.get("HOME");
         if (home == null || home.isEmpty()) {
             home = System.getProperty("user.home");
@@ -126,8 +126,8 @@ public class EnvironmentConfigurator {
             }
         }
 
-        // 5. 确保 CODEX_HOME 稳定且非空（Codex 用它定位 config/sessions/skills）
-        // macOS GUI 启动场景下环境变量可能缺失，依赖隐式默认值会导致功能探测不稳定（例如 skills tool 时有时无）
+        // 5. Ensure CODEX_HOME is stable and non-empty (Codex uses it to locate config/sessions/skills)
+        // Environment variables may be missing when launched from macOS GUI; relying on implicit defaults causes unstable feature detection (e.g. skills tool appearing intermittently)
         String codexHome = env.get(CODEX_HOME_ENV);
         if (codexHome == null || codexHome.trim().isEmpty()) {
             String userHome = System.getProperty("user.home");
@@ -140,7 +140,7 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * 配置权限环境变量
+     * Configures permission-related environment variables.
      */
     public void configurePermissionEnv(Map<String, String> env) {
         if (env == null) {
@@ -172,7 +172,7 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * 获取权限目录
+     * Gets the permission directory path.
      */
     public String getPermissionDirectory() {
         String cached = this.cachedPermissionDir;
@@ -191,8 +191,8 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * 检查 PATH 中是否已包含指定路径
-     * Windows 下进行大小写不敏感比较
+     * Checks whether the PATH already contains the specified path.
+     * Performs case-insensitive comparison on Windows.
      */
     private boolean pathContains(String pathEnv, String targetPath) {
         if (pathEnv == null || targetPath == null) {
@@ -205,7 +205,7 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * 配置临时目录环境变量
+     * Configures temporary directory environment variables.
      */
     public void configureTempDir(Map<String, String> env, File tempDir) {
         if (env == null || tempDir == null) {
@@ -218,7 +218,7 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * 配置项目路径环境变量
+     * Configures project path environment variables.
      */
     public void configureProjectPath(Map<String, String> env, String cwd) {
         if (env == null || cwd == null || cwd.isEmpty() || "undefined".equals(cwd) || "null".equals(cwd)) {
@@ -229,7 +229,7 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * 配置附件相关环境变量
+     * Configures attachment-related environment variables.
      */
     public void configureAttachmentEnv(Map<String, String> env, boolean hasAttachments) {
         if (env == null) {
@@ -241,7 +241,7 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * 清除缓存
+     * Clears all cached values.
      */
     public void clearCache() {
         this.cachedPermissionDir = null;

@@ -19,30 +19,30 @@ import java.io.IOException;
 import java.util.Collection;
 
 /**
- * Git Commit Message 生成服务
- * 负责生成 AI commit message
+ * Git commit message generation service.
+ * Responsible for generating AI-powered commit messages.
  */
 public class GitCommitMessageService {
 
     private static final Logger LOG = Logger.getInstance(GitCommitMessageService.class);
 
-    private static final int MAX_DIFF_LENGTH = 4000; // 限制 diff 长度避免 token 超限
+    private static final int MAX_DIFF_LENGTH = 4000; // Limit diff length to avoid exceeding token limits
 
     /**
-     * Commit Message 生成使用的默认模型
-     * 使用 Sonnet 模型在成本和质量之间取得平衡
+     * Default model used for commit message generation.
+     * Uses the Sonnet model for a balance between cost and quality.
      */
     private static final String COMMIT_MESSAGE_MODEL = "claude-sonnet-4-20250514";
 
     /**
-     * 默认 AI 提供者
-     * 当前系统默认使用 Claude，未来可扩展为从用户设置读取
+     * Default AI provider.
+     * Currently defaults to Claude; may be extended to read from user settings in the future.
      */
     private static final String DEFAULT_PROVIDER = "claude";
 
     /**
-     * 内置的 Commit 提示词（基于 CCG Commits 规范）
-     * 用户可以通过设置页面附加额外的提示词，会优先遵循用户的附加内容
+     * Built-in commit prompt (based on CCG Commits specification).
+     * Users can append additional prompts via the settings page, which take priority.
      */
     private static final String BUILTIN_COMMIT_PROMPT = """
 你是一个专门负责 GitHub commit 的高级程序员，请你遵循下面内容，生成高质量 commit
@@ -129,7 +129,7 @@ Footer 包含：
 - 包含敏感信息
 """;
 
-    // 用于提取 commit 消息的 XML 标签
+    // XML tags used to extract the commit message
     private static final String COMMIT_TAG_START = "<commit>";
     private static final String COMMIT_TAG_END = "</commit>";
 
@@ -137,7 +137,7 @@ Footer 包含：
     private final CodemossSettingsService settingsService;
 
     /**
-     * Commit Message 生成回调接口
+     * Commit message generation callback interface.
      */
     public interface CommitMessageCallback {
         void onSuccess(String commitMessage);
@@ -150,27 +150,27 @@ Footer 包含：
     }
 
     /**
-     * 生成 commit message
+     * Generate a commit message.
      *
-     * @param changes 选中的文件变更
-     * @param callback 回调接口
+     * @param changes  The selected file changes
+     * @param callback The callback interface
      */
     public void generateCommitMessage(
             @NotNull Collection<Change> changes,
             @NotNull CommitMessageCallback callback
     ) {
         try {
-            // 1. 生成 git diff
+            // 1. Generate git diff
             String diff = generateGitDiff(changes);
             if (diff.isEmpty()) {
                 callback.onError(ClaudeCodeGuiBundle.message("commit.noChangesFound"));
                 return;
             }
 
-            // 2. 构造完整的 prompt（内置提示词 + 用户附加提示词 + diff）
+            // 2. Build the full prompt (built-in prompt + user's additional prompt + diff)
             String fullPrompt = buildFullPrompt(diff);
 
-            // 3. 调用 AI SDK
+            // 3. Call the AI SDK
             callAIService(fullPrompt, callback);
 
         } catch (Exception e) {
@@ -180,7 +180,7 @@ Footer 包含：
     }
 
     /**
-     * 生成 git diff
+     * Generate git diff.
      */
     private String generateGitDiff(@NotNull Collection<Change> changes) {
         StringBuilder diff = new StringBuilder();
@@ -197,7 +197,7 @@ Footer 包含：
                 ContentRevision afterRevision = change.getAfterRevision();
 
                 if (changeType == Change.Type.NEW && afterRevision != null) {
-                    // 新增文件
+                    // New file
                     String content = afterRevision.getContent();
                     if (content != null && content.length() <= 500) {
                         diff.append("+++ ").append(content).append("\n");
@@ -206,10 +206,10 @@ Footer 包含：
                         diff.append(content, 0, Math.min(500, content.length())).append("\n");
                     }
                 } else if (changeType == Change.Type.DELETED && beforeRevision != null) {
-                    // 删除文件
+                    // Deleted file
                     diff.append("--- 文件已删除\n");
                 } else if (changeType == Change.Type.MODIFICATION && beforeRevision != null && afterRevision != null) {
-                    // 修改文件 - 生成简单的 diff
+                    // Modified file - generate simple diff
                     String before = beforeRevision.getContent();
                     String after = afterRevision.getContent();
 
@@ -218,7 +218,7 @@ Footer 包含：
                     }
                 }
 
-                // 限制总长度
+                // Limit total length
                 if (diff.length() > MAX_DIFF_LENGTH) {
                     diff.append("\n... (diff 过长，已截断)");
                     break;
@@ -233,7 +233,7 @@ Footer 包含：
     }
 
     /**
-     * 生成简单的 diff（显示增删的行）
+     * Generate a simple diff (showing added/removed lines).
      */
     private String generateSimpleDiff(String before, String after) {
         String[] beforeLines = before.split("\n");
@@ -242,7 +242,7 @@ Footer 包含：
         StringBuilder diff = new StringBuilder();
         int maxLines = Math.max(beforeLines.length, afterLines.length);
         int shownLines = 0;
-        int maxShownLines = 30; // 最多显示30行
+        int maxShownLines = 30; // Show at most 30 lines
 
         for (int i = 0; i < maxLines && shownLines < maxShownLines; i++) {
             String beforeLine = i < beforeLines.length ? beforeLines[i] : "";
@@ -268,16 +268,16 @@ Footer 包含：
     }
 
     /**
-     * 获取用户附加的提示词（可选）
+     * Get the user's additional prompt (optional).
      */
     private String getUserAdditionalPrompt() {
         try {
             String userPrompt = settingsService.getCommitPrompt();
-            // 如果用户没有设置或者设置的是默认值，返回空
+            // Return empty if the user hasn't configured a prompt or set the default value
             if (userPrompt == null || userPrompt.trim().isEmpty()) {
                 return "";
             }
-            // 如果是旧的默认值，也视为没有设置
+            // Treat the old default value as not configured
             if (userPrompt.equals("你是一个commit提交专员，请你阅读git记录，帮我生成commit记录")) {
                 return "";
             }
@@ -289,16 +289,16 @@ Footer 包含：
     }
 
     /**
-     * 构造完整的 prompt
-     * 逻辑：内置提示词 + 用户附加提示词（优先遵循用户的附加内容）+ git diff
+     * Build the full prompt.
+     * Logic: built-in prompt + user's additional prompt (takes priority) + git diff.
      */
     private String buildFullPrompt(String diff) {
         StringBuilder prompt = new StringBuilder();
 
-        // 1. 添加内置提示词
+        // 1. Add the built-in prompt
         prompt.append(BUILTIN_COMMIT_PROMPT);
 
-        // 2. 添加用户附加的提示词（如果有）
+        // 2. Add the user's additional prompt (if any)
         String userAdditionalPrompt = getUserAdditionalPrompt();
         if (!userAdditionalPrompt.isEmpty()) {
             prompt.append("\n\n## 用户附加要求（优先遵循）\n\n");
@@ -306,14 +306,14 @@ Footer 包含：
             prompt.append(userAdditionalPrompt);
         }
 
-        // 3. 添加 git diff 信息
+        // 3. Add the git diff information
         prompt.append("\n\n---\n\n");
         prompt.append("以下是 git diff 信息，请根据以上规则生成 commit message：\n\n");
         prompt.append("```diff\n");
         prompt.append(diff);
         prompt.append("\n```");
 
-        // 4. 添加输出格式要求（强制使用 XML 标签包裹，方便解析）
+        // 4. Add output format requirements (enforce XML tag wrapping for easy parsing)
         prompt.append("\n\n【输出格式要求 - 必须严格遵守】\n");
         prompt.append("请将 commit message 用 XML 标签包裹输出，格式如下：\n");
         prompt.append("<commit>\n");
@@ -329,10 +329,10 @@ Footer 包含：
     }
 
     /**
-     * 调用 AI 服务
+     * Call the AI service.
      */
     private void callAIService(String prompt, CommitMessageCallback callback) {
-        // 获取当前使用的 provider
+        // Get the current provider
         String currentProvider = getCurrentProvider();
 
         if ("codex".equals(currentProvider)) {
@@ -343,19 +343,19 @@ Footer 包含：
     }
 
     /**
-     * 获取当前使用的 provider
+     * Get the current provider.
      *
-     * 注意：当前始终返回默认 provider (claude)。
-     * 未来扩展时可以从用户设置或会话状态中读取用户偏好的 provider。
+     * Note: Currently always returns the default provider (claude).
+     * In the future, this can be extended to read the user's preferred provider from settings or session state.
      */
     private String getCurrentProvider() {
-        // 未来可扩展：从 CodemossSettingsService 读取用户设置的默认 provider
-        // 例如：return settingsService.getDefaultProvider();
+        // Future extension: read the user's default provider from CodemossSettingsService
+        // e.g.: return settingsService.getDefaultProvider();
         return DEFAULT_PROVIDER;
     }
 
     /**
-     * 调用 Claude API
+     * Call the Claude API.
      */
     private void callClaudeAPI(String prompt, CommitMessageCallback callback) {
         try {

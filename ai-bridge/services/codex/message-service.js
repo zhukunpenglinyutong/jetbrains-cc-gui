@@ -13,7 +13,7 @@
  * @author Crafted with geek spirit
  */
 
-// SDK 动态加载 - 不再静态导入，而是按需加载
+// SDK dynamic loading - loaded on demand instead of static imports
 import { loadCodexSdk, isCodexSdkAvailable } from '../../utils/sdk-loader.js';
 import { CodexPermissionMapper } from '../../utils/permission-mapper.js';
 import { randomUUID } from 'crypto';
@@ -21,7 +21,7 @@ import { existsSync, readFileSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { getRealHomeDir } from '../../utils/path-utils.js';
 
-// SDK 缓存
+// SDK cache
 let codexSdk = null;
 
 // ========== Debug Logging Configuration ==========
@@ -63,7 +63,7 @@ const emitStatusMessage = (emitMessage, message) => {
 };
 
 /**
- * 确保 Codex SDK 已加载
+ * Ensure Codex SDK is loaded.
  */
 async function ensureCodexSdk() {
     if (!codexSdk) {
@@ -80,16 +80,16 @@ async function ensureCodexSdk() {
 
 const MAX_TOOL_RESULT_CHARS = 20000;
 
-// AGENTS.md 最大读取字节数 (32KB，与 Codex CLI 一致)
+// AGENTS.md max read size in bytes (32KB, consistent with Codex CLI)
 const MAX_AGENTS_MD_BYTES = 32 * 1024;
 
-// AGENTS.md 文件名搜索顺序
+// AGENTS.md filename search order
 const AGENTS_FILE_NAMES = ['AGENTS.override.md', 'AGENTS.md', 'CLAUDE.md'];
 
 /**
- * 查找 Git 仓库根目录
- * @param {string} startDir - 起始目录
- * @returns {string|null} Git 根目录或 null
+ * Find the Git repository root directory.
+ * @param {string} startDir - Starting directory
+ * @returns {string|null} Git root directory or null
  */
 function findGitRoot(startDir) {
   let currentDir = startDir;
@@ -102,7 +102,7 @@ function findGitRoot(startDir) {
     }
     const parentDir = dirname(currentDir);
     if (parentDir === currentDir) {
-      // 已到达文件系统根目录
+      // Reached the filesystem root
       break;
     }
     currentDir = parentDir;
@@ -111,9 +111,9 @@ function findGitRoot(startDir) {
 }
 
 /**
- * 在单个目录中搜索 AGENTS.md 文件
- * @param {string} dir - 要搜索的目录
- * @returns {string|null} 找到的文件路径或 null
+ * Search for an AGENTS.md file in a single directory.
+ * @param {string} dir - Directory to search
+ * @returns {string|null} Found file path or null
  */
 function findAgentsFileInDir(dir) {
   for (const fileName of AGENTS_FILE_NAMES) {
@@ -126,16 +126,16 @@ function findAgentsFileInDir(dir) {
         }
       }
     } catch (e) {
-      // 忽略权限错误等
+      // Ignore permission errors, etc.
     }
   }
   return null;
 }
 
 /**
- * 读取 AGENTS.md 文件内容
- * @param {string} filePath - 文件路径
- * @returns {string} 文件内容（可能被截断）
+ * Read the contents of an AGENTS.md file.
+ * @param {string} filePath - File path
+ * @returns {string} File content (may be truncated)
  */
 function readAgentsFile(filePath) {
   try {
@@ -153,14 +153,14 @@ function readAgentsFile(filePath) {
 }
 
 /**
- * 收集所有 AGENTS.md 指令（从项目根目录到当前目录）
+ * Collect all AGENTS.md instructions (from project root to current directory).
  *
- * 搜索规则（与 Codex CLI 一致）：
- * 1. 全局指令: ~/.codex/AGENTS.override.md 或 ~/.codex/AGENTS.md
- * 2. 项目指令: 从 git 根目录到 cwd 的每一层目录
+ * Search rules (consistent with Codex CLI):
+ * 1. Global instructions: ~/.codex/AGENTS.override.md or ~/.codex/AGENTS.md
+ * 2. Project instructions: every directory from git root to cwd
  *
- * @param {string} cwd - 当前工作目录
- * @returns {string} 合并后的指令内容
+ * @param {string} cwd - Current working directory
+ * @returns {string} Merged instruction content
  */
 function collectAgentsInstructions(cwd) {
   if (!cwd || typeof cwd !== 'string') {
@@ -170,7 +170,7 @@ function collectAgentsInstructions(cwd) {
   const instructions = [];
   let totalBytes = 0;
 
-  // 1. 首先读取全局指令 (~/.codex/)
+  // 1. First read global instructions (~/.codex/)
   const codexHome = (process.env.CODEX_HOME && process.env.CODEX_HOME.trim())
     ? process.env.CODEX_HOME.trim()
     : join(getRealHomeDir(), '.codex');
@@ -184,15 +184,15 @@ function collectAgentsInstructions(cwd) {
     }
   }
 
-  // 2. 然后读取项目指令（从 git 根目录到 cwd）
+  // 2. Then read project instructions (from git root to cwd)
   const gitRoot = findGitRoot(cwd);
   const searchRoot = gitRoot || cwd;
 
-  // 收集从 searchRoot 到 cwd 的所有目录
+  // Collect all directories from searchRoot to cwd
   const directories = [];
   let currentDir = cwd;
   while (currentDir) {
-    directories.unshift(currentDir); // 添加到数组开头，保持根到叶的顺序
+    directories.unshift(currentDir); // Add to the beginning to maintain root-to-leaf order
     if (currentDir === searchRoot) {
       break;
     }
@@ -203,7 +203,7 @@ function collectAgentsInstructions(cwd) {
     currentDir = parentDir;
   }
 
-  // 按顺序读取每个目录的 AGENTS.md
+  // Read AGENTS.md from each directory in order
   for (const dir of directories) {
     if (totalBytes >= MAX_AGENTS_MD_BYTES) {
       logInfo('AGENTS.md', `Reached max bytes limit (${MAX_AGENTS_MD_BYTES}), stopping collection`);
@@ -270,10 +270,10 @@ export async function sendMessage(
     console.log('[MESSAGE_START]');
 
     // ============================================================
-    // 1. Initialize Codex SDK (动态加载)
+    // 1. Initialize Codex SDK (dynamic loading)
     // ============================================================
 
-    // 动态加载 Codex SDK
+    // Dynamically load Codex SDK
     const sdk = await ensureCodexSdk();
     const Codex = sdk.Codex || sdk.default || sdk;
 
@@ -376,7 +376,7 @@ export async function sendMessage(
     if (!isResumingThread && cwd) {
       const agentsInstructions = collectAgentsInstructions(cwd);
       if (agentsInstructions) {
-        // 将 AGENTS.md 指令作为系统指令附加到消息前面
+        // Prepend AGENTS.md instructions as system instructions to the message
         finalMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${message}`;
         logDebug('AGENTS.md', `Prepended ${agentsInstructions.length} chars of instructions to message`);
       }
@@ -708,7 +708,7 @@ export async function sendMessage(
         case 'item.completed': {
           if (!event.item) break;
 
-          // 【DEBUG】详细记录 item 信息，帮助诊断
+          // [DEBUG] Log detailed item info for diagnostics
           console.log('[DEBUG] item.completed - type:', event.item.type);
           console.log('[DEBUG] item.completed - has text:', !!event.item.text);
           console.log('[DEBUG] item.completed - has agent_message:', !!event.item.agent_message);

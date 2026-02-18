@@ -9,7 +9,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.util.List;
 
 /**
- * Prompt 提示词库管理消息处理器
+ * Prompt library management message handler.
  */
 public class PromptHandler extends BaseMessageHandler {
 
@@ -57,7 +57,7 @@ public class PromptHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取所有提示词
+     * Get all prompts.
      */
     private void handleGetPrompts() {
         try {
@@ -76,14 +76,14 @@ public class PromptHandler extends BaseMessageHandler {
     }
 
     /**
-     * 添加提示词
+     * Add a prompt.
      */
     private void handleAddPrompt(String content) {
         try {
             JsonObject prompt = gson.fromJson(content, JsonObject.class);
             settingsService.addPrompt(prompt);
 
-            // 刷新列表
+            // Refresh the list
             ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetPrompts();
                 callJavaScript("window.promptOperationResult", escapeJs("{\"success\":true,\"operation\":\"add\"}"));
@@ -101,7 +101,7 @@ public class PromptHandler extends BaseMessageHandler {
     }
 
     /**
-     * 更新提示词
+     * Update a prompt.
      */
     private void handleUpdatePrompt(String content) {
         try {
@@ -123,7 +123,7 @@ public class PromptHandler extends BaseMessageHandler {
 
             settingsService.updatePrompt(id, updates);
 
-            // 刷新列表
+            // Refresh the list
             ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetPrompts();
                 callJavaScript("window.promptOperationResult", escapeJs("{\"success\":true,\"operation\":\"update\"}"));
@@ -141,7 +141,7 @@ public class PromptHandler extends BaseMessageHandler {
     }
 
     /**
-     * 删除提示词
+     * Delete a prompt.
      */
     private void handleDeletePrompt(String content) {
         try {
@@ -158,7 +158,7 @@ public class PromptHandler extends BaseMessageHandler {
             boolean deleted = settingsService.deletePrompt(id);
 
             if (deleted) {
-                // 刷新列表
+                // Refresh the list
                 ApplicationManager.getApplication().invokeLater(() -> {
                     handleGetPrompts();
                     callJavaScript("window.promptOperationResult", escapeJs("{\"success\":true,\"operation\":\"delete\"}"));

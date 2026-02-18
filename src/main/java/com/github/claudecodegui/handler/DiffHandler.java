@@ -29,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Diff 和文件刷新相关消息处理器
+ * Diff and file refresh message handler.
  */
 public class DiffHandler extends BaseMessageHandler {
 
@@ -87,8 +87,8 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
-     * 刷新文件到 IDEA
-     * 使用异步方式和重试机制确保文件能被正确刷新
+     * Refresh a file in IDEA.
+     * Uses async processing and retry mechanisms to ensure the file is properly refreshed.
      */
     private void handleRefreshFile(String content) {
         try {
@@ -102,19 +102,19 @@ public class DiffHandler extends BaseMessageHandler {
 
             LOG.info("Refreshing file: " + filePath);
 
-            // 在后台线程中处理文件刷新
+            // Process file refresh in a background thread
             CompletableFuture.runAsync(() -> {
                 try {
                     File file = new File(filePath);
 
-                    // 添加短暂延迟，等待文件写入完成
+                    // Add a short delay to wait for file write completion
                     try {
                         TimeUnit.MILLISECONDS.sleep(300);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
 
-                    // 如果文件不存在且是相对路径，尝试相对于项目根目录解析
+                    // If the file does not exist and is a relative path, try resolving relative to the project root
                     if (!file.exists() && !file.isAbsolute() && context.getProject().getBasePath() != null) {
                         File projectFile = new File(context.getProject().getBasePath(), filePath);
                         if (projectFile.exists()) {
@@ -129,7 +129,7 @@ public class DiffHandler extends BaseMessageHandler {
 
                     final File finalFile = file;
 
-                    // 使用工具类方法异步刷新并查找文件
+                    // Use utility method to asynchronously refresh and find the file
                     EditorFileUtils.refreshAndFindFileAsync(
                             finalFile,
                             virtualFile -> performFileRefresh(virtualFile, filePath),
@@ -146,12 +146,12 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
-     * 执行文件刷新操作（必须在 UI 线程中调用）
+     * Perform the file refresh operation (must be called on the UI thread).
      */
     private void performFileRefresh(VirtualFile virtualFile, String filePath) {
         try {
-            // 刷新文件系统，让 IDEA 检测到文件变化
-            // IDEA 会自动提示用户是否重新加载，避免强制刷新导致的冲突
+            // Refresh the file system so IDEA detects the file change.
+            // IDEA will automatically prompt the user to reload, avoiding conflicts from forced refresh.
             virtualFile.refresh(false, false);
 
             LOG.info("File refreshed successfully: " + filePath);
@@ -161,7 +161,7 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示 Diff 视图
+     * Show the diff view.
      */
     private void handleShowDiff(String content) {
         try {
@@ -178,13 +178,13 @@ public class DiffHandler extends BaseMessageHandler {
                     String fileName = new File(filePath).getName();
                     FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
 
-                    // 创建 Diff 内容
+                    // Create diff content
                     DiffContent leftContent = DiffContentFactory.getInstance()
                         .create(context.getProject(), oldContent, fileType);
                     DiffContent rightContent = DiffContentFactory.getInstance()
                         .create(context.getProject(), newContent, fileType);
 
-                    // 创建 Diff 请求
+                    // Create diff request
                     String diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.fileChange", fileName);
                     SimpleDiffRequest diffRequest = new SimpleDiffRequest(
                         diffTitle,
@@ -194,7 +194,7 @@ public class DiffHandler extends BaseMessageHandler {
                         ClaudeCodeGuiBundle.message("diff.editAfter", fileName)
                     );
 
-                    // 显示 Diff 窗口
+                    // Show diff window
                     DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
 
                     LOG.info("Diff view opened for: " + filePath);
@@ -208,7 +208,7 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示多处编辑的 Diff 视图
+     * Show diff view for multiple edits.
      */
     private void handleShowMultiEditDiff(String content) {
         try {
@@ -221,7 +221,7 @@ public class DiffHandler extends BaseMessageHandler {
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
-                    // 获取文件当前内容
+                    // Get current file content
                     String afterContent = currentContent;
                     if (afterContent == null) {
                         File file = new File(filePath);
@@ -239,19 +239,19 @@ public class DiffHandler extends BaseMessageHandler {
                         return;
                     }
 
-                    // 反向重建编辑前内容
+                    // Reverse-rebuild content before edits
                     String beforeContent = ContentRebuildUtil.rebuildBeforeContent(afterContent, edits);
 
                     String fileName = new File(filePath).getName();
                     FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
 
-                    // 创建 Diff 内容
+                    // Create diff content
                     DiffContent leftContent = DiffContentFactory.getInstance()
                         .create(context.getProject(), beforeContent, fileType);
                     DiffContent rightContent = DiffContentFactory.getInstance()
                         .create(context.getProject(), afterContent, fileType);
 
-                    // 创建 Diff 请求
+                    // Create diff request
                     String diffTitle = ClaudeCodeGuiBundle.message("diff.tabName", fileName, edits.size());
                     SimpleDiffRequest diffRequest = new SimpleDiffRequest(
                         diffTitle,
@@ -261,7 +261,7 @@ public class DiffHandler extends BaseMessageHandler {
                         fileName + " (修改后)"
                     );
 
-                    // 显示 Diff 窗口
+                    // Show diff window
                     DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
 
                     LOG.info("Multi-edit diff view opened for: " + filePath);
@@ -275,9 +275,9 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示可编辑的 Diff 视图
-     * 用户可以在 diff 视图中选择性接受或拒绝更改
-     * 使用新的 InteractiveDiffManager 实现，带有 Apply/Reject 按钮
+     * Show an editable diff view.
+     * Users can selectively accept or reject changes in the diff view.
+     * Uses the InteractiveDiffManager implementation with Apply/Reject buttons.
      */
     private void handleShowEditableDiff(String content) {
         try {
@@ -400,8 +400,8 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示编辑预览 Diff（当前内容 → 应用编辑后的内容）
-     * 用于在执行编辑前预览效果
+     * Show edit preview diff (current content -> content after applying edits).
+     * Used to preview the effect before executing edits.
      */
     private void handleShowEditPreviewDiff(String content) {
         try {
@@ -488,8 +488,8 @@ public class DiffHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示完整文件 Diff（原始内容 → 修改后的内容）
-     * 用于展示修改前后的完整文件对比
+     * Show full file diff (original content -> modified content).
+     * Used to display a complete file comparison before and after modification.
      */
     private void handleShowEditFullDiff(String content) {
         try {
@@ -523,11 +523,11 @@ public class DiffHandler extends BaseMessageHandler {
                     String afterContent;
 
                     if (originalContent != null && !originalContent.isEmpty()) {
-                        // 有缓存的原始内容：展示完整文件 Diff
+                        // Cached original content available: show full file diff
                         LOG.info("Using cached original content for full file diff");
                         beforeContent = originalContent;
 
-                        // 计算修改后的内容：在原始内容上应用 oldString → newString 替换
+                        // Calculate modified content: apply oldString -> newString replacement on the original content
                         if (replaceAll) {
                             afterContent = beforeContent.replace(oldString, newString);
                         } else {
@@ -535,7 +535,7 @@ public class DiffHandler extends BaseMessageHandler {
                             if (index >= 0) {
                                 afterContent = beforeContent.substring(0, index) + newString + beforeContent.substring(index + oldString.length());
                             } else {
-                                // oldString 不在原始内容中，使用当前文件内容
+                                // oldString not found in original content, use current file content
                                 if (file != null) {
                                     try {
                                         afterContent = new String(file.contentsToByteArray(), file.getCharset());
@@ -548,7 +548,7 @@ public class DiffHandler extends BaseMessageHandler {
                             }
                         }
                     } else {
-                        // 没有缓存的原始内容：只展示编辑部分（oldString → newString）
+                        // No cached original content: show only the edit portion (oldString -> newString)
                         LOG.info("No cached content, showing edit-only diff");
                         beforeContent = oldString;
                         afterContent = newString;

@@ -6,8 +6,8 @@ import com.github.claudecodegui.permission.PermissionRequest;
 import java.util.List;
 
 /**
- * 回调处理器
- * 负责处理会话的各种回调通知
+ * Callback handler.
+ * Dispatches various session callback notifications.
  */
 public class CallbackHandler {
     private ClaudeSession.SessionCallback callback;
@@ -17,7 +17,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知消息更新
+     * Notify of a message update.
      */
     public void notifyMessageUpdate(List<ClaudeSession.Message> messages) {
         if (callback != null) {
@@ -26,7 +26,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知状态更新
+     * Notify of a state change.
      */
     public void notifyStateChange(boolean busy, boolean loading, String error) {
         if (callback != null) {
@@ -44,7 +44,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知会话ID接收
+     * Notify that a session ID was received.
      */
     public void notifySessionIdReceived(String sessionId) {
         if (callback != null) {
@@ -53,7 +53,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知权限请求
+     * Notify of a permission request.
      */
     public void notifyPermissionRequested(PermissionRequest request) {
         if (callback != null) {
@@ -62,7 +62,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知思考状态变化
+     * Notify of a thinking status change.
      */
     public void notifyThinkingStatusChanged(boolean isThinking) {
         if (callback != null) {
@@ -71,7 +71,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知斜杠命令接收
+     * Notify that slash commands were received.
      */
     public void notifySlashCommandsReceived(List<String> slashCommands) {
         if (callback != null) {
@@ -80,7 +80,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知 Node.js 日志（转发到前端 console）
+     * Notify of a Node.js log (forwarded to frontend console).
      */
     public void notifyNodeLog(String log) {
         if (callback != null) {
@@ -92,10 +92,10 @@ public class CallbackHandler {
             callback.onSummaryReceived(summary);
         }
     }
-    // ===== 🔧 流式传输通知方法 =====
+    // ===== Streaming notification methods =====
 
     /**
-     * 通知流式传输开始
+     * Notify that streaming has started.
      */
     public void notifyStreamStart() {
         if (callback != null) {
@@ -104,7 +104,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知流式传输结束
+     * Notify that streaming has ended.
      */
     public void notifyStreamEnd() {
         if (callback != null) {
@@ -113,7 +113,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知内容增量（已在现有的 onContentDelta 中处理）
+     * Notify of a content delta (handled by the existing onContentDelta callback).
      */
     public void notifyContentDelta(String delta) {
         if (callback != null) {
@@ -122,7 +122,7 @@ public class CallbackHandler {
     }
 
     /**
-     * 通知思考增量
+     * Notify of a thinking delta.
      */
     public void notifyThinkingDelta(String delta) {
         if (callback != null) {

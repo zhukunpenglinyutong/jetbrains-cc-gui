@@ -1,6 +1,6 @@
 /**
- * STDIO 工具获取模块
- * 提供从 STDIO 类型 MCP 服务器获取工具列表的功能
+ * STDIO tools retrieval module
+ * Provides tool listing from STDIO-based MCP servers
  */
 
 import { spawn } from 'child_process';
@@ -11,11 +11,11 @@ import { safeKillProcess } from './process-manager.js';
 import { MCP_PROTOCOL_VERSION, MCP_CLIENT_INFO } from './mcp-protocol.js';
 
 /**
- * 获取 STDIO 类型服务器的工具列表
- * 实现正确的 MCP STDIO 初始化流程：initialize → initialized → tools/list
- * @param {string} serverName - 服务器名称
- * @param {Object} serverConfig - 服务器配置
- * @returns {Promise<Object>} 工具列表响应
+ * Retrieve the tool list from an STDIO-based server
+ * Follows the proper MCP STDIO handshake: initialize -> initialized -> tools/list
+ * @param {string} serverName - Server name
+ * @param {Object} serverConfig - Server configuration
+ * @returns {Promise<Object>} Tools list response
  */
 export async function getStdioServerTools(serverName, serverConfig) {
   return new Promise((resolve) => {
@@ -39,7 +39,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
       return;
     }
 
-    // 验证命令白名单（仅警告，不阻止）
+    // Validate against command whitelist (warn only, don't block)
     const validation = validateCommand(command);
     if (!validation.valid) {
       log('warn', `[MCP Tools] Non-whitelisted command for ${serverName}: ${command} (${validation.reason})`);
@@ -49,7 +49,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
     log('info', '[MCP Tools] Getting tools for STDIO server:', serverName);
     log('debug', '[MCP Tools] Command:', command, 'Args:', args.length ? args.join(' ') : '(none)');
 
-    // 状态机：0=未初始化, 1=等待initialize响应, 2=已初始化, 3=等待tools/list响应
+    // State machine: 0=uninitialized, 1=awaiting initialize response, 2=initialized, 3=awaiting tools/list response
     const state = {
       step: 0,
       buffer: ''
@@ -72,13 +72,13 @@ export async function getStdioServerTools(serverName, serverConfig) {
       resolve(result);
     };
 
-    // 使用配置的超时时间
+    // Apply the configured timeout
     const timeoutId = setTimeout(() => {
       finalize(null, `Timeout after ${MCP_TOOLS_TIMEOUT / 1000}s`);
     }, MCP_TOOLS_TIMEOUT);
 
     try {
-      // Windows 下某些命令需要使用 shell
+      // Some commands on Windows require a shell
       const useShell = process.platform === 'win32' &&
                       (command.endsWith('.cmd') || command.endsWith('.bat') ||
                        command === 'npx' || command === 'npm' ||
@@ -87,7 +87,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
       const spawnOptions = {
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
-        // Windows 下隐藏命令行窗口
+        // Hide the console window on Windows
         windowsHide: true
       };
 
@@ -103,7 +103,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
       return;
     }
 
-    // 处理 stdout - MCP 协议消息
+    // Handle stdout - MCP protocol messages
     child.stdout.on('data', (data) => {
       state.buffer += data.toString();
 
@@ -118,7 +118,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
         try {
           const response = JSON.parse(line);
 
-          // 阶段 1：收到 initialize 响应 (id=1)
+          // Phase 1: Received initialize response (id=1)
           if (state.step === 1 && response.id === 1) {
             if (response.error) {
               finalize(null, 'Initialize error: ' + (response.error.message || JSON.stringify(response.error)));
@@ -127,7 +127,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
             if (response.result) {
               log('info', '[MCP Tools] ' + serverName + ' received initialize response');
 
-              // 发送 initialized 通知
+              // Send the initialized notification
               const initializedNotification = JSON.stringify({
                 jsonrpc: '2.0',
                 method: 'notifications/initialized'
@@ -137,7 +137,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
 
               state.step = 2;
 
-              // 立即发送 tools/list 请求
+              // Immediately send the tools/list request
               const toolsListRequest = JSON.stringify({
                 jsonrpc: '2.0',
                 id: 2,
@@ -149,7 +149,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
               state.step = 3;
             }
           }
-          // 阶段 3：收到 tools/list 响应 (id=2)
+          // Phase 3: Received tools/list response (id=2)
           else if (state.step === 3 && response.id === 2) {
             if (response.error) {
               finalize(null, 'Tools/list error: ' + (response.error.message || JSON.stringify(response.error)));
@@ -166,7 +166,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
               return;
             }
           }
-          // 处理其他错误响应
+          // Handle other error responses
           else if (response.error) {
             finalize(null, 'Server error: ' + (response.error.message || JSON.stringify(response.error)));
             return;
@@ -177,10 +177,10 @@ export async function getStdioServerTools(serverName, serverConfig) {
       }
     });
 
-    // 处理 stderr - 用于调试
+    // Handle stderr - used for debugging
     child.stderr.on('data', (data) => {
       stderrBuffer += data.toString();
-      // 只保留最后 500 字符的错误信息
+      // Keep only the last 500 characters of error output
       if (stderrBuffer.length > 500) {
         stderrBuffer = stderrBuffer.substring(stderrBuffer.length - 500);
       }
@@ -201,7 +201,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
       }
     });
 
-    // 发送 initialize 请求
+    // Send the initialize request
     process.nextTick(() => {
       if (child && child.stdin && !child.stdin.destroyed) {
         const initRequest = JSON.stringify({
