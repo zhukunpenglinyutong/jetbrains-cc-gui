@@ -80,6 +80,7 @@
     "disabled": "Désactivé",
     "sdkNotInstalled": "{{provider}} SDK n'est pas installé. Veuillez installer le SDK pour commencer à discuter.",
     "sdkStatusLoading": "Checking SDK status...",
+    "openSourceBanner": "Ce projet est garanti 100% open source pour toujours. N'hésitez pas à l'utiliser !",
     "goInstallSdk": "Aller installer",
     "commandNotImplemented": "La fonctionnalité `{{command}}` n'est pas encore implémentée.",
     "clearCommandDescription": "Effacer l'historique et démarrer une nouvelle session",

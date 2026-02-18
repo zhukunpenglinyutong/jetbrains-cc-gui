@@ -120,6 +120,16 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
   ) => {
     const { t } = useTranslation();
 
+    // Open source banner state (show once, dismiss permanently)
+    const BANNER_DISMISSED_KEY = 'openSourceBannerDismissed';
+    const [showOpenSourceBanner, setShowOpenSourceBanner] = useState(
+      () => !localStorage.getItem(BANNER_DISMISSED_KEY)
+    );
+    const handleDismissOpenSourceBanner = useCallback(() => {
+      localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
+      setShowOpenSourceBanner(false);
+    }, []);
+
     // Internal attachments state (if not provided externally)
     const [internalAttachments, setInternalAttachments] = useState<Attachment[]>([]);
     const attachments = externalAttachments ?? internalAttachments;
@@ -753,6 +763,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           onToggleStatusPanel={onToggleStatusPanel}
           messageQueue={messageQueue}
           onRemoveFromQueue={onRemoveFromQueue}
+          showOpenSourceBanner={showOpenSourceBanner}
+          onDismissOpenSourceBanner={handleDismissOpenSourceBanner}
         />
 
         {/* Input area */}

@@ -80,6 +80,7 @@
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
     "sdkStatusLoading": "Checking SDK status...",
+    "openSourceBanner": "This project is guaranteed to be 100% open source forever. Feel free to use it!",
     "goInstallSdk": "Go to Install",
     "commandNotImplemented": "`{{command}}` feature is not yet implemented.",
     "clearCommandDescription": "Clear conversation history and start a new session",
