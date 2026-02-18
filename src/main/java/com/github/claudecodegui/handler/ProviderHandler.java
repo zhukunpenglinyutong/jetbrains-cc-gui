@@ -236,7 +236,7 @@ public class ProviderHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to add provider: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("添加供应商失败: " + e.getMessage()));
+                callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.addFailed", e.getMessage())));
             });
         }
     }
@@ -272,7 +272,7 @@ public class ProviderHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to update provider: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("更新供应商失败: " + e.getMessage()));
+                callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.updateFailed", e.getMessage())));
             });
         }
     }
@@ -292,7 +292,7 @@ public class ProviderHandler extends BaseMessageHandler {
             if (!data.has("id")) {
                 LOG.error("[ProviderHandler] ERROR: Missing 'id' field in request");
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("window.showError", escapeJs("删除失败: 请求中缺少供应商 ID"));
+                    callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.deleteMissingId")));
                 });
                 return;
             }
@@ -321,7 +321,7 @@ public class ProviderHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Exception in handleDeleteProvider: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("删除供应商失败: " + e.getMessage()));
+                callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.deleteFailed", e.getMessage())));
             });
         }
 
@@ -388,7 +388,7 @@ public class ProviderHandler extends BaseMessageHandler {
             context.getSettingsService().applyActiveProviderToClaudeSettings();
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showSwitchSuccess", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + "\n\n已自动同步到 ~/.claude/settings.json，下一次提问将使用新的配置。"));
+                callJavaScript("window.showSwitchSuccess", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.switchSyncClaude")));
                 handleGetProviders();
                 handleGetCurrentClaudeConfig();
                 handleGetActiveProvider();
@@ -436,13 +436,9 @@ public class ProviderHandler extends BaseMessageHandler {
             LOG.info("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
 
             if (!dbFile.exists()) {
-                String errorMsg = "未找到 cc-switch 数据库文件\n" +
-                                 "路径: " + dbFile.getAbsolutePath() + "\n" +
-                                 "您可以主动选择cc-switch.db文件进行导入，或者检查：:\n" +
-                                 "1. 已安装 cc-switch 3.8.2 及以上版本\n" +
-                                 "2. 至少配置过一个 Claude 供应商";
+                String errorMsg = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.notFound", dbFile.getAbsolutePath());
                 LOG.error("[ProviderHandler] " + errorMsg);
-                sendErrorToFrontend("文件未找到", errorMsg);
+                sendErrorToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.notFoundTitle"), errorMsg);
                 return;
             }
 
@@ -453,8 +449,8 @@ public class ProviderHandler extends BaseMessageHandler {
                     List<JsonObject> providers = context.getSettingsService().parseProvidersFromCcSwitchDb(dbFile.getPath());
 
                     if (providers.isEmpty()) {
-                        LOG.info("[ProviderHandler] 数据库中没有找到 Claude 供应商配置");
-                        sendInfoToFrontend("无数据", "未在数据库中找到有效的 Claude 供应商配置。");
+                        LOG.info("[ProviderHandler] No Claude provider configs found in database");
+                        sendInfoToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.noDataTitle"), com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.noData"));
                         return;
                     }
 
@@ -467,36 +463,35 @@ public class ProviderHandler extends BaseMessageHandler {
                     response.add("providers", providersArray);
 
                     String jsonStr = gson.toJson(response);
-                    LOG.info("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
+                    LOG.info("[ProviderHandler] Successfully read " + providers.size() + " provider configs");
                     callJavaScript("import_preview_result", escapeJs(jsonStr));
 
                 } catch (Exception e) {
-                    String errorDetails = "读取数据库失败: " + e.getMessage();
+                    String errorDetails = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.readFailed") + ": " + e.getMessage();
                     LOG.error("[ProviderHandler] " + errorDetails, e);
-                    sendErrorToFrontend("读取数据库失败", errorDetails);
+                    sendErrorToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.readFailedTitle"), errorDetails);
                 }
             });
         });
     }
 
     /**
-     * 打开文件选择器选择 cc-switch 数据库文件
+     * Open file chooser for cc-switch database file
      */
     private void handleOpenFileChooserForCcSwitch() {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
-                // 创建文件选择器描述符
                 FileChooserDescriptor descriptor = new FileChooserDescriptor(
-                    true,   // chooseFiles - 允许选择文件
-                    false,  // chooseFolders - 不允许选择文件夹
-                    false,  // chooseJars - 不允许选择 JAR
-                    false,  // chooseJarsAsFiles - 不将 JAR 当作文件
-                    false,  // chooseJarContents - 不允许选择 JAR 内容
-                    false   // chooseMultiple - 不允许多选
+                    true,   // chooseFiles
+                    false,  // chooseFolders
+                    false,  // chooseJars
+                    false,  // chooseJarsAsFiles
+                    false,  // chooseJarContents
+                    false   // chooseMultiple
                 );
 
-                descriptor.setTitle("选择 cc-switch 数据库文件");
-                descriptor.setDescription("请选择 cc-switch.db 或其副本文件");
+                descriptor.setTitle(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.selectTitle"));
+                descriptor.setDescription(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.selectDesc"));
                 descriptor.withFileFilter(file -> {
                     String name = file.getName().toLowerCase();
                     return name.endsWith(".db");
@@ -522,8 +517,8 @@ public class ProviderHandler extends BaseMessageHandler {
                 );
 
                 if (selectedFiles.length == 0) {
-                    LOG.info("[ProviderHandler] 用户取消了文件选择");
-                    sendInfoToFrontend("已取消", "未选择文件");
+                    LOG.info("[ProviderHandler] User cancelled file selection");
+                    sendInfoToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.cancelledTitle"), com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.cancelled"));
                     return;
                 }
 
@@ -535,19 +530,18 @@ public class ProviderHandler extends BaseMessageHandler {
                 LOG.info("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
 
                 if (!dbFile.exists()) {
-                    String errorMsg = "未找到数据库文件\n" +
-                                     "路径: " + dbFile.getAbsolutePath();
+                    String errorMsg = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.notFound", dbFile.getAbsolutePath());
                     LOG.error("[ProviderHandler] " + errorMsg);
-                    sendErrorToFrontend("文件未找到", errorMsg);
+                    sendErrorToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.notFoundTitle"), errorMsg);
                     return;
                 }
 
                 if (!dbFile.canRead()) {
                     String errorMsg = com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.cannotReadFile") + "\n" +
-                                     "路径: " + dbFile.getAbsolutePath() + "\n" +
+                                     dbFile.getAbsolutePath() + "\n" +
                                      com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.checkFilePermissions");
                     LOG.error("[ProviderHandler] " + errorMsg);
-                    sendErrorToFrontend("权限错误", errorMsg);
+                    sendErrorToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.permissionErrorTitle"), errorMsg);
                     return;
                 }
 
@@ -559,8 +553,8 @@ public class ProviderHandler extends BaseMessageHandler {
                         List<JsonObject> providers = context.getSettingsService().parseProvidersFromCcSwitchDb(dbFile.getPath());
 
                         if (providers.isEmpty()) {
-                            LOG.info("[ProviderHandler] 数据库中没有找到 Claude 供应商配置");
-                            sendInfoToFrontend("无数据", "未在数据库中找到有效的 Claude 供应商配置。");
+                            LOG.info("[ProviderHandler] No Claude provider configs found in database");
+                            sendInfoToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.noDataTitle"), com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.noData"));
                             return;
                         }
 
@@ -577,16 +571,16 @@ public class ProviderHandler extends BaseMessageHandler {
                         callJavaScript("import_preview_result", escapeJs(jsonStr));
 
                     } catch (Exception e) {
-                        String errorDetails = "读取数据库失败: " + e.getMessage();
+                        String errorDetails = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.readFailed") + ": " + e.getMessage();
                         LOG.error("[ProviderHandler] " + errorDetails, e);
-                        sendErrorToFrontend("读取数据库失败", errorDetails);
+                        sendErrorToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.readFailedTitle"), errorDetails);
                     }
                 });
 
             } catch (Exception e) {
-                String errorDetails = "打开文件选择器失败: " + e.getMessage();
+                String errorDetails = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.fileChooserFailed") + ": " + e.getMessage();
                 LOG.error("[ProviderHandler] " + errorDetails, e);
-                sendErrorToFrontend("文件选择失败", errorDetails);
+                sendErrorToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.fileChooserFailedTitle"), errorDetails);
             }
         });
     }
@@ -616,12 +610,12 @@ public class ProviderHandler extends BaseMessageHandler {
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     handleGetProviders(); // 刷新界面
-                    sendInfoToFrontend("导入成功", "成功导入 " + count + " 个配置。");
+                    sendInfoToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.importSuccessTitle"), com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.importSuccess", count));
                 });
 
             } catch (Exception e) {
                 LOG.error("Failed to save imported providers", e);
-                sendErrorToFrontend("保存失败", e.getMessage());
+                sendErrorToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.saveFailedTitle"), e.getMessage());
             }
         });
     }
@@ -693,7 +687,7 @@ public class ProviderHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to add Codex provider: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("添加 Codex 供应商失败: " + e.getMessage()));
+                callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.addCodexFailed", e.getMessage())));
             });
         }
     }
@@ -729,7 +723,7 @@ public class ProviderHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to update Codex provider: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("更新 Codex 供应商失败: " + e.getMessage()));
+                callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.updateCodexFailed", e.getMessage())));
             });
         }
     }
@@ -749,7 +743,7 @@ public class ProviderHandler extends BaseMessageHandler {
             if (!data.has("id")) {
                 LOG.error("[ProviderHandler] ERROR: Missing 'id' field in request");
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("window.showError", escapeJs("删除失败: 请求中缺少供应商 ID"));
+                    callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.deleteCodexMissingId")));
                 });
                 return;
             }
@@ -775,7 +769,7 @@ public class ProviderHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Exception in handleDeleteCodexProvider: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("删除 Codex 供应商失败: " + e.getMessage()));
+                callJavaScript("window.showError", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.deleteCodexFailed", e.getMessage())));
             });
         }
 
@@ -795,7 +789,7 @@ public class ProviderHandler extends BaseMessageHandler {
             context.getSettingsService().applyActiveProviderToCodexSettings();
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showSwitchSuccess", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + "\n\n已自动同步到 ~/.codex/，下一次提问将使用新的配置。"));
+                callJavaScript("window.showSwitchSuccess", escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.switchSyncCodex")));
                 handleGetCodexProviders(); // Refresh provider list
                 handleGetCurrentCodexConfig(); // Refresh Codex CLI config display
                 handleGetActiveCodexProvider(); // Refresh active provider config

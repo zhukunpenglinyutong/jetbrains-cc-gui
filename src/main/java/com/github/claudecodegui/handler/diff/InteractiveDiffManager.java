@@ -23,6 +23,7 @@ import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.fileTypes.FileTypes;
 import com.github.claudecodegui.util.LineSeparatorUtil;
+import com.github.claudecodegui.ClaudeCodeGuiBundle;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -153,13 +154,13 @@ public class InteractiveDiffManager {
         }
 
         // Create diff request
-        String leftTitle = request.isNewFile() ? "New File" : "Original (before edit)";
+        String leftTitle = request.isNewFile() ? ClaudeCodeGuiBundle.message("diff.newFileTitle") : ClaudeCodeGuiBundle.message("diff.originalTitle");
         SimpleDiffRequest diffRequest = new SimpleDiffRequest(
                 request.getTabName(),
                 originalDiffContent,
                 proposedDiffContent,
                 leftTitle,
-                "Proposed"
+                ClaudeCodeGuiBundle.message("diff.proposedTitle")
         );
 
         // Set read-only flags: left=true, right=false
@@ -189,7 +190,7 @@ public class InteractiveDiffManager {
         diffRequest.putUserData(DiffUserDataKeysEx.CONTEXT_ACTIONS, actions);
 
         // Create bottom panel with buttons
-        JButton rejectButton = new JButton("Reject");
+        JButton rejectButton = new JButton(ClaudeCodeGuiBundle.message("diff.reject"));
         rejectButton.setIcon(AllIcons.Actions.Cancel);
         rejectButton.setMaximumSize(rejectButton.getPreferredSize());
         rejectButton.addActionListener(e -> {
@@ -201,7 +202,7 @@ public class InteractiveDiffManager {
             }
         });
 
-        JButton applyButton = new JButton("Apply");
+        JButton applyButton = new JButton(ClaudeCodeGuiBundle.message("diff.apply"));
         applyButton.setIcon(AllIcons.Actions.Checked);
         applyButton.setMaximumSize(applyButton.getPreferredSize());
         applyButton.addActionListener(e -> {
@@ -303,7 +304,7 @@ public class InteractiveDiffManager {
             CompletableFuture<DiffResult> resultFuture,
             MessageBusConnection connection
     ) {
-        return new AnAction("Reject", "Reject the proposed changes", AllIcons.Actions.Cancel) {
+        return new AnAction(ClaudeCodeGuiBundle.message("diff.reject"), ClaudeCodeGuiBundle.message("diff.reject.description"), AllIcons.Actions.Cancel) {
             @Override
             @RequiresEdt
             public void actionPerformed(@NotNull AnActionEvent e) {
@@ -327,7 +328,7 @@ public class InteractiveDiffManager {
             LightVirtualFile proposedFile,
             MessageBusConnection connection
     ) {
-        return new AnAction("Apply", "Apply the proposed changes", AllIcons.Actions.Checked) {
+        return new AnAction(ClaudeCodeGuiBundle.message("diff.apply"), ClaudeCodeGuiBundle.message("diff.apply.description"), AllIcons.Actions.Checked) {
             @Override
             @RequiresEdt
             public void actionPerformed(@NotNull AnActionEvent e) {

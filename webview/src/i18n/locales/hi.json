@@ -21,7 +21,8 @@
     "warning": "चेतावनी",
     "info": "जानकारी",
     "seconds": "से",
-    "minutes": "मि"
+    "minutes": "मि",
+    "optional": "Optional"
   },
   "chat": {
     "sendMessage": "{{provider}} को संदेश भेजें",
@@ -36,6 +37,8 @@
     "inputPlaceholder": "@फाइल संदर्भ, #एजेंट बुलाएं, Enter भेजने के लिए",
     "inputPlaceholderEnter": "@फाइल संदर्भ, #एजेंट बुलाएं, Enter भेजने के लिए",
     "inputPlaceholderCmdEnter": "@फाइल संदर्भ, #एजेंट बुलाएं, ⌘Enter भेजने के लिए",
+    "noThinkingContent": "कोई सोच सामग्री नहीं",
+    "parseError": "सामग्री पार्स करने में विफल",
     "sendMessageEnter": "संदेश भेजें (Enter)",
     "currentMode": "वर्तमान मोड: {{mode}}",
     "currentModel": "वर्तमान मॉडल: {{model}}",
@@ -51,8 +54,6 @@
     "context": "संदर्भ",
     "usage": "उपयोग",
     "usagePercentage": "उपयोग: {{percentage}}",
-    "noThinkingContent": "कोई सोच सामग्री नहीं",
-    "parseError": "सामग्री पार्स करने में विफल",
     "noMatchingFiles": "कोई मेल खाने वाली फाइलें नहीं",
     "noMatchingCommands": "कोई मेल खाने वाली कमांड नहीं",
     "noMatchingHistory": "कोई मेल खाने वाली इतिहास नहीं",
@@ -66,6 +67,7 @@
     "clickToEnable": "सक्षम करने के लिए क्लिक करें",
     "copyHomepageLink": "होमपेज लिंक कॉपी करें",
     "copyDocsLink": "डॉक्स लिंक कॉपी करें",
+    "copyConfig": "Copy config",
     "editConfig": "कॉन्फ़िग एडिट करें",
     "deleteServer": "सर्वर हटाएं",
     "loadingFailed": "लोडिंग विफल",
@@ -77,10 +79,12 @@
     "localProject": "स्थानीय",
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
+    "sdkStatusLoading": "Checking SDK status...",
     "goInstallSdk": "इंस्टॉल करने जाएं",
     "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
     "clearCommandDescription": "बातचीत इतिहास साफ़ करें और नया सत्र शुरू करें",
     "attachmentFile": "[अटैचमेंट: {{fileName}}]",
+    "unknownFile": "Unknown file",
     "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
     "streamingConnected": "Claude कनेक्ट हो गया, आपके प्रश्न को समझ रहा है"
   },
@@ -91,6 +95,8 @@
       "description": "पेज थीम, भाषा और Node.js रनटाइम वातावरण कॉन्फ़िगर करें",
       "theme": {
         "label": "इंटरफ़ेस थीम",
+        "system": "Follow IDE",
+        "systemDesc": "Automatically follow IDE theme",
         "light": "लाइट",
         "lightDesc": "ताज़ा और उज्ज्वल, दिन के उपयोग के लिए उपयुक्त",
         "dark": "डार्क",
@@ -115,6 +121,11 @@
         "hintText": "वास्तविक Node.js निष्पादन योग्य फ़ाइल पथ प्राप्त करें। खाली होने पर प्लगइन स्वचालित रूप से Node.js का पता लगाने का प्रयास करेगा।",
         "versionTooLow": "Node.js संस्करण बहुत पुराना है। प्लगइन को ठीक से चलाने के लिए v{{minVersion}} या उच्चतर की आवश्यकता है"
       },
+      "workingDirectory": {
+        "label": "Working Directory",
+        "placeholder": "e.g. project1 or leave empty to use project root",
+        "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
+      },
       "fontSize": {
         "label": "फ़ॉन्ट आकार",
         "level1": "छोटा (80%)",
@@ -127,6 +138,18 @@
       "editorFont": {
         "label": "फ़ॉन्ट (संपादक फ़ॉन्ट का अनुसरण करता है)",
         "hint": "यहाँ संपादन योग्य नहीं है। संशोधित करने के लिए, IDEA सेटिंग्स → संपादक → फ़ॉन्ट पर जाएं (प्लगइन फ़ॉन्ट प्रभावी होने के लिए IDEA पुनः आरंभ करें)"
+      },
+      "streaming": {
+        "label": "Streaming",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, AI responses will appear character by character in real-time, instead of waiting for the complete response. May consume more resources."
+      },
+      "autoOpenFile": {
+        "label": "Auto Open File",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
       "sendShortcut": {
         "label": "भेजने का शॉर्टकट",
@@ -179,6 +202,21 @@
     "mcpDesc": "Model Context Protocol सर्वर कॉन्फ़िगर और प्रबंधित करें",
     "permissions": "अनुमति कॉन्फ़िगरेशन",
     "permissionsDesc": "Claude Code की फ़ाइल एक्सेस और ऑपरेशन अनुमतियां प्रबंधित करें",
+    "commit": {
+      "title": "Commit AI",
+      "description": "Configure AI-generated Git commit message behavior",
+      "prompt": {
+        "label": "Additional Prompt",
+        "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
+        "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "codeReview": {
+        "comingSoon": "Coming Soon",
+        "label": "Code Review AI Additional Prompt",
+        "placeholder": "This feature is under development, stay tuned...",
+        "hint": "Code Review AI will help you automatically review code, identify potential issues, and provide improvement suggestions. You can configure review preferences and focus areas here."
+      }
+    },
     "agents": "Agents",
     "agentsDesc": "AI एजेंट प्रबंधित और कॉन्फ़िगर करें",
     "skills": "Skills",
@@ -224,10 +262,19 @@
       }
     },
     "codexFeatureUnavailable": "यह सेटिंग अनुभाग अभी Codex में उपलब्ध नहीं है। कृपया Claude Code पर स्विच करें।",
+    "sidebar": {
+      "expand": "Expand Sidebar",
+      "collapse": "Collapse Sidebar"
+    },
     "community": "आधिकारिक समुदाय",
     "communityDesc": "नवीनतम जानकारी और तकनीकी सहायता के लिए आधिकारिक WeChat समूह में शामिल होने के लिए नीचे QR कोड स्कैन करें",
     "communityQrTip": "WeChat से स्कैन करके समुदाय में शामिल हों",
     "communityQrAlt": "आधिकारिक WeChat समुदाय QR कोड",
+    "sponsor": "Sponsor",
+    "sponsorDesc": "If this project helps you, consider sponsoring to support ongoing maintenance!",
+    "alipay": "Alipay",
+    "wechatPay": "WeChat Pay",
+    "paypal": "PayPal",
     "provider": {
       "currentConfig": "वर्तमान ClaudeCode कॉन्फ़िगरेशन",
       "loading": "लोड हो रहा है...",
@@ -256,6 +303,7 @@
       "allProviders": "सभी प्रदाता",
       "import": "आयात करें",
       "importFromCcSwitchUpdate": "cc-switch से आयात/अपडेट करें",
+      "importFromCcSwitchFile": "Select cc-switch.db File to Import",
       "importFromCcSwitchCli": "cc-switch CLI से आयात/अपडेट करें",
       "importFromClaudeRouter": "Claude Code Router से आयात/अपडेट करें",
       "featureComingSoon": "सुविधा अभी तक लागू नहीं की गई है, कृपया प्रतीक्षा करें",
@@ -270,6 +318,9 @@
       "confirmConvert": "रूपांतरण की पुष्टि करें",
       "inUse": "उपयोग में",
       "enable": "सक्षम करें",
+      "localProviderName": "Local settings.json",
+      "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
+      "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
       "importDialog": {
         "title": "cc-switch कॉन्फ़िगरेशन आयात करें",
         "summary": "कुल {{total}} कॉन्फ़िगरेशन पहचाने गए, जिनमें",
@@ -316,13 +367,61 @@
         "showApiKey": "दिखाएं",
         "hideApiKey": "छुपाएं",
         "confirmAdd": "जोड़ने की पुष्टि करें",
-        "saveChanges": "परिवर्तन सहेजें"
+        "saveChanges": "परिवर्तन सहेजें",
+        "codeView": "Code",
+        "visualView": "Visual",
+        "formatJson": "Format",
+        "invalidJson": "Invalid JSON format, please switch to code view to fix",
+        "presetGroup": "Quick Presets"
+      },
+      "presets": {
+        "custom": "Custom",
+        "zhipu": "Zhipu GLM",
+        "kimi": "Kimi K2",
+        "deepseek": "DeepSeek",
+        "minimax": "MiniMax",
+        "xiaomi": "Xiaomi MiMo"
       }
     },
     "comingSoon": "सुविधा जल्द आ रही है...",
     "permissionsComingSoon": "अनुमति कॉन्फ़िगरेशन सुविधा जल्द आ रही है...",
     "agentsComingSoon": "Agents कॉन्फ़िगरेशन सुविधा जल्द आ रही है...",
     "skillsComingSoon": "Skills कॉन्फ़िगरेशन सुविधा जल्द आ रही है...",
+    "codexProvider": {
+      "title": "Codex Provider Management",
+      "description": "Manage Codex provider configurations, settings will be written to ~/.codex/ directory",
+      "emptyProvider": "No Codex providers configured, click Add to create one",
+      "deleteConfirmTitle": "Confirm Delete",
+      "deleteConfirmMessage": "Are you sure you want to delete provider \"{{name}}\"? This action cannot be undone.",
+      "dialog": {
+        "addTitle": "Add Codex Provider",
+        "editTitle": "Edit Provider: {{name}}",
+        "addDescription": "Configure new Codex provider, will be written to ~/.codex/ directory",
+        "editDescription": "Changes will be applied immediately to ~/.codex/ directory",
+        "providerName": "Provider Name",
+        "providerNamePlaceholder": "e.g., Codex Official",
+        "configJson": "Config",
+        "authJsonLabel": "Config",
+        "formatJson": "Format",
+        "formatSuccess": "Format successful",
+        "formatError": "Format failed, invalid JSON",
+        "nameRequired": "Please enter provider name",
+        "configJsonError": "config.toml JSON format error",
+        "authJsonError": "auth.json JSON format error",
+        "configJsonHint": "JSON object containing model_provider, model, model_providers, etc.",
+        "authJsonHint": "JSON object containing OPENAI_API_KEY and other auth info",
+        "customModels": "Custom Models",
+        "customModelsHint": "Add extra models supported by this provider. Custom models will appear at the top of the model selection list",
+        "noCustomModels": "No custom models",
+        "addModel": "Add Model",
+        "modelIdPlaceholder": "Model ID (required, e.g., gpt-4o)",
+        "modelLabelPlaceholder": "Display name (optional)",
+        "modelDescPlaceholder": "Model description (optional)",
+        "modelIdRequired": "Model ID is required",
+        "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
+        "modelIdDuplicate": "Model ID already exists"
+      }
+    },
     "agent": {
       "title": "एजेंट",
       "create": "बनाएं",
@@ -354,6 +453,40 @@
         "confirmAdd": "बनाएं",
         "saveChanges": "सहेजें"
       }
+    },
+    "prompts": "Prompt Library",
+    "promptsDesc": "Manage common prompt templates for quick insertion during chat",
+    "prompt": {
+      "title": "Prompt Library",
+      "create": "Create",
+      "createPrompt": "Create Prompt",
+      "createPromptHint": "Click to go to prompt settings page to create",
+      "customPrompts": "Custom Prompts",
+      "noPrompts": "No custom prompts",
+      "noPromptsDropdown": "No prompts",
+      "loadFailed": "Load failed",
+      "loading": "Loading...",
+      "menu": "Menu",
+      "addSuccess": "Prompt created successfully",
+      "updateSuccess": "Prompt updated successfully",
+      "deleteSuccess": "Prompt deleted successfully",
+      "operationSuccess": "Operation successful",
+      "operationFailed": "Operation failed",
+      "deleteConfirmTitle": "Confirm Delete",
+      "deleteConfirmMessage": "Are you sure you want to delete prompt \"{{name}}\"? This action cannot be undone.",
+      "description": "Create common prompt templates. Type ! in the chat input to quickly select and insert",
+      "dialog": {
+        "addTitle": "Create Prompt",
+        "editTitle": "Edit Prompt",
+        "name": "Name",
+        "namePlaceholder": "Enter prompt name",
+        "nameRequired": "Please enter prompt name",
+        "content": "Content",
+        "contentPlaceholder": "Enter prompt content, you can include variables like {{variable}}",
+        "contentHint": "Prompt content will be inserted directly into the input box when selected",
+        "confirmAdd": "Create",
+        "saveChanges": "Save"
+      }
     }
   },
   "history": {
@@ -377,6 +510,7 @@
     "messageCount": "{{count}} संदेश",
     "searchPlaceholder": "सत्र शीर्षक खोजें...",
     "noSearchResults": "कोई मिलान सत्र नहीं मिला",
+    "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "शीर्षक संपादित करें",
     "saveTitleButton": "सहेजें",
     "cancelEditButton": "रद्द करें",
@@ -428,11 +562,25 @@
     "collapse": "संक्षिप्त करें",
     "clickToAnswer": "उत्तर देने के लिए क्लिक करें"
   },
+  "planApproval": {
+    "title": "Plan Ready for Approval",
+    "subtitle": "Claude has finished planning and is ready to execute.",
+    "requestedPermissions": "Requested Permissions",
+    "executionMode": "Execution Mode",
+    "executionModeDescription": "Select how Claude should execute the plan:",
+    "approve": "Approve & Execute",
+    "reject": "Reject",
+    "toApprove": "to approve",
+    "toReject": "to reject",
+    "timeoutWarning": "Please make a choice soon, dialog will close in {{seconds}} seconds"
+  },
   "toast": {
     "switchSuccess": "स्विच सफल",
     "thinkingEnabled": "Thinking enabled",
     "thinkingDisabled": "Thinking disabled",
+    "configLoading": "Configuration loading, please try again",
     "saveSuccess": "सहेजना सफल",
+    "saveFailed": "Save failed",
     "deleteSuccess": "हटाना सफल",
     "operationFailed": "ऑपरेशन विफल",
     "copySuccess": "{{label}} क्लिपबोर्ड पर कॉपी किया गया",
@@ -511,6 +659,7 @@
     "marketComingSoon": "MCP बाजार सुविधा अभी तक लागू नहीं, जल्द आ रही है",
     "description": "विवरण",
     "command": "कमांड",
+    "url": "URL",
     "homepage": "होमपेज",
     "docs": "दस्तावेज़",
     "edit": "संपादित करें",
@@ -529,7 +678,49 @@
     "saved": "सहेजा गया",
     "added": "जोड़ा गया",
     "linkCopied": "लिंक कॉपी किया गया, कृपया ब्राउज़र में खोलें",
+    "configCopied": "Config copied to clipboard",
     "copyFailed": "कॉपी विफल, कृपया मैन्युअल रूप से कॉपी करें",
+    "connectionStatus": "Connection Status",
+    "serverVersion": "Server Version",
+    "statusConnected": "Connected",
+    "statusFailed": "Connection Failed",
+    "statusNeedsAuth": "Needs Authentication",
+    "statusPending": "Connecting...",
+    "statusUnknown": "Unknown",
+    "errorDetails": "Error Details",
+    "logs": {
+      "title": "Connection Logs",
+      "empty": "No logs yet",
+      "clear": "Clear logs",
+      "close": "Close",
+      "count": "{{count}} log entries",
+      "connected": "Connected",
+      "failed": "Connection failed",
+      "needsAuth": "Authentication required",
+      "unknownError": "Unknown error",
+      "loadingServers": "Loading MCP server list...",
+      "refreshingStatus": "Refreshing MCP server connection status...",
+      "loadedToolsFromCache": "Loaded tools from cache for \"{{name}}\": {{count}} tools",
+      "forceRefreshingTools": "Force refreshing tools for \"{{name}}\"...",
+      "loadingTools": "Loading tools for \"{{name}}\"...",
+      "fastLoadCache": "Fast load from cache: {{count}} servers (cached {{seconds}}s ago)",
+      "loadedToolsFromCacheSimple": "Loaded tools from cache: {{count}} tools",
+      "usingCacheStrategy": "Using cache-first strategy. Click refresh to get latest data",
+      "firstLoad": "First load, fetching server list...",
+      "loadedServersSuccess": "Loaded server list: {{count}} servers found",
+      "loadedServersFailed": "Failed to load server list: {{error}}",
+      "statusUpdateComplete": "Status update complete: {{total}} servers ({{connected}} connected, {{failed}} failed, {{pending}} pending, {{needsAuth}} need auth)",
+      "loadedStatusFailed": "Failed to load server status: {{error}}",
+      "cleared": "Refresh logs cleared",
+      "refreshingAll": "Refreshing all MCP servers...",
+      "startRefresh": "Starting refresh",
+      "forceRefreshingToolsServer": "Force refreshing tools for \"{{name}}\"...",
+      "startRefreshServer": "Starting refresh for \"{{name}}\"...",
+      "checkingConnection": "Checking connection status",
+      "checkingConnectionServer": "Server \"{{name}}\" - Checking connection status...",
+      "refreshComplete": "Server \"{{name}}\" refresh complete",
+      "forceRefreshTools": "Force refresh tools"
+    },
     "presets": {
       "fetch": "Web content fetching tool for scraping web pages",
       "time": "Time and timezone utilities",
@@ -592,7 +783,22 @@
         "unrecognizedFormat": "अपरिचित कॉन्फ़िगरेशन प्रारूप",
         "jsonParseError": "JSON पार्स त्रुटि: {{message}}"
       }
-    }
+    },
+    "tools": "Tools",
+    "loadTools": "Load Tool List",
+    "notConnected": "Not Connected",
+    "loadFailed": "Load Failed",
+    "noTools": "No Tools",
+    "clickToLoad": "Click to Load",
+    "refreshLogs": "Refresh Logs",
+    "clearLogs": "Clear Logs",
+    "clear": "Clear",
+    "noRefreshLogs": "No Refresh Logs",
+    "refreshLogsHint": "After clicking the refresh button, detailed refresh process information will be displayed here",
+    "noParams": "No Parameters",
+    "required": "Required",
+    "optional": "Optional",
+    "refreshServer": "Refresh {{name}}"
   },
   "tools": {
     "toolCall": "उपकरण कॉल",
@@ -626,7 +832,12 @@
     "editPrefix": "संपादित करें: {{fileName}}",
     "lineRange": "पंक्तियाँ {{start}}-{{end}}",
     "filePath": "फ़ाइल पथ:",
-    "unknownTool": "अज्ञात टूल"
+    "unknownTool": "अज्ञात टूल",
+    "bashGroupBatchRun": "Batch Run Commands",
+    "bashGroupBatchExecution": "Batch Execution",
+    "bashGroupCompleted": "completed",
+    "bashGroupAllCompleted": "All Completed",
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "{{completed}}/{{total}} कार्य प्रगति में",
@@ -792,9 +1003,82 @@
       }
     }
   },
+  "modes": {
+    "default": {
+      "label": "Default Mode",
+      "tooltip": "Standard permission behavior",
+      "description": "Requires manual confirmation for each operation, suitable for cautious use"
+    },
+    "plan": {
+      "label": "Plan Mode",
+      "tooltip": "Plan mode - read-only analysis",
+      "description": "Uses only read-only tools, generates plan for user approval"
+    },
+    "acceptEdits": {
+      "label": "Agent Mode",
+      "tooltip": "Automatically accept file edits",
+      "description": "Automatically accept file creation/editing, reducing confirmation steps"
+    },
+    "bypassPermissions": {
+      "label": "Auto Mode",
+      "tooltip": "Bypass all permission checks",
+      "description": "Fully automated, bypassing all permission checks [Use with caution]"
+    }
+  },
+  "codexModes": {
+    "default": {
+      "label": "Suggest (approval)",
+      "tooltip": "Codex approval_policy=untrusted – prompts before editing files or running shell commands.",
+      "description": "Safest option. Every write or command requires your approval."
+    },
+    "plan": {
+      "label": "Plan Mode",
+      "tooltip": "Plan mode - read-only analysis",
+      "description": "Uses only read-only tools, generates plan for user approval"
+    },
+    "acceptEdits": {
+      "label": "Auto Edit",
+      "tooltip": "Codex approval_policy=auto-edit – automatically applies file patches, still asks before shell commands.",
+      "description": "Auto-create and edit files via apply_patch while keeping command approvals."
+    },
+    "bypassPermissions": {
+      "label": "Full Auto",
+      "tooltip": "Codex approval_policy=never – runs commands and writes files without prompting (workspace sandbox still enforced).",
+      "description": "Hands-off mode. Codex executes edits and shell commands immediately."
+    }
+  },
+  "providers": {
+    "claude": {
+      "label": "Claude Code"
+    },
+    "codex": {
+      "label": "Codex Cli"
+    },
+    "gemini": {
+      "label": "Gemini Cli"
+    },
+    "opencode": {
+      "label": "OpenCode"
+    }
+  },
+  "promptEnhancer": {
+    "title": "Prompt Enhancer",
+    "tooltip": "Enhance Prompt",
+    "tooltipFull": "Rewrite prompt to provide more context and improve agent responses",
+    "shortcut": "⌘/",
+    "enhancing": "Enhancing prompt...",
+    "originalPrompt": "Original Prompt",
+    "enhancedPrompt": "Enhanced Prompt",
+    "useEnhanced": "Use Enhanced",
+    "keepOriginal": "Keep Original",
+    "enhanceFailed": "Failed to enhance prompt",
+    "emptyPrompt": "Please enter a prompt first",
+    "copyEnhanced": "Copy Enhanced"
+  },
   "rewind": {
     "title": "फ़ाइलों को पिछली स्थिति में पुनर्स्थापित करें",
     "tooltip": "इस संदेश पर फ़ाइलों को उनकी स्थिति में पुनर्स्थापित करें",
+    "tooltipFull": "Restore files to their state at this message",
     "selectTitle": "पुनर्स्थापना बिंदु चुनें",
     "noRewindableMessages": "इस सत्र में कोई पुनर्स्थापन योग्य संदेश नहीं है",
     "rewindTo": "पुनर्स्थापित करें",
@@ -830,6 +1114,20 @@
       "label": "अधिकतम",
       "description": "अधिकतम तर्क गहराई"
     }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "The application encountered an unexpected error. Please copy the error details below and share them with the developer for troubleshooting.",
+    "possibleCauses": "Possible causes:",
+    "cause1": "Node.js is not installed or not configured correctly",
+    "cause2": "Network connection issues",
+    "cause3": "Plugin or IDE compatibility issues",
+    "cause4": "Insufficient system resources",
+    "errorDetails": "Error Details",
+    "copyError": "Copy Error Info",
+    "copied": "Copied!",
+    "reload": "Reload Application",
+    "helpText": "If the problem persists, please copy the error information and submit it as an issue on GitHub, or share it in the community group."
   },
   "aiBridge": {
     "claudeCodeInterrupted": "Claude Code बाधित हुआ (संभवतः प्रतिक्रिया समय समाप्त या उपयोगकर्ता रद्दीकरण):",

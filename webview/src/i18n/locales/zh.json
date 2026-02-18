@@ -247,12 +247,22 @@
           "importanceHint": "重要度越高，自动补全时越靠前"
         },
         "timeAgo": {
+          "yearsAgo_one": "{{count}} year ago",
+          "yearsAgo_other": "{{count}} years ago",
+          "monthsAgo_one": "{{count}} month ago",
+          "monthsAgo_other": "{{count}} months ago",
+          "daysAgo_one": "{{count}} day ago",
+          "daysAgo_other": "{{count}} days ago",
+          "hoursAgo_one": "{{count}} hour ago",
+          "hoursAgo_other": "{{count}} hours ago",
+          "minutesAgo_one": "{{count}} minute ago",
+          "minutesAgo_other": "{{count}} minutes ago",
+          "justNow": "刚刚",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}个月前",
           "daysAgo": "{{count}}天前",
           "hoursAgo": "{{count}}小时前",
-          "minutesAgo": "{{count}}分钟前",
-          "justNow": "刚刚"
+          "minutesAgo": "{{count}}分钟前"
         }
       }
     },
@@ -817,7 +827,6 @@
     "listFiles": "列出文件",
     "findFile": "查找文件",
     "todoList": "任务列表",
-    "updatePlan": "更新计划",
     "editFileTitle": "编辑文件",
     "clickToOpen": "点击打开 {{filePath}}",
     "refreshFileInIdea": "在 IDEA 中刷新文件",
@@ -833,7 +842,8 @@
     "bashGroupBatchExecution": "批量执行",
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
-    "bashGroupFailed": "失败"
+    "bashGroupFailed": "失败",
+    "updatePlan": "更新计划"
   },
   "todo": {
     "inProgress": "进行中 {{completed}}/{{total}} 个任务",

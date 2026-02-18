@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import com.github.claudecodegui.ClaudeCodeGuiBundle;
 import com.intellij.openapi.diagnostic.Logger;
 /**
  * 权限请求对话框
@@ -55,7 +56,7 @@ public class PermissionDialog extends DialogWrapper {
         super(project, false);
         this.request = request;
 
-        setTitle("权限请求");
+        setTitle(ClaudeCodeGuiBundle.message("permission.dialogTitle"));
         setModal(true);
         setResizable(false);
 
@@ -89,7 +90,7 @@ public class PermissionDialog extends DialogWrapper {
             // 读取 HTML 文件
             InputStream is = getClass().getResourceAsStream("/html/permission-dialog.html");
             if (is == null) {
-                throw new RuntimeException("无法找到权限对话框 HTML 文件");
+                throw new RuntimeException(ClaudeCodeGuiBundle.message("permission.htmlNotFound"));
             }
 
             String html = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
@@ -116,7 +117,7 @@ public class PermissionDialog extends DialogWrapper {
 
         } catch (Exception e) {
             LOG.error("Error occurred", e);
-            browser.loadHTML("<html><body><h3>加载权限对话框失败</h3></body></html>");
+            browser.loadHTML(ClaudeCodeGuiBundle.message("permission.loadFailed"));
         }
     }
 
@@ -134,22 +135,15 @@ public class PermissionDialog extends DialogWrapper {
     }
 
     /**
-     * 翻译工具名称为中文
+     * Translate tool names using bundle localization
      */
     private String translateToolName(String toolName) {
-        Map<String, String> translations = new HashMap<>();
-        translations.put("Write", "写入文件");
-        translations.put("Edit", "编辑文件");
-        translations.put("Delete", "删除文件");
-        translations.put("CreateDirectory", "创建目录");
-        translations.put("MoveFile", "移动文件");
-        translations.put("CopyFile", "复制文件");
-        translations.put("ExecuteCommand", "执行命令");
-        translations.put("Bash", "执行Shell命令");
-        translations.put("RunCode", "运行代码");
-        translations.put("InstallPackage", "安装软件包");
-
-        return translations.getOrDefault(toolName, toolName);
+        String key = "permission.tool." + toolName;
+        try {
+            return ClaudeCodeGuiBundle.message(key);
+        } catch (Exception e) {
+            return toolName;
+        }
     }
 
     public void setDecisionCallback(Consumer<PermissionDecision> callback) {

@@ -248,21 +248,26 @@
         },
         "timeAgo": {
           "yearsAgo_one": "{{count}} год назад",
+          "yearsAgo_other": "{{count}} years ago",
+          "monthsAgo_one": "{{count}} месяц назад",
+          "monthsAgo_other": "{{count}} months ago",
+          "daysAgo_one": "{{count}} день назад",
+          "daysAgo_other": "{{count}} days ago",
+          "hoursAgo_one": "{{count}} час назад",
+          "hoursAgo_other": "{{count}} hours ago",
+          "minutesAgo_one": "{{count}} минуту назад",
+          "minutesAgo_other": "{{count}} minutes ago",
+          "justNow": "только что",
           "yearsAgo_few": "{{count}} года назад",
           "yearsAgo_many": "{{count}} лет назад",
-          "monthsAgo_one": "{{count}} месяц назад",
           "monthsAgo_few": "{{count}} месяца назад",
           "monthsAgo_many": "{{count}} месяцев назад",
-          "daysAgo_one": "{{count}} день назад",
           "daysAgo_few": "{{count}} дня назад",
           "daysAgo_many": "{{count}} дней назад",
-          "hoursAgo_one": "{{count}} час назад",
           "hoursAgo_few": "{{count}} часа назад",
           "hoursAgo_many": "{{count}} часов назад",
-          "minutesAgo_one": "{{count}} минуту назад",
           "minutesAgo_few": "{{count}} минуты назад",
-          "minutesAgo_many": "{{count}} минут назад",
-          "justNow": "только что"
+          "minutesAgo_many": "{{count}} минут назад"
         }
       }
     },
@@ -457,6 +462,40 @@
         "promptHint": "Промпт будет отправлен AI как системные инструкции в начале диалога",
         "confirmAdd": "Создать",
         "saveChanges": "Сохранить"
+      }
+    },
+    "prompts": "Prompt Library",
+    "promptsDesc": "Manage common prompt templates for quick insertion during chat",
+    "prompt": {
+      "title": "Prompt Library",
+      "create": "Create",
+      "createPrompt": "Create Prompt",
+      "createPromptHint": "Click to go to prompt settings page to create",
+      "customPrompts": "Custom Prompts",
+      "noPrompts": "No custom prompts",
+      "noPromptsDropdown": "No prompts",
+      "loadFailed": "Load failed",
+      "loading": "Loading...",
+      "menu": "Menu",
+      "addSuccess": "Prompt created successfully",
+      "updateSuccess": "Prompt updated successfully",
+      "deleteSuccess": "Prompt deleted successfully",
+      "operationSuccess": "Operation successful",
+      "operationFailed": "Operation failed",
+      "deleteConfirmTitle": "Confirm Delete",
+      "deleteConfirmMessage": "Are you sure you want to delete prompt \"{{name}}\"? This action cannot be undone.",
+      "description": "Create common prompt templates. Type ! in the chat input to quickly select and insert",
+      "dialog": {
+        "addTitle": "Create Prompt",
+        "editTitle": "Edit Prompt",
+        "name": "Name",
+        "namePlaceholder": "Enter prompt name",
+        "nameRequired": "Please enter prompt name",
+        "content": "Content",
+        "contentPlaceholder": "Enter prompt content, you can include variables like {{variable}}",
+        "contentHint": "Prompt content will be inserted directly into the input box when selected",
+        "confirmAdd": "Create",
+        "saveChanges": "Save"
       }
     }
   },
