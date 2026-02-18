@@ -22,25 +22,26 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * 编辑器上下文信息采集工具类
+ * Editor context information collector.
  *
- * 此工具类用于采集用户在 IDEA 编辑器中的当前工作环境信息，这些信息会被发送给 AI 作为上下文，
- * 帮助 AI 更准确地理解用户的意图和当前所处的代码环境。
+ * This utility collects the user's current working environment in the IDEA editor.
+ * The gathered information is sent to the AI as context, helping it better understand
+ * the user's intent and the current code environment.
  *
- * 采集的上下文信息包括：
- * 1. 当前激活（正在查看）的文件 - 作为 AI 回答问题时的主要关注点
- * 2. 用户选中的代码片段 - 作为用户提问的核心对象
- * 3. 所有打开的文件列表 - 作为潜在相关的上下文参考
+ * The collected context includes:
+ * 1. The currently active (viewed) file - serves as the AI's primary focus when answering questions
+ * 2. The user's selected code snippet - the core subject of the user's question
+ * 3. The list of all open files - potential contextual references
  *
- * 这些信息最终会被构建成 JSON 格式，附加到发送给 AI 的系统提示词中，格式如下：
+ * This information is built into JSON format and appended to the system prompt sent to the AI:
  * {
- *   "active": "当前激活的文件路径#L开始行-结束行",  // 优先级最高，AI 的主要关注点
- *   "selection": {                                  // 如果用户选中了代码，这是 AI 应该重点分析的内容
- *     "startLine": 起始行号,
- *     "endLine": 结束行号,
- *     "selectedText": "用户选中的代码内容"
+ *   "active": "path/to/active/file#Lstart-end",  // Highest priority, AI's primary focus
+ *   "selection": {                                 // If code is selected, the AI should analyze this first
+ *     "startLine": startLineNumber,
+ *     "endLine": endLineNumber,
+ *     "selectedText": "the selected code content"
  *   },
- *   "others": ["其他打开的文件路径1", "其他打开的文件路径2"]  // 潜在相关的上下文，优先级最低
+ *   "others": ["path/to/other/file1", "path/to/other/file2"]  // Potentially related context, lowest priority
  * }
  */
 public class EditorFileUtils {
@@ -48,19 +49,19 @@ public class EditorFileUtils {
     private static final Logger LOG = Logger.getInstance(EditorFileUtils.class);
 
     /**
-     * 获取当前项目中所有打开的文件路径
+     * Get all open file paths in the current project.
      *
-     * 此方法用于采集用户在 IDEA 中打开的所有文件，这些文件可能与用户当前的工作任务相关。
-     * 返回的文件列表会被发送给 AI 作为潜在的上下文参考，帮助 AI 理解：
-     * - 用户当前可能正在处理哪些相关文件
-     * - 用户的工作范围和关注的代码模块
-     * - 跨文件的代码关联和依赖关系
+     * Collects all files the user has open in IDEA, which may be related to their current task.
+     * The returned file list is sent to the AI as potential context references, helping it understand:
+     * - Which related files the user might be working on
+     * - The user's working scope and the code modules they are focused on
+     * - Cross-file code relationships and dependencies
      *
-     * 注意：此列表包含所有打开的文件，但激活文件（用户当前正在查看的文件）会被单独标记，
-     *       因为它通常是用户提问的主要对象。
+     * Note: This list includes all open files, but the active file (the one currently being viewed)
+     *       is marked separately since it is typically the primary subject of the user's question.
      *
-     * @param project IDEA 项目对象
-     * @return 打开的文件路径列表（绝对路径）
+     * @param project the IDEA project
+     * @return list of open file paths (absolute paths)
      */
     public static List<String> getOpenedFiles(Project project) {
         List<String> openedFiles = new ArrayList<>();
@@ -70,20 +71,20 @@ public class EditorFileUtils {
         }
 
         try {
-            // 获取文件编辑器管理器
+            // Get the file editor manager
             FileEditorManager fileEditorManager = FileEditorManager.getInstance(project);
 
-            // 获取所有打开的文件
+            // Get all open files
             VirtualFile[] openFiles = fileEditorManager.getOpenFiles();
 
-            // 提取文件路径
+            // Extract file paths
             for (VirtualFile file : openFiles) {
                 if (file != null && file.getPath() != null) {
                     openedFiles.add(file.getPath());
                 }
             }
         } catch (Exception e) {
-            // 捕获异常，避免影响主流程
+            // Catch exceptions to avoid disrupting the main flow
             LOG.error("[EditorFileUtils] Error getting opened files: " + e.getMessage());
         }
 
@@ -91,22 +92,24 @@ public class EditorFileUtils {
     }
 
     /**
-     * 获取当前激活（正在查看）的文件路径
+     * Get the path of the currently active (viewed) file.
      *
-     * 此方法返回用户当前正在查看/编辑的文件，这个文件通常是用户提问的主要对象。
+     * Returns the file the user is currently viewing or editing, which is typically the
+     * primary subject of their question.
      *
-     * 重要性说明：
-     * - 这是 AI 理解用户意图的核心线索，优先级最高
-     * - 当用户提问时没有明确指定文件时，AI 应该默认关注这个文件
-     * - 如果用户同时选中了代码，则这个文件路径 + 选中的代码片段共同构成 AI 的主要分析对象
+     * Importance:
+     * - This is the most critical clue for the AI to understand the user's intent (highest priority)
+     * - When the user asks a question without specifying a file, the AI should focus on this file by default
+     * - If the user has also selected code, this file path combined with the selection forms
+     *   the AI's primary analysis target
      *
-     * 使用场景示例：
-     * - 用户问"这段代码有什么问题"时，AI 会优先分析这个文件中选中的代码
-     * - 用户问"这个类的作用是什么"时，AI 会分析这个文件中的类定义
-     * - 用户问"如何优化性能"时，AI 会从这个文件的代码出发给出建议
+     * Usage examples:
+     * - "What's wrong with this code?" - AI analyzes the selected code in this file first
+     * - "What does this class do?" - AI analyzes the class definition in this file
+     * - "How to optimize performance?" - AI provides suggestions based on this file's code
      *
-     * @param project IDEA 项目对象
-     * @return 当前激活的文件路径（绝对路径），如果没有打开任何文件则返回 null
+     * @param project the IDEA project
+     * @return the active file path (absolute), or null if no file is open
      */
     public static String getCurrentActiveFile(Project project) {
         if (project == null) {
@@ -116,7 +119,7 @@ public class EditorFileUtils {
         try {
             FileEditorManager fileEditorManager = FileEditorManager.getInstance(project);
 
-            // 获取当前选中的文件
+            // Get the currently selected file
             VirtualFile[] selectedFiles = fileEditorManager.getSelectedFiles();
 
             if (selectedFiles.length > 0 && selectedFiles[0] != null) {
@@ -130,32 +133,33 @@ public class EditorFileUtils {
     }
 
     /**
-     * 获取当前激活文件中选中的代码信息
+     * Get information about the selected code in the currently active file.
      *
-     * 此方法返回用户在编辑器中选中的代码片段及其位置信息。选中的代码通常是用户提问的核心对象，
-     * 具有最高的优先级，AI 应该将其作为主要的分析目标。
+     * Returns the code snippet and its location that the user has selected in the editor.
+     * Selected code is typically the core subject of the user's question and has the highest priority;
+     * the AI should treat it as the primary analysis target.
      *
-     * 优先级说明：
-     * 选中的代码 > 当前激活的文件 > 其他打开的文件
+     * Priority order:
+     * Selected code > Currently active file > Other open files
      *
-     * 重要性说明：
-     * - 当用户选中代码时，这通常是一个强烈的信号，表明用户想要 AI 重点关注这段代码
-     * - AI 在回答问题时应该将选中的代码作为 PRIMARY FOCUS（主要焦点）
-     * - 即使用户的提问很模糊（如"有什么问题"），AI 也应该优先分析这段选中的代码
+     * Importance:
+     * - When the user selects code, it is a strong signal that they want the AI to focus on that code
+     * - The AI should treat selected code as the PRIMARY FOCUS when answering questions
+     * - Even with a vague question (e.g., "anything wrong?"), the AI should prioritize analyzing the selection
      *
-     * 使用场景示例：
-     * - 用户选中一个函数并问"这段代码有什么问题" → AI 应该分析这个函数的逻辑、潜在 bug、代码质量等
-     * - 用户选中一个类并问"如何优化" → AI 应该针对这个类的设计、性能、可维护性等方面给出建议
-     * - 用户选中一段代码并问"解释一下" → AI 应该详细解释这段代码的功能、逻辑流程、关键语法等
+     * Usage examples:
+     * - User selects a function and asks "what's wrong with this code?" - AI should analyze logic, potential bugs, code quality, etc.
+     * - User selects a class and asks "how to optimize?" - AI should advise on design, performance, maintainability, etc.
+     * - User selects code and asks "explain this" - AI should explain functionality, logic flow, key syntax, etc.
      *
-     * 返回值说明：
-     * - startLine: 选中代码的起始行号（从 1 开始）
-     * - endLine: 选中代码的结束行号（从 1 开始）
-     * - selectedText: 用户选中的完整代码文本内容
+     * Return value details:
+     * - startLine: the starting line number of the selection (1-based)
+     * - endLine: the ending line number of the selection (1-based)
+     * - selectedText: the full text content of the user's selection
      *
-     * @param project IDEA 项目对象
-     * @return 包含选中信息的 Map，如果没有选中任何代码则返回 null
-     *         Map 包含: startLine (Integer), endLine (Integer), selectedText (String)
+     * @param project the IDEA project
+     * @return a Map containing selection info, or null if no code is selected.
+     *         The Map contains: startLine (Integer), endLine (Integer), selectedText (String)
      */
     public static Map<String, Object> getSelectedCodeInfo(Project project) {
         if (project == null) {
@@ -165,20 +169,20 @@ public class EditorFileUtils {
         try {
             FileEditorManager fileEditorManager = FileEditorManager.getInstance(project);
 
-            // 获取当前选中的编辑器
+            // Get the currently selected editor
             FileEditor selectedEditor = fileEditorManager.getSelectedEditor();
             if (selectedEditor instanceof TextEditor) {
                 Editor editor = ((TextEditor) selectedEditor).getEditor();
                 SelectionModel selectionModel = editor.getSelectionModel();
 
-                // 检查是否有选中的文本
+                // Check if any text is selected
                 if (selectionModel.hasSelection()) {
                     String selectedText = selectionModel.getSelectedText();
                     if (selectedText != null && !selectedText.trim().isEmpty()) {
                         int startOffset = selectionModel.getSelectionStart();
                         int endOffset = selectionModel.getSelectionEnd();
 
-                        // 转换为行号（从 1 开始）
+                        // Convert to line numbers (1-based)
                         int startLine = editor.getDocument().getLineNumber(startOffset) + 1;
                         int endLine = editor.getDocument().getLineNumber(endOffset) + 1;
 

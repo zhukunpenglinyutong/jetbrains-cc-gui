@@ -8,8 +8,8 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 /**
- * Diff 相关的浏览器通信桥接
- * 封装 Java → WebView 的 JavaScript 调用
+ * Browser communication bridge for diff operations.
+ * Encapsulates Java to WebView JavaScript calls.
  */
 public class DiffBrowserBridge {
 
@@ -23,7 +23,7 @@ public class DiffBrowserBridge {
     }
 
     /**
-     * 在 WebView 中显示错误提示
+     * Show an error toast in the WebView.
      */
     public void showErrorToast(String message) {
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -42,7 +42,7 @@ public class DiffBrowserBridge {
     }
 
     /**
-     * 通知前端从编辑列表中移除文件
+     * Notify the frontend to remove a file from the edits list.
      */
     public void sendRemoveFileFromEdits(String filePath) {
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -67,7 +67,7 @@ public class DiffBrowserBridge {
     }
 
     /**
-     * 发送 diff 结果到前端
+     * Send diff result to the frontend.
      */
     public void sendDiffResult(String filePath, String action, String content, String error) {
         ApplicationManager.getApplication().invokeLater(() -> {

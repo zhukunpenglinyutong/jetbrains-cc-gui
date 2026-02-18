@@ -9,7 +9,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.util.List;
 
 /**
- * Agent 智能体管理消息处理器
+ * Agent management message handler.
  */
 public class AgentHandler extends BaseMessageHandler {
 
@@ -65,7 +65,7 @@ public class AgentHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取所有智能体
+     * Get all agents.
      */
     private void handleGetAgents() {
         try {
@@ -84,14 +84,14 @@ public class AgentHandler extends BaseMessageHandler {
     }
 
     /**
-     * 添加智能体
+     * Add an agent.
      */
     private void handleAddAgent(String content) {
         try {
             JsonObject agent = gson.fromJson(content, JsonObject.class);
             settingsService.addAgent(agent);
 
-            // 刷新列表
+            // Refresh the list
             ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetAgents();
                 callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"add\"}"));
@@ -109,7 +109,7 @@ public class AgentHandler extends BaseMessageHandler {
     }
 
     /**
-     * 更新智能体
+     * Update an agent.
      */
     private void handleUpdateAgent(String content) {
         try {
@@ -119,7 +119,7 @@ public class AgentHandler extends BaseMessageHandler {
 
             settingsService.updateAgent(id, updates);
 
-            // 刷新列表
+            // Refresh the list
             ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetAgents();
                 callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"update\"}"));
@@ -137,7 +137,7 @@ public class AgentHandler extends BaseMessageHandler {
     }
 
     /**
-     * 删除智能体
+     * Delete an agent.
      */
     private void handleDeleteAgent(String content) {
         try {
@@ -147,19 +147,19 @@ public class AgentHandler extends BaseMessageHandler {
             boolean deleted = settingsService.deleteAgent(id);
 
             if (deleted) {
-                // 如果删除的是当前选中的智能体，清空选中状态
+                // If the deleted agent was the currently selected one, clear the selection
                 try {
                     String selectedId = settingsService.getSelectedAgentId();
                     if (id.equals(selectedId)) {
                         settingsService.setSelectedAgentId(null);
-                        // 通知前端清空选中状态
+                        // Notify frontend to clear the selection
                         callJavaScript("window.onSelectedAgentChanged", escapeJs("null"));
                     }
                 } catch (Exception e) {
                     LOG.warn("[AgentHandler] Failed to check/clear selected agent: " + e.getMessage());
                 }
 
-                // 刷新列表
+                // Refresh the list
                 ApplicationManager.getApplication().invokeLater(() -> {
                     handleGetAgents();
                     callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"delete\"}"));
@@ -186,7 +186,7 @@ public class AgentHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取当前选中的智能体
+     * Get the currently selected agent.
      */
     private void handleGetSelectedAgent() {
         try {
@@ -199,7 +199,7 @@ public class AgentHandler extends BaseMessageHandler {
                     result.addProperty("selectedAgentId", selectedId);
                     result.add("agent", agent);
                 } else {
-                    // 智能体已被删除，清空选中状态
+                    // Agent was deleted, clear the selection
                     settingsService.setSelectedAgentId(null);
                     result.addProperty("selectedAgentId", (String) null);
                 }
@@ -220,17 +220,17 @@ public class AgentHandler extends BaseMessageHandler {
     }
 
     /**
-     * 设置选中的智能体
+     * Set the selected agent.
      */
     private void handleSetSelectedAgent(String content) {
         try {
             String agentId = null;
 
-            // 处理空内容（取消选择智能体）
+            // Handle empty content (deselect agent)
             if (content != null && !content.isEmpty() && !content.equals("null")) {
                 JsonObject data = gson.fromJson(content, JsonObject.class);
                 if (data != null) {
-                    // 兼容两种字段名：前端发送 "id"，但也支持 "agentId"
+                    // Support both field names: frontend sends "id", but "agentId" is also accepted
                     if (data.has("id") && !data.get("id").isJsonNull()) {
                         agentId = data.get("id").getAsString();
                     } else if (data.has("agentId") && !data.get("agentId").isJsonNull()) {

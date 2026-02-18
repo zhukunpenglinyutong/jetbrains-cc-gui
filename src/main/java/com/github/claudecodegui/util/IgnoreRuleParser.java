@@ -9,48 +9,48 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 解析 .gitignore 格式的 ignore 规则文件
- * 支持标准 .gitignore 语法：
- * - # 注释行
- * - ! 取反规则
- * - * 和 ** 通配符
- * - / 结尾表示目录
- * - / 开头表示相对于根目录
+ * Parser for .gitignore-format ignore rule files.
+ * Supports standard .gitignore syntax:
+ * - # comment lines
+ * - ! negation rules
+ * - * and ** wildcards
+ * - trailing / means directory only
+ * - leading / means anchored to root
  */
 public class IgnoreRuleParser {
 
     /**
-     * 解析后的 ignore 规则
+     * A parsed ignore rule.
      */
     public static class IgnoreRule {
         private final String pattern;
-        private final boolean negated;      // 是否为取反规则（以 ! 开头）
-        private final boolean directoryOnly; // 是否仅匹配目录（以 / 结尾）
-        private final boolean anchored;      // 是否锚定到根目录（以 / 开头或包含 /）
-        private final String regexPattern;   // 转换后的正则表达式
+        private final boolean negated;      // Whether this is a negation rule (starts with !)
+        private final boolean directoryOnly; // Whether this rule only matches directories (ends with /)
+        private final boolean anchored;      // Whether this rule is anchored to root (starts with / or contains /)
+        private final String regexPattern;   // The converted regex pattern
 
         public IgnoreRule(String rawPattern) {
             String pattern = rawPattern.trim();
 
-            // 检查是否为取反规则
+            // Check if this is a negation rule
             this.negated = pattern.startsWith("!");
             if (this.negated) {
                 pattern = pattern.substring(1);
             }
 
-            // 检查是否仅匹配目录
+            // Check if it only matches directories
             this.directoryOnly = pattern.endsWith("/");
             if (this.directoryOnly) {
                 pattern = pattern.substring(0, pattern.length() - 1);
             }
 
-            // 检查是否锚定到根目录
+            // Check if it is anchored to the root
             boolean startsWithSlash = pattern.startsWith("/");
             if (startsWithSlash) {
                 pattern = pattern.substring(1);
             }
 
-            // 如果包含 / 或以 / 开头，则锚定到根目录
+            // Anchored to root if it contains / or starts with /
             this.anchored = startsWithSlash || pattern.contains("/");
 
             this.pattern = pattern;
@@ -58,7 +58,7 @@ public class IgnoreRuleParser {
         }
 
         /**
-         * 将 gitignore 模式转换为正则表达式
+         * Convert a gitignore pattern to a regular expression.
          */
         private String convertToRegex(String pattern) {
             StringBuilder regex = new StringBuilder();
@@ -67,20 +67,20 @@ public class IgnoreRuleParser {
                 char c = pattern.charAt(i);
                 switch (c) {
                     case '*':
-                        // ** 匹配任意路径（包括 /）
+                        // ** matches any path (including /)
                         if (i + 1 < pattern.length() && pattern.charAt(i + 1) == '*') {
-                            i++; // 跳过第二个 *
+                            i++; // skip the second *
 
-                            // **/ 语义：匹配任意层级目录（包含 0 层），必须以 / 边界结束
+                            // **/ semantics: matches any depth of directories (including zero levels), must end at a / boundary
                             if (i + 1 < pattern.length() && pattern.charAt(i + 1) == '/') {
                                 regex.append("(?:.*/)?");
-                                i++; // 跳过 /
+                                i++; // skip the /
                             } else {
-                                // ** 语义：匹配任意字符（包括 /）
+                                // ** semantics: matches any character (including /)
                                 regex.append(".*");
                             }
                         } else {
-                            // 单个 * 匹配除 / 外的任意字符
+                            // Single * matches any character except /
                             regex.append("[^/]*");
                         }
                         break;
@@ -133,7 +133,7 @@ public class IgnoreRuleParser {
     }
 
     /**
-     * 解析 .gitignore 文件
+     * Parse a .gitignore file.
      */
     public static List<IgnoreRule> parse(File gitignoreFile) throws IOException {
         List<IgnoreRule> rules = new ArrayList<>();
@@ -147,7 +147,7 @@ public class IgnoreRuleParser {
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
 
-                // 跳过空行和注释
+                // Skip empty lines and comments
                 if (line.isEmpty() || line.startsWith("#")) {
                     continue;
                 }
@@ -160,14 +160,14 @@ public class IgnoreRuleParser {
     }
 
     /**
-     * 解析 .gitignore 文件
+     * Parse a .gitignore file.
      */
     public static List<IgnoreRule> parse(Path gitignorePath) throws IOException {
         return parse(gitignorePath.toFile());
     }
 
     /**
-     * 从字符串内容解析规则
+     * Parse rules from string content.
      */
     public static List<IgnoreRule> parseContent(String content) {
         List<IgnoreRule> rules = new ArrayList<>();
@@ -179,7 +179,7 @@ public class IgnoreRuleParser {
         for (String line : content.split("\n")) {
             line = line.trim();
 
-            // 跳过空行和注释
+            // Skip empty lines and comments
             if (line.isEmpty() || line.startsWith("#")) {
                 continue;
             }

@@ -21,8 +21,8 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * Provider 管理器
- * 负责管理 Claude 供应商配置
+ * Provider Manager.
+ * Manages Claude provider configurations.
  */
 public class ProviderManager {
     private static final Logger LOG = Logger.getInstance(ProviderManager.class);
@@ -49,7 +49,7 @@ public class ProviderManager {
     }
 
     /**
-     * 获取所有Claude供应商
+     * Get all Claude providers.
      */
     public List<JsonObject> getClaudeProviders() {
         JsonObject config = configReader.apply(null);
@@ -87,7 +87,7 @@ public class ProviderManager {
     }
 
     /**
-     * 获取当前激活的供应商
+     * Get the currently active provider.
      */
     public JsonObject getActiveClaudeProvider() {
         JsonObject config = configReader.apply(null);
@@ -123,7 +123,7 @@ public class ProviderManager {
     }
 
     /**
-     * 添加供应商
+     * Add a provider.
      */
     public void addClaudeProvider(JsonObject provider) throws IOException {
         if (!provider.has("id")) {
@@ -132,7 +132,7 @@ public class ProviderManager {
 
         JsonObject config = configReader.apply(null);
 
-        // 确保 claude 配置存在
+        // Ensure claude config exists
         if (!config.has("claude")) {
             JsonObject claude = new JsonObject();
             claude.add("providers", new JsonObject());
@@ -145,17 +145,17 @@ public class ProviderManager {
 
         String id = provider.get("id").getAsString();
 
-        // 检查 ID 是否已存在
+        // Check if the ID already exists
         if (providers.has(id)) {
             throw new IllegalArgumentException("Provider with id '" + id + "' already exists");
         }
 
-        // 添加创建时间
+        // Add creation timestamp
         if (!provider.has("createdAt")) {
             provider.addProperty("createdAt", System.currentTimeMillis());
         }
 
-        // 添加供应商(不自动设为 current,用户需要手动点击"启用"按钮来激活)
+        // Add the provider (not auto-activated; user must manually click "Enable" to activate)
         providers.add(id, provider);
 
         configWriter.accept(config);
@@ -163,7 +163,7 @@ public class ProviderManager {
     }
 
     /**
-     * 保存供应商(如果存在则更新,不存在则添加)
+     * Save a provider (update if it exists, add if it doesn't).
      */
     public void saveClaudeProvider(JsonObject provider) throws IOException {
         if (!provider.has("id")) {
@@ -172,7 +172,7 @@ public class ProviderManager {
 
         JsonObject config = configReader.apply(null);
 
-        // 确保 claude 配置存在
+        // Ensure claude config exists
         if (!config.has("claude")) {
             JsonObject claude = new JsonObject();
             claude.add("providers", new JsonObject());
@@ -185,7 +185,7 @@ public class ProviderManager {
 
         String id = provider.get("id").getAsString();
 
-        // 如果已存在,保留原有的 createdAt
+        // If it already exists, preserve the original createdAt
         if (providers.has(id)) {
             JsonObject existing = providers.getAsJsonObject(id);
             if (existing.has("createdAt") && !provider.has("createdAt")) {
@@ -197,13 +197,13 @@ public class ProviderManager {
             }
         }
 
-        // 覆盖保存
+        // Overwrite and save
         providers.add(id, provider);
         configWriter.accept(config);
     }
 
     /**
-     * 更新供应商
+     * Update a provider.
      */
     public void updateClaudeProvider(String id, JsonObject updates) throws IOException {
         JsonObject config = configReader.apply(null);
@@ -221,14 +221,14 @@ public class ProviderManager {
 
         JsonObject provider = providers.getAsJsonObject(id);
 
-        // 合并更新
+        // Merge updates
         for (String key : updates.keySet()) {
-            // 不允许修改 id
+            // ID modification is not allowed
             if (key.equals("id")) {
                 continue;
             }
 
-            // 如果值为 null (JsonNull),则删除该字段
+            // If the value is null (JsonNull), remove the field
             if (updates.get(key).isJsonNull()) {
                 provider.remove(key);
             } else {
@@ -241,9 +241,9 @@ public class ProviderManager {
     }
 
     /**
-     * 删除供应商(返回 DeleteResult 提供详细错误信息)
-     * @param id 供应商 ID
-     * @return DeleteResult 包含操作结果和错误详情
+     * Delete a provider (returns DeleteResult with detailed error information).
+     * @param id the provider ID
+     * @return DeleteResult containing the operation result and error details
      */
     public DeleteResult deleteClaudeProvider(String id) {
         Path configFilePath = null;
@@ -259,7 +259,7 @@ public class ProviderManager {
                     DeleteResult.ErrorType.FILE_NOT_FOUND,
                     "No claude configuration found",
                     configFilePath.toString(),
-                    "请先添加至少一个供应商配置"
+                    "Please add at least one provider configuration first"
                 );
             }
 
@@ -271,23 +271,23 @@ public class ProviderManager {
                     DeleteResult.ErrorType.FILE_NOT_FOUND,
                     "Provider with id '" + id + "' not found",
                     null,
-                    "请检查供应商 ID 是否正确"
+                    "Please verify that the provider ID is correct"
                 );
             }
 
-            // 创建配置备份(用于回滚)
+            // Create a config backup (for rollback)
             try {
                 Files.copy(configFilePath, backupFilePath, StandardCopyOption.REPLACE_EXISTING);
                 LOG.info("[ProviderManager] Created backup: " + backupFilePath);
             } catch (IOException e) {
                 LOG.warn("[ProviderManager] Warning: Failed to create backup: " + e.getMessage());
-                // 备份失败不阻止删除操作,但记录警告
+                // Backup failure doesn't block the delete operation, but log a warning
             }
 
-            // 删除供应商
+            // Delete the provider
             providers.remove(id);
 
-            // 如果删除的是当前激活的供应商,切换到第一个可用的供应商
+            // If the deleted provider was the active one, switch to the first available provider
             String currentId = claude.has("current") ? claude.get("current").getAsString() : null;
             if (id.equals(currentId)) {
                 if (providers.size() > 0) {
@@ -300,21 +300,21 @@ public class ProviderManager {
                 }
             }
 
-            // 写入配置
+            // Write config
             configWriter.accept(config);
             LOG.info("[ProviderManager] Deleted provider: " + id);
 
-            // 删除成功后移除备份
+            // Remove backup after successful deletion
             try {
                 Files.deleteIfExists(backupFilePath);
             } catch (IOException e) {
-                // 忽略备份文件删除失败
+                // Ignore backup file deletion failure
             }
 
             return DeleteResult.success(id);
 
         } catch (Exception e) {
-            // 尝试从备份恢复
+            // Attempt to restore from backup
             if (backupFilePath != null && configFilePath != null) {
                 try {
                     if (Files.exists(backupFilePath)) {
@@ -331,7 +331,7 @@ public class ProviderManager {
     }
 
     /**
-     * 切换供应商
+     * Switch to a different provider.
      */
     public void switchClaudeProvider(String id) throws IOException {
         JsonObject config = configReader.apply(null);
@@ -353,9 +353,9 @@ public class ProviderManager {
     }
 
     /**
-     * 批量保存供应商配置
-     * @param providers 供应商列表
-     * @return 成功保存的数量
+     * Batch-save provider configurations.
+     * @param providers the list of providers
+     * @return the number of providers saved successfully
      */
     public int saveProviders(List<JsonObject> providers) throws IOException {
         int count = 0;
@@ -371,7 +371,7 @@ public class ProviderManager {
     }
 
     /**
-     * 设置 alwaysThinkingEnabled 在当前激活的供应商中
+     * Set alwaysThinkingEnabled in the currently active provider.
      */
     public boolean setAlwaysThinkingEnabledInActiveProvider(boolean enabled) throws IOException {
         JsonObject config = configReader.apply(null);
@@ -413,7 +413,7 @@ public class ProviderManager {
     }
 
     /**
-     * 应用激活的供应商到 Claude settings.json
+     * Apply the active provider to Claude settings.json.
      */
     public void applyActiveProviderToClaudeSettings() throws IOException {
         JsonObject config = configReader.apply(null);
@@ -434,65 +434,65 @@ public class ProviderManager {
     }
 
     /**
-     * 解析 cc-switch.db 中的供应商配置
-     * 使用 Node.js 脚本读取数据库(跨平台兼容,避免 JDBC 类加载器问题)
-     * @param dbPath db文件路径
-     * @return 解析出的供应商列表
+     * Parse provider configurations from cc-switch.db.
+     * Uses a Node.js script to read the database (cross-platform compatible, avoids JDBC classloader issues).
+     * @param dbPath the database file path
+     * @return the list of parsed providers
      */
     public List<JsonObject> parseProvidersFromCcSwitchDb(String dbPath) throws IOException {
         List<JsonObject> result = new ArrayList<>();
 
-        LOG.info("[ProviderManager] 正在通过 Node.js 读取 cc-switch 数据库: " + dbPath);
+        LOG.info("[ProviderManager] Reading cc-switch database via Node.js: " + dbPath);
 
-        // 获取 ai-bridge 目录路径(自动处理解压)
+        // Get the ai-bridge directory path (handles extraction automatically)
         String aiBridgePath = getAiBridgePath();
         String scriptPath = new File(aiBridgePath, "read-cc-switch-db.js").getAbsolutePath();
 
-        LOG.info("[ProviderManager] 脚本路径: " + scriptPath);
+        LOG.info("[ProviderManager] Script path: " + scriptPath);
 
-        // 检查脚本是否存在
+        // Check if the script exists
         if (!new File(scriptPath).exists()) {
-            throw new IOException("读取脚本不存在: " + scriptPath);
+            throw new IOException("Reader script not found: " + scriptPath);
         }
 
         try {
-            // 优先使用用户在设置页面配置的 Node.js 路径
+            // Prefer the Node.js path configured by the user on the settings page
             String nodePath = null;
             try {
                 com.intellij.ide.util.PropertiesComponent props = com.intellij.ide.util.PropertiesComponent.getInstance();
                 String savedNodePath = props.getValue("claude.code.node.path");
                 if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
-                    // 验证用户配置的路径是否有效
+                    // Validate whether the user-configured path is valid
                     File nodeFile = new File(savedNodePath.trim());
                     if (nodeFile.exists() && nodeFile.canExecute()) {
                         nodePath = savedNodePath.trim();
-                        LOG.info("[ProviderManager] 使用用户配置的 Node.js 路径: " + nodePath);
+                        LOG.info("[ProviderManager] Using user-configured Node.js path: " + nodePath);
                     } else {
-                        LOG.info("[ProviderManager] 用户配置的 Node.js 路径无效,将自动检测: " + savedNodePath);
+                        LOG.info("[ProviderManager] User-configured Node.js path is invalid, will auto-detect: " + savedNodePath);
                     }
                 }
             } catch (Exception e) {
-                LOG.info("[ProviderManager] 读取用户配置的 Node.js 路径失败: " + e.getMessage());
+                LOG.info("[ProviderManager] Failed to read user-configured Node.js path: " + e.getMessage());
             }
 
-            // 如果用户没有配置或配置无效,使用 NodeDetector 自动检测
+            // If the user hasn't configured a path or the config is invalid, auto-detect via NodeDetector
             if (nodePath == null) {
                 NodeDetector nodeDetector = new NodeDetector();
                 nodePath = nodeDetector.findNodeExecutable();
-                LOG.info("[ProviderManager] 自动检测到的 Node.js 路径: " + nodePath);
+                LOG.info("[ProviderManager] Auto-detected Node.js path: " + nodePath);
             }
 
-            // 构建 Node.js 命令
+            // Build the Node.js command
             ProcessBuilder pb = new ProcessBuilder(nodePath, scriptPath, dbPath);
             pb.directory(new File(aiBridgePath));
-            pb.redirectErrorStream(true); // 合并错误输出到标准输出
+            pb.redirectErrorStream(true); // Merge stderr into stdout
 
-            LOG.info("[ProviderManager] 执行命令: " + nodePath + " " + scriptPath + " " + dbPath);
+            LOG.info("[ProviderManager] Executing command: " + nodePath + " " + scriptPath + " " + dbPath);
 
-            // 启动进程
+            // Start the process
             Process process = pb.start();
 
-            // 读取输出
+            // Read output
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
@@ -502,29 +502,29 @@ public class ProviderManager {
                 }
             }
 
-            // 等待进程完成
+            // Wait for process to finish
             int exitCode = process.waitFor();
 
             String jsonOutput = output.toString();
-            LOG.info("[ProviderManager] Node.js 输出: " + jsonOutput);
+            LOG.info("[ProviderManager] Node.js output: " + jsonOutput);
 
             if (exitCode != 0) {
-                throw new IOException("Node.js 脚本执行失败 (退出码: " + exitCode + "): " + jsonOutput);
+                throw new IOException("Node.js script failed (exit code: " + exitCode + "): " + jsonOutput);
             }
 
-            // 解析 JSON 输出
+            // Parse JSON output
             JsonObject response = gson.fromJson(jsonOutput, JsonObject.class);
 
             if (response == null || !response.has("success")) {
-                throw new IOException("无效的 Node.js 脚本响应: " + jsonOutput);
+                throw new IOException("Invalid Node.js script response: " + jsonOutput);
             }
 
             if (!response.get("success").getAsBoolean()) {
-                String errorMsg = response.has("error") ? response.get("error").getAsString() : "未知错误";
-                throw new IOException("Node.js 脚本执行失败: " + errorMsg);
+                String errorMsg = response.has("error") ? response.get("error").getAsString() : "Unknown error";
+                throw new IOException("Node.js script execution failed: " + errorMsg);
             }
 
-            // 提取供应商列表
+            // Extract the provider list
             if (response.has("providers")) {
                 JsonArray providersArray = response.getAsJsonArray("providers");
                 for (JsonElement element : providersArray) {
@@ -535,13 +535,13 @@ public class ProviderManager {
             }
 
             int count = response.has("count") ? response.get("count").getAsInt() : result.size();
-            LOG.info("[ProviderManager] 成功从数据库读取 " + count + " 个 Claude 供应商配置");
+            LOG.info("[ProviderManager] Successfully read " + count + " Claude provider configs from database");
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("Node.js 脚本执行被中断", e);
+            throw new IOException("Node.js script execution was interrupted", e);
         } catch (Exception e) {
-            String errorMsg = "通过 Node.js 读取数据库失败: " + e.getMessage();
+            String errorMsg = "Failed to read database via Node.js: " + e.getMessage();
             LOG.warn("[ProviderManager] " + errorMsg);
             LOG.error("Error occurred", e);
             throw new IOException(errorMsg, e);
@@ -551,43 +551,43 @@ public class ProviderManager {
     }
 
     /**
-     * 获取 ai-bridge 目录路径(使用 BridgeDirectoryResolver 自动处理解压)
+     * Get the ai-bridge directory path (uses BridgeDirectoryResolver with automatic extraction handling).
      */
     private String getAiBridgePath() throws IOException {
-        // 使用共享的 BridgeDirectoryResolver 实例，以便正确检测解压状态
+        // Use the shared BridgeDirectoryResolver instance for proper extraction state detection
         com.github.claudecodegui.bridge.BridgeDirectoryResolver resolver =
                 com.github.claudecodegui.startup.BridgePreloader.getSharedResolver();
 
         File aiBridgeDir = resolver.findSdkDir();
 
-        // 如果返回 null，可能是正在后台解压中，等待解压完成
+        // If null is returned, extraction may be in progress in the background; wait for completion
         if (aiBridgeDir == null) {
             if (resolver.isExtractionInProgress()) {
-                LOG.info("[ProviderManager] ai-bridge 正在解压中，等待完成...");
+                LOG.info("[ProviderManager] ai-bridge extraction in progress, waiting for completion...");
                 try {
-                    // 等待解压完成（最多等待 60 秒）
+                    // Wait for extraction to complete (up to 60 seconds)
                     Boolean ready = resolver.getExtractionFuture().get(60, java.util.concurrent.TimeUnit.SECONDS);
                     if (ready != null && ready) {
                         aiBridgeDir = resolver.getSdkDir();
                     }
                 } catch (java.util.concurrent.TimeoutException e) {
-                    throw new IOException("ai-bridge 解压超时，请稍后重试", e);
+                    throw new IOException("ai-bridge extraction timed out, please try again later", e);
                 } catch (Exception e) {
-                    throw new IOException("等待 ai-bridge 解压时发生错误: " + e.getMessage(), e);
+                    throw new IOException("Error while waiting for ai-bridge extraction: " + e.getMessage(), e);
                 }
             }
         }
 
         if (aiBridgeDir == null || !aiBridgeDir.exists()) {
-            throw new IOException("无法找到 ai-bridge 目录,请检查插件安装");
+            throw new IOException("Cannot find ai-bridge directory, please check the plugin installation");
         }
 
-        LOG.info("[ProviderManager] ai-bridge 目录: " + aiBridgeDir.getAbsolutePath());
+        LOG.info("[ProviderManager] ai-bridge directory: " + aiBridgeDir.getAbsolutePath());
         return aiBridgeDir.getAbsolutePath();
     }
 
     /**
-     * 提取环境配置
+     * Extract environment configuration.
      */
     private JsonObject extractEnvConfig(JsonObject provider) {
         if (provider == null ||

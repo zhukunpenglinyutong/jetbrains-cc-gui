@@ -12,8 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
- * 匹配文件路径与 ignore 规则
- * 支持多个 .gitignore 文件的层级规则
+ * Matches file paths against ignore rules.
+ * Supports hierarchical rules from multiple .gitignore files.
  */
 public class IgnoreRuleMatcher {
 
@@ -22,12 +22,12 @@ public class IgnoreRuleMatcher {
     private final List<CompiledRule> compiledRules = new ArrayList<>();
     private final String basePath;
 
-    // 缓存已编译的正则表达式，避免重复编译
+    // Cache compiled regex patterns to avoid recompilation
     private static final ConcurrentHashMap<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
     private static final int MAX_CACHE_SIZE = 1000;
 
     /**
-     * 编译后的规则，包含预编译的正则表达式
+     * A compiled rule containing pre-compiled regex patterns.
      */
     private static class CompiledRule {
         final IgnoreRule rule;
@@ -38,22 +38,22 @@ public class IgnoreRuleMatcher {
             this.rule = rule;
             String regex = rule.getRegexPattern();
 
-            // 非锚定模式：可以匹配路径中任意位置的文件/目录名
-            // 例如 "ZKP.md" 应该匹配 "ZKP.md"、"foo/ZKP.md"、"foo/bar/ZKP.md"
-            // 需要确保匹配到路径分段边界，避免 "build" 误匹配 "build2"
+            // Non-anchored pattern: can match a file/directory name at any position in the path
+            // e.g., "ZKP.md" should match "ZKP.md", "foo/ZKP.md", "foo/bar/ZKP.md"
+            // Must ensure matching respects path segment boundaries to avoid "build" matching "build2"
             this.pattern = getOrCompilePattern("(^|.*/)" + regex + "(?:/.*)?$");
 
-            // 锚定模式：必须从根开始匹配
-            // 同样需要分段边界，避免 "foo/bar" 误匹配 "foo/bar2"
+            // Anchored pattern: must match from the root
+            // Also requires segment boundaries to avoid "foo/bar" matching "foo/bar2"
             this.anchoredPattern = getOrCompilePattern("^" + regex + "(?:/.*)?$");
         }
 
         private Pattern getOrCompilePattern(String regex) {
-            // 简单的缓存大小控制
+            // Simple cache size control
             if (PATTERN_CACHE.size() > MAX_CACHE_SIZE) {
                 PATTERN_CACHE.clear();
             }
-            // 仅在 Windows/macOS 使用不区分大小写；Linux 通常区分大小写
+            // Use case-insensitive matching on Windows/macOS; Linux is typically case-sensitive
             boolean caseInsensitive = SystemInfo.isWindows || SystemInfo.isMac;
             int flags = caseInsensitive ? Pattern.CASE_INSENSITIVE : 0;
             String cacheKey = (caseInsensitive ? "(?i)" : "(?c)") + regex;
@@ -62,14 +62,14 @@ public class IgnoreRuleMatcher {
     }
 
     /**
-     * 创建规则匹配器
+     * Create a rule matcher.
      */
     public IgnoreRuleMatcher(String basePath) {
         this.basePath = normalizePath(basePath);
     }
 
     /**
-     * 从 .gitignore 文件加载规则
+     * Load rules from a .gitignore file.
      */
     public void loadRules(File gitignoreFile) {
         try {
@@ -84,7 +84,7 @@ public class IgnoreRuleMatcher {
     }
 
     /**
-     * 从字符串内容加载规则
+     * Load rules from string content.
      */
     public void loadRulesFromContent(String content) {
         List<IgnoreRule> rules = IgnoreRuleParser.parseContent(content);
@@ -94,7 +94,7 @@ public class IgnoreRuleMatcher {
     }
 
     /**
-     * 判断路径是否应该被忽略
+     * Determine whether a path should be ignored.
      */
     public boolean isIgnored(String path, boolean isDirectory) {
         if (compiledRules.isEmpty()) {
@@ -103,7 +103,7 @@ public class IgnoreRuleMatcher {
 
         String normalizedPath = normalizePath(path);
 
-        // 如果路径以 basePath 开头，转换为相对路径
+        // If the path starts with basePath, convert to a relative path
         if (normalizedPath.startsWith(basePath)) {
             normalizedPath = normalizedPath.substring(basePath.length());
             if (normalizedPath.startsWith("/")) {
@@ -113,11 +113,11 @@ public class IgnoreRuleMatcher {
 
         boolean ignored = false;
 
-        // 按顺序应用规则，后面的规则可以覆盖前面的
+        // Apply rules in order; later rules can override earlier ones
         for (CompiledRule compiled : compiledRules) {
             IgnoreRule rule = compiled.rule;
 
-            // 如果规则仅匹配目录，但当前不是目录，跳过
+            // If the rule only matches directories but the current path is not a directory, skip
             if (rule.isDirectoryOnly() && !isDirectory) {
                 continue;
             }
@@ -138,21 +138,21 @@ public class IgnoreRuleMatcher {
     }
 
     /**
-     * 获取当前加载的规则数量
+     * Get the number of currently loaded rules.
      */
     public int getRuleCount() {
         return compiledRules.size();
     }
 
     /**
-     * 清除所有规则
+     * Clear all rules.
      */
     public void clear() {
         compiledRules.clear();
     }
 
     /**
-     * 归一化路径
+     * Normalize a path.
      */
     private String normalizePath(String path) {
         if (path == null) {
@@ -162,8 +162,8 @@ public class IgnoreRuleMatcher {
     }
 
     /**
-     * 将路径追加一个分段边界，便于规则在不引入误匹配的情况下匹配目录/文件名。
-     * 例如 rule "build" 的正则 "build" 不应匹配 "build2"；追加 "/" 后可利用边界判断。
+     * Append a segment boundary to the path so rules can match directory/file names without false positives.
+     * For example, the regex for rule "build" should not match "build2"; appending "/" enables boundary checking.
      */
     private String ensureSegmentBoundary(String path) {
         if (path == null || path.isEmpty()) {
@@ -173,12 +173,12 @@ public class IgnoreRuleMatcher {
     }
 
     /**
-     * 静态工厂方法：创建并加载项目根目录的 .gitignore
+     * Static factory method: create a matcher and load the project root .gitignore.
      */
     public static IgnoreRuleMatcher forProject(String projectBasePath) {
         IgnoreRuleMatcher matcher = new IgnoreRuleMatcher(projectBasePath);
 
-        // 加载根目录的 .gitignore
+        // Load the root .gitignore
         File rootGitignore = new File(projectBasePath, ".gitignore");
         if (rootGitignore.exists()) {
             matcher.loadRules(rootGitignore);

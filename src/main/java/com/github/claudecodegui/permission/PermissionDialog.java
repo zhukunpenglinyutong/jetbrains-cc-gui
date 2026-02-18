@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 import com.github.claudecodegui.ClaudeCodeGuiBundle;
 import com.intellij.openapi.diagnostic.Logger;
 /**
- * 权限请求对话框
+ * Permission request dialog.
  */
 public class PermissionDialog extends DialogWrapper {
     private static final Logger LOG = Logger.getInstance(PermissionDialog.class);
@@ -60,12 +60,12 @@ public class PermissionDialog extends DialogWrapper {
         setModal(true);
         setResizable(false);
 
-        // 创建 JCEF 浏览器
+        // Create the JCEF browser
         this.browser = JBCefBrowserFactory.create();
         JBCefBrowserBase browserBase = this.browser;
         this.jsQuery = JBCefJSQuery.create(browserBase);
 
-        // 设置 JavaScript 回调
+        // Set up JavaScript callback
         jsQuery.addHandler((message) -> {
             if (message.startsWith("permission_decision:")) {
                 String jsonData = message.substring("permission_decision:".length());
@@ -79,7 +79,7 @@ public class PermissionDialog extends DialogWrapper {
             return null;
         });
 
-        // 加载 HTML
+        // Load HTML
         loadHtml();
 
         init();
@@ -87,7 +87,7 @@ public class PermissionDialog extends DialogWrapper {
 
     private void loadHtml() {
         try {
-            // 读取 HTML 文件
+            // Read the HTML file
             InputStream is = getClass().getResourceAsStream("/html/permission-dialog.html");
             if (is == null) {
                 throw new RuntimeException(ClaudeCodeGuiBundle.message("permission.htmlNotFound"));
@@ -97,18 +97,18 @@ public class PermissionDialog extends DialogWrapper {
                     .lines()
                     .collect(Collectors.joining("\n"));
 
-            // 注入 JavaScript 桥接代码
+            // Inject JavaScript bridge code
             String jsInjection = String.format(
                     "<script>window.sendToJava = function(message) { %s };</script>",
                     jsQuery.inject("message")
             );
             html = html.replace("</body>", jsInjection + "</body>");
 
-            // 加载 HTML
+            // Load the HTML content
             browser.getJBCefClient().addLoadHandler(new CefLoadHandlerAdapter() {
                 @Override
                 public void onLoadEnd(CefBrowser cefBrowser, CefFrame frame, int httpStatusCode) {
-                    // 页面加载完成后，初始化权限请求数据
+                    // After page load completes, initialize the permission request data
                     initializeRequestData();
                 }
             }, browser.getCefBrowser());
@@ -160,7 +160,7 @@ public class PermissionDialog extends DialogWrapper {
 
     @Override
     protected Action[] createActions() {
-        // 不显示默认的 OK 和 Cancel 按钮
+        // Do not show the default OK and Cancel buttons
         return new Action[0];
     }
 

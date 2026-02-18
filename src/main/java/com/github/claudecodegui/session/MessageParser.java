@@ -7,31 +7,31 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
 /**
- * 消息解析器
- * 负责解析服务器返回的消息并转换为 Message 对象
+ * Message parser.
+ * Parses server-returned messages and converts them to Message objects.
  */
 public class MessageParser {
     private static final Logger LOG = Logger.getInstance(MessageParser.class);
 
     /**
-     * 解析服务器返回的消息
+     * Parse a server-returned message.
      */
     public ClaudeSession.Message parseServerMessage(JsonObject msg) {
         String type = msg.has("type") ? msg.get("type").getAsString() : null;
 
-        // 过滤 isMeta 消息
+        // Filter out isMeta messages
         if (msg.has("isMeta") && msg.get("isMeta").getAsBoolean()) {
             return null;
         }
 
-        // 过滤命令消息
+        // Filter out command messages
         if (shouldFilterCommandMessage(msg)) {
             return null;
         }
 
         if ("user".equals(type)) {
             String content = extractMessageContent(msg);
-            // 检查是否包含 tool_result
+            // Check if it contains a tool_result
             if (content == null || content.trim().isEmpty()) {
                 if (hasToolResult(msg)) {
                     return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", msg);
@@ -48,7 +48,7 @@ public class MessageParser {
     }
 
     /**
-     * 检查是否应该过滤命令消息
+     * Check whether a command message should be filtered out.
      */
     private boolean shouldFilterCommandMessage(JsonObject msg) {
         if (!msg.has("message") || !msg.get("message").isJsonObject()) {
@@ -80,7 +80,7 @@ public class MessageParser {
             }
         }
 
-        // 过滤包含命令标签的内容（允许包含 <command-message> 的用户输入）
+        // Filter content with command tags (allow user input containing <command-message>)
         if (contentStr != null) {
             boolean hasCommandMessage = contentStr.contains("<command-message>") &&
                 contentStr.contains("</command-message>");
@@ -98,7 +98,7 @@ public class MessageParser {
     }
 
     /**
-     * 检查消息是否包含 tool_result
+     * Check whether the message contains a tool_result.
      */
     public boolean hasToolResult(JsonObject msg) {
         if (!msg.has("message") || !msg.get("message").isJsonObject()) {
@@ -125,7 +125,7 @@ public class MessageParser {
     }
 
     /**
-     * 提取消息内容
+     * Extract the message content.
      */
     public String extractMessageContent(JsonObject msg) {
         if (!msg.has("message")) {
@@ -144,7 +144,7 @@ public class MessageParser {
     }
 
     /**
-     * 从 JsonElement 中提取内容
+     * Extract content from a JsonElement.
      */
     private String extractContentFromElement(JsonElement contentElement) {
         if (contentElement.isJsonPrimitive()) {
@@ -167,7 +167,7 @@ public class MessageParser {
     }
 
     /**
-     * 从数组格式的内容中提取文本
+     * Extract text from array-format content.
      */
     private String extractFromArrayContent(JsonArray contentArray) {
         StringBuilder sb = new StringBuilder();

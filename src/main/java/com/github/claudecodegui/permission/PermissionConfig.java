@@ -5,55 +5,55 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 权限配置类
- * 定义需要权限控制的工具和默认配置
+ * Permission configuration class.
+ * Defines tools that require permission control and default settings.
  */
 public class PermissionConfig {
 
     /**
-     * 需要权限控制的工具列表
+     * List of tools that require permission control.
      */
     public static final Set<String> CONTROLLED_TOOLS = new HashSet<>(Arrays.asList(
-        // 文件操作
-        "Write",           // 写入文件
-        "Edit",            // 编辑文件
-        "Delete",          // 删除文件
-        "CreateDirectory", // 创建目录
-        "MoveFile",        // 移动文件
-        "CopyFile",        // 复制文件
-        "Rename",          // 重命名文件
+        // File operations
+        "Write",           // Write file
+        "Edit",            // Edit file
+        "Delete",          // Delete file
+        "CreateDirectory", // Create directory
+        "MoveFile",        // Move file
+        "CopyFile",        // Copy file
+        "Rename",          // Rename file
 
-        // 系统操作
-        "Bash",            // 执行Shell命令
-        "ExecuteCommand",  // 执行系统命令
-        "RunCode",         // 运行代码
-        "SystemCommand",   // 系统命令
+        // System operations
+        "Bash",            // Execute shell command
+        "ExecuteCommand",  // Execute system command
+        "RunCode",         // Run code
+        "SystemCommand",   // System command
 
-        // 包管理
-        "InstallPackage",  // 安装软件包
-        "UninstallPackage",// 卸载软件包
-        "UpdatePackage",   // 更新软件包
+        // Package management
+        "InstallPackage",  // Install package
+        "UninstallPackage",// Uninstall package
+        "UpdatePackage",   // Update package
 
-        // 网络操作
-        "HttpRequest",     // HTTP请求
-        "Download",        // 下载文件
-        "Upload",          // 上传文件
+        // Network operations
+        "HttpRequest",     // HTTP request
+        "Download",        // Download file
+        "Upload",          // Upload file
 
-        // Git操作
-        "GitCommit",       // Git提交
-        "GitPush",         // Git推送
-        "GitPull",         // Git拉取
-        "GitMerge",        // Git合并
-        "GitCheckout",     // Git切换分支
+        // Git operations
+        "GitCommit",       // Git commit
+        "GitPush",         // Git push
+        "GitPull",         // Git pull
+        "GitMerge",        // Git merge
+        "GitCheckout",     // Git checkout branch
 
-        // 数据库操作
-        "DatabaseQuery",   // 数据库查询
-        "DatabaseUpdate",  // 数据库更新
-        "DatabaseDelete"   // 数据库删除
+        // Database operations
+        "DatabaseQuery",   // Database query
+        "DatabaseUpdate",  // Database update
+        "DatabaseDelete"   // Database delete
     ));
 
     /**
-     * 高风险工具 - 总是需要确认
+     * High-risk tools - always require confirmation.
      */
     public static final Set<String> HIGH_RISK_TOOLS = new HashSet<>(Arrays.asList(
         "Delete",
@@ -64,72 +64,72 @@ public class PermissionConfig {
     ));
 
     /**
-     * 默认允许的安全工具
+     * Safe tools that are allowed by default.
      */
     public static final Set<String> SAFE_TOOLS = new HashSet<>(Arrays.asList(
-        "Read",            // 读取文件
-        "List",            // 列出文件
-        "Search",          // 搜索
-        "Grep",            // 文本搜索
-        "Find"             // 查找文件
+        "Read",            // Read file
+        "List",            // List files
+        "Search",          // Search
+        "Grep",            // Text search
+        "Find"             // Find files
     ));
 
     /**
-     * 判断工具是否需要权限控制
+     * Check if a tool requires permission control.
      */
     public static boolean requiresPermission(String toolName) {
         return CONTROLLED_TOOLS.contains(toolName);
     }
 
     /**
-     * 判断工具是否为高风险
+     * Check if a tool is high-risk.
      */
     public static boolean isHighRisk(String toolName) {
         return HIGH_RISK_TOOLS.contains(toolName);
     }
 
     /**
-     * 判断工具是否安全
+     * Check if a tool is safe.
      */
     public static boolean isSafe(String toolName) {
         return SAFE_TOOLS.contains(toolName);
     }
 
     /**
-     * 获取工具的风险等级描述
+     * Get the risk level description for a tool.
      */
     public static String getRiskLevel(String toolName) {
         if (isHighRisk(toolName)) {
-            return "高风险";
+            return "High risk";
         } else if (requiresPermission(toolName)) {
-            return "需要权限";
+            return "Requires permission";
         } else if (isSafe(toolName)) {
-            return "安全";
+            return "Safe";
         } else {
-            return "未知";
+            return "Unknown";
         }
     }
 
     /**
-     * 默认权限配置
+     * Default permission settings.
      */
     public static class DefaultSettings {
-        // 是否启用权限系统
+        // Whether the permission system is enabled
         public static boolean ENABLED = true;
 
-        // 是否对高风险操作总是询问
+        // Whether to always prompt for high-risk operations
         public static boolean ALWAYS_ASK_HIGH_RISK = true;
 
-        // 权限记忆超时时间（毫秒）
-        public static long MEMORY_TIMEOUT = 3600000; // 1小时
+        // Permission memory timeout in milliseconds
+        public static long MEMORY_TIMEOUT = 3600000; // 1 hour
 
-        // 最大记忆条目数
+        // Maximum number of memory entries
         public static int MAX_MEMORY_ENTRIES = 100;
 
-        // 是否记录权限日志
+        // Whether to log permission events
         public static boolean LOG_PERMISSIONS = true;
 
-        // 是否在开发模式下跳过权限检查
+        // Whether to skip permission checks in development mode
         public static boolean SKIP_IN_DEV_MODE = false;
     }
 }

@@ -6,8 +6,8 @@
 import fs from 'fs';
 
 /**
- * 读取附件 JSON（通过环境变量 CLAUDE_ATTACHMENTS_FILE 指定路径）
- * @deprecated 使用 loadAttachmentsFromStdin 替代，避免文件 I/O
+ * Read attachment JSON (path specified via CLAUDE_ATTACHMENTS_FILE environment variable).
+ * @deprecated Use loadAttachmentsFromStdin instead to avoid file I/O.
  */
 export function loadAttachmentsFromEnv() {
   try {
@@ -24,13 +24,13 @@ export function loadAttachmentsFromEnv() {
 }
 
 /**
- * 从 stdin 读取附件数据（异步）
- * Java 端通过 stdin 发送 JSON 格式的附件数组，避免临时文件
- * 格式: { "attachments": [...], "message": "用户消息" }
+ * Read attachment data from stdin (async).
+ * The Java side sends a JSON-formatted attachment array via stdin, avoiding temporary files.
+ * Format: { "attachments": [...], "message": "user message" }
  */
 export async function readStdinData() {
   return new Promise((resolve) => {
-    // 检查是否有环境变量标记表示使用 stdin
+    // Check if the environment variable indicates stdin should be used
     if (process.env.CLAUDE_USE_STDIN !== 'true') {
       resolve(null);
       return;
@@ -39,7 +39,7 @@ export async function readStdinData() {
     let data = '';
     const timeout = setTimeout(() => {
       resolve(null);
-    }, 5000); // 5秒超时
+    }, 5000); // 5-second timeout
 
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (chunk) => {
@@ -65,46 +65,46 @@ export async function readStdinData() {
       resolve(null);
     });
 
-    // 开始读取
+    // Start reading
     process.stdin.resume();
   });
 }
 
 /**
- * 从 stdin 或环境变量文件加载附件（兼容两种方式）
- * 优先使用 stdin，如果没有则回退到文件方式
+ * Load attachments from stdin or environment variable file (supports both methods).
+ * Prefers stdin; falls back to file-based loading if stdin data is not available.
  *
- * 支持的 stdinData 格式：
- * 1. 直接数组格式: [{fileName, mediaType, data}, ...]
- * 2. 包装对象格式: { attachments: [...] }
+ * Supported stdinData formats:
+ * 1. Direct array format: [{fileName, mediaType, data}, ...]
+ * 2. Wrapped object format: { attachments: [...] }
  */
 export async function loadAttachments(stdinData) {
-  // 优先使用 stdin 传入的数据
+  // Prefer data passed via stdin
   if (stdinData) {
-    // 格式1: 直接数组格式 (Java 端发送)
+    // Format 1: Direct array format (sent from Java side)
     if (Array.isArray(stdinData)) {
       return stdinData;
     }
-    // 格式2: 包装对象格式
+    // Format 2: Wrapped object format
     if (Array.isArray(stdinData.attachments)) {
       return stdinData.attachments;
     }
   }
 
-  // 回退到文件方式（兼容旧版本）
+  // Fall back to file-based loading (backward compatible with older versions)
   return loadAttachmentsFromEnv();
 }
 
 /**
- * 构建用户消息内容块（支持图片和文本）
- * @param {Array} attachments - 附件数组
- * @param {string} message - 用户消息文本
- * @returns {Array} 内容块数组
+ * Build user message content blocks (supports images and text).
+ * @param {Array} attachments - Attachment array
+ * @param {string} message - User message text
+ * @returns {Array} Content block array
  */
 export function buildContentBlocks(attachments, message) {
   const contentBlocks = [];
 
-  // 添加图片块
+  // Add image blocks
   for (const a of attachments) {
     const mt = typeof a.mediaType === 'string' ? a.mediaType : '';
     if (mt.startsWith('image/')) {
@@ -117,13 +117,13 @@ export function buildContentBlocks(attachments, message) {
         }
       });
     } else {
-      // 非图片附件作为文本提示
+      // Non-image attachments as text placeholders
       const name = a.fileName || 'Attachment';
       contentBlocks.push({ type: 'text', text: `[Attachment: ${name}]` });
     }
   }
 
-  // 处理空消息情况
+  // Handle empty message case
   let userText = message;
   if (!userText || userText.trim() === '') {
     const imageCount = contentBlocks.filter(b => b.type === 'image').length;
@@ -137,7 +137,7 @@ export function buildContentBlocks(attachments, message) {
     }
   }
 
-  // 添加用户文本
+  // Add user text
   contentBlocks.push({ type: 'text', text: userText });
 
   return contentBlocks;

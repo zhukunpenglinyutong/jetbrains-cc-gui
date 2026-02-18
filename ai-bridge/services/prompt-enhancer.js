@@ -29,15 +29,15 @@ async function ensureClaudeSdk() {
   return claudeSdk;
 }
 
-// 上下文长度限制（字符数），避免超出模型 token 限制
-const MAX_SELECTED_CODE_LENGTH = 2000;      // 选中代码最大长度
-const MAX_CURSOR_CONTEXT_LENGTH = 1000;     // 光标上下文最大长度
-const MAX_CURRENT_FILE_LENGTH = 3000;       // 当前文件内容最大长度
-const MAX_RELATED_FILES_LENGTH = 2000;      // 相关文件总长度限制
-const MAX_SINGLE_RELATED_FILE_LENGTH = 500; // 单个相关文件最大长度
+// Context length limits (in characters) to avoid exceeding model token limits
+const MAX_SELECTED_CODE_LENGTH = 2000;      // Max length for selected code
+const MAX_CURSOR_CONTEXT_LENGTH = 1000;     // Max length for cursor context
+const MAX_CURRENT_FILE_LENGTH = 3000;       // Max length for current file content
+const MAX_RELATED_FILES_LENGTH = 2000;      // Total length limit for related files
+const MAX_SINGLE_RELATED_FILE_LENGTH = 500; // Max length per related file
 
 /**
- * 从 stdin 读取输入
+ * Read input from stdin.
  */
 async function readStdin() {
   return new Promise((resolve, reject) => {
@@ -54,11 +54,11 @@ async function readStdin() {
 }
 
 /**
- * 截断文本到指定长度，保持完整性
- * @param {string} text - 原始文本
- * @param {number} maxLength - 最大长度
- * @param {boolean} fromEnd - 是否从末尾截断（默认从开头截断）
- * @returns {string} - 截断后的文本
+ * Truncate text to a specified length while preserving integrity.
+ * @param {string} text - Original text
+ * @param {number} maxLength - Maximum length
+ * @param {boolean} fromEnd - Whether to truncate from the end (defaults to truncating from the start)
+ * @returns {string} - Truncated text
  */
 function truncateText(text, maxLength, fromEnd = false) {
   if (!text || text.length <= maxLength) {
@@ -72,9 +72,9 @@ function truncateText(text, maxLength, fromEnd = false) {
 }
 
 /**
- * 获取文件扩展名对应的语言名称
- * @param {string} filePath - 文件路径
- * @returns {string} - 语言名称
+ * Get the programming language name for a file extension.
+ * @param {string} filePath - File path
+ * @returns {string} - Language name
  */
 function getLanguageFromPath(filePath) {
   if (!filePath) return 'text';
@@ -121,52 +121,52 @@ function getLanguageFromPath(filePath) {
 }
 
 /**
- * 构建包含上下文信息的完整提示词
- * 按优先级整合上下文：选中代码 > 光标位置 > 当前文件 > 相关文件
+ * Build a complete prompt with context information.
+ * Integrates context by priority: selected code > cursor position > current file > related files.
  *
- * @param {string} originalPrompt - 原始提示词
- * @param {Object} context - 上下文信息
- * @param {string} context.selectedCode - 用户选中的代码
- * @param {Object} context.currentFile - 当前文件信息
- * @param {string} context.currentFile.path - 文件路径
- * @param {string} context.currentFile.content - 文件内容
- * @param {string} context.currentFile.language - 语言类型
- * @param {Object} context.cursorPosition - 光标位置
- * @param {number} context.cursorPosition.line - 行号
- * @param {number} context.cursorPosition.column - 列号
- * @param {string} context.cursorContext - 光标周围的代码片段
- * @param {Array} context.relatedFiles - 相关文件列表
- * @param {string} context.projectType - 项目类型
- * @returns {string} - 构建的完整提示词
+ * @param {string} originalPrompt - Original prompt
+ * @param {Object} context - Context information
+ * @param {string} context.selectedCode - User-selected code
+ * @param {Object} context.currentFile - Current file information
+ * @param {string} context.currentFile.path - File path
+ * @param {string} context.currentFile.content - File content
+ * @param {string} context.currentFile.language - Language type
+ * @param {Object} context.cursorPosition - Cursor position
+ * @param {number} context.cursorPosition.line - Line number
+ * @param {number} context.cursorPosition.column - Column number
+ * @param {string} context.cursorContext - Code snippet around the cursor
+ * @param {Array} context.relatedFiles - Related file list
+ * @param {string} context.projectType - Project type
+ * @returns {string} - The constructed complete prompt
  */
 function buildFullPrompt(originalPrompt, context) {
   let fullPrompt = `Please optimize the following prompt:\n\n${originalPrompt}`;
 
-  // 如果没有上下文信息，直接返回
+  // If there's no context information, return as-is
   if (!context) {
     return fullPrompt;
   }
 
   const contextParts = [];
 
-  // 1. 最高优先级：用户选中的代码
+  // 1. Highest priority: user-selected code
   if (context.selectedCode && context.selectedCode.trim()) {
     const truncatedCode = truncateText(context.selectedCode, MAX_SELECTED_CODE_LENGTH);
     const language = context.currentFile?.language || getLanguageFromPath(context.currentFile?.path) || 'text';
     contextParts.push(`[User Selected Code]\n\`\`\`${language}\n${truncatedCode}\n\`\`\``);
-    console.log(`[PromptEnhancer] 添加选中代码上下文，长度: ${context.selectedCode.length}`);
+    console.log(`[PromptEnhancer] Added selected code context, length: ${context.selectedCode.length}`);
   }
 
-  // 2. 次高优先级：光标位置上下文（仅当没有选中代码时使用）
+  // 2. Second priority: cursor position context (only used when no code is selected)
   if (!context.selectedCode && context.cursorContext && context.cursorContext.trim()) {
     const truncatedContext = truncateText(context.cursorContext, MAX_CURSOR_CONTEXT_LENGTH);
     const language = context.currentFile?.language || getLanguageFromPath(context.currentFile?.path) || 'text';
     const lineInfo = context.cursorPosition ? ` (line ${context.cursorPosition.line})` : '';
     contextParts.push(`[Code Around Cursor${lineInfo}]\n\`\`\`${language}\n${truncatedContext}\n\`\`\``);
-    console.log(`[PromptEnhancer] 添加光标上下文，长度: ${context.cursorContext.length}`);
+    console.log(`[PromptEnhancer] Added cursor context, length: ${context.cursorContext.length}`);
   }
 
-  // 3. 当前文件基本信息（始终包含，如果有的话）
+  // 3. Current file basic info (always included when available)
   if (context.currentFile) {
     const { path, language, content } = context.currentFile;
     let fileInfo = '';
@@ -175,26 +175,26 @@ function buildFullPrompt(originalPrompt, context) {
       const lang = language || getLanguageFromPath(path);
       fileInfo = `[Current File] ${path}\n[Language Type] ${lang}`;
 
-      // 如果没有选中代码和光标上下文，可以包含部分文件内容
+      // If no selected code or cursor context, include a portion of the file content
       if (!context.selectedCode && !context.cursorContext && content && content.trim()) {
         const truncatedContent = truncateText(content, MAX_CURRENT_FILE_LENGTH);
         fileInfo += `\n[File Content Preview]\n\`\`\`${lang}\n${truncatedContent}\n\`\`\``;
-        console.log(`[PromptEnhancer] 添加文件内容预览，长度: ${content.length}`);
+        console.log(`[PromptEnhancer] Added file content preview, length: ${content.length}`);
       }
 
       contextParts.push(fileInfo);
-      console.log(`[PromptEnhancer] 添加当前文件信息: ${path}`);
+      console.log(`[PromptEnhancer] Added current file info: ${path}`);
     }
   }
 
-  // 4. 最低优先级：相关文件信息
+  // 4. Lowest priority: related file information
   if (context.relatedFiles && Array.isArray(context.relatedFiles) && context.relatedFiles.length > 0) {
     let totalLength = 0;
     const relatedFilesInfo = [];
 
     for (const file of context.relatedFiles) {
       if (totalLength >= MAX_RELATED_FILES_LENGTH) {
-        console.log(`[PromptEnhancer] 相关文件总长度已达上限，跳过剩余文件`);
+        console.log(`[PromptEnhancer] Related files total length reached limit, skipping remaining files`);
         break;
       }
 
@@ -214,17 +214,17 @@ function buildFullPrompt(originalPrompt, context) {
 
     if (relatedFilesInfo.length > 0) {
       contextParts.push(`[Related Files]\n${relatedFilesInfo.join('\n')}`);
-      console.log(`[PromptEnhancer] 添加 ${relatedFilesInfo.length} 个相关文件`);
+      console.log(`[PromptEnhancer] Added ${relatedFilesInfo.length} related file(s)`);
     }
   }
 
-  // 5. 项目类型信息
+  // 5. Project type information
   if (context.projectType) {
     contextParts.push(`[Project Type] ${context.projectType}`);
-    console.log(`[PromptEnhancer] 添加项目类型: ${context.projectType}`);
+    console.log(`[PromptEnhancer] Added project type: ${context.projectType}`);
   }
 
-  // 组合所有上下文信息
+  // Combine all context information
   if (contextParts.length > 0) {
     fullPrompt += '\n\n---\nThe following is relevant context information, please refer to it when optimizing the prompt:\n\n' + contextParts.join('\n\n');
   }
@@ -233,74 +233,74 @@ function buildFullPrompt(originalPrompt, context) {
 }
 
 /**
- * 增强提示词
- * @param {string} originalPrompt - 原始提示词
- * @param {string} systemPrompt - 系统提示词
- * @param {string} model - 使用的模型（可选，前端模型 ID）
- * @param {Object} context - 上下文信息（可选）
- * @returns {Promise<string>} - 增强后的提示词
+ * Enhance a prompt.
+ * @param {string} originalPrompt - Original prompt
+ * @param {string} systemPrompt - System prompt
+ * @param {string} model - Model to use (optional, frontend model ID)
+ * @param {Object} context - Context information (optional)
+ * @returns {Promise<string>} - Enhanced prompt
  */
 async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
   try {
     const sdk = await ensureClaudeSdk();
     const { query } = sdk;
 
-    // 设置环境变量（与正常对话功能相同）
+    // Set environment variables (same as normal conversation)
     process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
 
-    // 设置 API Key（这会设置正确的环境变量）
+    // Set up API Key (this sets the correct environment variables)
     const config = setupApiKey();
 
-    console.log(`[PromptEnhancer] 认证类型: ${config.authType}`);
+    console.log(`[PromptEnhancer] Auth type: ${config.authType}`);
     console.log(`[PromptEnhancer] Base URL: ${config.baseUrl || 'https://api.anthropic.com'}`);
 
-    // 将模型 ID 映射为 SDK 期望的名称
+    // Map model ID to the name expected by the SDK
     const sdkModelName = mapModelIdToSdkName(model);
-    console.log(`[PromptEnhancer] 模型映射: ${model} -> ${sdkModelName}`);
+    console.log(`[PromptEnhancer] Model mapping: ${model} -> ${sdkModelName}`);
 
-    // 使用用户主目录作为工作目录
+    // Use the user's home directory as the working directory
     const workingDirectory = getRealHomeDir();
 
-    // 构建包含上下文信息的完整提示词
+    // Build complete prompt with context information
     const fullPrompt = buildFullPrompt(originalPrompt, context);
-    console.log(`[PromptEnhancer] 完整提示词长度: ${fullPrompt.length}`);
+    console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}`);
 
-    // 准备选项
-    // 注意：提示词优化是简单任务，不需要工具调用
+    // Prepare options
+    // Note: Prompt enhancement is a simple task that doesn't require tool calls
     const options = {
       cwd: workingDirectory,
-      permissionMode: 'bypassPermissions',  // 增强提示词不需要工具权限
+      permissionMode: 'bypassPermissions',  // Prompt enhancement doesn't need tool permissions
       model: sdkModelName,
-      maxTurns: 1,  // 提示词优化只需要单轮对话，不需要工具调用
-      // 使用自定义系统提示词（直接传递字符串，而不是对象格式）
+      maxTurns: 1,  // Prompt enhancement only needs a single turn, no tool calls
+      // Use custom system prompt (passed as a string directly, not as an object)
       systemPrompt: systemPrompt,
       settingSources: ['user', 'project', 'local'],
     };
 
-    console.log(`[PromptEnhancer] 开始调用 Claude Agent SDK...`);
+    console.log(`[PromptEnhancer] Calling Claude Agent SDK...`);
 
-    // 调用 query 函数
+    // Call the query function
     const result = query({
       prompt: fullPrompt,
       options
     });
 
-    // 收集响应文本
+    // Collect response text
     let responseText = '';
     let messageCount = 0;
 
     for await (const msg of result) {
       messageCount++;
-      console.log(`[PromptEnhancer] 收到消息 #${messageCount}, type: ${msg.type}`);
+      console.log(`[PromptEnhancer] Received message #${messageCount}, type: ${msg.type}`);
 
-      // 处理助手消息
+      // Process assistant messages
       if (msg.type === 'assistant') {
         const content = msg.message?.content;
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'text') {
               responseText += block.text;
-              console.log(`[PromptEnhancer] 收到文本: ${block.text.substring(0, 100)}...`);
+              console.log(`[PromptEnhancer] Received text: ${block.text.substring(0, 100)}...`);
             }
           }
         } else if (typeof content === 'string') {
@@ -309,8 +309,8 @@ async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
       }
     }
 
-    console.log(`[PromptEnhancer] 总共收到 ${messageCount} 条消息`);
-    console.log(`[PromptEnhancer] 响应文本长度: ${responseText.length}`);
+    console.log(`[PromptEnhancer] Total messages received: ${messageCount}`);
+    console.log(`[PromptEnhancer] Response text length: ${responseText.length}`);
 
     if (responseText.trim()) {
       return responseText.trim();
@@ -318,17 +318,17 @@ async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
 
     throw new Error('AI response is empty');
   } catch (error) {
-    console.error('[PromptEnhancer] 增强失败:', error.message);
+    console.error('[PromptEnhancer] Enhancement failed:', error.message);
     throw error;
   }
 }
 
 /**
- * 主函数
+ * Main function.
  */
 async function main() {
   try {
-    // 读取 stdin 输入
+    // Read stdin input
     const input = await readStdin();
     const data = JSON.parse(input);
 
@@ -339,35 +339,35 @@ async function main() {
       process.exit(0);
     }
 
-    // 记录上下文信息
+    // Log context information
     if (context) {
-      console.log(`[PromptEnhancer] 收到上下文信息:`);
+      console.log(`[PromptEnhancer] Received context info:`);
       if (context.selectedCode) {
-        console.log(`  - 选中代码: ${context.selectedCode.length} 字符`);
+        console.log(`  - Selected code: ${context.selectedCode.length} chars`);
       }
       if (context.currentFile) {
-        console.log(`  - 当前文件: ${context.currentFile.path}`);
+        console.log(`  - Current file: ${context.currentFile.path}`);
       }
       if (context.cursorPosition) {
-        console.log(`  - 光标位置: 第 ${context.cursorPosition.line} 行`);
+        console.log(`  - Cursor position: line ${context.cursorPosition.line}`);
       }
       if (context.relatedFiles) {
-        console.log(`  - 相关文件: ${context.relatedFiles.length} 个`);
+        console.log(`  - Related files: ${context.relatedFiles.length}`);
       }
     } else {
-      console.log(`[PromptEnhancer] 未收到上下文信息`);
+      console.log(`[PromptEnhancer] No context info received`);
     }
 
-    // 增强提示词（传递上下文信息）
+    // Enhance the prompt (passing context information)
     const enhancedPrompt = await enhancePrompt(prompt, systemPrompt, model, context);
 
-    // 输出结果
-    // 将换行符替换为特殊标记，避免 Java 端 readLine() 只读取第一行
+    // Output the result
+    // Replace newlines with a special marker to prevent Java's readLine() from reading only the first line
     const encodedPrompt = enhancedPrompt.replace(/\n/g, '{{NEWLINE}}');
     console.log(`[ENHANCED]${encodedPrompt}`);
     process.exit(0);
   } catch (error) {
-    console.error('[PromptEnhancer] 错误:', error.message);
+    console.error('[PromptEnhancer] Error:', error.message);
     console.log(`[ENHANCED]Enhancement failed: ${error.message}`);
     process.exit(1);
   }

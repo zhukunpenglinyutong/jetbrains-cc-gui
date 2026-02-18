@@ -8,13 +8,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 消息合并器
- * 负责合并流式助手消息,确保之前展示的工具步骤不会被覆盖
+ * Message merger.
+ * Merges streaming assistant messages, ensuring previously displayed tool steps are not overwritten.
  */
 public class MessageMerger {
 
     /**
-     * 合并流式助手消息
+     * Merge streaming assistant messages.
      */
     public JsonObject mergeAssistantMessage(JsonObject existingRaw, JsonObject newRaw) {
         if (newRaw == null) {
@@ -27,7 +27,7 @@ public class MessageMerger {
 
         JsonObject merged = existingRaw.deepCopy();
 
-        // 合并顶层字段(除 message 外)
+        // Merge top-level fields (except "message")
         for (Map.Entry<String, JsonElement> entry : newRaw.entrySet()) {
             if ("message".equals(entry.getKey())) {
                 continue;
@@ -47,7 +47,7 @@ public class MessageMerger {
             ? merged.getAsJsonObject("message")
             : new JsonObject();
 
-        // 复制新元数据(保留最新 stop_reason、usage 等)
+        // Copy new metadata (keep latest stop_reason, usage, etc.)
         for (Map.Entry<String, JsonElement> entry : incomingMessage.entrySet()) {
             if ("content".equals(entry.getKey())) {
                 continue;
@@ -61,7 +61,7 @@ public class MessageMerger {
     }
 
     /**
-     * 合并助手消息的 content 数组
+     * Merge the content array of assistant messages.
      */
     private void mergeAssistantContentArray(JsonObject targetMessage, JsonObject incomingMessage) {
         JsonArray baseContent = targetMessage.has("content") && targetMessage.get("content").isJsonArray()
@@ -104,7 +104,7 @@ public class MessageMerger {
     }
 
     /**
-     * 构建内容块索引
+     * Build an index of content blocks by their unique keys.
      */
     private Map<String, Integer> buildContentIndex(JsonArray contentArray) {
         Map<String, Integer> index = new HashMap<>();
@@ -123,7 +123,7 @@ public class MessageMerger {
     }
 
     /**
-     * 获取内容块的唯一键
+     * Get the unique key for a content block.
      */
     private String getContentBlockKey(JsonObject block) {
         if (block.has("id") && !block.get("id").isJsonNull()) {

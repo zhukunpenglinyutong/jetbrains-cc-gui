@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Prompt 管理器
- * 负责管理提示词库配置(prompt.json)
+ * Prompt Manager.
+ * Manages prompt library configuration (prompt.json).
  */
 public class PromptManager {
     private static final Logger LOG = Logger.getInstance(PromptManager.class);
@@ -37,13 +37,13 @@ public class PromptManager {
     }
 
     /**
-     * 读取 prompt.json 文件
+     * Read the prompt.json file.
      */
     public JsonObject readPromptConfig() throws IOException {
         Path promptPath = pathManager.getPromptFilePath();
 
         if (!Files.exists(promptPath)) {
-            // 返回空的配置
+            // Return an empty config
             JsonObject config = new JsonObject();
             config.add("prompts", new JsonObject());
             return config;
@@ -51,7 +51,7 @@ public class PromptManager {
 
         try (BufferedReader reader = Files.newBufferedReader(promptPath, StandardCharsets.UTF_8)) {
             JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();
-            // 确保 prompts 节点存在
+            // Ensure the prompts node exists
             if (!config.has("prompts")) {
                 config.add("prompts", new JsonObject());
             }
@@ -65,7 +65,7 @@ public class PromptManager {
     }
 
     /**
-     * 写入 prompt.json 文件
+     * Write the prompt.json file.
      */
     public void writePromptConfig(JsonObject config) throws IOException {
         pathManager.ensureConfigDirectory();
@@ -81,8 +81,8 @@ public class PromptManager {
     }
 
     /**
-     * 获取所有提示词
-     * 按创建时间倒序排列(最新的在前)
+     * Get all prompts.
+     * Sorted by creation time in descending order (newest first).
      */
     public List<JsonObject> getPrompts() throws IOException {
         List<JsonObject> result = new ArrayList<>();
@@ -91,14 +91,14 @@ public class PromptManager {
         JsonObject prompts = config.getAsJsonObject("prompts");
         for (String key : prompts.keySet()) {
             JsonObject prompt = prompts.getAsJsonObject(key);
-            // 确保 ID 存在
+            // Ensure ID exists
             if (!prompt.has("id")) {
                 prompt.addProperty("id", key);
             }
             result.add(prompt);
         }
 
-        // 按创建时间倒序排序(最新的在前)
+        // Sort by creation time descending (newest first)
         result.sort((a, b) -> {
             long timeA = a.has("createdAt") ? a.get("createdAt").getAsLong() : 0;
             long timeB = b.has("createdAt") ? b.get("createdAt").getAsLong() : 0;
@@ -122,7 +122,7 @@ public class PromptManager {
     }
 
     /**
-     * 添加提示词
+     * Add a prompt.
      */
     public void addPrompt(JsonObject prompt) throws IOException {
         if (!prompt.has("id")) {
@@ -134,17 +134,17 @@ public class PromptManager {
         String id = prompt.get("id").getAsString();
         validateId(id);
 
-        // 检查 ID 是否已存在
+        // Check if the ID already exists
         if (prompts.has(id)) {
             throw new IllegalArgumentException("Prompt with id '" + id + "' already exists");
         }
 
-        // 添加创建时间
+        // Add creation timestamp
         if (!prompt.has("createdAt")) {
             prompt.addProperty("createdAt", System.currentTimeMillis());
         }
 
-        // 添加提示词
+        // Add the prompt
         prompts.add(id, prompt);
 
         writePromptConfig(config);
@@ -152,7 +152,7 @@ public class PromptManager {
     }
 
     /**
-     * 更新提示词
+     * Update a prompt.
      */
     public void updatePrompt(String id, JsonObject updates) throws IOException {
         validateId(id);
@@ -165,9 +165,9 @@ public class PromptManager {
 
         JsonObject prompt = prompts.getAsJsonObject(id);
 
-        // 合并更新
+        // Merge updates
         for (String key : updates.keySet()) {
-            // 不允许修改 id 和 createdAt
+            // Modification of id and createdAt is not allowed
             if (key.equals("id") || key.equals("createdAt")) {
                 continue;
             }
@@ -184,7 +184,7 @@ public class PromptManager {
     }
 
     /**
-     * 删除提示词
+     * Delete a prompt.
      */
     public boolean deletePrompt(String id) throws IOException {
         validateId(id);
@@ -196,7 +196,7 @@ public class PromptManager {
             return false;
         }
 
-        // 删除提示词
+        // Delete the prompt
         prompts.remove(id);
 
         writePromptConfig(config);
@@ -205,7 +205,7 @@ public class PromptManager {
     }
 
     /**
-     * 获取单个提示词
+     * Get a single prompt by ID.
      */
     public JsonObject getPrompt(String id) throws IOException {
         validateId(id);

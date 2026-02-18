@@ -11,8 +11,8 @@ import com.intellij.ui.jcef.JBCefBrowser;
 import java.util.function.Consumer;
 
 /**
- * Handler 上下文
- * 提供 Handler 所需的所有共享资源和回调
+ * Handler context.
+ * Provides all shared resources and callbacks needed by handlers.
  */
 public class HandlerContext {
 
@@ -22,7 +22,7 @@ public class HandlerContext {
     private final CodemossSettingsService settingsService;
     private final JsCallback jsCallback;
 
-    // 可变状态通过 getter/setter 访问
+    // Mutable state accessed via getters/setters
     private ClaudeSession session;
     private JBCefBrowser browser;
     private String currentModel = "claude-sonnet-4-6";
@@ -30,7 +30,7 @@ public class HandlerContext {
     private volatile boolean disposed = false;
 
     /**
-     * JavaScript 回调接口
+     * JavaScript callback interface.
      */
     public interface JsCallback {
         void callJavaScript(String functionName, String... args);
@@ -109,7 +109,7 @@ public class HandlerContext {
         this.disposed = disposed;
     }
 
-    // JavaScript 回调代理方法
+    // JavaScript callback proxy methods
     public void callJavaScript(String functionName, String... args) {
         jsCallback.callJavaScript(functionName, args);
     }
@@ -119,7 +119,7 @@ public class HandlerContext {
     }
 
     /**
-     * 在 EDT 线程上执行 JavaScript
+     * Execute JavaScript on the EDT (Event Dispatch Thread).
      */
     public void executeJavaScriptOnEDT(String jsCode) {
         if (browser != null && !disposed) {

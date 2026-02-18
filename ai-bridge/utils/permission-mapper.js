@@ -56,7 +56,7 @@ function normalizeUnifiedMode(mode) {
     return { core: UnifiedPermissionMode.YOLO, alias: 'bypassPermissions' };
   }
 
-  // acceptEdits (Agent Mode): 自动应用文件修改，命令仍需确认
+  // acceptEdits (Agent Mode): auto-apply file modifications, commands still require confirmation
   if (normalized === 'acceptedits') {
     return { core: UnifiedPermissionMode.DEFAULT, alias: 'acceptEdits' };
   }
@@ -142,13 +142,13 @@ export class CodexPermissionMapper {
       };
     }
 
-    // acceptEdits (Agent Mode): 自动应用文件修改，命令仍需确认
+    // acceptEdits (Agent Mode): auto-apply file modifications, commands still require confirmation
     // On Windows, use danger-full-access since sandbox is experimental
     if (alias === 'acceptEdits') {
       return {
         skipGitRepoCheck: true,
         sandbox: onWindows ? 'danger-full-access' : 'workspace-write',
-        approvalPolicy: 'auto-edit'  // Codex 的 auto-edit 模式
+        approvalPolicy: 'auto-edit'  // Codex auto-edit mode
       };
     }
 

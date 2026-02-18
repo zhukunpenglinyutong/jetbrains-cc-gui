@@ -31,7 +31,7 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 设置和使用统计相关消息处理器
+ * Settings and usage statistics message handler.
  */
 public class SettingsHandler extends BaseMessageHandler {
 
@@ -70,11 +70,11 @@ public class SettingsHandler extends BaseMessageHandler {
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
     static {
-        // Claude 模型
+        // Claude models
         MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-6", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-6", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-haiku-4-5", 200_000);
-        // Codex/OpenAI 模型
+        // Codex/OpenAI models
         MODEL_CONTEXT_LIMITS.put("gpt-5.2-codex", 258_000);
         MODEL_CONTEXT_LIMITS.put("gpt-5.1-codex-max", 258_000);
         MODEL_CONTEXT_LIMITS.put("gpt-5.1-codex-mini", 258_000);
@@ -94,16 +94,16 @@ public class SettingsHandler extends BaseMessageHandler {
 
     public SettingsHandler(HandlerContext context) {
         super(context);
-        // 注册主题变化监听器，当 IDE 主题变化时自动通知前端
+        // Register theme change listener to automatically notify frontend when IDE theme changes
         registerThemeChangeListener();
     }
 
     /**
-     * 注册主题变化监听器
+     * Register theme change listener.
      */
     private void registerThemeChangeListener() {
         ThemeConfigService.registerThemeChangeListener(themeConfig -> {
-            // 当主题变化时，通知前端
+            // Notify frontend when theme changes
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.onIdeThemeChanged", escapeJs(themeConfig.toString()));
             });
@@ -196,20 +196,20 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取当前权限模式
+     * Get current permission mode.
      */
     private void handleGetMode() {
         try {
-            String currentMode = "bypassPermissions";  // 默认值
+            String currentMode = "bypassPermissions";  // Default value
 
-            // 优先从 session 中获取
+            // Prefer getting from session first
             if (context.getSession() != null) {
                 String sessionMode = context.getSession().getPermissionMode();
                 if (sessionMode != null && !sessionMode.trim().isEmpty()) {
                     currentMode = sessionMode;
                 }
             } else {
-                // 如果 session 不存在，从持久化存储加载
+                // If session does not exist, load from persistent storage
                 PropertiesComponent props = PropertiesComponent.getInstance();
                 String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
                 if (savedMode != null && !savedMode.trim().isEmpty()) {
@@ -228,7 +228,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理设置模式请求
+     * Handle set mode request.
      */
     private void handleSetMode(String content) {
         try {
@@ -244,25 +244,25 @@ public class SettingsHandler extends BaseMessageHandler {
                         mode = json.get("mode").getAsString();
                     }
                 } catch (Exception e) {
-                    // content 本身就是 mode
+                    // content itself is the mode
                     // LOG.debug("[SettingsHandler] Content is not JSON, treating as plain string");
                 }
             }
 
             // LOG.info("[SettingsHandler] Parsed permission mode: " + mode);
 
-            // 检查 session 是否存在
+            // Check if session exists
             if (context.getSession() != null) {
                 // LOG.info("[SettingsHandler] Session exists, setting permission mode...");
                 context.getSession().setPermissionMode(mode);
 
-                // 保存权限模式到持久化存储
+                // Save permission mode to persistent storage
                 PropertiesComponent props = PropertiesComponent.getInstance();
                 props.setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
                 LOG.info("Saved permission mode to settings: " + mode);
                 com.github.claudecodegui.notifications.ClaudeNotifier.setMode(context.getProject(), mode);
 
-                // 验证设置是否成功
+                // Verify that the setting was applied successfully
                 // String currentMode = context.getSession().getPermissionMode();
                 // LOG.info("[SettingsHandler] Session permission mode confirmed: " + currentMode);
                 // LOG.info("[SettingsHandler] Mode update " + (mode.equals(currentMode) ? "SUCCESS" : "FAILED"));
@@ -276,12 +276,12 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理设置模型请求
-     * 设置完成后向前端发送确认回调，确保前后端状态同步
+     * Handle set model request.
+     * Sends a confirmation callback to the frontend after setting, ensuring frontend-backend state sync.
      *
-     * 容量计算优化：当前端选择基础模型（如 claude-sonnet-4-6）时，
-     * 会从设置中查找对应的实际模型配置（如 ANTHROPIC_DEFAULT_SONNET_MODEL），
-     * 以支持带容量后缀的自定义模型名称（如 claude-sonnet-4-6[1M]）
+     * Capacity calculation optimization: when the frontend selects a base model (e.g. claude-sonnet-4-6),
+     * the actual model configuration is looked up from settings (e.g. ANTHROPIC_DEFAULT_SONNET_MODEL),
+     * to support custom model names with capacity suffixes (e.g. claude-sonnet-4-6[1M]).
      */
     private void handleSetModel(String content) {
         try {
@@ -294,13 +294,13 @@ public class SettingsHandler extends BaseMessageHandler {
                         model = json.get("model").getAsString();
                     }
                 } catch (Exception e) {
-                    // content 本身就是 model
+                    // content itself is the model
                 }
             }
 
             LOG.info("[SettingsHandler] Setting model to: " + model);
 
-            // 尝试从设置中获取实际配置的模型名称（支持容量后缀）
+            // Try to get the actual configured model name from settings (supports capacity suffix)
             String actualModel = resolveActualModelName(model);
             String finalModelName;
             if (actualModel != null && !actualModel.equals(model)) {
@@ -319,18 +319,18 @@ public class SettingsHandler extends BaseMessageHandler {
             // Update status bar with basic model name
             com.github.claudecodegui.notifications.ClaudeNotifier.setModel(context.getProject(), model);
 
-            // 计算新模型的上下文限制
+            // Calculate the context limit for the new model
             int newMaxTokens = getModelContextLimit(finalModelName);
             LOG.info("[SettingsHandler] Model context limit: " + newMaxTokens + " tokens for model: " + finalModelName);
 
-            // 向前端发送确认回调，确保前后端状态同步
+            // Send confirmation callback to frontend, ensuring frontend-backend state sync
             final String confirmedModel = model;
             final String confirmedProvider = context.getCurrentProvider();
             ApplicationManager.getApplication().invokeLater(() -> {
-                // 发送模型确认
+                // Send model confirmation
                 callJavaScript("window.onModelConfirmed", escapeJs(confirmedModel), escapeJs(confirmedProvider));
 
-                // 重新计算并推送 usage 更新，确保 maxTokens 根据新模型更新
+                // Recalculate and push usage update, ensuring maxTokens is updated for the new model
                 pushUsageUpdateAfterModelChange(newMaxTokens);
             });
         } catch (Exception e) {
@@ -339,19 +339,19 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 在模型切换后推送 usage 更新
-     * 根据新模型的上下文限制重新计算百分比和 maxTokens
+     * Push usage update after model switch.
+     * Recalculates percentage and maxTokens based on the new model's context limit.
      */
     private void pushUsageUpdateAfterModelChange(int newMaxTokens) {
         try {
             ClaudeSession session = context.getSession();
             if (session == null) {
-                // 即使没有会话，也要发送更新让前端知道新的 maxTokens
+                // Even without a session, send update so frontend knows the new maxTokens
                 sendUsageUpdate(0, newMaxTokens);
                 return;
             }
 
-            // 从当前会话中提取最新的 usage 信息
+            // Extract the latest usage information from the current session
             List<ClaudeSession.Message> messages = session.getMessages();
             JsonObject lastUsage = null;
 
@@ -362,7 +362,7 @@ public class SettingsHandler extends BaseMessageHandler {
                     continue;
                 }
 
-                // 检查不同的可能结构
+                // Check different possible structures
                 if (msg.raw.has("message")) {
                     JsonObject message = msg.raw.getAsJsonObject("message");
                     if (message.has("usage")) {
@@ -371,32 +371,32 @@ public class SettingsHandler extends BaseMessageHandler {
                     }
                 }
 
-                // 检查usage是否在raw的根级别
+                // Check if usage is at the root level of raw
                 if (msg.raw.has("usage")) {
                     lastUsage = msg.raw.getAsJsonObject("usage");
                     break;
                 }
             }
 
-            // 计算使用的 tokens
+            // Calculate used tokens
             int inputTokens = lastUsage != null && lastUsage.has("input_tokens") ? lastUsage.get("input_tokens").getAsInt() : 0;
             int cacheWriteTokens = lastUsage != null && lastUsage.has("cache_creation_input_tokens") ? lastUsage.get("cache_creation_input_tokens").getAsInt() : 0;
             int cacheReadTokens = lastUsage != null && lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
             int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
 
-            // 根据 provider 计算已用 token 数
-            // Codex/OpenAI: input_tokens 已经包含了 cached_input_tokens，不需要重复加
-            // Claude: input_tokens 不包含缓存，需要加上 cache_creation（缓存读取不占用新的上下文窗口）
+            // Calculate used token count based on provider
+            // Codex/OpenAI: input_tokens already includes cached_input_tokens, no need to add again
+            // Claude: input_tokens does not include cache, need to add cache_creation (cache reads don't consume new context window)
             String currentProvider = context.getCurrentProvider();
             int usedTokens;
             if ("codex".equals(currentProvider)) {
                 usedTokens = inputTokens + outputTokens;
             } else {
-                // Claude: 缓存读取不占用新的上下文窗口，不计入 cacheReadTokens
+                // Claude: cache reads don't consume new context window, so cacheReadTokens is excluded
                 usedTokens = inputTokens + cacheWriteTokens + outputTokens;
             }
 
-            // 发送更新
+            // Send update
             sendUsageUpdate(usedTokens, newMaxTokens);
 
         } catch (Exception e) {
@@ -405,14 +405,14 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 发送 usage 更新到前端
+     * Send usage update to the frontend.
      */
     private void sendUsageUpdate(int usedTokens, int maxTokens) {
         int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 
         LOG.info("[SettingsHandler] Sending usage update: usedTokens=" + usedTokens + ", maxTokens=" + maxTokens + ", percentage=" + percentage + "%");
 
-        // 构建 usage 更新数据
+        // Build usage update data
         JsonObject usageUpdate = new JsonObject();
         usageUpdate.addProperty("percentage", percentage);
         usageUpdate.addProperty("totalTokens", usedTokens);
@@ -422,7 +422,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
         String usageJson = new Gson().toJson(usageUpdate);
 
-        // 推送到前端（必须在 EDT 线程中执行）
+        // Push to frontend (must be executed on the EDT thread)
         ApplicationManager.getApplication().invokeLater(() -> {
             if (context.getBrowser() != null && !context.isDisposed()) {
                 String js = "(function() {" +
@@ -438,7 +438,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理设置提供商请求
+     * Handle set provider request.
      */
     private void handleSetProvider(String content) {
         try {
@@ -451,7 +451,7 @@ public class SettingsHandler extends BaseMessageHandler {
                         provider = json.get("provider").getAsString();
                     }
                 } catch (Exception e) {
-                    // content 本身就是 provider
+                    // content itself is the provider
                 }
             }
 
@@ -475,14 +475,14 @@ public class SettingsHandler extends BaseMessageHandler {
                     return;
                 }
 
-                // 检查是否启用自动打开文件
+                // Check if auto-open file is enabled
                 String projectPath = context.getProject().getBasePath();
                 if (projectPath != null) {
                     com.github.claudecodegui.CodemossSettingsService settingsService =
                         new com.github.claudecodegui.CodemossSettingsService();
                     boolean autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
                     if (!autoOpenFileEnabled) {
-                        // 如果关闭了自动打开文件，清除 ContextBar 显示
+                        // If auto-open file is disabled, clear the ContextBar display
                         callJavaScript("clearSelectionInfo");
                         return;
                     }
@@ -529,7 +529,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理设置思考深度请求 (仅 Codex)
+     * Handle set reasoning effort request (Codex only).
      */
     private void handleSetReasoningEffort(String content) {
         try {
@@ -542,7 +542,7 @@ public class SettingsHandler extends BaseMessageHandler {
                         effort = json.get("reasoningEffort").getAsString();
                     }
                 } catch (Exception e) {
-                    // content 本身就是 effort
+                    // content itself is the effort
                 }
             }
 
@@ -557,7 +557,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取 Node.js 路径和版本信息.
+     * Get Node.js path and version information.
      */
     private void handleGetNodePath() {
         try {
@@ -578,7 +578,7 @@ public class SettingsHandler extends BaseMessageHandler {
                     pathToSend = detected.getNodePath();
                     versionToSend = detected.getNodeVersion();
                     props.setValue(NODE_PATH_PROPERTY_KEY, pathToSend);
-                    // 使用 verifyAndCacheNodePath 而不是 setNodeExecutable，确保版本信息被缓存
+                    // Use verifyAndCacheNodePath instead of setNodeExecutable to ensure version info is cached
                     context.getClaudeSDKBridge().verifyAndCacheNodePath(pathToSend);
                     context.getCodexSDKBridge().setNodeExecutable(pathToSend);
                 }
@@ -600,7 +600,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 设置 Node.js 路径.
+     * Set Node.js path.
      */
     private void handleSetNodePath(String content) {
         LOG.debug("[SettingsHandler] ========== handleSetNodePath START ==========");
@@ -634,7 +634,7 @@ public class SettingsHandler extends BaseMessageHandler {
                     finalPath = detected.getNodePath();
                     versionToSend = detected.getNodeVersion();
                     props.setValue(NODE_PATH_PROPERTY_KEY, finalPath);
-                    // 使用 verifyAndCacheNodePath 确保版本信息被缓存
+                    // Use verifyAndCacheNodePath to ensure version info is cached
                     context.getClaudeSDKBridge().verifyAndCacheNodePath(finalPath);
                     context.getCodexSDKBridge().setNodeExecutable(finalPath);
                     verifySuccess = true;
@@ -666,10 +666,10 @@ public class SettingsHandler extends BaseMessageHandler {
                 callJavaScript("window.updateNodePath", escapeJs(gson.toJson(response)));
 
                 if (successFlag) {
-                    // 🔧 触发环境重新检查,无需重启IDE
+                    // Trigger environment re-check, no IDE restart needed
                     callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存并生效,无需重启IDE"));
 
-                    // 通知 DependencySection 重新检查 Node.js 环境
+                    // Notify DependencySection to re-check Node.js environment
                     callJavaScript("window.checkNodeEnvironment");
                 } else {
                     String msg = failureMsgFinal != null ? failureMsgFinal : "无法验证指定的 Node.js 路径";
@@ -761,7 +761,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取工作目录配置
+     * Get working directory configuration.
      */
     private void handleGetWorkingDirectory() {
         try {
@@ -795,7 +795,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 设置工作目录配置
+     * Set working directory configuration.
      */
     private void handleSetWorkingDirectory(String content) {
         try {
@@ -815,7 +815,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 customWorkingDir = json.get("customWorkingDir").getAsString();
             }
 
-            // 验证自定义工作目录是否存在
+            // Validate that the custom working directory exists
             if (customWorkingDir != null && !customWorkingDir.trim().isEmpty()) {
                 java.io.File workingDirFile = new java.io.File(customWorkingDir);
                 if (!workingDirFile.isAbsolute()) {
@@ -849,7 +849,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取 IDEA 编辑器字体配置
+     * Get IDEA editor font configuration.
      */
     private void handleGetEditorFontConfig() {
         try {
@@ -865,7 +865,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 🔧 获取流式传输配置
+     * Get streaming configuration.
      */
     private void handleGetStreamingEnabled() {
         try {
@@ -899,7 +899,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 🔧 设置流式传输配置
+     * Set streaming configuration.
      */
     private void handleSetStreamingEnabled(String content) {
         try {
@@ -925,7 +925,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
             LOG.info("[SettingsHandler] Set streaming enabled: " + streamingEnabled);
 
-            // 返回更新后的状态
+            // Return updated state
             final boolean finalStreamingEnabled = streamingEnabled;
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
@@ -941,7 +941,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取自动打开文件配置
+     * Get auto-open file configuration.
      */
     private void handleGetAutoOpenFileEnabled() {
         try {
@@ -975,7 +975,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 设置自动打开文件配置
+     * Set auto-open file configuration.
      */
     private void handleSetAutoOpenFileEnabled(String content) {
         try {
@@ -1001,7 +1001,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
             LOG.info("[SettingsHandler] Set auto open file enabled: " + autoOpenFileEnabled);
 
-            // 返回更新后的状态
+            // Return updated state
             final boolean finalAutoOpenFileEnabled = autoOpenFileEnabled;
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
@@ -1017,11 +1017,11 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 从设置中解析实际使用的模型名称
-     * 支持从 ANTHROPIC_MODEL 或 ANTHROPIC_DEFAULT_*_MODEL 中读取带容量后缀的模型名称
+     * Resolve the actual model name used from settings.
+     * Supports reading model names with capacity suffixes from ANTHROPIC_MODEL or ANTHROPIC_DEFAULT_*_MODEL.
      *
-     * @param baseModel 前端选择的基础模型 ID (如 claude-sonnet-4-6, claude-haiku-4-5)
-     * @return 设置中配置的实际模型名称，如果未配置则返回 null
+     * @param baseModel the base model ID selected by frontend (e.g. claude-sonnet-4-6, claude-haiku-4-5)
+     * @return the actual model name configured in settings, or null if not configured
      */
     private String resolveActualModelName(String baseModel) {
         try {
@@ -1062,10 +1062,10 @@ public class SettingsHandler extends BaseMessageHandler {
 
                 com.google.gson.JsonObject env = settingsConfig.getAsJsonObject("env");
 
-                // 根据基础模型 ID 查找对应的环境变量
+                // Look up corresponding environment variable by base model ID
                 String actualModel = null;
 
-                // 首先检查 ANTHROPIC_MODEL（主模型配置）
+                // First check ANTHROPIC_MODEL (main model configuration)
                 if (env.has("ANTHROPIC_MODEL") && !env.get("ANTHROPIC_MODEL").isJsonNull()) {
                     String mainModel = env.get("ANTHROPIC_MODEL").getAsString();
                     if (mainModel != null && !mainModel.trim().isEmpty()) {
@@ -1073,7 +1073,7 @@ public class SettingsHandler extends BaseMessageHandler {
                     }
                 }
 
-                // 如果主模型未配置，根据基础模型 ID 查找对应的默认模型配置
+                // If main model not configured, look up corresponding default model config by base model ID
                 if (actualModel == null) {
                     if (baseModel.contains("sonnet") && env.has("ANTHROPIC_DEFAULT_SONNET_MODEL")) {
                         actualModel = env.get("ANTHROPIC_DEFAULT_SONNET_MODEL").getAsString();
@@ -1096,21 +1096,21 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取模型上下文限制
-     * 支持从模型名称中解析容量后缀，例如：
-     * - claude-sonnet-4-6[1M] → 1,000,000 tokens
-     * - claude-opus-4-6[2M] → 2,000,000 tokens
-     * - claude-haiku-4-5[500k] → 500,000 tokens
-     * - claude-sonnet-4-6 [1.5M] → 1,500,000 tokens (支持空格和小数)
-     * - 支持大小写不敏感 (1m 和 1M 都可以)
+     * Get model context limit.
+     * Supports parsing capacity suffix from model name, for example:
+     * - claude-sonnet-4-6[1M] -> 1,000,000 tokens
+     * - claude-opus-4-6[2M] -> 2,000,000 tokens
+     * - claude-haiku-4-5[500k] -> 500,000 tokens
+     * - claude-sonnet-4-6 [1.5M] -> 1,500,000 tokens (supports spaces and decimals)
+     * - Case insensitive (1m and 1M both work)
      */
     public static int getModelContextLimit(String model) {
         if (model == null || model.isEmpty()) {
             return 200_000;
         }
 
-        // 正则表达式：匹配末尾的 [数字单位]，支持可选空格、小数、大小写
-        // 示例: [1M], [2m], [500k], [1.5M], 或带空格的 [1M]
+        // Regex: matches trailing [number+unit], supports optional spaces, decimals, case insensitive
+        // Examples: [1M], [2m], [500k], [1.5M], or with spaces [1M]
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\s*\\[([0-9.]+)([kKmM])\\]\\s*$");
         java.util.regex.Matcher matcher = pattern.matcher(model);
 
@@ -1120,10 +1120,10 @@ public class SettingsHandler extends BaseMessageHandler {
                 String unit = matcher.group(2).toLowerCase();
 
                 if ("m".equals(unit)) {
-                    // M (百万) 转换为 tokens
+                    // M (million) convert to tokens
                     return (int)(value * 1_000_000);
                 } else if ("k".equals(unit)) {
-                    // k (千) 转换为 tokens
+                    // k (thousand) convert to tokens
                     return (int)(value * 1_000);
                 }
             } catch (NumberFormatException e) {
@@ -1131,8 +1131,8 @@ public class SettingsHandler extends BaseMessageHandler {
             }
         }
 
-        // 如果没有容量后缀，尝试从预定义映射中查找
-        // 先尝试完整匹配，如果不存在则使用默认值
+        // If no capacity suffix, try to look up from predefined mapping
+        // Try exact match first, fall back to default if not found
         return MODEL_CONTEXT_LIMITS.getOrDefault(model, 200_000);
     }
 
@@ -1193,7 +1193,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取 Commit AI 提示词
+     * Get Commit AI prompt.
      */
     private void handleGetCommitPrompt() {
         try {
@@ -1211,7 +1211,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 设置 Commit AI 提示词
+     * Set Commit AI prompt.
      */
     private void handleSetCommitPrompt(String content) {
         try {
@@ -1253,7 +1253,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
             LOG.info("[SettingsHandler] Set commit prompt, length: " + validatedPrompt.length());
 
-            // 返回成功响应，同时更新前端状态以重置 loading
+            // Return success response and update frontend state to reset loading
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("commitPrompt", validatedPrompt);
@@ -1269,7 +1269,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取 IDE 主题配置
+     * Get IDE theme configuration.
      */
     private void handleGetIdeTheme() {
         try {
@@ -1284,10 +1284,10 @@ public class SettingsHandler extends BaseMessageHandler {
         }
     }
 
-    // ==================== 输入历史记录管理 ====================
+    // ==================== Input History Management ====================
 
     /**
-     * 获取输入历史记录
+     * Get input history records.
      */
     private void handleGetInputHistory() {
         CompletableFuture.runAsync(() -> {
@@ -1306,8 +1306,8 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 记录输入历史
-     * @param content JSON 数组格式的片段列表
+     * Record input history.
+     * @param content JSON array of fragments
      */
     private void handleRecordInputHistory(String content) {
         CompletableFuture.runAsync(() -> {
@@ -1323,8 +1323,8 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 删除单条输入历史
-     * @param content 要删除的历史记录项
+     * Delete a single input history item.
+     * @param content the history item to delete
      */
     private void handleDeleteInputHistoryItem(String content) {
         CompletableFuture.runAsync(() -> {
@@ -1340,7 +1340,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 清空所有输入历史
+     * Clear all input history.
      */
     private void handleClearInputHistory() {
         CompletableFuture.runAsync(() -> {
@@ -1356,7 +1356,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 调用 Node.js input-history-service（单参数版本）
+     * Call Node.js input-history-service (single parameter version).
      */
     private String callInputHistoryService(String functionName, String param) throws Exception {
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
@@ -1364,7 +1364,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
         String nodeScript;
         if (param == null || param.isEmpty()) {
-            // 无参数调用
+            // Call without parameters
             nodeScript = String.format(
                 "const { %s } = require('%s/services/input-history-service.cjs'); " +
                 "const result = %s(); " +
@@ -1374,7 +1374,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 functionName
             );
         } else {
-            // 单参数调用（通过 stdin 传递，避免转义问题）
+            // Single parameter call (passed via stdin to avoid escaping issues)
             nodeScript = String.format(
                 "const { %s } = require('%s/services/input-history-service.cjs'); " +
                 "let input = ''; " +
@@ -1418,7 +1418,7 @@ public class SettingsHandler extends BaseMessageHandler {
             }
         }
 
-        // 添加超时控制，避免进程无限等待
+        // Add timeout control to prevent indefinite process waiting
         boolean finished = process.waitFor(30, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
@@ -1435,7 +1435,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * 调用 Node.js input-history-service（数组参数版本，用于 recordHistory）
+     * Call Node.js input-history-service (array parameter version, used for recordHistory).
      */
     private String callInputHistoryServiceWithArray(String functionName, String jsonArrayParam) throws Exception {
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
@@ -1482,7 +1482,7 @@ public class SettingsHandler extends BaseMessageHandler {
             }
         }
 
-        // 添加超时控制，避免进程无限等待
+        // Add timeout control to prevent indefinite process waiting
         boolean finished = process.waitFor(30, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();

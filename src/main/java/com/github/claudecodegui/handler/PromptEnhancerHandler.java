@@ -26,13 +26,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 增强提示词消息处理器
- * 调用 AI 服务对用户的提示词进行优化重写
+ * Prompt enhancement message handler.
+ * Calls the AI service to optimize and rewrite the user's prompt.
  *
- * 支持自动获取编辑器上下文信息：
- * - 用户选中的代码片段
- * - 当前打开的文件信息（路径、内容、语言类型）
- * - 光标位置及周围代码
+ * Supports automatic collection of editor context information:
+ * - User's selected code snippet
+ * - Current open file info (path, content, language type)
+ * - Cursor position and surrounding code
  */
 public class PromptEnhancerHandler extends BaseMessageHandler {
 
@@ -40,16 +40,16 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     private final Gson gson = new Gson();
     private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
 
-    // 光标上下文的行数范围（光标前后各取多少行）
+    // Number of lines to capture around the cursor (before and after)
     private static final int CURSOR_CONTEXT_LINES = 10;
 
     private static final String[] SUPPORTED_TYPES = {
         "enhance_prompt"
     };
 
-    // 增强提示词的系统提示
-    // 注意：必须强调"只输出优化后的提示词"，否则 AI 可能会添加解释性文字
-    // 更新：添加了如何利用上下文信息的指导
+    // System prompt for prompt enhancement
+    // Note: Must emphasize "only output the enhanced prompt", otherwise the AI may add explanatory text
+    // Update: Added guidance on how to use context information
     private static final String ENHANCE_SYSTEM_PROMPT =
         "你是一个提示词优化专家。用户会发送一个需要优化的提示词，格式为：\n" +
         "\"请优化以下提示词：\n[原始提示词]\"\n\n" +
@@ -108,8 +108,8 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理增强提示词请求
-     * 自动从编辑器获取上下文信息：selectedCode, currentFile, cursorPosition, cursorContext
+     * Handle prompt enhancement request.
+     * Automatically collects editor context: selectedCode, currentFile, cursorPosition, cursorContext.
      */
     private void handleEnhancePrompt(String content) {
         CompletableFuture.runAsync(() -> {
@@ -128,10 +128,10 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                     LOG.info("[PromptEnhancer] 使用模型: " + model);
                 }
 
-                // 自动从编辑器获取上下文信息
+                // Automatically collect context information from the editor
                 JsonObject contextObj = collectEditorContext();
 
-                // 记录上下文信息
+                // Log context information
                 if (contextObj != null) {
                     LOG.info("[PromptEnhancer] 已收集编辑器上下文信息:");
                     if (contextObj.has("selectedCode")) {
@@ -161,7 +161,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                     LOG.info("[PromptEnhancer] 未能获取编辑器上下文信息");
                 }
 
-                // 调用 AI 服务进行增强（传递上下文信息）
+                // Call AI service for enhancement (passing context information)
                 String enhancedPrompt = callAIForEnhancement(originalPrompt, model, contextObj);
 
                 if (enhancedPrompt != null && !enhancedPrompt.isEmpty()) {
@@ -180,16 +180,16 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 从编辑器收集上下文信息
-     * 包括：选中的代码、当前文件信息、光标位置、光标周围的代码
+     * Collect context information from the editor.
+     * Includes: selected code, current file info, cursor position, and code surrounding the cursor.
      *
-     * @return 上下文信息的 JsonObject，如果无法获取则返回 null
+     * @return a JsonObject containing context information, or null if unavailable
      */
     private JsonObject collectEditorContext() {
         AtomicReference<JsonObject> contextRef = new AtomicReference<>(null);
 
         try {
-            // 使用 ReadAction 在读取线程中安全地访问编辑器
+            // Use ReadAction to safely access the editor from the read thread
             ApplicationManager.getApplication().invokeAndWait(() -> {
                 ReadAction.run(() -> {
                     try {
@@ -205,21 +205,21 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                             VirtualFile virtualFile = FileDocumentManager.getInstance().getFile(document);
 
                             if (virtualFile != null) {
-                                // 1. 当前文件信息
+                                // 1. Current file information
                                 JsonObject currentFile = new JsonObject();
                                 currentFile.addProperty("path", virtualFile.getPath());
                                 currentFile.addProperty("language", getLanguageFromExtension(virtualFile.getExtension()));
                                 contextObj.add("currentFile", currentFile);
                                 hasContext = true;
 
-                                // 2. 选中的代码
+                                // 2. Selected code
                                 SelectionModel selectionModel = editor.getSelectionModel();
                                 if (selectionModel.hasSelection()) {
                                     String selectedText = selectionModel.getSelectedText();
                                     if (selectedText != null && !selectedText.trim().isEmpty()) {
                                         contextObj.addProperty("selectedCode", selectedText);
 
-                                        // 选中代码的行号范围
+                                        // Line number range of selected code
                                         int startLine = document.getLineNumber(selectionModel.getSelectionStart()) + 1;
                                         int endLine = document.getLineNumber(selectionModel.getSelectionEnd()) + 1;
 
@@ -230,7 +230,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                                     }
                                 }
 
-                                // 3. 光标位置
+                                // 3. Cursor position
                                 int caretOffset = editor.getCaretModel().getOffset();
                                 int caretLine = document.getLineNumber(caretOffset) + 1;
                                 int caretColumn = caretOffset - document.getLineStartOffset(caretLine - 1) + 1;
@@ -240,7 +240,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                                 cursorPosition.addProperty("column", caretColumn);
                                 contextObj.add("cursorPosition", cursorPosition);
 
-                                // 4. 光标周围的代码（如果没有选中代码）
+                                // 4. Code surrounding the cursor (if no code is selected)
                                 if (!selectionModel.hasSelection() || selectionModel.getSelectedText() == null || selectionModel.getSelectedText().trim().isEmpty()) {
                                     String cursorContext = getCursorContext(document, caretLine - 1);
                                     if (cursorContext != null && !cursorContext.isEmpty()) {
@@ -266,11 +266,11 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取光标周围的代码上下文
+     * Get the code context surrounding the cursor.
      *
-     * @param document 文档对象
-     * @param caretLine 光标所在行（0-based）
-     * @return 光标周围的代码片段
+     * @param document the document object
+     * @param caretLine the line where the cursor is located (0-based)
+     * @return code snippet surrounding the cursor
      */
     private String getCursorContext(Document document, int caretLine) {
         try {
@@ -289,10 +289,10 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 根据文件扩展名获取语言类型
+     * Get the language type based on file extension.
      *
-     * @param extension 文件扩展名
-     * @return 语言类型名称
+     * @param extension the file extension
+     * @return language type name
      */
     private String getLanguageFromExtension(String extension) {
         if (extension == null) return "text";
@@ -328,10 +328,10 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 调用 AI 服务进行提示词增强
-     * @param originalPrompt 原始提示词
-     * @param model 使用的模型（可选）
-     * @param contextObj 上下文信息（可选）
+     * Call the AI service for prompt enhancement.
+     * @param originalPrompt the original prompt
+     * @param model the model to use (optional)
+     * @param contextObj context information (optional)
      */
     private String callAIForEnhancement(String originalPrompt, String model, JsonObject contextObj) {
         LOG.info("[PromptEnhancer] 开始调用 AI 服务进行提示词增强");
@@ -339,7 +339,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
         LOG.info("[PromptEnhancer] 使用模型: " + (model != null ? model : "默认"));
 
         try {
-            // 使用 Node.js 脚本调用 AI 服务
+            // Call AI service using a Node.js script
             String nodeExecutable = context.getClaudeSDKBridge().getNodeExecutable();
             if (nodeExecutable == null) {
                 LOG.error("[PromptEnhancer] Node.js 未配置");
@@ -354,7 +354,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             }
             LOG.info("[PromptEnhancer] AI Bridge 目录: " + bridgeDir.getAbsolutePath());
 
-            // 构建命令
+            // Build the command
             List<String> command = new ArrayList<>();
             command.add(nodeExecutable);
             command.add(new File(bridgeDir, "services/prompt-enhancer.js").getAbsolutePath());
@@ -364,20 +364,20 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             pb.directory(bridgeDir);
             pb.redirectErrorStream(true);
 
-            // 设置环境变量
+            // Set environment variables
             envConfigurator.updateProcessEnvironment(pb, nodeExecutable);
 
             Process process = pb.start();
             LOG.info("[PromptEnhancer] Node.js 进程已启动");
 
-            // 发送请求数据到 stdin（包含上下文信息）
+            // Send request data to stdin (including context information)
             JsonObject stdinInput = new JsonObject();
             stdinInput.addProperty("prompt", originalPrompt);
             stdinInput.addProperty("systemPrompt", ENHANCE_SYSTEM_PROMPT);
             if (model != null && !model.isEmpty()) {
                 stdinInput.addProperty("model", model);
             }
-            // 添加上下文信息
+            // Add context information
             if (contextObj != null) {
                 stdinInput.add("context", contextObj);
             }
@@ -387,17 +387,17 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                 writer.flush();
             }
 
-            // 读取响应
+            // Read the response
             StringBuilder response = new StringBuilder();
             StringBuilder allOutput = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     allOutput.append(line).append("\n");
-                    // 打印所有输出用于调试
+                    // Print all output for debugging
                     LOG.info("[PromptEnhancer] Node.js: " + line);
                     if (line.startsWith("[ENHANCED]")) {
-                        // 解码特殊标记，还原换行符
+                        // Decode the special marker, restore newlines
                         String enhancedText = line.substring("[ENHANCED]".length()).trim();
                         enhancedText = enhancedText.replace("{{NEWLINE}}", "\n");
                         response.append(enhancedText);
@@ -421,7 +421,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 发送增强结果到前端
+     * Send the enhancement result to the frontend.
      */
     private void sendEnhanceResult(boolean success, String enhancedPrompt, String error) {
         JsonObject result = new JsonObject();

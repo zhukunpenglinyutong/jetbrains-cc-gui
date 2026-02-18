@@ -10,8 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 标签页状态持久化服务
- * 负责保存和恢复标签页的自定义名称
+ * Tab State Persistence Service.
+ * Saves and restores custom tab names.
  */
 @State(
     name = "ClaudeCodeTabState",
@@ -40,9 +40,9 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     }
 
     /**
-     * 保存标签页名称
-     * @param tabIndex 标签页索引
-     * @param tabName 标签页名称
+     * Save a tab name.
+     * @param tabIndex the tab index
+     * @param tabName the tab name
      */
     public void saveTabName(int tabIndex, String tabName) {
         if (tabName != null && !tabName.trim().isEmpty()) {
@@ -52,9 +52,9 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     }
 
     /**
-     * 获取标签页名称
-     * @param tabIndex 标签页索引
-     * @return 标签页名称，如果未设置返回 null
+     * Get a tab name.
+     * @param tabIndex the tab index
+     * @return the tab name, or null if not set
      */
     @Nullable
     public String getTabName(int tabIndex) {
@@ -62,8 +62,8 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     }
 
     /**
-     * 移除标签页名称
-     * @param tabIndex 标签页索引
+     * Remove a tab name.
+     * @param tabIndex the tab index
      */
     public void removeTabName(int tabIndex) {
         myState.tabNames.remove(tabIndex);
@@ -71,15 +71,15 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     }
 
     /**
-     * 获取所有标签页名称
-     * @return 标签页索引到名称的映射
+     * Get all tab names.
+     * @return a map from tab index to tab name
      */
     public Map<Integer, String> getAllTabNames() {
         return new HashMap<>(myState.tabNames);
     }
 
     /**
-     * 清除所有标签页名称
+     * Clear all tab names.
      */
     public void clearAllTabNames() {
         myState.tabNames.clear();
@@ -87,14 +87,14 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     }
 
     /**
-     * 更新标签页索引（当标签页被删除时，需要重新映射索引）
-     * @param removedIndex 被删除的标签页索引
+     * Update tab indexes when a tab is removed (re-maps all indexes accordingly).
+     * @param removedIndex the index of the removed tab
      */
     public void onTabRemoved(int removedIndex) {
-        // 移除被删除标签页的名称
+        // Remove the name of the deleted tab
         myState.tabNames.remove(removedIndex);
 
-        // 将所有大于 removedIndex 的索引减 1
+        // Decrement all indexes greater than removedIndex by 1
         Map<Integer, String> newMap = new HashMap<>();
         for (Map.Entry<Integer, String> entry : myState.tabNames.entrySet()) {
             int oldIndex = entry.getKey();
@@ -106,7 +106,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         }
         myState.tabNames = newMap;
 
-        // 更新标签页数量
+        // Update the tab count
         if (myState.tabCount > 0) {
             myState.tabCount--;
         }
@@ -115,8 +115,8 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     }
 
     /**
-     * 保存标签页数量
-     * @param count 标签页数量
+     * Save the tab count.
+     * @param count the number of tabs
      */
     public void saveTabCount(int count) {
         myState.tabCount = count;
@@ -124,24 +124,24 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     }
 
     /**
-     * 获取标签页数量
-     * @return 标签页数量，默认为 1
+     * Get the tab count.
+     * @return the number of tabs, defaults to 1
      */
     public int getTabCount() {
         return Math.max(1, myState.tabCount);
     }
 
     /**
-     * 持久化状态类
+     * Persistent state class.
      */
     public static class State {
         /**
-         * 标签页索引到名称的映射
+         * Map from tab index to tab name.
          */
         public Map<Integer, String> tabNames = new HashMap<>();
 
         /**
-         * 标签页数量
+         * Number of tabs.
          */
         public int tabCount = 1;
     }

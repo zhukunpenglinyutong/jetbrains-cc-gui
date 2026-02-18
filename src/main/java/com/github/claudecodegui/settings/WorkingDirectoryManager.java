@@ -9,8 +9,8 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * 工作目录管理器
- * 负责管理项目自定义工作目录配置
+ * Working Directory Manager.
+ * Manages custom working directory configuration for projects.
  */
 public class WorkingDirectoryManager {
     private static final Logger LOG = Logger.getInstance(WorkingDirectoryManager.class);
@@ -26,9 +26,9 @@ public class WorkingDirectoryManager {
     }
 
     /**
-     * 获取自定义工作目录配置
-     * @param projectPath 项目根路径
-     * @return 自定义工作目录,如果未配置则返回 null
+     * Get the custom working directory configuration.
+     * @param projectPath the project root path
+     * @return the custom working directory, or null if not configured
      */
     public String getCustomWorkingDirectory(String projectPath) {
         JsonObject config = configReader.apply(null);
@@ -47,14 +47,14 @@ public class WorkingDirectoryManager {
     }
 
     /**
-     * 设置自定义工作目录
-     * @param projectPath 项目根路径
-     * @param customWorkingDir 自定义工作目录(相对于项目根路径或绝对路径)
+     * Set the custom working directory.
+     * @param projectPath the project root path
+     * @param customWorkingDir the custom working directory (relative to project root or absolute path)
      */
     public void setCustomWorkingDirectory(String projectPath, String customWorkingDir) throws IOException {
         JsonObject config = configReader.apply(null);
 
-        // 确保 workingDirectories 节点存在
+        // Ensure the workingDirectories node exists
         if (!config.has("workingDirectories")) {
             config.add("workingDirectories", new JsonObject());
         }
@@ -62,10 +62,10 @@ public class WorkingDirectoryManager {
         JsonObject workingDirs = config.getAsJsonObject("workingDirectories");
 
         if (customWorkingDir == null || customWorkingDir.trim().isEmpty()) {
-            // 如果传入空值,移除配置
+            // If an empty value is provided, remove the configuration
             workingDirs.remove(projectPath);
         } else {
-            // 设置自定义工作目录
+            // Set the custom working directory
             workingDirs.addProperty(projectPath, customWorkingDir.trim());
         }
 
@@ -74,7 +74,7 @@ public class WorkingDirectoryManager {
     }
 
     /**
-     * 获取所有工作目录配置
+     * Get all working directory configurations.
      * @return Map<projectPath, customWorkingDir>
      */
     public Map<String, String> getAllWorkingDirectories() {

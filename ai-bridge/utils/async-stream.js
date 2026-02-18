@@ -1,6 +1,6 @@
 /**
- * AsyncStream - 手动控制的异步迭代器
- * 用于向 Claude Agent SDK 传递用户消息（包括图片）
+ * AsyncStream - Manually controlled async iterator.
+ * Used to pass user messages (including images) to the Claude Agent SDK.
  */
 export class AsyncStream {
   constructor() {

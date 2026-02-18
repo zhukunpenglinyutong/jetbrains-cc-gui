@@ -18,8 +18,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 编辑器上下文收集器
- * 负责收集 IDE 编辑器中的上下文信息(打开的文件、选中的代码等)
+ * Editor context collector.
+ * Collects context information from the IDE editor (open files, selected code, etc.).
  */
 public class EditorContextCollector {
     private static final Logger LOG = Logger.getInstance(EditorContextCollector.class);
@@ -43,21 +43,21 @@ public class EditorContextCollector {
     }
 
     /**
-     * 设置是否启用自动打开文件（编辑器上下文收集）
-     * 如果关闭，collectContext() 将返回空对象，AI 不会收到任何编辑器上下文信息
+     * Set whether auto open file (editor context collection) is enabled.
+     * When disabled, collectContext() returns an empty object and AI receives no editor context.
      */
     public void setAutoOpenFileEnabled(boolean enabled) {
         this.autoOpenFileEnabled = enabled;
     }
 
     /**
-     * 异步收集编辑器上下文信息
-     * 如果 autoOpenFileEnabled 为 false，则返回空对象，AI 不会收到任何编辑器上下文
+     * Asynchronously collect editor context information.
+     * Returns an empty object if autoOpenFileEnabled is false.
      */
     public CompletableFuture<JsonObject> collectContext() {
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
 
-        // 如果用户关闭了"自动打开文件"开关，不收集任何编辑器上下文
+        // If the user has disabled the auto open file toggle, skip all editor context collection
         if (!autoOpenFileEnabled) {
             LOG.info("Auto open file disabled, skipping editor context collection");
             future.complete(new JsonObject());
@@ -94,20 +94,21 @@ public class EditorContextCollector {
     }
 
     /**
-     * 构建上下文 JSON 对象
+     * Build the context JSON object.
      */
     private JsonObject buildContextJson(Editor editor, String activeFile) {
         /*
-         * ========== 编辑器上下文信息采集 ==========
+         * ========== Editor Context Information Collection ==========
          *
-         * 此处采集用户在 IDEA 编辑器中的工作环境信息,用于帮助 AI 理解用户当前的代码上下文。
-         * 这些信息会被构建成 JSON 格式,最终附加到发送给 AI 的系统提示词中。
+         * Collects the user's working environment in the IDEA editor to help AI
+         * understand the current code context. This information is built into JSON
+         * format and appended to the system prompt sent to AI.
          *
-         * 采集的信息按优先级分为四层:
-         * 1. active (当前激活的文件) - 优先级最高,AI 的主要关注点
-         * 2. selection (用户选中的代码) - 如果存在,则是 AI 应该重点分析的核心对象
-         * 3. semantic (PSI语义信息) - 代码结构、引用、继承关系等
-         * 4. others (其他打开的文件) - 优先级最低,作为潜在的上下文参考
+         * Collected information is organized in four priority layers:
+         * 1. active (currently active file) - Highest priority, AI's primary focus
+         * 2. selection (user-selected code) - If present, the core target for AI analysis
+         * 3. semantic (PSI semantic info) - Code structure, references, inheritance, etc.
+         * 4. others (other open files) - Lowest priority, potential context references
          */
 
         List<String> allOpenedFiles = EditorFileUtils.getOpenedFiles(project);
@@ -116,11 +117,11 @@ public class EditorContextCollector {
         JsonObject openedFilesJson = new JsonObject();
 
         if (activeFile != null) {
-            // 添加当前激活的文件路径
+            // Add the currently active file path
             openedFilesJson.addProperty("active", activeFile);
             LOG.debug("Current active file: " + activeFile);
 
-            // 如果用户选中了代码,添加选中信息
+            // If the user has selected code, add selection info
             if (selectionInfo != null) {
                 JsonObject selectionJson = new JsonObject();
                 selectionJson.addProperty("startLine", (Integer) selectionInfo.get("startLine"));
@@ -131,7 +132,7 @@ public class EditorContextCollector {
                     selectionInfo.get("startLine") + "-" + selectionInfo.get("endLine"));
             }
 
-            // 收集 PSI 语义上下文 (所有文件)
+            // Collect PSI semantic context (all files)
             if (psiContextEnabled && editor != null && activeFile != null) {
                 try {
                     ContextCollector semanticCollector = new ContextCollector();
@@ -149,7 +150,7 @@ public class EditorContextCollector {
             }
         }
 
-        // 添加其他打开的文件(排除激活文件,避免重复)
+        // Add other open files (excluding the active file to avoid duplication)
         JsonArray othersArray = new JsonArray();
         for (String file : allOpenedFiles) {
             if (!file.equals(activeFile)) {

@@ -7,36 +7,36 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * 权限管理器，管理所有权限请求和决策
+ * Permission manager that handles all permission requests and decisions.
  */
 public class PermissionManager {
 
-    // 权限模式枚举
+    // Permission mode enum
     public enum PermissionMode {
-        DEFAULT,    // 默认模式，每次询问
-        ACCEPT_EDITS, // 代理模式：自动接受文件编辑相关操作
-        ALLOW_ALL,  // 允许所有工具调用
-        DENY_ALL    // 拒绝所有工具调用
+        DEFAULT,    // Default mode, ask every time
+        ACCEPT_EDITS, // Agent mode: auto-approve file editing operations
+        ALLOW_ALL,  // Allow all tool calls
+        DENY_ALL    // Deny all tool calls
     }
 
     private PermissionMode mode = PermissionMode.DEFAULT;
     private final Map<String, PermissionRequest> pendingRequests = new ConcurrentHashMap<>();
-    private final Map<String, Boolean> toolPermissionMemory = new ConcurrentHashMap<>(); // 记住工具权限决策（工具+参数）
-    private final Map<String, Boolean> toolOnlyPermissionMemory = new ConcurrentHashMap<>(); // 工具级别权限记忆（仅工具名）
+    private final Map<String, Boolean> toolPermissionMemory = new ConcurrentHashMap<>(); // Remember tool permission decisions (tool + parameters)
+    private final Map<String, Boolean> toolOnlyPermissionMemory = new ConcurrentHashMap<>(); // Tool-level permission memory (tool name only)
     private Consumer<PermissionRequest> onPermissionRequestedCallback;
 
     /**
-     * 创建新的权限请求.
+     * Create a new permission request.
      *
-     * @param channelId 通道ID
-     * @param toolName 工具名称
-     * @param inputs 输入参数
-     * @param suggestions 建议
-     * @param project 所属项目
-     * @return 权限请求对象
+     * @param channelId the channel ID
+     * @param toolName the tool name
+     * @param inputs the input parameters
+     * @param suggestions the suggestions
+     * @param project the owning project
+     * @return the permission request object
      */
     public PermissionRequest createRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions, Project project) {
-        // 首先检查工具级别的权限记忆（总是允许）
+        // First check tool-level permission memory (always allow)
         if (toolOnlyPermissionMemory.containsKey(toolName)) {
             PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
             if (toolOnlyPermissionMemory.get(toolName)) {
@@ -47,10 +47,10 @@ public class PermissionManager {
             return request;
         }
 
-        // 检查是否有记忆的权限决策（工具+参数）
+        // Check if there is a remembered permission decision (tool + parameters)
         String memoryKey = toolName + ":" + generateInputHash(inputs);
         if (toolPermissionMemory.containsKey(memoryKey)) {
-            // 自动处理基于记忆的决策
+            // Automatically process based on remembered decision
             PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
             if (toolPermissionMemory.get(memoryKey)) {
                 request.accept();
@@ -60,7 +60,7 @@ public class PermissionManager {
             return request;
         }
 
-        // 检查全局权限模式
+        // Check global permission mode
         if (mode == PermissionMode.ACCEPT_EDITS) {
             if (isAutoApprovedInAcceptEditsMode(toolName)) {
                 PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
@@ -78,11 +78,11 @@ public class PermissionManager {
             return request;
         }
 
-        // 创建新的权限请求
+        // Create a new permission request
         PermissionRequest request = new PermissionRequest(channelId, toolName, inputs, suggestions, project);
         pendingRequests.put(channelId, request);
 
-        // 触发权限请求回调
+        // Trigger the permission request callback
         if (onPermissionRequestedCallback != null) {
             onPermissionRequestedCallback.accept(request);
         }
@@ -91,9 +91,9 @@ public class PermissionManager {
     }
 
     /**
-     * 创建新的权限请求（兼容旧版本）.
+     * Create a new permission request (backward compatible).
      *
-     * @deprecated 使用包含 project 参数的方法
+     * @deprecated Use the method that includes a project parameter.
      */
     @Deprecated
     public PermissionRequest createRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions) {
@@ -101,7 +101,7 @@ public class PermissionManager {
     }
 
     /**
-     * 处理权限决策（带记忆选项）
+     * Handle a permission decision (with remember option).
      */
     public void handlePermissionDecision(String channelId, boolean allow, boolean rememberDecision, String rejectMessage) {
         PermissionRequest request = pendingRequests.remove(channelId);
@@ -109,7 +109,7 @@ public class PermissionManager {
             return;
         }
 
-        // 如果选择记住决策，保存到记忆中
+        // If the user chose to remember the decision, save it to memory
         if (rememberDecision) {
             String memoryKey = request.getToolName() + ":" + generateInputHash(request.getInputs());
             toolPermissionMemory.put(memoryKey, allow);
@@ -123,7 +123,7 @@ public class PermissionManager {
     }
 
     /**
-     * 处理权限决策（总是允许 - 按工具类型）
+     * Handle a permission decision (always allow/deny - by tool type).
      */
     public void handlePermissionDecisionAlways(String channelId, boolean allow) {
         PermissionRequest request = pendingRequests.remove(channelId);
@@ -131,7 +131,7 @@ public class PermissionManager {
             return;
         }
 
-        // 保存工具级别的权限记忆
+        // Save tool-level permission memory
         toolOnlyPermissionMemory.put(request.getToolName(), allow);
 
         if (allow) {
@@ -142,48 +142,48 @@ public class PermissionManager {
     }
 
     /**
-     * 设置权限请求回调
+     * Set the permission request callback.
      */
     public void setOnPermissionRequestedCallback(Consumer<PermissionRequest> callback) {
         this.onPermissionRequestedCallback = callback;
     }
 
     /**
-     * 设置权限模式
+     * Set the permission mode.
      */
     public void setPermissionMode(PermissionMode mode) {
         this.mode = mode;
     }
 
     /**
-     * 获取当前权限模式
+     * Get the current permission mode.
      */
     public PermissionMode getPermissionMode() {
         return mode;
     }
 
     /**
-     * 清除权限记忆
+     * Clear all permission memory.
      */
     public void clearPermissionMemory() {
         toolPermissionMemory.clear();
     }
 
     /**
-     * 清除特定工具的权限记忆
+     * Clear permission memory for a specific tool.
      */
     public void clearToolPermissionMemory(String toolName) {
         toolPermissionMemory.entrySet().removeIf(entry -> entry.getKey().startsWith(toolName + ":"));
     }
 
     /**
-     * 生成输入参数的哈希值用于记忆
+     * Generate a hash of the input parameters for memory lookup.
      */
     private String generateInputHash(Map<String, Object> inputs) {
         if (inputs == null || inputs.isEmpty()) {
             return "empty";
         }
-        // 简单的哈希实现，实际可以更复杂
+        // Simple hash implementation; could be more sophisticated
         return String.valueOf(inputs.toString().hashCode());
     }
 
@@ -201,14 +201,14 @@ public class PermissionManager {
     }
 
     /**
-     * 获取挂起的权限请求
+     * Get all pending permission requests.
      */
     public Collection<PermissionRequest> getPendingRequests() {
         return new ArrayList<>(pendingRequests.values());
     }
 
     /**
-     * 取消所有挂起的权限请求
+     * Cancel all pending permission requests.
      */
     public void cancelAllPendingRequests() {
         for (PermissionRequest request : pendingRequests.values()) {

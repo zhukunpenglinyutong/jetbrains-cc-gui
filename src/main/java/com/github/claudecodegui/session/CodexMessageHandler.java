@@ -6,12 +6,10 @@ import com.github.claudecodegui.ClaudeSession.Message;
 import com.intellij.openapi.diagnostic.Logger;
 
 /**
- * Codex消息回调处理器
- * 英文：Codex Message Callback Handler
- *
- * 解释：这个类专门负责处理Codex AI返回的消息
- * - 和ClaudeMessageHandler类似，但Codex的消息格式更简单
- * - 主要处理流式文本输出
+ * Codex message callback handler.
+ * Processes messages returned by Codex AI.
+ * Similar to ClaudeMessageHandler but handles Codex's simpler message format,
+ * primarily dealing with streaming text output.
  */
 public class CodexMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(CodexMessageHandler.class);
@@ -19,20 +17,14 @@ public class CodexMessageHandler implements MessageCallback {
     private final SessionState state;
     private final CallbackHandler callbackHandler;
 
-    // 当前助手消息的内容累积器
-    // 英文：Current assistant message content accumulator
-    // 解释：收集AI说的话
+    // Content accumulator for the current assistant message
     private final StringBuilder assistantContent = new StringBuilder();
 
-    // 当前助手消息对象
-    // 英文：Current assistant message object
-    // 解释：正在处理的消息
+    // Current assistant message object being processed
     private Message currentAssistantMessage = null;
 
     /**
-     * 构造函数
-     * 英文：Constructor
-     * 解释：创建这个处理器
+     * Constructor.
      */
     public CodexMessageHandler(SessionState state, CallbackHandler callbackHandler) {
         this.state = state;
@@ -40,36 +32,34 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理收到的消息
-     * 英文：Handle received message
-     * 解释：Codex发来消息时的处理
+     * Handle a received message by dispatching to the appropriate handler based on type.
      */
     @Override
     public void onMessage(String type, String content) {
-        // 【FIX】添加对多种消息类型的处理
-        // Codex message-service.js 会发送：
-        // - type='assistant': 包含 thinking, tool_use, text
-        // - type='user': 包含 tool_result
+        // [FIX] Handle multiple message types
+        // Codex message-service.js sends:
+        // - type='assistant': contains thinking, tool_use, text
+        // - type='user': contains tool_result
         LOG.debug("CodexMessageHandler.onMessage: type=" + type + ", content length=" + (content != null ? content.length() : 0));
 
         if ("assistant".equals(type)) {
-            // 处理 assistant 消息（thinking, tool_use, text）
+            // Handle assistant message (thinking, tool_use, text)
             handleAssistantMessage(content);
         } else if ("user".equals(type)) {
-            // 处理 user 消息（tool_result）
+            // Handle user message (tool_result)
             handleUserMessage(content);
         } else if ("result".equals(type)) {
-            // 处理 result 消息（usage 等）
+            // Handle result message (usage stats, etc.)
             handleResultMessage(content);
         } else if ("session_id".equals(type)) {
-            // 处理 session_id/thread_id（用于 session 恢复）
+            // Handle session_id/thread_id (for session recovery)
             handleSessionId(content);
         } else if ("event_msg".equals(type)) {
             handleEventMessage(content);
         } else if ("content_delta".equals(type) || "content".equals(type)) {
-            // 处理流式内容增量（旧格式，保留兼容）
-            // content_delta: 流式增量
-            // content: 完整内容块
+            // Handle streaming content delta (legacy format, kept for compatibility)
+            // content_delta: streaming incremental
+            // content: complete content block
             handleContentDelta(content);
         } else if ("status".equals(type)) {
             if (content != null && !content.trim().isEmpty()) {
@@ -83,9 +73,7 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理错误
-     * 英文：Handle error
-     * 解释：出错了怎么办
+     * Handle an error from the SDK.
      */
     @Override
     public void onError(String error) {
@@ -100,9 +88,7 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理完成
-     * 英文：Handle completion
-     * 解释：Codex说完了
+     * Handle completion of a response turn.
      */
     @Override
     public void onComplete(SDKResult result) {
@@ -112,22 +98,18 @@ public class CodexMessageHandler implements MessageCallback {
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
-    // ===== 私有方法 =====
-    // Private Methods
-    // 解释：具体处理消息的小帮手
+    // ===== Private methods =====
 
     /**
-     * 处理完整的 assistant 消息
-     * 英文：Handle complete assistant message
-     * 解释：处理 Codex 返回的完整消息（JSON 格式）
-     * 包含 thinking, tool_use, text 等多种内容类型
+     * Handle a complete assistant message in JSON format.
+     * Contains thinking, tool_use, text, and other content types.
      */
     private void handleAssistantMessage(String jsonContent) {
         try {
             com.google.gson.Gson gson = new com.google.gson.Gson();
             com.google.gson.JsonObject msgJson = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
 
-            // 应用 v0.1.3-codex 的过滤逻辑
+            // Apply v0.1.3-codex filtering logic
             Message parsed = parseServerMessage(msgJson, Message.Type.ASSISTANT);
             if (parsed == null) {
                 LOG.debug("Codex assistant message filtered out");
@@ -144,16 +126,14 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理 user 消息（主要是 tool_result）
-     * 英文：Handle user message (mainly tool_result)
-     * 解释：处理工具执行结果
+     * Handle a user message (primarily tool_result).
      */
     private void handleUserMessage(String jsonContent) {
         try {
             com.google.gson.Gson gson = new com.google.gson.Gson();
             com.google.gson.JsonObject msgJson = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
 
-            // 应用 v0.1.3-codex 的过滤逻辑
+            // Apply v0.1.3-codex filtering logic
             Message parsed = parseServerMessage(msgJson, Message.Type.USER);
             if (parsed == null) {
                 LOG.debug("Codex user message filtered out");
@@ -170,9 +150,7 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理 session_id（Codex thread ID）
-     * 英文：Handle session_id (Codex thread ID)
-     * 解释：保存 Codex 的 thread ID 用于会话恢复
+     * Handle the session_id (Codex thread ID) for session recovery.
      */
     private void handleSessionId(String threadId) {
         if (threadId != null && !threadId.trim().isEmpty()) {
@@ -183,8 +161,7 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理 result（usage 统计）
-     * 英文：Handle result message (usage stats)
+     * Handle the result message containing usage statistics.
      */
     private void handleResultMessage(String jsonContent) {
         try {
@@ -208,8 +185,7 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理 event_msg（包含 token_count 等事件）
-     * 英文：Handle event_msg (token_count, etc.)
+     * Handle event_msg containing token_count and other events.
      */
     private void handleEventMessage(String jsonContent) {
         try {
@@ -257,7 +233,7 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 将 usage 挂到最后一条 assistant 消息 raw 上，供前端展示。
+     * Attach usage data to the last assistant message's raw field for frontend display.
      */
     private boolean attachUsageToLastAssistant(com.google.gson.JsonObject usage) {
         java.util.List<Message> messages = state.getMessagesReference();
@@ -272,17 +248,15 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 解析服务器消息（移植自 v0.1.3-codex）
-     * 英文：Parse server message (ported from v0.1.3-codex)
-     * 解释：完整的消息过滤和解析逻辑
+     * Parse a server message with full filtering and parsing logic (ported from v0.1.3-codex).
      */
     private Message parseServerMessage(com.google.gson.JsonObject msg, Message.Type messageType) {
-        // 过滤 isMeta 消息（如 "Caveat: The messages below were generated..."）
+        // Filter out isMeta messages (e.g., "Caveat: The messages below were generated...")
         if (msg.has("isMeta") && msg.get("isMeta").getAsBoolean()) {
             return null;
         }
 
-        // 过滤命令消息（包含 <command-name> 或 <local-command-stdout> 标签）
+        // Filter out command messages (containing <command-name> or <local-command-stdout> tags)
         if (msg.has("message") && msg.get("message").isJsonObject()) {
             com.google.gson.JsonObject message = msg.getAsJsonObject("message");
             if (message.has("content")) {
@@ -292,7 +266,7 @@ public class CodexMessageHandler implements MessageCallback {
                 if (contentElement.isJsonPrimitive()) {
                     contentStr = contentElement.getAsString();
                 } else if (contentElement.isJsonArray()) {
-                    // 检查数组中的文本内容
+                    // Check text content in the array
                     com.google.gson.JsonArray contentArray = contentElement.getAsJsonArray();
                     for (int i = 0; i < contentArray.size(); i++) {
                         com.google.gson.JsonElement element = contentArray.get(i);
@@ -307,7 +281,7 @@ public class CodexMessageHandler implements MessageCallback {
                     }
                 }
 
-                // 如果内容包含命令标签，过滤掉（允许包含 <command-message> 的用户输入）
+                // Filter out content with command tags (allow user input containing <command-message>)
                 if (contentStr != null) {
                     boolean hasCommandMessage = contentStr.contains("<command-message>") &&
                         contentStr.contains("</command-message>");
@@ -325,10 +299,10 @@ public class CodexMessageHandler implements MessageCallback {
 
         String content = extractMessageContent(msg);
 
-        // User 消息的特殊处理：即使内容为空，也要保留 tool_result
+        // Special handling for user messages: preserve tool_result even if content is empty
         if (messageType == Message.Type.USER) {
             if (content == null || content.trim().isEmpty()) {
-                // 检查是否包含 tool_result
+                // Check if it contains a tool_result
                 if (msg.has("message") && msg.get("message").isJsonObject()) {
                     com.google.gson.JsonObject message = msg.getAsJsonObject("message");
                     if (message.has("content") && message.get("content").isJsonArray()) {
@@ -338,7 +312,7 @@ public class CodexMessageHandler implements MessageCallback {
                             if (element.isJsonObject()) {
                                 com.google.gson.JsonObject block = element.getAsJsonObject();
                                 if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
-                                    // 包含 tool_result，保留此消息（使用占位符内容）
+                                    // Contains tool_result; keep this message with placeholder content
                                     Message result = new Message(Message.Type.USER, "[tool_result]");
                                     result.raw = msg;
                                     return result;
@@ -351,19 +325,18 @@ public class CodexMessageHandler implements MessageCallback {
             }
         }
 
-        // 创建消息并保留原始 JSON
+        // Create message and preserve the original JSON
         Message result = new Message(messageType, content != null ? content : "");
         result.raw = msg;
         return result;
     }
 
     /**
-     * 提取消息内容（移植自 v0.1.3-codex）
-     * 英文：Extract message content (ported from v0.1.3-codex)
+     * Extract message content (ported from v0.1.3-codex).
      */
     private String extractMessageContent(com.google.gson.JsonObject msg) {
         if (!msg.has("message")) {
-            // 尝试直接从顶层获取 content（某些消息格式可能不同）
+            // Try to get content directly from the top level (some message formats may differ)
             if (msg.has("content")) {
                 return extractContentFromElement(msg.get("content"));
             }
@@ -375,22 +348,21 @@ public class CodexMessageHandler implements MessageCallback {
             return "";
         }
 
-        // 获取content元素
+        // Get the content element
         com.google.gson.JsonElement contentElement = message.get("content");
         return extractContentFromElement(contentElement);
     }
 
     /**
-     * 从 JsonElement 中提取内容（移植自 v0.1.3-codex）
-     * 英文：Extract content from JsonElement (ported from v0.1.3-codex)
+     * Extract content from a JsonElement (ported from v0.1.3-codex).
      */
     private String extractContentFromElement(com.google.gson.JsonElement contentElement) {
-        // 字符串格式
+        // String format
         if (contentElement.isJsonPrimitive()) {
             return contentElement.getAsString();
         }
 
-        // 数组格式
+        // Array format
         if (contentElement.isJsonArray()) {
             com.google.gson.JsonArray contentArray = contentElement.getAsJsonArray();
             StringBuilder sb = new StringBuilder();
@@ -404,7 +376,7 @@ public class CodexMessageHandler implements MessageCallback {
                         ? block.get("type").getAsString()
                         : null;
 
-                    // 处理不同类型的内容块
+                    // Handle different content block types
                     if ("text".equals(blockType) && block.has("text") && !block.get("text").isJsonNull()) {
                         String text = block.get("text").getAsString();
                         if (sb.length() > 0) {
@@ -415,16 +387,15 @@ public class CodexMessageHandler implements MessageCallback {
                     } else if ("tool_use".equals(blockType)) {
                         // Skip tool_use, don't display tool usage text
                     } else if ("tool_result".equals(blockType)) {
-                        // 工具结果 - 不展示，因为对用户没有实际意义
-                        // 工具结果通常很长，且已经在 assistant 的响应中体现
-                        // 这里跳过不处理
+                        // Tool result - skip display as it provides no direct value to the user
+                        // and is typically long and already reflected in the assistant's response
                     } else if ("thinking".equals(blockType)) {
                         // Skip thinking block, don't display fixed text
                     } else if ("image".equals(blockType)) {
                         // Skip image block, don't display fixed text
                     }
                 } else if (element.isJsonPrimitive()) {
-                    // 某些情况下，数组元素可能直接是字符串
+                    // In some cases, array elements may be plain strings
                     String text = element.getAsString();
                     if (text != null && !text.trim().isEmpty()) {
                         if (sb.length() > 0) {
@@ -439,10 +410,10 @@ public class CodexMessageHandler implements MessageCallback {
             return sb.toString();
         }
 
-        // 对象格式（某些特殊情况）
+        // Object format (special cases)
         if (contentElement.isJsonObject()) {
             com.google.gson.JsonObject contentObj = contentElement.getAsJsonObject();
-            // 尝试提取 text 字段
+            // Try to extract the text field
             if (contentObj.has("text") && !contentObj.get("text").isJsonNull()) {
                 return contentObj.get("text").getAsString();
             }
@@ -453,12 +424,10 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理内容增量（流式输出）
-     * 英文：Handle content delta (streaming output)
-     * 解释：Codex一字一字地说话
+     * Handle content delta in streaming mode.
      */
     private void handleContentDelta(String content) {
-        // 空内容检查（兼容 v0.1.3-codex）
+        // Empty content check (compatible with v0.1.3-codex)
         if (content == null || content.isEmpty()) {
             return;
         }
@@ -476,9 +445,7 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * 处理消息结束
-     * 英文：Handle message end
-     * 解释：Codex说完这条消息了
+     * Handle the end of a message.
      */
     private void handleMessageEnd() {
         state.setBusy(false);
