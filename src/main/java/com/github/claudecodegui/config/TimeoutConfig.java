@@ -3,32 +3,32 @@ package com.github.claudecodegui.config;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 统一的超时配置
- * 用于所有异步操作的超时控制
+ * Unified timeout configuration.
+ * Controls timeouts for all asynchronous operations.
  */
 public class TimeoutConfig {
     /**
-     * 快速操作超时：30秒
-     * 适用于：启动 Channel、获取命令列表等
+     * Quick operation timeout: 30 seconds.
+     * Used for: channel startup, fetching command lists, etc.
      */
     public static final long QUICK_OPERATION_TIMEOUT = 30;
     public static final TimeUnit QUICK_OPERATION_UNIT = TimeUnit.SECONDS;
 
     /**
-     * 消息发送超时：3分钟
-     * 适用于：发送消息、AI 响应等
+     * Message sending timeout: 3 minutes.
+     * Used for: sending messages, AI responses, etc.
      */
     public static final long MESSAGE_TIMEOUT = 180;
     public static final TimeUnit MESSAGE_UNIT = TimeUnit.SECONDS;
 
     /**
-     * 长时间操作超时：10分钟
-     * 适用于：文件索引、大量数据处理等
+     * Long operation timeout: 10 minutes.
+     * Used for: file indexing, large-scale data processing, etc.
      */
     public static final long LONG_OPERATION_TIMEOUT = 600;
     public static final TimeUnit LONG_OPERATION_UNIT = TimeUnit.SECONDS;
 
     private TimeoutConfig() {
-        // 工具类，不允许实例化
+        // Utility class, not instantiable
     }
 }

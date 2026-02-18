@@ -20,6 +20,14 @@ public class CreateNewTabAction extends AnAction {
 
     private static final Logger LOG = Logger.getInstance(CreateNewTabAction.class);
 
+    public CreateNewTabAction() {
+        super(
+            ClaudeCodeGuiBundle.message("action.createNewTab.text"),
+            ClaudeCodeGuiBundle.message("action.createNewTab.description"),
+            null
+        );
+    }
+
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
         return ActionUpdateThread.BGT;

@@ -16,11 +16,14 @@ export interface UseSubmitHandlerOptions {
   clearInput: () => void;
   /** Cancel any pending debounced input callbacks to prevent stale values from refilling the input */
   cancelPendingInput: () => void;
+  /** Invalidate text content cache to force fresh DOM read on submit */
+  invalidateCache: () => void;
   externalAttachments: Attachment[] | undefined;
   setInternalAttachments: Dispatch<SetStateAction<Attachment[]>>;
   fileCompletion: CompletionLike;
   commandCompletion: CompletionLike;
   agentCompletion: CompletionLike;
+  promptCompletion: CompletionLike;
   recordInputHistory: (text: string) => void;
   onSubmit?: (content: string, attachmentsToSend?: Attachment[]) => void;
   onInstallSdk?: () => void;
@@ -45,11 +48,13 @@ export function useSubmitHandler({
   currentProvider,
   clearInput,
   cancelPendingInput,
+  invalidateCache,
   externalAttachments,
   setInternalAttachments,
   fileCompletion,
   commandCompletion,
   agentCompletion,
+  promptCompletion,
   recordInputHistory,
   onSubmit,
   onInstallSdk,
@@ -57,6 +62,8 @@ export function useSubmitHandler({
   t,
 }: UseSubmitHandlerOptions) {
   return useCallback(() => {
+    // Force fresh DOM read to avoid stale cache (e.g., after paste)
+    invalidateCache();
     const content = getTextContent();
     const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
@@ -84,6 +91,7 @@ export function useSubmitHandler({
     fileCompletion.close();
     commandCompletion.close();
     agentCompletion.close();
+    promptCompletion.close();
 
     // Record input history
     recordInputHistory(content);
@@ -104,6 +112,7 @@ export function useSubmitHandler({
     }, 10);
   }, [
     getTextContent,
+    invalidateCache,
     attachments,
     isLoading,
     sdkStatusLoading,
@@ -116,6 +125,7 @@ export function useSubmitHandler({
     fileCompletion,
     commandCompletion,
     agentCompletion,
+    promptCompletion,
     recordInputHistory,
     onSubmit,
     onInstallSdk,

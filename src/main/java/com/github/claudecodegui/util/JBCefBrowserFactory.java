@@ -7,27 +7,28 @@ import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.ui.jcef.JBCefBrowserBase;
 
 /**
- * JBCefBrowser 工厂类
- * 统一管理 JBCefBrowser 的创建，根据不同平台和 IDEA 版本设置合适的 OSR (Off-Screen Rendering) 模式
+ * JBCefBrowser factory.
+ * Centrally manages JBCefBrowser creation, configuring the appropriate
+ * OSR (Off-Screen Rendering) mode based on the platform and IDEA version.
  *
- * OSR 模式说明：
- * - macOS: 关闭 OSR（使用原生渲染）
- * - Windows: 关闭 OSR
- * - Linux/Unix: IDEA 2023+ 开启 OSR，2023 以下关闭 OSR
+ * OSR mode behavior:
+ * - macOS: OSR disabled (uses native rendering)
+ * - Windows: OSR disabled
+ * - Linux/Unix: OSR enabled for IDEA 2023+, disabled for earlier versions
  */
 public final class JBCefBrowserFactory {
 
     private static final Logger LOG = Logger.getInstance(JBCefBrowserFactory.class);
 
     private JBCefBrowserFactory() {
-        // 工具类，禁止实例化
+        // Utility class, do not instantiate
     }
 
     /**
-     * 创建 JBCefBrowser 实例
-     * 根据当前平台和 IDEA 版本自动选择合适的 OSR 设置
+     * Create a JBCefBrowser instance.
+     * Automatically selects the appropriate OSR setting based on the current platform and IDEA version.
      *
-     * @return JBCefBrowser 实例
+     * @return a JBCefBrowser instance
      */
     public static JBCefBrowser create() {
         boolean isOffScreenRendering = determineOsrMode();
@@ -40,7 +41,7 @@ public final class JBCefBrowserFactory {
             JBCefBrowser browser = JBCefBrowser.createBuilder()
                     .setOffScreenRendering(isOffScreenRendering)
                     .setEnableOpenDevToolsMenuItem(isDevMode)
-                    // .setCreateImmediately(true) // 此处会导致 新开标签页永远卡在"正在检查 SDK 状态...” 先注释 恢复为默认的懒加载模式
+                    // .setCreateImmediately(true) // Causes new tabs to permanently stall on "Checking SDK status..." - commented out; using default lazy-load mode instead
                     .build();
             configureContextMenu(browser, isDevMode);
             LOG.info("JBCefBrowser created successfully using builder");
@@ -54,10 +55,10 @@ public final class JBCefBrowserFactory {
     }
 
     /**
-     * 创建 JBCefBrowser 实例并加载指定 URL
+     * Create a JBCefBrowser instance and load the specified URL.
      *
-     * @param url 要加载的 URL
-     * @return JBCefBrowser 实例
+     * @param url the URL to load
+     * @return a JBCefBrowser instance
      */
     public static JBCefBrowser create(String url) {
         boolean isOffScreenRendering = determineOsrMode();
@@ -86,31 +87,31 @@ public final class JBCefBrowserFactory {
     }
 
     /**
-     * 根据平台和 IDEA 版本确定是否启用 OSR 模式
+     * Determine whether to enable OSR mode based on platform and IDEA version.
      *
-     * @return true 表示启用 OSR，false 表示禁用
+     * @return true to enable OSR, false to disable
      */
     private static boolean determineOsrMode() {
         if (SystemInfo.isMac) {
-            // macOS: 关闭 OSR
+            // macOS: disable OSR
             return false;
         } else if (SystemInfo.isLinux || SystemInfo.isUnix) {
-            // Linux/Unix: 根据 IDEA 版本决定
+            // Linux/Unix: depends on IDEA version
             int version = getIdeaMajorVersion();
-            // IDEA 2023+ 开启 OSR
+            // Enable OSR for IDEA 2023+
             return version >= 2023;
         } else if (SystemInfo.isWindows) {
-            // Windows: 关闭 OSR
+            // Windows: disable OSR
             return false;
         }
-        // 未知平台，默认关闭 OSR
+        // Unknown platform, disable OSR by default
         return false;
     }
 
     /**
-     * 获取 IDEA 主版本号
+     * Get the IDEA major version number.
      *
-     * @return IDEA 主版本号（如 2023, 2024 等），解析失败返回 0
+     * @return the IDEA major version (e.g., 2023, 2024), or 0 if parsing fails
      */
     private static int getIdeaMajorVersion() {
         try {
@@ -124,9 +125,9 @@ public final class JBCefBrowserFactory {
     }
 
     /**
-     * 获取当前平台名称（用于日志）
+     * Get the current platform name (for logging purposes).
      *
-     * @return 平台名称
+     * @return the platform name
      */
     private static String getPlatformName() {
         if (SystemInfo.isMac) {
@@ -142,9 +143,9 @@ public final class JBCefBrowserFactory {
     }
 
     /**
-     * 检查 JCEF 是否可用
+     * Check whether JCEF is available.
      *
-     * @return true 表示 JCEF 可用
+     * @return true if JCEF is supported
      */
     public static boolean isJcefSupported() {
         try {
@@ -156,10 +157,10 @@ public final class JBCefBrowserFactory {
     }
 
     /**
-     * 配置浏览器右键菜单.
-     * 在开发环境启用右键菜单，在生产环境禁用右键菜单。
+     * Configure the browser context menu.
+     * Enables the context menu in development mode and disables it in production.
      *
-     * @param browser JBCefBrowser 实例
+     * @param browser the JBCefBrowser instance
      */
     private static void configureContextMenu(JBCefBrowser browser, boolean isDevMode) {
         browser.setProperty(JBCefBrowserBase.Properties.NO_CONTEXT_MENU, !isDevMode);

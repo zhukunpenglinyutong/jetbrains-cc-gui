@@ -12,8 +12,8 @@ import javax.swing.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 历史数据处理器
- * 处理历史数据加载和会话加载
+ * History data handler.
+ * Handles loading history data and session loading.
  */
 public class HistoryHandler extends BaseMessageHandler {
 
@@ -22,20 +22,20 @@ public class HistoryHandler extends BaseMessageHandler {
     private static final String[] SUPPORTED_TYPES = {
         "load_history_data",
         "load_session",
-        "delete_session",  // 新增:删除会话
-        "export_session",  // 新增:导出会话
-        "toggle_favorite", // 新增:切换收藏状态
-        "update_title",    // 新增:更新会话标题
-        "deep_search_history" // 新增:深度搜索(清空缓存后重新加载)
+        "delete_session",  // Delete session
+        "export_session",  // Export session
+        "toggle_favorite", // Toggle favorite status
+        "update_title",    // Update session title
+        "deep_search_history" // Deep search (clear cache and reload)
     };
 
-    // 会话加载回调接口
+    // Session load callback interface
     public interface SessionLoadCallback {
         void onLoadSession(String sessionId, String projectPath);
     }
 
     private SessionLoadCallback sessionLoadCallback;
-    private String currentProvider = "claude"; // 默认为 claude
+    private String currentProvider = "claude"; // Default to claude
 
     public HistoryHandler(HandlerContext context) {
         super(context);
@@ -87,11 +87,11 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 加载并注入历史数据到前端（包含收藏信息）
-     * @param provider 提供商标识 ("claude" 或 "codex")
+     * Load and inject history data into the frontend (including favorite info).
+     * @param provider the provider identifier ("claude" or "codex")
      */
     private void handleLoadHistoryData(String provider) {
-        // 保存当前 provider 状态
+        // Save the current provider state
         this.currentProvider = provider != null && !provider.isEmpty() ? provider : "claude";
 
         CompletableFuture.runAsync(() -> {
@@ -100,32 +100,32 @@ public class HistoryHandler extends BaseMessageHandler {
             try {
                 String historyJson;
 
-                // 获取当前项目路径
+                // Get current project path
                 String projectPath = context.getProject().getBasePath();
 
-                // 根据 provider 选择不同的 reader
+                // Choose a different reader based on the provider
                 if ("codex".equals(provider)) {
-                    // 使用 CodexHistoryReader 读取 Codex 会话（按项目过滤）
+                    // Use CodexHistoryReader to read Codex sessions (filtered by project)
                     LOG.info("[HistoryHandler] 使用 CodexHistoryReader 读取 Codex 会话 (项目: " + projectPath + ")");
                     CodexHistoryReader codexReader = new CodexHistoryReader();
                     historyJson = codexReader.getSessionsForProjectAsJson(projectPath);
                     LOG.info("[HistoryHandler] CodexHistoryReader 返回的 JSON 长度: " + historyJson.length());
                 } else {
-                    // 默认使用 ClaudeHistoryReader 读取 Claude 会话
+                    // Default: use ClaudeHistoryReader to read Claude sessions
                     LOG.info("[HistoryHandler] 使用 ClaudeHistoryReader 读取 Claude 会话");
                     ClaudeHistoryReader historyReader = new ClaudeHistoryReader();
                     historyJson = historyReader.getProjectDataAsJson(projectPath);
                 }
 
-                // 加载收藏数据并合并到历史数据中
+                // Load favorite data and merge into history data
                 String enhancedJson = enhanceHistoryWithFavorites(historyJson);
                 LOG.info("[HistoryHandler] enhanceHistoryWithFavorites 完成，JSON 长度: " + enhancedJson.length());
 
-                // 加载自定义标题并合并到历史数据中
+                // Load custom titles and merge into history data
                 String finalJson = enhanceHistoryWithTitles(enhancedJson);
                 LOG.info("[HistoryHandler] enhanceHistoryWithTitles 完成，JSON 长度: " + finalJson.length());
 
-                // 使用 Base64 编码来避免 JavaScript 字符串转义问题
+                // Use Base64 encoding to avoid JavaScript string escaping issues
                 String base64Json = java.util.Base64.getEncoder().encodeToString(finalJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 LOG.info("[HistoryHandler] Base64 编码完成，长度: " + base64Json.length());
 
@@ -135,7 +135,7 @@ public class HistoryHandler extends BaseMessageHandler {
                         "  try { " +
                         "    var base64Str = '" + base64Json + "'; " +
                         "    console.log('[Backend->Frontend] Base64 length:', base64Str.length); " +
-                        // 使用 TextDecoder 正确解码 UTF-8 的 Base64 字符串（避免中文乱码）
+                        // Use TextDecoder to properly decode UTF-8 Base64 strings (avoid garbled non-ASCII characters)
                         "    var binaryStr = atob(base64Str); " +
                         "    var bytes = new Uint8Array(binaryStr.length); " +
                         "    for (var i = 0; i < binaryStr.length; i++) { bytes[i] = binaryStr.charCodeAt(i); } " +
@@ -172,16 +172,16 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 深度搜索历史记录
-     * 清空缓存后重新从文件系统加载完整的历史记录
-     * @param provider 提供商标识 ("claude" 或 "codex")
+     * Deep search history records.
+     * Clears cache and reloads complete history from the file system.
+     * @param provider the provider identifier ("claude" or "codex")
      */
     private void handleDeepSearchHistory(String provider) {
         String projectPath = context.getProject().getBasePath();
         LOG.info("[HistoryHandler] ========== 开始深度搜索 ========== provider=" + provider);
 
         try {
-            // 1. 清空内存缓存
+            // 1. Clear in-memory cache
             if ("codex".equals(provider)) {
                 SessionIndexCache.getInstance().clearAllCodexCache();
                 LOG.info("[HistoryHandler] 已清空 Codex 内存缓存");
@@ -190,7 +190,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] 已清空 Claude 项目内存缓存: " + projectPath);
             }
 
-            // 2. 清空磁盘索引
+            // 2. Clear disk index
             if ("codex".equals(provider)) {
                 SessionIndexManager.getInstance().clearAllCodexIndex();
                 LOG.info("[HistoryHandler] 已清空 Codex 磁盘索引");
@@ -205,22 +205,22 @@ public class HistoryHandler extends BaseMessageHandler {
             LOG.warn("[HistoryHandler] 清理缓存时出错（继续加载）: " + e.getMessage());
         }
 
-        // 3. 重新加载历史数据（使用现有方法）
+        // 3. Reload history data (using existing method)
         handleLoadHistoryData(provider);
     }
 
     /**
-     * 加载历史会话
+     * Load a history session.
      */
     private void handleLoadSession(String sessionId) {
         String projectPath = context.getProject().getBasePath();
         LOG.info("[HistoryHandler] Loading history session: " + sessionId + " from project: " + projectPath + ", provider: " + currentProvider);
 
         if ("codex".equals(currentProvider)) {
-            // Codex 会话：读取会话信息并恢复会话状态
+            // Codex session: read session info and restore session state
             loadCodexSession(sessionId);
         } else {
-            // Claude 会话：使用现有的 callback 机制
+            // Claude session: use existing callback mechanism
             if (sessionLoadCallback != null) {
                 sessionLoadCallback.onLoadSession(sessionId, projectPath);
             } else {
@@ -230,7 +230,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 将 Codex 的 content 转换为 Claude 格式的 content blocks
+     * Convert Codex content to Claude-format content blocks.
      * Codex: [{type: "input_text", text: "..."}, {type: "text", text: "..."}]
      * Claude: [{type: "text", text: "..."}]
      */
@@ -241,7 +241,7 @@ public class HistoryHandler extends BaseMessageHandler {
             return claudeBlocks;
         }
 
-        // 处理字符串类型 - 转换为单个文本块
+        // Handle string type - convert to a single text block
         if (contentElem.isJsonPrimitive()) {
             com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
             textBlock.addProperty("type", "text");
@@ -250,7 +250,7 @@ public class HistoryHandler extends BaseMessageHandler {
             return claudeBlocks;
         }
 
-        // 处理数组类型
+        // Handle array type
         if (contentElem.isJsonArray()) {
             com.google.gson.JsonArray contentArray = contentElem.getAsJsonArray();
 
@@ -262,7 +262,7 @@ public class HistoryHandler extends BaseMessageHandler {
                     if (type != null) {
                         com.google.gson.JsonObject claudeBlock = new com.google.gson.JsonObject();
 
-                        // Codex 的 "input_text" 和 "output_text" 转换为 Claude 的 "text"
+                        // Convert Codex "input_text" and "output_text" to Claude "text"
                         if ("input_text".equals(type) || "output_text".equals(type) || "text".equals(type)) {
                             claudeBlock.addProperty("type", "text");
                             if (itemObj.has("text")) {
@@ -270,7 +270,7 @@ public class HistoryHandler extends BaseMessageHandler {
                             }
                             claudeBlocks.add(claudeBlock);
                         }
-                        // 处理工具使用（如果 Codex 有的话）
+                        // Handle tool use (if present in Codex)
                         else if ("tool_use".equals(type)) {
                             claudeBlock.addProperty("type", "tool_use");
                             if (itemObj.has("id")) {
@@ -284,7 +284,7 @@ public class HistoryHandler extends BaseMessageHandler {
                             }
                             claudeBlocks.add(claudeBlock);
                         }
-                        // 处理工具结果
+                        // Handle tool result
                         else if ("tool_result".equals(type)) {
                             claudeBlock.addProperty("type", "tool_result");
                             if (itemObj.has("tool_use_id")) {
@@ -298,7 +298,7 @@ public class HistoryHandler extends BaseMessageHandler {
                             }
                             claudeBlocks.add(claudeBlock);
                         }
-                        // 处理思考块
+                        // Handle thinking block
                         else if ("thinking".equals(type)) {
                             claudeBlock.addProperty("type", "thinking");
                             if (itemObj.has("thinking")) {
@@ -309,7 +309,7 @@ public class HistoryHandler extends BaseMessageHandler {
                             }
                             claudeBlocks.add(claudeBlock);
                         }
-                        // 处理图片
+                        // Handle image
                         else if ("image".equals(type)) {
                             claudeBlock.addProperty("type", "image");
                             if (itemObj.has("src")) {
@@ -323,7 +323,7 @@ public class HistoryHandler extends BaseMessageHandler {
                             }
                             claudeBlocks.add(claudeBlock);
                         }
-                        // 其他未知类型，尝试保持原样
+                        // Other unknown types, try to keep as-is
                         else {
                             claudeBlocks.add(itemObj);
                         }
@@ -334,7 +334,7 @@ public class HistoryHandler extends BaseMessageHandler {
             return claudeBlocks;
         }
 
-        // 处理对象类型 - 作为单个块
+        // Handle object type - treat as a single block
         if (contentElem.isJsonObject()) {
             claudeBlocks.add(contentElem.getAsJsonObject());
             return claudeBlocks;
@@ -344,20 +344,20 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 从 Codex content 字段提取文本内容
-     * Codex 的 content 可能是字符串、对象或数组格式
+     * Extract text content from a Codex content field.
+     * Codex content can be in string, object, or array format.
      */
     private String extractContentAsString(com.google.gson.JsonElement contentElem) {
         if (contentElem == null) {
             return null;
         }
 
-        // 处理字符串类型
+        // Handle string type
         if (contentElem.isJsonPrimitive()) {
             return contentElem.getAsString();
         }
 
-        // 处理数组类型
+        // Handle array type
         if (contentElem.isJsonArray()) {
             com.google.gson.JsonArray contentArray = contentElem.getAsJsonArray();
             StringBuilder sb = new StringBuilder();
@@ -366,7 +366,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 if (item.isJsonObject()) {
                     com.google.gson.JsonObject itemObj = item.getAsJsonObject();
 
-                    // 提取文本类型
+                    // Extract text type
                     if (itemObj.has("type") && "text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
                             if (sb.length() > 0) {
@@ -375,7 +375,7 @@ public class HistoryHandler extends BaseMessageHandler {
                             sb.append(itemObj.get("text").getAsString());
                         }
                     }
-                    // 提取 input_text 类型 (Codex 用户消息)
+                    // Extract input_text type (Codex user messages)
                     else if (itemObj.has("type") && "input_text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
                             if (sb.length() > 0) {
@@ -384,7 +384,7 @@ public class HistoryHandler extends BaseMessageHandler {
                             sb.append(itemObj.get("text").getAsString());
                         }
                     }
-                    // 提取 output_text 类型 (Codex AI 助手消息)
+                    // Extract output_text type (Codex AI assistant messages)
                     else if (itemObj.has("type") && "output_text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
                             if (sb.length() > 0) {
@@ -399,7 +399,7 @@ public class HistoryHandler extends BaseMessageHandler {
             return sb.toString();
         }
 
-        // 处理对象类型
+        // Handle object type
         if (contentElem.isJsonObject()) {
             com.google.gson.JsonObject contentObj = contentElem.getAsJsonObject();
             if (contentObj.has("text")) {
@@ -411,8 +411,8 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 加载 Codex 会话
-     * 直接读取会话消息并注入到前端，同时恢复会话状态
+     * Load a Codex session.
+     * Reads session messages directly and injects them into the frontend, while restoring session state.
      */
     private void loadCodexSession(String sessionId) {
         CompletableFuture.runAsync(() -> {
@@ -426,7 +426,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
                 LOG.info("[HistoryHandler] 读取到 " + messages.size() + " 条 Codex 消息");
 
-                // 提取会话元数据并恢复会话状态
+                // Extract session metadata and restore session state
                 String[] sessionMeta = extractSessionMeta(messages);
                 String threadIdToUse = sessionMeta[0] != null ? sessionMeta[0] : sessionId;
                 String cwd = sessionMeta[1];
@@ -434,18 +434,18 @@ public class HistoryHandler extends BaseMessageHandler {
                 context.getSession().setSessionInfo(threadIdToUse, cwd);
                 LOG.info("[HistoryHandler] 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
 
-                // 清空当前消息
+                // Clear current messages
                 ApplicationManager.getApplication().invokeLater(() -> {
                     context.executeJavaScriptOnEDT("if (window.clearMessages) { window.clearMessages(); }");
                 });
 
-                // 将 Codex 消息转换为前端格式并逐条注入
+                // Convert Codex messages to frontend format and inject one by one
                 for (int i = 0; i < messages.size(); i++) {
                     com.google.gson.JsonObject msg = messages.get(i).getAsJsonObject();
                     processAndInjectCodexMessage(msg);
                 }
 
-                // 通知前端历史消息加载完成，触发 Markdown 重新渲染
+                // Notify frontend that history messages have finished loading, trigger Markdown re-rendering
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "if (window.historyLoadComplete) { " +
                         "  try { " +
@@ -474,7 +474,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 提取 Codex 会话元数据（threadId 和 cwd）
+     * Extract Codex session metadata (threadId and cwd).
      * @return String[2]: [0]=actualThreadId, [1]=cwd
      */
     private String[] extractSessionMeta(com.google.gson.JsonArray messages) {
@@ -501,7 +501,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理并注入单条 Codex 消息到前端
+     * Process and inject a single Codex message into the frontend.
      */
     private void processAndInjectCodexMessage(com.google.gson.JsonObject msg) {
         if (!msg.has("type") || !"response_item".equals(msg.get("type").getAsString())) {
@@ -531,12 +531,12 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 转换 Codex 普通消息为前端格式
+     * Convert Codex regular message to frontend format.
      */
     private com.google.gson.JsonObject convertCodexMessageToFrontend(com.google.gson.JsonObject payload, String timestamp) {
         String contentStr = extractContentAsString(payload.get("content"));
 
-        // 过滤掉系统消息
+        // Filter out system messages
         if (contentStr != null && isSystemMessage(contentStr)) {
             return null;
         }
@@ -565,7 +565,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 检查是否为系统消息（需要过滤）
+     * Check if this is a system message (should be filtered).
      */
     private boolean isSystemMessage(String contentStr) {
         return contentStr.startsWith("Warning:") ||
@@ -577,7 +577,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 转换 Codex function_call 为 Claude tool_use 格式
+     * Convert Codex function_call to Claude tool_use format.
      */
     private com.google.gson.JsonObject convertFunctionCallToToolUse(com.google.gson.JsonObject payload, String timestamp) {
         com.google.gson.JsonObject frontendMsg = new com.google.gson.JsonObject();
@@ -586,11 +586,11 @@ public class HistoryHandler extends BaseMessageHandler {
         String toolName = payload.has("name") ? payload.get("name").getAsString() : "unknown";
         com.google.gson.JsonElement toolInput = parseToolArguments(payload);
 
-        // 智能转换工具名
+        // Smart tool name conversion
         toolName = convertToolName(toolName, toolInput);
         toolInput = convertToolInput(toolName, toolInput);
 
-        // 构造 tool_use 格式
+        // Build tool_use format
         com.google.gson.JsonObject toolUse = new com.google.gson.JsonObject();
         toolUse.addProperty("type", "tool_use");
         toolUse.addProperty("id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
@@ -618,7 +618,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 解析工具调用参数
+     * Parse tool call arguments.
      */
     private com.google.gson.JsonElement parseToolArguments(com.google.gson.JsonObject payload) {
         if (!payload.has("arguments")) {
@@ -632,7 +632,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 智能转换工具名（shell_command -> read/glob, update_plan -> todowrite）
+     * Smart tool name conversion (shell_command -> read/glob, update_plan -> todowrite).
      */
     private String convertToolName(String toolName, com.google.gson.JsonElement toolInput) {
         if ("shell_command".equals(toolName) && toolInput != null && toolInput.isJsonObject()) {
@@ -656,7 +656,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 转换工具输入（update_plan -> todowrite 格式转换）
+     * Convert tool input (update_plan -> todowrite format conversion).
      */
     private com.google.gson.JsonElement convertToolInput(String toolName, com.google.gson.JsonElement toolInput) {
         if (!"todowrite".equals(toolName) || toolInput == null || !toolInput.isJsonObject()) {
@@ -693,7 +693,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 转换 Codex function_call_output 为 Claude tool_result 格式
+     * Convert Codex function_call_output to Claude tool_result format.
      */
     private com.google.gson.JsonObject convertFunctionCallOutputToToolResult(com.google.gson.JsonObject payload, String timestamp) {
         com.google.gson.JsonObject frontendMsg = new com.google.gson.JsonObject();
@@ -724,7 +724,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 注入消息到前端
+     * Inject a message into the frontend.
      */
     private void injectMessageToFrontend(com.google.gson.JsonObject frontendMsg) {
         String msgJson = new com.google.gson.Gson().toJson(frontendMsg);
@@ -747,8 +747,8 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 删除会话历史文件
-     * 删除指定 sessionId 的 .jsonl 文件以及相关的 agent-xxx.jsonl 文件
+     * Delete session history files.
+     * Deletes the .jsonl file for the specified sessionId and related agent-xxx.jsonl files.
      */
     private void handleDeleteSession(String sessionId) {
         CompletableFuture.runAsync(() -> {
@@ -762,9 +762,9 @@ public class HistoryHandler extends BaseMessageHandler {
                 boolean mainDeleted = false;
                 int agentFilesDeleted = 0;
 
-                // 根据 provider 确定会话目录
+                // Determine session directory based on provider
                 if ("codex".equals(currentProvider)) {
-                    // Codex 会话：存储在 ~/.codex/sessions/
+                    // Codex sessions: stored in ~/.codex/sessions/
                     sessionDir = java.nio.file.Paths.get(homeDir, ".codex", "sessions");
                     LOG.info("[HistoryHandler] 使用 Codex 会话目录: " + sessionDir);
 
@@ -773,7 +773,7 @@ public class HistoryHandler extends BaseMessageHandler {
                         return;
                     }
 
-                    // 查找并删除 Codex 会话文件（可能在子目录中）
+                    // Find and delete Codex session files (may be in subdirectories)
                     try (java.util.stream.Stream<java.nio.file.Path> paths = java.nio.file.Files.walk(sessionDir)) {
                         java.util.List<java.nio.file.Path> sessionFiles = paths
                             .filter(java.nio.file.Files::isRegularFile)
@@ -793,14 +793,14 @@ public class HistoryHandler extends BaseMessageHandler {
                     }
 
                 } else {
-                    // Claude 会话：存储在 ~/.claude/projects/{projectPath}/
+                    // Claude sessions: stored in ~/.claude/projects/{projectPath}/
                     String projectPath = context.getProject().getBasePath();
                     LOG.info("[HistoryHandler] ProjectPath: " + projectPath);
 
                     java.nio.file.Path claudeDir = java.nio.file.Paths.get(homeDir, ".claude");
                     java.nio.file.Path projectsDir = claudeDir.resolve("projects");
 
-                    // 规范化项目路径(与 ClaudeHistoryReader 保持一致)
+                    // Sanitize project path (consistent with ClaudeHistoryReader)
                     String sanitizedPath = com.github.claudecodegui.util.PathUtils.sanitizePath(projectPath);
                     sessionDir = projectsDir.resolve(sanitizedPath);
 
@@ -811,7 +811,7 @@ public class HistoryHandler extends BaseMessageHandler {
                         return;
                     }
 
-                    // 删除主会话文件
+                    // Delete the main session file
                     java.nio.file.Path mainSessionFile = sessionDir.resolve(sessionId + ".jsonl");
 
                     if (java.nio.file.Files.exists(mainSessionFile)) {
@@ -822,20 +822,20 @@ public class HistoryHandler extends BaseMessageHandler {
                         LOG.warn("[HistoryHandler] 主会话文件不存在: " + mainSessionFile.getFileName());
                     }
 
-                    // 删除相关的 agent 文件
-                    // 遍历项目目录,查找所有可能相关的 agent 文件
-                    // agent 文件通常命名为 agent-<uuid>.jsonl
+                    // Delete related agent files
+                    // Iterate through the project directory to find all potentially related agent files
+                    // Agent files are typically named agent-<uuid>.jsonl
                     try (java.util.stream.Stream<java.nio.file.Path> stream = java.nio.file.Files.list(sessionDir)) {
                         java.util.List<java.nio.file.Path> agentFiles = stream
                             .filter(path -> {
                                 String filename = path.getFileName().toString();
-                                // 匹配 agent-*.jsonl 文件，并且需要属于当前会话
+                                // Match agent-*.jsonl files that belong to the current session
                                 if (!filename.startsWith("agent-") || !filename.endsWith(".jsonl")) {
                                     return false;
                                 }
 
-                                // 检查agent文件是否属于当前会话
-                                // 通过读取文件内容查找sessionId引用
+                                // Check if the agent file belongs to the current session
+                                // by reading file content to find sessionId references
                                 return isAgentFileRelatedToSession(path, sessionId);
                             })
                             .collect(java.util.stream.Collectors.toList());
@@ -856,16 +856,16 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] 主会话文件: " + (mainDeleted ? "已删除" : "未找到"));
                 LOG.info("[HistoryHandler] Agent 文件: 删除了 " + agentFilesDeleted + " 个");
 
-                // 清理相关的收藏和标题数据
+                // Clean up related favorite and title data
                 if (mainDeleted) {
                     try {
                         LOG.info("[HistoryHandler] 开始清理会话关联数据...");
 
-                        // 清理收藏数据
+                        // Clean up favorite data
                         callNodeJsFavoritesService("removeFavorite", sessionId);
                         LOG.info("[HistoryHandler] 已清理收藏数据");
 
-                        // 清理标题数据
+                        // Clean up title data
                         String deleteResult = callNodeJsDeleteTitle(sessionId);
                         LOG.info("[HistoryHandler] 已清理标题数据");
 
@@ -874,18 +874,18 @@ public class HistoryHandler extends BaseMessageHandler {
                     }
                 }
 
-                // 清理缓存，确保下次加载时不会返回已删除的会话
+                // Clear cache to ensure deleted sessions are not returned on next load
                 try {
                     String projectPath = context.getProject().getBasePath();
                     LOG.info("[HistoryHandler] 清理会话缓存...");
 
                     if ("codex".equals(currentProvider)) {
-                        // Codex 使用 "__all__" 作为缓存键，需要清除所有 Codex 缓存
+                        // Codex uses "__all__" as cache key, need to clear all Codex cache
                         SessionIndexCache.getInstance().clearAllCodexCache();
                         SessionIndexManager.getInstance().clearAllCodexIndex();
                         LOG.info("[HistoryHandler] 已清理所有 Codex 缓存和索引");
                     } else {
-                        // Claude 使用 projectPath 作为缓存键
+                        // Claude uses projectPath as cache key
                         SessionIndexCache.getInstance().clearProject(projectPath);
                         SessionIndexManager.getInstance().clearProjectIndex("claude", projectPath);
                         LOG.info("[HistoryHandler] 已清理 Claude 项目缓存和索引");
@@ -895,7 +895,7 @@ public class HistoryHandler extends BaseMessageHandler {
                     LOG.warn("[HistoryHandler] 清理缓存失败（不影响会话删除）: " + e.getMessage());
                 }
 
-                // 删除完成后，重新加载历史数据并推送给前端
+                // After deletion, reload history data and push to frontend
                 LOG.info("[HistoryHandler] 重新加载历史数据...");
                 handleLoadHistoryData(currentProvider);
 
@@ -906,15 +906,15 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 导出会话数据
-     * 读取会话的所有消息并返回给前端
+     * Export session data.
+     * Reads all messages of the session and returns them to the frontend.
      */
     private void handleExportSession(String content) {
         CompletableFuture.runAsync(() -> {
             LOG.info("[HistoryHandler] ========== 开始导出会话 ==========");
 
             try {
-                // 解析前端传来的JSON，获取 sessionId 和 title
+                // Parse JSON from frontend to extract sessionId and title
                 com.google.gson.JsonObject exportRequest = new com.google.gson.Gson().fromJson(content, com.google.gson.JsonObject.class);
                 String sessionId = exportRequest.get("sessionId").getAsString();
                 String title = exportRequest.get("title").getAsString();
@@ -925,7 +925,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] ProjectPath: " + projectPath);
                 LOG.info("[HistoryHandler] CurrentProvider: " + currentProvider);
 
-                // 根据 provider 选择不同的 reader
+                // Choose a different reader based on the provider
                 String messagesJson;
                 if ("codex".equals(currentProvider)) {
                     LOG.info("[HistoryHandler] 使用 CodexHistoryReader 读取 Codex 会话消息");
@@ -937,7 +937,7 @@ public class HistoryHandler extends BaseMessageHandler {
                     messagesJson = historyReader.getSessionMessagesAsJson(projectPath, sessionId);
                 }
 
-                // 将消息包装到包含 sessionId 和 title 的对象中
+                // Wrap messages into an object containing sessionId and title
                 com.google.gson.JsonObject exportData = new com.google.gson.JsonObject();
                 exportData.addProperty("sessionId", sessionId);
                 exportData.addProperty("title", title);
@@ -982,7 +982,7 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 切换收藏状态
+     * Toggle favorite status.
      */
     private void handleToggleFavorite(String sessionId) {
         CompletableFuture.runAsync(() -> {
@@ -990,7 +990,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] ========== 切换收藏状态 ==========");
                 LOG.info("[HistoryHandler] SessionId: " + sessionId);
 
-                // 调用 Node.js favorites-service 切换收藏状态
+                // Call Node.js favorites-service to toggle favorite status
                 String result = callNodeJsFavoritesService("toggleFavorite", sessionId);
                 LOG.info("[HistoryHandler] 收藏状态切换结果: " + result);
 
@@ -1001,14 +1001,14 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 更新会话标题
+     * Update session title.
      */
     private void handleUpdateTitle(String content) {
         CompletableFuture.runAsync(() -> {
             try {
                 LOG.info("[HistoryHandler] ========== 更新会话标题 ==========");
 
-                // 解析前端传来的JSON，获取 sessionId 和 customTitle
+                // Parse JSON from frontend to extract sessionId and customTitle
                 com.google.gson.JsonObject request = new com.google.gson.Gson().fromJson(content, com.google.gson.JsonObject.class);
                 String sessionId = request.get("sessionId").getAsString();
                 String customTitle = request.get("customTitle").getAsString();
@@ -1016,11 +1016,11 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] SessionId: " + sessionId);
                 LOG.info("[HistoryHandler] CustomTitle: " + customTitle);
 
-                // 调用 Node.js session-titles-service 更新标题
+                // Call Node.js session-titles-service to update the title
                 String result = callNodeJsTitlesServiceWithParams("updateTitle", sessionId, customTitle);
                 LOG.info("[HistoryHandler] 标题更新结果: " + result);
 
-                // 解析结果
+                // Parse the result
                 com.google.gson.JsonObject resultObj = new com.google.gson.Gson().fromJson(result, com.google.gson.JsonObject.class);
                 boolean success = resultObj.get("success").getAsBoolean();
 
@@ -1047,25 +1047,25 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 增强历史数据：添加收藏信息到每个会话
+     * Enhance history data: add favorite info to each session.
      */
     private String enhanceHistoryWithFavorites(String historyJson) {
         try {
-            // 加载收藏数据
+            // Load favorite data
             String favoritesJson = callNodeJsFavoritesService("loadFavorites", "");
 
-            // 解析历史数据和收藏数据
+            // Parse history data and favorite data
             com.google.gson.JsonObject history = new com.google.gson.Gson().fromJson(historyJson, com.google.gson.JsonObject.class);
             com.google.gson.JsonObject favorites = new com.google.gson.Gson().fromJson(favoritesJson, com.google.gson.JsonObject.class);
 
-            // 为每个会话添加收藏信息和 provider 信息
+            // Add favorite info and provider info to each session
             if (history.has("sessions") && history.get("sessions").isJsonArray()) {
                 com.google.gson.JsonArray sessions = history.getAsJsonArray("sessions");
                 for (int i = 0; i < sessions.size(); i++) {
                     com.google.gson.JsonObject session = sessions.get(i).getAsJsonObject();
                     String sessionId = session.get("sessionId").getAsString();
 
-                    // 添加 provider 信息
+                    // Add provider info
                     session.addProperty("provider", currentProvider);
 
                     if (favorites.has(sessionId)) {
@@ -1078,7 +1078,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 }
             }
 
-            // 将收藏数据也添加到历史数据中
+            // Also add favorite data to the history data
             history.add("favorites", favorites);
 
             return new com.google.gson.Gson().toJson(history);
@@ -1090,18 +1090,18 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 增强历史数据：添加自定义标题到每个会话
+     * Enhance history data: add custom titles to each session.
      */
     private String enhanceHistoryWithTitles(String historyJson) {
         try {
-            // 加载标题数据
+            // Load title data
             String titlesJson = callNodeJsTitlesService("loadTitles", "", "");
 
-            // 解析历史数据和标题数据
+            // Parse history data and title data
             com.google.gson.JsonObject history = new com.google.gson.Gson().fromJson(historyJson, com.google.gson.JsonObject.class);
             com.google.gson.JsonObject titles = new com.google.gson.Gson().fromJson(titlesJson, com.google.gson.JsonObject.class);
 
-            // 为每个会话添加自定义标题
+            // Add custom title to each session
             if (history.has("sessions") && history.get("sessions").isJsonArray()) {
                 com.google.gson.JsonArray sessions = history.getAsJsonArray("sessions");
                 for (int i = 0; i < sessions.size(); i++) {
@@ -1110,7 +1110,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
                     if (titles.has(sessionId)) {
                         com.google.gson.JsonObject titleInfo = titles.getAsJsonObject(sessionId);
-                        // 如果有自定义标题，则覆盖原始标题
+                        // If a custom title exists, override the original title
                         if (titleInfo.has("customTitle")) {
                             String customTitle = titleInfo.get("customTitle").getAsString();
                             session.addProperty("title", customTitle);
@@ -1129,14 +1129,14 @@ public class HistoryHandler extends BaseMessageHandler {
     }
 
     /**
-     * 调用 Node.js favorites-service
+     * Call Node.js favorites-service.
      */
     private String callNodeJsFavoritesService(String functionName, String sessionId) throws Exception {
-        // 获取 ai-bridge 路径
+        // Get ai-bridge path
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
 
-        // 构建 Node.js 命令
+        // Build Node.js command
         String nodeScript = String.format(
             "const { %s } = require('%s/services/favorites-service.cjs'); " +
             "const result = %s('%s'); " +
@@ -1152,7 +1152,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
         Process process = pb.start();
 
-        // 读取输出
+        // Read output
         StringBuilder output = new StringBuilder();
         try (java.io.BufferedReader reader = new java.io.BufferedReader(
                 new java.io.InputStreamReader(process.getInputStream()))) {
@@ -1167,20 +1167,20 @@ public class HistoryHandler extends BaseMessageHandler {
             throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
         }
 
-        // 返回最后一行（JSON 输出）
+        // Return the last line (JSON output)
         String[] lines = output.toString().split("\n");
         return lines.length > 0 ? lines[lines.length - 1] : "{}";
     }
 
     /**
-     * 调用 Node.js session-titles-service（无参数版本，用于 loadTitles）
+     * Call Node.js session-titles-service (no-argument version, for loadTitles).
      */
     private String callNodeJsTitlesService(String functionName, String dummy1, String dummy2) throws Exception {
-        // 获取 ai-bridge 路径
+        // Get ai-bridge path
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
 
-        // 构建 Node.js 命令（loadTitles 不需要参数）
+        // Build Node.js command (loadTitles requires no arguments)
         String nodeScript = String.format(
             "const { %s } = require('%s/services/session-titles-service.cjs'); " +
             "const result = %s(); " +
@@ -1195,7 +1195,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
         Process process = pb.start();
 
-        // 读取输出
+        // Read output
         StringBuilder output = new StringBuilder();
         try (java.io.BufferedReader reader = new java.io.BufferedReader(
                 new java.io.InputStreamReader(process.getInputStream()))) {
@@ -1210,23 +1210,23 @@ public class HistoryHandler extends BaseMessageHandler {
             throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
         }
 
-        // 返回最后一行（JSON 输出）
+        // Return the last line (JSON output)
         String[] lines = output.toString().split("\n");
         return lines.length > 0 ? lines[lines.length - 1] : "{}";
     }
 
     /**
-     * 调用 Node.js session-titles-service（带参数版本，用于 updateTitle）
+     * Call Node.js session-titles-service (with parameters, for updateTitle).
      */
     private String callNodeJsTitlesServiceWithParams(String functionName, String sessionId, String customTitle) throws Exception {
-        // 获取 ai-bridge 路径
+        // Get ai-bridge path
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
 
-        // 转义特殊字符
+        // Escape special characters
         String escapedTitle = customTitle.replace("\\", "\\\\").replace("'", "\\'");
 
-        // 构建 Node.js 命令
+        // Build Node.js command
         String nodeScript = String.format(
             "const { %s } = require('%s/services/session-titles-service.cjs'); " +
             "const result = %s('%s', '%s'); " +
@@ -1243,7 +1243,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
         Process process = pb.start();
 
-        // 读取输出
+        // Read output
         StringBuilder output = new StringBuilder();
         try (java.io.BufferedReader reader = new java.io.BufferedReader(
                 new java.io.InputStreamReader(process.getInputStream()))) {
@@ -1258,20 +1258,20 @@ public class HistoryHandler extends BaseMessageHandler {
             throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
         }
 
-        // 返回最后一行（JSON 输出）
+        // Return the last line (JSON output)
         String[] lines = output.toString().split("\n");
         return lines.length > 0 ? lines[lines.length - 1] : "{}";
     }
 
     /**
-     * 调用 Node.js session-titles-service 删除标题（单参数版本）
+     * Call Node.js session-titles-service to delete a title (single parameter version).
      */
     private String callNodeJsDeleteTitle(String sessionId) throws Exception {
-        // 获取 ai-bridge 路径
+        // Get ai-bridge path
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
 
-        // 构建 Node.js 命令
+        // Build Node.js command
         String nodeScript = String.format(
             "const { deleteTitle } = require('%s/services/session-titles-service.cjs'); " +
             "const result = deleteTitle('%s'); " +
@@ -1285,7 +1285,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
         Process process = pb.start();
 
-        // 读取输出
+        // Read output
         StringBuilder output = new StringBuilder();
         try (java.io.BufferedReader reader = new java.io.BufferedReader(
                 new java.io.InputStreamReader(process.getInputStream()))) {
@@ -1300,22 +1300,22 @@ public class HistoryHandler extends BaseMessageHandler {
             throw new Exception("Node.js process exited with code " + exitCode + ": " + output.toString());
         }
 
-        // 返回最后一行（JSON 输出）
+        // Return the last line (JSON output)
         String[] lines = output.toString().split("\n");
         return lines.length > 0 ? lines[lines.length - 1] : "{}";
     }
 
     /**
-     * 检查agent文件是否属于指定的会话
-     * 通过读取文件内容查找sessionId引用
+     * Check if an agent file belongs to the specified session.
+     * Reads file content to find sessionId references.
      */
     private boolean isAgentFileRelatedToSession(java.nio.file.Path agentFilePath, String sessionId) {
         try (java.io.BufferedReader reader = java.nio.file.Files.newBufferedReader(agentFilePath, java.nio.charset.StandardCharsets.UTF_8)) {
             String line;
             int lineCount = 0;
-            // 只读取前20行以提高性能（通常sessionId会在文件开头）
+            // Only read the first 20 lines for performance (sessionId is typically near the beginning)
             while ((line = reader.readLine()) != null && lineCount < 20) {
-                // 检查这一行是否包含sessionId
+                // Check if this line contains the sessionId
                 if (line.contains("\"sessionId\":\"" + sessionId + "\"") ||
                     line.contains("\"parentSessionId\":\"" + sessionId + "\"")) {
                     LOG.debug("[HistoryHandler] Agent文件 " + agentFilePath.getFileName() + " 属于会话 " + sessionId);
@@ -1323,11 +1323,11 @@ public class HistoryHandler extends BaseMessageHandler {
                 }
                 lineCount++;
             }
-            // 如果前20行都没找到，说明这个agent文件不属于当前会话
+            // If not found in the first 20 lines, the agent file does not belong to this session
             LOG.debug("[HistoryHandler] Agent文件 " + agentFilePath.getFileName() + " 不属于会话 " + sessionId);
             return false;
         } catch (Exception e) {
-            // 如果读取失败，为了安全起见，不删除这个文件
+            // If reading fails, do not delete the file to be safe
             LOG.warn("[HistoryHandler] 无法读取agent文件 " + agentFilePath.getFileName() + ": " + e.getMessage());
             return false;
         }

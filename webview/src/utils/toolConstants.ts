@@ -12,6 +12,9 @@ export const EDIT_TOOL_NAMES = new Set(['edit', 'edit_file', 'replace_string', '
 // Bash/command execution tools
 export const BASH_TOOL_NAMES = new Set(['bash', 'run_terminal_cmd', 'execute_command', 'shell_command']);
 
+// Search/grep/glob tools
+export const SEARCH_TOOL_NAMES = new Set(['grep', 'glob', 'search', 'find']);
+
 // File modification tools (for rewind feature - includes write for new file creation)
 export const FILE_MODIFY_TOOL_NAMES = new Set([
   'write',

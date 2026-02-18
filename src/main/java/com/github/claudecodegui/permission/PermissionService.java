@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * 权限服务 - 处理Node.js的权限请求
+ * Permission service - handles permission requests from the Node.js process
  */
 public class PermissionService {
 
@@ -22,7 +22,7 @@ public class PermissionService {
     private static PermissionService instance;
     private static final Map<String, PermissionService> instancesBySessionId = new ConcurrentHashMap<>();
 
-    // 文件名模式常量
+    // File name pattern constants
     private static final String REQUEST_FILE_PREFIX = "request-%s-%s.json";
     private static final String RESPONSE_FILE_PREFIX = "response-%s-%s.json";
     private static final String ASK_USER_QUESTION_FILE_PREFIX = "ask-user-question-%s-%s.json";
@@ -30,7 +30,7 @@ public class PermissionService {
     private static final String PLAN_APPROVAL_FILE_PREFIX = "plan-approval-%s-%s.json";
     private static final String PLAN_APPROVAL_RESPONSE_FILE_PREFIX = "plan-approval-response-%s-%s.json";
 
-    // Session清理配置
+    // Session cleanup configuration
     private static final long SESSION_CLEANUP_INTERVAL_MS = TimeUnit.HOURS.toMillis(1);
     private static final long SESSION_MAX_IDLE_TIME_MS = TimeUnit.HOURS.toMillis(24);
     private static volatile long lastCleanupTime = System.currentTimeMillis();
@@ -44,29 +44,29 @@ public class PermissionService {
     private boolean running = false;
     private volatile long lastActivityTime = System.currentTimeMillis();
 
-    // 记忆用户选择（工具+参数级别）
+    // Remember user choices (tool + parameter level)
     private final Map<String, Integer> permissionMemory = new ConcurrentHashMap<>();
-    // 工具级别权限记忆（仅工具名 -> 是否总是允许）
+    // Tool-level permission memory (tool name only -> always allow or not)
     private final Map<String, Boolean> toolOnlyPermissionMemory = new ConcurrentHashMap<>();
     private volatile PermissionDecisionListener decisionListener;
 
-    // 多项目支持：按项目注册的权限对话框显示器
+    // Multi-project support: permission dialog showers registered per project
     private final Map<Project, PermissionDialogShower> dialogShowers = new ConcurrentHashMap<>();
 
-    // 多项目支持：按项目注册的 AskUserQuestion 对话框显示器
+    // Multi-project support: AskUserQuestion dialog showers registered per project
     private final Map<Project, AskUserQuestionDialogShower> askUserQuestionDialogShowers = new ConcurrentHashMap<>();
 
-    // 多项目支持：按项目注册的 PlanApproval 对话框显示器
+    // Multi-project support: PlanApproval dialog showers registered per project
     private final Map<Project, PlanApprovalDialogShower> planApprovalDialogShowers = new ConcurrentHashMap<>();
 
-    // 最近活动的项目（用于无文件上下文的对话框选择）
+    // Most recently active project (used for dialog selection when no file context is available)
     private volatile Project lastActiveProject = null;
 
-    // 文件等待配置
+    // File wait configuration
     private static final int FILE_WAIT_INITIAL_DELAY_MS = 50;
     private static final int FILE_WAIT_MAX_RETRIES = 3;
 
-    // 调试日志辅助方法
+    // Debug logging helper methods
     private void debugLog(String tag, String message) {
         LOG.debug(String.format("[%s] %s", tag, message));
     }
@@ -76,9 +76,9 @@ public class PermissionService {
     }
 
     public enum PermissionResponse {
-        ALLOW(1, "允许"),
-        ALLOW_ALWAYS(2, "允许且不再询问"),
-        DENY(3, "拒绝");
+        ALLOW(1, "Allow"),
+        ALLOW_ALWAYS(2, "Allow and don't ask again"),
+        DENY(3, "Deny");
 
         private final int value;
         private final String description;
@@ -143,40 +143,40 @@ public class PermissionService {
     }
 
     /**
-     * 权限对话框显示器接口 - 用于显示前端弹窗
+     * Permission dialog shower interface - used to display frontend popups
      */
     public interface PermissionDialogShower {
         /**
-         * 显示权限对话框并返回用户决策
-         * @param toolName 工具名称
-         * @param inputs 输入参数
-         * @return CompletableFuture<Integer> 返回 PermissionResponse 的值
+         * Show a permission dialog and return the user's decision
+         * @param toolName the tool name
+         * @param inputs the input parameters
+         * @return CompletableFuture<Integer> resolving to a PermissionResponse value
          */
         CompletableFuture<Integer> showPermissionDialog(String toolName, JsonObject inputs);
     }
 
     /**
-     * AskUserQuestion 对话框显示器接口 - 用于显示问题对话框
+     * AskUserQuestion dialog shower interface - used to display question dialogs
      */
     public interface AskUserQuestionDialogShower {
         /**
-         * 显示 AskUserQuestion 对话框并返回用户答案
-         * @param requestId 请求ID
-         * @param questions 问题列表（JSON 数组）
-         * @return CompletableFuture<JsonObject> 返回用户答案（格式：{ "问题文本": "答案" }）
+         * Show an AskUserQuestion dialog and return the user's answers
+         * @param requestId the request ID
+         * @param questions the list of questions (JSON array)
+         * @return CompletableFuture<JsonObject> resolving to user answers (format: { "question text": "answer" })
          */
         CompletableFuture<JsonObject> showAskUserQuestionDialog(String requestId, JsonObject questions);
     }
 
     /**
-     * PlanApproval 对话框显示器接口 - 用于显示计划批准对话框
+     * PlanApproval dialog shower interface - used to display plan approval dialogs
      */
     public interface PlanApprovalDialogShower {
         /**
-         * 显示计划批准对话框并返回用户决策
-         * @param requestId 请求ID
-         * @param planData 计划数据（包含 allowedPrompts 等）
-         * @return CompletableFuture<JsonObject> 返回用户决策（格式：{ "approved": boolean, "targetMode": string }）
+         * Show a plan approval dialog and return the user's decision
+         * @param requestId the request ID
+         * @param planData the plan data (containing allowedPrompts, etc.)
+         * @return CompletableFuture<JsonObject> resolving to user decision (format: { "approved": boolean, "targetMode": string })
          */
         CompletableFuture<JsonObject> showPlanApprovalDialog(String requestId, JsonObject planData);
     }
@@ -185,10 +185,10 @@ public class PermissionService {
         this.project = project;
         this.sessionId = sessionId;
 
-        // 统一权限通信目录：
-        // 1. 优先读取环境变量 CLAUDE_PERMISSION_DIR（由 Java 启动 Node 进程时注入）
-        // 2. 其次使用系统临时目录 {java.io.tmpdir}/claude-permission
-        // 不再使用 ~/.claude/permission，避免与 Node 侧默认的 /tmp 路径不一致
+        // Unified permission communication directory:
+        // 1. Prefer the CLAUDE_PERMISSION_DIR environment variable (injected by Java when launching the Node process)
+        // 2. Fall back to the system temp directory {java.io.tmpdir}/claude-permission
+        // No longer uses ~/.claude/permission to avoid path mismatch with the Node side's default /tmp path
         String envDir = System.getenv("CLAUDE_PERMISSION_DIR");
         if (envDir != null && !envDir.trim().isEmpty()) {
             this.permissionDir = Paths.get(envDir);
@@ -220,27 +220,27 @@ public class PermissionService {
      * @return PermissionService instance
      */
     public static synchronized PermissionService getInstance(Project project, String sessionId) {
-        // 定期清理过期的session实例
+        // Periodically clean up expired session instances
         cleanupStaleInstancesIfNeeded();
 
-        // 按 sessionId 管理多个实例，而不是全局单例
+        // Manage multiple instances by sessionId instead of a global singleton
         if (sessionId == null || sessionId.isEmpty()) {
-            // 兼容旧代码：如果没有 sessionId，使用全局单例（已弃用）
+            // Backward compatibility: if no sessionId, use the global singleton (deprecated)
             if (instance == null) {
                 instance = new PermissionService(project, java.util.UUID.randomUUID().toString());
             }
             return instance;
         }
 
-        // 为每个 sessionId 创建或返回对应的实例
+        // Create or return the instance corresponding to each sessionId
         return instancesBySessionId.computeIfAbsent(sessionId, sid ->
             new PermissionService(project, sid)
         );
     }
 
     /**
-     * 清理指定 sessionId 的 PermissionService 实例.
-     * 在项目关闭时调用，防止内存泄漏
+     * Remove the PermissionService instance for the specified sessionId.
+     * Called when a project is closed to prevent memory leaks.
      *
      * @param sessionId Session ID
      */
@@ -274,8 +274,8 @@ public class PermissionService {
     }
 
     /**
-     * 定期清理过期的session实例，防止内存泄漏.
-     * 当session超过24小时未活动时，自动清理
+     * Periodically clean up stale session instances to prevent memory leaks.
+     * Sessions idle for more than 24 hours are automatically removed.
      */
     private static synchronized void cleanupStaleInstancesIfNeeded() {
         long now = System.currentTimeMillis();
@@ -285,7 +285,7 @@ public class PermissionService {
 
         lastCleanupTime = now;
 
-        // 收集需要清理的 session，避免 ConcurrentModificationException
+        // Collect sessions to clean up, avoiding ConcurrentModificationException
         List<String> sessionsToRemove = new ArrayList<>();
         for (Map.Entry<String, PermissionService> entry : instancesBySessionId.entrySet()) {
             PermissionService service = entry.getValue();
@@ -296,7 +296,7 @@ public class PermissionService {
             }
         }
 
-        // 批量清理
+        // Batch cleanup
         for (String sessionId : sessionsToRemove) {
             PermissionService service = instancesBySessionId.remove(sessionId);
             if (service != null) {
@@ -316,11 +316,11 @@ public class PermissionService {
     }
 
     /**
-     * 注册权限对话框显示器（用于显示前端弹窗）
-     * 支持多项目：每个项目注册自己的显示器
+     * Register a permission dialog shower (used to display frontend popups).
+     * Supports multi-project: each project registers its own shower.
      *
-     * @param project 项目
-     * @param shower 权限对话框显示器
+     * @param project the project
+     * @param shower the permission dialog shower
      */
     public void registerDialogShower(Project project, PermissionDialogShower shower) {
         if (project != null && shower != null) {
@@ -332,10 +332,10 @@ public class PermissionService {
     }
 
     /**
-     * 注销权限对话框显示器
-     * 在项目关闭时调用，防止内存泄漏
+     * Unregister a permission dialog shower.
+     * Called when a project is closed to prevent memory leaks.
      *
-     * @param project 项目
+     * @param project the project
      */
     public void unregisterDialogShower(Project project) {
         if (project != null) {
@@ -346,11 +346,11 @@ public class PermissionService {
     }
 
     /**
-     * 注册 AskUserQuestion 对话框显示器
-     * 支持多项目：每个项目注册自己的显示器
+     * Register an AskUserQuestion dialog shower.
+     * Supports multi-project: each project registers its own shower.
      *
-     * @param project 项目
-     * @param shower AskUserQuestion 对话框显示器
+     * @param project the project
+     * @param shower the AskUserQuestion dialog shower
      */
     public void registerAskUserQuestionDialogShower(Project project, AskUserQuestionDialogShower shower) {
         if (project != null && shower != null) {
@@ -362,10 +362,10 @@ public class PermissionService {
     }
 
     /**
-     * 注销 AskUserQuestion 对话框显示器
-     * 在项目关闭时调用，防止内存泄漏
+     * Unregister an AskUserQuestion dialog shower.
+     * Called when a project is closed to prevent memory leaks.
      *
-     * @param project 项目
+     * @param project the project
      */
     public void unregisterAskUserQuestionDialogShower(Project project) {
         if (project != null) {
@@ -376,11 +376,11 @@ public class PermissionService {
     }
 
     /**
-     * 注册 PlanApproval 对话框显示器
-     * 支持多项目：每个项目注册自己的显示器
+     * Register a PlanApproval dialog shower.
+     * Supports multi-project: each project registers its own shower.
      *
-     * @param project 项目
-     * @param shower PlanApproval 对话框显示器
+     * @param project the project
+     * @param shower the PlanApproval dialog shower
      */
     public void registerPlanApprovalDialogShower(Project project, PlanApprovalDialogShower shower) {
         if (project != null && shower != null) {
@@ -442,10 +442,10 @@ public class PermissionService {
     }
 
     /**
-     * 注销 PlanApproval 对话框显示器
-     * 在项目关闭时调用，防止内存泄漏
+     * Unregister a PlanApproval dialog shower.
+     * Called when a project is closed to prevent memory leaks.
      *
-     * @param project 项目
+     * @param project the project
      */
     public void unregisterPlanApprovalDialogShower(Project project) {
         if (project != null) {
@@ -456,12 +456,12 @@ public class PermissionService {
     }
 
     /**
-     * 设置权限对话框显示器（用于显示前端弹窗）
-     * @deprecated 使用 {@link #registerDialogShower(Project, PermissionDialogShower)} 代替
+     * Set the permission dialog shower (used to display frontend popups).
+     * @deprecated Use {@link #registerDialogShower(Project, PermissionDialogShower)} instead.
      */
     @Deprecated
     public void setDialogShower(PermissionDialogShower shower) {
-        // 兼容旧代码：使用默认项目注册
+        // Backward compatibility: register with the default project
         if (shower != null && this.project != null) {
             dialogShowers.put(this.project, shower);
         }
@@ -469,14 +469,14 @@ public class PermissionService {
     }
 
     /**
-     * 根据工作目录匹配项目的通用方法
-     * 从请求中提取 cwd，然后找到对应的项目
+     * Generic method to match a project by working directory.
+     * Extracts cwd from the request and finds the corresponding project.
      *
-     * @param request 请求数据（包含 cwd 字段）
-     * @param dialogShowers 已注册的 DialogShower 映射
-     * @param logPrefix 日志前缀，用于区分不同类型的请求
-     * @param <T> DialogShower 类型
-     * @return 匹配的项目对应的 DialogShower，如果匹配不到则使用 lastActiveProject
+     * @param request the request data (containing a cwd field)
+     * @param dialogShowers the map of registered DialogShowers
+     * @param logPrefix the log prefix, used to distinguish different request types
+     * @param <T> the DialogShower type
+     * @return the DialogShower for the matched project, or the lastActiveProject's shower as fallback
      */
     private <T> T findDialogShowerByCwd(
             JsonObject request,
@@ -487,14 +487,14 @@ public class PermissionService {
             return null;
         }
 
-        // 只有一个项目时，直接返回
+        // If only one project is registered, return it directly
         if (dialogShowers.size() == 1) {
             Map.Entry<Project, T> entry = dialogShowers.entrySet().iterator().next();
             debugLog(logPrefix, "Single project registered: " + entry.getKey().getName());
             return entry.getValue();
         }
 
-        // 从请求中提取 cwd
+        // Extract cwd from the request
         String cwd = null;
         if (request.has("cwd") && !request.get("cwd").isJsonNull()) {
             cwd = request.get("cwd").getAsString();
@@ -505,12 +505,12 @@ public class PermissionService {
             return getPreferredDialogShower(dialogShowers);
         }
 
-        // 规范化 cwd 路径
+        // Normalize the cwd path
         String normalizedCwd = normalizePath(cwd);
         debugLog(logPrefix, "Extracted cwd: " + cwd +
             (cwd.equals(normalizedCwd) ? "" : " (normalized: " + normalizedCwd + ")"));
 
-        // 遍历所有项目，找到路径匹配的项目（选择最长匹配）
+        // Iterate over all projects and find the path match (prefer the longest match)
         Project bestMatch = null;
         int longestMatchLength = 0;
 
@@ -521,7 +521,7 @@ public class PermissionService {
             if (projectPath != null) {
                 String normalizedProjectPath = normalizePath(projectPath);
 
-                // 检查 cwd 是否在项目路径下
+                // Check if cwd is under the project path
                 if (isFileInProject(normalizedCwd, normalizedProjectPath)) {
                     if (normalizedProjectPath.length() > longestMatchLength) {
                         longestMatchLength = normalizedProjectPath.length();
@@ -539,65 +539,65 @@ public class PermissionService {
             return dialogShowers.get(bestMatch);
         }
 
-        // 匹配失败，使用 lastActiveProject
+        // No match found, fall back to lastActiveProject
         debugLog(logPrefix, "No matching project found, using preferred dialog shower");
         return getPreferredDialogShower(dialogShowers);
     }
 
     /**
-     * 根据工作目录匹配项目
-     * 从 AskUserQuestion 请求中提取 cwd，然后找到对应的项目
+     * Match a project by working directory.
+     * Extracts cwd from the AskUserQuestion request and finds the corresponding project.
      *
-     * @param request AskUserQuestion 请求数据
-     * @return 匹配的项目对应的 DialogShower，如果匹配不到则使用 lastActiveProject
+     * @param request the AskUserQuestion request data
+     * @return the DialogShower for the matched project, or the lastActiveProject's shower as fallback
      */
     private AskUserQuestionDialogShower findAskUserQuestionDialogShowerByCwd(JsonObject request) {
         return findDialogShowerByCwd(request, askUserQuestionDialogShowers, "MATCH_ASK_PROJECT");
     }
 
     /**
-     * 根据工作目录匹配项目
-     * 从 PlanApproval 请求中提取 cwd，然后找到对应的项目
+     * Match a project by working directory.
+     * Extracts cwd from the PlanApproval request and finds the corresponding project.
      *
-     * @param request PlanApproval 请求数据
-     * @return 匹配的项目对应的 DialogShower，如果匹配不到则使用 lastActiveProject
+     * @param request the PlanApproval request data
+     * @return the DialogShower for the matched project, or the lastActiveProject's shower as fallback
      */
     private PlanApprovalDialogShower findPlanApprovalDialogShowerByCwd(JsonObject request) {
         return findDialogShowerByCwd(request, planApprovalDialogShowers, "MATCH_PLAN_PROJECT");
     }
 
     /**
-     * 从 inputs 中提取文件路径
-     * 支持多种字段：file_path、path、command 中的路径等
+     * Extract a file path from inputs.
+     * Supports multiple fields: file_path, path, paths within command, etc.
      */
     private String extractFilePathFromInputs(JsonObject inputs) {
         if (inputs == null) {
             return null;
         }
 
-        // 优先检查 file_path 字段（最常见）
+        // Check file_path field first (most common)
         if (inputs.has("file_path") && !inputs.get("file_path").isJsonNull()) {
             return inputs.get("file_path").getAsString();
         }
 
-        // 检查 path 字段
+        // Check path field
         if (inputs.has("path") && !inputs.get("path").isJsonNull()) {
             return inputs.get("path").getAsString();
         }
 
-        // 检查 notebook_path 字段（Jupyter notebooks）
+        // Check notebook_path field (Jupyter notebooks)
         if (inputs.has("notebook_path") && !inputs.get("notebook_path").isJsonNull()) {
             return inputs.get("notebook_path").getAsString();
         }
 
-        // 从 command 字段中提取路径（尝试找到绝对路径）
+        // Extract path from command field (attempt to find an absolute path)
         if (inputs.has("command") && !inputs.get("command").isJsonNull()) {
             String command = inputs.get("command").getAsString();
-            // 简单的路径提取：查找以 / 开头的路径（Unix）或包含 :\ 的路径（Windows）
+            // Simple path extraction: look for paths starting with / (Unix) or containing :\ (Windows)
             String[] parts = command.split("\\s+");
             for (String part : parts) {
                 if (part.startsWith("/") || (part.length() > 2 && part.charAt(1) == ':')) {
-                    // 去除可能的引号
+                    // Strip potential surrounding quotes
                     part = part.replace("\"", "").replace("'", "");
                     if (part.length() > 1) {
                         return part;
@@ -610,54 +610,54 @@ public class PermissionService {
     }
 
     /**
-     * 规范化文件路径
-     * 统一路径分隔符为 Unix 风格 (/)，确保跨平台兼容性
+     * Normalize a file path.
+     * Unifies path separators to Unix style (/) for cross-platform compatibility.
      *
-     * @param path 原始路径
-     * @return 规范化后的路径，如果输入为 null 则返回 null
+     * @param path the original path
+     * @return the normalized path, or null if the input is null
      */
     private String normalizePath(String path) {
         if (path == null) {
             return null;
         }
-        // 将 Windows 风格的反斜杠替换为正斜杠
+        // Replace Windows-style backslashes with forward slashes
         return path.replace('\\', '/');
     }
 
     /**
-     * 检查文件路径是否属于项目路径
-     * 确保匹配的是完整的路径前缀，而不是字符串前缀
+     * Check if a file path belongs to a project path.
+     * Ensures the match is a full path prefix, not just a string prefix.
      *
-     * 例如：
-     * - /home/user/my-app/file.txt 属于 /home/user/my-app ✓
-     * - /home/user/my-app-v2/file.txt 不属于 /home/user/my-app ✓
+     * Examples:
+     * - /home/user/my-app/file.txt belongs to /home/user/my-app (true)
+     * - /home/user/my-app-v2/file.txt does NOT belong to /home/user/my-app (true)
      *
-     * @param filePath 文件路径（已规范化）
-     * @param projectPath 项目路径（已规范化）
-     * @return true 如果文件属于该项目
+     * @param filePath the file path (already normalized)
+     * @param projectPath the project path (already normalized)
+     * @return true if the file belongs to the project
      */
     private boolean isFileInProject(String filePath, String projectPath) {
         if (filePath == null || projectPath == null) {
             return false;
         }
 
-        // 完全相等的情况
+        // Exact match case
         if (filePath.equals(projectPath)) {
             return true;
         }
 
-        // 确保 projectPath 以分隔符结尾，避免前缀匹配错误
-        // 例如：/home/user/my-app/ 而不是 /home/user/my-app
+        // Ensure projectPath ends with a separator to avoid false prefix matches
+        // e.g., /home/user/my-app/ instead of /home/user/my-app
         String normalizedProjectPath = projectPath.endsWith("/")
             ? projectPath
             : projectPath + "/";
 
-        // 检查文件路径是否以 "项目路径/" 开头
+        // Check if the file path starts with "projectPath/"
         return filePath.startsWith(normalizedProjectPath);
     }
 
     /**
-     * 启动权限服务.
+     * Start the permission service.
      */
     public void start() {
         if (running) {
@@ -665,11 +665,11 @@ public class PermissionService {
             return;
         }
 
-        // 清理旧的响应文件,避免误处理
+        // Clean up old response files to avoid accidental processing
         cleanupOldResponseFiles();
 
         this.running = true;
-        this.lastActivityTime = System.currentTimeMillis(); // 更新活动时间
+        this.lastActivityTime = System.currentTimeMillis(); // Update activity time
 
         this.watchThread = new Thread(this::watchLoop, "PermissionWatcher");
         this.watchThread.setDaemon(true);
@@ -679,7 +679,7 @@ public class PermissionService {
     }
 
     /**
-     * 清理旧的响应文件和请求文件（只清理属于自己 session 的文件）
+     * Clean up old response and request files (only files belonging to this session).
      */
     private void cleanupOldResponseFiles() {
         try {
@@ -688,7 +688,7 @@ public class PermissionService {
                 return;
             }
 
-            // 清理普通权限响应文件（只清理自己的 session）
+            // Clean up permission response files (only for this session)
             File[] responseFiles = dir.listFiles((d, name) ->
                 name.startsWith("response-" + sessionId + "-") && name.endsWith(".json"));
             if (responseFiles != null) {
@@ -702,7 +702,7 @@ public class PermissionService {
                 }
             }
 
-            // 清理普通权限请求文件（只清理自己的 session）
+            // Clean up permission request files (only for this session)
             File[] requestFiles = dir.listFiles((d, name) ->
                 name.startsWith("request-" + sessionId + "-") && name.endsWith(".json"));
             if (requestFiles != null) {
@@ -716,7 +716,7 @@ public class PermissionService {
                 }
             }
 
-            // 清理所有 AskUserQuestion 相关文件（只清理自己的 session）
+            // Clean up all AskUserQuestion-related files (only for this session)
             File[] askFiles = dir.listFiles((d, name) ->
                 name.startsWith("ask-user-question-" + sessionId + "-") && name.endsWith(".json"));
             if (askFiles != null) {
@@ -730,7 +730,7 @@ public class PermissionService {
                 }
             }
 
-            // 清理所有 PlanApproval 相关文件（只清理自己的 session）
+            // Clean up all PlanApproval-related files (only for this session)
             File[] planApprovalFiles = dir.listFiles((d, name) ->
                 name.startsWith("plan-approval-" + sessionId + "-") && name.endsWith(".json"));
             if (planApprovalFiles != null) {
@@ -751,8 +751,8 @@ public class PermissionService {
     }
 
     /**
-     * 监控文件变化
-     * 改为轮询模式，以提高在 macOS /tmp 目录下的可靠性
+     * Watch for file changes.
+     * Uses polling mode for better reliability on macOS /tmp directories.
      */
     private void watchLoop() {
         debugLog("WATCH_LOOP", "Starting polling loop on: " + permissionDir);
@@ -765,24 +765,24 @@ public class PermissionService {
                     dir.mkdirs();
                 }
 
-                // 监控普通权限请求文件（只处理包含自己 session ID 的文件）
+                // Monitor permission request files (only process files containing this session ID)
                 File[] requestFiles = dir.listFiles((d, name) ->
                     name.startsWith("request-" + sessionId + "-") && name.endsWith(".json"));
 
-                // 监控 AskUserQuestion 请求文件 (排除响应文件，只处理自己的 session)
+                // Monitor AskUserQuestion request files (exclude response files, only process this session)
                 File[] askUserQuestionFiles = dir.listFiles((d, name) ->
                     name.startsWith("ask-user-question-" + sessionId + "-") &&
                     !name.startsWith("ask-user-question-response-") &&
                     name.endsWith(".json"));
 
-                // 监控 PlanApproval 请求文件 (排除响应文件，只处理自己的 session)
+                // Monitor PlanApproval request files (exclude response files, only process this session)
                 File[] planApprovalFiles = dir.listFiles((d, name) ->
                     name.startsWith("plan-approval-" + sessionId + "-") &&
                     !name.startsWith("plan-approval-response-") &&
                     name.endsWith(".json"));
 
-                // 每20次轮询（约10秒）输出一次状态
-                // 降低日志频率：每100次轮询（约50秒）记录一次状态
+                // Log status periodically (every 100 polls, ~50 seconds)
+                // Reduced logging frequency from every 20 polls (~10s) for less noise
                 if (pollCount % 100 == 0) {
                     int requestCount = requestFiles != null ? requestFiles.length : 0;
                     int askQuestionCount = askUserQuestionFiles != null ? askUserQuestionFiles.length : 0;
@@ -791,10 +791,10 @@ public class PermissionService {
                         pollCount, requestCount, askQuestionCount, planApprovalCount));
                 }
 
-                // 处理普通权限请求
+                // Process permission requests
                 if (requestFiles != null && requestFiles.length > 0) {
                     for (File file : requestFiles) {
-                        // 简单防重：检查文件是否还存在（可能被其他线程处理了）
+                        // Simple deduplication: check if the file still exists (may have been handled by another thread)
                         if (file.exists()) {
                             debugLog("REQUEST_FOUND", "Found request file: " + file.getName());
                             handlePermissionRequest(file.toPath());
@@ -802,7 +802,7 @@ public class PermissionService {
                     }
                 }
 
-                // 处理 AskUserQuestion 请求
+                // Process AskUserQuestion requests
                 if (askUserQuestionFiles != null && askUserQuestionFiles.length > 0) {
                     for (File file : askUserQuestionFiles) {
                         if (file.exists()) {
@@ -812,7 +812,7 @@ public class PermissionService {
                     }
                 }
 
-                // 处理 PlanApproval 请求
+                // Process PlanApproval requests
                 if (planApprovalFiles != null && planApprovalFiles.length > 0) {
                     for (File file : planApprovalFiles) {
                         if (file.exists()) {
@@ -822,13 +822,13 @@ public class PermissionService {
                     }
                 }
 
-                // 轮询间隔 500ms
+                // Polling interval: 500ms
                 Thread.sleep(500);
             } catch (Exception e) {
                 debugLog("POLL_ERROR", "Error in poll loop: " + e.getMessage());
                 LOG.error("Error occurred", e);
                 try {
-                    Thread.sleep(1000); // 出错后稍作等待
+                    Thread.sleep(1000); // Brief wait after an error
                 } catch (InterruptedException ex) {
                     break;
                 }
@@ -837,26 +837,26 @@ public class PermissionService {
         debugLog("WATCH_LOOP", "Polling loop ended");
     }
 
-    // 记录正在处理的请求文件，避免重复处理
+    // Track request files currently being processed to avoid duplicate handling
     private final Set<String> processingRequests = ConcurrentHashMap.newKeySet();
 
     /**
-     * 处理权限请求.
+     * Handle a permission request.
      */
     private void handlePermissionRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
         long startTime = System.currentTimeMillis();
-        this.lastActivityTime = startTime; // 更新活动时间
+        this.lastActivityTime = startTime; // Update activity time
         debugLog("HANDLE_REQUEST", "Processing request file: " + fileName);
 
-        // 检查是否正在处理该请求
+        // Check if this request is already being processed
         if (!processingRequests.add(fileName)) {
             debugLog("SKIP_DUPLICATE", "Request already being processed, skipping: " + fileName);
             return;
         }
 
         try {
-            Thread.sleep(100); // 等待文件写入完成
+            Thread.sleep(100); // Wait for file write to complete
 
             if (!Files.exists(requestFile)) {
                 debugLog("FILE_MISSING", "Request file missing before read, likely already handled: " + fileName);
@@ -880,7 +880,7 @@ public class PermissionService {
 
             debugLog("REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
 
-            // 首先检查工具级别的权限记忆（总是允许）
+            // First check tool-level permission memory (always allow)
             if (toolOnlyPermissionMemory.containsKey(toolName)) {
                 boolean allow = toolOnlyPermissionMemory.get(toolName);
                 debugLog("MEMORY_HIT", "Using tool-level memory for " + toolName + " -> " + (allow ? "ALLOW" : "DENY"));
@@ -891,11 +891,11 @@ public class PermissionService {
                 return;
             }
 
-            // 生成内存键（工具+参数）
+            // Generate memory key (tool + parameters)
             String memoryKey = toolName + ":" + inputs.toString().hashCode();
             debugLog("MEMORY_KEY", "Generated memory key: " + memoryKey);
 
-            // 检查是否有记忆的选择（工具+参数级别）
+            // Check if there is a remembered choice (tool + parameter level)
             if (permissionMemory.containsKey(memoryKey)) {
                 int memorized = permissionMemory.get(memoryKey);
                 PermissionResponse rememberedResponse = PermissionResponse.fromValue(memorized);
@@ -908,14 +908,14 @@ public class PermissionService {
                 return;
             }
 
-            // 根据工作目录匹配项目，找到对应的前端弹窗显示器（支持多 IDEA 实例）
+            // Match the project by working directory and find the corresponding frontend dialog shower (supports multiple IDEA instances)
             PermissionDialogShower matchedDialogShower = findDialogShowerByCwd(request, dialogShowers, "MATCH_PROJECT");
 
-            // 如果有前端弹窗显示器，使用异步方式
+            // If a frontend dialog shower is available, use async processing
             if (matchedDialogShower != null) {
                 debugLog("DIALOG_SHOWER", "Using frontend dialog for: " + toolName);
 
-                // 立即删除请求文件，避免重复处理
+                // Delete the request file immediately to prevent duplicate processing
                 try {
                     Files.deleteIfExists(requestFile);
                     debugLog("FILE_DELETE", "Deleted request file: " + fileName);
@@ -927,11 +927,11 @@ public class PermissionService {
                 final String tool = toolName;
                 final long dialogStartTime = System.currentTimeMillis();
 
-                // 异步调用前端弹窗
+                // Asynchronously invoke the frontend dialog
                 debugLog("DIALOG_SHOW", "Calling dialogShower.showPermissionDialog for: " + toolName);
                 CompletableFuture<Integer> future = matchedDialogShower.showPermissionDialog(toolName, inputs);
 
-                // 异步处理结果
+                // Process the result asynchronously
                 future.thenAccept(response -> {
                     long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
                     LOG.info("[PERM_FUTURE] thenAccept called: response=" + response + ", dialogElapsed=" + dialogElapsed + "ms, tool=" + tool);
@@ -950,7 +950,7 @@ public class PermissionService {
                                 break;
                             case ALLOW_ALWAYS:
                                 allow = true;
-                                // 保存到工具级别权限记忆（按工具类型，不是按参数）
+                                // Save to tool-level permission memory (by tool type, not by parameters)
                                 toolOnlyPermissionMemory.put(tool, true);
                                 LOG.info("[PERM_FUTURE] Decision: ALLOW_ALWAYS for " + tool + ", saved to memory");
                                 break;
@@ -983,11 +983,11 @@ public class PermissionService {
                     return null;
                 });
 
-                // 异步处理，直接返回，不阻塞
+                // Async processing, return immediately without blocking
                 return;
             }
 
-            // 降级方案：使用系统弹窗（同步阻塞）
+            // Fallback: use system dialog (synchronous blocking)
             debugLog("FALLBACK_DIALOG", "Using system dialog (JOptionPane) for: " + toolName);
             CompletableFuture<Integer> future = new CompletableFuture<>();
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -1023,11 +1023,11 @@ public class PermissionService {
 
             notifyDecision(toolName, inputs, decision);
 
-            // 写入响应
+            // Write the response
             debugLog("WRITE_RESPONSE", String.format("Writing response for %s: allow=%s", requestId, allow));
             writeResponse(requestId, allow);
 
-            // 删除请求文件
+            // Delete the request file
             Files.delete(requestFile);
             debugLog("FILE_DELETE", "Deleted request file after processing: " + fileName);
 
@@ -1043,35 +1043,35 @@ public class PermissionService {
     }
 
     /**
-     * 显示系统权限对话框（JOptionPane）- 降级方案
+     * Show a system permission dialog (JOptionPane) - fallback approach.
      */
     private int showSystemPermissionDialog(String toolName, JsonObject inputs) {
-        // 构建消息内容
+        // Build message content
         StringBuilder message = new StringBuilder();
-        message.append("Claude 请求执行以下操作：\n\n");
-        message.append("工具：").append(toolName).append("\n");
+        message.append("Claude requests to perform the following action:\n\n");
+        message.append("Tool: ").append(toolName).append("\n");
 
-        // 显示重要参数
+        // Show important parameters
         if (inputs.has("file_path")) {
-            message.append("文件：").append(inputs.get("file_path").getAsString()).append("\n");
+            message.append("File: ").append(inputs.get("file_path").getAsString()).append("\n");
         }
         if (inputs.has("command")) {
-            message.append("命令：").append(inputs.get("command").getAsString()).append("\n");
+            message.append("Command: ").append(inputs.get("command").getAsString()).append("\n");
         }
 
-        message.append("\n是否允许执行？");
+        message.append("\nAllow this action?");
 
-        // 创建选项
+        // Create options
         Object[] options = {
-            "允许",
-            "拒绝"
+            "Allow",
+            "Deny"
         };
 
-        // 显示对话框
+        // Show dialog
         int result = JOptionPane.showOptionDialog(
             null,
             message.toString(),
-            "权限请求 - " + toolName,
+            "Permission Request - " + toolName,
             JOptionPane.DEFAULT_OPTION,
             JOptionPane.QUESTION_MESSAGE,
             null,
@@ -1086,7 +1086,7 @@ public class PermissionService {
     }
 
     /**
-     * 写入响应文件.
+     * Write a response file.
      */
     private void writeResponse(String requestId, boolean allow) {
         LOG.info("[PERM_WRITE] Writing response for requestId=" + requestId + ", allow=" + allow);
@@ -1102,7 +1102,7 @@ public class PermissionService {
 
             Files.writeString(responseFile, responseContent);
 
-            // 验证文件是否写入成功
+            // Verify the file was written successfully
             if (Files.exists(responseFile)) {
                 long fileSize = Files.size(responseFile);
                 LOG.info("[PERM_WRITE] Response file written successfully: " + responseFile + ", size=" + fileSize + " bytes");
@@ -1115,23 +1115,23 @@ public class PermissionService {
     }
 
     /**
-     * 处理 AskUserQuestion 请求
+     * Handle an AskUserQuestion request.
      *
-     * ⚠️ 关键修复说明：
-     * 原问题：轮询间隔 500ms，但异步处理对话框需要用户交互（可能几秒到几十秒）
-     * 在用户响应之前，轮询会多次检测到同一个请求文件，导致：
-     * 1. 多次调用 showAskUserQuestionDialog，前端队列堆积
-     * 2. 用户第一次点击后请求文件被删除，响应成功返回
-     * 3. 队列中的后续请求仍然弹出对话框，但 pendingRequest 已不存在
+     * Critical fix note:
+     * Original issue: The 500ms polling interval caused the same request file to be detected
+     * multiple times before the user could respond to the async dialog (which may take seconds).
+     * This led to: (1) multiple showAskUserQuestionDialog calls queuing up in the frontend,
+     * (2) after the first response the request file was deleted and the response written,
+     * (3) subsequent queued requests still showed dialogs but the pendingRequest no longer existed.
      *
-     * 修复方案：读取文件内容后立即删除请求文件，然后再进行异步处理
+     * Fix: Delete the request file immediately after reading its content, then proceed with async processing.
      */
     private void handleAskUserQuestionRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
         long startTime = System.currentTimeMillis();
         debugLog("HANDLE_ASK_USER_QUESTION", "Processing AskUserQuestion file: " + fileName);
 
-        // 检查是否正在处理该请求（基于文件名去重）
+        // Check if this request is already being processed (deduplicated by filename)
         if (!processingRequests.add(fileName)) {
             debugLog("SKIP_DUPLICATE_ASK", "AskUserQuestion already being processed, skipping: " + fileName);
             return;
@@ -1139,7 +1139,7 @@ public class PermissionService {
 
         String content;
         try {
-            Thread.sleep(100); // 等待文件写入完成
+            Thread.sleep(100); // Wait for file write to complete
 
             if (!Files.exists(requestFile)) {
                 debugLog("ASK_FILE_MISSING", "AskUserQuestion file missing before read, likely already handled: " + fileName);
@@ -1147,12 +1147,12 @@ public class PermissionService {
                 return;
             }
 
-            // 读取文件内容
+            // Read file content
             content = Files.readString(requestFile);
             debugLog("ASK_FILE_READ", "Read AskUserQuestion content: " + content.substring(0, Math.min(200, content.length())) + "...");
 
-            // ⚠️ 关键修复: 读取后立即删除请求文件，避免轮询重复处理
-            // 必须在解析和异步调用之前删除，因为轮询间隔只有 500ms
+            // Critical fix: delete the request file immediately after reading to prevent duplicate polling
+            // Must delete before parsing and async invocation since the polling interval is only 500ms
             Files.deleteIfExists(requestFile);
             debugLog("ASK_FILE_DELETE", "Deleted AskUserQuestion request file: " + fileName);
 
@@ -1167,7 +1167,7 @@ public class PermissionService {
             return;
         }
 
-        // 解析 JSON（文件已删除，即使解析失败也不会重复处理）
+        // Parse JSON (file already deleted, so parsing failures won't cause duplicate processing)
         JsonObject request;
         try {
             request = gson.fromJson(content, JsonObject.class);
@@ -1177,7 +1177,7 @@ public class PermissionService {
             return;
         }
 
-        // 验证必需字段
+        // Validate required fields
         if (!request.has("requestId") || request.get("requestId").isJsonNull()) {
             debugLog("ASK_INVALID_FORMAT", "AskUserQuestion missing requestId field: " + fileName);
             processingRequests.remove(fileName);
@@ -1196,7 +1196,7 @@ public class PermissionService {
 
         debugLog("ASK_REQUEST_PARSED", String.format("requestId=%s, toolName=%s", requestId, toolName));
 
-        // 获取 AskUserQuestion 对话框显示器（根据 cwd 匹配项目，支持多 IDEA 实例）
+        // Get the AskUserQuestion dialog shower (match project by cwd, supports multiple IDEA instances)
         AskUserQuestionDialogShower dialogShower = findAskUserQuestionDialogShowerByCwd(request);
 
         if (dialogShower != null) {
@@ -1204,11 +1204,11 @@ public class PermissionService {
 
             final long dialogStartTime = System.currentTimeMillis();
 
-            // 异步调用前端弹窗
+            // Asynchronously invoke the frontend dialog
             debugLog("ASK_DIALOG_SHOW", "Calling dialogShower.showAskUserQuestionDialog");
             CompletableFuture<JsonObject> future = dialogShower.showAskUserQuestionDialog(requestId, questionsData);
 
-            // 异步处理结果
+            // Process the result asynchronously
             future.thenAccept(answers -> {
                 long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
                 debugLog("ASK_DIALOG_RESPONSE", String.format("Got answers after %dms", dialogElapsed));
@@ -1234,11 +1234,11 @@ public class PermissionService {
                 return null;
             });
 
-            // 异步处理，不在这里移除 processingRequests，由回调处理
+            // Async processing; processingRequests removal is handled in the callback
             return;
         }
 
-        // 没有对话框显示器，写入空答案（拒绝）
+        // No dialog shower available, write empty answers (deny)
         debugLog("ASK_NO_DIALOG_SHOWER", "No AskUserQuestion dialog shower available, denying");
         writeAskUserQuestionResponse(requestId, new JsonObject());
         processingRequests.remove(fileName);
@@ -1248,8 +1248,8 @@ public class PermissionService {
     }
 
     /**
-     * 写入 AskUserQuestion 响应文件.
-     * 响应格式：{ "answers": { "问题文本": "答案" } }
+     * Write an AskUserQuestion response file.
+     * Response format: { "answers": { "question text": "answer" } }
      */
     private void writeAskUserQuestionResponse(String requestId, JsonObject answers) {
         debugLog("WRITE_ASK_RESPONSE_START", String.format("Writing AskUserQuestion response for requestId=%s", requestId));
@@ -1265,7 +1265,7 @@ public class PermissionService {
 
             Files.writeString(responseFile, responseContent);
 
-            // 验证文件是否写入成功
+            // Verify the file was written successfully
             if (Files.exists(responseFile)) {
                 long fileSize = Files.size(responseFile);
                 debugLog("ASK_WRITE_SUCCESS", String.format("AskUserQuestion response file written successfully, size=%d bytes", fileSize));
@@ -1279,22 +1279,22 @@ public class PermissionService {
     }
 
     /**
-     * 处理 PlanApproval 请求
-     * 请求文件格式：plan-approval-{requestId}.json
+     * Handle a PlanApproval request.
+     * Request file format: plan-approval-{requestId}.json
      */
     private void handlePlanApprovalRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
         long startTime = System.currentTimeMillis();
         debugLog("PLAN_HANDLE_REQUEST", "Processing PlanApproval request file: " + fileName);
 
-        // 检查是否正在处理该请求
+        // Check if this request is already being processed
         if (!processingRequests.add(fileName)) {
             debugLog("PLAN_SKIP_DUPLICATE", "PlanApproval request already being processed, skipping: " + fileName);
             return;
         }
 
         try {
-            Thread.sleep(100); // 等待文件写入完成
+            Thread.sleep(100); // Wait for file write to complete
 
             if (!Files.exists(requestFile)) {
                 debugLog("PLAN_FILE_MISSING", "PlanApproval request file missing before read: " + fileName);
@@ -1317,7 +1317,7 @@ public class PermissionService {
 
             debugLog("PLAN_REQUEST_PARSED", String.format("PlanApproval requestId=%s", requestId));
 
-            // 立即删除请求文件，避免重复处理
+            // Delete the request file immediately to prevent duplicate processing
             try {
                 Files.deleteIfExists(requestFile);
                 debugLog("PLAN_FILE_DELETE", "Deleted PlanApproval request file: " + fileName);
@@ -1325,7 +1325,7 @@ public class PermissionService {
                 debugLog("PLAN_FILE_DELETE_ERROR", "Failed to delete PlanApproval request file: " + e.getMessage());
             }
 
-            // 找到对应的对话框显示器（根据 cwd 匹配项目，支持多 IDEA 实例）
+            // Find the corresponding dialog shower (match project by cwd, supports multiple IDEA instances)
             PlanApprovalDialogShower dialogShower = findPlanApprovalDialogShowerByCwd(request);
 
             if (dialogShower != null) {
@@ -1333,11 +1333,11 @@ public class PermissionService {
 
                 final long dialogStartTime = System.currentTimeMillis();
 
-                // 异步调用前端弹窗
+                // Asynchronously invoke the frontend dialog
                 debugLog("PLAN_DIALOG_SHOW", "Calling dialogShower.showPlanApprovalDialog");
                 CompletableFuture<JsonObject> future = dialogShower.showPlanApprovalDialog(requestId, request);
 
-                // 异步处理结果
+                // Process the result asynchronously
                 future.thenAccept(response -> {
                     long dialogElapsed = System.currentTimeMillis() - dialogStartTime;
                     debugLog("PLAN_DIALOG_RESPONSE", String.format("Got PlanApproval response after %dms", dialogElapsed));
@@ -1353,7 +1353,7 @@ public class PermissionService {
                     } catch (Exception e) {
                         debugLog("PLAN_DIALOG_ERROR", "Error processing PlanApproval dialog result: " + e.getMessage());
                         LOG.error("Error occurred", e);
-                        // 出错时写入拒绝响应
+                        // Write a deny response on error
                         writePlanApprovalResponse(requestId, false, "default");
                     } finally {
                         processingRequests.remove(fileName);
@@ -1365,11 +1365,11 @@ public class PermissionService {
                     return null;
                 });
 
-                // 异步处理，不在这里移除 processingRequests，由回调处理
+                // Async processing; processingRequests removal is handled in the callback
                 return;
             }
 
-            // 没有对话框显示器，写入拒绝响应
+            // No dialog shower available, write a deny response
             debugLog("PLAN_NO_DIALOG_SHOWER", "No PlanApproval dialog shower available, denying");
             writePlanApprovalResponse(requestId, false, "default");
             processingRequests.remove(fileName);
@@ -1385,8 +1385,8 @@ public class PermissionService {
     }
 
     /**
-     * 写入 PlanApproval 响应文件.
-     * 响应格式：{ "approved": boolean, "targetMode": string }
+     * Write a PlanApproval response file.
+     * Response format: { "approved": boolean, "targetMode": string }
      */
     private void writePlanApprovalResponse(String requestId, boolean approved, String targetMode) {
         debugLog("WRITE_PLAN_RESPONSE_START", String.format("Writing PlanApproval response for requestId=%s, approved=%s, targetMode=%s",
@@ -1404,7 +1404,7 @@ public class PermissionService {
 
             Files.writeString(responseFile, responseContent);
 
-            // 验证文件是否写入成功
+            // Verify the file was written successfully
             if (Files.exists(responseFile)) {
                 long fileSize = Files.size(responseFile);
                 debugLog("PLAN_WRITE_SUCCESS", String.format("PlanApproval response file written successfully, size=%d bytes", fileSize));
@@ -1418,7 +1418,7 @@ public class PermissionService {
     }
 
     /**
-     * 停止权限服务
+     * Stop the permission service.
      */
     public void stop() {
         running = false;

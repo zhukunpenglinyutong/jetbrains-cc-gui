@@ -14,8 +14,9 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 平台工具类
- * 提供跨平台兼容性支持，包括平台检测、环境变量处理、进程管理等
+ * Platform utility class.
+ * Provides cross-platform compatibility support including platform detection,
+ * environment variable handling, and process management.
  */
 public class PlatformUtils {
 
@@ -29,7 +30,7 @@ public class PlatformUtils {
     private static volatile Boolean cachedDevMode = null;
 
     /**
-     * 平台类型枚举
+     * Platform type enumeration.
      */
     public enum PlatformType {
         WINDOWS,
@@ -38,11 +39,11 @@ public class PlatformUtils {
         UNKNOWN
     }
 
-    // ==================== 平台检测方法 ====================
+    // ==================== Platform Detection ====================
 
     /**
-     * 获取当前平台类型
-     * @return 平台类型枚举值
+     * Get the current platform type.
+     * @return the platform type enum value
      */
     public static PlatformType getPlatformType() {
         if (cachedPlatformType == null) {
@@ -61,44 +62,45 @@ public class PlatformUtils {
     }
 
     /**
-     * 检查是否为 Windows 平台
-     * @return true 如果是 Windows
+     * Check whether the current platform is Windows.
+     * @return true if running on Windows
      */
     public static boolean isWindows() {
         return getPlatformType() == PlatformType.WINDOWS;
     }
 
     /**
-     * 检查是否为 macOS 平台
-     * @return true 如果是 macOS
+     * Check whether the current platform is macOS.
+     * @return true if running on macOS
      */
     public static boolean isMac() {
         return getPlatformType() == PlatformType.MACOS;
     }
 
     /**
-     * 检查是否为 Linux 平台
-     * @return true 如果是 Linux
+     * Check whether the current platform is Linux.
+     * @return true if running on Linux
      */
     public static boolean isLinux() {
         return getPlatformType() == PlatformType.LINUX;
     }
 
     /**
-     * 获取当前插件 ID.
-     * 通过遍历所有插件并匹配类加载器来自动获取，避免硬编码。
+     * Get the current plugin ID.
+     * Automatically detects the ID by iterating over all plugins and matching the classloader,
+     * avoiding hardcoded values.
      *
-     * @return 插件 ID，如果获取失败返回兜底值
+     * @return the plugin ID, or a fallback value if detection fails
      */
     public static String getPluginId() {
         if (cachedPluginId == null) {
             synchronized (PlatformUtils.class) {
                 if (cachedPluginId == null) {
                     try {
-                        // 获取当前类的类加载器
+                        // Get the classloader for the current class
                         ClassLoader classLoader = PlatformUtils.class.getClassLoader();
 
-                        // 遍历所有插件，找到包含当前类的插件
+                        // Iterate over all plugins to find the one containing the current class
                         for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
                             if (plugin.getPluginClassLoader() == classLoader) {
                                 cachedPluginId = plugin.getPluginId().getIdString();
@@ -107,12 +109,12 @@ public class PlatformUtils {
                             }
                         }
 
-                        // 如果没找到，使用兜底值
+                        // If no matching plugin found, use fallback value
                         LOG.warn("Failed to detect plugin ID: no matching plugin found");
-                        cachedPluginId = "com.github.idea-claude-code-gui"; // 兜底值
+                        cachedPluginId = "com.github.idea-claude-code-gui"; // fallback value
                     } catch (Exception e) {
                         LOG.warn("Failed to detect plugin ID: " + e.getMessage());
-                        cachedPluginId = "com.github.idea-claude-code-gui"; // 兜底值
+                        cachedPluginId = "com.github.idea-claude-code-gui"; // fallback value
                     }
                 }
             }
@@ -217,27 +219,28 @@ public class PlatformUtils {
         return false;
     }
 
-    // ==================== 环境变量处理 ====================
+    // ==================== Environment Variable Handling ====================
 
     /**
-     * 大小写不敏感地获取环境变量（适用于 Windows）
-     * Windows 环境变量名称大小写不敏感，但 Java 的 System.getenv() 返回的 Map 是大小写敏感的
+     * Get an environment variable with case-insensitive lookup (for Windows compatibility).
+     * Windows environment variable names are case-insensitive, but Java's System.getenv()
+     * returns a case-sensitive Map.
      *
-     * @param name 环境变量名称
-     * @return 环境变量值，如果不存在返回 null
+     * @param name the environment variable name
+     * @return the environment variable value, or null if not found
      */
     public static String getEnvIgnoreCase(String name) {
         if (name == null) {
             return null;
         }
 
-        // 首先尝试精确匹配
+        // Try exact match first
         String value = System.getenv(name);
         if (value != null) {
             return value;
         }
 
-        // 如果是 Windows，进行大小写不敏感搜索
+        // On Windows, perform case-insensitive search
         if (isWindows()) {
             for (Map.Entry<String, String> entry : System.getenv().entrySet()) {
                 if (entry.getKey().equalsIgnoreCase(name)) {
@@ -250,21 +253,21 @@ public class PlatformUtils {
     }
 
     /**
-     * 获取 PATH 环境变量（兼容 Windows 的 Path 和 PATH）
-     * @return PATH 环境变量值
+     * Get the PATH environment variable (handles both "Path" and "PATH" on Windows).
+     * @return the PATH environment variable value
      */
     public static String getPathEnv() {
         return getEnvIgnoreCase("PATH");
     }
 
-    // ==================== 文件操作 ====================
+    // ==================== File Operations ====================
 
     /**
-     * 带重试机制的文件删除（处理 Windows 文件锁定问题）
+     * Delete a file with retry logic (handles Windows file locking issues).
      *
-     * @param file 要删除的文件
-     * @param maxRetries 最大重试次数
-     * @return true 如果删除成功
+     * @param file the file to delete
+     * @param maxRetries maximum number of retry attempts
+     * @return true if deletion succeeded
      */
     public static boolean deleteWithRetry(File file, int maxRetries) {
         if (file == null || !file.exists()) {
@@ -278,10 +281,10 @@ public class PlatformUtils {
 
             if (attempt < maxRetries - 1) {
                 try {
-                    // 指数退避：200ms, 400ms, 800ms
+                    // Exponential backoff: 200ms, 400ms, 800ms
                     long waitTime = 200L * (1L << attempt);
                     Thread.sleep(waitTime);
-                    // 提示垃圾回收，可能释放文件句柄
+                    // Hint the GC, which may release file handles
                     System.gc();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -290,16 +293,16 @@ public class PlatformUtils {
             }
         }
 
-        LOG.warn("⚠️ 文件删除失败（可能被锁定）: " + file.getAbsolutePath());
+        LOG.warn("Failed to delete file (possibly locked): " + file.getAbsolutePath());
         return false;
     }
 
     /**
-     * 带重试机制的目录删除（递归删除）
+     * Recursively delete a directory with retry logic.
      *
-     * @param directory 要删除的目录
-     * @param maxRetries 最大重试次数
-     * @return true 如果删除成功
+     * @param directory the directory to delete
+     * @param maxRetries maximum number of retry attempts
+     * @return true if deletion succeeded
      */
     public static boolean deleteDirectoryWithRetry(File directory, int maxRetries) {
         if (directory == null || !directory.exists()) {
@@ -310,7 +313,7 @@ public class PlatformUtils {
             return deleteWithRetry(directory, maxRetries);
         }
 
-        // 递归删除子文件和子目录
+        // Recursively delete child files and subdirectories
         File[] files = directory.listFiles();
         if (files != null) {
             for (File file : files) {
@@ -320,17 +323,17 @@ public class PlatformUtils {
             }
         }
 
-        // 删除空目录
+        // Delete the now-empty directory
         return deleteWithRetry(directory, maxRetries);
     }
 
-    // ==================== 进程管理 ====================
+    // ==================== Process Management ====================
 
     /**
-     * 终止进程树（包括所有子进程）
-     * Windows 上使用 taskkill /F /T /PID，Unix 上使用标准的 destroy/destroyForcibly
+     * Terminate a process tree (including all child processes).
+     * On Windows, uses taskkill /F /T /PID. On Unix, uses the standard destroy/destroyForcibly.
      *
-     * @param process 要终止的进程
+     * @param process the process to terminate
      */
     public static void terminateProcess(Process process) {
         if (process == null || !process.isAlive()) {
@@ -339,11 +342,11 @@ public class PlatformUtils {
 
         try {
             if (isWindows()) {
-                // 获取进程 ID
+                // Get the process ID
                 long pid = process.pid();
-                // 使用 taskkill 终止进程树
-                // /F = 强制终止
-                // /T = 终止进程树（包括子进程）
+                // Use taskkill to terminate the process tree
+                // /F = force termination
+                // /T = terminate the entire process tree (including children)
                 ProcessBuilder pb = new ProcessBuilder(
                     "taskkill", "/F", "/T", "/PID", String.valueOf(pid)
                 );
@@ -405,10 +408,10 @@ public class PlatformUtils {
     }
 
     /**
-     * 通过 PID 终止进程树
+     * Terminate a process tree by PID.
      *
-     * @param pid 进程 ID
-     * @return true 如果终止命令执行成功
+     * @param pid the process ID
+     * @return true if the termination command executed successfully
      */
     public static boolean terminateProcessTree(long pid) {
         try {
@@ -420,7 +423,7 @@ public class PlatformUtils {
                 Process killer = pb.start();
                 return killer.waitFor(5, TimeUnit.SECONDS);
             } else {
-                // Unix: 尝试使用 kill 命令
+                // Unix: try using the kill command
                 ProcessBuilder pb = new ProcessBuilder(
                     "kill", "-9", String.valueOf(pid)
                 );
@@ -429,48 +432,48 @@ public class PlatformUtils {
                 return killer.waitFor(3, TimeUnit.SECONDS);
             }
         } catch (Exception e) {
-            LOG.warn("⚠️ 终止进程失败 (PID: " + pid + "): " + e.getMessage());
+            LOG.warn("Failed to terminate process (PID: " + pid + "): " + e.getMessage());
             return false;
         }
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== Helper Methods ====================
 
     /**
-     * 获取操作系统名称
-     * @return 操作系统名称
+     * Get the operating system name.
+     * @return the OS name
      */
     public static String getOsName() {
         return System.getProperty("os.name", "Unknown");
     }
 
     /**
-     * 获取操作系统版本
-     * @return 操作系统版本
+     * Get the operating system version.
+     * @return the OS version
      */
     public static String getOsVersion() {
         return System.getProperty("os.version", "Unknown");
     }
 
     /**
-     * 获取用户主目录
-     * @return 用户主目录路径
+     * Get the user's home directory.
+     * @return the home directory path
      */
     public static String getHomeDirectory() {
         return System.getProperty("user.home", "");
     }
 
     /**
-     * 获取系统临时目录
-     * @return 临时目录路径
+     * Get the system temporary directory.
+     * @return the temporary directory path
      */
     public static String getTempDirectory() {
         return System.getProperty("java.io.tmpdir", "");
     }
 
     /**
-     * 获取 Windows 最大路径长度
-     * @return 最大路径长度（Windows 为 260，其他平台为 4096）
+     * Get the maximum path length for the current platform.
+     * @return the maximum path length (260 for Windows, 4096 for other platforms)
      */
     public static int getMaxPathLength() {
         return isWindows() ? 260 : 4096;

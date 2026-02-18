@@ -1,6 +1,6 @@
 /**
- * MCP 配置加载模块
- * 提供从 ~/.claude.json 读取 MCP 服务器配置的功能
+ * MCP configuration loader module
+ * Provides functionality to read MCP server configuration from ~/.claude.json
  */
 
 import { existsSync } from 'fs';
@@ -10,25 +10,25 @@ import { getRealHomeDir } from '../../../utils/path-utils.js';
 import { log } from './logger.js';
 
 /**
- * 验证 MCP 服务器配置的基本结构
- * @param {Object} serverConfig - 服务器配置对象
- * @returns {boolean} 配置是否有效
+ * Validate the basic structure of an MCP server configuration
+ * @param {Object} serverConfig - Server configuration object
+ * @returns {boolean} Whether the configuration is valid
  */
 function isValidServerConfig(serverConfig) {
   if (!serverConfig || typeof serverConfig !== 'object') {
     return false;
   }
-  // 必须有 command (stdio) 或 url (http)
+  // Must have command (stdio) or url (http)
   const hasCommand = typeof serverConfig.command === 'string' && serverConfig.command.length > 0;
   const hasUrl = typeof serverConfig.url === 'string' && serverConfig.url.length > 0;
   if (!hasCommand && !hasUrl) {
     return false;
   }
-  // args 如果存在必须是数组
+  // args must be an array if present
   if (serverConfig.args !== undefined && !Array.isArray(serverConfig.args)) {
     return false;
   }
-  // env 如果存在必须是对象
+  // env must be an object if present
   if (serverConfig.env !== undefined && (typeof serverConfig.env !== 'object' || serverConfig.env === null)) {
     return false;
   }
@@ -36,31 +36,31 @@ function isValidServerConfig(serverConfig) {
 }
 
 /**
- * 验证配置文件的基本结构
- * @param {Object} config - 配置对象
- * @returns {{valid: boolean, reason?: string}} 验证结果
+ * Validate the basic structure of a configuration file
+ * @param {Object} config - Configuration object
+ * @returns {{valid: boolean, reason?: string}} Validation result
  */
 function validateConfigStructure(config) {
   if (!config || typeof config !== 'object') {
     return { valid: false, reason: 'Config must be an object' };
   }
-  // mcpServers 如果存在必须是对象
+  // mcpServers must be an object if present
   if (config.mcpServers !== undefined) {
     if (typeof config.mcpServers !== 'object' || config.mcpServers === null) {
       return { valid: false, reason: 'mcpServers must be an object' };
     }
-    // 验证每个服务器配置
+    // Validate each server configuration
     for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
       if (!isValidServerConfig(serverConfig)) {
         log('warn', `Invalid server config for "${name}", skipping`);
       }
     }
   }
-  // disabledMcpServers 如果存在必须是数组
+  // disabledMcpServers must be an array if present
   if (config.disabledMcpServers !== undefined && !Array.isArray(config.disabledMcpServers)) {
     return { valid: false, reason: 'disabledMcpServers must be an array' };
   }
-  // projects 如果存在必须是对象
+  // projects must be an object if present
   if (config.projects !== undefined && (typeof config.projects !== 'object' || config.projects === null)) {
     return { valid: false, reason: 'projects must be an object' };
   }
@@ -68,10 +68,10 @@ function validateConfigStructure(config) {
 }
 
 /**
- * 解析 MCP 配置文件中的服务器列表和禁用列表
- * 抽离出公共逻辑，供 loadMcpServersConfig 和 loadAllMcpServersInfo 共享
- * @param {string} cwd - 当前工作目录（用于检测项目）
- * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} 解析结果，失败返回 null
+ * Parse the server list and disabled list from the MCP configuration file
+ * Extracts shared logic used by both loadMcpServersConfig and loadAllMcpServersInfo
+ * @param {string} cwd - Current working directory (used for project detection)
+ * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} Parse result, or null on failure
  */
 async function parseMcpConfig(cwd = null) {
   const claudeJsonPath = join(getRealHomeDir(), '.claude.json');
@@ -84,21 +84,21 @@ async function parseMcpConfig(cwd = null) {
   const content = await readFile(claudeJsonPath, 'utf8');
   const config = JSON.parse(content);
 
-  // 验证配置结构
+  // Validate configuration structure
   const validation = validateConfigStructure(config);
   if (!validation.valid) {
     log('error', 'Invalid config structure:', validation.reason);
     return null;
   }
 
-  // 规范化路径以匹配配置中的路径格式
+  // Normalize the path to match the path format used in config
   let normalizedCwd = cwd;
   if (cwd) {
     normalizedCwd = cwd.replace(/\\/g, '/');
     normalizedCwd = normalizedCwd.replace(/\/$/, '');
   }
 
-  // 查找匹配的项目配置
+  // Find a matching project configuration
   let projectConfig = null;
   if (normalizedCwd && config.projects) {
     if (config.projects[normalizedCwd]) {
@@ -148,12 +148,12 @@ async function parseMcpConfig(cwd = null) {
 }
 
 /**
- * 从 ~/.claude.json 读取 MCP 服务器配置
- * 支持两种模式：
- * 1. 全局配置 - 使用全局 mcpServers
- * 2. 项目配置 - 使用项目特定的 mcpServers
- * @param {string} cwd - 当前工作目录（用于检测项目）
- * @returns {Promise<Array<{name: string, config: Object}>>} 启用的 MCP 服务器列表
+ * Read MCP server configuration from ~/.claude.json
+ * Supports two modes:
+ * 1. Global config - uses the global mcpServers
+ * 2. Project config - uses project-specific mcpServers
+ * @param {string} cwd - Current working directory (used for project detection)
+ * @returns {Promise<Array<{name: string, config: Object}>>} List of enabled MCP servers
  */
 export async function loadMcpServersConfig(cwd = null) {
   try {
@@ -165,7 +165,7 @@ export async function loadMcpServersConfig(cwd = null) {
     const enabledServers = [];
     for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
       if (!disabledServers.has(serverName)) {
-        // 跳过无效的服务器配置
+        // Skip invalid server configurations
         if (!isValidServerConfig(serverConfig)) {
           log('warn', `Skipping invalid server config: ${serverName}`);
           continue;
@@ -183,9 +183,9 @@ export async function loadMcpServersConfig(cwd = null) {
 }
 
 /**
- * 加载所有 MCP 服务器信息（包括被禁用和配置无效的）
- * 合并全局和项目级别的 mcpServers，确保与 Java 端看到的服务器列表一致
- * @param {string} cwd - 当前工作目录
+ * Load all MCP server info (including disabled and invalid ones)
+ * Merges global and project-level mcpServers to stay consistent with the server list seen by the Java side
+ * @param {string} cwd - Current working directory
  * @returns {Promise<{enabled: Array, disabled: Array<string>, invalid: Array<{name: string, reason: string}>}>}
  */
 export async function loadAllMcpServersInfo(cwd = null) {
@@ -197,22 +197,22 @@ export async function loadAllMcpServersInfo(cwd = null) {
 
     const { mcpServers, disabledServers } = parsed;
 
-    // 收集项目范围内的服务器名
+    // Collect server names within the project scope
     const processedNames = new Set();
 
-    // 先处理项目/全局解析出来的服务器（parseMcpConfig 的结果）
+    // Process servers resolved from project/global config (the parseMcpConfig result) first
     for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
       processedNames.add(serverName);
       classifyServer(serverName, serverConfig, disabledServers, result);
     }
 
-    // 如果指定了 cwd，全局服务器可能被项目配置覆盖了
-    // 需要额外读取全局配置，补充那些只存在于全局的服务器
+    // If cwd is specified, global servers may have been overridden by project config.
+    // Read the global config separately to pick up servers that only exist globally.
     if (cwd) {
       const globalParsed = await parseMcpConfig(null);
       if (globalParsed) {
         for (const [serverName, serverConfig] of Object.entries(globalParsed.mcpServers)) {
-          if (processedNames.has(serverName)) continue; // 项目配置已包含，跳过
+          if (processedNames.has(serverName)) continue; // Already covered by project config, skip
           processedNames.add(serverName);
           classifyServer(serverName, serverConfig, globalParsed.disabledServers, result);
         }
@@ -228,7 +228,7 @@ export async function loadAllMcpServersInfo(cwd = null) {
 }
 
 /**
- * 将服务器分类到 enabled/disabled/invalid
+ * Classify a server into the enabled/disabled/invalid buckets
  */
 function classifyServer(serverName, serverConfig, disabledServers, result) {
   if (disabledServers.has(serverName)) {

@@ -2,9 +2,9 @@
 
 /**
  * AI Bridge Channel Manager
- * 统一的 Claude 和 Codex SDK 桥接入口
+ * Unified bridge entry point for Claude and Codex SDKs
  *
- * 命令格式:
+ * Command format:
  *   node channel-manager.js <provider> <command> [args...]
  *
  * Provider:
@@ -12,40 +12,40 @@
  *   codex  - Codex SDK (@openai/codex-sdk)
  *
  * Commands:
- *   send                - 发送消息（参数通过 stdin JSON 传递）
- *   sendWithAttachments - 发送带附件的消息（仅 claude）
- *   getSession          - 获取会话历史消息（仅 claude）
+ *   send                - Send a message (parameters passed via stdin as JSON)
+ *   sendWithAttachments - Send a message with attachments (claude only)
+ *   getSession          - Retrieve session message history (claude only)
  *
- * 设计说明：
- * - 统一入口，根据 provider 参数分发到不同的服务
- * - sessionId/threadId 由调用方（Java）维护
- * - 消息和其他参数通过 stdin 以 JSON 格式传递
+ * Design notes:
+ * - Single entry point that dispatches to different services based on the provider parameter
+ * - sessionId/threadId is managed by the caller (Java side)
+ * - Messages and other parameters are passed via stdin in JSON format
  */
 
-// 共用工具
+// Shared utilities
 import { readStdinData } from './utils/stdin-utils.js';
 import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
 import { getSdkStatus, isClaudeSdkAvailable, isCodexSdkAvailable } from './utils/sdk-loader.js';
 
-// 🔧 诊断日志：启动信息
+// Diagnostic logging: startup info
 console.log('[DIAG-ENTRY] ========== CHANNEL-MANAGER STARTUP ==========');
 console.log('[DIAG-ENTRY] Node.js version:', process.version);
 console.log('[DIAG-ENTRY] Platform:', process.platform);
 console.log('[DIAG-ENTRY] CWD:', process.cwd());
 console.log('[DIAG-ENTRY] argv:', process.argv);
 
-// 命令行参数解析
+// Parse command-line arguments
 const provider = process.argv[2];
 const command = process.argv[3];
 const args = process.argv.slice(4);
 
-// 🔧 诊断日志：参数信息
+// Diagnostic logging: argument info
 console.log('[DIAG-ENTRY] Provider:', provider);
 console.log('[DIAG-ENTRY] Command:', command);
 console.log('[DIAG-ENTRY] Args:', args);
 
-// 错误处理
+// Error handling
 process.on('uncaughtException', (error) => {
   console.error('[UNCAUGHT_ERROR]', error.message);
   console.log(JSON.stringify({
@@ -65,12 +65,12 @@ process.on('unhandledRejection', (reason) => {
 });
 
 /**
- * 处理系统级命令（如 SDK 状态检查）
+ * Handle system-level commands (e.g., SDK status checks)
  */
 async function handleSystemCommand(command, args, stdinData) {
   switch (command) {
     case 'getSdkStatus':
-      // 返回所有 SDK 的安装状态
+      // Return the installation status of all SDKs
       const status = getSdkStatus();
       console.log(JSON.stringify({
         success: true,
@@ -79,7 +79,7 @@ async function handleSystemCommand(command, args, stdinData) {
       break;
 
     case 'checkClaudeSdk':
-      // 检查 Claude SDK 是否可用
+      // Check if Claude SDK is available
       console.log(JSON.stringify({
         success: true,
         available: isClaudeSdkAvailable()
@@ -87,7 +87,7 @@ async function handleSystemCommand(command, args, stdinData) {
       break;
 
     case 'checkCodexSdk':
-      // 检查 Codex SDK 是否可用
+      // Check if Codex SDK is available
       console.log(JSON.stringify({
         success: true,
         available: isCodexSdkAvailable()
@@ -109,11 +109,11 @@ const providerHandlers = {
   system: handleSystemCommand
 };
 
-// 执行命令
+// Execute command
 (async () => {
   console.log('[DIAG-EXEC] ========== STARTING EXECUTION ==========');
   try {
-    // 验证 provider
+    // Validate provider
     console.log('[DIAG-EXEC] Validating provider...');
     if (!provider || !providerHandlers[provider]) {
       console.error('Invalid provider. Use "claude", "codex", or "system"');
@@ -124,7 +124,7 @@ const providerHandlers = {
       process.exit(1);
     }
 
-    // 验证 command
+    // Validate command
     if (!command) {
       console.error('No command specified');
       console.log(JSON.stringify({
@@ -134,27 +134,28 @@ const providerHandlers = {
       process.exit(1);
     }
 
-    // 读取 stdin 数据
+    // Read stdin data
     console.log('[DIAG-EXEC] Reading stdin data...');
     const stdinData = await readStdinData(provider);
     console.log('[DIAG-EXEC] Stdin data received, keys:', stdinData ? Object.keys(stdinData) : 'null');
 
-    // 根据 provider 分发
+    // Dispatch to the appropriate provider handler
     console.log('[DIAG-EXEC] Dispatching to handler:', provider);
     const handler = providerHandlers[provider];
     await handler(command, args, stdinData);
     console.log('[DIAG-EXEC] Handler completed successfully');
 
-    // 🔥 重要：不要使用 process.exit(0)，因为它会在 stdout 缓冲区刷新前终止进程
-    // 导致大量 JSON 输出（如 getSession 返回的历史消息）被截断
-    // 使用 process.exitCode 设置退出码，让进程自然退出，确保所有 I/O 完成
+    // IMPORTANT: Do not use process.exit(0) here -- it terminates the process
+    // before the stdout buffer is fully flushed, which can truncate large JSON
+    // output (e.g., the history returned by getSession).
+    // Instead, set process.exitCode and let the process exit naturally so all I/O completes.
     process.exitCode = 0;
 
-    // 🔥 对于 rewindFiles 命令，需要强制退出
-    // 因为它会恢复 SDK 会话，会话的 MCP 连接可能保持打开状态，导致进程无法自然退出
-    // rewindFiles 的输出很小，不会有截断问题
+    // For the rewindFiles command we need to force-exit, because it restores
+    // an SDK session whose MCP connections may stay open and prevent the
+    // process from exiting naturally. Its output is small, so truncation is not a concern.
     if (command === 'rewindFiles') {
-      // 给一点时间让 stdout 缓冲区刷新
+      // Allow a short delay for the stdout buffer to flush
       setTimeout(() => process.exit(0), 100);
     }
 

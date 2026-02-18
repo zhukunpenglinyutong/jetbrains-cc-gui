@@ -1,3 +1,67 @@
+##### **2026年2月19日（v0.1.9）**
+
+English:
+
+✨ Features
+- Add prompt template management system with backend CRUD, PromptDialog UI, and ">>" trigger detection in chat input #hpstream
+- Add chat background color customization with theme-aware presets and color picker
+- Add batch search grouping for consecutive grep/glob/find tool calls (SearchToolGroupBlock)
+- Add collapsible accordion to TaskOutput tool block
+- Add dismissible open-source banner above chat input
+- Add Russian language support #dsudomoin
+- Add timestamp display for history completion items with relative time formatting #hpstream
+- Upgrade default models to Sonnet 4.6 and Opus 4.6, remove Opus 4.5
+- Support multi-file drag and drop into chat input
+- Extract hardcoded strings to resource bundles for full internationalization
+
+🐛 Fixes
+- Resolve paste-then-send race condition in chat input with debounce flush mechanism #gadfly3173
+- Send full tool_result block and remove cwd file cleanup to prevent cross-session race condition #gadfly3173
+- Fix markdown rendering error handling and dialog overlay click blocking
+- Fix i18n pluralization for relative time display (e.g. "1 year ago" vs "1 years ago")
+- Add input validation and harden prompt operations (null checks, ID format validation, hex color validation)
+- Replace debounce non-null assertion with guard check to prevent runtime errors
+- Batch timestamp writes to reduce N localStorage read/write cycles to 1
+
+🔧 Improvements
+- Translate all Chinese comments to English across codebase for improved accessibility
+- Add truncateToolResultBlock() to limit IPC payload size (20k chars) matching Java-side threshold
+- Replace per-session temp file cleanup with age-based stale cleanup (>24h) during IDE shutdown for safe concurrent sessions
+- Refactor prompt template: use shared service instance, require whitespace before trigger, switch to debug log levels, remove dead code
+- Simplify markdown rendering by removing redundant mountRetry and over-wrapped error fallback
+- Add Russian plural forms (_one/_few/_many) for i18n
+
+中文：
+
+✨ Features
+- 新增提示词模板管理系统：后端 CRUD、PromptDialog 界面、输入框 ">>" 触发检测 #hpstream
+- 新增聊天背景颜色自定义，支持主题感知预设和颜色选择器
+- 新增连续搜索工具调用（grep/glob/find）的批量分组显示（SearchToolGroupBlock）
+- 新增 TaskOutput 工具块的可折叠手风琴组件
+- 新增聊天输入框上方的可关闭开源横幅
+- 新增俄语语言支持 #dsudomoin
+- 新增历史补全项的时间戳显示，支持相对时间格式化 #hpstream
+- 升级默认模型到 Sonnet 4.6 和 Opus 4.6，移除 Opus 4.5
+- 支持多文件拖拽到聊天输入框
+- 提取硬编码字符串到资源包，实现完整国际化
+
+🐛 Fixes
+- 修复粘贴后立即发送的竞态条件，添加防抖 flush 机制 #gadfly3173
+- 发送完整 tool_result 块并移除 cwd 文件清理，防止跨会话竞态条件 #gadfly3173
+- 修复 Markdown 渲染错误处理和对话框遮罩层点击阻塞问题
+- 修复相对时间显示的国际化复数形式（如 "1 year ago" 而非 "1 years ago"）
+- 添加输入验证并加固提示词操作（空值检查、ID 格式验证、十六进制颜色验证）
+- 将防抖非空断言替换为守卫检查，防止运行时错误
+- 批量写入时间戳，将 N 次 localStorage 读写减少为 1 次
+
+🔧 Improvements
+- 将代码库中所有中文注释翻译为英文，提升可访问性
+- 添加 truncateToolResultBlock() 限制 IPC 负载大小（20k 字符），匹配 Java 端阈值
+- 将每会话临时文件清理替换为基于时间的过期清理（>24h），在 IDE 关闭时执行，支持并发会话安全
+- 重构提示词模板：使用共享服务实例、触发符前需空白字符、切换为 debug 日志级别、移除死代码
+- 简化 Markdown 渲染，移除冗余的 mountRetry 和过度包装的错误回退
+- 添加俄语复数形式（_one/_few/_many）国际化支持
+
 ##### **2026年2月12日（v0.1.8）**
 
 English:

@@ -75,7 +75,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
                 .submit(AppExecutorUtil.getAppExecutorService());
 
         } catch (Exception ex) {
-            showError(project, "发送失败: " + ex.getMessage());
+            showError(project, ClaudeCodeGuiBundle.message("send.failed", ex.getMessage()));
             LOG.error("Error: " + ex.getMessage(), ex);
         }
     }
@@ -113,7 +113,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         Editor editor = e.getData(CommonDataKeys.EDITOR);
 
         if (project == null || editor == null) {
-            showError(project, "无法获取编辑器信息");
+            showError(project, ClaudeCodeGuiBundle.message("send.cannotGetEditor"));
             return null;
         }
 
@@ -122,14 +122,14 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
 
         // 检查是否有选中内容
         if (selectedText == null || selectedText.trim().isEmpty()) {
-            showInfo(project, "请先选中要发送的代码");
+            showInfo(project, ClaudeCodeGuiBundle.message("send.selectCodeFirst"));
             return null;
         }
 
         // 获取当前文件
         VirtualFile[] selectedFiles = FileEditorManager.getInstance(project).getSelectedFiles();
         if (selectedFiles.length == 0) {
-            showError(project, "无法获取当前文件");
+            showError(project, ClaudeCodeGuiBundle.message("send.cannotGetFile"));
             return null;
         }
         VirtualFile virtualFile = selectedFiles[0];
@@ -137,7 +137,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         // 获取相对项目路径
         String relativePath = getRelativePath(project, virtualFile);
         if (relativePath == null) {
-            showError(project, "无法确定文件路径");
+            showError(project, ClaudeCodeGuiBundle.message("send.cannotGetFilePath"));
             return null;
         }
 
@@ -208,11 +208,11 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
                     LOG.info("聊天窗口已激活并发送内容到项目: " + project.getName());
                 }
             } else {
-                showError(project, "找不到 CCG 工具窗口");
+                showError(project, ClaudeCodeGuiBundle.message("send.toolWindowNotFound"));
             }
 
         } catch (Exception ex) {
-            showError(project, "发送到聊天窗口失败: " + ex.getMessage());
+            showError(project, ClaudeCodeGuiBundle.message("send.sendToChatFailed", ex.getMessage()));
             LOG.error("Error occurred", ex);
         }
     }
@@ -224,7 +224,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         LOG.error(message);
         if (project != null) {
             ApplicationManager.getApplication().invokeLater(() -> {
-                com.intellij.openapi.ui.Messages.showErrorDialog(project, message, "错误");
+                com.intellij.openapi.ui.Messages.showErrorDialog(project, message, ClaudeCodeGuiBundle.message("dialog.error.title"));
             });
         }
     }
@@ -236,7 +236,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         LOG.info(message);
         if (project != null) {
             ApplicationManager.getApplication().invokeLater(() -> {
-                com.intellij.openapi.ui.Messages.showInfoMessage(project, message, "提示");
+                com.intellij.openapi.ui.Messages.showInfoMessage(project, message, ClaudeCodeGuiBundle.message("dialog.info.title"));
             });
         }
     }

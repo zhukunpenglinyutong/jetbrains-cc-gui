@@ -1,14 +1,14 @@
 /**
- * MCP 服务器状态检测日志模块
- * 提供统一的日志输出函数
+ * MCP server status detection logging module
+ * Provides a unified logging function
  */
 
 import { DEBUG } from './config.js';
 
 /**
- * 统一的日志输出函数
- * @param {'info' | 'debug' | 'error' | 'warn'} level - 日志级别
- * @param {...any} args - 日志参数
+ * Unified logging function
+ * @param {'info' | 'debug' | 'error' | 'warn'} level - Log level
+ * @param {...any} args - Log arguments
  */
 export function log(level, ...args) {
   const prefix = '[McpStatus]';

@@ -13,13 +13,6 @@ interface UseGlobalCallbacksOptions {
   focusInput: () => void;
 }
 
-declare global {
-  interface Window {
-    handleFilePathFromJava?: (filePath: string) => void;
-    insertCodeSnippetAtCursor?: (selectionInfo: string) => void;
-  }
-}
-
 /**
  * useGlobalCallbacks - Register global callback functions for Java interop
  *
@@ -41,7 +34,10 @@ export function useGlobalCallbacks({
 }: UseGlobalCallbacksOptions): void {
   // Register global function to receive file path from Java
   useEffect(() => {
-    window.handleFilePathFromJava = (filePath: string) => {
+    /**
+     * Insert a single file path into the input box
+     */
+    const insertSingleFilePath = (filePath: string) => {
       if (!editableRef.current) return;
 
       // Extract file path and add to path mapping
@@ -84,6 +80,37 @@ export function useGlobalCallbacks({
         range.collapse(true);
         selection?.removeAllRanges();
         selection?.addRange(range);
+      }
+    };
+
+    window.handleFilePathFromJava = (filePathInput: string | string[]) => {
+      if (!editableRef.current) return;
+
+      // Normalize input to string array.
+      // Java side (v0.1.9+) passes a JS array directly via executeJavaScript,
+      // so Array.isArray branch is the primary path.
+      // The string branch is kept for backward compatibility with older Java
+      // versions that passed a single string. It can be removed once v0.1.8
+      // support is no longer needed.
+      let filePaths: string[];
+      if (Array.isArray(filePathInput)) {
+        filePaths = filePathInput;
+      } else if (typeof filePathInput === 'string') {
+        try {
+          const parsed: unknown = JSON.parse(filePathInput);
+          filePaths = Array.isArray(parsed) ? parsed : [filePathInput];
+        } catch {
+          filePaths = [filePathInput];
+        }
+      } else {
+        return;
+      }
+
+      // Insert all file paths
+      for (const filePath of filePaths) {
+        if (filePath && filePath.trim()) {
+          insertSingleFilePath(filePath.trim());
+        }
       }
 
       // Close completion menus

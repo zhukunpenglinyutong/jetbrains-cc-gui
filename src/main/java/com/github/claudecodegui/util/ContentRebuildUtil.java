@@ -5,8 +5,8 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
 /**
- * 内容重建工具类
- * 通过反向应用编辑操作，从编辑后内容推导出编辑前内容
+ * Content rebuild utility.
+ * Derives the pre-edit content by reverse-applying edit operations to the post-edit content.
  */
 public final class ContentRebuildUtil {
 
@@ -16,15 +16,16 @@ public final class ContentRebuildUtil {
     }
 
     /**
-     * 反向重建编辑前内容
+     * Reverse-rebuild the pre-edit content from the post-edit content.
      *
-     * 注意：如果文件被 linter/formatter 修改过，newString 可能无法精确匹配。
-     * 此时会尝试标准化空白后再匹配，如果仍失败则跳过该操作继续处理。
+     * Note: if the file was modified by a linter/formatter, newString may not match exactly.
+     * In that case, whitespace-normalized matching is attempted; if that also fails, the
+     * operation is skipped and processing continues.
      */
     public static String rebuildBeforeContent(String afterContent, JsonArray edits) {
         String content = afterContent;
 
-        // 反向遍历编辑操作
+        // Iterate over edit operations in reverse order
         for (int i = edits.size() - 1; i >= 0; i--) {
             JsonObject edit = edits.get(i).getAsJsonObject();
             String oldString = edit.has("oldString") ? edit.get("oldString").getAsString() : "";
@@ -55,7 +56,7 @@ public final class ContentRebuildUtil {
             return content.replace(normalizedNewString, normalizedOldString);
         }
 
-        // 尝试标准化空白后匹配
+        // Try matching with normalized whitespace
         String normalizedNew = normalizeWhitespace(newString);
         String normalizedContent = normalizeWhitespace(content);
         if (normalizedContent.contains(normalizedNew)) {
@@ -83,7 +84,7 @@ public final class ContentRebuildUtil {
             }
         }
 
-        // 尝试标准化空白后匹配
+        // Try matching with normalized whitespace
         int fuzzyIndex = findNormalizedIndex(content, newString);
         if (fuzzyIndex >= 0) {
             int actualEnd = findActualEndIndex(content, fuzzyIndex, newString);
@@ -94,7 +95,7 @@ public final class ContentRebuildUtil {
     }
 
     /**
-     * 标准化空白字符（用于模糊匹配）
+     * Normalize whitespace characters (for fuzzy matching).
      */
     static String normalizeWhitespace(String s) {
         if (s == null) return "";
@@ -102,7 +103,7 @@ public final class ContentRebuildUtil {
     }
 
     /**
-     * 在标准化空白后查找子串位置
+     * Find the position of a substring after normalizing whitespace.
      */
     static int findNormalizedIndex(String content, String target) {
         String normalizedTarget = normalizeWhitespace(target);
@@ -130,7 +131,7 @@ public final class ContentRebuildUtil {
     }
 
     /**
-     * 找到实际的结束索引（考虑空白差异）
+     * Find the actual end index, accounting for whitespace differences.
      */
     static int findActualEndIndex(String content, int startIndex, String target) {
         String normalizedTarget = normalizeWhitespace(target);
@@ -149,7 +150,7 @@ public final class ContentRebuildUtil {
             actualIndex++;
         }
 
-        // 跳过尾部空白（但不跳过换行符，包括 \r 和 \n）
+        // Skip trailing whitespace (but not line breaks, including \r and \n)
         while (actualIndex < content.length() &&
                Character.isWhitespace(content.charAt(actualIndex)) &&
                content.charAt(actualIndex) != '\n' &&
@@ -161,7 +162,7 @@ public final class ContentRebuildUtil {
     }
 
     /**
-     * 使用标准化匹配进行替换
+     * Perform a replacement using normalized matching.
      */
     static String replaceNormalized(String content, String target, String replacement) {
         int index = findNormalizedIndex(content, target);

@@ -171,7 +171,7 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
       <a href="https://github.com/hpstream">
         <img src="https://avatars.githubusercontent.com/u/18394192?size=100" width="100" height="100" alt="hpstream" style="border-radius: 50%;" />
       </a>
-      <div>🔥</div>
+      <div>🔥🔥</div>
     </td>
     <td align="center">
       <a href="https://github.com/imblowsnow">
@@ -248,6 +248,11 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
         <img src="https://avatars.githubusercontent.com/u/35370530?size=100" width="100" height="100" alt="fz-lyle" style="border-radius: 50%;" />
       </a>
     </td>
+    <td align="center">
+      <a href="https://github.com/dsudomoin">
+        <img src="https://avatars.githubusercontent.com/u/155488585?size=100" width="100" height="100" alt="dsudomoin" style="border-radius: 50%;" />
+      </a>
+    </td>
   </tr>
 </table>
 
@@ -256,6 +261,7 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
 ## Sponsor
 
 If this project is helpful to you, you can invite the author to have a KFC or a cup of coffee~
+
 如果这个项目对你有帮助，想请作者吃顿肯德基（KFC）或者喝杯咖啡，都是可以的~
 
 [View Sponsors List →](./SPONSORS.md)

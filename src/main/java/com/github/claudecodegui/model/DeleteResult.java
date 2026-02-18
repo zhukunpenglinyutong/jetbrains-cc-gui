@@ -1,28 +1,28 @@
 package com.github.claudecodegui.model;
 
 /**
- * 删除操作结果类
- * 用于表示文件或配置删除操作的结果，支持成功/失败状态和错误详情
+ * Delete operation result class.
+ * Represents the outcome of a file or configuration deletion, including success/failure status and error details.
  */
 public class DeleteResult {
 
     /**
-     * 错误类型枚举
+     * Error type enum.
      */
     public enum ErrorType {
-        /** 无错误 */
+        /** No error */
         NONE,
-        /** 文件被锁定 */
+        /** File is locked */
         FILE_LOCKED,
-        /** 权限不足 */
+        /** Insufficient permissions */
         PERMISSION_DENIED,
-        /** 文件未找到 */
+        /** File not found */
         FILE_NOT_FOUND,
-        /** IO 错误 */
+        /** I/O error */
         IO_ERROR,
-        /** 资源正在使用中 */
+        /** Resource is in use */
         IN_USE,
-        /** 未知错误 */
+        /** Unknown error */
         UNKNOWN
     }
 
@@ -33,7 +33,7 @@ public class DeleteResult {
     private final String suggestion;
 
     /**
-     * 私有构造函数
+     * Private constructor.
      */
     private DeleteResult(boolean success, ErrorType errorType, String errorMessage, String affectedPath, String suggestion) {
         this.success = success;
@@ -43,69 +43,69 @@ public class DeleteResult {
         this.suggestion = suggestion;
     }
 
-    // ==================== 工厂方法 ====================
+    // ==================== Factory Methods ====================
 
     /**
-     * 创建成功结果
+     * Creates a successful result.
      *
-     * @return 成功的 DeleteResult
+     * @return a successful DeleteResult
      */
     public static DeleteResult success() {
         return new DeleteResult(true, ErrorType.NONE, null, null, null);
     }
 
     /**
-     * 创建成功结果（带路径信息）
+     * Creates a successful result with path information.
      *
-     * @param deletedPath 已删除的路径
-     * @return 成功的 DeleteResult
+     * @param deletedPath the path that was deleted
+     * @return a successful DeleteResult
      */
     public static DeleteResult success(String deletedPath) {
         return new DeleteResult(true, ErrorType.NONE, null, deletedPath, null);
     }
 
     /**
-     * 创建失败结果
+     * Creates a failure result.
      *
-     * @param errorType 错误类型
-     * @param errorMessage 错误消息
-     * @return 失败的 DeleteResult
+     * @param errorType the type of error
+     * @param errorMessage the error message
+     * @return a failed DeleteResult
      */
     public static DeleteResult failure(ErrorType errorType, String errorMessage) {
         return new DeleteResult(false, errorType, errorMessage, null, null);
     }
 
     /**
-     * 创建失败结果（带路径信息）
+     * Creates a failure result with path information.
      *
-     * @param errorType 错误类型
-     * @param errorMessage 错误消息
-     * @param affectedPath 受影响的路径
-     * @return 失败的 DeleteResult
+     * @param errorType the type of error
+     * @param errorMessage the error message
+     * @param affectedPath the path affected by the error
+     * @return a failed DeleteResult
      */
     public static DeleteResult failure(ErrorType errorType, String errorMessage, String affectedPath) {
         return new DeleteResult(false, errorType, errorMessage, affectedPath, null);
     }
 
     /**
-     * 创建失败结果（带建议）
+     * Creates a failure result with a suggestion for resolution.
      *
-     * @param errorType 错误类型
-     * @param errorMessage 错误消息
-     * @param affectedPath 受影响的路径
-     * @param suggestion 解决建议
-     * @return 失败的 DeleteResult
+     * @param errorType the type of error
+     * @param errorMessage the error message
+     * @param affectedPath the path affected by the error
+     * @param suggestion a suggested resolution
+     * @return a failed DeleteResult
      */
     public static DeleteResult failure(ErrorType errorType, String errorMessage, String affectedPath, String suggestion) {
         return new DeleteResult(false, errorType, errorMessage, affectedPath, suggestion);
     }
 
     /**
-     * 根据异常创建失败结果
+     * Creates a failure result from an exception.
      *
-     * @param e 异常对象
-     * @param path 相关路径
-     * @return 失败的 DeleteResult
+     * @param e the exception that occurred
+     * @param path the path related to the error
+     * @return a failed DeleteResult
      */
     public static DeleteResult fromException(Exception e, String path) {
         ErrorType type = ErrorType.UNKNOWN;
@@ -131,51 +131,51 @@ public class DeleteResult {
         return new DeleteResult(false, type, message, path, suggestion);
     }
 
-    // ==================== Getter 方法 ====================
+    // ==================== Getters ====================
 
     /**
-     * 获取操作是否成功
-     * @return true 如果操作成功
+     * Returns whether the operation was successful.
+     * @return true if the operation succeeded
      */
     public boolean isSuccess() {
         return success;
     }
 
     /**
-     * 获取错误消息
-     * @return 错误消息，如果操作成功返回 null
+     * Gets the error message.
+     * @return the error message, or null if the operation succeeded
      */
     public String getErrorMessage() {
         return errorMessage;
     }
 
     /**
-     * 获取错误类型
-     * @return 错误类型枚举值
+     * Gets the error type.
+     * @return the error type enum value
      */
     public ErrorType getErrorType() {
         return errorType;
     }
 
     /**
-     * 获取受影响的路径
-     * @return 受影响的路径，可能为 null
+     * Gets the affected path.
+     * @return the affected path, may be null
      */
     public String getAffectedPath() {
         return affectedPath;
     }
 
     /**
-     * 获取解决建议
-     * @return 解决建议，可能为 null
+     * Gets the suggested resolution.
+     * @return the suggestion, may be null
      */
     public String getSuggestion() {
         return suggestion;
     }
 
     /**
-     * 获取用户友好的错误描述
-     * @return 包含错误信息和建议的完整描述
+     * Gets a user-friendly error description.
+     * @return a full description including error details and suggestions
      */
     public String getUserFriendlyMessage() {
         if (success) {

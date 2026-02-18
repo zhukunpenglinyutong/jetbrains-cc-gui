@@ -32,8 +32,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Bridge 目录解析器
- * 负责查找和管理 ai-bridge 目录（统一的 Claude 和 Codex SDK 桥接）
+ * Bridge directory resolver.
+ * Responsible for locating and managing the ai-bridge directory (unified bridge for Claude and Codex SDKs).
  */
 public class BridgeDirectoryResolver {
 
@@ -49,10 +49,10 @@ public class BridgeDirectoryResolver {
 
     private volatile File cachedSdkDir = null;
     /**
-     * 通过 setSdkDir() 手动设置的目录路径，具有最高优先级。
-     * 与 cachedSdkDir 的区别：
-     * - manuallySdkDir: 用户显式调用 setSdkDir() 设置，不会被自动发现逻辑覆盖
-     * - cachedSdkDir: 通过任何途径（手动或自动）找到的目录缓存
+     * Directory path manually set via setSdkDir(), with the highest priority.
+     * Difference from cachedSdkDir:
+     * - manuallySdkDir: Explicitly set by the user via setSdkDir(), never overridden by auto-discovery
+     * - cachedSdkDir: Cached directory found through any means (manual or automatic)
      */
     private volatile File manuallySdkDir = null;
     private final Object bridgeExtractionLock = new Object();
@@ -70,18 +70,18 @@ public class BridgeDirectoryResolver {
     private volatile CompletableFuture<Boolean> extractionReadyFuture = new CompletableFuture<>();
 
     /**
-     * 查找 claude-bridge 目录
-     * 优先级: 手动设置路径 > 配置路径 > 嵌入式路径 > 缓存路径 > Fallback
+     * Find the claude-bridge directory.
+     * Priority: manually set path > configured path > embedded path > cached path > fallback
      */
     public File findSdkDir() {
-        // ✓ 优先级 0: 手动设置路径（通过 setSdkDir() 调用，最高优先级）
+        // Priority 0: Manually set path (via setSdkDir(), highest priority)
         if (this.manuallySdkDir != null && isValidBridgeDir(this.manuallySdkDir)) {
             LOG.debug("[BridgeResolver] Using manually set path: " + this.manuallySdkDir.getAbsolutePath());
             this.cachedSdkDir = this.manuallySdkDir;
             return this.cachedSdkDir;
         }
 
-        // ✓ 优先级 1: 配置路径
+        // Priority 1: Configured path
         File configuredDir = resolveConfiguredBridgeDir();
         if (configuredDir != null) {
             LOG.debug("[BridgeResolver] Using configured path: " + configuredDir.getAbsolutePath());
@@ -89,31 +89,31 @@ public class BridgeDirectoryResolver {
             return this.cachedSdkDir;
         }
 
-        // ✓ 检查是否正在解压中（避免重复触发解压）
+        // Check if extraction is already in progress (avoid triggering it again)
         if (this.extractionState.get() == ExtractionState.IN_PROGRESS) {
             LOG.debug("[BridgeResolver] Extraction in progress, returning null");
             return null;
         }
 
-        // ✓ 优先级 2: 嵌入式 ai-bridge.zip（生产环境优先）
+        // Priority 2: Embedded ai-bridge.zip (preferred in production)
         File embeddedDir = ensureEmbeddedBridgeExtracted();
         if (embeddedDir != null) {
             LOG.info("[BridgeResolver] Using embedded path: " + embeddedDir.getAbsolutePath());
-            // 验证 node_modules 是否存在
+            // Verify that node_modules exists
             File nodeModules = new File(embeddedDir, "node_modules");
             LOG.debug("[BridgeResolver] node_modules exists: " + nodeModules.exists());
             this.cachedSdkDir = embeddedDir;
             return this.cachedSdkDir;
         }
 
-        // ✓ 再次检查：如果 ensureEmbeddedBridgeExtracted() 触发了后台解压（EDT线程场景）
-        // 此时状态会变成 IN_PROGRESS，我们应该返回 null 而不是使用 fallback 路径
+        // Re-check: if ensureEmbeddedBridgeExtracted() triggered background extraction (EDT thread scenario),
+        // the state will be IN_PROGRESS, and we should return null instead of using a fallback path
         if (this.extractionState.get() == ExtractionState.IN_PROGRESS) {
             LOG.debug("[BridgeResolver] Background extraction started, returning null to avoid incorrect fallback path");
             return null;
         }
 
-        // ✓ 优先级 3: 使用缓存路径（如果存在且有效）
+        // Priority 3: Use cached path (if it exists and is valid)
         if (this.cachedSdkDir != null && isValidBridgeDir(this.cachedSdkDir)) {
             LOG.debug("[BridgeResolver] Using cached path: " + this.cachedSdkDir.getAbsolutePath());
             return this.cachedSdkDir;
@@ -121,15 +121,15 @@ public class BridgeDirectoryResolver {
 
         LOG.debug("[BridgeResolver] Embedded path not found, trying fallback search...");
 
-        // ✓ 优先级 4: Fallback（开发环境）
-        // 可能的位置列表
+        // Priority 4: Fallback (development environment)
+        // List of possible locations
         List<File> possibleDirs = new ArrayList<>();
 
-        // 1. 当前工作目录
+        // 1. Current working directory
         File currentDir = new File(System.getProperty("user.dir"));
         addCandidate(possibleDirs, new File(currentDir, SDK_DIR_NAME));
 
-        // 2. 项目根目录（假设当前目录可能在子目录中）
+        // 2. Project root directory (the current directory may be in a subdirectory)
         File parent = currentDir.getParentFile();
         while (parent != null && parent.exists()) {
             boolean hasIdeaDir = new File(parent, ".idea").exists();
@@ -146,13 +146,13 @@ public class BridgeDirectoryResolver {
             parent = parent.getParentFile();
         }
 
-        // 3. 插件目录及 sandbox
+        // 3. Plugin directory and sandbox
         addPluginCandidates(possibleDirs);
 
-        // 4. 基于类路径推断
+        // 4. Infer from classpath
         addClasspathCandidates(possibleDirs);
 
-        // 查找第一个存在的目录
+        // Find the first valid directory
         for (File dir : possibleDirs) {
             if (isValidBridgeDir(dir)) {
                 this.cachedSdkDir = dir;
@@ -163,18 +163,18 @@ public class BridgeDirectoryResolver {
             }
         }
 
-        // 如果都找不到，打印调试信息
+        // If none found, print debug info
         LOG.warn("[BridgeResolver] Cannot find ai-bridge directory, tried locations:");
         for (File dir : possibleDirs) {
             LOG.warn("  - " + dir.getAbsolutePath() + " (exists: " + dir.exists() + ")");
         }
 
-        // 不返回不存在的默认路径，这会导致 ProcessBuilder 使用错误的工作目录
-        // 例如当 user.dir 为 "/" 时，会产生 "/ai-bridge" 这个无效路径
+        // Do not return a non-existent default path, as it would cause ProcessBuilder to use an incorrect working directory.
+        // For example, when user.dir is "/", it would produce the invalid path "/ai-bridge".
         LOG.error("[BridgeResolver] Failed to find valid ai-bridge directory. " +
                 "Please ensure the plugin is properly installed or set CLAUDE_BRIDGE_PATH environment variable.");
 
-        // 检查是否是开发环境（源码目录缺少 node_modules）
+        // Check if this is a development environment (source directory missing node_modules)
         for (File dir : possibleDirs) {
             if (dir.exists() && dir.isDirectory()) {
                 File nodeModules = new File(dir, "node_modules");
@@ -192,7 +192,7 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * 解析配置的 Bridge 目录
+     * Resolve the configured bridge directory.
      */
     private File resolveConfiguredBridgeDir() {
         File fromProperty = tryResolveConfiguredPath(
@@ -277,11 +277,11 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * 验证目录是否为有效的 bridge 目录
-     * 检查核心脚本和 node_modules 存在性
+     * Validate whether a directory is a valid bridge directory.
+     * Checks for the existence of the core script and node_modules.
      *
-     * 注意：@anthropic-ai/claude-agent-sdk 等 AI SDK 不在 ai-bridge 中打包，
-     * 而是从 ~/.codemoss/dependencies/ 动态加载，因此不检查 SDK 存在性
+     * Note: AI SDKs such as @anthropic-ai/claude-agent-sdk are not bundled in ai-bridge.
+     * They are loaded dynamically from ~/.codemoss/dependencies/, so SDK presence is not checked here.
      */
     public boolean isValidBridgeDir(File dir) {
         if (dir == null) {
@@ -291,22 +291,22 @@ public class BridgeDirectoryResolver {
             return false;
         }
 
-        // 检查核心脚本
+        // Check for the core script
         File scriptFile = new File(dir, NODE_SCRIPT);
         if (!scriptFile.exists()) {
             LOG.debug("[BridgeResolver] Core script not found: " + scriptFile.getAbsolutePath());
             return false;
         }
 
-        // 检查 node_modules 存在（包含 sql.js 等桥接层依赖）
+        // Check that node_modules exists (contains bridge-layer dependencies like sql.js)
         File nodeModules = new File(dir, "node_modules");
         if (!nodeModules.exists() || !nodeModules.isDirectory()) {
             LOG.debug("[BridgeResolver] node_modules not found: " + dir.getAbsolutePath());
             return false;
         }
 
-        // AI SDK（@anthropic-ai/claude-agent-sdk, @openai/codex-sdk 等）
-        // 从 ~/.codemoss/dependencies/ 动态加载，不需要在 ai-bridge 中检查
+        // AI SDKs (@anthropic-ai/claude-agent-sdk, @openai/codex-sdk, etc.)
+        // are loaded dynamically from ~/.codemoss/dependencies/, no need to check within ai-bridge
 
         return true;
     }
@@ -337,11 +337,11 @@ public class BridgeDirectoryResolver {
             if (descriptor == null) {
                 LOG.debug("[BridgeResolver] Cannot get plugin descriptor by PluginId: " + PlatformUtils.getPluginId());
 
-                // 尝试通过遍历所有插件来查找
+                // Try to find by iterating through all plugins
                 for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
                     String id = plugin.getPluginId().getIdString();
                     String name = plugin.getName();
-                    // 匹配插件 ID 或名称
+                    // Match by plugin ID or name
                     if (id.contains("claude") || id.contains("Claude") ||
                         (name != null && (name.contains("Claude") || name.contains("claude")))) {
                         LOG.debug("[BridgeResolver] Found candidate plugin: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
@@ -368,7 +368,7 @@ public class BridgeDirectoryResolver {
             LOG.debug("[BridgeResolver] Looking for archive: " + archiveFile.getAbsolutePath() + " (exists: " + archiveFile.exists() + ")");
 
             if (!archiveFile.exists()) {
-                // 尝试在 lib 目录下查找
+                // Try searching in the lib directory
                 File libDir = new File(pluginDir, "lib");
                 if (libDir.exists()) {
                     LOG.debug("[BridgeResolver] Checking lib directory: " + libDir.getAbsolutePath());
@@ -380,10 +380,10 @@ public class BridgeDirectoryResolver {
                     }
                 }
 
-                // 如果在插件目录或 lib 下找不到，尝试查找常见的 sandbox 顶级 plugins 目录和 system/config 下的 plugins
+                // If not found in plugin dir or lib, try common sandbox top-level plugins directories and plugins under system/config
                 List<File> fallbackCandidates = new ArrayList<>();
                 try {
-                    // 向上查找祖先，寻找可能的 idea-sandbox 根目录或包含顶级 plugins 的目录
+                    // Walk up ancestors to find a potential idea-sandbox root or top-level plugins directory
                     File ancestor = pluginDir;
                     int climbs = 0;
                     while (climbs < 6) {
@@ -415,7 +415,7 @@ public class BridgeDirectoryResolver {
                     // ignore fallback discovery errors
                 }
 
-                // 打印并尝试这些候选路径
+                // Log and try these candidate paths
                 for (File f : fallbackCandidates) {
                     LOG.debug("[BridgeResolver] Trying candidate path: " + f.getAbsolutePath() + " (exists: " + f.exists() + ")");
                     if (f.exists()) {
@@ -448,7 +448,7 @@ public class BridgeDirectoryResolver {
 
             if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
                 this.cachedSdkDir = extractedDir;
-                // 确保通知等待者，即使目录已经存在
+                // Ensure waiters are notified even if the directory already exists
                 this.extractionState.compareAndSet(ExtractionState.NOT_STARTED, ExtractionState.COMPLETED);
                 if (!this.extractionReadyFuture.isDone()) {
                     this.extractionReadyFuture.complete(true);
@@ -459,7 +459,7 @@ public class BridgeDirectoryResolver {
             synchronized (this.bridgeExtractionLock) {
                 if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
                     this.cachedSdkDir = extractedDir;
-                    // 确保通知等待者
+                    // Ensure waiters are notified
                     this.extractionState.compareAndSet(ExtractionState.NOT_STARTED, ExtractionState.COMPLETED);
                     if (!this.extractionReadyFuture.isDone()) {
                         this.extractionReadyFuture.complete(true);
@@ -479,7 +479,7 @@ public class BridgeDirectoryResolver {
                 if (currentState == ExtractionState.COMPLETED && isValidBridgeDir(extractedDir)) {
                     // Already extracted and valid
                     this.cachedSdkDir = extractedDir;
-                    // 确保通知等待者
+                    // Ensure waiters are notified
                     if (!this.extractionReadyFuture.isDone()) {
                         this.extractionReadyFuture.complete(true);
                     }
@@ -943,11 +943,11 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * 手动设置 claude-bridge 目录路径.
-     * 此方法设置的路径具有最高优先级，会覆盖配置路径和嵌入式路径。
-     * 设置后，findSdkDir() 将优先返回此路径。
+     * Manually sets the claude-bridge directory path.
+     * This path has the highest priority and overrides configured and embedded paths.
+     * Once set, findSdkDir() will preferentially return this path.
      *
-     * @param path 目录路径
+     * @param path the directory path
      */
     public void setSdkDir(String path) {
         this.manuallySdkDir = new File(path);
@@ -956,7 +956,7 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * 获取当前使用的 claude-bridge 目录.
+     * Gets the currently used claude-bridge directory.
      */
     public File getSdkDir() {
         if (this.cachedSdkDir == null) {
@@ -966,8 +966,8 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * 清除所有缓存，包括手动设置的路径和自动发现的缓存。
-     * 调用后，下次 findSdkDir() 将重新执行完整的路径发现逻辑。
+     * Clears all caches, including manually set paths and auto-discovered caches.
+     * After calling this, the next findSdkDir() will re-execute the full path discovery logic.
      */
     public void clearCache() {
         this.cachedSdkDir = null;

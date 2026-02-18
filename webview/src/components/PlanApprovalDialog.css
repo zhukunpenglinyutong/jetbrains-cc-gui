@@ -129,8 +129,15 @@
 
 /* 收起模式样式 */
 .permission-dialog-overlay.collapsed-mode {
+  background: transparent;
+  pointer-events: none;  /* 让 overlay 不拦截点击事件 */
   align-items: flex-end;
   padding-bottom: 20px;
+}
+
+/* 收起模式下，对话框本身恢复点击响应 */
+.permission-dialog-overlay.collapsed-mode .plan-approval-dialog-collapsed {
+  pointer-events: auto;
 }
 
 .plan-approval-dialog-collapsed {

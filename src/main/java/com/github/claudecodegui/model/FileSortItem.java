@@ -3,7 +3,7 @@ package com.github.claudecodegui.model;
 import com.google.gson.JsonObject;
 
 /**
- * 排序辅助类
+ * Helper class for file sorting.
  */
 public class FileSortItem {
 
@@ -13,7 +13,7 @@ public class FileSortItem {
     public final boolean isDir;
     public final String name;
 
-    // 懒加载字段
+    // Lazily initialized fields
     private int depth = -1;
     private String parentPath = null;
 

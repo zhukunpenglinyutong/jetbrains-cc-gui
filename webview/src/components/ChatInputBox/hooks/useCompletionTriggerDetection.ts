@@ -25,11 +25,12 @@ interface UseCompletionTriggerDetectionParams {
   fileCompletion: CompletionDropdownState;
   commandCompletion: CompletionDropdownState;
   agentCompletion: CompletionDropdownState;
+  promptCompletion: CompletionDropdownState;
 }
 
 /**
  * useCompletionTriggerDetection - Completion trigger detection hook
- * Handles detection and triggering of @ / / # completion menus
+ * Handles detection and triggering of @ / / # / ! completion menus
  */
 export function useCompletionTriggerDetection({
   editableRef,
@@ -39,6 +40,7 @@ export function useCompletionTriggerDetection({
   fileCompletion,
   commandCompletion,
   agentCompletion,
+  promptCompletion,
 }: UseCompletionTriggerDetectionParams) {
   const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
 
@@ -63,6 +65,7 @@ export function useCompletionTriggerDetection({
       fileCompletion.close();
       commandCompletion.close();
       agentCompletion.close();
+      promptCompletion.close();
       return;
     }
 
@@ -75,6 +78,7 @@ export function useCompletionTriggerDetection({
       fileCompletion.close();
       commandCompletion.close();
       agentCompletion.close();
+      promptCompletion.close();
       timer.mark('skip-large-text');
       timer.end();
       return;
@@ -84,11 +88,13 @@ export function useCompletionTriggerDetection({
     const hasAtSymbol = text.includes('@');
     const hasSlashSymbol = text.includes('/');
     const hasHashSymbol = text.includes('#');
+    const hasExclamationSymbol = text.includes('!');
 
-    if (!hasAtSymbol && !hasSlashSymbol && !hasHashSymbol) {
+    if (!hasAtSymbol && !hasSlashSymbol && !hasHashSymbol && !hasExclamationSymbol) {
       fileCompletion.close();
       commandCompletion.close();
       agentCompletion.close();
+      promptCompletion.close();
       timer.end();
       return;
     }
@@ -106,6 +112,7 @@ export function useCompletionTriggerDetection({
       fileCompletion.close();
       commandCompletion.close();
       agentCompletion.close();
+      promptCompletion.close();
       timer.end();
       return;
     }
@@ -121,6 +128,7 @@ export function useCompletionTriggerDetection({
     if (trigger.trigger === '@') {
       commandCompletion.close();
       agentCompletion.close();
+      promptCompletion.close();
       if (!fileCompletion.isOpen) {
         fileCompletion.open(position, trigger);
         fileCompletion.updateQuery(trigger);
@@ -130,6 +138,7 @@ export function useCompletionTriggerDetection({
     } else if (trigger.trigger === '/') {
       fileCompletion.close();
       agentCompletion.close();
+      promptCompletion.close();
       if (!commandCompletion.isOpen) {
         commandCompletion.open(position, trigger);
         commandCompletion.updateQuery(trigger);
@@ -139,11 +148,22 @@ export function useCompletionTriggerDetection({
     } else if (trigger.trigger === '#') {
       fileCompletion.close();
       commandCompletion.close();
+      promptCompletion.close();
       if (!agentCompletion.isOpen) {
         agentCompletion.open(position, trigger);
         agentCompletion.updateQuery(trigger);
       } else {
         agentCompletion.updateQuery(trigger);
+      }
+    } else if (trigger.trigger === '!') {
+      fileCompletion.close();
+      commandCompletion.close();
+      agentCompletion.close();
+      if (!promptCompletion.isOpen) {
+        promptCompletion.open(position, trigger);
+        promptCompletion.updateQuery(trigger);
+      } else {
+        promptCompletion.updateQuery(trigger);
       }
     }
 
@@ -159,6 +179,7 @@ export function useCompletionTriggerDetection({
     fileCompletion,
     commandCompletion,
     agentCompletion,
+    promptCompletion,
   ]);
 
   // Create debounced version of detectAndTriggerCompletion

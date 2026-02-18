@@ -23,8 +23,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * SDK 依赖管理器
- * 负责管理 ~/.codemoss/dependencies/ 目录下的 SDK 安装
+ * SDK dependency manager.
+ * Manages SDK installations under the ~/.codemoss/dependencies/ directory.
  */
 public class DependencyManager {
 
@@ -50,7 +50,7 @@ public class DependencyManager {
     }
 
     /**
-     * 获取依赖目录根路径 (~/.codemoss/dependencies/)
+     * Returns the root dependencies directory path (~/.codemoss/dependencies/).
      */
     public Path getDependenciesDir() {
         String home = System.getProperty("user.home");
@@ -58,21 +58,21 @@ public class DependencyManager {
     }
 
     /**
-     * 获取指定 SDK 的安装目录
+     * Returns the installation directory for a given SDK.
      */
     public Path getSdkDir(String sdkId) {
         return getDependenciesDir().resolve(sdkId);
     }
 
     /**
-     * 获取指定 SDK 的 node_modules 目录
+     * Returns the node_modules directory for a given SDK.
      */
     public Path getSdkNodeModulesDir(String sdkId) {
         return getSdkDir(sdkId).resolve("node_modules");
     }
 
     /**
-     * 检查 SDK 是否已安装
+     * Checks whether an SDK is installed.
      */
     public boolean isInstalled(String sdkId) {
         SdkDefinition sdk = SdkDefinition.fromId(sdkId);
@@ -80,14 +80,14 @@ public class DependencyManager {
             return false;
         }
 
-        // 检查主包是否存在于 node_modules 中
+        // Check if the main package exists in node_modules
         Path packageDir = getPackageDir(sdkId, sdk.getNpmPackage());
         if (!Files.exists(packageDir)) {
             return false;
         }
 
-        // 如果包存在但没有 .installed 标记文件，自动创建标记文件
-        // 这支持用户手动运行 npm install 的情况
+        // If the package exists but the .installed marker file is missing, create it automatically.
+        // This handles the case where the user ran npm install manually.
         Path sdkDir = getSdkDir(sdkId);
         Path markerFile = sdkDir.resolve(INSTALLED_MARKER);
         if (!Files.exists(markerFile)) {
@@ -104,7 +104,7 @@ public class DependencyManager {
     }
 
     /**
-     * 从 package.json 读取版本（内部使用，不依赖 isInstalled）
+     * Reads the version from package.json (internal use, does not depend on isInstalled).
      */
     private String getInstalledVersionFromPackage(String sdkId, String npmPackage) {
         Path packageJson = getPackageDir(sdkId, npmPackage).resolve("package.json");
@@ -125,7 +125,7 @@ public class DependencyManager {
     }
 
     /**
-     * 获取包在 node_modules 中的路径
+     * Returns the path of a package within node_modules.
      */
     private Path getPackageDir(String sdkId, String npmPackage) {
         // @scope/package -> node_modules/@scope/package
@@ -139,7 +139,7 @@ public class DependencyManager {
     }
 
     /**
-     * 获取已安装的版本
+     * Returns the installed version.
      */
     public String getInstalledVersion(String sdkId) {
         SdkDefinition sdk = SdkDefinition.fromId(sdkId);
@@ -151,7 +151,7 @@ public class DependencyManager {
     }
 
     /**
-     * 从 NPM Registry 获取最新版本
+     * Fetches the latest version from the NPM Registry.
      */
     public String getLatestVersion(String sdkId) {
         SdkDefinition sdk = SdkDefinition.fromId(sdkId);
@@ -196,7 +196,7 @@ public class DependencyManager {
     }
 
     /**
-     * 检查是否有可用更新
+     * Checks whether an update is available.
      */
     public UpdateInfo checkForUpdates(String sdkId) {
         SdkDefinition sdk = SdkDefinition.fromId(sdkId);
@@ -226,14 +226,14 @@ public class DependencyManager {
     }
 
     /**
-     * 安装 SDK（异步）
+     * Installs an SDK (asynchronous).
      */
     public CompletableFuture<InstallResult> installSdk(String sdkId, Consumer<String> logCallback) {
         return CompletableFuture.supplyAsync(() -> installSdkSync(sdkId, logCallback));
     }
 
     /**
-     * 安装 SDK（同步）
+     * Installs an SDK (synchronous).
      */
     public InstallResult installSdkSync(String sdkId, Consumer<String> logCallback) {
         SdkDefinition sdk = SdkDefinition.fromId(sdkId);
@@ -252,7 +252,7 @@ public class DependencyManager {
         try {
             log.accept("Starting installation of " + sdk.getDisplayName() + "...");
 
-            // 1. 检查 Node.js 环境
+            // 1. Check the Node.js environment
             String nodePath = nodeDetector.findNodeExecutable();
             if (nodePath == null || "node".equals(nodePath)) {
                 String version = nodeDetector.verifyNodePath("node");
@@ -267,10 +267,10 @@ public class DependencyManager {
             String npmPath = getNpmPath(nodePath);
             log.accept("Using npm: " + npmPath);
 
-            // 2. 创建 SDK 目录
+            // 2. Create the SDK directory
             Path sdkDir = getSdkDir(sdkId);
 
-            // 🔧 路径安全校验：确保 sdkDir 在预期的依赖目录下，防止路径遍历攻击
+            // Path safety check: ensure sdkDir is within the expected dependencies directory to prevent path traversal attacks
             Path normalizedSdkDir = sdkDir.normalize().toAbsolutePath();
             Path normalizedDepsDir = getDependenciesDir().normalize().toAbsolutePath();
             if (!normalizedSdkDir.startsWith(normalizedDepsDir)) {
@@ -282,16 +282,16 @@ public class DependencyManager {
             Files.createDirectories(sdkDir);
             log.accept("Created directory: " + sdkDir);
 
-            // 3. 创建 package.json
+            // 3. Create package.json
             createPackageJson(sdkDir, sdk);
             log.accept("Created package.json");
 
-            // 4. 预检查 npm 缓存权限
+            // 4. Pre-check npm cache permissions
             log.accept("Checking npm cache permissions...");
             if (!NpmPermissionHelper.checkCachePermission()) {
                 log.accept("⚠️ Warning: npm cache may have permission issues, attempting to fix...");
 
-                // 尝试清理缓存
+                // Try to clean the cache
                 if (NpmPermissionHelper.cleanNpmCache(npmPath)) {
                     log.accept("✓ npm cache cleaned successfully");
                 } else if (NpmPermissionHelper.forceDeleteCache()) {
@@ -301,7 +301,7 @@ public class DependencyManager {
                 }
             }
 
-            // 5. 执行 npm install（带重试机制）
+            // 5. Run npm install (with retry mechanism)
             List<String> packages = sdk.getAllPackages();
             int maxRetries = 2;
             InstallResult lastResult = null;
@@ -324,7 +324,7 @@ public class DependencyManager {
 
                 Process process = pb.start();
 
-                // 实时读取输出并收集日志
+                // Read output in real time and collect logs
                 StringBuilder installLogs = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -340,37 +340,37 @@ public class DependencyManager {
                     process.destroyForcibly();
                     lastResult = InstallResult.failure(sdkId,
                         "Installation timed out (3 minutes)", logs.toString());
-                    continue; // 尝试重试
+                    continue; // Retry
                 }
 
                 int exitCode = process.exitValue();
                 if (exitCode == 0) {
-                    // 安装成功，跳到后续步骤
+                    // Installation succeeded, proceed to next steps
                     break;
                 }
 
-                // 安装失败，记录结果
+                // Installation failed, record the result
                 String logsStr = logs.toString();
                 lastResult = InstallResult.failure(sdkId,
                     "npm install failed with exit code: " + exitCode, logsStr);
 
-                // 如果是最后一次尝试，不再重试
+                // If this is the last attempt, do not retry
                 if (attempt == maxRetries) {
-                    // 添加错误解决方案提示
+                    // Append troubleshooting suggestions
                     String solution = NpmPermissionHelper.generateErrorSolution(logsStr);
                     return InstallResult.failure(sdkId,
                         lastResult.getErrorMessage() + solution,
                         lastResult.getLogs());
                 }
 
-                // 检测错误类型并尝试修复
+                // Detect error type and attempt to fix
                 boolean fixed = false;
                 if (NpmPermissionHelper.hasPermissionError(logsStr) ||
                     NpmPermissionHelper.hasCacheError(logsStr)) {
 
                     log.accept("⚠️ Detected npm cache/permission error, attempting to fix...");
 
-                    // 策略1: 清理缓存
+                    // Strategy 1: Clean the cache
                     if (NpmPermissionHelper.cleanNpmCache(npmPath)) {
                         log.accept("✓ Cache cleaned, will retry");
                         fixed = true;
@@ -379,7 +379,7 @@ public class DependencyManager {
                         fixed = true;
                     }
 
-                    // 策略2: 修复权限（Unix only）
+                    // Strategy 2: Fix permissions (Unix only)
                     if (!fixed && !PlatformUtils.isWindows()) {
                         log.accept("Attempting to fix cache ownership (may require password)...");
                         if (NpmPermissionHelper.fixCacheOwnership()) {
@@ -393,7 +393,7 @@ public class DependencyManager {
                     log.accept("⚠️ Could not auto-fix the issue, will retry with --force flag");
                 }
 
-                // 短暂延迟后重试
+                // Brief delay before retrying
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException ie) {
@@ -402,12 +402,12 @@ public class DependencyManager {
                 }
             }
 
-            // 6. 创建安装标记文件
+            // 6. Create the installation marker file
             String installedVersion = getInstalledVersion(sdkId);
             Path markerFile = sdkDir.resolve(INSTALLED_MARKER);
             Files.writeString(markerFile, installedVersion != null ? installedVersion : "unknown");
 
-            // 7. 更新 manifest
+            // 7. Update the manifest
             updateManifest(sdkId, installedVersion);
 
             log.accept("Installation completed successfully!");
@@ -423,8 +423,8 @@ public class DependencyManager {
     }
 
     /**
-     * 卸载 SDK
-     * @return true 如果完全卸载成功，false 如果有部分文件删除失败
+     * Uninstalls an SDK.
+     * @return true if the uninstallation completed fully, false if some files failed to delete
      */
     public boolean uninstallSdk(String sdkId) {
         try {
@@ -433,20 +433,20 @@ public class DependencyManager {
                 return true;
             }
 
-            // 🔧 递归删除目录，并获取删除失败的路径列表
+            // Recursively delete the directory and collect paths that failed to delete
             List<Path> failedPaths = deleteDirectory(sdkDir);
 
-            // 更新 manifest
+            // Update the manifest
             removeFromManifest(sdkId);
 
             if (failedPaths.isEmpty()) {
                 LOG.info("[DependencyManager] Uninstalled SDK completely: " + sdkId);
                 return true;
             } else {
-                // 🔧 部分文件删除失败，记录警告但仍返回成功（manifest 已更新）
+                // Some files failed to delete; log a warning but still return success (manifest is already updated)
                 LOG.warn("[DependencyManager] Uninstalled SDK with " + failedPaths.size() +
                     " files failed to delete: " + sdkId);
-                return true; // 仍然返回 true，因为 SDK 功能上已卸载
+                return true; // Still return true because the SDK is functionally uninstalled
             }
         } catch (Exception e) {
             LOG.error("[DependencyManager] Failed to uninstall SDK: " + e.getMessage(), e);
@@ -455,7 +455,7 @@ public class DependencyManager {
     }
 
     /**
-     * 获取所有 SDK 的状态
+     * Returns the status of all SDKs.
      */
     public JsonObject getAllSdkStatus() {
         JsonObject result = new JsonObject();
@@ -469,13 +469,13 @@ public class DependencyManager {
             status.addProperty("description", sdk.getDescription());
             status.addProperty("npmPackage", sdk.getNpmPackage());
             status.addProperty("installed", installed);
-            // 添加 status 字段供前端使用
+            // Add the status field for frontend consumption
             status.addProperty("status", installed ? "installed" : "not_installed");
 
             if (installed) {
                 String version = getInstalledVersion(sdk.getId());
                 status.addProperty("installedVersion", version);
-                status.addProperty("version", version); // 同时添加 version 字段
+                status.addProperty("version", version); // Also add the version field
             }
 
             result.add(sdk.getId(), status);
@@ -485,7 +485,7 @@ public class DependencyManager {
     }
 
     /**
-     * 检查 Node.js 环境是否可用
+     * Checks whether the Node.js environment is available.
      */
     public boolean checkNodeEnvironment() {
         try {
@@ -502,15 +502,15 @@ public class DependencyManager {
         }
     }
 
-    // ==================== 私有方法 ====================
+    // ==================== Private methods ====================
 
     /**
-     * 获取 npm 路径（基于 node 路径）
+     * Resolves the npm path based on the node path.
      */
     private String getNpmPath(String nodePath) {
         String npmName = PlatformUtils.isWindows() ? "npm.cmd" : "npm";
 
-        // 1. 尝试从 Node.js 同目录查找
+        // 1. Try to find npm in the same directory as Node.js
         if (nodePath != null && !"node".equals(nodePath)) {
             File nodeFile = new File(nodePath);
             String dir = nodeFile.getParent();
@@ -522,7 +522,7 @@ public class DependencyManager {
             }
         }
 
-        // 2. Windows: 尝试从环境变量 PATH 中查找 npm.cmd 的完整路径
+        // 2. Windows: try to find the full path to npm.cmd from the PATH environment variable
         if (PlatformUtils.isWindows()) {
             String pathEnv = System.getenv("PATH");
             if (pathEnv != null) {
@@ -536,12 +536,12 @@ public class DependencyManager {
             }
         }
 
-        // 3. 回退到简单命令名（Unix 通常可以工作）
+        // 3. Fall back to the bare command name (usually works on Unix)
         return PlatformUtils.isWindows() ? npmName : "npm";
     }
 
     /**
-     * 配置进程环境变量
+     * Configures the process environment variables.
      */
     private void configureProcessEnvironment(ProcessBuilder pb) {
         String nodePath = nodeDetector.findNodeExecutable();
@@ -549,7 +549,7 @@ public class DependencyManager {
     }
 
     /**
-     * 创建 package.json
+     * Creates the package.json file.
      */
     private void createPackageJson(Path sdkDir, SdkDefinition sdk) throws IOException {
         JsonObject packageJson = new JsonObject();
@@ -564,7 +564,7 @@ public class DependencyManager {
     }
 
     /**
-     * 更新 manifest.json
+     * Updates the manifest.json file.
      */
     private void updateManifest(String sdkId, String version) {
         try {
@@ -593,7 +593,7 @@ public class DependencyManager {
     }
 
     /**
-     * 从 manifest.json 中移除 SDK
+     * Removes an SDK from manifest.json.
      */
     private void removeFromManifest(String sdkId) {
         try {
@@ -618,8 +618,8 @@ public class DependencyManager {
     }
 
     /**
-     * 递归删除目录
-     * @return 删除失败的路径列表（空列表表示完全成功）
+     * Recursively deletes a directory.
+     * @return a list of paths that failed to delete (empty list means complete success)
      */
     private List<Path> deleteDirectory(Path dir) throws IOException {
         List<Path> failedPaths = new ArrayList<>();
@@ -628,9 +628,9 @@ public class DependencyManager {
             return failedPaths;
         }
 
-        // 🔧 收集所有删除失败的路径，而不是静默忽略
+        // Collect all paths that failed to delete instead of silently ignoring them
         Files.walk(dir)
-            .sorted((a, b) -> b.compareTo(a)) // 反向排序，先删除子文件
+            .sorted((a, b) -> b.compareTo(a)) // Reverse sort to delete children first
             .forEach(path -> {
                 try {
                     Files.delete(path);
@@ -648,15 +648,15 @@ public class DependencyManager {
     }
 
     /**
-     * 比较版本号
-     * @return 负数表示 v1 < v2，0 表示相等，正数表示 v1 > v2
+     * Compares two version strings.
+     * @return negative if v1 < v2, 0 if equal, positive if v1 > v2
      */
     private int compareVersions(String v1, String v2) {
         if (v1 == null || v2 == null) {
             return 0;
         }
 
-        // 移除前缀 v
+        // Strip the leading 'v' prefix
         v1 = v1.startsWith("v") ? v1.substring(1) : v1;
         v2 = v2.startsWith("v") ? v2.substring(1) : v2;
 
@@ -677,10 +677,10 @@ public class DependencyManager {
     }
 
     /**
-     * 解析版本号部分
+     * Parses a single segment of a version string.
      */
     private int parseVersionPart(String part) {
-        // 移除非数字后缀（如 -beta, -alpha）
+        // Strip non-numeric suffixes (e.g. -beta, -alpha)
         Pattern pattern = Pattern.compile("^(\\d+)");
         Matcher matcher = pattern.matcher(part);
         if (matcher.find()) {

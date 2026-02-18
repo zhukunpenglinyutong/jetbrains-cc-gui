@@ -11,24 +11,24 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
 /**
- * Shell 命令执行工具类
- * 封装进程执行、超时处理和输出过滤的通用逻辑
+ * Shell command execution utility.
+ * Encapsulates common logic for process execution, timeout handling, and output filtering.
  */
 public final class ShellExecutor {
 
     private static final Logger LOG = Logger.getInstance(ShellExecutor.class);
 
     /**
-     * 默认进程超时时间（秒）
+     * Default process timeout in seconds.
      */
     public static final int DEFAULT_TIMEOUT_SECONDS = 5;
 
     private ShellExecutor() {
-        // 工具类不允许实例化
+        // Utility class, do not instantiate
     }
 
     /**
-     * 执行结果
+     * Execution result.
      */
     public static class ExecutionResult {
         private final boolean success;
@@ -73,26 +73,26 @@ public final class ShellExecutor {
     }
 
     /**
-     * 执行 Shell 命令并返回第一行有效输出
+     * Execute a shell command and return the first valid output line.
      *
-     * @param command      命令列表
-     * @param lineFilter   行过滤器，返回 true 表示该行有效
-     * @param logPrefix    日志前缀
-     * @return 执行结果
+     * @param command    the command as a list of arguments
+     * @param lineFilter line filter; returns true if the line is valid
+     * @param logPrefix  prefix for log messages
+     * @return the execution result
      */
     public static ExecutionResult execute(List<String> command, Predicate<String> lineFilter, String logPrefix) {
         return execute(command, lineFilter, logPrefix, DEFAULT_TIMEOUT_SECONDS, true);
     }
 
     /**
-     * 执行 Shell 命令并返回结果
+     * Execute a shell command and return the result.
      *
-     * @param command          命令列表
-     * @param lineFilter       行过滤器，返回 true 表示该行有效
-     * @param logPrefix        日志前缀
-     * @param timeoutSeconds   超时时间（秒）
-     * @param useInteractive   是否使用交互式 shell 配置（设置 TERM=dumb）
-     * @return 执行结果
+     * @param command          the command as a list of arguments
+     * @param lineFilter       line filter; returns true if the line is valid
+     * @param logPrefix        prefix for log messages
+     * @param timeoutSeconds   timeout in seconds
+     * @param useInteractive   whether to use interactive shell configuration (sets TERM=dumb)
+     * @return the execution result
      */
     public static ExecutionResult execute(
             List<String> command,
@@ -104,22 +104,22 @@ public final class ShellExecutor {
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
             if (useInteractive) {
-                // 设置 TERM=dumb 抑制交互式 shell 的额外输出（如颜色代码、提示符等）
+                // Set TERM=dumb to suppress extra output from interactive shells (color codes, prompts, etc.)
                 pb.environment().put("TERM", "dumb");
             }
             pb.redirectErrorStream(true);
 
             Process process = pb.start();
 
-            // 先等待进程完成（带超时），确保不会因 readLine 阻塞
+            // Wait for the process to complete (with timeout) to avoid blocking on readLine
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
-                LOG.debug(logPrefix + " 命令超时");
+                LOG.debug(logPrefix + " command timed out");
                 process.destroyForcibly();
                 return ExecutionResult.timeout();
             }
 
-            // 进程已完成，现在可以安全地读取输出
+            // Process has completed, now safe to read output
             List<String> allLines = new ArrayList<>();
             List<String> filteredLines = new ArrayList<>();
             String validOutput = null;
@@ -133,23 +133,23 @@ public final class ShellExecutor {
 
                     if (lineFilter.test(trimmed)) {
                         validOutput = trimmed;
-                        // 找到第一个有效行就返回
+                        // Return on the first valid line
                         break;
                     } else if (!trimmed.isEmpty()) {
-                        // 记录被过滤的非空行，便于调试
+                        // Record filtered non-empty lines for debugging
                         filteredLines.add(trimmed);
                     }
                 }
 
-                // 读取剩余行
+                // Read remaining lines
                 while ((line = reader.readLine()) != null) {
                     allLines.add(line.trim());
                 }
             }
 
-            // DEBUG 级别记录被过滤的行
+            // Log filtered lines at DEBUG level
             if (!filteredLines.isEmpty() && LOG.isDebugEnabled()) {
-                LOG.debug(logPrefix + " 过滤掉的行: " + filteredLines);
+                LOG.debug(logPrefix + " filtered lines: " + filteredLines);
             }
 
             if (validOutput != null) {
@@ -158,19 +158,19 @@ public final class ShellExecutor {
 
             return ExecutionResult.failure();
         } catch (Exception e) {
-            LOG.debug(logPrefix + " 执行失败: " + e.getMessage());
+            LOG.debug(logPrefix + " execution failed: " + e.getMessage());
             return ExecutionResult.failure();
         }
     }
 
     /**
-     * 执行 Shell 命令并返回最后一个有效输出（用于环境变量获取）
+     * Execute a shell command and return the last valid output line (useful for retrieving environment variables).
      *
-     * @param command          命令列表
-     * @param lineFilter       行过滤器，返回 true 表示该行有效
-     * @param logPrefix        日志前缀
-     * @param timeoutSeconds   超时时间（秒）
-     * @return 执行结果
+     * @param command          the command as a list of arguments
+     * @param lineFilter       line filter; returns true if the line is valid
+     * @param logPrefix        prefix for log messages
+     * @param timeoutSeconds   timeout in seconds
+     * @return the execution result
      */
     public static ExecutionResult executeAndGetLast(
             List<String> command,
@@ -180,21 +180,21 @@ public final class ShellExecutor {
     ) {
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
-            // 设置 TERM=dumb 抑制交互式 shell 的额外输出
+            // Set TERM=dumb to suppress extra output from interactive shells
             pb.environment().put("TERM", "dumb");
             pb.redirectErrorStream(true);
 
             Process process = pb.start();
 
-            // 先等待进程完成（带超时）
+            // Wait for the process to complete (with timeout)
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
-                LOG.debug(logPrefix + " 命令超时");
+                LOG.debug(logPrefix + " command timed out");
                 process.destroyForcibly();
                 return ExecutionResult.timeout();
             }
 
-            // 读取所有输出，保留最后一个有效值
+            // Read all output, keeping the last valid value
             List<String> allLines = new ArrayList<>();
             List<String> filteredLines = new ArrayList<>();
             String lastValidValue = null;
@@ -214,9 +214,9 @@ public final class ShellExecutor {
                 }
             }
 
-            // DEBUG 级别记录被过滤的行
+            // Log filtered lines at DEBUG level
             if (!filteredLines.isEmpty() && LOG.isDebugEnabled()) {
-                LOG.debug(logPrefix + " 过滤掉的行: " + filteredLines);
+                LOG.debug(logPrefix + " filtered lines: " + filteredLines);
             }
 
             if (lastValidValue != null) {
@@ -225,23 +225,23 @@ public final class ShellExecutor {
 
             return ExecutionResult.failure();
         } catch (Exception e) {
-            LOG.debug(logPrefix + " 执行失败: " + e.getMessage());
+            LOG.debug(logPrefix + " execution failed: " + e.getMessage());
             return ExecutionResult.failure();
         }
     }
 
     /**
-     * 创建交互式 Shell 输出的默认过滤器
-     * 过滤常见的 shell 提示符、登录消息等
+     * Create a default filter for interactive shell output.
+     * Filters out common shell prompts, login messages, etc.
      *
-     * @return 行过滤器
+     * @return the line filter
      */
     public static Predicate<String> createShellOutputFilter() {
         return line -> {
             if (line == null || line.isEmpty()) {
                 return false;
             }
-            // 跳过常见的 shell 输出干扰
+            // Skip common shell output noise
             return !line.startsWith("[") &&         // Skip MOTD brackets
                    !line.startsWith("%") &&         // Skip zsh prompts
                    !line.startsWith(">") &&         // Skip continuation prompts
@@ -250,16 +250,16 @@ public final class ShellExecutor {
     }
 
     /**
-     * 创建 Node.js 路径的过滤器
+     * Create a filter for Node.js paths.
      *
-     * @return 行过滤器
+     * @return the line filter
      */
     public static Predicate<String> createNodePathFilter() {
         return line -> {
             if (line == null || line.isEmpty()) {
                 return false;
             }
-            // 有效的 node 路径应该以 / 开头，以 /node 结尾，不包含错误信息
+            // A valid node path should start with /, end with /node, and not contain error messages
             return line.startsWith("/") &&
                    !line.contains("not found") &&
                    line.endsWith("/node");

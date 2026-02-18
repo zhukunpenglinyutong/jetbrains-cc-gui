@@ -1,7 +1,7 @@
 package com.github.claudecodegui.dependency;
 
 /**
- * SDK 更新信息 DTO
+ * SDK update information DTO.
  */
 public class UpdateInfo {
 
@@ -46,7 +46,7 @@ public class UpdateInfo {
     }
 
     /**
-     * 创建有更新可用的结果
+     * Creates a result indicating an update is available.
      */
     public static UpdateInfo updateAvailable(String sdkId, String sdkName,
                                               String currentVersion, String latestVersion) {
@@ -60,7 +60,7 @@ public class UpdateInfo {
     }
 
     /**
-     * 创建无更新的结果
+     * Creates a result indicating no update is available.
      */
     public static UpdateInfo noUpdate(String sdkId, String sdkName, String currentVersion) {
         return new Builder()
@@ -73,7 +73,7 @@ public class UpdateInfo {
     }
 
     /**
-     * 创建检查失败的结果
+     * Creates a result indicating the check failed.
      */
     public static UpdateInfo error(String sdkId, String sdkName, String errorMessage) {
         return new Builder()

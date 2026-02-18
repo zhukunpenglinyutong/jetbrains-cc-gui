@@ -450,6 +450,136 @@
   color: var(--text-secondary);
 }
 
+/* 聊天背景色设置 */
+.bgColorSection {
+  margin-bottom: 24px;
+}
+
+.colorPresets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.colorSwatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 2px;
+  border: 2px solid var(--border-secondary);
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--border-hover);
+    transform: scale(1.1);
+  }
+
+  &.active {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+  }
+}
+
+.colorSwatchInner {
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.customColorRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.customColorLabel {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.colorPickerWrapper {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--border-secondary);
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: var(--border-hover);
+  }
+}
+
+.colorPickerPreview {
+  width: 100%;
+  height: 100%;
+}
+
+.colorPickerInput {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.hexInput {
+  width: 90px;
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--idea-editor-font-family, monospace);
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+  }
+
+  &::placeholder {
+    color: var(--text-placeholder);
+  }
+}
+
+.resetBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  .codicon {
+    font-size: 12px;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--border-hover);
+  }
+}
+
 .sendShortcutSection {
   margin-bottom: 24px;
 }

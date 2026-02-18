@@ -45,6 +45,14 @@ public class OpenDevToolsAction extends AnAction {
 
     private static final Logger LOG = Logger.getInstance(OpenDevToolsAction.class);
 
+    public OpenDevToolsAction() {
+        super(
+            ClaudeCodeGuiBundle.message("action.openDevTools.text"),
+            ClaudeCodeGuiBundle.message("action.openDevTools.description"),
+            null
+        );
+    }
+
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
         return ActionUpdateThread.BGT;
@@ -64,13 +72,13 @@ public class OpenDevToolsAction extends AnAction {
 
         // Show popup menu with options
         List<DevToolsOption> options = List.of(
-                new DevToolsOption("Open Embedded DevTools", this::openEmbeddedDevTools),
-                new DevToolsOption("Open in Chrome DevTools", this::openChromeDevTools),
-                new DevToolsOption("Copy Debug Info", this::copyDebugInfo)
+                new DevToolsOption(ClaudeCodeGuiBundle.message("devtools.openEmbedded"), this::openEmbeddedDevTools),
+                new DevToolsOption(ClaudeCodeGuiBundle.message("devtools.openChrome"), this::openChromeDevTools),
+                new DevToolsOption(ClaudeCodeGuiBundle.message("devtools.copyDebugInfo"), this::copyDebugInfo)
         );
 
         ListPopup popup = JBPopupFactory.getInstance().createListPopup(
-                new BaseListPopupStep<>("DevTools Options", options) {
+                new BaseListPopupStep<>(ClaudeCodeGuiBundle.message("devtools.popupTitle"), options) {
                     @Override
                     public @NotNull String getTextFor(DevToolsOption value) {
                         return value.name;
@@ -93,7 +101,7 @@ public class OpenDevToolsAction extends AnAction {
         JBCefBrowser browser = findBrowserInToolWindow(project);
         if (browser == null) {
             LOG.warn("[OpenDevToolsAction] No JBCefBrowser found in CCG tool window");
-            showNotification(project, "No browser found in tool window", NotificationType.WARNING);
+            showNotification(project, ClaudeCodeGuiBundle.message("devtools.noBrowser"), NotificationType.WARNING);
             return;
         }
 
@@ -105,7 +113,7 @@ public class OpenDevToolsAction extends AnAction {
                         LOG.info("[OpenDevToolsAction] Opened embedded DevTools");
                     } catch (Exception ex) {
                         LOG.error("[OpenDevToolsAction] Failed to open embedded DevTools", ex);
-                        showNotification(project, "Failed to open DevTools: " + ex.getMessage(), NotificationType.ERROR);
+                        showNotification(project, ClaudeCodeGuiBundle.message("devtools.openFailed", ex.getMessage()), NotificationType.ERROR);
                     }
                 });
             }
@@ -137,8 +145,7 @@ public class OpenDevToolsAction extends AnAction {
         int port = getDebugPort();
         if (port <= 0) {
             showNotification(project,
-                    "Remote debugging port not available.\n" +
-                            "Set 'ide.browser.jcef.debug.port' in Registry (Help > Find Action > Registry)",
+                    ClaudeCodeGuiBundle.message("devtools.portNotAvailable"),
                     NotificationType.WARNING);
             return;
         }
@@ -151,7 +158,7 @@ public class OpenDevToolsAction extends AnAction {
 
                 if (jsonResponse == null || jsonResponse.isEmpty()) {
                     ApplicationManager.getApplication().invokeLater(() ->
-                            showNotification(project, "No response from debug port " + port, NotificationType.ERROR));
+                            showNotification(project, ClaudeCodeGuiBundle.message("devtools.noResponse", port), NotificationType.ERROR));
                     return;
                 }
 
@@ -194,8 +201,7 @@ public class OpenDevToolsAction extends AnAction {
                     ApplicationManager.getApplication().invokeLater(() -> {
                         BrowserUtil.browse("http://127.0.0.1:" + port);
                         showNotification(project,
-                                "DevTools URL not found. Opening target list.\n" +
-                                        "Click on 'inspect' link for any target.",
+                                ClaudeCodeGuiBundle.message("devtools.urlNotFound"),
                                 NotificationType.INFORMATION);
                     });
                 }
@@ -203,7 +209,7 @@ public class OpenDevToolsAction extends AnAction {
             } catch (Exception ex) {
                 LOG.error("[OpenDevToolsAction] Failed to fetch DevTools URL", ex);
                 ApplicationManager.getApplication().invokeLater(() ->
-                        showNotification(project, "Failed to fetch DevTools URL: " + ex.getMessage(), NotificationType.ERROR));
+                        showNotification(project, ClaudeCodeGuiBundle.message("devtools.fetchFailed", ex.getMessage()), NotificationType.ERROR));
             }
         });
     }
@@ -215,28 +221,20 @@ public class OpenDevToolsAction extends AnAction {
         int port = getDebugPort();
         if (port <= 0) {
             showNotification(project,
-                    "Remote debugging port not available.\n" +
-                            "Set 'ide.browser.jcef.debug.port' in Registry",
+                    ClaudeCodeGuiBundle.message("devtools.portNotAvailable"),
                     NotificationType.WARNING);
             return;
         }
 
-        String debugInfo = String.format(
-                "JCEF Remote Debug Info:\n" +
-                        "━━━━━━━━━━━━━━━━━━━━━━\n" +
-                        "Port: %d\n" +
-                        "Target List: http://127.0.0.1:%d/json\n" +
-                        "━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-                        "To debug in Chrome:\n" +
-                        "1. Open chrome://inspect\n" +
-                        "2. Click 'Configure...' next to 'Discover network targets'\n" +
-                        "3. Add: 127.0.0.1:%d\n" +
-                        "4. Click 'inspect' on the target",
-                port, port, port
-        );
+        String debugInfo = ClaudeCodeGuiBundle.message("devtools.debugInfoTitle") + "\n" +
+                "━━━━━━━━━━━━━━━━━━━━━━\n" +
+                "Port: " + port + "\n" +
+                ClaudeCodeGuiBundle.message("devtools.debugInfoTargetList", port) + "\n" +
+                "━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                ClaudeCodeGuiBundle.message("devtools.debugInfoInstructions", port);
 
         copyToClipboard(debugInfo);
-        showNotification(project, "Debug info copied to clipboard!\nPort: " + port, NotificationType.INFORMATION);
+        showNotification(project, ClaudeCodeGuiBundle.message("devtools.debugInfoCopied", port), NotificationType.INFORMATION);
         LOG.info("[OpenDevToolsAction] Copied debug info for port: " + port);
     }
 

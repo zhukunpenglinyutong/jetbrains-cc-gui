@@ -16,14 +16,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 权限处理器
- * 处理权限对话框显示和决策
+ * Permission handler.
+ * Handles permission dialog display and decision processing.
  */
 public class PermissionHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(PermissionHandler.class);
 
-    // 权限请求超时时间（5 分钟），与 Node 端 PERMISSION_TIMEOUT_MS 保持一致
+    // Permission request timeout (5 minutes), consistent with Node-side PERMISSION_TIMEOUT_MS
     private static final long PERMISSION_TIMEOUT_SECONDS = 300;
 
     private static final String[] SUPPORTED_TYPES = {
@@ -32,16 +32,16 @@ public class PermissionHandler extends BaseMessageHandler {
         "plan_approval_response"
     };
 
-    // 权限请求映射
+    // Permission request map
     private final Map<String, CompletableFuture<Integer>> pendingPermissionRequests = new ConcurrentHashMap<>();
 
-    // AskUserQuestion 请求映射 (requestId -> CompletableFuture<JsonObject>)
+    // AskUserQuestion request map (requestId -> CompletableFuture<JsonObject>)
     private final Map<String, CompletableFuture<JsonObject>> pendingAskUserQuestionRequests = new ConcurrentHashMap<>();
 
-    // PlanApproval 请求映射 (requestId -> CompletableFuture<JsonObject>)
+    // PlanApproval request map (requestId -> CompletableFuture<JsonObject>)
     private final Map<String, CompletableFuture<JsonObject>> pendingPlanApprovalRequests = new ConcurrentHashMap<>();
 
-    // 权限拒绝回调
+    // Permission denied callback
     public interface PermissionDeniedCallback {
         void onPermissionDenied();
     }
@@ -83,7 +83,7 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示前端权限对话框
+     * Show the frontend permission dialog.
      */
     public CompletableFuture<Integer> showFrontendPermissionDialog(String toolName, JsonObject inputs) {
         String channelId = UUID.randomUUID().toString();
@@ -119,7 +119,7 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // 超时处理（让用户有足够时间查看上下文）
+            // Timeout handling (give users enough time to review the context)
             CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
                 if (!future.isDone()) {
                     LOG.warn("[PERM_SHOW] Timeout! Removing pending request for channelId=" + channelId);
@@ -138,7 +138,7 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示权限请求对话框（来自 PermissionRequest）
+     * Show permission request dialog (from PermissionRequest).
      */
     public void showPermissionDialog(PermissionRequest request) {
         LOG.info("[PermissionHandler] 显示权限请求对话框: " + request.getToolName());
@@ -159,20 +159,20 @@ public class PermissionHandler extends BaseMessageHandler {
             String requestJson = gson.toJson(requestData);
             String escapedJson = escapeJs(requestJson);
 
-            // 获取权限请求所属的项目
+            // Get the project associated with the permission request
             Project targetProject = request.getProject();
             if (targetProject == null) {
                 LOG.warn("[PermissionHandler] 警告: PermissionRequest 没有关联的 Project，使用当前 context 的窗口");
                 targetProject = this.context.getProject();
             }
 
-            // 获取目标项目的窗口实例
+            // Get the window instance for the target project
             com.github.claudecodegui.ClaudeSDKToolWindow.ClaudeChatWindow targetWindow =
                 com.github.claudecodegui.ClaudeSDKToolWindow.getChatWindow(targetProject);
 
             if (targetWindow == null) {
                 LOG.error("[PermissionHandler] 错误: 找不到项目 " + targetProject.getName() + " 的窗口实例");
-                // 如果找不到目标窗口，拒绝权限请求
+                // If target window is not found, deny the permission request
                 this.context.getSession().handlePermissionDecision(
                     request.getChannelId(),
                     false,
@@ -183,7 +183,7 @@ public class PermissionHandler extends BaseMessageHandler {
                 return;
             }
 
-            // 在目标窗口中执行 JavaScript 显示弹窗
+            // Execute JavaScript in the target window to show the dialog
             String jsCode = "if (window.showPermissionDialog) { " +
                 "  window.showPermissionDialog('" + escapedJson + "'); " +
                 "}";
@@ -203,7 +203,7 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理来自 JavaScript 的权限决策消息
+     * Handle permission decision messages from JavaScript.
      */
     private void handlePermissionDecision(String jsonContent) {
         LOG.info("[PERM_DECISION] Received permission decision from JS");
@@ -244,7 +244,7 @@ public class PermissionHandler extends BaseMessageHandler {
             } else {
                 LOG.warn("[PERM_DECISION] No pending future found for channelId=" + channelId + ", falling back to session handler");
                 LOG.warn("[PERM_DECISION] Current pendingPermissionRequests keys: " + pendingPermissionRequests.keySet());
-                // 处理来自 Session 的权限请求
+                // Handle permission request from Session
                 if (remember) {
                     context.getSession().handlePermissionDecisionAlways(channelId, allow);
                 } else {
@@ -260,7 +260,7 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 通知权限被拒绝
+     * Notify that permission was denied.
      */
     private void notifyPermissionDenied() {
         if (deniedCallback != null) {
@@ -269,8 +269,8 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 清理所有待处理的权限请求
-     * 在会话切换或历史恢复时调用，避免旧的请求干扰新会话
+     * Clear all pending permission requests.
+     * Called during session switching or history restoration to prevent old requests from interfering with the new session.
      */
     public void clearPendingRequests() {
         LOG.info("[PERM_CLEAR] Clearing all pending permission requests");
@@ -279,19 +279,19 @@ public class PermissionHandler extends BaseMessageHandler {
         int askUserCount = pendingAskUserQuestionRequests.size();
         int planCount = pendingPlanApprovalRequests.size();
 
-        // 取消所有待处理的权限请求
+        // Cancel all pending permission requests
         for (Map.Entry<String, CompletableFuture<Integer>> entry : pendingPermissionRequests.entrySet()) {
             entry.getValue().complete(PermissionService.PermissionResponse.DENY.getValue());
         }
         pendingPermissionRequests.clear();
 
-        // 取消所有待处理的 AskUserQuestion 请求
+        // Cancel all pending AskUserQuestion requests
         for (Map.Entry<String, CompletableFuture<JsonObject>> entry : pendingAskUserQuestionRequests.entrySet()) {
             entry.getValue().complete(null);
         }
         pendingAskUserQuestionRequests.clear();
 
-        // 取消所有待处理的 PlanApproval 请求
+        // Cancel all pending PlanApproval requests
         for (Map.Entry<String, CompletableFuture<JsonObject>> entry : pendingPlanApprovalRequests.entrySet()) {
             JsonObject rejected = new com.google.gson.JsonObject();
             rejected.addProperty("approved", false);
@@ -305,7 +305,7 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示 AskUserQuestion 对话框（实现 PermissionService.AskUserQuestionDialogShower 接口）
+     * Show AskUserQuestion dialog (implements PermissionService.AskUserQuestionDialogShower interface).
      */
     public CompletableFuture<JsonObject> showAskUserQuestionDialog(String requestId, JsonObject questionsData) {
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
@@ -335,12 +335,12 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // 超时处理（与普通权限请求保持一致：5 分钟）
+            // Timeout handling (consistent with regular permission requests: 5 minutes)
             CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
                 if (!future.isDone()) {
                     LOG.warn("[ASK_USER_QUESTION][SHOW_DIALOG] Timeout! Removing pending request for requestId=" + requestId);
                     pendingAskUserQuestionRequests.remove(requestId);
-                    // 超时返回空答案
+                    // Return empty answers on timeout
                     future.complete(new JsonObject());
                 }
             });
@@ -355,7 +355,7 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理来自 JavaScript 的 AskUserQuestion 响应消息
+     * Handle AskUserQuestion response messages from JavaScript.
      */
     private void handleAskUserQuestionResponse(String jsonContent) {
         LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] Received response from JS: " + jsonContent);
@@ -382,7 +382,7 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 显示 PlanApproval 对话框（实现 PermissionService.PlanApprovalDialogShower 接口）
+     * Show PlanApproval dialog (implements PermissionService.PlanApprovalDialogShower interface).
      */
     public CompletableFuture<JsonObject> showPlanApprovalDialog(String requestId, JsonObject planData) {
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
@@ -412,11 +412,11 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // 超时处理（与其他权限请求保持一致：5 分钟）
+            // Timeout handling (consistent with other permission requests: 5 minutes)
             CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
                 if (!future.isDone()) {
                     pendingPlanApprovalRequests.remove(requestId);
-                    // 超时返回拒绝
+                    // Return rejection on timeout
                     JsonObject timeoutResponse = new JsonObject();
                     timeoutResponse.addProperty("approved", false);
                     timeoutResponse.addProperty("targetMode", "default");
@@ -439,7 +439,7 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     /**
-     * 处理来自 JavaScript 的 PlanApproval 响应消息
+     * Handle PlanApproval response messages from JavaScript.
      */
     private void handlePlanApprovalResponse(String jsonContent) {
         LOG.debug("[PLAN_APPROVAL][HANDLE_RESPONSE] Received response from JS: " + jsonContent);

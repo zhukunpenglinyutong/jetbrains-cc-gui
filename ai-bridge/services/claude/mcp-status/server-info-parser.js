@@ -1,32 +1,32 @@
 /**
- * 服务器信息解析模块
- * 提供从输出中解析服务器信息的功能
+ * Server info parser module
+ * Provides functionality to parse server information from process output
  */
 
 import { MAX_LINE_LENGTH } from './config.js';
 import { log } from './logger.js';
 
 /**
- * 从 stdout 解析服务器信息
- * @param {string} stdout - 标准输出内容
- * @returns {Object|null} 服务器信息或 null
+ * Parse server information from stdout
+ * @param {string} stdout - Standard output content
+ * @returns {Object|null} Server info object, or null if not found
  */
 export function parseServerInfo(stdout) {
   try {
     const lines = stdout.split('\n');
     for (const line of lines) {
-      // 跳过过长的行以防止 ReDoS 攻击
+      // Skip oversized lines to prevent ReDoS attacks
       if (line.length > MAX_LINE_LENGTH) {
         log('debug', 'Skipping oversized line in parseServerInfo');
         continue;
       }
 
       if (line.includes('"serverInfo"')) {
-        // 使用更安全的 JSON 解析方式：找到 JSON 对象边界
+        // Use a safer JSON parsing approach: locate the JSON object boundaries
         const startIdx = line.indexOf('{');
         if (startIdx === -1) continue;
 
-        // 简单的括号匹配来找到完整的 JSON 对象
+        // Simple brace matching to find the complete JSON object
         let depth = 0;
         let endIdx = -1;
         for (let i = startIdx; i < line.length; i++) {

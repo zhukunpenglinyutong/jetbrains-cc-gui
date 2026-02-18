@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Skill 管理消息处理器
+ * Skill management message handler.
  */
 public class SkillHandler extends BaseMessageHandler {
 
@@ -68,7 +68,7 @@ public class SkillHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取所有 Skills (全局 + 本地)
+     * Get all skills (global + local).
      */
     private void handleGetAllSkills() {
         try {
@@ -89,7 +89,7 @@ public class SkillHandler extends BaseMessageHandler {
     }
 
     /**
-     * 导入 Skill（显示文件选择对话框）
+     * Import a skill (show file chooser dialog).
      */
     private void handleImportSkill(String content) {
         try {
@@ -138,7 +138,7 @@ public class SkillHandler extends BaseMessageHandler {
     }
 
     /**
-     * 删除 Skill
+     * Delete a skill.
      */
     private void handleDeleteSkill(String content) {
         try {
@@ -167,7 +167,7 @@ public class SkillHandler extends BaseMessageHandler {
     }
 
     /**
-     * 启用/停用 Skill
+     * Enable/disable a skill.
      */
     private void handleToggleSkill(String content) {
         try {
@@ -196,7 +196,7 @@ public class SkillHandler extends BaseMessageHandler {
     }
 
     /**
-     * 在编辑器中打开 Skill
+     * Open a skill in the editor.
      */
     private void handleOpenSkill(String content) {
         try {
@@ -207,7 +207,7 @@ public class SkillHandler extends BaseMessageHandler {
             File skillFile = new File(skillPath);
             String targetPath = skillPath;
 
-            // 如果是目录，尝试打开 skill.md 或 SKILL.md
+            // If it's a directory, try opening skill.md or SKILL.md
             if (skillFile.isDirectory()) {
                 File skillMd = new File(skillFile, "skill.md");
                 if (!skillMd.exists()) {
@@ -220,14 +220,14 @@ public class SkillHandler extends BaseMessageHandler {
 
             final String fileToOpen = targetPath;
 
-            // 使用 ReadAction.nonBlocking() 在后台线程中查找文件
+            // Use ReadAction.nonBlocking() to find the file in a background thread
             ReadAction
                 .nonBlocking(() -> {
-                    // 在后台线程中查找文件（这是慢操作）
+                    // Find the file in a background thread (this is a slow operation)
                     return LocalFileSystem.getInstance().findFileByPath(fileToOpen);
                 })
                 .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), virtualFile -> {
-                    // 在 UI 线程中打开文件
+                    // Open the file on the UI thread
                     if (virtualFile != null) {
                         FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
                     } else {

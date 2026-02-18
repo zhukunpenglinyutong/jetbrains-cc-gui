@@ -1,6 +1,6 @@
 /**
- * STDIO 服务器验证模块
- * 提供 STDIO 类型 MCP 服务器的连接状态验证功能
+ * STDIO server verification module
+ * Provides connection status verification for STDIO-based MCP servers
  */
 
 import { spawn } from 'child_process';
@@ -10,10 +10,10 @@ import { validateCommand } from './command-validator.js';
 import { safeKillProcess, createProcessHandlers, sendInitializeRequest } from './process-manager.js';
 
 /**
- * 验证 STDIO 类型 MCP 服务器的连接状态
- * @param {string} serverName - 服务器名称
- * @param {Object} serverConfig - 服务器配置
- * @returns {Promise<Object>} 服务器状态信息 { name, status, serverInfo, error? }
+ * Verify the connection status of an STDIO-based MCP server
+ * @param {string} serverName - Server name
+ * @param {Object} serverConfig - Server configuration
+ * @returns {Promise<Object>} Server status info { name, status, serverInfo, error? }
  */
 export async function verifyStdioServerStatus(serverName, serverConfig) {
   return new Promise((resolve) => {
@@ -30,7 +30,7 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
     const args = serverConfig.args || [];
     const env = createSafeEnv(serverConfig.env);
 
-    // 检查命令是否存在
+    // Check if a command is specified
     if (!command) {
       result.status = 'failed';
       result.error = 'No command specified';
@@ -38,7 +38,7 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
       return;
     }
 
-    // 验证命令白名单（仅警告，不阻止）
+    // Validate against command whitelist (warn only, don't block)
     const validation = validateCommand(command);
     if (!validation.valid) {
       log('warn', `[MCP Verify] Non-whitelisted command for ${serverName}: ${command} (${validation.reason})`);
@@ -48,7 +48,7 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
     log('info', 'Verifying STDIO server:', serverName, 'command:', command);
     log('debug', 'Full command args:', args.length, 'arguments');
 
-    // 完成处理函数
+    // Finalization handler
     const finalize = (status, serverInfo = null, error = null) => {
       if (resolved) return;
       resolved = true;
@@ -62,15 +62,15 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
       resolve(result);
     };
 
-    // 设置超时 - 使用 STDIO 专用超时
+    // Set timeout - use the STDIO-specific timeout
     const timeoutId = setTimeout(() => {
       log('debug', `Timeout for ${serverName} after ${MCP_STDIO_VERIFY_TIMEOUT}ms`);
       finalize('pending');
     }, MCP_STDIO_VERIFY_TIMEOUT);
 
-    // 尝试启动进程
+    // Attempt to spawn the process
     try {
-      // Windows 下某些命令需要使用 shell
+      // Some commands on Windows require a shell
       const useShell = process.platform === 'win32' &&
                       (command.endsWith('.cmd') || command.endsWith('.bat') ||
                        command === 'npx' || command === 'npm' ||
@@ -79,7 +79,7 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
       const spawnOptions = {
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
-        // Windows 下隐藏命令行窗口
+        // Hide the console window on Windows
         windowsHide: true
       };
 
@@ -98,14 +98,14 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
       return;
     }
 
-    // 创建事件处理器
+    // Create event handlers
     const handlers = createProcessHandlers({
       serverName,
       child,
       finalize
     });
 
-    // 绑定事件
+    // Bind event listeners
     child.stdout.on('data', handlers.stdout.onData);
     child.stderr.on('data', handlers.stderr.onData);
     child.on('error', handlers.onError);
@@ -115,7 +115,7 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
       }
     });
 
-    // 发送初始化请求
+    // Send the initialize request
     sendInitializeRequest(child, serverName);
   });
 }

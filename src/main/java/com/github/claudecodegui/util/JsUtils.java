@@ -1,15 +1,14 @@
 package com.github.claudecodegui.util;
 
 /**
- * JavaScript 工具类
- * 提供 JavaScript 字符串转义和调用相关的工具方法
+ * JavaScript utility class.
+ * Provides helper methods for JavaScript string escaping and function invocation.
  */
 public class JsUtils {
 
     /**
-     * 转义 JavaScript 字符串
-     * 用于将 Java 字符串安全地嵌入到 JavaScript 代码中
-     * 包括处理特殊字符如行分隔符、段落分隔符等
+     * Escape a string for safe embedding in JavaScript code.
+     * Handles special characters including line separators, paragraph separators, etc.
      */
     public static String escapeJs(String str) {
         if (str == null) {
@@ -28,10 +27,10 @@ public class JsUtils {
     }
 
     /**
-     * 构建 JavaScript 函数调用代码
-     * @param functionName 函数名称
-     * @param args 参数列表（已转义的字符串）
-     * @return JavaScript 代码
+     * Build a JavaScript function call with an existence check.
+     * @param functionName the function name
+     * @param args pre-escaped string arguments
+     * @return the JavaScript code
      */
     public static String buildJsCall(String functionName, String... args) {
         StringBuilder js = new StringBuilder();
@@ -48,10 +47,10 @@ public class JsUtils {
     }
 
     /**
-     * 构建带有存在性检查的 JavaScript 调用
-     * @param objectPath 对象路径（如 "window.myFunction"）
-     * @param args 参数列表（已转义的字符串）
-     * @return JavaScript 代码
+     * Build a safe JavaScript call with a truthiness check on the object path.
+     * @param objectPath the object path (e.g. "window.myFunction")
+     * @param args pre-escaped string arguments
+     * @return the JavaScript code
      */
     public static String buildSafeJsCall(String objectPath, String... args) {
         StringBuilder js = new StringBuilder();

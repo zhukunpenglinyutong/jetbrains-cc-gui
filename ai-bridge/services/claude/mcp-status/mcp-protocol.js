@@ -1,6 +1,6 @@
 /**
- * MCP 协议工具模块
- * 提供 MCP 协议相关的工具函数
+ * MCP protocol utilities module
+ * Provides utility functions for the MCP protocol
  */
 
 /** MCP protocol version used for initialize handshake */
@@ -13,8 +13,8 @@ export const MCP_CLIENT_INFO = Object.freeze({
 });
 
 /**
- * 创建 MCP initialize 请求
- * @returns {string} JSON-RPC 格式的初始化请求
+ * Create an MCP initialize request
+ * @returns {string} JSON-RPC formatted initialization request
  */
 export function createInitializeRequest() {
   return JSON.stringify({
@@ -30,8 +30,8 @@ export function createInitializeRequest() {
 }
 
 /**
- * 检查输出是否包含有效的 MCP 协议响应
- * @param {string} stdout - 标准输出
+ * Check whether the output contains a valid MCP protocol response
+ * @param {string} stdout - Standard output
  * @returns {boolean}
  */
 export function hasValidMcpResponse(stdout) {
@@ -39,9 +39,9 @@ export function hasValidMcpResponse(stdout) {
 }
 
 /**
- * 解析 SSE (Server-Sent Events) 响应
- * @param {string} text - SSE 响应文本
- * @returns {Array<Object>} 解析后的事件数组
+ * Parse an SSE (Server-Sent Events) response
+ * @param {string} text - SSE response text
+ * @returns {Array<Object>} Array of parsed events
  */
 export function parseSSE(text) {
   const events = [];
