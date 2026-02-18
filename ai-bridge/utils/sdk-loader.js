@@ -1,8 +1,8 @@
 /**
- * SDK Loader - 动态加载可选 AI SDK
+ * SDK Loader - Dynamically loads optional AI SDKs
  *
- * 支持从用户目录 ~/.codemoss/dependencies/ 加载 SDK
- * 这允许用户按需安装 SDK，而不是将其打包在插件中
+ * Supports loading SDKs from the user directory ~/.codemoss/dependencies/
+ * This allows users to install SDKs on demand rather than bundling them with the plugin
  */
 
 import { existsSync, readFileSync } from 'fs';
@@ -10,15 +10,15 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { getRealHomeDir, getCodemossDir } from './path-utils.js';
 
-// 依赖目录基路径 - 使用统一的路径工具函数
+// Base path for dependencies directory - uses the shared path utility
 const DEPS_BASE = join(getCodemossDir(), 'dependencies');
 
-// SDK 缓存
+// SDK cache
 const sdkCache = new Map();
-// 🔧 加载中的 Promise 缓存，防止并发加载同一 SDK
+// Promise cache for in-flight loads to prevent concurrent loading of the same SDK
 const loadingPromises = new Map();
 
-// SDK 定义（与 DependencyManager.SdkDefinition 保持一致）
+// SDK definitions (kept in sync with DependencyManager.SdkDefinition)
 const SDK_DEFINITIONS = {
     CLAUDE: {
         id: 'claude-sdk',
@@ -36,7 +36,7 @@ function getSdkRootDir(sdkId) {
 
 function getPackageDirFromRoot(sdkRootDir, pkgName) {
     // pkgName like: "@anthropic-ai/claude-agent-sdk" or "@openai/codex-sdk"
-    // 与 DependencyManager.getPackageDir() 保持一致的逻辑
+    // Logic kept consistent with DependencyManager.getPackageDir()
     const parts = pkgName.split('/');
     return join(sdkRootDir, 'node_modules', ...parts);
 }
@@ -103,8 +103,8 @@ function resolveExternalPackageUrl(pkgName, sdkRootDir) {
 }
 
 /**
- * 检查 Claude Code SDK 是否可用
- * 与 DependencyManager.isInstalled("claude") 保持一致的逻辑
+ * Check whether the Claude Code SDK is available
+ * Logic kept consistent with DependencyManager.isInstalled("claude")
  */
 export function isClaudeSdkAvailable() {
     const sdkId = 'claude-sdk';
@@ -120,8 +120,8 @@ export function isClaudeSdkAvailable() {
 }
 
 /**
- * 检查 Codex SDK 是否可用
- * 与 DependencyManager.isInstalled("codex") 保持一致的逻辑
+ * Check whether the Codex SDK is available
+ * Logic kept consistent with DependencyManager.isInstalled("codex")
  */
 export function isCodexSdkAvailable() {
     const sdkId = 'codex-sdk';
@@ -136,20 +136,20 @@ export function isCodexSdkAvailable() {
 }
 
 /**
- * 动态加载 Claude SDK
+ * Dynamically load the Claude SDK
  * @returns {Promise<{query: Function, ...}>}
- * @throws {Error} 如果 SDK 未安装
+ * @throws {Error} If the SDK is not installed
  */
 export async function loadClaudeSdk() {
     console.log('[DIAG-SDK] loadClaudeSdk() called');
 
-    // 🔧 优先返回已缓存的 SDK
+    // Return the cached SDK if available
     if (sdkCache.has('claude')) {
         console.log('[DIAG-SDK] Returning cached SDK');
         return sdkCache.get('claude');
     }
 
-    // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
+    // If a load is already in progress, return the same promise to prevent duplicate loading
     if (loadingPromises.has('claude')) {
         console.log('[DIAG-SDK] SDK loading in progress, returning existing promise');
         return loadingPromises.get('claude');
@@ -165,12 +165,12 @@ export async function loadClaudeSdk() {
         throw new Error('SDK_NOT_INSTALLED:claude');
     }
 
-    // 🔧 创建加载 Promise 并缓存
+    // Create and cache the loading promise
     const loadPromise = (async () => {
         try {
             console.log('[DIAG-SDK] SDK root dir:', sdkRootDir);
 
-            // 🔧 Node ESM 不支持 import(目录)，必须解析到具体文件（如 sdk.mjs）
+            // Node ESM does not support import(directory); must resolve to a concrete file (e.g. sdk.mjs)
             const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/claude-agent-sdk', sdkRootDir);
             console.log('[DIAG-SDK] Resolved URL:', resolvedUrl);
 
@@ -187,7 +187,7 @@ export async function loadClaudeSdk() {
             const hint = existsSync(hintFile) ? ` Did you mean to import ${hintFile}?` : '';
             throw new Error(`Failed to load Claude SDK: ${error.message}${hint}`);
         } finally {
-            // 🔧 加载完成后清除 Promise 缓存
+            // Clear the promise cache once loading is complete
             loadingPromises.delete('claude');
         }
     })();
@@ -197,17 +197,17 @@ export async function loadClaudeSdk() {
 }
 
 /**
- * 动态加载 Codex SDK
+ * Dynamically load the Codex SDK
  * @returns {Promise<{Codex: Class, ...}>}
- * @throws {Error} 如果 SDK 未安装
+ * @throws {Error} If the SDK is not installed
  */
 export async function loadCodexSdk() {
-    // 🔧 优先返回已缓存的 SDK
+    // Return the cached SDK if available
     if (sdkCache.has('codex')) {
         return sdkCache.get('codex');
     }
 
-    // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
+    // If a load is already in progress, return the same promise to prevent duplicate loading
     if (loadingPromises.has('codex')) {
         return loadingPromises.get('codex');
     }
@@ -219,7 +219,7 @@ export async function loadCodexSdk() {
         throw new Error('SDK_NOT_INSTALLED:codex');
     }
 
-    // 🔧 创建加载 Promise 并缓存
+    // Create and cache the loading promise
     const loadPromise = (async () => {
         try {
             const resolvedUrl = resolveExternalPackageUrl('@openai/codex-sdk', sdkRootDir);
@@ -239,16 +239,16 @@ export async function loadCodexSdk() {
 }
 
 /**
- * 加载 Anthropic 基础 SDK（用于 API 回退）
+ * Load the base Anthropic SDK (used as an API fallback)
  * @returns {Promise<{Anthropic: Class}>}
  */
 export async function loadAnthropicSdk() {
-    // 🔧 优先返回已缓存的 SDK
+    // Return the cached SDK if available
     if (sdkCache.has('anthropic')) {
         return sdkCache.get('anthropic');
     }
 
-    // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
+    // If a load is already in progress, return the same promise to prevent duplicate loading
     if (loadingPromises.has('anthropic')) {
         return loadingPromises.get('anthropic');
     }
@@ -260,7 +260,7 @@ export async function loadAnthropicSdk() {
         throw new Error('SDK_NOT_INSTALLED:anthropic');
     }
 
-    // 🔧 创建加载 Promise 并缓存
+    // Create and cache the loading promise
     const loadPromise = (async () => {
         try {
             const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/sdk', sdkRootDir);
@@ -280,16 +280,16 @@ export async function loadAnthropicSdk() {
 }
 
 /**
- * 加载 Bedrock SDK
+ * Load the Bedrock SDK
  * @returns {Promise<{AnthropicBedrock: Class}>}
  */
 export async function loadBedrockSdk() {
-    // 🔧 优先返回已缓存的 SDK
+    // Return the cached SDK if available
     if (sdkCache.has('bedrock')) {
         return sdkCache.get('bedrock');
     }
 
-    // 🔧 如果正在加载中，返回同一个 Promise，防止并发重复加载
+    // If a load is already in progress, return the same promise to prevent duplicate loading
     if (loadingPromises.has('bedrock')) {
         return loadingPromises.get('bedrock');
     }
@@ -301,7 +301,7 @@ export async function loadBedrockSdk() {
         throw new Error('SDK_NOT_INSTALLED:bedrock');
     }
 
-    // 🔧 创建加载 Promise 并缓存
+    // Create and cache the loading promise
     const loadPromise = (async () => {
         try {
             const resolvedUrl = resolveExternalPackageUrl('@anthropic-ai/bedrock-sdk', sdkRootDir);
@@ -321,10 +321,10 @@ export async function loadBedrockSdk() {
 }
 
 /**
- * 获取所有 SDK 的状态
+ * Get the installation status of all SDKs
  */
 export function getSdkStatus() {
-    // 使用与 DependencyManager 相同的路径计算逻辑
+    // Uses the same path resolution logic as DependencyManager
     const claudeInstalled = isClaudeSdkAvailable();
     const codexInstalled = isCodexSdkAvailable();
 
@@ -341,17 +341,17 @@ export function getSdkStatus() {
 }
 
 /**
- * 清除 SDK 缓存
- * 在 SDK 重新安装后调用
+ * Clear the SDK cache
+ * Should be called after an SDK is reinstalled
  */
 export function clearSdkCache() {
     sdkCache.clear();
 }
 
 /**
- * 检查 SDK 是否安装并抛出友好错误
- * @param {string} provider - 'claude' 或 'codex'
- * @throws {Error} 如果 SDK 未安装
+ * Verify that the SDK is installed, throwing a user-friendly error if not
+ * @param {string} provider - 'claude' or 'codex'
+ * @throws {Error} If the SDK is not installed
  */
 export function requireSdk(provider) {
     if (provider === 'claude' && !isClaudeSdkAvailable()) {

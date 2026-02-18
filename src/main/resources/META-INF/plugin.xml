@@ -132,23 +132,17 @@
         <!-- Create New Tab Action (can be invoked via Find Action or programmatically) -->
         <action id="ClaudeCodeGUI.CreateNewTabAction"
                 class="com.github.claudecodegui.CreateNewTabAction"
-                icon="AllIcons.General.Add"
-                text="New Chat Tab"
-                description="Create a new chat tab in Claude Code GUI tool window"/>
+                icon="AllIcons.General.Add"/>
 
         <!-- Rename Tab Action -->
         <action id="ClaudeCodeGUI.RenameTabAction"
                 class="com.github.claudecodegui.RenameTabAction"
-                icon="AllIcons.Actions.Edit"
-                text="Rename Tab"
-                description="Rename the current chat tab"/>
+                icon="AllIcons.Actions.Edit"/>
 
         <!-- Open DevTools Action for JCEF debugging -->
         <action id="ClaudeCodeGUI.OpenDevToolsAction"
                 class="com.github.claudecodegui.OpenDevToolsAction"
-                icon="AllIcons.Xml.Browsers.Chromium"
-                text="Open DevTools"
-                description="Open JCEF DevTools for debugging"/>
+                icon="AllIcons.Xml.Browsers.Chromium"/>
 
         <!-- 从文件树发送文件路径到输入框的 Action -->
         <action id="ClaudeCodeGUI.SendFilePathToInputAction"

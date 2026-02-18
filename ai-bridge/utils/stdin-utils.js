@@ -1,15 +1,15 @@
 /**
- * stdin 读取工具模块（统一版）
- * 支持 Claude 和 Codex 两种 SDK
+ * Stdin reader utility module (unified version).
+ * Supports both Claude and Codex SDKs.
  */
 
 /**
- * 从 stdin 读取 JSON 数据
- * @param {string} provider - 'claude' 或 'codex'
- * @returns {Promise<Object|null>} 解析后的 JSON 对象，或 null
+ * Read JSON data from stdin.
+ * @param {string} provider - 'claude' or 'codex'
+ * @returns {Promise<Object|null>} The parsed JSON object, or null
  */
 export async function readStdinData(provider = 'claude') {
-  // 检查是否启用了 stdin 输入
+  // Check whether stdin input is enabled
   const envKey = provider === 'codex' ? 'CODEX_USE_STDIN' : 'CLAUDE_USE_STDIN';
   if (process.env[envKey] !== 'true') {
     return null;
@@ -21,7 +21,7 @@ export async function readStdinData(provider = 'claude') {
 
     stdin.setEncoding('utf8');
 
-    // 清理函数：移除所有监听器并停止读取
+    // Cleanup: remove all listeners and stop reading
     const cleanup = () => {
       stdin.removeListener('readable', onReadable);
       stdin.removeListener('end', onEnd);
@@ -29,7 +29,7 @@ export async function readStdinData(provider = 'claude') {
       stdin.pause();
     };
 
-    // 设置超时，避免无限等待
+    // Set a timeout to avoid waiting indefinitely
     const timeout = setTimeout(() => {
       cleanup();
       resolve(null);

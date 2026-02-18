@@ -1,10 +1,10 @@
 /**
- * Quick Fix 专用提示词构建模块
+ * Quick Fix prompt building module.
  */
 
 /**
- * 构建加强版 IDE 上下文信息的系统提示词 (用于 Quick Fix)
- * 包含 PSI, Lombok, 错误诊断等深度分析
+ * Build an enhanced IDE context system prompt (for Quick Fix).
+ * Includes PSI, Lombok, error diagnostics and other in-depth analysis.
  */
 function buildEnhancedIDEContextPrompt(openedFiles, agentPrompt = null) {
     let prompt = '';
@@ -17,7 +17,7 @@ function buildEnhancedIDEContextPrompt(openedFiles, agentPrompt = null) {
         prompt += '\n---\n';
     }
 
-    // Windows路径格式约束
+    // Windows path format constraint
     prompt += '\n\n## CRITICAL: File Path Format Requirement\n\n';
     prompt += '**IMPORTANT**: There\'s a file modification bug in Claude Code. The workaround is: always use complete absolute Windows paths with drive letters and backslashes for ALL file operations.\n\n';
     prompt += '**Examples**:\n';
@@ -116,7 +116,7 @@ function buildEnhancedIDEContextPrompt(openedFiles, agentPrompt = null) {
 }
 
 /**
- * 构建 Quick Fix 专用系统提示词
+ * Build the Quick Fix system prompt.
  */
 export function buildQuickFixPrompt(openedFiles, userPrompt) {
     let prompt = buildEnhancedIDEContextPrompt(openedFiles);

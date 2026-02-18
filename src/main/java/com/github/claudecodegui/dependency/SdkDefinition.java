@@ -5,8 +5,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * SDK 定义枚举
- * 定义可安装的 AI SDK 包信息
+ * SDK definition enum.
+ * Defines the installable AI SDK package information.
  */
 public enum SdkDefinition {
 
@@ -70,15 +70,15 @@ public enum SdkDefinition {
     }
 
     /**
-     * 获取完整的 npm 安装包名（包含版本）
-     * 例如: @anthropic-ai/claude-agent-sdk@^0.1.76
+     * Returns the full npm package specifier including the version.
+     * For example: @anthropic-ai/claude-agent-sdk@^0.1.76
      */
     public String getFullPackageSpec() {
         return npmPackage + "@" + version;
     }
 
     /**
-     * 获取所有需要安装的包（主包 + 依赖包）
+     * Returns all packages to install (main package + dependencies).
      */
     public List<String> getAllPackages() {
         if (dependencies.isEmpty()) {
@@ -91,7 +91,7 @@ public enum SdkDefinition {
     }
 
     /**
-     * 根据 ID 查找 SDK 定义
+     * Finds an SDK definition by its ID.
      */
     public static SdkDefinition fromId(String id) {
         for (SdkDefinition sdk : values()) {
@@ -103,7 +103,7 @@ public enum SdkDefinition {
     }
 
     /**
-     * 根据提供商名称查找对应的 SDK
+     * Finds the corresponding SDK by provider name.
      */
     public static SdkDefinition fromProvider(String provider) {
         if ("claude".equalsIgnoreCase(provider)) {

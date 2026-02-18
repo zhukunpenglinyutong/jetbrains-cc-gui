@@ -2,6 +2,7 @@ package com.github.claudecodegui;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.AgentHandler;
+import com.github.claudecodegui.handler.PromptHandler;
 import com.github.claudecodegui.handler.CodexMcpServerHandler;
 import com.github.claudecodegui.handler.DependencyHandler;
 import com.github.claudecodegui.handler.DiffHandler;
@@ -317,7 +318,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         centerPanel.add(Box.createVerticalStrut(16));
 
         // 加载提示文字
-        JLabel textLabel = new JLabel("Preparing AI Bridge...(插件解压中...)");
+        JLabel textLabel = new JLabel(ClaudeCodeGuiBundle.message("toolwindow.preparingBridge"));
         textLabel.setFont(textLabel.getFont().deriveFont(14f));
         textLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         centerPanel.add(textLabel);
@@ -835,7 +836,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 com.github.claudecodegui.notifications.ClaudeNotifier.setMode(project, mode);
 
                 // Set initial model
-                String model = session != null ? session.getModel() : "claude-sonnet-4-5";
+                String model = session != null ? session.getModel() : "claude-sonnet-4-6";
                 com.github.claudecodegui.notifications.ClaudeNotifier.setModel(project, model);
 
                 // Set initial agent
@@ -929,6 +930,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             messageDispatcher.registerHandler(new DiffHandler(handlerContext));
             messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
             messageDispatcher.registerHandler(new AgentHandler(handlerContext));
+            messageDispatcher.registerHandler(new PromptHandler(handlerContext));
             messageDispatcher.registerHandler(new TabHandler(handlerContext));
             messageDispatcher.registerHandler(new RewindHandler(handlerContext));
             messageDispatcher.registerHandler(new UndoFileHandler(handlerContext));
@@ -1290,14 +1292,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                                 List<File> files = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
 
                                 if (!files.isEmpty()) {
-                                    File file = files.get(0); // 只处理第一个文件
-                                    String filePath = file.getAbsolutePath();
-                                    LOG.debug("Dropped file path: " + filePath);
+                                    // Build JSON array using Gson for safe serialization
+                                    JsonArray jsonArray = new JsonArray();
+                                    for (File file : files) {
+                                        jsonArray.add(file.getAbsolutePath());
+                                    }
 
-                                    // 通过 JavaScript 将路径传递到前端
+                                    LOG.debug("Dropped " + files.size() + " file(s)");
+
+                                    // Pass JSON array to frontend for batch processing
                                     String jsCode = String.format(
-                                        "if (window.handleFilePathFromJava) { window.handleFilePathFromJava('%s'); }",
-                                        filePath.replace("\\", "\\\\").replace("'", "\\'")
+                                        "if (window.handleFilePathFromJava) { window.handleFilePathFromJava(%s); }",
+                                        jsonArray.toString()
                                     );
                                     browser.getCefBrowser().executeJavaScript(jsCode, browser.getCefBrowser().getURL(), 0);
                                 }
@@ -1402,18 +1408,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             iconLabel.setForeground(Color.WHITE);
             iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            JLabel titleLabel = new JLabel("当前IDE JCEF 模块未安装");
+            JLabel titleLabel = new JLabel(ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalled"));
             titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
             titleLabel.setForeground(Color.WHITE);
             titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
             JTextArea messageArea = new JTextArea();
-            messageArea.setText(
-                "解决方案：\n" +
-                "双击 Shift 键，搜索 Choose Boot Java Runtime for the IDE\n" +
-                "在弹出窗口的下拉列表中，选择一个标记有 with JCEF 的版本进行下载和安装。\n" +
-                "等待下载完成并点击确定，随后重启 Android Studio"
-            );
+            messageArea.setText(ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalledSolution"));
             messageArea.setEditable(false);
             messageArea.setBackground(new Color(45, 45, 45));
             messageArea.setForeground(new Color(200, 200, 200));
@@ -1446,17 +1447,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             iconLabel.setForeground(Color.WHITE);
             iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            JLabel titleLabel = new JLabel("编辑器 JCEF 模块报错");
+            JLabel titleLabel = new JLabel(ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteError"));
             titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
             titleLabel.setForeground(Color.WHITE);
             titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
             JTextArea messageArea = new JTextArea();
-            messageArea.setText(
-                "解决方案：\n" +
-                "✅ 彻底退出您当前的编辑器，重新启动编辑器就好了\n" +
-                "⚠️ 请注意，一定要彻底退出，不要只退到项目选择页面" 
-            );
+            messageArea.setText(ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteSolution"));
             messageArea.setEditable(false);
             messageArea.setBackground(new Color(45, 45, 45));
             messageArea.setForeground(new Color(200, 200, 200));
@@ -1494,13 +1491,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             iconLabel.setForeground(Color.WHITE);
             iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            JLabel titleLabel = new JLabel("AI BridgPreparinge...(插件解压中...)");
+            JLabel titleLabel = new JLabel(ClaudeCodeGuiBundle.message("toolwindow.extractingTitle"));
             titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
             titleLabel.setForeground(Color.WHITE);
             titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
             titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
-            JLabel descLabel = new JLabel("<html><center>First-time setup: extracting AI Bridge components.<br>This only happens once.<br>仅在首次安装/更新时候需要解压（大约10s~30s），解压后就没有此页面了</center></html>");
+            JLabel descLabel = new JLabel("<html><center>" + ClaudeCodeGuiBundle.message("toolwindow.extractingDesc").replace("\n", "<br>") + "</center></html>");
             descLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
             descLabel.setForeground(new Color(180, 180, 180));
             descLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -1941,7 +1938,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty()) ? savedMode.trim() : "bypassPermissions";
                 // provider 和 model 使用默认值，因为窗口刚打开时前端会主动同步
                 previousProvider = "claude";
-                previousModel = "claude-sonnet-4-5";
+                previousModel = "claude-sonnet-4-6";
             }
             LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
@@ -2562,7 +2559,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             // 保存当前的 permission mode、provider、model（如果存在旧 session）
             String previousPermissionMode = (session != null) ? session.getPermissionMode() : "bypassPermissions";
             String previousProvider = (session != null) ? session.getProvider() : "claude";
-            String previousModel = (session != null) ? session.getModel() : "claude-sonnet-4-5";
+            String previousModel = (session != null) ? session.getModel() : "claude-sonnet-4-6";
             LOG.info("Preserving session state: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
             // 清空前端消息显示（修复新建会话时消息不清空的bug）

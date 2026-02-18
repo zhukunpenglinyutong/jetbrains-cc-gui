@@ -1,17 +1,17 @@
 /**
- * HTTP/SSE 工具获取模块
- * 提供从 HTTP/SSE 类型 MCP 服务器获取工具列表的功能
+ * HTTP/SSE tools retrieval module
+ * Provides tool listing from HTTP/SSE-based MCP servers
  */
 
 import { log } from './logger.js';
 import { parseSSE } from './mcp-protocol.js';
 
 /**
- * 获取 HTTP/SSE 类型服务器的工具列表
- * 支持 MCP Streamable HTTP 的会话管理（Mcp-Session-Id）
- * @param {string} serverName - 服务器名称
- * @param {Object} serverConfig - 服务器配置
- * @returns {Promise<Object>} 工具列表响应
+ * Retrieve the tool list from an HTTP/SSE-based server
+ * Supports MCP Streamable HTTP session management (Mcp-Session-Id)
+ * @param {string} serverName - Server name
+ * @param {Object} serverConfig - Server configuration
+ * @returns {Promise<Object>} Tools list response
  */
 export async function getHttpServerTools(serverName, serverConfig) {
   const result = {
@@ -55,11 +55,11 @@ export async function getHttpServerTools(serverName, serverConfig) {
   let sessionId = null;
 
   /**
-   * 发送 MCP 请求，支持会话管理和重试
-   * @param {string} method - MCP 方法名
-   * @param {Object} params - 请求参数
-   * @param {number} retryCount - 当前重试次数
-   * @returns {Promise<Object>} 响应数据
+   * Send an MCP request with session management and retry support
+   * @param {string} method - MCP method name
+   * @param {Object} params - Request parameters
+   * @param {number} retryCount - Current retry attempt
+   * @returns {Promise<Object>} Response data
    */
   const sendRequest = async (method, params = {}, retryCount = 0) => {
     const id = ++requestId;
@@ -70,7 +70,7 @@ export async function getHttpServerTools(serverName, serverConfig) {
       params: params
     };
 
-    // 构建请求头，包含会话 ID（如果存在）
+    // Build request headers, including session ID if available
     const headers = { ...baseHeaders };
     if (sessionId) {
       headers['Mcp-Session-Id'] = sessionId;
@@ -79,7 +79,7 @@ export async function getHttpServerTools(serverName, serverConfig) {
 
     log('info', '[MCP Tools] ' + serverName + ' sending ' + method + ' request (id: ' + id + ')');
 
-    // 指数退避超时：第一次 10s，第二次 15s，第三次 20s
+    // Exponential backoff timeout: 10s first try, 15s second, 20s third
     const timeoutMs = 10000 + (retryCount * 5000);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -95,14 +95,14 @@ export async function getHttpServerTools(serverName, serverConfig) {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        // 如果是 404 或 405，可能是旧版 SSE 传输，需要特殊处理
+        // 404 or 405 may indicate a legacy SSE transport that needs special handling
         if (response.status === 404 || response.status === 405) {
           log('warn', '[MCP Tools] Server returned ' + response.status + ', may be using legacy SSE transport');
         }
         throw new Error('HTTP ' + response.status + ': ' + response.statusText);
       }
 
-      // 提取会话 ID（从响应头）
+      // Extract session ID from response headers
       const responseSessionId = response.headers.get('Mcp-Session-Id');
       if (responseSessionId && !sessionId) {
         sessionId = responseSessionId;
@@ -117,7 +117,7 @@ export async function getHttpServerTools(serverName, serverConfig) {
         const data = events[0].data;
 
         if (data.error) {
-          // 如果是会话相关的错误，尝试重试
+          // Retry on session-related errors
           if (data.error.code === -32600 || data.error.message?.includes('session')) {
             if (retryCount < 2) {
               log('warn', '[MCP Tools] Session error, retrying...');
@@ -136,7 +136,7 @@ export async function getHttpServerTools(serverName, serverConfig) {
         const data = JSON.parse(responseText);
 
         if (data.error) {
-          // 如果是会话相关的错误，尝试重试
+          // Retry on session-related errors
           if (data.error.code === -32600 || data.error.message?.includes('session')) {
             if (retryCount < 2) {
               log('warn', '[MCP Tools] Session error, retrying...');
@@ -156,7 +156,7 @@ export async function getHttpServerTools(serverName, serverConfig) {
       if (error.name === 'AbortError') {
         throw new Error('Request timeout after ' + timeoutMs + 'ms');
       }
-      // 网络错误重试
+      // Retry on network errors
       if ((error.message.includes('ECONNREFUSED') || error.message.includes('fetch failed')) && retryCount < 2) {
         log('warn', '[MCP Tools] Network error, retrying...', error.message);
         await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
@@ -168,7 +168,7 @@ export async function getHttpServerTools(serverName, serverConfig) {
   };
 
   try {
-    // 发送初始化请求
+    // Send the initialize request
     const initResponse = await sendRequest('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
@@ -181,12 +181,12 @@ export async function getHttpServerTools(serverName, serverConfig) {
 
     log('info', '[MCP Tools] ' + serverName + ' initialized successfully');
 
-    // 如果有会话 ID，现在已建立会话，后续请求将使用相同的会话
+    // If we have a session ID, the session is now established and subsequent requests will reuse it
     if (sessionId) {
       log('info', '[MCP Tools] Using session:', sessionId);
     }
 
-    // 发送 tools/list 请求（现在会包含会话 ID）
+    // Send the tools/list request (now includes the session ID)
     const toolsResponse = await sendRequest('tools/list', {});
 
     if (toolsResponse.result && toolsResponse.result.tools) {

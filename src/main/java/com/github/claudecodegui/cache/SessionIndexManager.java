@@ -15,9 +15,9 @@ import java.util.*;
 import java.util.stream.Stream;
 
 /**
- * 会话索引文件管理器
- * 负责索引文件的读写和增量更新
- * 索引文件位置: ~/.codemoss/cache/
+ * Session index file manager.
+ * Handles reading, writing, and incremental updates of index files.
+ * Index file location: ~/.codemoss/cache/
  */
 public class SessionIndexManager {
 
@@ -32,11 +32,11 @@ public class SessionIndexManager {
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    // 单例
+    // Singleton
     private static final SessionIndexManager INSTANCE = new SessionIndexManager();
 
     private SessionIndexManager() {
-        // 确保缓存目录存在
+        // Ensure cache directory exists
         ensureCacheDir();
     }
 
@@ -45,7 +45,7 @@ public class SessionIndexManager {
     }
 
     /**
-     * 索引文件结构
+     * Index file structure.
      */
     public static class SessionIndex {
         public int version = INDEX_VERSION;
@@ -54,7 +54,7 @@ public class SessionIndexManager {
     }
 
     /**
-     * 项目索引结构
+     * Project index structure.
      */
     public static class ProjectIndex {
         public long lastDirScanTime;
@@ -62,7 +62,7 @@ public class SessionIndexManager {
         public List<SessionIndexEntry> sessions = new ArrayList<>();
 
         /**
-         * 获取已索引的 sessionId 集合
+         * Returns the set of already-indexed session IDs.
          */
         public Set<String> getIndexedSessionIds() {
             Set<String> ids = new HashSet<>();
@@ -74,16 +74,16 @@ public class SessionIndexManager {
     }
 
     /**
-     * 更新类型枚举
+     * Update type enumeration.
      */
     public enum UpdateType {
-        NONE,           // 不需要更新
-        INCREMENTAL,    // 增量更新（只有新增文件）
-        FULL            // 全量更新
+        NONE,           // No update needed
+        INCREMENTAL,    // Incremental update (new files only)
+        FULL            // Full rebuild
     }
 
     /**
-     * 会话索引条目
+     * Session index entry.
      */
     public static class SessionIndexEntry {
         public String sessionId;
@@ -92,14 +92,14 @@ public class SessionIndexManager {
         public long lastTimestamp;
         public long firstTimestamp;
         public long fileSize;
-        public String cwd;  // Codex 专用
+        public String cwd;  // Codex only
 
-        // 用于检测文件是否变化
+        // Used to detect whether the file has changed
         public long fileLastModified;
     }
 
     /**
-     * 确保缓存目录存在
+     * Ensures the cache directory exists.
      */
     private void ensureCacheDir() {
         try {
@@ -113,49 +113,49 @@ public class SessionIndexManager {
     }
 
     /**
-     * 获取 Claude 索引文件路径
+     * Returns the file path for the Claude index.
      */
     public Path getClaudeIndexPath() {
         return CODEMOSS_CACHE_DIR.resolve(CLAUDE_INDEX_FILE);
     }
 
     /**
-     * 获取 Codex 索引文件路径
+     * Returns the file path for the Codex index.
      */
     public Path getCodexIndexPath() {
         return CODEMOSS_CACHE_DIR.resolve(CODEX_INDEX_FILE);
     }
 
     /**
-     * 读取 Claude 索引
+     * Reads the Claude index.
      */
     public SessionIndex readClaudeIndex() {
         return readIndex(getClaudeIndexPath());
     }
 
     /**
-     * 读取 Codex 索引
+     * Reads the Codex index.
      */
     public SessionIndex readCodexIndex() {
         return readIndex(getCodexIndexPath());
     }
 
     /**
-     * 保存 Claude 索引
+     * Saves the Claude index.
      */
     public void saveClaudeIndex(SessionIndex index) {
         saveIndex(getClaudeIndexPath(), index);
     }
 
     /**
-     * 保存 Codex 索引
+     * Saves the Codex index.
      */
     public void saveCodexIndex(SessionIndex index) {
         saveIndex(getCodexIndexPath(), index);
     }
 
     /**
-     * 读取索引文件
+     * Reads an index file from disk.
      */
     private SessionIndex readIndex(Path indexPath) {
         if (!Files.exists(indexPath)) {
@@ -168,7 +168,7 @@ public class SessionIndexManager {
             if (index == null) {
                 return new SessionIndex();
             }
-            // 版本检查
+            // Version check
             if (index.version != INDEX_VERSION) {
                 LOG.info("[SessionIndexManager] Index version mismatch, rebuilding");
                 return new SessionIndex();
@@ -182,7 +182,7 @@ public class SessionIndexManager {
     }
 
     /**
-     * 保存索引文件
+     * Saves an index file to disk.
      */
     private void saveIndex(Path indexPath, SessionIndex index) {
         ensureCacheDir();
@@ -197,20 +197,20 @@ public class SessionIndexManager {
     }
 
     /**
-     * 检查项目索引是否需要更新
-     * @param projectIndex 项目索引
-     * @param projectDir 项目目录
-     * @return true 如果需要更新
+     * Checks whether the project index needs to be updated.
+     * @param projectIndex the project index
+     * @param projectDir the project directory
+     * @return true if an update is needed
      */
     public boolean needsUpdate(ProjectIndex projectIndex, Path projectDir) {
         return getUpdateType(projectIndex, projectDir) != UpdateType.NONE;
     }
 
     /**
-     * 获取更新类型
-     * @param projectIndex 项目索引
-     * @param projectDir 项目目录
-     * @return 更新类型
+     * Determines the type of update required.
+     * @param projectIndex the project index
+     * @param projectDir the project directory
+     * @return the update type
      */
     public UpdateType getUpdateType(ProjectIndex projectIndex, Path projectDir) {
         if (projectIndex == null || projectIndex.sessions.isEmpty()) {
@@ -218,26 +218,26 @@ public class SessionIndexManager {
         }
 
         try {
-            // 检查文件数量
+            // Check file count
             long currentFileCount;
             try (Stream<Path> paths = Files.list(projectDir)) {
                 currentFileCount = paths.filter(p -> p.toString().endsWith(".jsonl")).count();
             }
 
             if (currentFileCount == projectIndex.fileCount) {
-                // 文件数量相同，检查目录修改时间
+                // File count unchanged; check directory modification time
                 long currentDirModified = Files.getLastModifiedTime(projectDir).toMillis();
                 if (currentDirModified <= projectIndex.lastDirScanTime) {
                     return UpdateType.NONE;
                 }
-                // 目录时间变了但文件数量相同，可能是文件内容变化，需要全量更新
+                // Directory timestamp changed but file count is the same -- content may have changed, requiring a full update
                 return UpdateType.FULL;
             } else if (currentFileCount > projectIndex.fileCount) {
-                // 文件数量增加，可以增量更新
+                // File count increased; an incremental update is sufficient
                 LOG.info("[SessionIndexManager] File count increased: " + projectIndex.fileCount + " -> " + currentFileCount + ", incremental update");
                 return UpdateType.INCREMENTAL;
             } else {
-                // 文件数量减少，需要全量更新
+                // File count decreased; a full update is needed
                 LOG.info("[SessionIndexManager] File count decreased: " + projectIndex.fileCount + " -> " + currentFileCount + ", full update");
                 return UpdateType.FULL;
             }
@@ -248,7 +248,7 @@ public class SessionIndexManager {
     }
 
     /**
-     * 获取 Codex 更新类型（递归目录）
+     * Determines the update type for Codex (recursive directory scan).
      */
     public UpdateType getUpdateTypeRecursive(ProjectIndex projectIndex, Path sessionsDir) {
         if (projectIndex == null || projectIndex.sessions.isEmpty()) {
@@ -256,14 +256,14 @@ public class SessionIndexManager {
         }
 
         try {
-            // 对于 Codex，检查根目录的修改时间
+            // For Codex, check the root directory's modification time
             long currentDirModified = Files.getLastModifiedTime(sessionsDir).toMillis();
 
             if (currentDirModified <= projectIndex.lastDirScanTime) {
                 return UpdateType.NONE;
             }
 
-            // 目录时间变了，统计当前文件数量
+            // Directory timestamp changed; count current files
             long currentFileCount;
             try (Stream<Path> paths = Files.walk(sessionsDir)) {
                 currentFileCount = paths
@@ -279,7 +279,7 @@ public class SessionIndexManager {
                 LOG.info("[SessionIndexManager] Codex file count decreased, full update");
                 return UpdateType.FULL;
             } else {
-                // 文件数量相同但目录时间变了，可能是内容更新
+                // File count is the same but directory timestamp changed; content may have been updated
                 return UpdateType.FULL;
             }
         } catch (IOException e) {
@@ -289,10 +289,10 @@ public class SessionIndexManager {
     }
 
     /**
-     * 从索引条目转换为 ClaudeHistoryReader.SessionInfo
+     * Converts an index entry to a ClaudeHistoryReader.SessionInfo representation.
      */
     public static Object toClaudeSessionInfo(SessionIndexEntry entry) {
-        // 使用反射或直接创建，这里返回一个 Map 供调用方转换
+        // Returns a Map for the caller to convert (avoids reflection dependency)
         Map<String, Object> info = new HashMap<>();
         info.put("sessionId", entry.sessionId);
         info.put("title", entry.title);
@@ -303,7 +303,7 @@ public class SessionIndexManager {
     }
 
     /**
-     * 创建索引条目
+     * Creates a new index entry.
      */
     public static SessionIndexEntry createEntry(
             String sessionId,
@@ -328,7 +328,7 @@ public class SessionIndexManager {
     }
 
     /**
-     * 清除所有索引
+     * Clears all indexes.
      */
     public void clearAllIndexes() {
         try {
@@ -341,7 +341,7 @@ public class SessionIndexManager {
     }
 
     /**
-     * 清除指定项目的索引
+     * Clears the index for a specific project.
      */
     public void clearProjectIndex(String provider, String projectPath) {
         if ("claude".equals(provider)) {
@@ -357,8 +357,8 @@ public class SessionIndexManager {
     }
 
     /**
-     * 清除所有 Codex 索引
-     * Codex 使用 "__all__" 作为索引键，删除会话时需要清除整个 Codex 索引
+     * Clears all Codex indexes.
+     * Codex uses "__all__" as its index key, so deleting a session requires clearing the entire Codex index.
      */
     public void clearAllCodexIndex() {
         SessionIndex index = new SessionIndex();

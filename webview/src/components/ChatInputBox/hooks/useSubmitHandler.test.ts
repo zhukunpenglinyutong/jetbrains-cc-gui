@@ -16,17 +16,20 @@ describe('useSubmitHandler', () => {
     const { result } = renderHook(() =>
       useSubmitHandler({
         getTextContent: () => '',
+        invalidateCache: vi.fn(),
         attachments: [],
         isLoading: false,
         sdkStatusLoading: false,
         sdkInstalled: true,
         currentProvider: 'claude',
         clearInput,
+        cancelPendingInput: vi.fn(),
         externalAttachments: undefined,
         setInternalAttachments: vi.fn(),
         fileCompletion: { close },
         commandCompletion: { close },
         agentCompletion: { close },
+        promptCompletion: { close },
         recordInputHistory,
         onSubmit,
         t: (key) => key,
@@ -47,17 +50,20 @@ describe('useSubmitHandler', () => {
     const { result } = renderHook(() =>
       useSubmitHandler({
         getTextContent: () => 'hello',
+        invalidateCache: vi.fn(),
         attachments: [],
         isLoading: false,
         sdkStatusLoading: true,
         sdkInstalled: true,
         currentProvider: 'claude',
         clearInput,
+        cancelPendingInput: vi.fn(),
         externalAttachments: undefined,
         setInternalAttachments: vi.fn(),
         fileCompletion: { close },
         commandCompletion: { close },
         agentCompletion: { close },
+        promptCompletion: { close },
         recordInputHistory: vi.fn(),
         onSubmit: vi.fn(),
         addToast,
@@ -77,17 +83,20 @@ describe('useSubmitHandler', () => {
     const { result } = renderHook(() =>
       useSubmitHandler({
         getTextContent: () => 'hello',
+        invalidateCache: vi.fn(),
         attachments: [],
         isLoading: false,
         sdkStatusLoading: false,
         sdkInstalled: false,
         currentProvider: 'codex',
         clearInput: vi.fn(),
+        cancelPendingInput: vi.fn(),
         externalAttachments: undefined,
         setInternalAttachments: vi.fn(),
         fileCompletion: { close: vi.fn() },
         commandCompletion: { close: vi.fn() },
         agentCompletion: { close: vi.fn() },
+        promptCompletion: { close: vi.fn() },
         recordInputHistory: vi.fn(),
         onSubmit: vi.fn(),
         onInstallSdk,
@@ -107,21 +116,25 @@ describe('useSubmitHandler', () => {
     const recordInputHistory = vi.fn();
     const close = vi.fn();
     const onSubmit = vi.fn();
+    const invalidateCache = vi.fn();
 
     const { result } = renderHook(() =>
       useSubmitHandler({
         getTextContent: () => 'hello',
+        invalidateCache,
         attachments: [createAttachment('a1')],
         isLoading: false,
         sdkStatusLoading: false,
         sdkInstalled: true,
         currentProvider: 'claude',
         clearInput,
+        cancelPendingInput: vi.fn(),
         externalAttachments: undefined,
         setInternalAttachments: vi.fn(),
         fileCompletion: { close },
         commandCompletion: { close },
         agentCompletion: { close },
+        promptCompletion: { close },
         recordInputHistory,
         onSubmit,
         t: (key) => key,
@@ -129,7 +142,8 @@ describe('useSubmitHandler', () => {
     );
 
     result.current();
-    expect(close).toHaveBeenCalledTimes(3);
+    expect(invalidateCache).toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(4);
     expect(recordInputHistory).toHaveBeenCalledWith('hello');
     expect(clearInput).toHaveBeenCalled();
 

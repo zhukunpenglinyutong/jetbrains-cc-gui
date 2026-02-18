@@ -9,27 +9,27 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 会话索引内存缓存
- * 用于缓存历史会话列表，避免每次都从文件系统读取
+ * In-memory cache for session indexes.
+ * Caches historical session lists to avoid reading from the filesystem on every access.
  */
 public class SessionIndexCache {
 
     private static final Logger LOG = Logger.getInstance(SessionIndexCache.class);
 
-    // 单例
+    // Singleton
     private static final SessionIndexCache INSTANCE = new SessionIndexCache();
 
-    // 缓存有效期: 5分钟
+    // Cache TTL: 5 minutes
     private static final long CACHE_TTL_MS = 5 * 60 * 1000;
 
-    // Claude 缓存: projectPath -> CacheEntry
+    // Claude cache: projectPath -> CacheEntry
     private final Map<String, CacheEntry<?>> claudeCache = new ConcurrentHashMap<>();
 
-    // Codex 缓存: projectPath -> CacheEntry
+    // Codex cache: projectPath -> CacheEntry
     private final Map<String, CacheEntry<?>> codexCache = new ConcurrentHashMap<>();
 
     private SessionIndexCache() {
-        // 私有构造函数
+        // Private constructor
     }
 
     public static SessionIndexCache getInstance() {
@@ -37,7 +37,7 @@ public class SessionIndexCache {
     }
 
     /**
-     * 缓存条目
+     * Cache entry.
      */
     public static class CacheEntry<T> {
         private final List<T> sessions;
@@ -63,30 +63,30 @@ public class SessionIndexCache {
         }
 
         /**
-         * 检查缓存是否过期
+         * Checks whether the cache has expired.
          */
         public boolean isExpired() {
             return System.currentTimeMillis() - cacheCreatedAt > CACHE_TTL_MS;
         }
 
         /**
-         * 检查缓存是否仍然有效
-         * @param currentDirModified 当前目录修改时间
+         * Checks whether the cache is still valid.
+         * @param currentDirModified current directory modification time
          */
         public boolean isValid(long currentDirModified) {
             if (isExpired()) {
                 return false;
             }
-            // 如果目录修改时间没变，缓存仍然有效
+            // If the directory modification time hasn't changed, the cache is still valid
             return currentDirModified == lastDirModified;
         }
     }
 
     /**
-     * 获取 Claude 缓存的会话列表
-     * @param projectPath 项目路径
-     * @param projectDir 项目目录 Path（用于检查修改时间）
-     * @return 缓存的会话列表，如果缓存无效则返回 null
+     * Returns the cached Claude session list.
+     * @param projectPath the project path
+     * @param projectDir the project directory Path (used to check modification time)
+     * @return the cached session list, or null if the cache is invalid
      */
     @SuppressWarnings("unchecked")
     public <T> List<T> getClaudeSessions(String projectPath, Path projectDir) {
@@ -108,7 +108,7 @@ public class SessionIndexCache {
     }
 
     /**
-     * 更新 Claude 缓存
+     * Updates the Claude cache.
      */
     public <T> void updateClaudeCache(String projectPath, Path projectDir, List<T> sessions) {
         long dirModified = getDirModifiedTime(projectDir);
@@ -118,10 +118,10 @@ public class SessionIndexCache {
     }
 
     /**
-     * 获取 Codex 缓存的会话列表
-     * @param projectPath 项目路径
-     * @param sessionsDir sessions 目录 Path
-     * @return 缓存的会话列表，如果缓存无效则返回 null
+     * Returns the cached Codex session list.
+     * @param projectPath the project path
+     * @param sessionsDir the sessions directory Path
+     * @return the cached session list, or null if the cache is invalid
      */
     @SuppressWarnings("unchecked")
     public <T> List<T> getCodexSessions(String projectPath, Path sessionsDir) {
@@ -143,7 +143,7 @@ public class SessionIndexCache {
     }
 
     /**
-     * 更新 Codex 缓存
+     * Updates the Codex cache.
      */
     public <T> void updateCodexCache(String projectPath, Path sessionsDir, List<T> sessions) {
         long dirModified = getDirModifiedTime(sessionsDir);
@@ -153,7 +153,7 @@ public class SessionIndexCache {
     }
 
     /**
-     * 清除所有缓存
+     * Clears all caches.
      */
     public void clearAll() {
         claudeCache.clear();
@@ -162,7 +162,7 @@ public class SessionIndexCache {
     }
 
     /**
-     * 清除指定项目的缓存
+     * Clears the cache for a specific project.
      */
     public void clearProject(String projectPath) {
         claudeCache.remove(projectPath);
@@ -171,8 +171,8 @@ public class SessionIndexCache {
     }
 
     /**
-     * 清除所有 Codex 缓存
-     * Codex 使用 "__all__" 作为缓存键，删除会话时需要清除整个 Codex 缓存
+     * Clears all Codex caches.
+     * Codex uses "__all__" as the cache key, so deleting a session requires clearing the entire Codex cache.
      */
     public void clearAllCodexCache() {
         codexCache.clear();
@@ -180,7 +180,7 @@ public class SessionIndexCache {
     }
 
     /**
-     * 获取目录的修改时间
+     * Returns the modification time of a directory.
      */
     private long getDirModifiedTime(Path dir) {
         if (dir == null || !Files.exists(dir)) {

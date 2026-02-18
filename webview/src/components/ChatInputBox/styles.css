@@ -21,7 +21,7 @@
    ============================================================ */
 :root .chat-input-box,
 [data-theme="dark"] .chat-input-box {
-  --input-bg: #1e1e1e;
+  --input-bg: var(--bg-chat, #1e1e1e);
   --input-border: #3e3e42;
   --input-focus-border: #007fd4;
   --input-placeholder: #666;
@@ -49,7 +49,7 @@
    CSS 变量 - 亮色主题
    ============================================================ */
 [data-theme="light"] .chat-input-box {
-  --input-bg: #ffffff;
+  --input-bg: var(--bg-chat, #ffffff);
   --input-border: #d0d0d0;
   --input-focus-border: #0078d4;
   --input-placeholder: #999999;
@@ -1748,6 +1748,50 @@
 }
 
 [data-theme="light"] .sdk-warning-bar.sdk-loading .codicon-loading {
+  color: #1976d2;
+}
+
+/* ============================================================
+   开源宣传横幅
+   ============================================================ */
+.open-source-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(33, 150, 243, 0.1);
+  border-bottom: 1px solid rgba(33, 150, 243, 0.2);
+  color: #64b5f6;
+  font-size: 12px;
+}
+
+.open-source-banner .banner-text {
+  flex: 1;
+}
+
+.open-source-banner .banner-close {
+  background: none;
+  border: none;
+  color: #64b5f6;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 0 0 10px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.open-source-banner .banner-close:hover {
+  opacity: 1;
+}
+
+[data-theme="light"] .open-source-banner {
+  background: rgba(33, 150, 243, 0.08);
+  border-bottom-color: rgba(33, 150, 243, 0.15);
+  color: #1976d2;
+}
+
+[data-theme="light"] .open-source-banner .banner-close {
   color: #1976d2;
 }
 

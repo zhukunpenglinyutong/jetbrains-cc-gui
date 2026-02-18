@@ -10,14 +10,14 @@ import { join, basename } from 'path';
 import { tmpdir } from 'os';
 import { getRealHomeDir } from './utils/path-utils.js';
 
-// ========== 调试日志辅助函数 ==========
+// ========== Debug logging helpers ==========
 function debugLog(tag, message, data = null) {
   const timestamp = new Date().toISOString();
   const dataStr = data ? ` | Data: ${JSON.stringify(data)}` : '';
   console.log(`[${timestamp}][PERM_DEBUG][${tag}] ${message}${dataStr}`);
 }
 
-// 通信目录
+// Communication directory
 const PERMISSION_DIR = process.env.CLAUDE_PERMISSION_DIR
   ? process.env.CLAUDE_PERMISSION_DIR
   : join(tmpdir(), 'claude-permission');
@@ -25,7 +25,7 @@ const PERMISSION_DIR = process.env.CLAUDE_PERMISSION_DIR
 // Session ID for isolating permission requests across multiple IDEA instances
 const SESSION_ID = process.env.CLAUDE_SESSION_ID || 'default';
 
-// 权限请求超时时间（5 分钟），与 Java 端 PermissionHandler.PERMISSION_TIMEOUT_SECONDS 保持一致
+// Permission request timeout (5 minutes), kept in sync with Java-side PermissionHandler.PERMISSION_TIMEOUT_SECONDS
 const PERMISSION_TIMEOUT_MS = 300000;
 
 debugLog('INIT', `Permission dir: ${PERMISSION_DIR}`);
@@ -34,7 +34,7 @@ debugLog('INIT', `tmpdir(): ${tmpdir()}`);
 debugLog('INIT', `CLAUDE_PERMISSION_DIR env: ${process.env.CLAUDE_PERMISSION_DIR || 'NOT SET'}`);
 debugLog('INIT', `CLAUDE_SESSION_ID env: ${process.env.CLAUDE_SESSION_ID || 'NOT SET'}`);
 
-// 确保目录存在
+// Ensure the directory exists
 import { mkdirSync } from 'fs';
 try {
   mkdirSync(PERMISSION_DIR, { recursive: true });
@@ -144,7 +144,7 @@ async function requestAskUserQuestionAnswers(input) {
       return null;
     }
 
-    // 等待响应文件（与 PERMISSION_TIMEOUT_MS 保持一致：5分钟）
+    // Wait for the response file (matches PERMISSION_TIMEOUT_MS: 5 minutes)
     const timeout = PERMISSION_TIMEOUT_MS;
     let pollCount = 0;
     const pollInterval = 100;
@@ -155,7 +155,7 @@ async function requestAskUserQuestionAnswers(input) {
       await new Promise(resolve => setTimeout(resolve, pollInterval));
       pollCount++;
 
-      // 每5秒输出一次等待状态
+      // Log waiting status every 5 seconds
       if (pollCount % 50 === 0) {
         const elapsed = Date.now() - requestStartTime;
         debugLog('ASK_USER_QUESTION_WAITING', `Still waiting for answers`, { elapsed: `${elapsed}ms`, pollCount });
@@ -171,7 +171,7 @@ async function requestAskUserQuestionAnswers(input) {
           const answers = responseData.answers;
           debugLog('ASK_USER_QUESTION_RESPONSE_PARSED', `Parsed answers`, { answers, elapsed: `${Date.now() - requestStartTime}ms` });
 
-          // 清理响应文件
+          // Clean up the response file
           try {
             unlinkSync(responseFile);
             debugLog('ASK_USER_QUESTION_FILE_CLEANUP', `Response file deleted`);
@@ -187,7 +187,7 @@ async function requestAskUserQuestionAnswers(input) {
       }
     }
 
-    // 超时，返回 null
+    // Timed out, return null
     const elapsed = Date.now() - requestStartTime;
     debugLog('ASK_USER_QUESTION_TIMEOUT', `Timeout waiting for answers`, { elapsed: `${elapsed}ms`, timeout: `${timeout}ms` });
 
@@ -312,7 +312,7 @@ export async function requestPermissionFromJava(toolName, input) {
   debugLog('REQUEST_START', `Tool: ${toolName}`, { input });
 
   try {
-    // 列出当前目录中的文件（调试用）
+    // List files in the current directory (for debugging)
     try {
       const existingFiles = readdirSync(PERMISSION_DIR);
       debugLog('DIR_CONTENTS', `Files in permission dir (before request)`, { files: existingFiles });
@@ -320,8 +320,8 @@ export async function requestPermissionFromJava(toolName, input) {
       debugLog('DIR_ERROR', `Cannot read permission dir: ${e.message}`);
     }
 
-    // 对于某些明显的危险操作，直接拒绝
-    // 获取用户主目录用于路径检查
+    // Immediately deny obviously dangerous operations
+    // Retrieve the user's home directory for path checks
     const userHomeDir = getRealHomeDir();
     const dangerousPatterns = [
       '/etc/',
@@ -332,7 +332,7 @@ export async function requestPermissionFromJava(toolName, input) {
       `${userHomeDir}/.aws/`
     ];
 
-    // 检查文件路径是否包含危险模式
+    // Check whether the file path matches any dangerous pattern
     if (input.file_path || input.path) {
       const path = input.file_path || input.path;
       for (const pattern of dangerousPatterns) {
@@ -343,11 +343,11 @@ export async function requestPermissionFromJava(toolName, input) {
       }
     }
 
-    // 生成请求ID
+    // Generate a request ID
     const requestId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
     debugLog('REQUEST_ID', `Generated request ID: ${requestId}`);
 
-    // 创建请求文件
+    // Create the request file
     const requestFile = join(PERMISSION_DIR, `request-${SESSION_ID}-${requestId}.json`);
     const responseFile = join(PERMISSION_DIR, `response-${SESSION_ID}-${requestId}.json`);
 
@@ -365,7 +365,7 @@ export async function requestPermissionFromJava(toolName, input) {
       writeFileSync(requestFile, JSON.stringify(requestData, null, 2));
       debugLog('FILE_WRITE_OK', `Request file written successfully`);
 
-      // 验证文件是否确实创建
+      // Verify the file was actually created
       if (existsSync(requestFile)) {
         debugLog('FILE_VERIFY', `Request file exists after write`);
       } else {
@@ -376,7 +376,7 @@ export async function requestPermissionFromJava(toolName, input) {
       return false;
     }
 
-    // 等待响应文件（延长到 5 分钟，让用户有足够时间查看上下文做决定）
+    // Wait for the response file (extended to 5 minutes to give the user enough time to review context and decide)
     const timeout = PERMISSION_TIMEOUT_MS;
     let pollCount = 0;
     const pollInterval = 100;
@@ -387,12 +387,12 @@ export async function requestPermissionFromJava(toolName, input) {
       await new Promise(resolve => setTimeout(resolve, pollInterval));
       pollCount++;
 
-      // 每5秒输出一次等待状态
+      // Log waiting status every 5 seconds
       if (pollCount % 50 === 0) {
         const elapsed = Date.now() - requestStartTime;
         debugLog('WAITING', `Still waiting for response`, { elapsed: `${elapsed}ms`, pollCount });
 
-        // 检查请求文件是否还存在（Java 应该会删除它）
+        // Check if the request file still exists (Java should have deleted it)
         const reqFileExists = existsSync(requestFile);
         const respFileExists = existsSync(responseFile);
         debugLog('FILE_STATUS', `File status check`, {
@@ -411,7 +411,7 @@ export async function requestPermissionFromJava(toolName, input) {
           const result = responseData.allow;
           debugLog('RESPONSE_PARSED', `Parsed response`, { allow: result, elapsed: `${Date.now() - requestStartTime}ms` });
 
-          // 清理响应文件
+          // Clean up the response file
           try {
             unlinkSync(responseFile);
             debugLog('FILE_CLEANUP', `Response file deleted`);
@@ -427,11 +427,11 @@ export async function requestPermissionFromJava(toolName, input) {
       }
     }
 
-    // 超时，默认拒绝
+    // Timed out -- deny by default
     const elapsed = Date.now() - requestStartTime;
     debugLog('TIMEOUT', `Timeout waiting for response`, { elapsed: `${elapsed}ms`, timeout: `${timeout}ms` });
 
-    // 超时后检查文件状态
+    // Check file status after timeout
     const reqFileExists = existsSync(requestFile);
     const respFileExists = existsSync(responseFile);
     debugLog('TIMEOUT_FILE_STATUS', `File status at timeout`, {
@@ -461,21 +461,21 @@ export async function canUseTool(toolName, input, options = {}) {
   console.log('[PERM_DEBUG][CAN_USE_TOOL] options:', options ? 'present' : 'undefined');
   debugLog('CAN_USE_TOOL', `Called with tool: ${toolName}`, { input });
 
-  // 特殊处理：AskUserQuestion 工具
-  // 这个工具需要向用户显示问题并收集答案，而不是简单的批准/拒绝
+  // Special handling for the AskUserQuestion tool:
+  // This tool needs to display questions to the user and collect answers, not just approve/deny
   if (toolName === 'AskUserQuestion') {
     debugLog('ASK_USER_QUESTION', 'Handling AskUserQuestion tool', { input });
 
-    // 请求用户回答问题
+    // Request answers from the user
     const answers = await requestAskUserQuestionAnswers(input);
     const elapsed = Date.now() - callStartTime;
 
     if (answers !== null) {
       debugLog('ASK_USER_QUESTION_SUCCESS', 'User provided answers', { answers, elapsed: `${elapsed}ms` });
 
-      // 按照 SDK 要求返回答案：
+      // Return answers in the format expected by the SDK:
       // behavior: 'allow'
-      // updatedInput: { questions: 原始问题, answers: 用户答案 }
+      // updatedInput: { questions: original questions, answers: user answers }
       return {
         behavior: 'allow',
         updatedInput: {
@@ -486,7 +486,7 @@ export async function canUseTool(toolName, input, options = {}) {
     } else {
       debugLog('ASK_USER_QUESTION_FAILED', 'Failed to get answers from user', { elapsed: `${elapsed}ms` });
 
-      // 如果用户取消或超时，拒绝工具调用
+      // If the user cancelled or timed out, deny the tool call
       return {
         behavior: 'deny',
         message: 'User did not provide answers'
@@ -494,13 +494,13 @@ export async function canUseTool(toolName, input, options = {}) {
     }
   }
 
-  // 将 /tmp 等路径重写到项目根目录
+  // Rewrite paths like /tmp to the project root directory
   const rewriteResult = rewriteToolInputPaths(toolName, input);
   if (rewriteResult.changed) {
     debugLog('PATH_REWRITE', `Paths were rewritten for tool: ${toolName}`, { input });
   }
 
-  // 如果无法获取工具名称，拒绝
+  // Deny if no tool name is provided
   if (!toolName) {
     debugLog('ERROR', 'No tool name provided, denying');
     return {
@@ -509,7 +509,7 @@ export async function canUseTool(toolName, input, options = {}) {
     };
   }
 
-  // 某些工具可以自动允许（只读操作）
+  // Certain tools can be auto-allowed (read-only operations)
   const autoAllowedTools = ['Read', 'Glob', 'Grep'];
   if (autoAllowedTools.includes(toolName)) {
     debugLog('AUTO_ALLOW', `Auto-allowing read-only tool: ${toolName}`);
@@ -519,7 +519,7 @@ export async function canUseTool(toolName, input, options = {}) {
     };
   }
 
-  // 其他工具需要请求权限
+  // All other tools require explicit permission
   debugLog('PERMISSION_NEEDED', `Tool ${toolName} requires permission, calling requestPermissionFromJava`);
   const allowed = await requestPermissionFromJava(toolName, input);
   const elapsed = Date.now() - callStartTime;

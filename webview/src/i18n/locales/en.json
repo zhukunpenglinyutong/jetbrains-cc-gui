@@ -34,9 +34,9 @@
     "emptyMessage": "Empty message",
     "clickToPreview": "Click to preview",
     "userUploadedImage": "User uploaded image",
-    "inputPlaceholder": "@reference files, #invoke agents, Enter to send",
-    "inputPlaceholderEnter": "@reference files, #invoke agents, Enter to send",
-    "inputPlaceholderCmdEnter": "@reference files, #invoke agents, ⌘Enter to send",
+    "inputPlaceholder": "@reference files, #invoke agents, !insert prompts, Enter to send",
+    "inputPlaceholderEnter": "@reference files, #invoke agents, !insert prompts, Enter to send",
+    "inputPlaceholderCmdEnter": "@reference files, #invoke agents, !insert prompts, ⌘Enter to send",
     "noThinkingContent": "No thinking content",
     "parseError": "Failed to parse content",
     "sendMessageEnter": "Send message (Enter)",
@@ -80,6 +80,7 @@
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
     "sdkStatusLoading": "Checking SDK status...",
+    "openSourceBanner": "This project is guaranteed to be 100% open source forever. Feel free to use it!",
     "goInstallSdk": "Go to Install",
     "commandNotImplemented": "`{{command}}` feature is not yet implemented.",
     "clearCommandDescription": "Clear conversation history and start a new session",
@@ -110,7 +111,8 @@
         "hindi": "हिन्दी",
         "spanish": "Español",
         "french": "Français",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "russian": "Русский"
       },
       "nodePath": {
         "label": "Node.js Path",
@@ -156,6 +158,12 @@
         "enterDesc": "Press Enter to send message, Shift+Enter for new line",
         "cmdEnter": "⌘/Ctrl+Enter to Send",
         "cmdEnterDesc": "Press ⌘/Ctrl+Enter to send message, Enter for new line"
+      },
+      "chatBgColor": {
+        "label": "Chat Background",
+        "custom": "Custom",
+        "reset": "Reset",
+        "hint": "Customize the chat area background color. Leave empty to follow the theme default."
       }
     },
     "providers": "Provider Management",
@@ -238,6 +246,19 @@
           "contentPlaceholder": "Enter history record content...",
           "importanceLabel": "Importance",
           "importanceHint": "Higher importance means higher priority in auto-completion"
+        },
+        "timeAgo": {
+          "yearsAgo_one": "{{count}} year ago",
+          "yearsAgo_other": "{{count}} years ago",
+          "monthsAgo_one": "{{count}} month ago",
+          "monthsAgo_other": "{{count}} months ago",
+          "daysAgo_one": "{{count}} day ago",
+          "daysAgo_other": "{{count}} days ago",
+          "hoursAgo_one": "{{count}} hour ago",
+          "hoursAgo_other": "{{count}} hours ago",
+          "minutesAgo_one": "{{count}} minute ago",
+          "minutesAgo_other": "{{count}} minutes ago",
+          "justNow": "just now"
         }
       }
     },
@@ -332,13 +353,13 @@
         "apiUrlHint": "Enter Claude API compatible service endpoint address",
         "modelMapping": "Model Mapping (will be injected into JSON env)",
         "mainModel": "Main Model",
-        "mainModelPlaceholder": "e.g., claude-sonnet-4-5",
+        "mainModelPlaceholder": "e.g., claude-sonnet-4-6",
         "haikuModel": "Haiku Default Model",
         "haikuModelPlaceholder": "e.g., claude-haiku-4-5",
         "sonnetModel": "Sonnet Default Model",
-        "sonnetModelPlaceholder": "e.g., claude-sonnet-4-5",
+        "sonnetModelPlaceholder": "e.g., claude-sonnet-4-6",
         "opusModel": "Opus Default Model",
-        "opusModelPlaceholder": "e.g., claude-opus-4-5-20251101",
+        "opusModelPlaceholder": "e.g., claude-opus-4-6",
         "modelMappingHint": "Optional: Specify default Claude models to use. Leave empty for system defaults.",
         "jsonConfig": "JSON Configuration",
         "jsonConfigDescription": "Configure complete settings.json content here, supporting all fields (e.g., model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.)",
@@ -430,6 +451,40 @@
         "prompt": "Prompt",
         "promptPlaceholder": "Enter the agent's role, tone, workflow, tool preferences and rules. (Optional)",
         "promptHint": "The prompt will be sent to AI as system instructions at the start of conversation",
+        "confirmAdd": "Create",
+        "saveChanges": "Save"
+      }
+    },
+    "prompts": "Prompt Library",
+    "promptsDesc": "Manage common prompt templates for quick insertion during chat",
+    "prompt": {
+      "title": "Prompt Library",
+      "create": "Create",
+      "createPrompt": "Create Prompt",
+      "createPromptHint": "Click to go to prompt settings page to create",
+      "customPrompts": "Custom Prompts",
+      "noPrompts": "No custom prompts",
+      "noPromptsDropdown": "No prompts",
+      "loadFailed": "Load failed",
+      "loading": "Loading...",
+      "menu": "Menu",
+      "addSuccess": "Prompt created successfully",
+      "updateSuccess": "Prompt updated successfully",
+      "deleteSuccess": "Prompt deleted successfully",
+      "operationSuccess": "Operation successful",
+      "operationFailed": "Operation failed",
+      "deleteConfirmTitle": "Confirm Delete",
+      "deleteConfirmMessage": "Are you sure you want to delete prompt \"{{name}}\"? This action cannot be undone.",
+      "description": "Create common prompt templates. Type ! in the chat input to quickly select and insert",
+      "dialog": {
+        "addTitle": "Create Prompt",
+        "editTitle": "Edit Prompt",
+        "name": "Name",
+        "namePlaceholder": "Enter prompt name",
+        "nameRequired": "Please enter prompt name",
+        "content": "Content",
+        "contentPlaceholder": "Enter prompt content, you can include variables like {{variable}}",
+        "contentHint": "Prompt content will be inserted directly into the input box when selected",
         "confirmAdd": "Create",
         "saveChanges": "Save"
       }
@@ -775,6 +830,7 @@
     "showDiffInIdea": "Show changes in IDEA",
     "diffButton": "Diff",
     "editBatchTitle": "Batch Edit Files",
+    "searchBatchTitle": "Batch Search",
     "editPrefix": "Edit: {{fileName}}",
     "lineRange": "Lines {{start}}-{{end}}",
     "filePath": "File path:",
@@ -901,9 +957,9 @@
   },
   "models": {
     "claude": {
-      "sonnet45": {
-        "label": "Sonnet 4.5",
-        "description": "Sonnet 4.5 · Use the default model"
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · Use the default model"
       },
       "opus46": {
         "label": "Opus 4.6",
@@ -912,10 +968,6 @@
       "opus46_1m": {
         "label": "Opus (1M context)",
         "description": "Opus 4.6 for long sessions"
-      },
-      "opus45": {
-        "label": "Opus 4.5",
-        "description": "Opus 4.5 · Most capable for complex work"
       },
       "haiku45": {
         "label": "Haiku 4.5",

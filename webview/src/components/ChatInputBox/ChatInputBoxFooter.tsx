@@ -43,6 +43,7 @@ export function ChatInputBoxFooter({
   fileCompletion,
   commandCompletion,
   agentCompletion,
+  promptCompletion,
   tooltip,
   promptEnhancer,
   t,
@@ -73,6 +74,7 @@ export function ChatInputBoxFooter({
   fileCompletion: CompletionController;
   commandCompletion: CompletionController;
   agentCompletion: CompletionController;
+  promptCompletion: CompletionController;
   tooltip: TooltipState | null;
   promptEnhancer: {
     isOpen: boolean;
@@ -153,6 +155,20 @@ export function ChatInputBoxFooter({
         onClose={agentCompletion.close}
         onSelect={(_, index) => agentCompletion.selectIndex(index)}
         onMouseEnter={agentCompletion.handleMouseEnter}
+      />
+
+      {/* ! prompt selection dropdown menu */}
+      <CompletionDropdown
+        isVisible={promptCompletion.isOpen}
+        position={promptCompletion.position}
+        width={400}
+        items={promptCompletion.items}
+        selectedIndex={promptCompletion.activeIndex}
+        loading={promptCompletion.loading}
+        emptyText={t('settings.prompt.noPromptsDropdown')}
+        onClose={promptCompletion.close}
+        onSelect={(_, index) => promptCompletion.selectIndex(index)}
+        onMouseEnter={promptCompletion.handleMouseEnter}
       />
 
       {/* Floating Tooltip (uses Portal or Fixed positioning to break overflow limit) */}

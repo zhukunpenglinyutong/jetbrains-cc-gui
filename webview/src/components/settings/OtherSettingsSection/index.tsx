@@ -62,6 +62,35 @@ interface EditorState {
   item?: HistoryItem;
 }
 
+/**
+ * Format timestamp to relative time string
+ */
+const formatRelativeTime = (timestamp: string | undefined, t: (key: string, options?: Record<string, unknown>) => string): string => {
+  if (!timestamp) {
+    return '';
+  }
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) {
+    return '';
+  }
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  const units: [number, string][] = [
+    [31536000, 'settings.other.historyCompletion.timeAgo.yearsAgo'],
+    [2592000, 'settings.other.historyCompletion.timeAgo.monthsAgo'],
+    [86400, 'settings.other.historyCompletion.timeAgo.daysAgo'],
+    [3600, 'settings.other.historyCompletion.timeAgo.hoursAgo'],
+    [60, 'settings.other.historyCompletion.timeAgo.minutesAgo'],
+  ];
+
+  for (const [unitSeconds, key] of units) {
+    const interval = Math.floor(seconds / unitSeconds);
+    if (interval >= 1) {
+      return t(key, { count: interval });
+    }
+  }
+  return t('settings.other.historyCompletion.timeAgo.justNow');
+};
+
 const OtherSettingsSection = ({
   historyCompletionEnabled,
   onHistoryCompletionEnabledChange,
@@ -252,6 +281,11 @@ const OtherSettingsSection = ({
                         <span className={styles.historyText} title={item.text}>
                           {item.text}
                         </span>
+                        {item.timestamp && (
+                          <span className={styles.historyTimestamp} title={new Date(item.timestamp).toLocaleString()}>
+                            {formatRelativeTime(item.timestamp, t)}
+                          </span>
+                        )}
                         <div className={styles.itemActions}>
                           <button
                             type="button"

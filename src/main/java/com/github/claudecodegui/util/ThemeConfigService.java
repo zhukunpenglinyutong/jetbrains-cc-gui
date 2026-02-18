@@ -11,14 +11,14 @@ import com.google.gson.JsonObject;
 import java.awt.Color;
 
 /**
- * IDE 主题配置服务
- * 负责从 IDEA 获取当前 UI 主题信息（亮色/暗色）并提供给 Webview
+ * IDE theme configuration service.
+ * Retrieves the current UI theme (light/dark) from IDEA and provides it to the Webview.
  *
- * 使用 IntelliJ Platform 公开 API:
- * - JBColor.isBright() - 检测当前是否为亮色主题
- * - LafManagerListener - 监听所有主题变化事件（包括 Sync with OS）
+ * Uses IntelliJ Platform public APIs:
+ * - JBColor.isBright() - detects whether the current theme is light
+ * - LafManagerListener - listens for all theme change events (including Sync with OS)
  *
- * 参考:
+ * References:
  * - https://github.com/JetBrains/intellij-community/blob/master/platform/util/ui/src/com/intellij/ui/JBColor.java
  * - https://plugins.jetbrains.com/docs/intellij/themes-getting-started.html
  */
@@ -26,43 +26,43 @@ public class ThemeConfigService {
 
     private static final Logger LOG = Logger.getInstance(ThemeConfigService.class);
 
-    // 主题背景色常量 - 统一管理，确保前后端一致
+    // Theme background color constants - centrally managed for frontend/backend consistency
     public static final Color DARK_BG_COLOR = new Color(30, 30, 30);   // #1e1e1e
     public static final Color LIGHT_BG_COLOR = Color.WHITE;             // #ffffff
     public static final String DARK_BG_HEX = "#1e1e1e";
     public static final String LIGHT_BG_HEX = "#ffffff";
     private static ThemeChangeCallback themeChangeCallback = null;
-    private static Boolean lastKnownIsDark = null; // 缓存上次的主题状态,用于去重
+    private static Boolean lastKnownIsDark = null; // Cache the last known theme state for deduplication
     private static boolean listenerRegistered = false;
 
     /**
-     * 主题变化回调接口
+     * Callback interface for theme changes.
      */
     public interface ThemeChangeCallback {
         void onThemeChanged(JsonObject themeConfig);
     }
 
     /**
-     * 注册主题变化监听器
-     * 使用 LafManagerListener 监听所有 Look and Feel 变化
+     * Register a theme change listener.
+     * Uses LafManagerListener to listen for all Look and Feel changes.
      *
-     * 该监听器会在以下情况触发:
-     * - 用户手动切换主题 (View → Appearance → Theme)
-     * - IDE 跟随 OS 主题变化 (Settings → Sync with OS enabled)
-     * - 切换 Sync with OS 设置导致主题实际改变
-     * - 安装或切换自定义主题
+     * The listener fires in these situations:
+     * - User manually switches theme (View - Appearance - Theme)
+     * - IDE follows OS theme changes (Settings - Sync with OS enabled)
+     * - Toggling Sync with OS causes an actual theme change
+     * - Installing or switching to a custom theme
      *
-     * 注意:
-     * - 监听器只会注册一次(Application 级别),在整个 IDE 生命周期内有效
-     * - 每次调用都会更新回调函数,支持项目关闭后重新打开的场景
+     * Notes:
+     * - The listener is registered once (Application level) and remains active for the IDE's lifetime
+     * - Each call updates the callback, supporting project close/reopen scenarios
      */
     public static void registerThemeChangeListener(ThemeChangeCallback callback) {
-        // 总是更新回调,支持项目重新打开的场景
-        // 即使 listenerRegistered = true,项目重新打开后也需要更新回调
+        // Always update the callback to support project reopen scenarios
+        // Even if listenerRegistered is true, the callback needs updating after project reopen
         themeChangeCallback = callback;
         LOG.info("[ThemeConfig] Theme change callback updated");
 
-        // 监听器只注册一次(Application 级别)
+        // Register the listener only once (Application level)
         if (listenerRegistered) {
             LOG.debug("[ThemeConfig] Listener already registered, callback updated");
             return;
@@ -71,8 +71,8 @@ public class ThemeConfigService {
         listenerRegistered = true;
 
         try {
-            // 注册到 Application 级别的 MessageBus
-            // 监听器在整个 IDE 生命周期内有效,即使项目关闭重新打开也能继续工作
+            // Register on the Application-level MessageBus
+            // The listener remains active for the IDE's entire lifecycle, even across project close/reopen
             ApplicationManager.getApplication().getMessageBus()
                 .connect()
                 .subscribe(LafManagerListener.TOPIC, new LafManagerListener() {
@@ -80,8 +80,8 @@ public class ThemeConfigService {
                     public void lookAndFeelChanged(LafManager source) {
                         LOG.info("[ThemeConfig] Look and Feel changed event received");
 
-                        // 延迟执行,确保 UI 主题已经完全更新
-                        // 使用 invokeLater 确保在 EDT 的下一个周期执行,此时新主题已生效
+                        // Defer execution to ensure the UI theme is fully updated
+                        // Using invokeLater ensures this runs on the next EDT cycle, when the new theme is in effect
                         ApplicationManager.getApplication().invokeLater(() -> {
                             notifyThemeChange();
                         });
@@ -95,8 +95,8 @@ public class ThemeConfigService {
     }
 
     /**
-     * 通知前端主题变化
-     * 只有当主题真正改变时才通知,避免重复通知和不必要的 UI 更新
+     * Notify the frontend of a theme change.
+     * Only sends a notification when the theme actually changes, avoiding duplicate notifications and unnecessary UI updates.
      */
     private static void notifyThemeChange() {
         if (themeChangeCallback == null) {
@@ -108,13 +108,13 @@ public class ThemeConfigService {
             JsonObject config = getIdeThemeConfig();
             boolean currentIsDark = config.get("isDark").getAsBoolean();
 
-            // 去重:如果主题状态没有改变,则不通知
+            // Deduplicate: skip notification if the theme state hasn't changed
             if (lastKnownIsDark != null && lastKnownIsDark == currentIsDark) {
                 LOG.debug("[ThemeConfig] Theme state unchanged (isDark=" + currentIsDark + "), skipping notification");
                 return;
             }
 
-            // 更新缓存并通知
+            // Update cache and notify
             lastKnownIsDark = currentIsDark;
             LOG.info("[ThemeConfig] Theme changed to: " + (currentIsDark ? "DARK" : "LIGHT") + ", notifying webview");
             themeChangeCallback.onThemeChanged(config);
@@ -124,26 +124,26 @@ public class ThemeConfigService {
     }
 
     /**
-     * 获取 IDE 主题配置
+     * Get the IDE theme configuration.
      *
-     * 使用 IntelliJ Platform 公开 API JBColor.isBright()
-     * JBColor.isBright() 返回 true 表示亮色主题，取反即为暗色主题
+     * Uses the IntelliJ Platform public API JBColor.isBright().
+     * JBColor.isBright() returns true for a light theme; negating it gives the dark theme state.
      *
-     * @return 包含主题配置的 JsonObject,格式: {"isDark": true/false}
+     * @return a JsonObject containing the theme config, format: {"isDark": true/false}
      */
     public static JsonObject getIdeThemeConfig() {
         JsonObject config = new JsonObject();
 
         try {
-            // 使用 IntelliJ 公开 API 检测是否为暗色主题
-            // JBColor.isBright() 返回 true 表示亮色主题，取反得到暗色主题
+            // Use IntelliJ's public API to detect whether the theme is dark
+            // JBColor.isBright() returns true for light theme; negate to get dark theme
             boolean isDark = !JBColor.isBright();
 
             config.addProperty("isDark", isDark);
 
             LOG.debug("[ThemeConfig] Retrieved IDE theme config: isDark=" + isDark);
         } catch (Exception e) {
-            // 发生异常时使用默认值（深色）
+            // Fall back to default (dark) on exception
             config.addProperty("isDark", true);
             LOG.error("[ThemeConfig] Failed to get theme config, using default (dark): " + e.getMessage(), e);
         }
@@ -152,26 +152,26 @@ public class ThemeConfigService {
     }
 
     /**
-     * 获取主题配置的 JSON 字符串
-     * 会更新缓存的主题状态,确保后续的变化检测准确
+     * Get the theme configuration as a JSON string.
+     * Also updates the cached theme state to ensure accurate subsequent change detection.
      *
-     * @return 主题配置的 JSON 字符串
+     * @return the theme configuration as a JSON string
      */
     public static String getIdeThemeConfigJson() {
         JsonObject config = getIdeThemeConfig();
 
-        // 更新缓存,确保后续的变化检测准确
-        // 这样在初始加载后,只有实际变化才会触发通知
+        // Update cache to ensure accurate subsequent change detection
+        // After initial load, only actual changes will trigger notifications
         lastKnownIsDark = config.get("isDark").getAsBoolean();
 
         return new Gson().toJson(config);
     }
 
     /**
-     * 获取当前 IDE 主题对应的 Swing 背景色
-     * 统一的背景色获取方法，确保前后端颜色一致
+     * Get the Swing background color corresponding to the current IDE theme.
+     * A unified method for obtaining background color, ensuring frontend/backend color consistency.
      *
-     * @return 当前主题的背景色（Dark: #1e1e1e, Light: #ffffff）
+     * @return the background color for the current theme (Dark: #1e1e1e, Light: #ffffff)
      */
     public static Color getBackgroundColor() {
         try {
@@ -184,10 +184,10 @@ public class ThemeConfigService {
     }
 
     /**
-     * 获取当前 IDE 主题对应的 Hex 颜色值
-     * 用于注入到 HTML 中
+     * Get the hex color value corresponding to the current IDE theme.
+     * Used for injection into HTML.
      *
-     * @return 当前主题的背景色 Hex 值
+     * @return the background color hex value for the current theme
      */
     public static String getBackgroundColorHex() {
         try {

@@ -313,7 +313,6 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
 
       return doc.body.innerHTML.trim();
     } catch {
-      // Failed to parse markdown - return raw content
       return content;
     }
   }, [content, isStreaming, i18n.language, t]);

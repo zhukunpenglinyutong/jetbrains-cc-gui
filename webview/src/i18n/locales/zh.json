@@ -34,9 +34,9 @@
     "emptyMessage": "空消息",
     "clickToPreview": "点击预览大图",
     "userUploadedImage": "用户上传的图片",
-    "inputPlaceholder": "@引用文件，#唤起智能体，Enter 发送",
-    "inputPlaceholderEnter": "@引用文件，#唤起智能体，Enter 发送",
-    "inputPlaceholderCmdEnter": "@引用文件，#唤起智能体，⌘Enter 发送",
+    "inputPlaceholder": "@引用文件，#唤起智能体，!插入提示词，Enter 发送",
+    "inputPlaceholderEnter": "@引用文件，#唤起智能体，!插入提示词，Enter 发送",
+    "inputPlaceholderCmdEnter": "@引用文件，#唤起智能体，!插入提示词，⌘Enter 发送",
     "noThinkingContent": "无思考内容",
     "parseError": "无法解析内容",
     "sendMessageEnter": "发送消息 (Enter)",
@@ -80,6 +80,7 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
     "sdkStatusLoading": "正在检查 SDK 状态...",
+    "openSourceBanner": "本项目保证100%开源，请放心使用",
     "goInstallSdk": "前往安装",
     "commandNotImplemented": "`{{command}}` 功能暂未实现。",
     "clearCommandDescription": "清除对话历史并新建会话",
@@ -110,7 +111,8 @@
         "hindi": "हिन्दी",
         "spanish": "Español",
         "french": "Français",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "russian": "Русский"
       },
       "nodePath": {
         "label": "Node.js 路径",
@@ -156,6 +158,12 @@
         "enterDesc": "按 Enter 发送消息，Shift+Enter 换行",
         "cmdEnter": "⌘/Ctrl+Enter 发送",
         "cmdEnterDesc": "按 ⌘/Ctrl+Enter 发送消息，Enter 换行"
+      },
+      "chatBgColor": {
+        "label": "聊天背景色",
+        "custom": "自定义",
+        "reset": "恢复默认",
+        "hint": "自定义聊天区域的背景颜色，留空则跟随主题默认颜色"
       }
     },
     "providers": "供应商管理",
@@ -238,6 +246,24 @@
           "contentPlaceholder": "输入历史记录内容...",
           "importanceLabel": "重要度",
           "importanceHint": "重要度越高，自动补全时越靠前"
+        },
+        "timeAgo": {
+          "yearsAgo_one": "{{count}} year ago",
+          "yearsAgo_other": "{{count}} years ago",
+          "monthsAgo_one": "{{count}} month ago",
+          "monthsAgo_other": "{{count}} months ago",
+          "daysAgo_one": "{{count}} day ago",
+          "daysAgo_other": "{{count}} days ago",
+          "hoursAgo_one": "{{count}} hour ago",
+          "hoursAgo_other": "{{count}} hours ago",
+          "minutesAgo_one": "{{count}} minute ago",
+          "minutesAgo_other": "{{count}} minutes ago",
+          "justNow": "刚刚",
+          "yearsAgo": "{{count}}年前",
+          "monthsAgo": "{{count}}个月前",
+          "daysAgo": "{{count}}天前",
+          "hoursAgo": "{{count}}小时前",
+          "minutesAgo": "{{count}}分钟前"
         }
       }
     },
@@ -332,13 +358,13 @@
         "apiUrlHint": "填写兼容 Claude API 的服务端口地址",
         "modelMapping": "模型映射（会注入到 JSON 的 env 里）",
         "mainModel": "主模型",
-        "mainModelPlaceholder": "例如：claude-sonnet-4-5",
+        "mainModelPlaceholder": "例如：claude-sonnet-4-6",
         "haikuModel": "Haiku 默认模型",
         "haikuModelPlaceholder": "例如：claude-haiku-4-5",
         "sonnetModel": "Sonnet 默认模型",
-        "sonnetModelPlaceholder": "例如：claude-sonnet-4-5",
+        "sonnetModelPlaceholder": "例如：claude-sonnet-4-6",
         "opusModel": "Opus 默认模型",
-        "opusModelPlaceholder": "例如：claude-opus-4-5-20251101",
+        "opusModelPlaceholder": "例如：claude-opus-4-6",
         "modelMappingHint": "可选：指定默认使用的 Claude 模型，留空则使用系统默认。",
         "jsonConfig": "配置 JSON",
         "jsonConfigDescription": "此处可配置完整的 settings.json 内容，支持所有字段（如 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等）",
@@ -430,6 +456,40 @@
         "prompt": "提示词",
         "promptPlaceholder": "请输入智能体的角色、语气、工作流程、工具偏好及规则规范等。（选填）",
         "promptHint": "提示词会在对话开始时作为系统指令发送给AI",
+        "confirmAdd": "创建",
+        "saveChanges": "保存"
+      }
+    },
+    "prompts": "提示词库",
+    "promptsDesc": "管理常用提示词模板，可在聊天时快速插入",
+    "prompt": {
+      "title": "提示词库",
+      "create": "创建",
+      "createPrompt": "创建提示词",
+      "createPromptHint": "点击跳转到提示词设置页面进行创建",
+      "customPrompts": "自定义提示词",
+      "noPrompts": "暂无自定义提示词",
+      "noPromptsDropdown": "暂无提示词",
+      "loadFailed": "加载失败",
+      "loading": "加载中...",
+      "menu": "菜单",
+      "addSuccess": "提示词创建成功",
+      "updateSuccess": "提示词更新成功",
+      "deleteSuccess": "提示词删除成功",
+      "operationSuccess": "操作成功",
+      "operationFailed": "操作失败",
+      "deleteConfirmTitle": "确认删除",
+      "deleteConfirmMessage": "确定要删除提示词 \"{{name}}\" 吗？此操作无法撤销。",
+      "description": "创建常用提示词模板，在聊天输入框中输入 ! 即可快速选择并插入",
+      "dialog": {
+        "addTitle": "创建提示词",
+        "editTitle": "编辑提示词",
+        "name": "名称",
+        "namePlaceholder": "请输入提示词名称",
+        "nameRequired": "请输入提示词名称",
+        "content": "内容",
+        "contentPlaceholder": "请输入提示词内容，可以包含变量如 {{variable}}",
+        "contentHint": "提示词内容会在选择后直接插入到输入框中",
         "confirmAdd": "创建",
         "saveChanges": "保存"
       }
@@ -768,7 +828,6 @@
     "listFiles": "列出文件",
     "findFile": "查找文件",
     "todoList": "任务列表",
-    "updatePlan": "更新计划",
     "editFileTitle": "编辑文件",
     "clickToOpen": "点击打开 {{filePath}}",
     "refreshFileInIdea": "在 IDEA 中刷新文件",
@@ -776,6 +835,7 @@
     "showDiffInIdea": "在 IDEA 中显示变更",
     "diffButton": "Diff",
     "editBatchTitle": "批量编辑文件",
+    "searchBatchTitle": "批量搜索",
     "editPrefix": "编辑: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
     "filePath": "文件路径：",
@@ -784,7 +844,8 @@
     "bashGroupBatchExecution": "批量执行",
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
-    "bashGroupFailed": "失败"
+    "bashGroupFailed": "失败",
+    "updatePlan": "更新计划"
   },
   "todo": {
     "inProgress": "进行中 {{completed}}/{{total}} 个任务",
@@ -902,9 +963,9 @@
   },
   "models": {
     "claude": {
-      "sonnet45": {
-        "label": "Sonnet 4.5",
-        "description": "Sonnet 默认推荐模型"
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · 默认推荐模型"
       },
       "opus46": {
         "label": "Opus 4.6",
@@ -913,10 +974,6 @@
       "opus46_1m": {
         "label": "Opus (1M 上下文)",
         "description": "Opus 4.6 长会话模式"
-      },
-      "opus45": {
-        "label": "Opus 4.5",
-        "description": "Opus 复杂任务最强性能"
       },
       "haiku45": {
         "label": "Haiku 4.5",

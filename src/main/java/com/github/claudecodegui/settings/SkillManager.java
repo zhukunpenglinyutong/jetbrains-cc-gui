@@ -11,8 +11,8 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Skill 管理器
- * 负责管理 Skills 配置
+ * Skill Manager.
+ * Manages Skills configuration.
  */
 public class SkillManager {
     private static final Logger LOG = Logger.getInstance(SkillManager.class);
@@ -31,7 +31,7 @@ public class SkillManager {
     }
 
     /**
-     * 获取所有 Skills 配置
+     * Get all Skills configurations.
      */
     public List<JsonObject> getSkills() {
         List<JsonObject> result = new ArrayList<>();
@@ -44,7 +44,7 @@ public class SkillManager {
         JsonObject skills = config.getAsJsonObject("skills");
         for (String key : skills.keySet()) {
             JsonObject skill = skills.getAsJsonObject(key);
-            // 确保 ID 存在
+            // Ensure ID exists
             if (!skill.has("id")) {
                 skill.addProperty("id", key);
             }
@@ -56,7 +56,7 @@ public class SkillManager {
     }
 
     /**
-     * 添加或更新 Skill
+     * Add or update a Skill.
      */
     public void upsertSkill(JsonObject skill) throws IOException {
         if (!skill.has("id")) {
@@ -65,7 +65,7 @@ public class SkillManager {
 
         String id = skill.get("id").getAsString();
 
-        // 验证 Skill 配置
+        // Validate Skill configuration
         Map<String, Object> validation = validateSkill(skill);
         if (!(boolean) validation.get("valid")) {
             @SuppressWarnings("unchecked")
@@ -75,27 +75,27 @@ public class SkillManager {
 
         JsonObject config = configReader.apply(null);
 
-        // 确保 skills 节点存在
+        // Ensure skills node exists
         if (!config.has("skills")) {
             config.add("skills", new JsonObject());
         }
 
         JsonObject skills = config.getAsJsonObject("skills");
 
-        // 添加或更新 Skill
+        // Add or update the Skill
         skills.add(id, skill);
 
-        // 写入配置
+        // Write config
         configWriter.accept(config);
 
-        // 同步到 Claude settings
+        // Sync to Claude settings
         syncSkillsToClaudeSettings();
 
         LOG.info("[SkillManager] Upserted skill: " + id);
     }
 
     /**
-     * 删除 Skill
+     * Delete a Skill.
      */
     public boolean deleteSkill(String id) throws IOException {
         JsonObject config = configReader.apply(null);
@@ -111,13 +111,13 @@ public class SkillManager {
             return false;
         }
 
-        // 删除 Skill
+        // Delete the Skill
         skills.remove(id);
 
-        // 写入配置
+        // Write config
         configWriter.accept(config);
 
-        // 同步到 Claude settings
+        // Sync to Claude settings
         syncSkillsToClaudeSettings();
 
         LOG.info("[SkillManager] Deleted skill: " + id);
@@ -125,41 +125,41 @@ public class SkillManager {
     }
 
     /**
-     * 验证 Skill 配置
-     * Skills 是包含 SKILL.md 文件的文件夹,ID 必须是 hyphen-case 格式
+     * Validate Skill configuration.
+     * Skills are folders containing a SKILL.md file; IDs must be in hyphen-case format.
      */
     public Map<String, Object> validateSkill(JsonObject skill) {
         List<String> errors = new ArrayList<>();
 
-        // 验证 ID(必须是 hyphen-case:小写字母、数字、连字符)
+        // Validate ID (must be hyphen-case: lowercase letters, digits, and hyphens)
         if (!skill.has("id") || skill.get("id").isJsonNull() ||
                 skill.get("id").getAsString().trim().isEmpty()) {
-            errors.add("Skill ID 不能为空");
+            errors.add("Skill ID must not be empty");
         } else {
             String id = skill.get("id").getAsString();
-            // Skill ID 格式:只允许小写字母、数字、连字符(hyphen-case)
+            // Skill ID format: only lowercase letters, digits, and hyphens allowed (hyphen-case)
             if (!id.matches("^[a-z0-9-]+$")) {
-                errors.add("Skill ID 只能包含小写字母、数字和连字符(hyphen-case)");
+                errors.add("Skill ID may only contain lowercase letters, digits, and hyphens (hyphen-case)");
             }
         }
 
-        // 验证名称
+        // Validate name
         if (!skill.has("name") || skill.get("name").isJsonNull() ||
                 skill.get("name").getAsString().trim().isEmpty()) {
-            errors.add("Skill 名称不能为空");
+            errors.add("Skill name must not be empty");
         }
 
-        // 验证路径(必须是包含 SKILL.md 的文件夹路径)
+        // Validate path (must be a folder path containing SKILL.md)
         if (!skill.has("path") || skill.get("path").isJsonNull() ||
                 skill.get("path").getAsString().trim().isEmpty()) {
-            errors.add("Skill 路径不能为空");
+            errors.add("Skill path must not be empty");
         }
 
-        // 验证类型(目前只支持 local)
+        // Validate type (currently only 'local' is supported)
         if (skill.has("type") && !skill.get("type").isJsonNull()) {
             String type = skill.get("type").getAsString();
             if (!"local".equals(type)) {
-                errors.add("不支持的 Skill 类型: " + type + "(目前只支持 local)");
+                errors.add("Unsupported Skill type: " + type + " (only 'local' is currently supported)");
             }
         }
 
@@ -170,30 +170,30 @@ public class SkillManager {
     }
 
     /**
-     * 同步 Skills 到 Claude settings.json
-     * 将启用的 Skills 转换为 SDK plugins 格式
+     * Sync Skills to Claude settings.json.
+     * Converts enabled Skills to the SDK plugins format.
      */
     public void syncSkillsToClaudeSettings() throws IOException {
         List<JsonObject> skills = getSkills();
 
-        // 构建 plugins 数组
+        // Build the plugins array
         JsonArray plugins = new JsonArray();
         for (JsonObject skill : skills) {
-            // 只同步启用的 Skills
+            // Only sync enabled Skills
             boolean enabled = !skill.has("enabled") || skill.get("enabled").isJsonNull() ||
                     skill.get("enabled").getAsBoolean();
             if (!enabled) {
                 continue;
             }
 
-            // 转换为 SDK 的 SdkPluginConfig 格式
+            // Convert to SDK SdkPluginConfig format
             JsonObject plugin = new JsonObject();
             plugin.addProperty("type", "local");
             plugin.addProperty("path", skill.get("path").getAsString());
             plugins.add(plugin);
         }
 
-        // 委托给 ClaudeSettingsManager 进行同步
+        // Delegate to ClaudeSettingsManager for the sync
         claudeSettingsManager.syncSkillsToClaudeSettings(plugins);
 
         LOG.info("[SkillManager] Synced " + plugins.size() + " enabled skills to Claude settings");

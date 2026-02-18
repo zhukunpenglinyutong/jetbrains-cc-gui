@@ -15,28 +15,28 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
- * npm 权限问题检测和修复工具
+ * Utility for detecting and fixing npm permission issues.
  */
 public class NpmPermissionHelper {
     private static final Logger LOG = Logger.getInstance(NpmPermissionHelper.class);
 
-    // 权限错误关键词
+    // Permission error keywords
     private static final Pattern PERMISSION_ERROR_PATTERN = Pattern.compile(
         "EACCES|EPERM|permission denied|access denied|ENOTEMPTY.*_cacache",
         Pattern.CASE_INSENSITIVE
     );
 
-    // 缓存冲突关键词
+    // Cache conflict keywords
     private static final Pattern CACHE_ERROR_PATTERN = Pattern.compile(
         "File exists.*_cacache|EEXIST.*_cacache|Invalid response body",
         Pattern.CASE_INSENSITIVE
     );
 
-    // Windows shell 需要转义的特殊字符
+    // Special characters that need escaping in the Windows shell
     private static final Pattern WINDOWS_SPECIAL_CHARS = Pattern.compile("[\\^~<>|&()\\s]");
 
     /**
-     * 检测日志中是否包含权限错误
+     * Detects whether the logs contain permission errors.
      */
     public static boolean hasPermissionError(String logs) {
         if (logs == null || logs.isEmpty()) {
@@ -46,7 +46,7 @@ public class NpmPermissionHelper {
     }
 
     /**
-     * 检测日志中是否包含缓存错误
+     * Detects whether the logs contain cache errors.
      */
     public static boolean hasCacheError(String logs) {
         if (logs == null || logs.isEmpty()) {
@@ -56,7 +56,7 @@ public class NpmPermissionHelper {
     }
 
     /**
-     * 获取 npm 缓存目录
+     * Returns the npm cache directory.
      */
     public static Path getNpmCacheDir() {
         String userHome = System.getProperty("user.home");
@@ -64,35 +64,35 @@ public class NpmPermissionHelper {
     }
 
     /**
-     * 检查 npm 缓存目录是否有权限问题
+     * Checks whether the npm cache directory has permission issues.
      */
     public static boolean checkCachePermission() {
         try {
             Path cacheDir = getNpmCacheDir();
             if (!Files.exists(cacheDir)) {
-                return true; // 不存在则没问题
+                return true; // Doesn't exist, so no problem
             }
 
-            // 尝试在缓存目录创建测试文件
+            // Try to create a test file in the cache directory
             Path testFile = cacheDir.resolve(".permission-test-" + System.currentTimeMillis());
             try {
                 Files.createFile(testFile);
                 Files.delete(testFile);
-                return true; // 有写权限
+                return true; // Write permission confirmed
             } catch (Exception e) {
                 LOG.warn("[NpmPermissionHelper] Cache directory has permission issues: " + e.getMessage());
-                return false; // 无写权限
+                return false; // No write permission
             }
         } catch (Exception e) {
             LOG.error("[NpmPermissionHelper] Failed to check cache permission: " + e.getMessage(), e);
-            return true; // 无法检查，假设没问题
+            return true; // Cannot check, assume no issues
         }
     }
 
     /**
-     * 清理 npm 缓存（方案1）
-     * @param npmPath npm 可执行文件路径
-     * @return true 如果清理成功
+     * Cleans the npm cache (strategy 1).
+     * @param npmPath path to the npm executable
+     * @return true if the cleanup succeeded
      */
     public static boolean cleanNpmCache(String npmPath) {
         try {
@@ -101,7 +101,7 @@ public class NpmPermissionHelper {
             ProcessBuilder pb = new ProcessBuilder(npmPath, "cache", "clean", "--force");
             Process process = pb.start();
 
-            // 读取输出（可能有警告信息）
+            // Read output (may contain warning messages)
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -134,8 +134,8 @@ public class NpmPermissionHelper {
     }
 
     /**
-     * 手动删除 npm 缓存目录（方案2 - 更激进）
-     * @return true 如果删除成功
+     * Forcefully deletes the npm cache directory (strategy 2 - more aggressive).
+     * @return true if the deletion succeeded
      */
     public static boolean forceDeleteCache() {
         try {
@@ -148,7 +148,7 @@ public class NpmPermissionHelper {
             LOG.info("[NpmPermissionHelper] Force deleting cache directory: " + cacheDir);
 
             if (PlatformUtils.isWindows()) {
-                // Windows: 使用 rmdir /s /q
+                // Windows: use rmdir /s /q
                 ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "rmdir", "/s", "/q", cacheDir.toString());
                 Process process = pb.start();
                 boolean finished = process.waitFor(30, TimeUnit.SECONDS);
@@ -157,7 +157,7 @@ public class NpmPermissionHelper {
                 }
                 return process.exitValue() == 0;
             } else {
-                // Unix: 使用 rm -rf
+                // Unix: use rm -rf
                 ProcessBuilder pb = new ProcessBuilder("rm", "-rf", cacheDir.toString());
                 Process process = pb.start();
                 boolean finished = process.waitFor(30, TimeUnit.SECONDS);
@@ -173,12 +173,12 @@ public class NpmPermissionHelper {
     }
 
     /**
-     * 修复缓存目录权限（Unix only）
-     * @return true 如果修复成功或不需要修复
+     * Fixes cache directory ownership (Unix only).
+     * @return true if the fix succeeded or was not needed
      */
     public static boolean fixCacheOwnership() {
         if (PlatformUtils.isWindows()) {
-            // Windows 不需要修复所有者
+            // Windows does not need ownership fixes
             return true;
         }
 
@@ -191,7 +191,7 @@ public class NpmPermissionHelper {
             String currentUser = System.getProperty("user.name");
             LOG.info("[NpmPermissionHelper] Attempting to fix ownership of: " + cacheDir + " to user: " + currentUser);
 
-            // 使用 sudo chown -R
+            // Use sudo chown -R
             ProcessBuilder pb = new ProcessBuilder("sudo", "chown", "-R", currentUser, cacheDir.toString());
             Process process = pb.start();
 
@@ -215,7 +215,7 @@ public class NpmPermissionHelper {
     }
 
     /**
-     * 构建带有权限修复策略的 npm install 命令
+     * Builds an npm install command with permission fix strategies.
      */
     public static List<String> buildInstallCommandWithFallback(
             String npmPath, Path sdkDir, List<String> packages, int retryAttempt) {
@@ -226,7 +226,7 @@ public class NpmPermissionHelper {
         command.add("--prefix");
         command.add(sdkDir.toString());
 
-        // 第二次重试：使用 --force 强制覆盖
+        // Second retry: use --force to overwrite
         if (retryAttempt > 0) {
             command.add("--force");
             LOG.info("[NpmPermissionHelper] Adding --force flag for retry attempt " + retryAttempt);
@@ -249,7 +249,7 @@ public class NpmPermissionHelper {
     }
 
     /**
-     * 生成用户友好的错误提示
+     * Generates a user-friendly error message with troubleshooting suggestions.
      */
     public static String generateErrorSolution(String logs) {
         StringBuilder solution = new StringBuilder();

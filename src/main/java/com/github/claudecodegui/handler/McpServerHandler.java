@@ -14,7 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * MCP 服务器管理消息处理器
+ * MCP server management message handler.
  */
 public class McpServerHandler extends BaseMessageHandler {
 
@@ -73,11 +73,11 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取所有 MCP 服务器
+     * Get all MCP servers.
      */
     private void handleGetMcpServers() {
         try {
-            // 获取项目路径，用于读取项目级别的MCP配置
+            // Get project path for reading project-level MCP configuration
             String projectPath = context.getProject() != null
                 ? context.getProject().getBasePath()
                 : null;
@@ -98,8 +98,8 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取 MCP 服务器连接状态.
-     * 通过 Claude SDK 获取实时的 MCP 服务器连接状态
+     * Get MCP server connection status.
+     * Retrieves real-time MCP server connection status via Claude SDK.
      */
     private void handleGetMcpServerStatus() {
         try {
@@ -107,7 +107,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 ? context.getProject().getBasePath()
                 : null;
 
-            // 首先等待 bridge 准备就绪（防止首次加载时 bridge 还在解压中）
+            // Wait for bridge to be ready first (prevents issues when bridge is still extracting on first load)
             waitForBridgeAndFetchStatus(cwd);
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to get MCP server status: " + e.getMessage(), e);
@@ -115,13 +115,13 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 等待 bridge 准备就绪后获取服务器状态
-     * 解决首次加载时 bridge 未就绪导致返回空列表的问题
+     * Wait for bridge readiness then fetch server status.
+     * Solves the issue where bridge not being ready on first load returns empty list.
      */
     private void waitForBridgeAndFetchStatus(String cwd) {
         CompletableFuture.runAsync(() -> {
             try {
-                // 如果 bridge 未就绪，等待最多 10 秒
+                // If bridge not ready, wait up to 10 seconds
                 if (!BridgePreloader.isBridgeReady()) {
                     LOG.info("[McpServerHandler] Bridge not ready yet, waiting...");
                     boolean ready = BridgePreloader.waitForBridgeAsync()
@@ -133,13 +133,13 @@ public class McpServerHandler extends BaseMessageHandler {
                     }
                 }
 
-                // 获取服务器状态
+                // Get server status
                 context.getClaudeSDKBridge().getMcpServerStatus(cwd)
                     .thenAccept(statusList -> {
                         Gson gson = new Gson();
                         String statusJson = gson.toJson(statusList);
 
-                        // 添加调试日志，帮助排查名称匹配问题
+                        // Add debug logging to help troubleshoot name matching issues
                         LOG.info("[McpServerHandler] MCP server status received: " + statusList.size() + " servers");
                         for (JsonObject status : statusList) {
                             if (status.has("name")) {
@@ -172,8 +172,8 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 获取指定 MCP 服务器的工具列表
-     * 通过调用 ai-bridge 的 mcp-status-service 获取工具列表
+     * Get tool list for a specified MCP server.
+     * Retrieves tool list by calling the ai-bridge mcp-status-service.
      */
     private void handleGetMcpServerTools(String content) {
         try {
@@ -183,7 +183,7 @@ public class McpServerHandler extends BaseMessageHandler {
 
             LOG.info("[McpServerHandler] Getting tools for server: " + serverId);
 
-            // 等待 bridge 准备就绪后再获取工具列表
+            // Wait for bridge to be ready before fetching tool list
             waitForBridgeAndFetchTools(serverId, gson);
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to get MCP server tools: " + e.getMessage(), e);
@@ -191,13 +191,13 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 等待 bridge 准备就绪后获取服务器工具列表
-     * 防止首次加载时 bridge 未就绪导致工具获取失败
+     * Wait for bridge readiness then fetch server tool list.
+     * Prevents tool fetching failure when bridge is not ready on first load.
      */
     private void waitForBridgeAndFetchTools(String serverId, Gson gson) {
         CompletableFuture.runAsync(() -> {
             try {
-                // 如果 bridge 未就绪，等待最多 10 秒
+                // If bridge not ready, wait up to 10 seconds
                 if (!BridgePreloader.isBridgeReady()) {
                     LOG.info("[McpServerHandler] Bridge not ready yet for tools, waiting...");
                     boolean ready = BridgePreloader.waitForBridgeAsync()
@@ -209,7 +209,7 @@ public class McpServerHandler extends BaseMessageHandler {
                     }
                 }
 
-                // 调用 Claude SDK Bridge 获取工具列表
+                // Call Claude SDK Bridge to get tool list
                 context.getClaudeSDKBridge().getMcpServerTools(serverId)
                     .thenAccept(result -> {
                         String resultJson = gson.toJson(result);
@@ -245,7 +245,7 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 添加 MCP 服务器
+     * Add an MCP server.
      */
     private void handleAddMcpServer(String content) {
         try {
@@ -268,7 +268,7 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 更新 MCP 服务器
+     * Update an MCP server.
      */
     private void handleUpdateMcpServer(String content) {
         try {
@@ -291,7 +291,7 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 删除 MCP 服务器
+     * Delete an MCP server.
      */
     private void handleDeleteMcpServer(String content) {
         try {
@@ -322,14 +322,14 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 切换 MCP 服务器启用/禁用状态
+     * Toggle MCP server enabled/disabled state.
      */
     private void handleToggleMcpServer(String content) {
         try {
             Gson gson = new Gson();
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
-            // 更新服务器配置
+            // Update server configuration
             String projectPath = context.getProject() != null
                 ? context.getProject().getBasePath()
                 : null;
@@ -344,7 +344,7 @@ public class McpServerHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.mcpServerToggled", escapeJs(content));
                 handleGetMcpServers();
-                // 同时刷新状态,以便UI显示最新的连接状态
+                // Also refresh status so the UI shows the latest connection state
                 handleGetMcpServerStatus();
             });
         } catch (Exception e) {
@@ -356,7 +356,7 @@ public class McpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * 验证 MCP 服务器配置
+     * Validate MCP server configuration.
      */
     private void handleValidateMcpServer(String content) {
         try {

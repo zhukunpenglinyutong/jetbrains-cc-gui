@@ -10,11 +10,12 @@ import {
   ReadToolGroupBlock,
   BashToolBlock,
   BashToolGroupBlock,
+  SearchToolGroupBlock,
 } from '../toolBlocks';
 import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
-import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
+import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -33,7 +34,8 @@ type GroupedBlock =
   | { type: 'single'; block: ClaudeContentBlock; originalIndex: number }
   | { type: 'read_group'; blocks: ClaudeContentBlock[]; startIndex: number }
   | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'bash_group'; blocks: ClaudeContentBlock[]; startIndex: number };
+  | { type: 'bash_group'; blocks: ClaudeContentBlock[]; startIndex: number }
+  | { type: 'search_group'; blocks: ClaudeContentBlock[]; startIndex: number };
 
 /** Shared copy icon SVG used by both user and assistant message copy buttons */
 const CopyIcon = () => (
@@ -86,6 +88,8 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   let editGroupStartIndex = -1;
   let currentBashGroup: ClaudeContentBlock[] = [];
   let bashGroupStartIndex = -1;
+  let currentSearchGroup: ClaudeContentBlock[] = [];
+  let searchGroupStartIndex = -1;
 
   const flushReadGroup = () => {
     if (currentReadGroup.length > 0) {
@@ -123,10 +127,23 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     }
   };
 
+  const flushSearchGroup = () => {
+    if (currentSearchGroup.length > 0) {
+      groupedBlocks.push({
+        type: 'search_group',
+        blocks: [...currentSearchGroup],
+        startIndex: searchGroupStartIndex,
+      });
+      currentSearchGroup = [];
+      searchGroupStartIndex = -1;
+    }
+  };
+
   blocks.forEach((block, idx) => {
     if (isToolBlockOfType(block, READ_TOOL_NAMES)) {
       flushEditGroup();
       flushBashGroup();
+      flushSearchGroup();
       if (currentReadGroup.length === 0) {
         readGroupStartIndex = idx;
       }
@@ -134,6 +151,7 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     } else if (isToolBlockOfType(block, EDIT_TOOL_NAMES)) {
       flushReadGroup();
       flushBashGroup();
+      flushSearchGroup();
       if (currentEditGroup.length === 0) {
         editGroupStartIndex = idx;
       }
@@ -141,14 +159,24 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     } else if (isToolBlockOfType(block, BASH_TOOL_NAMES)) {
       flushReadGroup();
       flushEditGroup();
+      flushSearchGroup();
       if (currentBashGroup.length === 0) {
         bashGroupStartIndex = idx;
       }
       currentBashGroup.push(block);
+    } else if (isToolBlockOfType(block, SEARCH_TOOL_NAMES)) {
+      flushReadGroup();
+      flushEditGroup();
+      flushBashGroup();
+      if (currentSearchGroup.length === 0) {
+        searchGroupStartIndex = idx;
+      }
+      currentSearchGroup.push(block);
     } else {
       flushReadGroup();
       flushEditGroup();
       flushBashGroup();
+      flushSearchGroup();
       groupedBlocks.push({ type: 'single', block, originalIndex: idx });
     }
   });
@@ -156,6 +184,7 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   flushReadGroup();
   flushEditGroup();
   flushBashGroup();
+  flushSearchGroup();
 
   return groupedBlocks;
 }
@@ -384,6 +413,43 @@ export const MessageItem = memo(function MessageItem({
         return (
           <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
             <BashToolGroupBlock items={bashItems} deniedToolIds={window.__deniedToolIds} />
+          </div>
+        );
+      }
+
+      if (grouped.type === 'search_group') {
+        const searchItems = grouped.blocks.map((b) => {
+          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
+          return {
+            name: block.name,
+            input: block.input,
+            result: findToolResult(block.id, messageIndex),
+          };
+        });
+
+        if (searchItems.length === 1) {
+          return (
+            <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
+              <ContentBlockRenderer
+                block={grouped.blocks[0]}
+                messageIndex={messageIndex}
+                messageType={message.type}
+                isStreaming={isMessageStreaming}
+                isThinkingExpanded={false}
+                isThinking={isThinking}
+                isLastMessage={isLast}
+                isLastBlock={grouped.startIndex === blocks.length - 1}
+                t={t}
+                onToggleThinking={() => {}}
+                findToolResult={findToolResult}
+              />
+            </div>
+          );
+        }
+
+        return (
+          <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
+            <SearchToolGroupBlock items={searchItems} />
           </div>
         );
       }

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.notifications;
 
+import com.github.claudecodegui.ClaudeCodeGuiBundle;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
@@ -10,15 +11,15 @@ import org.jetbrains.annotations.NotNull;
 public class ClaudeNotifier {
 
     public static void setThinking(@NotNull Project project) {
-        update(project, "thinking", "Claude is thinking...");
+        update(project, "thinking", ClaudeCodeGuiBundle.message("notifier.thinking"));
     }
 
     public static void setGenerating(@NotNull Project project) {
-        update(project, "generating", "Claude is generating response...");
+        update(project, "generating", ClaudeCodeGuiBundle.message("notifier.generating"));
     }
 
     public static void setWaiting(@NotNull Project project) {
-        update(project, "waiting", "Waiting for Claude...");
+        update(project, "waiting", ClaudeCodeGuiBundle.message("notifier.waiting"));
     }
 
     public static void showSuccess(@NotNull Project project, String message) {

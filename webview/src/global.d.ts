@@ -13,9 +13,9 @@ interface Window {
   getClipboardFilePath?: () => Promise<string>;
 
   /**
-   * Handle file path dropped from Java
+   * Handle file path(s) dropped from Java (supports batch files)
    */
-  handleFilePathFromJava?: (filePath: string) => void;
+  handleFilePathFromJava?: (filePathInput: string | string[]) => void;
 
   /**
    * Update messages from backend
@@ -382,6 +382,16 @@ interface Window {
    * Agent operation result callback
    */
   agentOperationResult?: (json: string) => void;
+
+  /**
+   * Update prompts list
+   */
+  updatePrompts?: (json: string) => void;
+
+  /**
+   * Prompt operation result callback
+   */
+  promptOperationResult?: (json: string) => void;
 
   /**
    * Selected agent received callback - 初始化时接收当前选中的智能体

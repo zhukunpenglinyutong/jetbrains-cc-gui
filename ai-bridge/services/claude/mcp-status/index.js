@@ -1,21 +1,21 @@
 /**
- * MCP 服务器状态检测服务
- * 负责验证 MCP 服务器的真实连接状态和获取工具列表
+ * MCP server status detection service
+ * Verifies MCP server connectivity and retrieves tool listings
  *
- * 模块结构：
- * - config.js: 配置常量和安全白名单
- * - logger.js: 日志系统
- * - mcp-protocol.js: MCP 协议工具函数
- * - command-validator.js: 命令白名单验证
- * - server-info-parser.js: 服务器信息解析
- * - process-manager.js: 进程管理
- * - http-verifier.js: HTTP/Streamable HTTP 服务器验证
- * - sse-verifier.js: SSE 传输服务器验证
- * - stdio-verifier.js: STDIO 服务器验证
- * - config-loader.js: 配置加载
- * - http-tools-getter.js: HTTP 工具获取
- * - sse-tools-getter.js: SSE 工具获取
- * - stdio-tools-getter.js: STDIO 工具获取
+ * Module structure:
+ * - config.js: Configuration constants and security whitelists
+ * - logger.js: Logging system
+ * - mcp-protocol.js: MCP protocol utility functions
+ * - command-validator.js: Command whitelist validation
+ * - server-info-parser.js: Server info parsing
+ * - process-manager.js: Process management
+ * - http-verifier.js: HTTP/Streamable HTTP server verification
+ * - sse-verifier.js: SSE transport server verification
+ * - stdio-verifier.js: STDIO server verification
+ * - config-loader.js: Configuration loading
+ * - http-tools-getter.js: HTTP tools retrieval
+ * - sse-tools-getter.js: SSE tools retrieval
+ * - stdio-tools-getter.js: STDIO tools retrieval
  */
 
 import { log } from './logger.js';
@@ -27,14 +27,14 @@ import { getHttpServerTools } from './http-tools-getter.js';
 import { getSseServerTools } from './sse-tools-getter.js';
 import { getStdioServerTools } from './stdio-tools-getter.js';
 
-// 重新导出配置加载函数
+// Re-export config loading functions
 export { loadMcpServersConfig, loadAllMcpServersInfo } from './config-loader.js';
 
 /**
- * 验证单个 MCP 服务器的连接状态
- * @param {string} serverName - 服务器名称
- * @param {Object} serverConfig - 服务器配置
- * @returns {Promise<Object>} 服务器状态信息 { name, status, serverInfo, error? }
+ * Verify the connection status of a single MCP server
+ * @param {string} serverName - Server name
+ * @param {Object} serverConfig - Server configuration
+ * @returns {Promise<Object>} Server status info { name, status, serverInfo, error? }
  */
 export async function verifyMcpServerStatus(serverName, serverConfig) {
   const serverType = serverConfig.type || 'stdio';
@@ -49,15 +49,15 @@ export async function verifyMcpServerStatus(serverName, serverConfig) {
     return verifyHttpServerStatus(serverName, serverConfig);
   }
 
-  // STDIO 类型服务器
+  // STDIO transport server
   return verifyStdioServerStatus(serverName, serverConfig);
 }
 
 /**
- * 获取所有 MCP 服务器的连接状态
- * 包含启用、禁用和配置无效的服务器，确保前端能获取完整状态
- * @param {string} cwd - 当前工作目录（用于检测项目配置）
- * @returns {Promise<Object[]>} MCP 服务器状态列表
+ * Get the connection status of all MCP servers
+ * Includes enabled, disabled, and invalid servers so the frontend gets a complete picture
+ * @param {string} cwd - Current working directory (used to detect project config)
+ * @returns {Promise<Object[]>} List of MCP server statuses
  */
 export async function getMcpServersStatus(cwd = null) {
   try {
@@ -67,21 +67,21 @@ export async function getMcpServersStatus(cwd = null) {
       allServers.disabled.length, 'disabled,',
       allServers.invalid.length, 'invalid MCP servers');
 
-    // 并行验证所有启用的服务器
+    // Verify all enabled servers in parallel
     const enabledResults = allServers.enabled.length > 0
       ? await Promise.all(
           allServers.enabled.map(({ name, config }) => verifyMcpServerStatus(name, config))
         )
       : [];
 
-    // 为禁用的服务器生成 failed 状态（附带原因）
+    // Generate failed status for disabled servers (with reason)
     const disabledResults = allServers.disabled.map(name => ({
       name,
       status: 'failed',
       error: 'Server is disabled',
     }));
 
-    // 为配置无效的服务器生成 failed 状态（附带原因）
+    // Generate failed status for servers with invalid config (with reason)
     const invalidResults = allServers.invalid.map(({ name, reason }) => ({
       name,
       status: 'failed',
@@ -103,10 +103,10 @@ export async function getMcpServersStatus(cwd = null) {
 }
 
 /**
- * 发送 tools/list 请求到已连接的 MCP 服务器
- * @param {string} serverName - 服务器名称
- * @param {Object} serverConfig - 服务器配置
- * @returns {Promise<Object>} 工具列表响应
+ * Send a tools/list request to a connected MCP server
+ * @param {string} serverName - Server name
+ * @param {Object} serverConfig - Server configuration
+ * @returns {Promise<Object>} Tools list response
  */
 export async function getMcpServerTools(serverName, serverConfig) {
   const serverType = serverConfig.type || 'stdio';

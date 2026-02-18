@@ -10,7 +10,7 @@
 import initSqlJs from 'sql.js';
 import fs from 'fs';
 
-// 获取命令行参数
+// Get command-line arguments
 const dbPath = process.argv[2];
 
 if (!dbPath) {
@@ -21,7 +21,7 @@ if (!dbPath) {
     process.exit(1);
 }
 
-// 检查文件是否存在
+// Check if the file exists
 if (!fs.existsSync(dbPath)) {
     console.error(JSON.stringify({
         success: false,
@@ -31,20 +31,20 @@ if (!fs.existsSync(dbPath)) {
 }
 
 try {
-    // 初始化 sql.js
+    // Initialize sql.js
     const SQL = await initSqlJs();
 
-    // 读取数据库文件
+    // Read the database file
     const fileBuffer = fs.readFileSync(dbPath);
     const db = new SQL.Database(fileBuffer);
 
-    // 查询 Claude 供应商配置
+    // Query Claude provider configurations
     const result = db.exec(`
         SELECT * FROM providers
         WHERE app_type = 'claude'
     `);
 
-    // 检查是否有结果
+    // Check if there are any results
     if (!result || result.length === 0 || !result[0].values || result[0].values.length === 0) {
         console.log(JSON.stringify({
             success: true,
@@ -55,32 +55,32 @@ try {
         process.exit(0);
     }
 
-    // 获取列名和数据
+    // Get column names and data
     const columns = result[0].columns;
     const rows = result[0].values;
 
-    // 解析每一行数据
+    // Parse each row of data
     const providers = rows.map(rowArray => {
         try {
-            // 将数组转为对象（根据列名）
+            // Convert the array to an object keyed by column name
             const row = {};
             columns.forEach((col, index) => {
                 row[col] = rowArray[index];
             });
 
-            // 解析 settings_config JSON
+            // Parse the settings_config JSON
             const settingsConfig = row.settings_config ? JSON.parse(row.settings_config) : {};
 
-            // 从 settings_config 中提取配置
-            // 支持两种格式：
-            // 1. 新格式（env 包含环境变量）: { env: { ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN } }
-            // 2. 旧格式（直接包含配置）: { base_url, api_key, model, ... }
+            // Extract configuration from settings_config
+            // Two formats are supported:
+            // 1. New format (env contains environment variables): { env: { ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN } }
+            // 2. Legacy format (contains config directly): { base_url, api_key, model, ... }
 
             let baseUrl = null;
             let apiKey = null;
 
             if (settingsConfig.env) {
-                // 新格式: 从 env 对象中提取
+                // New format: extract from the env object
                 const env = settingsConfig.env;
                 if (env.ANTHROPIC_BASE_URL) {
                     baseUrl = env.ANTHROPIC_BASE_URL;
@@ -88,13 +88,13 @@ try {
                 if (env.ANTHROPIC_AUTH_TOKEN) {
                     apiKey = env.ANTHROPIC_AUTH_TOKEN;
                 }
-                // 也检查其他常见的环境变量名
+                // Also check other common environment variable names
                 if (!apiKey && env.ANTHROPIC_API_KEY) {
                     apiKey = env.ANTHROPIC_API_KEY;
                 }
             }
 
-            // 旧格式: 直接从 settingsConfig 提取
+            // Legacy format: extract directly from settingsConfig
             if (!baseUrl && settingsConfig.base_url) {
                 baseUrl = settingsConfig.base_url;
             }
@@ -102,8 +102,8 @@ try {
                 apiKey = settingsConfig.api_key;
             }
 
-            // 基于 cc-switch 原始 settings_config 构造 settingsConfig，
-            // 尽量保留 cc-switch 中的所有字段（包括 model、alwaysThinkingEnabled 等）
+            // Build settingsConfig from the original cc-switch settings_config,
+            // preserving all cc-switch fields (including model, alwaysThinkingEnabled, etc.)
             const mergedSettingsConfig = {
                 ...settingsConfig,
                 env: {
@@ -111,7 +111,7 @@ try {
                 },
             };
 
-            // 构造供应商配置对象（使用插件期望的格式）
+            // Build the provider config object in the format expected by the plugin
             const provider = {
                 id: row.id,
                 name: row.name || row.id,
@@ -119,7 +119,7 @@ try {
                 settingsConfig: mergedSettingsConfig,
             };
 
-            // 设置 env 字段
+            // Set the env fields
             if (baseUrl) {
                 provider.settingsConfig.env.ANTHROPIC_BASE_URL = baseUrl;
             }
@@ -127,7 +127,7 @@ try {
                 provider.settingsConfig.env.ANTHROPIC_AUTH_TOKEN = apiKey;
             }
 
-            // 同时保留顶层字段用于前端预览显示
+            // Also keep top-level fields for frontend preview display
             if (baseUrl) {
                 provider.baseUrl = baseUrl;
             }
@@ -135,7 +135,7 @@ try {
                 provider.apiKey = apiKey;
             }
 
-            // 其他元数据
+            // Other metadata
             if (row.website_url) {
                 provider.websiteUrl = row.website_url;
             }
@@ -156,10 +156,10 @@ try {
         }
     }).filter(p => p !== null);
 
-    // 关闭数据库
+    // Close the database
     db.close();
 
-    // 输出结果
+    // Output the result
     console.log(JSON.stringify({
         success: true,
         providers: providers,

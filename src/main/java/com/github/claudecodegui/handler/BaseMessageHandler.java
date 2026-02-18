@@ -1,8 +1,8 @@
 package com.github.claudecodegui.handler;
 
 /**
- * 消息处理器基类
- * 提供通用的工具方法
+ * Base class for message handlers.
+ * Provides common utility methods.
  */
 public abstract class BaseMessageHandler implements MessageHandler {
 
@@ -13,28 +13,28 @@ public abstract class BaseMessageHandler implements MessageHandler {
     }
 
     /**
-     * 调用 JavaScript 函数
+     * Call a JavaScript function.
      */
     protected void callJavaScript(String functionName, String... args) {
         context.callJavaScript(functionName, args);
     }
 
     /**
-     * 转义 JavaScript 字符串
+     * Escape a JavaScript string.
      */
     protected String escapeJs(String str) {
         return context.escapeJs(str);
     }
 
     /**
-     * 在 EDT 线程上执行 JavaScript
+     * Execute JavaScript on the EDT (Event Dispatch Thread).
      */
     protected void executeJavaScript(String jsCode) {
         context.executeJavaScriptOnEDT(jsCode);
     }
 
     /**
-     * 检查消息类型是否匹配
+     * Check whether the message type matches any of the supported types.
      */
     protected boolean matchesType(String type, String... supportedTypes) {
         for (String supported : supportedTypes) {

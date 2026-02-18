@@ -28,6 +28,8 @@ export function ChatInputBoxHeader({
   onToggleStatusPanel,
   messageQueue,
   onRemoveFromQueue,
+  showOpenSourceBanner,
+  onDismissOpenSourceBanner,
 }: {
   sdkInstalled: boolean;
   sdkStatusLoading: boolean;
@@ -52,9 +54,28 @@ export function ChatInputBoxHeader({
   onToggleStatusPanel?: () => void;
   messageQueue?: QueuedMessage[];
   onRemoveFromQueue?: (id: string) => void;
+  showOpenSourceBanner?: boolean;
+  onDismissOpenSourceBanner?: () => void;
 }) {
   return (
     <>
+      {/* Open source banner */}
+      {showOpenSourceBanner && (
+        <div className="open-source-banner">
+          <span className="banner-text">{t('chat.openSourceBanner')}</span>
+          <button
+            className="banner-close"
+            aria-label="Close"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismissOpenSourceBanner?.();
+            }}
+          >
+            &#x2715;
+          </button>
+        </div>
+      )}
+
       {/* SDK status loading or not installed warning bar */}
       {(sdkStatusLoading || !sdkInstalled) && (
         <div className={`sdk-warning-bar ${sdkStatusLoading ? 'sdk-loading' : ''}`}>

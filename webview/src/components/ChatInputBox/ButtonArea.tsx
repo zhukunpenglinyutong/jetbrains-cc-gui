@@ -40,7 +40,7 @@ export const ButtonArea = ({
   hasInputContent = false,
   isLoading = false,
   isEnhancing = false,
-  selectedModel = 'claude-sonnet-4-5',
+  selectedModel = 'claude-sonnet-4-6',
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
   reasoningEffort = 'medium',
@@ -96,8 +96,8 @@ export const ButtonArea = ({
    */
   const applyModelMapping = useCallback((model: ModelInfo, mapping: { haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
     const modelKeyMap: Record<string, keyof typeof mapping> = {
-      'claude-sonnet-4-5': 'sonnet',
-      'claude-opus-4-5-20251101': 'opus',
+      'claude-sonnet-4-6': 'sonnet',
+      'claude-opus-4-6': 'opus',
       'claude-haiku-4-5': 'haiku',
     };
 

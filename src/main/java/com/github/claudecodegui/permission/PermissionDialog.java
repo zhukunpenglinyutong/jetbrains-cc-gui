@@ -24,9 +24,10 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import com.github.claudecodegui.ClaudeCodeGuiBundle;
 import com.intellij.openapi.diagnostic.Logger;
 /**
- * 权限请求对话框
+ * Permission request dialog.
  */
 public class PermissionDialog extends DialogWrapper {
     private static final Logger LOG = Logger.getInstance(PermissionDialog.class);
@@ -55,16 +56,16 @@ public class PermissionDialog extends DialogWrapper {
         super(project, false);
         this.request = request;
 
-        setTitle("权限请求");
+        setTitle(ClaudeCodeGuiBundle.message("permission.dialogTitle"));
         setModal(true);
         setResizable(false);
 
-        // 创建 JCEF 浏览器
+        // Create the JCEF browser
         this.browser = JBCefBrowserFactory.create();
         JBCefBrowserBase browserBase = this.browser;
         this.jsQuery = JBCefJSQuery.create(browserBase);
 
-        // 设置 JavaScript 回调
+        // Set up JavaScript callback
         jsQuery.addHandler((message) -> {
             if (message.startsWith("permission_decision:")) {
                 String jsonData = message.substring("permission_decision:".length());
@@ -78,7 +79,7 @@ public class PermissionDialog extends DialogWrapper {
             return null;
         });
 
-        // 加载 HTML
+        // Load HTML
         loadHtml();
 
         init();
@@ -86,28 +87,28 @@ public class PermissionDialog extends DialogWrapper {
 
     private void loadHtml() {
         try {
-            // 读取 HTML 文件
+            // Read the HTML file
             InputStream is = getClass().getResourceAsStream("/html/permission-dialog.html");
             if (is == null) {
-                throw new RuntimeException("无法找到权限对话框 HTML 文件");
+                throw new RuntimeException(ClaudeCodeGuiBundle.message("permission.htmlNotFound"));
             }
 
             String html = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
                     .lines()
                     .collect(Collectors.joining("\n"));
 
-            // 注入 JavaScript 桥接代码
+            // Inject JavaScript bridge code
             String jsInjection = String.format(
                     "<script>window.sendToJava = function(message) { %s };</script>",
                     jsQuery.inject("message")
             );
             html = html.replace("</body>", jsInjection + "</body>");
 
-            // 加载 HTML
+            // Load the HTML content
             browser.getJBCefClient().addLoadHandler(new CefLoadHandlerAdapter() {
                 @Override
                 public void onLoadEnd(CefBrowser cefBrowser, CefFrame frame, int httpStatusCode) {
-                    // 页面加载完成后，初始化权限请求数据
+                    // After page load completes, initialize the permission request data
                     initializeRequestData();
                 }
             }, browser.getCefBrowser());
@@ -116,7 +117,7 @@ public class PermissionDialog extends DialogWrapper {
 
         } catch (Exception e) {
             LOG.error("Error occurred", e);
-            browser.loadHTML("<html><body><h3>加载权限对话框失败</h3></body></html>");
+            browser.loadHTML(ClaudeCodeGuiBundle.message("permission.loadFailed"));
         }
     }
 
@@ -134,22 +135,15 @@ public class PermissionDialog extends DialogWrapper {
     }
 
     /**
-     * 翻译工具名称为中文
+     * Translate tool names using bundle localization
      */
     private String translateToolName(String toolName) {
-        Map<String, String> translations = new HashMap<>();
-        translations.put("Write", "写入文件");
-        translations.put("Edit", "编辑文件");
-        translations.put("Delete", "删除文件");
-        translations.put("CreateDirectory", "创建目录");
-        translations.put("MoveFile", "移动文件");
-        translations.put("CopyFile", "复制文件");
-        translations.put("ExecuteCommand", "执行命令");
-        translations.put("Bash", "执行Shell命令");
-        translations.put("RunCode", "运行代码");
-        translations.put("InstallPackage", "安装软件包");
-
-        return translations.getOrDefault(toolName, toolName);
+        String key = "permission.tool." + toolName;
+        try {
+            return ClaudeCodeGuiBundle.message(key);
+        } catch (Exception e) {
+            return toolName;
+        }
     }
 
     public void setDecisionCallback(Consumer<PermissionDecision> callback) {
@@ -166,7 +160,7 @@ public class PermissionDialog extends DialogWrapper {
 
     @Override
     protected Action[] createActions() {
-        // 不显示默认的 OK 和 Cancel 按钮
+        // Do not show the default OK and Cancel buttons
         return new Action[0];
     }
 

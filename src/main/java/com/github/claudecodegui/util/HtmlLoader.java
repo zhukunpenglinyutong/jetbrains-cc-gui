@@ -7,8 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 /**
- * HTML 加载器
- * 处理 HTML 文件加载和本地库注入
+ * HTML loader.
+ * Handles HTML file loading and local library injection.
  */
 public class HtmlLoader {
 
@@ -20,8 +20,8 @@ public class HtmlLoader {
     }
 
     /**
-     * 加载聊天界面 HTML
-     * @return HTML 内容，如果加载失败返回备用 HTML
+     * Load the chat interface HTML.
+     * @return the HTML content, or fallback HTML if loading fails
      */
     public String loadChatHtml() {
         try {
@@ -33,51 +33,53 @@ public class HtmlLoader {
                 if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
                     html = injectLocalLibraries(html);
                 } else {
-                    LOG.info("✓ 检测到打包好的现代前端资源，无需额外注入库文件");
+                    LOG.info("Detected bundled modern frontend assets; no additional library injection needed");
                 }
 
-                // 注入 IDE 主题到 HTML，避免页面初始化时闪屏
+                // Inject the IDE theme into the HTML to prevent flash of unstyled content on initial load
                 html = injectIdeTheme(html);
 
                 return html;
             }
         } catch (Exception e) {
-            LOG.error("无法加载 claude-chat.html: " + e.getMessage());
+            LOG.error("Failed to load claude-chat.html: " + e.getMessage());
         }
 
         return generateFallbackHtml();
     }
 
     /**
-     * 将 IDE 主题注入到 HTML 中
+     * Inject the IDE theme into the HTML.
      *
-     * 策略：直接在 HTML 标签上添加内联 style 属性，确保背景色在第一帧渲染时就生效
-     * 1. 修改 <html> 标签，添加 style="background-color:..."
-     * 2. 修改 <body> 标签，添加 style="background-color:..."
-     * 3. 在 <head> 中注入主题变量脚本
+     * Strategy: add inline style attributes directly on HTML tags to ensure the background
+     * color is applied on the very first render frame.
+     * 1. Modify the &lt;html&gt; tag to add style="background-color:..."
+     * 2. Modify the &lt;body&gt; tag to add style="background-color:..."
+     * 3. Inject a theme variable script into &lt;head&gt;
      *
-     * 内联样式比 CSS 规则解析更快，能在 CEF 第一帧渲染时就显示正确颜色
+     * Inline styles are parsed faster than CSS rules, ensuring the correct color appears
+     * on the first CEF render frame.
      */
     private String injectIdeTheme(String html) {
         try {
             boolean isDark = ThemeConfigService.getIdeThemeConfig().get("isDark").getAsBoolean();
             String theme = isDark ? "dark" : "light";
-            // 使用统一的颜色值，确保与 Swing 组件背景色一致
+            // Use the unified color values to ensure consistency with Swing component backgrounds
             String bgColor = ThemeConfigService.getBackgroundColorHex();
 
-            // 1. 修改 <html> 标签，添加内联样式
+            // 1. Modify the <html> tag to add inline styles
             html = html.replaceFirst(
                 "<html([^>]*)>",
                 "<html$1 style=\"background-color:" + bgColor + ";\">"
             );
 
-            // 2. 修改 <body> 标签，添加内联样式
+            // 2. Modify the <body> tag to add inline styles
             html = html.replaceFirst(
                 "<body([^>]*)>",
                 "<body$1 style=\"background-color:" + bgColor + ";\">"
             );
 
-            // 3. 在 <head> 标签后注入主题变量脚本
+            // 3. Inject a theme variable script after the <head> tag
             String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '" + theme + "';</script>";
             int headIndex = html.indexOf("<head>");
             if (headIndex != -1) {
@@ -85,16 +87,16 @@ public class HtmlLoader {
                 html = html.substring(0, insertPos) + scriptInjection + html.substring(insertPos);
             }
 
-            LOG.info("✓ 成功注入 IDE 主题（内联样式）: " + theme + ", 背景色: " + bgColor);
+            LOG.info("Successfully injected IDE theme (inline styles): " + theme + ", background: " + bgColor);
         } catch (Exception e) {
-            LOG.error("注入 IDE 主题失败: " + e.getMessage(), e);
+            LOG.error("Failed to inject IDE theme: " + e.getMessage(), e);
         }
 
         return html;
     }
 
     /**
-     * 生成备用 HTML
+     * Generate fallback HTML.
      */
     public String generateFallbackHtml() {
         return "<!DOCTYPE html>" +
@@ -112,15 +114,15 @@ public class HtmlLoader {
             "</head>" +
             "<body>" +
             "<div class=\"error\">" +
-            "<h1>无法加载聊天界面</h1>" +
-            "<p>请检查 HTML 资源文件是否存在</p>" +
+            "<h1>Failed to load chat interface</h1>" +
+            "<p>Please verify that the HTML resource file exists</p>" +
             "</div>" +
             "</body>" +
             "</html>";
     }
 
     /**
-     * 将本地库文件内容注入到 HTML 中
+     * Inject local library file contents into the HTML.
      */
     private String injectLocalLibraries(String html) {
         try {
@@ -137,30 +139,30 @@ public class HtmlLoader {
             );
 
             StringBuilder injectedLibs = new StringBuilder();
-            injectedLibs.append("\n    <!-- React 和相关库 (本地版本) -->\n");
+            injectedLibs.append("\n    <!-- React and related libraries (local versions) -->\n");
             injectedLibs.append("    <script>/* React 18 */\n").append(reactJs).append("\n    </script>\n");
             injectedLibs.append("    <script>/* ReactDOM 18 */\n").append(reactDomJs).append("\n    </script>\n");
             injectedLibs.append("    <script>/* Babel Standalone */\n").append(babelJs).append("\n    </script>\n");
             injectedLibs.append("    <script>/* Marked */\n").append(markedJs).append("\n    </script>\n");
-            injectedLibs.append("    <style>/* VS Code Codicons (含内嵌字体) */\n").append(codiconCss).append("\n    </style>");
+            injectedLibs.append("    <style>/* VS Code Codicons (with embedded font) */\n").append(codiconCss).append("\n    </style>");
 
             html = html.replace("<!-- LOCAL_LIBRARY_INJECTION_POINT -->", injectedLibs.toString());
 
-            LOG.info("✓ 成功注入本地库文件 (React + ReactDOM + Babel + Codicons)");
+            LOG.info("Successfully injected local libraries (React + ReactDOM + Babel + Codicons)");
         } catch (Exception e) {
-            LOG.error("✗ 注入本地库文件失败: " + e.getMessage());
+            LOG.error("Failed to inject local libraries: " + e.getMessage());
         }
 
         return html;
     }
 
     /**
-     * 加载资源文件为字符串
+     * Load a resource file as a string.
      */
     private String loadResourceAsString(String resourcePath) throws Exception {
         InputStream is = resourceClass.getResourceAsStream(resourcePath);
         if (is == null) {
-            throw new Exception("无法找到资源: " + resourcePath);
+            throw new Exception("Resource not found: " + resourcePath);
         }
         String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         is.close();
@@ -168,12 +170,12 @@ public class HtmlLoader {
     }
 
     /**
-     * 加载资源文件为 Base64 字符串
+     * Load a resource file as a Base64-encoded string.
      */
     private String loadResourceAsBase64(String resourcePath) throws Exception {
         InputStream is = resourceClass.getResourceAsStream(resourcePath);
         if (is == null) {
-            throw new Exception("无法找到资源: " + resourcePath);
+            throw new Exception("Resource not found: " + resourcePath);
         }
         byte[] bytes = is.readAllBytes();
         is.close();

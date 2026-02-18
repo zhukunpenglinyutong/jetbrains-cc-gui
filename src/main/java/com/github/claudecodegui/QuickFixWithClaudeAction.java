@@ -92,12 +92,12 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
         JPanel navPanel = new JPanel(new GridLayout(2, 1, 0, 2));
 
         JButton historyUpButton = new JButton("▲");
-        historyUpButton.setToolTipText("Previous in history (↑)");
+        historyUpButton.setToolTipText(ClaudeCodeGuiBundle.message("action.quickFixWithClaude.historyUpTooltip"));
         historyUpButton.setPreferredSize(new Dimension(NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT));
         historyUpButton.setFont(new Font("SansSerif", Font.PLAIN, NAV_BUTTON_FONT_SIZE));
 
         JButton historyDownButton = new JButton("▼");
-        historyDownButton.setToolTipText("Next in history (↓)");
+        historyDownButton.setToolTipText(ClaudeCodeGuiBundle.message("action.quickFixWithClaude.historyDownTooltip"));
         historyDownButton.setPreferredSize(new Dimension(NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT));
         historyDownButton.setFont(new Font("SansSerif", Font.PLAIN, NAV_BUTTON_FONT_SIZE));
 
@@ -107,11 +107,11 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
         // Right panel with action buttons
         JPanel actionPanel = new JPanel(new GridLayout(2, 1, 0, 2));
 
-        JButton submitButton = new JButton("Submit ⏎");
-        submitButton.setToolTipText("Submit (Enter)");
+        JButton submitButton = new JButton(ClaudeCodeGuiBundle.message("action.quickFixWithClaude.submit"));
+        submitButton.setToolTipText(ClaudeCodeGuiBundle.message("action.quickFixWithClaude.submitTooltip"));
 
-        JButton cancelButton = new JButton("Cancel ␛");
-        cancelButton.setToolTipText("Cancel (Esc)");
+        JButton cancelButton = new JButton(ClaudeCodeGuiBundle.message("action.quickFixWithClaude.cancel"));
+        cancelButton.setToolTipText(ClaudeCodeGuiBundle.message("action.quickFixWithClaude.cancelTooltip"));
 
         actionPanel.add(submitButton);
         actionPanel.add(cancelButton);
@@ -223,7 +223,7 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
     private void executeQuickFix(@NotNull Project project, @NotNull Editor editor, @NotNull String userPrompt) {
         ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
         if (toolWindow == null) {
-            ClaudeNotifier.showError(project, "CCG tool window not found");
+            ClaudeNotifier.showError(project, ClaudeCodeGuiBundle.message("quickfix.toolWindowNotFound"));
             return;
         }
 
@@ -251,7 +251,7 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
             @Override
             public void onError(String error) {
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    ClaudeNotifier.showError(project, "Quick Fix failed: " + error);
+                    ClaudeNotifier.showError(project, ClaudeCodeGuiBundle.message("quickfix.failed", error));
                     ClaudeNotifier.clearStatus(project);
                 });
             }

@@ -37,6 +37,7 @@ public class CodemossSettingsService {
     private final CodexMcpServerManager codexMcpServerManager;
     private final WorkingDirectoryManager workingDirectoryManager;
     private final AgentManager agentManager;
+    private final PromptManager promptManager;
     private final SkillManager skillManager;
     private final McpServerManager mcpServerManager;
     private final ProviderManager providerManager;
@@ -71,6 +72,9 @@ public class CodemossSettingsService {
 
         // 初始化 AgentManager
         this.agentManager = new AgentManager(gson, pathManager);
+
+        // 初始化 PromptManager
+        this.promptManager = new PromptManager(gson, pathManager);
 
         // 初始化 SkillManager
         this.skillManager = new SkillManager(
@@ -597,6 +601,28 @@ public class CodemossSettingsService {
 
     public void setSelectedAgentId(String agentId) throws IOException {
         agentManager.setSelectedAgentId(agentId);
+    }
+
+    // ==================== Prompts 管理 ====================
+
+    public List<JsonObject> getPrompts() throws IOException {
+        return promptManager.getPrompts();
+    }
+
+    public void addPrompt(JsonObject prompt) throws IOException {
+        promptManager.addPrompt(prompt);
+    }
+
+    public void updatePrompt(String id, JsonObject updates) throws IOException {
+        promptManager.updatePrompt(id, updates);
+    }
+
+    public boolean deletePrompt(String id) throws IOException {
+        return promptManager.deletePrompt(id);
+    }
+
+    public JsonObject getPrompt(String id) throws IOException {
+        return promptManager.getPrompt(id);
     }
 
     // ==================== Codex Provider 管理 ====================

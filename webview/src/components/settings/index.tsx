@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig, CodexProviderConfig } from '../../types/provider';
 import type { AgentConfig } from '../../types/agent';
+import type { PromptConfig } from '../../types/prompt';
 import { type ClaudeConfig } from './ConfigInfoDisplay';
 import AlertDialog from '../AlertDialog';
 import type { AlertType } from '../AlertDialog';
@@ -10,6 +11,7 @@ import { ToastContainer, type ToastMessage } from '../Toast';
 import ProviderDialog from '../ProviderDialog';
 import CodexProviderDialog from '../CodexProviderDialog';
 import AgentDialog from '../AgentDialog';
+import PromptDialog from '../PromptDialog';
 
 // 导入拆分后的组件
 import SettingsHeader from './SettingsHeader';
@@ -21,6 +23,7 @@ import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
 import CommunitySection from './CommunitySection';
 import AgentSection from './AgentSection';
+import PromptSection from './PromptSection';
 import CommitSection from './CommitSection';
 import OtherSettingsSection from './OtherSettingsSection';
 import { SkillsSettingsSection } from '../skills';
@@ -30,6 +33,7 @@ import {
   useProviderManagement,
   useCodexProviderManagement,
   useAgentManagement,
+  usePromptManagement,
 } from './hooks';
 
 import styles from './style.module.less';
@@ -168,6 +172,27 @@ const SettingsView = ({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
 
+  // 使用 Prompt 管理 hook
+  const {
+    prompts,
+    promptsLoading,
+    promptDialog,
+    deletePromptConfirm,
+    loadPrompts,
+    updatePrompts,
+    cleanupPromptsTimeout,
+    handleAddPrompt,
+    handleEditPrompt,
+    handleClosePromptDialog,
+    handleDeletePrompt,
+    handleSavePrompt,
+    confirmDeletePrompt,
+    cancelDeletePrompt,
+    handlePromptOperationResult,
+  } = usePromptManagement({
+    onSuccess: (msg) => addToast(msg, 'success'),
+  });
+
   // Claude CLI 当前配置（来自 ~/.claude/settings.json）
   const [claudeConfig, setClaudeConfig] = useState<ClaudeConfig | null>(null);
   const [claudeConfigLoading, setClaudeConfigLoading] = useState(false);
@@ -248,6 +273,15 @@ const SettingsView = ({
   // Commit AI 提示词配置
   const [commitPrompt, setCommitPrompt] = useState('');
   const [savingCommitPrompt, setSavingCommitPrompt] = useState(false);
+
+  // 聊天背景色配置
+  const [chatBgColor, setChatBgColor] = useState<string>(() => {
+    const saved = localStorage.getItem('chatBgColor');
+    if (saved && /^#[0-9a-fA-F]{6}$/.test(saved)) {
+      return saved;
+    }
+    return '';
+  });
 
   // 历史补全开关配置
   const [historyCompletionEnabled, setHistoryCompletionEnabled] = useState<boolean>(() => {
@@ -452,6 +486,27 @@ const SettingsView = ({
       }
     };
 
+    // Prompt 提示词库回调 - 使用 hooks 提供的更新函数
+    const previousUpdatePrompts = window.updatePrompts;
+    window.updatePrompts = (jsonStr: string) => {
+      try {
+        const promptsList: PromptConfig[] = JSON.parse(jsonStr);
+        updatePrompts(promptsList);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse prompts:', error);
+      }
+      previousUpdatePrompts?.(jsonStr);
+    };
+
+    window.promptOperationResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        handlePromptOperationResult(result);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse prompt operation result:', error);
+      }
+    };
+
     // Codex provider callbacks - 使用 hooks 提供的更新函数
     window.updateCodexProviders = (jsonStr: string) => {
       try {
@@ -490,6 +545,8 @@ const SettingsView = ({
     loadCodexProviders();
     // 加载智能体列表
     loadAgents();
+    // 加载提示词列表
+    loadPrompts();
     // 加载 Claude CLI 当前配置
     loadClaudeConfig();
     // 加载 Node.js 路径
@@ -506,6 +563,8 @@ const SettingsView = ({
     return () => {
       // 清理 Agent 超时定时器 - 使用 hook 提供的清理函数
       cleanupAgentsTimeout();
+      // 清理 Prompt 超时定时器 - 使用 hook 提供的清理函数
+      cleanupPromptsTimeout();
 
       window.updateProviders = undefined;
       window.updateActiveProvider = undefined;
@@ -529,6 +588,9 @@ const SettingsView = ({
       window.updateCommitPrompt = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
+      // Cleanup Prompt callbacks
+      window.updatePrompts = previousUpdatePrompts;
+      window.promptOperationResult = undefined;
       // Cleanup Codex callbacks
       window.updateCodexProviders = undefined;
       window.updateActiveCodexProvider = undefined;
@@ -609,6 +671,17 @@ const SettingsView = ({
     // 保存到 localStorage
     localStorage.setItem('fontSizeLevel', fontSizeLevel.toString());
   }, [fontSizeLevel]);
+
+  // 聊天背景色处理
+  useEffect(() => {
+    if (chatBgColor) {
+      document.documentElement.style.setProperty('--bg-chat', chatBgColor);
+      localStorage.setItem('chatBgColor', chatBgColor);
+    } else {
+      document.documentElement.style.removeProperty('--bg-chat');
+      localStorage.removeItem('chatBgColor');
+    }
+  }, [chatBgColor]);
 
   useEffect(() => {
     if (isCodexMode && disabledTabs.includes(currentTab)) {
@@ -807,6 +880,8 @@ const SettingsView = ({
               onSendShortcutChange={handleSendShortcutChange}
               autoOpenFileEnabled={autoOpenFileEnabled}
               onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+              chatBgColor={chatBgColor}
+              onChatBgColorChange={setChatBgColor}
             />
           </div>
 
@@ -870,6 +945,17 @@ const SettingsView = ({
               onAdd={handleAddAgent}
               onEdit={handleEditAgent}
               onDelete={handleDeleteAgent}
+            />
+          </div>
+
+          {/* Prompts */}
+          <div style={{ display: currentTab === 'prompts' ? 'block' : 'none' }}>
+            <PromptSection
+              prompts={prompts}
+              loading={promptsLoading}
+              onAdd={handleAddPrompt}
+              onEdit={handleEditPrompt}
+              onDelete={handleDeletePrompt}
             />
           </div>
 
@@ -946,6 +1032,25 @@ const SettingsView = ({
         cancelText={t('common.cancel')}
         onConfirm={confirmDeleteAgent}
         onCancel={cancelDeleteAgent}
+      />
+
+      {/* 提示词添加/编辑弹窗 */}
+      <PromptDialog
+        isOpen={promptDialog.isOpen}
+        prompt={promptDialog.prompt}
+        onClose={handleClosePromptDialog}
+        onSave={handleSavePrompt}
+      />
+
+      {/* 提示词删除确认弹窗 */}
+      <ConfirmDialog
+        isOpen={deletePromptConfirm.isOpen}
+        title={t('settings.prompt.deleteConfirmTitle')}
+        message={t('settings.prompt.deleteConfirmMessage', { name: deletePromptConfirm.prompt?.name || '' })}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={confirmDeletePrompt}
+        onCancel={cancelDeletePrompt}
       />
 
       {/* Codex 供应商添加/编辑弹窗 */}

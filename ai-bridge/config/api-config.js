@@ -1,6 +1,6 @@
 /**
- * API 配置模块
- * 负责加载和管理 Claude API 配置
+ * API configuration module.
+ * Loads and manages Claude API configuration.
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -10,7 +10,7 @@ import { execSync } from 'child_process';
 import { getClaudeDir } from '../utils/path-utils.js';
 
 /**
- * 读取 Claude Code 配置
+ * Read Claude Code configuration.
  */
 export function loadClaudeSettings() {
   try {
@@ -80,11 +80,11 @@ function readFileCredentials() {
 }
 
 /**
- * 检查是否存在有效的 Claude CLI 会话认证
- * - macOS: 从系统钥匙串(Keychain)读取凭证
- * - Linux/Windows: 从 ~/.claude/.credentials.json 文件读取凭证
+ * Check whether a valid Claude CLI session authentication exists.
+ * - macOS: Reads credentials from the system Keychain
+ * - Linux/Windows: Reads credentials from ~/.claude/.credentials.json
  *
- * @returns {boolean} 如果存在有效的CLI会话凭证返回true，否则返回false
+ * @returns {boolean} True if valid CLI session credentials are found, false otherwise
  */
 export function hasCliSessionAuth() {
   try {
@@ -124,8 +124,8 @@ export function hasCliSessionAuth() {
 }
 
 /**
- * 配置 API Key
- * @returns {Object} 包含 apiKey, baseUrl, authType 及其来源
+ * Configure the API Key.
+ * @returns {Object} Contains apiKey, baseUrl, authType and their sources
  */
 export function setupApiKey() {
   console.log('[DIAG-CONFIG] ========== setupApiKey() START ==========');
@@ -138,27 +138,27 @@ export function setupApiKey() {
 
   let apiKey;
   let baseUrl;
-  let authType = 'api_key';  // 默认使用 api_key（x-api-key header）
+  let authType = 'api_key';  // Default to api_key (x-api-key header)
   let apiKeySource = 'default';
   let baseUrlSource = 'default';
 
-  // 🔥 配置优先级：只从 settings.json 读取，忽略系统环境变量
-  // 这样确保配置来源唯一，避免 shell 环境变量干扰
+  // Configuration priority: only read from settings.json, ignore system environment variables.
+  // This ensures a single source of truth and avoids interference from shell environment variables.
   console.log('[DEBUG] Loading configuration from settings.json only (ignoring shell environment variables)...');
 
-  // 优先使用 ANTHROPIC_AUTH_TOKEN（Bearer 认证），回退到 ANTHROPIC_API_KEY（x-api-key 认证）
-  // 这样可以兼容 Claude Code CLI 的两种认证方式
+  // Prefer ANTHROPIC_AUTH_TOKEN (Bearer auth), fall back to ANTHROPIC_API_KEY (x-api-key auth).
+  // This supports both authentication methods used by the Claude Code CLI.
   if (settings?.env?.ANTHROPIC_AUTH_TOKEN) {
     apiKey = settings.env.ANTHROPIC_AUTH_TOKEN;
-    authType = 'auth_token';  // Bearer 认证
+    authType = 'auth_token';  // Bearer authentication
     apiKeySource = 'settings.json (ANTHROPIC_AUTH_TOKEN)';
   } else if (settings?.env?.ANTHROPIC_API_KEY) {
     apiKey = settings.env.ANTHROPIC_API_KEY;
-    authType = 'api_key';  // x-api-key 认证
+    authType = 'api_key';  // x-api-key authentication
     apiKeySource = 'settings.json (ANTHROPIC_API_KEY)';
   } else if (settings?.env?.CLAUDE_CODE_USE_BEDROCK === '1' || settings?.env?.CLAUDE_CODE_USE_BEDROCK === 1 || settings?.env?.CLAUDE_CODE_USE_BEDROCK === 'true' || settings?.env?.CLAUDE_CODE_USE_BEDROCK === true) {
     apiKey = settings?.env?.CLAUDE_CODE_USE_BEDROCK;
-    authType = 'aws_bedrock';  // aws_bedrock 认证
+    authType = 'aws_bedrock';  // AWS Bedrock authentication
     apiKeySource = 'settings.json (AWS_BEDROCK)';
   }
 
@@ -167,12 +167,12 @@ export function setupApiKey() {
     baseUrlSource = 'settings.json';
   }
 
-  // 如果没有配置 API Key，检查是否存在 CLI 会话认证
+  // If no API Key is configured, check for CLI session authentication
   if (!apiKey) {
     console.log('[DEBUG] No API Key found in settings.json, checking for CLI session...');
 
     if (hasCliSessionAuth()) {
-      // 使用 CLI 会话认证
+      // Use CLI session authentication
       console.log('[INFO] Using CLI session authentication (claude login)');
       authType = 'cli_session';
       // Set source based on platform
@@ -181,11 +181,11 @@ export function setupApiKey() {
         ? 'CLI session (macOS Keychain)'
         : 'CLI session (~/.claude/.credentials.json)';
 
-      // 清除所有 API Key 相关的环境变量，让 SDK 自动检测 CLI 会话
+      // Clear all API Key environment variables so the SDK auto-detects the CLI session
       delete process.env.ANTHROPIC_API_KEY;
       delete process.env.ANTHROPIC_AUTH_TOKEN;
 
-      // 设置 baseUrl (如果配置了)
+      // Set baseUrl if configured
       if (baseUrl) {
         process.env.ANTHROPIC_BASE_URL = baseUrl;
       }
@@ -193,7 +193,7 @@ export function setupApiKey() {
       console.log('[DEBUG] Auth type:', authType);
       return { apiKey: null, baseUrl, authType, apiKeySource, baseUrlSource };
     } else {
-      // 既没有 API Key 也没有 CLI 会话
+      // Neither API Key nor CLI session found
       console.error('[ERROR] API Key not configured and no CLI session found.');
       console.error('[ERROR] Please either:');
       console.error('[ERROR]   1. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in ~/.claude/settings.json');
@@ -202,17 +202,17 @@ export function setupApiKey() {
     }
   }
 
-  // 根据认证类型设置对应的环境变量
+  // Set the corresponding environment variables based on auth type
   if (authType === 'auth_token') {
     process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
-    // 清除 ANTHROPIC_API_KEY 避免混淆
+    // Clear ANTHROPIC_API_KEY to avoid confusion
     delete process.env.ANTHROPIC_API_KEY;
   } else if (authType === 'aws_bedrock') {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_AUTH_TOKEN;
   } else {
     process.env.ANTHROPIC_API_KEY = apiKey;
-    // 清除 ANTHROPIC_AUTH_TOKEN 避免混淆
+    // Clear ANTHROPIC_AUTH_TOKEN to avoid confusion
     delete process.env.ANTHROPIC_AUTH_TOKEN;
   }
 
@@ -233,9 +233,9 @@ export function setupApiKey() {
 }
 
 /**
- * 检测是否使用自定义 Base URL（非官方 Anthropic API）
+ * Detect whether a custom Base URL (non-official Anthropic API) is being used.
  * @param {string} baseUrl - Base URL
- * @returns {boolean} 是否为自定义 URL
+ * @returns {boolean} Whether the URL is custom
  */
 export function isCustomBaseUrl(baseUrl) {
   if (!baseUrl) return false;
