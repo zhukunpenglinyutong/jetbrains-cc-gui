@@ -312,7 +312,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       });
 
       return doc.body.innerHTML.trim();
-    } catch (e) {
+    } catch {
       return content;
     }
   }, [content, isStreaming, i18n.language, t]);

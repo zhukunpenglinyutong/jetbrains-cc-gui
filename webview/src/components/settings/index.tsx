@@ -276,7 +276,11 @@ const SettingsView = ({
 
   // 聊天背景色配置
   const [chatBgColor, setChatBgColor] = useState<string>(() => {
-    return localStorage.getItem('chatBgColor') || '';
+    const saved = localStorage.getItem('chatBgColor');
+    if (saved && /^#[0-9a-fA-F]{6}$/.test(saved)) {
+      return saved;
+    }
+    return '';
   });
 
   // 历史补全开关配置

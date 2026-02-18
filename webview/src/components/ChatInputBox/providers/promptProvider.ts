@@ -30,6 +30,7 @@ let pendingWaiters: Array<{ resolve: () => void; reject: (error: unknown) => voi
 const MIN_REFRESH_INTERVAL = 2000;
 const LOADING_TIMEOUT = 1500; // 减少到1.5秒，更快的超时反馈
 const MAX_RETRY_COUNT = 1; // 最多重试1次，避免长时间等待
+const MAX_PENDING_WAITERS = 10; // 最大并发等待数
 
 // ============================================================================
 // 核心函数
@@ -132,6 +133,12 @@ function waitForPrompts(signal: AbortSignal, timeoutMs: number): Promise<void> {
       cleanup();
       reject(error);
     };
+
+    // Evict oldest waiters if limit exceeded
+    if (pendingWaiters.length >= MAX_PENDING_WAITERS) {
+      const evicted = pendingWaiters.splice(0, pendingWaiters.length - MAX_PENDING_WAITERS + 1);
+      evicted.forEach(w => w.reject(new Error('Too many pending waiters')));
+    }
 
     pendingWaiters.push(waiter);
   });

@@ -106,6 +106,18 @@ public class PromptHandler extends BaseMessageHandler {
     private void handleUpdatePrompt(String content) {
         try {
             JsonObject data = gson.fromJson(content, JsonObject.class);
+
+            if (!data.has("id") || data.get("id").isJsonNull()) {
+                LOG.error("[PromptHandler] Missing 'id' field in update request");
+                sendErrorResult("update", "Missing 'id' field in request");
+                return;
+            }
+            if (!data.has("updates") || data.get("updates").isJsonNull()) {
+                LOG.error("[PromptHandler] Missing 'updates' field in update request");
+                sendErrorResult("update", "Missing 'updates' field in request");
+                return;
+            }
+
             String id = data.get("id").getAsString();
             JsonObject updates = data.getAsJsonObject("updates");
 
@@ -134,6 +146,13 @@ public class PromptHandler extends BaseMessageHandler {
     private void handleDeletePrompt(String content) {
         try {
             JsonObject data = gson.fromJson(content, JsonObject.class);
+
+            if (!data.has("id") || data.get("id").isJsonNull()) {
+                LOG.error("[PromptHandler] Missing 'id' field in delete request");
+                sendErrorResult("delete", "Missing 'id' field in request");
+                return;
+            }
+
             String id = data.get("id").getAsString();
 
             boolean deleted = settingsService.deletePrompt(id);
@@ -163,5 +182,18 @@ public class PromptHandler extends BaseMessageHandler {
                 callJavaScript("window.promptOperationResult", escapeJs(gson.toJson(errorResult)));
             });
         }
+    }
+
+    /**
+     * Send error result to frontend
+     */
+    private void sendErrorResult(String operation, String error) {
+        JsonObject errorResult = new JsonObject();
+        errorResult.addProperty("success", false);
+        errorResult.addProperty("operation", operation);
+        errorResult.addProperty("error", error);
+        ApplicationManager.getApplication().invokeLater(() -> {
+            callJavaScript("window.promptOperationResult", escapeJs(gson.toJson(errorResult)));
+        });
     }
 }

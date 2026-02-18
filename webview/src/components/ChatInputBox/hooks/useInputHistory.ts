@@ -312,13 +312,27 @@ const MAX_COUNT_RECORDS = 200;
 /**
  * Clean up counts to keep only the most frequently used records
  */
-function cleanupCounts(counts: Record<string, number>): Record<string, number> {
+function cleanupCounts(
+  counts: Record<string, number>,
+  timestamps?: Record<string, string>
+): Record<string, number> {
   const entries = Object.entries(counts);
   if (entries.length <= MAX_COUNT_RECORDS) return counts;
 
   // Sort by count descending, keep top MAX_COUNT_RECORDS
   entries.sort((a, b) => b[1] - a[1]);
   const kept = entries.slice(0, MAX_COUNT_RECORDS);
+  const keptKeys = new Set(kept.map(([key]) => key));
+
+  // Sync timestamps: remove entries not in kept counts
+  if (timestamps) {
+    for (const key of Object.keys(timestamps)) {
+      if (!keptKeys.has(key)) {
+        delete timestamps[key];
+      }
+    }
+  }
+
   return Object.fromEntries(kept);
 }
 
@@ -530,9 +544,11 @@ export function addHistoryItem(text: string, importance: number = 1): void {
 
     // Set importance
     const counts = loadCounts();
+    const timestamps = loadTimestamps();
     counts[sanitized] = Math.max(1, Math.floor(importance));
-    const cleaned = cleanupCounts(counts);
+    const cleaned = cleanupCounts(counts, timestamps);
     window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(cleaned));
+    window.localStorage.setItem(HISTORY_TIMESTAMPS_KEY, JSON.stringify(timestamps));
 
     // Save timestamp
     saveTimestamps([sanitized]);
@@ -603,7 +619,7 @@ export function updateHistoryItem(
     }
 
     window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items));
-    const cleaned = cleanupCounts(counts);
+    const cleaned = cleanupCounts(counts, timestamps);
     window.localStorage.setItem(HISTORY_COUNTS_KEY, JSON.stringify(cleaned));
     window.localStorage.setItem(HISTORY_TIMESTAMPS_KEY, JSON.stringify(timestamps));
   } catch {

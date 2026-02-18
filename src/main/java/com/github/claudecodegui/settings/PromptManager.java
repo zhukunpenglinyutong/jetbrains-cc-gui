@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Prompt 管理器
@@ -20,6 +21,12 @@ import java.util.List;
  */
 public class PromptManager {
     private static final Logger LOG = Logger.getInstance(PromptManager.class);
+
+    /**
+     * Valid prompt ID pattern: UUID format or numeric timestamp string.
+     * Rejects IDs containing path separators, whitespace, or special characters.
+     */
+    private static final Pattern VALID_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9\\-]{1,64}$");
 
     private final Gson gson;
     private final ConfigPathManager pathManager;
@@ -103,6 +110,18 @@ public class PromptManager {
     }
 
     /**
+     * Validate prompt ID format to prevent injection of malformed keys
+     */
+    private void validateId(String id) {
+        if (id == null || id.isEmpty()) {
+            throw new IllegalArgumentException("Prompt ID must not be empty");
+        }
+        if (!VALID_ID_PATTERN.matcher(id).matches()) {
+            throw new IllegalArgumentException("Invalid prompt ID format: " + id);
+        }
+    }
+
+    /**
      * 添加提示词
      */
     public void addPrompt(JsonObject prompt) throws IOException {
@@ -113,6 +132,7 @@ public class PromptManager {
         JsonObject config = readPromptConfig();
         JsonObject prompts = config.getAsJsonObject("prompts");
         String id = prompt.get("id").getAsString();
+        validateId(id);
 
         // 检查 ID 是否已存在
         if (prompts.has(id)) {
@@ -135,6 +155,7 @@ public class PromptManager {
      * 更新提示词
      */
     public void updatePrompt(String id, JsonObject updates) throws IOException {
+        validateId(id);
         JsonObject config = readPromptConfig();
         JsonObject prompts = config.getAsJsonObject("prompts");
 
@@ -166,6 +187,7 @@ public class PromptManager {
      * 删除提示词
      */
     public boolean deletePrompt(String id) throws IOException {
+        validateId(id);
         JsonObject config = readPromptConfig();
         JsonObject prompts = config.getAsJsonObject("prompts");
 
@@ -186,6 +208,7 @@ public class PromptManager {
      * 获取单个提示词
      */
     public JsonObject getPrompt(String id) throws IOException {
+        validateId(id);
         JsonObject config = readPromptConfig();
         JsonObject prompts = config.getAsJsonObject("prompts");
 
