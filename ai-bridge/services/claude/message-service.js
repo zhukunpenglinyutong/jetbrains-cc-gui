@@ -362,6 +362,48 @@ function truncateErrorContent(content, maxLen = 1000) {
   return content.substring(0, maxLen) + `... [truncated, total ${content.length} chars]`;
 }
 
+const MAX_TOOL_RESULT_CONTENT_CHARS = 20000;
+
+/**
+ * Truncate tool_result block content for IPC transport.
+ * Preserves all fields but limits the content string to avoid large payloads through stdout.
+ * @param {object} block - The tool_result block
+ * @returns {object} A block with truncated content (or the original if small enough)
+ */
+function truncateToolResultBlock(block) {
+  if (!block || !block.content) return block;
+  const content = block.content;
+  if (typeof content === 'string' && content.length > MAX_TOOL_RESULT_CONTENT_CHARS) {
+    const head = Math.floor(MAX_TOOL_RESULT_CONTENT_CHARS * 0.65);
+    const tail = MAX_TOOL_RESULT_CONTENT_CHARS - head;
+    return {
+      ...block,
+      content: content.substring(0, head) +
+        `\n...\n(truncated, original length: ${content.length} chars)\n...\n` +
+        content.substring(content.length - tail)
+    };
+  }
+  if (Array.isArray(content)) {
+    let changed = false;
+    const truncated = content.map(item => {
+      if (item && item.type === 'text' && typeof item.text === 'string' && item.text.length > MAX_TOOL_RESULT_CONTENT_CHARS) {
+        changed = true;
+        const head = Math.floor(MAX_TOOL_RESULT_CONTENT_CHARS * 0.65);
+        const tail = MAX_TOOL_RESULT_CONTENT_CHARS - head;
+        return {
+          ...item,
+          text: item.text.substring(0, head) +
+            `\n...\n(truncated, original length: ${item.text.length} chars)\n...\n` +
+            item.text.substring(item.text.length - tail)
+        };
+      }
+      return item;
+    });
+    return changed ? { ...block, content: truncated } : block;
+  }
+  return block;
+}
+
 /**
  * Build error payload for configuration errors
  * @param {Error} error - The error object to build payload from
@@ -853,7 +895,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'tool_result') {
-              console.log('[TOOL_RESULT]', JSON.stringify({ tool_use_id: block.tool_use_id, is_error: block.is_error }));
+              console.log('[TOOL_RESULT]', JSON.stringify(truncateToolResultBlock(block)));
             }
           }
         }
@@ -1559,7 +1601,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	        if (Array.isArray(content)) {
 	    	          for (const block of content) {
 	    	            if (block.type === 'tool_result') {
-	    	              console.log('[TOOL_RESULT]', JSON.stringify({ tool_use_id: block.tool_use_id, is_error: block.is_error }));
+	    	              console.log('[TOOL_RESULT]', JSON.stringify(truncateToolResultBlock(block)));
 	    	            }
 	    	          }
 	    	        }

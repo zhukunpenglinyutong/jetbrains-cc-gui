@@ -8,8 +8,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -130,6 +128,9 @@ public class ProcessManager {
         activeChannelProcesses.clear();
         interruptedChannels.clear();
 
+        // Clean up stale temp files on shutdown (safe for concurrent sessions)
+        cleanupStaleTempFiles();
+
         LOG.info("[ProcessManager] Cleanup complete. Terminated " + count + " processes.");
     }
 
@@ -182,48 +183,37 @@ public class ProcessManager {
     }
 
     /**
-     * Takes a snapshot of Claude cwd files.
+     * Cleans up stale Claude cwd temp files older than the given threshold.
+     * Called during IDE shutdown to prevent temp file accumulation
+     * without interfering with concurrent sessions.
      */
-    public Set<String> snapshotClaudeCwdFiles(File tempDir) {
-        if (tempDir == null || !tempDir.exists()) {
-            return Collections.emptySet();
-        }
-        File[] existing = tempDir.listFiles((dir, name) ->
-            name.startsWith("claude-") && name.endsWith("-cwd"));
-        if (existing == null || existing.length == 0) {
-            return Collections.emptySet();
-        }
-        Set<String> snapshot = new HashSet<>();
-        for (File file : existing) {
-            snapshot.add(file.getName());
-        }
-        return snapshot;
-    }
-
-    /**
-     * Cleans up Claude temporary files.
-     */
-    public void cleanupClaudeTempFiles(File tempDir, Set<String> preserved) {
+    public void cleanupStaleTempFiles() {
+        File tempDir = prepareClaudeTempDir();
         if (tempDir == null || !tempDir.exists()) {
             return;
         }
-        File[] leftovers = tempDir.listFiles((dir, name) ->
+        File[] cwdFiles = tempDir.listFiles((dir, name) ->
             name.startsWith("claude-") && name.endsWith("-cwd"));
-        if (leftovers == null || leftovers.length == 0) {
+        if (cwdFiles == null || cwdFiles.length == 0) {
             return;
         }
-        for (File file : leftovers) {
-            if (preserved != null && preserved.contains(file.getName())) {
-                continue;
-            }
-            // Use delete with retry to handle Windows file locking issues
-            if (!PlatformUtils.deleteWithRetry(file, 3)) {
-                try {
-                    Files.deleteIfExists(file.toPath());
-                } catch (IOException e) {
-                    LOG.error("[ProcessManager] Failed to delete temp cwd file: " + file.getAbsolutePath());
+        long staleThresholdMs = TimeUnit.HOURS.toMillis(24);
+        long now = System.currentTimeMillis();
+        int cleaned = 0;
+        for (File file : cwdFiles) {
+            if (now - file.lastModified() > staleThresholdMs) {
+                if (!PlatformUtils.deleteWithRetry(file, 3)) {
+                    try {
+                        Files.deleteIfExists(file.toPath());
+                    } catch (IOException e) {
+                        LOG.error("[ProcessManager] Failed to delete stale temp cwd file: " + file.getAbsolutePath());
+                    }
                 }
+                cleaned++;
             }
+        }
+        if (cleaned > 0) {
+            LOG.info("[ProcessManager] Cleaned up " + cleaned + " stale temp cwd files.");
         }
     }
 }
