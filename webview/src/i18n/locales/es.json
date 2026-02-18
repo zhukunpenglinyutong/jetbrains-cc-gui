@@ -829,6 +829,7 @@
     "showDiffInIdea": "Mostrar cambios en IDEA",
     "diffButton": "Diff",
     "editBatchTitle": "Edición de archivos por lotes",
+    "searchBatchTitle": "Buscar en lote",
     "editPrefix": "Editar: {{fileName}}",
     "lineRange": "Líneas {{start}}-{{end}}",
     "filePath": "Ruta del archivo:",

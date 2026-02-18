@@ -829,6 +829,7 @@
     "showDiffInIdea": "Afficher les modifications dans IDEA",
     "diffButton": "Diff",
     "editBatchTitle": "Modification de fichiers en masse",
+    "searchBatchTitle": "Recherche en lot",
     "editPrefix": "Modifier : {{fileName}}",
     "lineRange": "Lignes {{start}}-{{end}}",
     "filePath": "Chemin du fichier :",

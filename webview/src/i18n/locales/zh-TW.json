@@ -834,6 +834,7 @@
     "showDiffInIdea": "在 IDEA 中顯示變更",
     "diffButton": "Diff",
     "editBatchTitle": "批量編輯檔案",
+    "searchBatchTitle": "批量搜尋",
     "editPrefix": "編輯: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
     "filePath": "檔案路徑：",

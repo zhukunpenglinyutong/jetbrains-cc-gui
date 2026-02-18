@@ -829,6 +829,7 @@
     "showDiffInIdea": "IDEA में परिवर्तन दिखाएं",
     "diffButton": "Diff",
     "editBatchTitle": "बैच फ़ाइल संपादन",
+    "searchBatchTitle": "बैच खोज",
     "editPrefix": "संपादित करें: {{fileName}}",
     "lineRange": "पंक्तियाँ {{start}}-{{end}}",
     "filePath": "फ़ाइल पथ:",

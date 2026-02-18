@@ -839,6 +839,7 @@
     "showDiffInIdea": "Показать изменения в IDEA",
     "diffButton": "Diff",
     "editBatchTitle": "Пакетное редактирование файлов",
+    "searchBatchTitle": "Пакетный поиск",
     "editPrefix": "Правка: {{fileName}}",
     "lineRange": "Строки {{start}}-{{end}}",
     "filePath": "Путь к файлу:",
