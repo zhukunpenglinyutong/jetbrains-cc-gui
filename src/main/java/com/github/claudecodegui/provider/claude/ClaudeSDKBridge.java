@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -391,7 +391,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 command.add(NODE_SCRIPT);
 
                 File processTempDir = processManager.prepareClaudeTempDir();
-                Set<String> existingTempMarkers = processManager.snapshotClaudeCwdFiles(processTempDir);
 
                 ProcessBuilder pb = new ProcessBuilder(command);
                 pb.directory(workDir);
@@ -486,7 +485,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
                 } finally {
                     processManager.waitForProcessTermination(process);
-                    processManager.cleanupClaudeTempFiles(processTempDir, existingTempMarkers);
                 }
 
             } catch (Exception e) {
@@ -660,7 +658,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 command.add(hasAttachments ? "sendWithAttachments" : "send");
 
                 File processTempDir = processManager.prepareClaudeTempDir();
-                Set<String> existingTempMarkers = processManager.snapshotClaudeCwdFiles(processTempDir);
 
                 ProcessBuilder pb = new ProcessBuilder(command);
 
@@ -869,7 +866,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 } finally {
                     processManager.unregisterProcess(channelId, process);
                     processManager.waitForProcessTermination(process);
-                    processManager.cleanupClaudeTempFiles(processTempDir, existingTempMarkers);
                 }
 
             } catch (Exception e) {

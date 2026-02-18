@@ -853,7 +853,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'tool_result') {
-              console.log('[TOOL_RESULT]', JSON.stringify({ tool_use_id: block.tool_use_id, is_error: block.is_error }));
+              console.log('[TOOL_RESULT]', JSON.stringify(block));
             }
           }
         }
@@ -1559,7 +1559,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	        if (Array.isArray(content)) {
 	    	          for (const block of content) {
 	    	            if (block.type === 'tool_result') {
-	    	              console.log('[TOOL_RESULT]', JSON.stringify({ tool_use_id: block.tool_use_id, is_error: block.is_error }));
+	    	              console.log('[TOOL_RESULT]', JSON.stringify(block));
 	    	            }
 	    	          }
 	    	        }
