@@ -66,7 +66,7 @@ public class SessionHandler extends BaseMessageHandler {
 
     /**
      * Send message to Claude
-     * 【FIX】Now parses JSON format to extract text, agent info and file tags
+     * [FIX] Now parses JSON format to extract text, agent info and file tags
      */
     private void handleSendMessage(String content) {
         String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
@@ -106,7 +106,7 @@ public class SessionHandler extends BaseMessageHandler {
                 }
             }
 
-            // 【FIX】Extract file tags from the message (for Codex context injection)
+            // [FIX] Extract file tags from the message (for Codex context injection)
             if (payload != null && payload.has("fileTags") && payload.get("fileTags").isJsonArray()) {
                 JsonArray fileTagsArray = payload.getAsJsonArray("fileTags");
                 fileTagPaths = new java.util.ArrayList<>();
@@ -145,7 +145,7 @@ public class SessionHandler extends BaseMessageHandler {
                 ClaudeNotifier.setWaiting(project);
             }
 
-            // 【FIX】Pass agent prompt and file tags directly to session
+            // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths)
                 .thenRun(() -> {
                     if (project != null) {
@@ -195,7 +195,7 @@ public class SessionHandler extends BaseMessageHandler {
                 }
             }
 
-            // 【FIX】Extract agent prompt from the payload for per-tab agent selection
+            // [FIX] Extract agent prompt from the payload for per-tab agent selection
             String agentPrompt = null;
             if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
                 JsonObject agent = payload.getAsJsonObject("agent");
@@ -206,7 +206,7 @@ public class SessionHandler extends BaseMessageHandler {
                 }
             }
 
-            // 【FIX】Extract file tags from the payload (for Codex context injection)
+            // [FIX] Extract file tags from the payload (for Codex context injection)
             java.util.List<String> fileTagPaths = null;
             if (payload != null && payload.has("fileTags") && payload.get("fileTags").isJsonArray()) {
                 JsonArray fileTagsArray = payload.getAsJsonArray("fileTags");
@@ -231,7 +231,7 @@ public class SessionHandler extends BaseMessageHandler {
 
     /**
      * Send message with attachments to Claude
-     * 【FIX】Now accepts agent prompt and file tags parameters
+     * [FIX] Now accepts agent prompt and file tags parameters
      */
     private void sendMessageWithAttachments(String prompt, List<ClaudeSession.Attachment> attachments, String agentPrompt, java.util.List<String> fileTagPaths) {
         // Version check (consistent with handleSendMessage)
@@ -268,7 +268,7 @@ public class SessionHandler extends BaseMessageHandler {
                 ClaudeNotifier.setWaiting(project);
             }
 
-            // 【FIX】Pass agent prompt and file tags directly to session
+            // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths)
                 .thenRun(() -> {
                     if (project != null) {

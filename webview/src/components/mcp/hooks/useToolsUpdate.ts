@@ -109,10 +109,10 @@ export function useToolsUpdate({
       }
     };
 
-    // 注册到 window 对象
+    // Register on the window object
     window.updateMcpServerTools = handleToolsUpdate;
 
-    // 清理
+    // Cleanup
     return () => {
       window.updateMcpServerTools = undefined;
     };

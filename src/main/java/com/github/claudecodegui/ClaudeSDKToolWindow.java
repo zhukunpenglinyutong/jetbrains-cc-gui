@@ -2520,17 +2520,17 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         private void createNewSession() {
             LOG.info("Creating new session...");
 
-            // 保存当前的 permission mode、provider、model（如果存在旧 session）
+            // Save current permission mode, provider, and model (if an old session exists)
             String previousPermissionMode = (session != null) ? session.getPermissionMode() : "bypassPermissions";
             String previousProvider = (session != null) ? session.getProvider() : "claude";
             String previousModel = (session != null) ? session.getModel() : "claude-sonnet-4-6";
             LOG.info("Preserving session state: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
-            // 清空前端消息显示（修复新建会话时消息不清空的bug）
+            // Clear frontend message display (fix bug where messages were not cleared on new session)
             callJavaScript("clearMessages");
 
-            // 先中断旧会话，确保彻底断开旧的连接
-            // 使用异步方式等待中断完成，避免竞态条件
+            // Interrupt the old session first to ensure a clean disconnect
+            // Wait asynchronously for the interruption to complete to avoid race conditions
             CompletableFuture<Void> interruptFuture = session != null
                 ? session.interrupt()
                 : CompletableFuture.completedFuture(null);
@@ -2548,35 +2548,35 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     callJavaScript("showLoading", "false");
                 });
 
-                // 清理所有待处理的权限请求，防止旧会话的请求干扰新会话
+                // Clear all pending permission requests to prevent old session requests from interfering with the new session
                 permissionHandler.clearPendingRequests();
 
-                // 创建全新的 Session 对象
+                // Create a brand new Session object
                 session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
 
-                // 恢复之前保存的 permission mode、provider、model
+                // Restore previously saved permission mode, provider, and model
                 session.setPermissionMode(previousPermissionMode);
                 session.setProvider(previousProvider);
                 session.setModel(previousModel);
                 LOG.info("Restored session state to new session: mode=" + previousPermissionMode + ", provider=" + previousProvider + ", model=" + previousModel);
 
-                // 更新 HandlerContext 中的 Session 引用（重要：确保所有 Handler 使用新 Session）
+                // Update the Session reference in HandlerContext (important: ensure all Handlers use the new Session)
                 handlerContext.setSession(session);
 
-                // 设置回调
+                // Set up callbacks
                 setupSessionCallbacks();
 
-                // 设置工作目录（sessionId 为 null 表示新会话）
+                // Set working directory (sessionId is null for a new session)
                 String workingDirectory = determineWorkingDirectory();
                 session.setSessionInfo(null, workingDirectory);
 
                 LOG.info("New session created successfully, working directory: " + workingDirectory);
 
-                // 更新前端状态
+                // Update frontend state
                 ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("updateStatus", JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
 
-                    // 重置 Token 使用统计
+                    // Reset token usage statistics
                     int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
                     JsonObject usageUpdate = new JsonObject();
                     usageUpdate.addProperty("percentage", 0);
@@ -2588,7 +2588,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     String usageJson = new Gson().toJson(usageUpdate);
 
                     if (browser != null && !disposed) {
-                        // 使用安全的调用方式
+                        // Use safe invocation pattern
                         String js = "(function() {" +
                                 "  if (typeof window.onUsageUpdate === 'function') {" +
                                 "    window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "');" +
@@ -2611,7 +2611,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         private void interruptDueToPermissionDenial() {
             this.session.interrupt().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
-                // 通知前端权限被拒绝，让前端标记未完成的工具调用为"中断"状态
+                // Notify frontend that permission was denied so it can mark pending tool calls as "interrupted"
                 callJavaScript("onPermissionDenied");
                 // Align with explicit interrupt behavior to clear streaming/loading UI state.
                 callJavaScript("onStreamEnd");
@@ -2621,9 +2621,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
-         * 执行 JavaScript 代码（对外公开，用于权限弹窗等功能）.
+         * Execute JavaScript code (public API, used for permission dialogs and similar features).
          *
-         * @param jsCode 要执行的 JavaScript 代码
+         * @param jsCode the JavaScript code to execute
          */
         public void executeJavaScriptCode(String jsCode) {
             if (this.disposed || this.browser == null) {
@@ -2680,8 +2680,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
-         * 【自动监听】更新 ContextBar - 由自动监听器调用
-         * 只更新上面灰色条的显示，不添加代码片段标签
+         * [Auto-listener] Update ContextBar - called by automatic editor listeners.
+         * Only updates the gray context bar display; does not add code snippet tags.
          */
         private void addSelectionInfo(String selectionInfo) {
             if (selectionInfo != null && !selectionInfo.isEmpty()) {
@@ -2690,8 +2690,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
-         * 【手动发送】添加代码片段到输入框 - 由右键"发送到 GUI"调用
-         * 添加代码片段标签到输入框内
+         * [Manual send] Add code snippet to the input box - called by the "Send to GUI" context menu action.
+         * Adds a code snippet tag inside the input box.
          */
         private void addCodeSnippet(String selectionInfo) {
             if (selectionInfo != null && !selectionInfo.isEmpty()) {
@@ -2704,8 +2704,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
-         * 从外部（右键菜单）添加代码片段
-         * 调用 addCodeSnippet 而不是 addSelectionInfo
+         * Add code snippet from external source (context menu).
+         * Calls addCodeSnippet instead of addSelectionInfo.
          *
          * [FIX] Now sends code to the currently selected tab instead of always the first tab
          */
@@ -2724,7 +2724,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             if (window == null) {
-                // 如果窗口不存在，自动打开工具窗口
+                // If no window instance exists, open the tool window automatically
                 LOG.info("窗口实例不存在，自动打开工具窗口: " + project.getName());
                 ApplicationManager.getApplication().invokeLater(() -> {
                     try {
@@ -2758,7 +2758,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
 
-            // 从外部调用，使用 addCodeSnippet 添加代码片段标签
+            // Called from external source; use addCodeSnippet to add the code snippet tag
             window.addCodeSnippet(selectionInfo);
         }
 
@@ -2834,8 +2834,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         /**
-         * 发送 QuickFix 消息 - 供 QuickFixWithClaudeAction 调用
-         * Send QuickFix message - called by QuickFixWithClaudeAction
+         * Send QuickFix message - called by QuickFixWithClaudeAction.
          */
         public void sendQuickFixMessage(String prompt, boolean isQuickFix, MessageCallback callback) {
             if (session == null) {
@@ -2937,7 +2936,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 LOG.debug("Failed to cancel webview watchdog: " + e.getMessage(), e);
             }
 
-            // 注销权限服务的 dialogShower、askUserQuestionDialogShower 和 planApprovalDialogShower，防止内存泄漏
+            // Unregister permission service dialog showers (dialogShower, askUserQuestionDialogShower, planApprovalDialogShower) to prevent memory leaks
             try {
                 // Get permission service using sessionId to avoid deprecated method
                 if (this.sessionId != null && !this.sessionId.isEmpty()) {
@@ -2978,7 +2977,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 LOG.warn("清理会话失败: " + e.getMessage());
             }
 
-            // 清理所有活跃的 Node.js 子进程
+            // Clean up all active Node.js child processes
             try {
                 if (claudeSDKBridge != null) {
                     int activeCount = claudeSDKBridge.getActiveProcessCount();

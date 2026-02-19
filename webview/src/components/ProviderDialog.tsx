@@ -146,11 +146,11 @@ export default function ProviderDialog({
         setProviderName(provider.name || '');
         setRemark(provider.remark || provider.websiteUrl || '');
         setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');
-        // 编辑模式下不填充默认值，避免覆盖用户实际使用的第三方代理 URL
+        // In edit mode, do not populate default values to avoid overwriting the user's third-party proxy URL
         setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '');
         const env = provider.settingsConfig?.env || {};
 
-        // 自动检测匹配的预设
+        // Auto-detect matching preset
         setActivePreset(detectMatchingPreset(env));
 
         setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
@@ -170,7 +170,7 @@ export default function ProviderDialog({
         };
         setJsonConfig(JSON.stringify(config, null, 2));
       } else {
-        // 添加模式
+        // Add mode
         setActivePreset('custom');
         setProviderName('');
         setRemark('');
@@ -198,7 +198,7 @@ export default function ProviderDialog({
     }
   }, [isOpen, provider]);
 
-  // ESC 键关闭
+  // Close on ESC key press
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
@@ -320,7 +320,7 @@ export default function ProviderDialog({
             {isAdding ? t('settings.provider.dialog.addDescription') : t('settings.provider.dialog.editDescription')}
           </p>
 
-          {/* 快捷配置按钮组 */}
+          {/* Preset configuration button group */}
           <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.presetGroup')}>
             {PROVIDER_PRESETS.map((preset) => (
               <button
@@ -474,7 +474,7 @@ export default function ProviderDialog({
                 {t('settings.provider.dialog.jsonConfigDescription')}
               </p>
 
-              {/* 工具栏 */}
+              {/* Toolbar */}
               <div className="json-toolbar">
                 <button
                   type="button"

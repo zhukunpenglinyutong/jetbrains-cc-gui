@@ -84,7 +84,7 @@ export function useSessionManagement({
     if (loading) {
       sendBridgeEvent('interrupt_session');
     }
-    // 设置过渡标志，防止后端旧会话回调通过 updateMessages 写回旧消息
+    // Set the transition flag to prevent stale session callbacks from writing old messages via updateMessages
     window.__sessionTransitioning = true;
     setMessages([]);
     sendBridgeEvent('create_new_session');
