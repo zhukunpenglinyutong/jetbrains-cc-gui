@@ -23,7 +23,7 @@ const PermissionDialog = ({
   onSkip,
   onApproveAlways,
 }: PermissionDialogProps) => {
-  const [showCommand, setShowCommand] = useState(true); // 默认展开命令
+  const [showCommand, setShowCommand] = useState(true); // Expand command by default
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { t } = useTranslation();
 
@@ -44,7 +44,7 @@ const PermissionDialog = ({
 
   useEffect(() => {
     if (isOpen && request) {
-      setShowCommand(true); // 每次打开时默认展开
+      setShowCommand(true); // Expand by default each time it opens
       setSelectedIndex(0);
 
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -80,7 +80,7 @@ const PermissionDialog = ({
     return null;
   }
 
-  // 格式化输入参数显示
+  // Format input parameters for display
   const formatInputValue = (value: any): string => {
     if (value === null || value === undefined) {
       return '';
@@ -94,9 +94,9 @@ const PermissionDialog = ({
     return String(value);
   };
 
-  // 获取命令或主要操作内容
+  // Get the command or primary action content
   const getCommandContent = (): string => {
-    // 根据工具类型获取主要内容
+    // Get primary content based on tool type
     if (request.inputs.command) {
       return request.inputs.command;
     }
@@ -106,13 +106,13 @@ const PermissionDialog = ({
     if (request.inputs.text) {
       return request.inputs.text;
     }
-    // 对于其他工具，格式化所有输入
+    // For other tools, format all inputs
     return Object.entries(request.inputs)
       .map(([key, value]) => `${key}: ${formatInputValue(value)}`)
       .join('\n');
   };
 
-  // 获取工作目录
+  // Get working directory
   const getWorkingDirectory = (): string => {
     if (request.inputs.cwd) {
       return request.inputs.cwd;
@@ -126,11 +126,11 @@ const PermissionDialog = ({
     return '~';
   };
 
-  // 工具名称映射到标题
+  // Map tool name to display title
   const getToolTitle = (toolName: string): string => {
     const key = `permission.tools.${toolName}`;
     const translated = t(key);
-    // 如果翻译键不存在,返回默认模板
+    // If translation key does not exist, return default template
     if (translated === key) {
       return t('permission.tools.execute', { toolName });
     }
@@ -143,11 +143,11 @@ const PermissionDialog = ({
   return (
     <div className="permission-dialog-overlay">
       <div className="permission-dialog-v3">
-        {/* 标题区域 */}
+        {/* Title area */}
         <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
         <p className="permission-dialog-v3-subtitle">{t('permission.fromExternalProcess')}</p>
 
-        {/* 命令/内容区域 */}
+        {/* Command/content area */}
         <div className="permission-dialog-v3-command-box">
           <div className="permission-dialog-v3-command-header">
             <span className="command-path">
@@ -169,7 +169,7 @@ const PermissionDialog = ({
           )}
         </div>
 
-        {/* 选项按钮列表 */}
+        {/* Option buttons list */}
         <div className="permission-dialog-v3-options">
           <button
             className={`permission-dialog-v3-option ${selectedIndex === 0 ? 'selected' : ''}`}

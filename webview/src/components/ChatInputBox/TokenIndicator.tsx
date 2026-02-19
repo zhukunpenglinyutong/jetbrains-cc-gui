@@ -2,8 +2,8 @@ import { useTranslation } from 'react-i18next';
 import type { TokenIndicatorProps } from './types';
 
 /**
- * TokenIndicator - 使用量圆环进度条组件
- * 使用 SVG 双圆圈方案实现
+ * TokenIndicator - Usage ring progress bar component
+ * Implemented using SVG dual-circle approach
  */
 export const TokenIndicator = ({
   percentage,
@@ -12,17 +12,17 @@ export const TokenIndicator = ({
   maxTokens,
 }: TokenIndicatorProps) => {
   const { t } = useTranslation();
-  // 圆的半径（留出 stroke 空间）
+  // Circle radius (accounting for stroke space)
   const radius = (size - 3) / 2;
   const center = size / 2;
 
-  // 圆周长
+  // Circumference
   const circumference = 2 * Math.PI * radius;
 
-  // 计算偏移量（从顶部开始顺时针填充）
+  // Calculate offset (fill clockwise from top)
   const strokeOffset = circumference * (1 - percentage / 100);
 
-  // 百分比统一保留一位小数（四舍五入），但 .0 结尾时隐藏小数
+  // Round percentage to one decimal place, but hide trailing .0
   const rounded = Math.round(percentage * 10) / 10;
   const formattedPercentage = Number.isInteger(rounded)
     ? `${Math.round(rounded)}%`
@@ -30,11 +30,11 @@ export const TokenIndicator = ({
 
   const formatTokens = (value?: number) => {
     if (typeof value !== 'number' || !isFinite(value)) return undefined;
-    // 始终使用 k (千) 为单位显示容量
-    // 例如: 1,000,000 → 1000k, 500,000 → 500k
+    // Always display capacity in k (thousands) units
+    // e.g.: 1,000,000 -> 1000k, 500,000 -> 500k
     if (value >= 1_000) {
       const kValue = value / 1_000;
-      // 如果是整数，不显示小数点
+      // If it's a whole number, don't show decimal point
       return Number.isInteger(kValue) ? `${kValue}k` : `${kValue.toFixed(1)}k`;
     }
     return `${value}`;
@@ -55,14 +55,14 @@ export const TokenIndicator = ({
           height={size}
           viewBox={`0 0 ${size} ${size}`}
         >
-          {/* 背景圆 */}
+          {/* Background circle */}
           <circle
             className="token-indicator-bg"
             cx={center}
             cy={center}
             r={radius}
           />
-          {/* 进度弧 */}
+          {/* Progress arc */}
           <circle
             className="token-indicator-fill"
             cx={center}
@@ -72,7 +72,7 @@ export const TokenIndicator = ({
             strokeDashoffset={strokeOffset}
           />
         </svg>
-        {/* 悬停气泡 */}
+        {/* Hover tooltip */}
         <div className="token-tooltip">
           {tooltip}
         </div>

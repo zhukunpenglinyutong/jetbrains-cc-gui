@@ -30,8 +30,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Claude 会话管理类
- * 负责维护单个对话会话的状态和消息历史
+ * Session management for Claude conversations.
+ * Maintains state and message history for a single chat session.
  */
 public class ClaudeSession {
 
@@ -43,29 +43,27 @@ public class ClaudeSession {
     private final Gson gson = new Gson();
     private final Project project;
 
-    // 会话状态管理器
+    // Session state manager
     private final com.github.claudecodegui.session.SessionState state;
 
-    // 消息处理器
+    // Message processors
     private final com.github.claudecodegui.session.MessageParser messageParser;
     private final com.github.claudecodegui.session.MessageMerger messageMerger;
 
-    // 上下文收集器
+    // Context collector
     private final com.github.claudecodegui.session.EditorContextCollector contextCollector;
 
-    // 回调处理器
+    // Callback handler
     private final com.github.claudecodegui.session.CallbackHandler callbackHandler;
 
-    // SDK 桥接
+    // SDK bridges
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
 
-    // 权限管理
+    // Permission manager
     private final PermissionManager permissionManager = new PermissionManager();
 
-    /**
-     * 消息类
-     */
+    /** Represents a single message in the conversation. */
     public static class Message {
         public enum Type {
             USER, ASSISTANT, SYSTEM, ERROR
@@ -74,7 +72,7 @@ public class ClaudeSession {
         public Type type;
         public String content;
         public long timestamp;
-        public JsonObject raw; // 原始消息数据
+        public JsonObject raw; // Raw message data from SDK
 
         public Message(Type type, String content) {
             this.type = type;
@@ -88,9 +86,7 @@ public class ClaudeSession {
         }
     }
 
-    /**
-     * 会话回调接口
-     */
+    /** Callback interface for session events. */
     public interface SessionCallback {
         void onMessageUpdate(List<Message> messages);
         void onStateChange(boolean busy, boolean loading, String error);
@@ -102,7 +98,7 @@ public class ClaudeSession {
         void onNodeLog(String log);
         void onSummaryReceived(String summary);
 
-        // 🔧 流式传输回调方法（带默认实现，保持向后兼容）
+        // Streaming callback methods (with default implementations for backward compatibility)
         default void onStreamStart() {}
         default void onStreamEnd() {}
         default void onContentDelta(String delta) {}
@@ -114,14 +110,14 @@ public class ClaudeSession {
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
 
-        // 初始化管理器
+        // Initialize managers
         this.state = new com.github.claudecodegui.session.SessionState();
         this.messageParser = new com.github.claudecodegui.session.MessageParser();
         this.messageMerger = new com.github.claudecodegui.session.MessageMerger();
         this.contextCollector = new com.github.claudecodegui.session.EditorContextCollector(project);
         this.callbackHandler = new com.github.claudecodegui.session.CallbackHandler();
 
-        // 设置权限管理器回调
+        // Set up permission manager callback
         permissionManager.setOnPermissionRequestedCallback(request -> {
             callbackHandler.notifyPermissionRequested(request);
         });
@@ -135,7 +131,7 @@ public class ClaudeSession {
         return contextCollector;
     }
 
-    // Getters - 委托给 SessionState
+    // Getters - delegated to SessionState
     public String getSessionId() {
         return state.getSessionId();
     }
@@ -168,9 +164,7 @@ public class ClaudeSession {
         return state.getLastModifiedTime();
     }
 
-    /**
-     * 设置会话ID和工作目录（用于恢复会话）
-     */
+    /** Set session ID and working directory (used for session restoration). */
     public void setSessionInfo(String sessionId, String cwd) {
         state.setSessionId(sessionId);
         if (cwd != null) {
@@ -180,24 +174,20 @@ public class ClaudeSession {
         }
     }
 
-    /**
-     * 获取当前工作目录
-     */
+    /** Get the current working directory. */
     public String getCwd() {
         return state.getCwd();
     }
 
-    /**
-     * 设置工作目录
-     */
+    /** Set the working directory. */
     public void setCwd(String cwd) {
         state.setCwd(cwd);
         LOG.info("Working directory updated to: " + cwd);
     }
 
     /**
-     * 启动 Claude Agent
-     * 如果已有 channelId 则复用，否则创建新的
+     * Launch Claude agent.
+     * Reuses existing channelId if available, otherwise creates a new one.
      */
     public CompletableFuture<String> launchClaude() {
         if (state.getChannelId() != null) {
@@ -209,7 +199,7 @@ public class ClaudeSession {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // 检查并清理错误的 sessionId（如果是路径而不是 UUID）
+                // Validate and clean invalid sessionId (e.g., path instead of UUID)
                 String currentSessionId = state.getSessionId();
                 if (currentSessionId != null && (currentSessionId.contains("/") || currentSessionId.contains("\\"))) {
                     LOG.warn("sessionId looks like a path, resetting: " + currentSessionId);
@@ -217,7 +207,7 @@ public class ClaudeSession {
                     currentSessionId = null;
                 }
 
-                // 根据 provider 选择 SDK
+                // Select SDK based on provider
                 JsonObject result;
                 String currentProvider = state.getProvider();
                 String currentChannelId = state.getChannelId();
@@ -228,10 +218,10 @@ public class ClaudeSession {
                     result = claudeSDKBridge.launchChannel(currentChannelId, currentSessionId, currentCwd);
                 }
 
-                // 检查 sessionId 是否存在且不为 null
+                // Check if sessionId exists and is not null
                 if (result.has("sessionId") && !result.get("sessionId").isJsonNull()) {
                     String newSessionId = result.get("sessionId").getAsString();
-                    // 验证 sessionId 格式（应该是 UUID 格式）
+                    // Validate sessionId format (should be UUID format)
                     if (!newSessionId.contains("/") && !newSessionId.contains("\\")) {
                         state.setSessionId(newSessionId);
                         callbackHandler.notifySessionIdReceived(newSessionId);
@@ -251,8 +241,8 @@ public class ClaudeSession {
                      com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_UNIT)
           .exceptionally(ex -> {
               if (ex instanceof java.util.concurrent.TimeoutException) {
-                  String timeoutMsg = "启动 Channel 超时（" +
-                      com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT + "秒），请重试";
+                  String timeoutMsg = "Channel launch timed out (" +
+                      com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT + "s), please retry";
                   LOG.warn(timeoutMsg);
                   state.setError(timeoutMsg);
                   state.setChannelId(null);
@@ -264,84 +254,74 @@ public class ClaudeSession {
     }
 
     /**
-     * 发送消息（使用全局智能体设置）
-     * 【注意】此方法用于向后兼容，优先使用 send(input, agentPrompt) 版本
+     * Send a message using global agent settings.
+     * @deprecated Use {@link #send(String, String)} with explicit agent prompt instead.
      */
     public CompletableFuture<Void> send(String input) {
         return send(input, (List<Attachment>) null, null);
     }
 
     /**
-     * 【FIX】发送消息（指定智能体提示词）
-     * 英文：Send message with specific agent prompt
-     * 解释：发送消息给AI，使用指定的智能体提示词（用于多标签页独立智能体选择）
+     * Send a message with a specific agent prompt.
+     * Used for per-tab independent agent selection.
      */
     public CompletableFuture<Void> send(String input, String agentPrompt) {
         return send(input, null, agentPrompt, null);
     }
 
     /**
-     * 【FIX】发送消息（指定智能体提示词和文件标签）
-     * 英文：Send message with specific agent prompt and file tags
-     * 解释：发送消息给AI，使用指定的智能体提示词和文件标签（用于 Codex 上下文注入）
+     * Send a message with a specific agent prompt and file tags.
+     * Used for Codex context injection.
      */
     public CompletableFuture<Void> send(String input, String agentPrompt, List<String> fileTagPaths) {
         return send(input, null, agentPrompt, fileTagPaths);
     }
 
     /**
-     * 发送消息（支持附件，使用全局智能体设置）
-     * 【注意】此方法用于向后兼容，优先使用 send(input, attachments, agentPrompt) 版本
+     * Send a message with attachments using global agent settings.
+     * @deprecated Use {@link #send(String, List, String)} with explicit agent prompt instead.
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments) {
         return send(input, attachments, null, null);
     }
 
     /**
-     * 【FIX】发送消息（支持附件和指定智能体提示词）
-     * 英文：Send message with attachments and specific agent prompt
-     * 解释：发送消息给AI，带上图片等附件，使用指定的智能体提示词（用于多标签页独立智能体选择）
-     * @param input 用户输入的消息文本
-     * @param attachments 附件列表（可为空）
-     * @param agentPrompt 智能体提示词（如为空则使用全局设置）
+     * Send a message with attachments and a specific agent prompt.
+     * Used for per-tab independent agent selection.
+     * @param input User input text
+     * @param attachments List of attachments (nullable)
+     * @param agentPrompt Agent prompt (falls back to global setting if null)
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments, String agentPrompt) {
         return send(input, attachments, agentPrompt, null);
     }
 
     /**
-     * 【FIX】发送消息（完整版：支持附件、智能体提示词和文件标签）
-     * 英文：Send message with attachments, agent prompt and file tags
-     * 解释：发送消息给AI，带上图片等附件，使用指定的智能体提示词和文件标签（用于 Codex 上下文注入）
-     * @param input 用户输入的消息文本
-     * @param attachments 附件列表（可为空）
-     * @param agentPrompt 智能体提示词（如为空则使用全局设置）
-     * @param fileTagPaths 文件标签路径列表（用于 Codex 上下文注入）
+     * Send a message with attachments, agent prompt, and file tags.
+     * Used for Codex context injection.
+     * @param input User input text
+     * @param attachments List of attachments (nullable)
+     * @param agentPrompt Agent prompt (falls back to global setting if null)
+     * @param fileTagPaths File tag paths for Codex context injection
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments, String agentPrompt, List<String> fileTagPaths) {
-        // 第1步：准备用户消息
-        // Step 1: Prepare user message
-        // 解释：把用户说的话和图片整理好
+        // Prepare user message
         String normalizedInput = (input != null) ? input.trim() : "";
         Message userMessage = buildUserMessage(normalizedInput, attachments);
 
-        // 第2步：更新会话状态
-        // Step 2: Update session state
-        // 解释：把消息存起来，更新状态
+        // Update session state
         updateSessionStateForSend(userMessage, normalizedInput);
 
-        // 保存 agentPrompt 和 fileTagPaths 用于后续发送
+        // Save agentPrompt and fileTagPaths for later use
         final String finalAgentPrompt = agentPrompt;
         final List<String> finalFileTagPaths = fileTagPaths;
 
-        // 第3步：启动Claude并发送消息
-        // Step 3: Launch Claude and send message
-        // 解释：叫醒AI，发消息过去
+        // Launch Claude and send message
         return launchClaude().thenCompose(chId -> {
-            // 设置是否启用PSI语义上下文收集
+            // Configure PSI semantic context collection
             contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
 
-            // 读取"自动打开文件"设置，决定是否收集编辑器上下文
+            // Read "auto open file" setting to determine editor context collection
             boolean autoOpenFileEnabled = true;
             try {
                 String projectPath = project.getBasePath();
@@ -367,11 +347,7 @@ public class ClaudeSession {
         });
     }
 
-    /**
-     * 构建用户消息
-     * 英文：Build user message
-     * 解释：把用户的文字和图片组装成规范的消息格式
-     */
+    /** Build a user message from input text and attachments. */
     private Message buildUserMessage(String normalizedInput, List<Attachment> attachments) {
         Message userMessage = new Message(Message.Type.USER, normalizedInput);
 
@@ -379,38 +355,29 @@ public class ClaudeSession {
             JsonArray contentArr = new JsonArray();
             String userDisplayText = normalizedInput;
 
-            // 处理附件
             // Handle attachments
-            // 解释：有图片的话，把图片加进去
             if (attachments != null && !attachments.isEmpty()) {
-                // 添加图片块
+                // Add image blocks
                 for (Attachment att : attachments) {
                     if (isImageAttachment(att)) {
                         contentArr.add(createImageBlock(att));
                     }
                 }
 
-                // 当用户未输入文本时，提供占位说明
-                // Provide placeholder when no text input
-                // 解释：如果只发了图，没写字，就显示"已上传图片"
+                // Provide placeholder text when no text input
                 if (userDisplayText.isEmpty()) {
                     userDisplayText = generateAttachmentSummary(attachments);
                 }
             }
 
-            // 处理终端引用和服务引用
-            // Handle terminal and service references - replace @protocol://xxx with actual output
+            // Handle terminal and service references
             userDisplayText = processReferences(normalizedInput, "terminal", "Terminal Output", this::resolveTerminalContent);
             userDisplayText = processReferences(userDisplayText, "service", "Service Output", this::resolveServiceContent);
 
-            // 添加文本块（始终添加）
             // Always add text block
-            // 解释：把用户说的话也加进去
             contentArr.add(createTextBlock(userDisplayText));
 
-            // 组装完整消息
             // Assemble complete message
-            // 解释：把所有内容打包成完整消息
             JsonObject messageObj = new JsonObject();
             messageObj.add("content", contentArr);
             JsonObject rawUser = new JsonObject();
@@ -429,14 +396,12 @@ public class ClaudeSession {
     }
 
     /**
-     * 通用引用处理方法
-     * Generic reference processing method for @protocol://name patterns
-     *
-     * @param input 输入文本
-     * @param protocol 协议名称 (如 "terminal", "service")
-     * @param blockTitle 输出块标题 (如 "Terminal Output", "Service Output")
-     * @param contentResolver 内容解析函数
-     * @return 处理后的文本
+     * Process @protocol://name reference patterns in the input text.
+     * @param input Input text
+     * @param protocol Protocol name (e.g., "terminal", "service")
+     * @param blockTitle Output block title (e.g., "Terminal Output")
+     * @param contentResolver Content resolution function
+     * @return Processed text with references replaced
      */
     private String processReferences(String input, String protocol, String blockTitle,
                                       Function<String, String> contentResolver) {
@@ -528,22 +493,14 @@ public class ClaudeSession {
         });
     }
 
-    /**
-     * 判断是否为图片附件
-     * 英文：Check if attachment is an image
-     * 解释：看看这个附件是不是图片
-     */
+    /** Check if the attachment is an image. */
     private boolean isImageAttachment(Attachment att) {
         if (att == null) return false;
         String mt = (att.mediaType != null) ? att.mediaType : "";
         return mt.startsWith("image/") && att.data != null;
     }
 
-    /**
-     * 创建图片块
-     * 英文：Create image block
-     * 解释：把图片转成AI能理解的格式
-     */
+    /** Create an image content block for the API request. */
     private JsonObject createImageBlock(Attachment att) {
         JsonObject imageBlock = new JsonObject();
         imageBlock.addProperty("type", "image");
@@ -557,11 +514,7 @@ public class ClaudeSession {
         return imageBlock;
     }
 
-    /**
-     * 创建文本块
-     * 英文：Create text block
-     * 解释：把文字转成AI能理解的格式
-     */
+    /** Create a text content block for the API request. */
     private JsonObject createTextBlock(String text) {
         JsonObject textBlock = new JsonObject();
         textBlock.addProperty("type", "text");
@@ -569,11 +522,7 @@ public class ClaudeSession {
         return textBlock;
     }
 
-    /**
-     * 生成附件摘要
-     * 英文：Generate attachment summary
-     * 解释：用户只发了图没写字，就显示"已上传X张图片"
-     */
+    /** Generate a summary text for image-only messages. */
     private String generateAttachmentSummary(List<Attachment> attachments) {
         int imageCount = 0;
         List<String> names = new ArrayList<>();
@@ -603,17 +552,13 @@ public class ClaudeSession {
         return "[Uploaded Attachments: " + String.join(", ", names) + "]";
     }
 
-    /**
-     * 更新会话状态（发送消息时）
-     * 英文：Update session state when sending message
-     * 解释：记录消息、更新摘要、设置状态
-     */
+    /** Update session state when sending a message. */
     private void updateSessionStateForSend(Message userMessage, String normalizedInput) {
-        // 添加消息到历史
+        // Add message to history
         state.addMessage(userMessage);
         notifyMessageUpdate();
 
-        // 更新摘要（第一条消息）
+        // Update summary (first message only)
         if (state.getSummary() == null) {
             String baseSummary = (userMessage.content != null && !userMessage.content.isEmpty())
                 ? userMessage.content
@@ -623,7 +568,7 @@ public class ClaudeSession {
             callbackHandler.notifySummaryReceived(newSummary);
         }
 
-        // 更新状态
+        // Update state
         state.updateLastModifiedTime();
         state.setError(null);
         state.setBusy(true);
@@ -633,15 +578,13 @@ public class ClaudeSession {
     }
 
     /**
-     * 【FIX】发送消息到AI提供商
-     * 英文：Send message to AI provider
-     * 解释：根据选择的AI（Claude或Codex），发送消息
-     * @param channelId 通道ID
-     * @param input 用户输入
-     * @param attachments 附件列表
-     * @param openedFilesJson 已打开文件信息
-     * @param externalAgentPrompt 外部传入的智能体提示词（如为空则使用全局设置）
-     * @param fileTagPaths 文件标签路径列表（用于 Codex 上下文注入）
+     * Send message to the AI provider.
+     * @param channelId Channel ID
+     * @param input User input
+     * @param attachments Attachment list
+     * @param openedFilesJson Opened files context from IDE
+     * @param externalAgentPrompt External agent prompt (falls back to global setting if null)
+     * @param fileTagPaths File tag paths for Codex context injection
      */
     private CompletableFuture<Void> sendMessageToProvider(
         String channelId,
@@ -651,20 +594,17 @@ public class ClaudeSession {
         String externalAgentPrompt,
         List<String> fileTagPaths
     ) {
-        // 【FIX】优先使用外部传入的智能体提示词，否则回退到全局设置
-        // Use external agent prompt if provided, otherwise fall back to global setting
+        // Prefer external agent prompt; fall back to global setting if not provided
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
-            // 回退到全局设置（向后兼容）
+            // Fall back to global setting (backward compatibility)
             agentPrompt = getAgentPrompt();
             LOG.info("[Agent] Using agent from global setting (fallback)");
         } else {
             LOG.info("[Agent] Using agent from message (per-tab selection)");
         }
 
-        // 根据 provider 选择 SDK
-        // Choose SDK based on provider
-        // 解释：看看是用Claude还是Codex
+        // Select SDK based on provider
         String currentProvider = state.getProvider();
 
         if ("codex".equals(currentProvider)) {
@@ -675,10 +615,8 @@ public class ClaudeSession {
     }
 
     /**
-     * 发送消息到Codex
-     * 英文：Send message to Codex
-     * 解释：用Codex AI发送消息
-     * @param fileTagPaths 文件标签路径列表（用于上下文注入）
+     * Send message via Codex SDK.
+     * @param fileTagPaths File tag paths for context injection
      */
     private CompletableFuture<Void> sendToCodex(
         String channelId,
@@ -708,11 +646,10 @@ public class ClaudeSession {
     }
 
     /**
-     * 构建 Codex 上下文追加内容
-     * 英文：Build Codex context append content
-     * 解释：处理 IDE 打开的文件、选中代码和用户文件标签，注入到 Codex 消息中
-     * @param openedFilesJson IDE 打开文件信息（含当前文件和选中代码）
-     * @param fileTagPaths 用户在输入框中添加的文件标签路径列表
+     * Build context content to append to Codex messages.
+     * Handles IDE open files, selected code, and user file tags for context injection.
+     * @param openedFilesJson IDE open file info (includes active file and selection)
+     * @param fileTagPaths User-added file tag paths from the input box
      */
     private String buildCodexContextAppend(JsonObject openedFilesJson, List<String> fileTagPaths) {
         StringBuilder sb = new StringBuilder();
@@ -766,7 +703,6 @@ public class ClaudeSession {
             }
         }
 
-        // 【FIX】处理 IDE 当前打开的文件（activeFile）
         // Process IDE active file - inject full file content for Codex
         if (openedFilesJson != null && !openedFilesJson.isJsonNull()) {
             String activeFile = null;
@@ -774,7 +710,7 @@ public class ClaudeSession {
                 activeFile = openedFilesJson.get("active").getAsString();
             }
 
-            // 检查是否有选中的代码
+            // Check for selected code
             JsonObject selection = null;
             String selectedText = null;
             Integer startLine = null;
@@ -793,7 +729,7 @@ public class ClaudeSession {
                 }
             }
 
-            // 如果有选中的代码，显示选中的代码
+            // Display selected code if present
             if (selectedText != null && !selectedText.trim().isEmpty()) {
                 sb.append("\n\n## IDE Context\n\n");
                 if (activeFile != null && !activeFile.trim().isEmpty()) {
@@ -813,7 +749,6 @@ public class ClaudeSession {
                 sb.append("The selected code above is the primary subject of the user's question.\n");
                 hasContent = true;
             }
-            // 【FIX】如果没有选中代码，但有打开的文件，读取并注入整个文件内容
             // If no selection but has active file, read and inject full file content
             else if (activeFile != null && !activeFile.trim().isEmpty()) {
                 String fileContent = readFileContent(activeFile);
@@ -838,10 +773,9 @@ public class ClaudeSession {
     }
 
     /**
-     * 读取文件内容（带大小限制）
-     * 英文：Read file content with size limit
-     * @param filePath 文件路径
-     * @return 文件内容，如果读取失败返回 null
+     * Read file content with size limit.
+     * @param filePath File path
+     * @return File content, or null if reading fails
      */
     private String readFileContent(String filePath) {
         try {
@@ -852,7 +786,7 @@ public class ClaudeSession {
             }
 
             long fileSize = file.length();
-            // 限制文件大小（最大 100KB）
+            // Enforce file size limit (max 100KB)
             if (fileSize > MAX_FILE_SIZE_BYTES) {
                 LOG.info("[Codex Context] File too large, reading first 100KB: " + filePath + " (" + fileSize + " bytes)");
                 try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
@@ -875,10 +809,7 @@ public class ClaudeSession {
         }
     }
 
-    /**
-     * 获取文件扩展名（用于代码块语法高亮）
-     * 英文：Get file extension for code block syntax highlighting
-     */
+    /** Get file extension for code block syntax highlighting. */
     private String getFileExtension(String filePath) {
         if (filePath == null) return "";
         int lastDot = filePath.lastIndexOf('.');
@@ -888,11 +819,7 @@ public class ClaudeSession {
         return "";
     }
 
-    /**
-     * 发送消息到Claude
-     * 英文：Send message to Claude
-     * 解释：用Claude AI发送消息
-     */
+    /** Send message via Claude SDK. */
     private CompletableFuture<Void> sendToClaude(
         String channelId,
         String input,
@@ -909,7 +836,7 @@ public class ClaudeSession {
             gson
         );
 
-        // 🔧 读取流式传输配置
+        // Read streaming configuration
         Boolean streaming = null;
         try {
             String projectPath = project.getBasePath();
@@ -1084,11 +1011,7 @@ public class ClaudeSession {
         return null;
     }
 
-    /**
-     * 获取智能体提示词
-     * 英文：Get agent prompt
-     * 解释：读取用户选的智能体配置
-     */
+    /** Get the agent prompt from settings. */
     private String getAgentPrompt() {
         try {
             CodemossSettingsService settingsService = new CodemossSettingsService();
@@ -1116,9 +1039,7 @@ public class ClaudeSession {
         return null;
     }
 
-    /**
-     * 中断当前执行
-     */
+    /** Interrupt the current execution. */
     public CompletableFuture<Void> interrupt() {
         if (state.getChannelId() == null) {
             return CompletableFuture.completedFuture(null);
@@ -1133,28 +1054,26 @@ public class ClaudeSession {
                 } else {
                     claudeSDKBridge.interruptChannel(currentChannelId);
                 }
-                state.setError(null);  // 清除之前的错误状态
+                state.setError(null);  // Clear previous error state
                 state.setBusy(false);
-                state.setLoading(false);  // FIX: 同时重置 loading 状态
+                state.setLoading(false);  // Also reset loading state
 
-                // 注意：这里不调用 notifyStreamEnd()，因为：
-                // 1. 前端的 interruptSession() 已经直接清理了流式状态
-                // 2. 调用 notifyStreamEnd() 会触发 flushStreamMessageUpdates()，
-                //    可能会用 lastMessagesSnapshot 恢复之前的消息，影响 clearMessages 的效果
-                // 3. 状态重置通过 updateState() -> onStateChange() 来通知前端
+                // Note: We intentionally don't call notifyStreamEnd() here because:
+                // 1. The frontend's interruptSession() already cleans up streaming state directly
+                // 2. Calling notifyStreamEnd() would trigger flushStreamMessageUpdates(),
+                //    which might restore previous messages via lastMessagesSnapshot, interfering with clearMessages
+                // 3. State reset is notified via updateState() -> onStateChange()
 
                 updateState();
             } catch (Exception e) {
                 state.setError(e.getMessage());
-                state.setLoading(false);  // FIX: 错误时也重置 loading
+                state.setLoading(false);  // Also reset loading on error
                 updateState();
             }
         });
     }
 
-    /**
-     * 重启 Claude Agent
-     */
+    /** Restart the Claude agent. */
     public CompletableFuture<Void> restart() {
         return interrupt().thenCompose(v -> {
             state.setChannelId(null);
@@ -1164,9 +1083,7 @@ public class ClaudeSession {
         });
     }
 
-    /**
-     * 加载服务器端的历史消息
-     */
+    /** Load message history from the server. */
     public CompletableFuture<Void> loadFromServer() {
         if (state.getSessionId() == null) {
             return CompletableFuture.completedFuture(null);
@@ -1213,16 +1130,12 @@ public class ClaudeSession {
         });
     }
 
-    /**
-     * 通知消息更新
-     */
+    /** Notify callback of message updates. */
     private void notifyMessageUpdate() {
         callbackHandler.notifyMessageUpdate(getMessages());
     }
 
-    /**
-     * 通知状态更新
-     */
+    /** Notify callback of state changes. */
     private void updateState() {
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
         
@@ -1233,13 +1146,11 @@ public class ClaudeSession {
         }
     }
 
-    /**
-     * 附件类
-     */
+    /** Represents a file attachment (e.g., image). */
     public static class Attachment {
         public String fileName;
         public String mediaType;
-        public String data; // Base64 编码
+        public String data; // Base64 encoded data
 
         public Attachment(String fileName, String mediaType, String data) {
             this.fileName = fileName;
@@ -1248,26 +1159,23 @@ public class ClaudeSession {
         }
     }
 
-    /**
-     * 获取权限管理器
-     */
+    /** Get the permission manager. */
     public PermissionManager getPermissionManager() {
         return permissionManager;
     }
 
     /**
-     * 设置权限模式
-     * 将前端权限模式字符串映射到 PermissionManager 枚举值
+     * Set the permission mode.
+     * Maps frontend permission mode strings to PermissionManager enum values.
      */
     public void setPermissionMode(String mode) {
         state.setPermissionMode(mode);
 
-        // 同步更新 PermissionManager 的权限模式
-        // 前端模式映射:
-        // - "default" -> DEFAULT (每次询问)
-        // - "acceptEdits" -> ACCEPT_EDITS (代理模式,自动接受文件编辑等操作)
-        // - "bypassPermissions" -> ALLOW_ALL (自动模式,绕过所有权限检查)
-        // - "plan" -> DENY_ALL (规划模式,暂不支持)
+        // Sync PermissionManager mode with frontend mode:
+        // - "default" -> DEFAULT (ask every time)
+        // - "acceptEdits" -> ACCEPT_EDITS (agent mode, auto-accept file edits)
+        // - "bypassPermissions" -> ALLOW_ALL (auto mode, bypass all permission checks)
+        // - "plan" -> DENY_ALL (plan mode, not yet supported)
         PermissionManager.PermissionMode pmMode;
         if ("bypassPermissions".equals(mode)) {
             pmMode = PermissionManager.PermissionMode.ALLOW_ALL;
@@ -1279,7 +1187,7 @@ public class ClaudeSession {
             pmMode = PermissionManager.PermissionMode.DENY_ALL;
             LOG.info("Permission mode set to DENY_ALL for mode: " + mode);
         } else {
-            // "default" 或其他未知模式
+            // "default" or other unknown modes
             pmMode = PermissionManager.PermissionMode.DEFAULT;
             LOG.info("Permission mode set to DEFAULT for mode: " + mode);
         }
@@ -1287,84 +1195,62 @@ public class ClaudeSession {
         permissionManager.setPermissionMode(pmMode);
     }
 
-    /**
-     * 获取权限模式
-     */
+    /** Get the permission mode. */
     public String getPermissionMode() {
         return state.getPermissionMode();
     }
 
-    /**
-     * 设置模型
-     */
+    /** Set the model. */
     public void setModel(String model) {
         state.setModel(model);
         LOG.info("Model updated to: " + model);
     }
 
-    /**
-     * 获取模型
-     */
+    /** Get the model. */
     public String getModel() {
         return state.getModel();
     }
 
-    /**
-     * 设置AI提供商
-     */
+    /** Set the AI provider. */
     public void setProvider(String provider) {
         state.setProvider(provider);
         LOG.info("Provider updated to: " + provider);
     }
 
-    /**
-     * 获取AI提供商
-     */
+    /** Get the AI provider. */
     public String getProvider() {
         return state.getProvider();
     }
 
-    /**
-     * 设置推理深度 (Reasoning Effort)
-     */
+    /** Set the reasoning effort level. */
     public void setReasoningEffort(String effort) {
         state.setReasoningEffort(effort);
         LOG.info("Reasoning effort updated to: " + effort);
     }
 
-    /**
-     * 获取推理深度 (Reasoning Effort)
-     */
+    /** Get the reasoning effort level. */
     public String getReasoningEffort() {
         return state.getReasoningEffort();
     }
 
-    /**
-     * 获取斜杠命令列表
-     */
+    /** Get the list of available slash commands. */
     public List<String> getSlashCommands() {
         return state.getSlashCommands();
     }
 
 
 
-    /**
-     * 创建权限请求（供SDK调用）
-     */
+    /** Create a permission request (called by the SDK). */
     public PermissionRequest createPermissionRequest(String toolName, Map<String, Object> inputs, JsonObject suggestions, Project project) {
         return permissionManager.createRequest(state.getChannelId(), toolName, inputs, suggestions, project);
     }
 
-    /**
-     * 处理权限决策
-     */
+    /** Handle a permission decision. */
     public void handlePermissionDecision(String channelId, boolean allow, boolean remember, String rejectMessage) {
         permissionManager.handlePermissionDecision(channelId, allow, remember, rejectMessage);
     }
 
-    /**
-     * 处理权限决策（总是允许）
-     */
+    /** Handle an "always allow" permission decision. */
     public void handlePermissionDecisionAlways(String channelId, boolean allow) {
         permissionManager.handlePermissionDecisionAlways(channelId, allow);
     }

@@ -81,7 +81,7 @@
     <depends optional="true" config-file="python-features.xml">com.intellij.modules.python</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!-- Claude Code GUI 工具窗口（包含历史记录功能） -->
+        <!-- Claude Code GUI tool window (includes history feature) -->
         <toolWindow id="CCG"
                     anchor="right"
                     factoryClass="com.github.claudecodegui.ClaudeSDKToolWindow"
@@ -106,11 +106,11 @@
     </extensions>
 
     <actions>
-        <!-- 发送选中代码到终端的Action -->
+        <!-- Action to send selected code to terminal -->
         <action id="ClaudeCodeGUI.SendSelectionToTerminalAction"
                 class="com.github.claudecodegui.SendSelectionToTerminalAction"
                 icon="/icons/send-to-terminal.svg">
-            <!-- 添加到编辑器右键菜单（显示在最上面） -->
+            <!-- Add to editor context menu (displayed at the top) -->
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt K"/>
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt K"/>
@@ -144,11 +144,11 @@
                 class="com.github.claudecodegui.OpenDevToolsAction"
                 icon="AllIcons.Xml.Browsers.Chromium"/>
 
-        <!-- 从文件树发送文件路径到输入框的 Action -->
+        <!-- Action to send file path from the file tree to the input box -->
         <action id="ClaudeCodeGUI.SendFilePathToInputAction"
                 class="com.github.claudecodegui.SendFilePathToInputAction"
                 icon="/icons/send-to-terminal.svg">
-            <!-- 添加到项目文件树右键菜单 -->
+            <!-- Add to project file tree context menu -->
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
         </action>
 
@@ -156,7 +156,7 @@
         <action id="ClaudeCodeGUI.GenerateCommitMessageAction"
                 class="com.github.claudecodegui.GenerateCommitMessageAction"
                 icon="/icons/logo-16.png">
-            <!-- 添加到 VCS Commit 工具栏 -->
+            <!-- Add to VCS Commit toolbar -->
             <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
         </action>
     </actions>

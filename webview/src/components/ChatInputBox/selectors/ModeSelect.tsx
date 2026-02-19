@@ -9,8 +9,8 @@ interface ModeSelectProps {
 }
 
 /**
- * ModeSelect - 模式选择器组件
- * 支持默认模式、代理模式、规划模式、自动模式切换
+ * ModeSelect - Mode selector component
+ * Supports switching between default, agent, plan, and auto modes
  */
 export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   const { t } = useTranslation();
@@ -20,7 +20,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
 
   const modeOptions = useMemo(() => {
     if (provider === 'codex') {
-      // Codex 只有三个模式：默认模式、代理模式、自动模式（过滤掉规划模式）
+      // Codex only has three modes: default, agent, auto (filter out plan mode)
       return AVAILABLE_MODES.filter((mode) => mode.id !== 'plan').map((mode) => {
         if (mode.id === 'default' || mode.id === 'acceptEdits') {
           return { ...mode, disabled: true };
@@ -45,7 +45,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   };
 
   /**
-   * 切换下拉菜单
+   * Toggle dropdown
    */
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,16 +53,16 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   }, [isOpen]);
 
   /**
-   * 选择模式
+   * Select mode
    */
   const handleSelect = useCallback((mode: PermissionMode, disabled?: boolean) => {
-    if (disabled) return; // 禁用的选项不能选择
+    if (disabled) return; // Disabled options cannot be selected
     onChange(mode);
     setIsOpen(false);
   }, [onChange]);
 
   /**
-   * 点击外部关闭
+   * Close on outside click
    */
   useEffect(() => {
     if (!isOpen) return;
@@ -78,7 +78,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
       }
     };
 
-    // 延迟添加事件监听，避免立即触发
+    // Delay adding event listener to prevent immediate trigger
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
     }, 0);

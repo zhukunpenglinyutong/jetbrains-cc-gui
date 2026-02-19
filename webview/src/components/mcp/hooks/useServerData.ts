@@ -1,6 +1,6 @@
 /**
- * 服务器数据加载和初始化 Hook
- * 管理服务器列表、状态和缓存的加载
+ * Server Data Loading and Initialization Hook
+ * Manages loading of server list, status, and cache
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -17,7 +17,7 @@ export interface UseServerDataOptions {
 }
 
 export interface UseServerDataReturn {
-  // 状态
+  // State
   servers: McpServer[];
   serverStatus: Map<string, McpServerStatusInfo>;
   loading: boolean;
@@ -25,20 +25,20 @@ export interface UseServerDataReturn {
   serverTools: ServerToolsState;
   expandedServers: Set<string>;
 
-  // 状态更新函数
+  // State update functions
   setServers: React.Dispatch<React.SetStateAction<McpServer[]>>;
   setServerStatus: React.Dispatch<React.SetStateAction<Map<string, McpServerStatusInfo>>>;
   setServerTools: React.Dispatch<React.SetStateAction<ServerToolsState>>;
   setExpandedServers: React.Dispatch<React.SetStateAction<Set<string>>>;
 
-  // 数据加载函数
+  // Data loading functions
   loadServers: () => void;
   loadServerStatus: () => void;
   loadServerTools: (server: McpServer, forceRefresh?: boolean) => void;
 }
 
 /**
- * 服务器数据加载和初始化 Hook
+ * Server Data Loading and Initialization Hook
  */
 export function useServerData({
   isCodexMode,
@@ -47,7 +47,7 @@ export function useServerData({
   t,
   onLog
 }: UseServerDataOptions): UseServerDataReturn {
-  // 状态
+  // State
   const [servers, setServers] = useState<McpServer[]>([]);
   const [serverStatus, setServerStatus] = useState<Map<string, McpServerStatusInfo>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -58,7 +58,7 @@ export function useServerData({
   // Refs
   const refreshTimersRef = useRef<number[]>([]);
 
-  // 加载服务器列表
+  // Load server list
   const loadServers = useCallback(() => {
     setLoading(true);
     onLog(
@@ -71,7 +71,7 @@ export function useServerData({
     sendToJava(`get_${messagePrefix}mcp_servers`, {});
   }, [messagePrefix, t, onLog]);
 
-  // 加载服务器状态
+  // Load server status
   const loadServerStatus = useCallback(() => {
     setStatusLoading(true);
     onLog(
@@ -85,9 +85,9 @@ export function useServerData({
     sendToJava(`get_${messagePrefix}mcp_server_status`, {});
   }, [messagePrefix, isCodexMode, t, onLog]);
 
-  // 加载服务器工具列表
+  // Load server tools list
   const loadServerTools = useCallback((server: McpServer, forceRefresh = false) => {
-    // Codex 模式不支持工具列表
+    // Tool listing not supported in Codex mode
     if (isCodexMode) {
       setServerTools(prev => ({
         ...prev,
@@ -100,7 +100,7 @@ export function useServerData({
       return;
     }
 
-    // 检查缓存（除非强制刷新）
+    // Check cache (unless force refresh)
     if (!forceRefresh) {
       const cachedTools = readToolsCache(server.id, cacheKeys);
       if (cachedTools && cachedTools.length > 0) {
@@ -122,7 +122,7 @@ export function useServerData({
       }
     }
 
-    // 设置加载状态
+    // Set loading state
     setServerTools(prev => ({
       ...prev,
       [server.id]: {
@@ -145,14 +145,14 @@ export function useServerData({
     sendToJava('get_mcp_server_tools', { serverId: server.id, forceRefresh });
   }, [isCodexMode, cacheKeys, t, onLog]);
 
-  // 初始化和数据加载
+  // Initialization and data loading
   useEffect(() => {
     const clearRefreshTimers = () => {
       refreshTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
       refreshTimersRef.current = [];
     };
 
-    // 从缓存加载数据
+    // Load data from cache
     const loadFromCache = (): boolean => {
       const cachedServers = readCache<McpServer[]>(cacheKeys.SERVERS, cacheKeys);
       const hasValidCache = !!cachedServers && cachedServers.length > 0;
@@ -178,7 +178,7 @@ export function useServerData({
         }
       }
 
-      // 恢复上次展开的服务器
+      // Restore last expanded server
       if (hasValidCache) {
         try {
           const lastServerId = localStorage.getItem(cacheKeys.LAST_SERVER_ID);
@@ -208,7 +208,7 @@ export function useServerData({
       return hasValidCache;
     };
 
-    // 先尝试从缓存加载数据
+    // Try loading data from cache first
     const hasCache = loadFromCache();
 
     if (hasCache) {
@@ -224,7 +224,7 @@ export function useServerData({
     };
   }, [cacheKeys, isCodexMode, loadServers, loadServerStatus, t, onLog]);
 
-  // 注册服务器列表更新回调
+  // Register server list update callback
   useEffect(() => {
     const handleServerListUpdate = (jsonStr: string) => {
       try {
@@ -273,7 +273,7 @@ export function useServerData({
       }
     };
 
-    // 注册回调
+    // Register callbacks
     if (isCodexMode) {
       window.updateCodexMcpServers = handleServerListUpdate;
       window.updateCodexMcpServerStatus = handleServerStatusUpdate;
@@ -294,7 +294,7 @@ export function useServerData({
   }, [isCodexMode, t, onLog]);
 
   return {
-    // 状态
+    // State
     servers,
     serverStatus,
     loading,
@@ -302,13 +302,13 @@ export function useServerData({
     serverTools,
     expandedServers,
 
-    // 状态更新函数
+    // State update functions
     setServers,
     setServerStatus,
     setServerTools,
     setExpandedServers,
 
-    // 数据加载函数
+    // Data loading functions
     loadServers,
     loadServerStatus,
     loadServerTools,

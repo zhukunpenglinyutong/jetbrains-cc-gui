@@ -218,7 +218,7 @@ interface GenericToolBlockProps {
   name?: string;
   input?: ToolInput;
   result?: ToolResultBlock | null;
-  /** 工具调用的唯一 ID，用于判断该工具是否被用户拒绝了权限 */
+  /** Unique ID of the tool call, used to determine if the user denied permission */
   toolId?: string;
 }
 
@@ -235,12 +235,12 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
   const isDenied = useIsToolDenied(toolId);
 
   // Determine tool call status based on result
-  // 如果被拒绝，视为已完成（显示错误状态）
+  // If denied, treat as completed (show error state)
   const isCompleted = (result !== undefined && result !== null) || isDenied;
   // AskUserQuestion tool should never show as error - it's a user interaction tool
   // The is_error field may be set by SDK but it doesn't indicate a real error
   const isAskUserQuestion = lowerName === 'askuserquestion';
-  // 如果被拒绝，显示为错误状态
+  // If denied, show as error state
   const isError = isDenied || (isCompleted && result?.is_error === true && !isAskUserQuestion);
 
   if (!input) {
@@ -267,7 +267,7 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
 
   const shouldShowDetails = otherParams.length > 0 && (!isCollapsible || expanded);
 
-  // 检查是否为特殊文件（没有扩展名但确实是文件）
+  // Check if it's a special file (no extension but still a file)
   const isSpecialFile = (fileName: string): boolean => {
     const specialFiles = [
       'makefile', 'dockerfile', 'jenkinsfile', 'vagrantfile',
@@ -278,7 +278,7 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
     return specialFiles.includes(fileName.toLowerCase());
   };
 
-  // 判断是否为目录：以 / 结尾、是 . 或 ..、或者文件名不包含扩展名（且不是特殊文件）
+  // Determine if it's a directory: ends with /, is . or .., or filename has no extension (and is not a special file)
   const fileName = filePath ? getFileName(filePath) : '';
   // Remove line number suffix when checking if it's a directory
   const cleanFileName = fileName.replace(/:\d+(-\d+)?$/, '');
@@ -288,7 +288,7 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
     filePath === '..' ||
     (!cleanFileName.includes('.') && !isSpecialFile(cleanFileName))
   );
-  // 判断是否为文件路径（非目录）
+  // Determine if it's a file path (not a directory)
   const isFilePath = filePath && !isDirectoryPath;
 
   const handleFileClick = (e: React.MouseEvent) => {
@@ -303,7 +303,7 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
     const name = getFileName(path);
 
     if (isDirectoryPath) {
-      // 对于目录，使用 getFolderIcon 获取彩色文件夹图标
+      // For directories, use getFolderIcon to get a colored folder icon
       return getFolderIcon(name);
     } else {
       // Remove line number suffix if present (e.g., "App.tsx:700-780" -> "App.tsx")

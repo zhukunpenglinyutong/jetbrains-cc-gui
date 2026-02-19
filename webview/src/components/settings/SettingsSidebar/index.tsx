@@ -6,7 +6,7 @@ export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'pe
 interface SidebarItem {
   key: SettingsTab;
   icon: string;
-  labelKey: string; // 改为翻译 key
+  labelKey: string; // Changed to i18n translation key
 }
 
 const sidebarItems: SidebarItem[] = [
@@ -70,7 +70,7 @@ const SettingsSidebar = ({
         })}
       </div>
 
-      {/* 折叠按钮 */}
+      {/* Collapse toggle button */}
       <div
         className={styles.sidebarToggle}
         onClick={onToggleCollapse}

@@ -366,6 +366,8 @@
         "opusModel": "Opusデフォルトモデル",
         "opusModelPlaceholder": "例: claude-opus-4-6",
         "modelMappingHint": "オプション: 使用するデフォルトのClaudeモデルを指定します。空欄の場合はシステムデフォルトを使用します。",
+        "customModels": "カスタムモデル",
+        "customModelsHint": "このプロバイダーがサポートする追加モデルを追加します。カスタムモデルはモデル選択リストの最上部に表示されます",
         "jsonConfig": "JSON設定",
         "jsonConfigDescription": "完全なsettings.jsonコンテンツをここで設定できます。すべてのフィールドをサポート(例: model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderIdなど)",
         "jsonError": "無効なJSON形式",
@@ -1167,5 +1169,10 @@
     "uploadedAttachments": "添付ファイルをアップロードしました",
     "emptyMessage": "空のメッセージ",
     "attachment": "添付ファイル"
+  },
+  "changelog": {
+    "title": "更新情報",
+    "close": "了解",
+    "page": "{{current}} / {{total}}"
   }
 }

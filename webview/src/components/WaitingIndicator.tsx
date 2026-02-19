@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 interface WaitingIndicatorProps {
   size?: number;
-  /** 开始加载的时间戳（毫秒），用于在视图切换后保持计时连续 */
+  /** Loading start timestamp (ms), used to maintain continuous timing across view switches */
   startTime?: number;
 }
 
@@ -11,14 +11,14 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
   const { t } = useTranslation();
   const [dotCount, setDotCount] = useState(1);
   const [elapsedSeconds, setElapsedSeconds] = useState(() => {
-    // 如果提供了开始时间，计算已经过去的秒数
+    // If a start time is provided, calculate the elapsed seconds
     if (startTime) {
       return Math.floor((Date.now() - startTime) / 1000);
     }
     return 0;
   });
 
-  // 省略号动画
+  // Ellipsis animation
   useEffect(() => {
     const timer = setInterval(() => {
       setDotCount(prev => (prev % 3) + 1);
@@ -26,11 +26,11 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
     return () => clearInterval(timer);
   }, []);
 
-  // 计时器：记录当前思考轮次已经经过的秒数
+  // Timer: track elapsed seconds for the current thinking round
   useEffect(() => {
     const timer = setInterval(() => {
       if (startTime) {
-        // 使用外部传入的开始时间计算，避免视图切换后重置
+        // Calculate from the externally provided start time to avoid reset on view switches
         setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
       } else {
         setElapsedSeconds(prev => prev + 1);
@@ -44,7 +44,7 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
 
   const dots = '.'.repeat(dotCount);
 
-  // 格式化时间显示：60秒以内显示"X秒"，超过60秒显示"X分Y秒"
+  // Format elapsed time: show "X seconds" under 60s, "X min Y sec" above 60s
   const formatElapsedTime = (seconds: number): string => {
     if (seconds < 60) {
       return `${seconds} ${t('common.seconds')}`;

@@ -366,6 +366,8 @@
         "opusModel": "Opus 預設模型",
         "opusModelPlaceholder": "例如：claude-opus-4-6",
         "modelMappingHint": "選填：指定預設使用的 Claude 模型，留空則使用系統預設。",
+        "customModels": "自訂模型",
+        "customModelsHint": "新增此供應商支援的額外模型，自訂模型將顯示在模型選擇列表的最前面",
         "jsonConfig": "配置 JSON",
         "jsonConfigDescription": "此處可配置完整的 settings.json 內容，支援所有欄位（如 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等）",
         "jsonError": "JSON 格式無效",
@@ -1167,5 +1169,10 @@
     "uploadedAttachments": "已上傳附件",
     "emptyMessage": "空訊息",
     "attachment": "附件"
+  },
+  "changelog": {
+    "title": "版本更新",
+    "close": "知道了",
+    "page": "{{current}} / {{total}}"
   }
 }

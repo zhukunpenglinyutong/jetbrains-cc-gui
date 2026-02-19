@@ -139,7 +139,7 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
   const actionText = isDirectory ? t('permission.tools.readDirectory') : t('permission.tools.Read');
 
   const handleFileClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止冒泡，避免触发展开/折叠
+    e.stopPropagation(); // Prevent bubbling to avoid triggering expand/collapse
     if (filePath && !isDirectory) {
       openFile(filePath);
     }

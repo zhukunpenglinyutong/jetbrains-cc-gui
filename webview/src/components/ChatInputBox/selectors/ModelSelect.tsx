@@ -8,8 +8,8 @@ import { STORAGE_KEYS } from '../../../types/provider';
 interface ModelSelectProps {
   value: string;
   onChange: (modelId: string) => void;
-  models?: ModelInfo[];  // 新增: 可选的动态模型列表
-  currentProvider?: string;  // 当前提供商类型
+  models?: ModelInfo[];  // Optional dynamic model list
+  currentProvider?: string;  // Current provider type
 }
 
 const DEFAULT_MODEL_MAP: Record<string, ModelInfo> = AVAILABLE_MODELS.reduce(
@@ -75,7 +75,7 @@ const getModelMapping = (): Record<string, string> => {
 };
 
 /**
- * 模型图标组件 - 根据提供商类型显示不同图标
+ * Model icon component - displays different icons based on provider type
  */
 const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }) => {
   switch (provider) {
@@ -90,8 +90,8 @@ const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }
 };
 
 /**
- * ModelSelect - 模型选择器组件
- * 支持 Sonnet 4.5、Opus 4.5 等模型切换，以及 Codex 模型
+ * ModelSelect - Model selector component
+ * Supports switching between Sonnet 4.5, Opus 4.5, and other models, including Codex models
  */
 export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude' }: ModelSelectProps) => {
   const { t } = useTranslation();
@@ -141,7 +141,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   };
 
   /**
-   * 切换下拉菜单
+   * Toggle dropdown
    */
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -149,7 +149,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   }, [isOpen]);
 
   /**
-   * 选择模型
+   * Select model
    */
   const handleSelect = useCallback((modelId: string) => {
     onChange(modelId);
@@ -157,7 +157,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   }, [onChange]);
 
   /**
-   * 点击外部关闭
+   * Close on outside click
    */
   useEffect(() => {
     if (!isOpen) return;
@@ -173,7 +173,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
       }
     };
 
-    // 延迟添加事件监听，避免立即触发
+    // Delay adding event listener to prevent immediate trigger
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
     }, 0);

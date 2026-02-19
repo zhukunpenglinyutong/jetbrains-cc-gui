@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { DropdownItemProps } from '../types';
 
 /**
- * DropdownItem - 下拉菜单项组件
+ * DropdownItem - Dropdown menu item component
  */
 export const DropdownItem = ({
   item,
@@ -20,7 +20,7 @@ export const DropdownItem = ({
   });
 
   /**
-   * 处理鼠标进入，显示 tooltip
+   * Handle mouse enter to show tooltip
    */
   const handleMouseEnterItem = () => {
     if (!itemRef.current || !item.description) return;
@@ -30,7 +30,7 @@ export const DropdownItem = ({
     const spaceBelow = viewportHeight - rect.bottom;
     const tooltipEstimatedHeight = 100;
 
-    // 决定 tooltip 显示位置
+    // Determine tooltip placement
     const placement = spaceBelow < tooltipEstimatedHeight ? 'top' : 'bottom';
 
     setTooltipPosition({
@@ -42,17 +42,17 @@ export const DropdownItem = ({
   };
 
   /**
-   * 处理鼠标离开，隐藏 tooltip
+   * Handle mouse leave to hide tooltip
    */
   const handleMouseLeaveItem = () => {
     setShowTooltip(false);
   };
 
   /**
-   * 渲染图标
+   * Render icon
    */
   const renderIcon = () => {
-    // 如果 icon 包含 SVG 标签，说明是内联 SVG
+    // If icon contains SVG tags, it's an inline SVG
     if (item.icon?.startsWith('<svg')) {
       return (
         <span
@@ -69,13 +69,13 @@ export const DropdownItem = ({
       );
     }
 
-    // 否则使用 codicon 类名
+    // Otherwise use codicon class name
     const iconClass = item.icon || getDefaultIconClass(item.type);
     return <span className={`dropdown-item-icon codicon ${iconClass}`} />;
   };
 
   /**
-   * 获取默认图标类名（用于 codicon）
+   * Get default icon class name (for codicon)
    */
   const getDefaultIconClass = (type?: string): string => {
     switch (type) {
@@ -91,7 +91,7 @@ export const DropdownItem = ({
   };
 
   /**
-   * 渲染 Portal Tooltip
+   * Render portal tooltip
    */
   const renderTooltip = () => {
     if (!showTooltip || !item.description) return null;
@@ -159,12 +159,12 @@ export const DropdownItem = ({
     );
   };
 
-  // 分隔线
+  // Separator
   if (item.type === 'separator') {
     return <div className="dropdown-separator" />;
   }
 
-  // 分组标题
+  // Section header
   if (item.type === 'section-header') {
     return (
       <div className="dropdown-section-header">
@@ -173,7 +173,7 @@ export const DropdownItem = ({
     );
   }
 
-  // 所有项都可以选择（除了加载提示项）
+  // All items are selectable (except loading indicator items)
   const isDisabled = item.id === '__loading__';
 
   return (
@@ -183,9 +183,9 @@ export const DropdownItem = ({
         className={`dropdown-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
         onClick={isDisabled ? undefined : onClick}
         onMouseEnter={() => {
-          // 调用原有的 onMouseEnter（用于键盘导航高亮）
+          // Call the original onMouseEnter (for keyboard navigation highlighting)
           onMouseEnter?.();
-          // 显示 tooltip
+          // Show tooltip
           handleMouseEnterItem();
         }}
         onMouseLeave={handleMouseLeaveItem}

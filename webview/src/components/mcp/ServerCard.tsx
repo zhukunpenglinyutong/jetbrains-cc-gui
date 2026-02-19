@@ -1,6 +1,6 @@
 /**
- * 服务器卡片组件
- * 显示单个 MCP 服务器的信息、状态和操作
+ * Server Card Component
+ * Displays information, status, and actions for a single MCP server
  */
 
 import type { McpServer, McpServerStatusInfo } from '../../types/mcp';
@@ -28,7 +28,7 @@ export interface ServerCardProps {
 }
 
 /**
- * 服务器卡片组件
+ * Server Card Component
  */
 export function ServerCard({
   server,
@@ -55,7 +55,7 @@ export function ServerCard({
     <div
       className={`server-card ${isExpanded ? 'expanded' : ''} ${!enabled ? 'disabled' : ''}`}
     >
-      {/* 卡片头部 */}
+      {/* Card header */}
       <div className="card-header" onClick={onToggleExpand}>
         <div className="header-left-section">
           <span className={`expand-icon codicon ${isExpanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`}></span>
@@ -63,7 +63,7 @@ export function ServerCard({
             {getServerInitial(server)}
           </div>
           <span className="server-name">{server.name || server.id}</span>
-          {/* 连接状态指示器 */}
+          {/* Connection status indicator */}
           <span
             className="status-indicator"
             style={{ color: getStatusColor(server, status, isCodexMode) }}
@@ -73,7 +73,7 @@ export function ServerCard({
           </span>
         </div>
         <div className="header-right-section" onClick={(e) => e.stopPropagation()}>
-          {/* 编辑按钮 */}
+          {/* Edit button */}
           <button
             className="icon-btn edit-btn"
             onClick={(e) => {
@@ -84,7 +84,7 @@ export function ServerCard({
           >
             <span className="codicon codicon-edit"></span>
           </button>
-          {/* 复制按钮 */}
+          {/* Copy button */}
           <button
             className="icon-btn copy-btn"
             onClick={(e) => {
@@ -95,7 +95,7 @@ export function ServerCard({
           >
             <span className="codicon codicon-copy"></span>
           </button>
-          {/* 删除按钮 */}
+          {/* Delete button */}
           <button
             className="icon-btn delete-btn"
             onClick={(e) => {
@@ -117,10 +117,10 @@ export function ServerCard({
         </div>
       </div>
 
-      {/* 展开内容 */}
+      {/* Expanded content */}
       {isExpanded && (
         <div className="card-content">
-          {/* 连接状态信息 */}
+          {/* Connection status info */}
           <div className="status-section">
             <div className="info-row">
               <span className="info-label">{t('mcp.connectionStatus')}:</span>
@@ -142,7 +142,7 @@ export function ServerCard({
             )}
           </div>
 
-          {/* 服务器信息 */}
+          {/* Server info */}
           <div className="info-section">
             {server.description && (
               <div className="info-row">
@@ -166,7 +166,7 @@ export function ServerCard({
             )}
           </div>
 
-          {/* 工具列表面板 */}
+          {/* Tools list panel */}
           <ServerToolsPanel
             toolsInfo={toolsInfo}
             isConnected={isConnected}
@@ -176,7 +176,7 @@ export function ServerCard({
             onToolHover={onToolHover}
           />
 
-          {/* 标签 */}
+          {/* Tags */}
           {server.tags && server.tags.length > 0 && (
             <div className="tags-section">
               {server.tags.map(tag => (
@@ -185,7 +185,7 @@ export function ServerCard({
             </div>
           )}
 
-          {/* 操作按钮 */}
+          {/* Action buttons */}
           <div className="actions-section">
             {server.homepage && (
               <button

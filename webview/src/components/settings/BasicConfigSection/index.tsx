@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 
-// 预设颜色（模块级常量，避免每次渲染重新创建）
+// Preset colors (module-level constants to avoid recreating on each render)
 const DARK_PRESETS = [
   { color: '#1e1e1e', label: 'Default' },
   { color: '#1a1b26', label: 'Tokyo Night' },
@@ -75,16 +75,16 @@ interface BasicConfigSectionProps {
     fontSize: number;
     lineSpacing: number;
   };
-  // 流式传输配置
+  // Streaming configuration
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
-  // 自动打开文件配置
+  // Auto open file configuration
   autoOpenFileEnabled?: boolean;
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
-  // 发送快捷键配置
+  // Send shortcut configuration
   sendShortcut?: 'enter' | 'cmdEnter';
   onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
-  // 聊天背景色配置
+  // Chat background color configuration
   chatBgColor?: string;
   onChatBgColorChange?: (color: string) => void;
 }
@@ -105,16 +105,16 @@ const BasicConfigSection = ({
   onSaveWorkingDirectory = () => {},
   savingWorkingDirectory = false,
   editorFontConfig,
-  // 流式传输配置
+  // Streaming configuration
   streamingEnabled = true,
   onStreamingEnabledChange = () => {},
-  // 自动打开文件配置
+  // Auto open file configuration
   autoOpenFileEnabled = true,
   onAutoOpenFileEnabledChange = () => {},
-  // 发送快捷键配置
+  // Send shortcut configuration
   sendShortcut = 'enter',
   onSendShortcutChange = () => {},
-  // 聊天背景色配置
+  // Chat background color configuration
   chatBgColor = '',
   onChatBgColorChange = () => {},
 }: BasicConfigSectionProps) => {
@@ -122,18 +122,18 @@ const BasicConfigSection = ({
   const colorInputRef = useRef<HTMLInputElement>(null);
   const [hexInput, setHexInput] = useState(chatBgColor || '');
 
-  // H1 修复：当 chatBgColor prop 变化时同步 hexInput
+  // H1 fix: sync hexInput when chatBgColor prop changes
   useEffect(() => {
     setHexInput(chatBgColor || '');
   }, [chatBgColor]);
 
-  // L1 修复：使用 useMemo + data-theme 属性缓存，避免渲染阶段直接 DOM 读取
+  // L1 fix: use useMemo + data-theme attribute cache to avoid direct DOM reads during render
   const resolvedTheme = useMemo(() => {
     if (theme !== 'system') return theme;
     return (document.documentElement.getAttribute('data-theme') as 'light' | 'dark') || 'dark';
   }, [theme]);
 
-  // M4 修复：提取默认背景色常量
+  // M4 fix: extract default background color constants
   const defaultBgColor = resolvedTheme === 'light' ? DEFAULT_LIGHT_BG : DEFAULT_DARK_BG;
   const presets = resolvedTheme === 'light' ? LIGHT_PRESETS : DARK_PRESETS;
 
@@ -166,7 +166,7 @@ const BasicConfigSection = ({
     return chatBgColor.toLowerCase() === presetColor.toLowerCase();
   };
 
-  // 解析主版本号
+  // Parse the major version number
   const parseMajorVersion = (version: string | null | undefined): number => {
     if (!version) return 0;
     const versionStr = version.startsWith('v') ? version.substring(1) : version;
@@ -177,14 +177,14 @@ const BasicConfigSection = ({
     return parseInt(versionStr, 10) || 0;
   };
 
-  // 检查版本是否过低
+  // Check if the version is too low
   const majorVersion = parseMajorVersion(nodeVersion);
   const isVersionTooLow = nodeVersion && majorVersion > 0 && majorVersion < minNodeVersion;
 
-  // 当前语言
+  // Current language
   const currentLanguage = i18n.language || 'zh';
 
-  // 语言选项
+  // Language options
   const languageOptions = [
     { value: 'zh', label: 'settings.basic.language.simplifiedChinese' },
     { value: 'zh-TW', label: 'settings.basic.language.traditionalChinese' },
@@ -196,7 +196,7 @@ const BasicConfigSection = ({
     { value: 'ru', label: 'settings.basic.language.russian' },
   ];
 
-  // 切换语言
+  // Switch language
   const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const language = event.target.value;
     i18n.changeLanguage(language);
@@ -210,7 +210,7 @@ const BasicConfigSection = ({
       <h3 className={styles.sectionTitle}>{t('settings.basic.title')}</h3>
       <p className={styles.sectionDesc}>{t('settings.basic.description')}</p>
 
-      {/* 主题切换 */}
+      {/* Theme switcher */}
       <div className={styles.themeSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-symbol-color" />
@@ -218,7 +218,7 @@ const BasicConfigSection = ({
         </div>
 
         <div className={styles.themeSelector}>
-          {/* 跟随 IDE */}
+          {/* Follow IDE */}
           <div
             className={`${styles.themeOption} ${theme === 'system' ? styles.active : ''}`}
             onClick={() => onThemeChange('system')}
@@ -229,7 +229,7 @@ const BasicConfigSection = ({
             <span className={styles.themeOptionLabel}>{t('settings.basic.theme.system')}</span>
           </div>
 
-          {/* 亮色主题 */}
+          {/* Light theme */}
           <div
             className={`${styles.themeOption} ${theme === 'light' ? styles.active : ''}`}
             onClick={() => onThemeChange('light')}
@@ -240,7 +240,7 @@ const BasicConfigSection = ({
             <span className={styles.themeOptionLabel}>{t('settings.basic.theme.light')}</span>
           </div>
 
-          {/* 暗色主题 */}
+          {/* Dark theme */}
           <div
             className={`${styles.themeOption} ${theme === 'dark' ? styles.active : ''}`}
             onClick={() => onThemeChange('dark')}
@@ -253,14 +253,14 @@ const BasicConfigSection = ({
         </div>
       </div>
 
-      {/* 聊天背景色 */}
+      {/* Chat background color */}
       <div className={styles.bgColorSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-paintcan" />
           <span className={styles.fieldLabel}>{t('settings.basic.chatBgColor.label')}</span>
         </div>
 
-        {/* 预设颜色 */}
+        {/* Preset colors */}
         <div className={styles.colorPresets}>
           {presets.map((preset) => (
             <div
@@ -286,7 +286,7 @@ const BasicConfigSection = ({
           ))}
         </div>
 
-        {/* 自定义颜色 */}
+        {/* Custom color */}
         <div className={styles.customColorRow}>
           <span className={styles.customColorLabel}>{t('settings.basic.chatBgColor.custom')}</span>
           <div
@@ -331,7 +331,7 @@ const BasicConfigSection = ({
         </small>
       </div>
 
-      {/* 语言切换 */}
+      {/* Language switcher */}
       <div className={styles.languageSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-globe" />
@@ -350,7 +350,7 @@ const BasicConfigSection = ({
         </select>
       </div>
 
-      {/* 字体大小选择 */}
+      {/* Font size selector */}
       <div className={styles.fontSizeSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-text-size" />
@@ -370,7 +370,7 @@ const BasicConfigSection = ({
         </select>
       </div>
 
-      {/* IDEA 编辑器字体展示 - 只读 */}
+      {/* IDEA editor font display - read only */}
       <div className={styles.editorFontSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-symbol-text" />
@@ -385,7 +385,7 @@ const BasicConfigSection = ({
         </small>
       </div>
 
-      {/* Node.js 路径配置 */}
+      {/* Node.js path configuration */}
       <div className={styles.nodePathSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-terminal" />
@@ -431,7 +431,7 @@ const BasicConfigSection = ({
         </small>
       </div>
 
-      {/* 工作目录配置 */}
+      {/* Working directory configuration */}
       <div className={styles.workingDirSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-folder" />
@@ -466,7 +466,7 @@ const BasicConfigSection = ({
         </small>
       </div>
 
-      {/* 🔧 流式传输配置 */}
+      {/* Streaming configuration */}
       <div className={styles.streamingSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-sync" />
@@ -492,7 +492,7 @@ const BasicConfigSection = ({
         </small>
       </div>
 
-      {/* 自动打开文件配置 */}
+      {/* Auto open file configuration */}
       <div className={styles.streamingSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-file" />
@@ -518,14 +518,14 @@ const BasicConfigSection = ({
         </small>
       </div>
 
-      {/* 发送快捷键配置 */}
+      {/* Send shortcut configuration */}
       <div className={styles.sendShortcutSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-keyboard" />
           <span className={styles.fieldLabel}>{t('settings.basic.sendShortcut.label')}</span>
         </div>
         <div className={styles.themeGrid}>
-          {/* Enter 发送 */}
+          {/* Send with Enter */}
           <div
             className={`${styles.themeCard} ${sendShortcut === 'enter' ? styles.active : ''}`}
             onClick={() => onSendShortcutChange('enter')}
@@ -539,7 +539,7 @@ const BasicConfigSection = ({
             <div className={styles.themeCardDesc}>{t('settings.basic.sendShortcut.enterDesc')}</div>
           </div>
 
-          {/* Cmd/Ctrl+Enter 发送 */}
+          {/* Send with Cmd/Ctrl+Enter */}
           <div
             className={`${styles.themeCard} ${sendShortcut === 'cmdEnter' ? styles.active : ''}`}
             onClick={() => onSendShortcutChange('cmdEnter')}

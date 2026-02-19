@@ -44,6 +44,9 @@ import { ChatHeader } from './components/ChatHeader';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageList } from './components/MessageList';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
+import ChangelogDialog from './components/ChangelogDialog';
+import { CHANGELOG_DATA } from './version/changelog';
+import { APP_VERSION } from './version/version';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -100,9 +103,9 @@ const App = () => {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  // IDE 主题状态 - 优先使用 Java 注入的初始主题
+  // IDE theme state - prefer initial theme injected by Java
   const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
-    // 检查 Java 是否注入了初始主题
+    // Check if Java injected an initial theme
     const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
     if (injectedTheme === 'light' || injectedTheme === 'dark') {
       return injectedTheme;
@@ -155,7 +158,7 @@ const App = () => {
   // but now it's updated via debounced callback, not on every keystroke
   const [draftInput, setDraftInput] = useState('');
 
-  // ChatInputBox 相关状态
+  // ChatInputBox related state
   const [currentProvider, setCurrentProvider] = useState('claude');
   const [selectedClaudeModel, setSelectedClaudeModel] = useState(CLAUDE_MODELS[0].id);
   const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
@@ -170,46 +173,57 @@ const App = () => {
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
   const [claudeSettingsAlwaysThinkingEnabled, setClaudeSettingsAlwaysThinkingEnabled] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
-  // 🔧 流式传输开关状态（同步设置页面）
+  // Streaming toggle state (synced with settings page)
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(true);
-  // 发送快捷键设置
+  // Send shortcut setting
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
-  // 自动打开文件设置
+  // Auto-open file setting
   const [autoOpenFileEnabled, setAutoOpenFileEnabled] = useState(true);
-  // StatusPanel 展开/收起状态（默认收起，有内容时自动展开）
+  // StatusPanel expanded/collapsed state (collapsed by default, auto-expands when content is present)
   const [statusPanelExpanded, setStatusPanelExpanded] = useState(false);
-  // 已处理的文件路径列表（Apply/Reject 后从 fileChanges 中过滤，持久化到 localStorage）
+  // List of processed file paths (filtered from fileChanges after Apply/Reject, persisted to localStorage)
   const [processedFiles, setProcessedFiles] = useState<string[]>([]);
-  // 基准消息索引（用于 Keep All 功能，只统计该索引之后的改动）
+  // Base message index (for Keep All feature, only counts changes after this index)
   const [baseMessageIndex, setBaseMessageIndex] = useState(0);
 
-  // 🔧 SDK 安装状态（用于在未安装时禁止提问）
-  const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
-  const [sdkStatusLoaded, setSdkStatusLoaded] = useState(false); // 标记 SDK 状态是否已从后端加载
+  // Changelog dialog state (show once per version update)
+  const LAST_SEEN_VERSION_KEY = 'lastSeenChangelogVersion';
+  const [showChangelogDialog, setShowChangelogDialog] = useState(() => {
+    const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY);
+    return lastSeen !== APP_VERSION;
+  });
+  const handleCloseChangelog = useCallback(() => {
+    localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
+    setShowChangelogDialog(false);
+  }, []);
 
-  // 使用 useRef 存储最新的 provider 值，避免回调中的闭包问题
+  // SDK installation status (used to prevent sending messages when SDK is not installed)
+  const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
+  const [sdkStatusLoaded, setSdkStatusLoaded] = useState(false); // Whether SDK status has been loaded from backend
+
+  // Use useRef to store the latest provider value, avoiding stale closures in callbacks
   const currentProviderRef = useRef(currentProvider);
   useEffect(() => {
     currentProviderRef.current = currentProvider;
   }, [currentProvider]);
 
-  // 使用 useRef 存储最新的 sessionId 值，用于回调中访问
+  // Use useRef to store the latest sessionId value for access in callbacks
   const currentSessionIdRef = useRef(currentSessionId);
   useEffect(() => {
     currentSessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
 
-  // Context state (active file and selection) - 保留用于 ContextBar 显示
+  // Context state (active file and selection) - retained for ContextBar display
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
 
-  // 根据当前提供商选择显示的模型
+  // Select the displayed model based on the current provider
   const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
 
-  // 🔧 根据当前提供商判断对应的 SDK 是否已安装
+  // Determine whether the SDK for the current provider is installed
   const currentSdkInstalled = (() => {
-    // 状态未加载时，返回 false（显示加载中或未安装提示）
+    // Return false when status hasn't loaded yet (show loading or not-installed prompt)
     if (!sdkStatusLoaded) return false;
-    // 提供商 -> SDK 映射
+    // Provider -> SDK mapping
     const providerToSdk: Record<string, string> = {
       claude: 'claude-sdk',
       anthropic: 'claude-sdk',
@@ -219,7 +233,7 @@ const App = () => {
     };
     const sdkId = providerToSdk[currentProvider] || 'claude-sdk';
     const status = sdkStatus[sdkId];
-    // 检查 status 字段（优先）或 installed 字段
+    // Check the status field (preferred) or the installed field
     return status?.status === 'installed' || status?.installed === true;
   })();
 
@@ -250,18 +264,18 @@ const App = () => {
     }
   };
 
-  // 全局拖拽事件拦截 - 阻止浏览器默认的文件打开行为
-  // 这确保拖拽文件到插件任意位置都不会触发浏览器打开文件
+  // Global drag event interception - prevent browser default file-open behavior
+  // This ensures dragging files anywhere in the plugin won't trigger the browser to open files
   useEffect(() => {
     const preventDefaultDragDrop = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
     };
 
-    // 在 document 级别拦截所有 dragover 和 drop 事件
+    // Intercept all dragover and drop events at the document level
     document.addEventListener('dragover', preventDefaultDragDrop);
     document.addEventListener('drop', preventDefaultDragDrop);
-    // 同时处理 dragenter 和 dragleave 以防止任何意外行为
+    // Also handle dragenter and dragleave to prevent any unexpected behavior
     document.addEventListener('dragenter', preventDefaultDragDrop);
 
     return () => {
@@ -271,9 +285,9 @@ const App = () => {
     };
   }, []);
 
-  // 初始化主题和字体缩放
+  // Initialize theme and font scaling
   useEffect(() => {
-    // 注册 IDE 主题接收回调
+    // Register IDE theme received callback
     window.onIdeThemeReceived = (jsonStr: string) => {
       try {
         const themeData = JSON.parse(jsonStr);
@@ -284,7 +298,7 @@ const App = () => {
       }
     };
 
-    // 监听 IDE 主题变化（当用户在 IDE 中切换主题时）
+    // Listen for IDE theme changes (when user switches theme in the IDE)
     window.onIdeThemeChanged = (jsonStr: string) => {
       try {
         const themeData = JSON.parse(jsonStr);
@@ -295,15 +309,15 @@ const App = () => {
       }
     };
 
-    // 初始化字体缩放
+    // Initialize font scaling
     const savedLevel = localStorage.getItem('fontSizeLevel');
-    const level = savedLevel ? parseInt(savedLevel, 10) : 2; // 默认档位 2 (90%)
+    const level = savedLevel ? parseInt(savedLevel, 10) : 2; // Default level 2 (90%)
     const fontSizeLevel = (level >= 1 && level <= 6) ? level : 2;
 
-    // 将档位映射到缩放比例
+    // Map level to scale ratio
     const fontSizeMap: Record<number, number> = {
       1: 0.8,   // 80%
-      2: 0.9,   // 90% (默认)
+      2: 0.9,   // 90% (default)
       3: 1.0,   // 100%
       4: 1.1,   // 110%
       5: 1.2,   // 120%
@@ -312,21 +326,21 @@ const App = () => {
     const scale = fontSizeMap[fontSizeLevel] || 1.0;
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
-    // 初始化聊天背景色（校验 hex 格式后再应用）
+    // Initialize chat background color (validate hex format before applying)
     const savedChatBgColor = localStorage.getItem('chatBgColor');
     if (savedChatBgColor && /^#[0-9a-fA-F]{6}$/.test(savedChatBgColor)) {
       document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
     }
 
-    // 先应用用户明确选择的主题（light/dark），跟随 IDE 的情况等 ideTheme 更新后再处理
+    // Apply the user's explicit theme choice (light/dark) first; Follow IDE mode is handled after ideTheme updates
     const savedTheme = localStorage.getItem('theme');
 
-    // 检查是否有 Java 注入的初始主题
+    // Check if there's an initial theme injected by Java
     const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
 
-    // 请求 IDE 主题（带重试机制）- 仍然需要，用于处理动态主题变化
+    // Request IDE theme (with retry mechanism) - still needed for handling dynamic theme changes
     let retryCount = 0;
-    const MAX_RETRIES = 20; // 最多重试 20 次 (2 秒)
+    const MAX_RETRIES = 20; // Max 20 retries (2 seconds)
 
     const requestIdeTheme = () => {
       if (window.sendToJava) {
@@ -336,7 +350,7 @@ const App = () => {
         if (retryCount < MAX_RETRIES) {
           setTimeout(requestIdeTheme, 100);
         } else {
-          // 如果是 Follow IDE 模式且无法获取 IDE 主题，使用注入的主题或 dark 作为 fallback
+          // If in Follow IDE mode and unable to get IDE theme, use injected theme or dark as fallback
           if (savedTheme === null || savedTheme === 'system') {
             const fallback = injectedTheme || 'dark';
             setIdeTheme(fallback as 'light' | 'dark');
@@ -345,27 +359,27 @@ const App = () => {
       }
     };
 
-    // 延迟 100ms 开始请求，给 bridge 初始化时间
+    // Delay 100ms before requesting, giving the bridge time to initialize
     setTimeout(requestIdeTheme, 100);
   }, []);
 
-  // 当 IDE 主题变化时，重新应用主题（如果用户选择了"跟随 IDE"）
-  // 这个 effect 也处理初始加载时的主题设置
+  // Re-apply theme when IDE theme changes (if user chose "Follow IDE")
+  // This effect also handles the theme setup on initial load
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
 
-    // 只有在 ideTheme 已加载后才处理
+    // Only process after ideTheme has been loaded
     if (ideTheme === null) {
       return;
     }
 
-    // 如果用户选择了 "Follow IDE" 模式
+    // If user selected "Follow IDE" mode
     if (savedTheme === null || savedTheme === 'system') {
       document.documentElement.setAttribute('data-theme', ideTheme);
     }
   }, [ideTheme]);
 
-  // 从 LocalStorage 加载模型选择状态，并同步到后端
+  // Load model selection state from LocalStorage and sync to backend
   useEffect(() => {
     try {
       const saved = localStorage.getItem('model-selection-state');
@@ -377,7 +391,7 @@ const App = () => {
       if (saved) {
         const state = JSON.parse(saved);
 
-        // 验证并恢复提供商
+        // Validate and restore provider
         if (['claude', 'codex'].includes(state.provider)) {
           restoredProvider = state.provider;
           setCurrentProvider(state.provider);
@@ -386,13 +400,13 @@ const App = () => {
           }
         }
 
-        // 验证并恢复 Claude 模型
+        // Validate and restore Claude model
         if (CLAUDE_MODELS.find(m => m.id === state.claudeModel)) {
           restoredClaudeModel = state.claudeModel;
           setSelectedClaudeModel(state.claudeModel);
         }
 
-        // 验证并恢复 Codex 模型
+        // Validate and restore Codex model
         if (CODEX_MODELS.find(m => m.id === state.codexModel)) {
           restoredCodexModel = state.codexModel;
           setSelectedCodexModel(state.codexModel);
@@ -401,34 +415,34 @@ const App = () => {
 
       setPermissionMode(initialPermissionMode);
 
-      // 初始化时同步模型状态到后端，确保前后端一致
+      // Sync model state to backend on initialization to ensure frontend-backend consistency
       let syncRetryCount = 0;
-      const MAX_SYNC_RETRIES = 30; // 最多重试30次（3秒）
+      const MAX_SYNC_RETRIES = 30; // Max 30 retries (3 seconds)
 
       const syncToBackend = () => {
         if (window.sendToJava) {
-          // 先同步 provider
+          // Sync provider first
           sendBridgeEvent('set_provider', restoredProvider);
-          // 再同步对应的模型
+          // Then sync the corresponding model
           const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
           sendBridgeEvent('set_model', modelToSync);
           sendBridgeEvent('set_mode', initialPermissionMode);
         } else {
-          // 如果 sendToJava 还没准备好，稍后重试
+          // If sendToJava is not ready yet, retry later
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
             setTimeout(syncToBackend, 100);
           }
         }
       };
-      // 延迟同步，等待 bridge 准备好
+      // Delay sync, waiting for bridge to be ready
       setTimeout(syncToBackend, 200);
     } catch {
       // Failed to load model selection state
     }
   }, []);
 
-  // 保存模型选择状态到 LocalStorage
+  // Save model selection state to LocalStorage
   useEffect(() => {
     try {
       localStorage.setItem('model-selection-state', JSON.stringify({
@@ -441,10 +455,10 @@ const App = () => {
     }
   }, [currentProvider, selectedClaudeModel, selectedCodexModel]);
 
-  // 加载选中的智能体
+  // Load selected agent
   useEffect(() => {
     let retryCount = 0;
-    const MAX_RETRIES = 10; // 减少到10次，总共1秒
+    const MAX_RETRIES = 10; // Reduced to 10 retries, 1 second total
     let timeoutId: number | undefined;
 
     const loadSelectedAgent = () => {
@@ -455,11 +469,11 @@ const App = () => {
         if (retryCount < MAX_RETRIES) {
           timeoutId = window.setTimeout(loadSelectedAgent, 100);
         }
-        // 即使加载失败，也不影响其他功能的使用
+        // Even if loading fails, it doesn't affect other features
       }
     };
 
-    timeoutId = window.setTimeout(loadSelectedAgent, 200); // 减少初始延迟到200ms
+    timeoutId = window.setTimeout(loadSelectedAgent, 200); // Reduced initial delay to 200ms
 
     return () => {
       if (timeoutId !== undefined) {
@@ -579,13 +593,13 @@ const App = () => {
   });
 
   /**
-   * 新建会话的命令集合（/new, /clear, /reset 均可触发）
+   * Set of commands that trigger new session creation (/new, /clear, /reset)
    */
   const NEW_SESSION_COMMANDS = new Set(['/new', '/clear', '/reset']);
 
   /**
-   * 检查是否是新建会话命令
-   * @returns true 如果是新建会话命令（已处理），false 否则
+   * Check if the input is a new session command
+   * @returns true if it was a new session command (handled), false otherwise
    */
   const checkNewSessionCommand = useCallback((text: string): boolean => {
     if (!text.startsWith('/')) return false;
@@ -598,8 +612,8 @@ const App = () => {
   }, [forceCreateNewSession]);
 
   /**
-   * 检查未实现的斜杠命令
-   * @returns true 如果是未实现的命令（已处理），false 否则
+   * Check for unimplemented slash commands
+   * @returns true if it was an unimplemented command (handled), false otherwise
    */
   const checkUnimplementedCommand = useCallback((text: string): boolean => {
     if (!text.startsWith('/')) return false;
@@ -625,7 +639,7 @@ const App = () => {
   }, [t]);
 
   /**
-   * 构建用户消息的内容块
+   * Build content blocks for the user message
    */
   const buildUserContentBlocks = useCallback((
     text: string,
@@ -654,7 +668,6 @@ const App = () => {
       }
     }
 
-    // 过滤占位文本：如果已有图片附件且文本是附件占位文本，则不添加
     // Filter placeholder text: skip if there are image attachments and text is placeholder
     const isPlaceholderText = text && text.trim().startsWith('[Uploaded ');
 
@@ -666,7 +679,7 @@ const App = () => {
   }, [t]);
 
   /**
-   * 发送消息到后端
+   * Send message to backend
    */
   const sendMessageToBackend = useCallback((
     text: string,
@@ -701,7 +714,7 @@ const App = () => {
   }, []);
 
   /**
-   * 执行消息发送（从队列或直接执行）
+   * Execute message sending (from queue or directly)
    */
   const executeMessage = useCallback((content: string, attachments?: Attachment[]) => {
     const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
@@ -709,7 +722,7 @@ const App = () => {
 
     if (!text && !hasAttachments) return;
 
-    // 检查 SDK 状态
+    // Check SDK status
     if (!sdkStatusLoaded) {
       addToast(t('chat.sdkStatusLoading'), 'info');
       return;
@@ -724,19 +737,19 @@ const App = () => {
       return;
     }
 
-    // 构建用户消息内容块
+    // Build user message content blocks
     const userContentBlocks = buildUserContentBlocks(text, attachments);
     if (userContentBlocks.length === 0) return;
 
-    // 持久化存储非图片附件元数据，确保后端消息替换乐观消息后仍可显示文件芯片
+    // Persist non-image attachment metadata to ensure file chips remain visible after backend replaces optimistic messages
     const nonImageAttachments = Array.isArray(attachments)
       ? attachments.filter(a => !a.mediaType?.startsWith('image/'))
       : [];
     if (nonImageAttachments.length > 0) {
-      // 限制缓存大小，防止内存无限增长（保留最近 100 条）
+      // Limit cache size to prevent unbounded memory growth (keep last 100 entries)
       const MAX_ATTACHMENT_CACHE_SIZE = 100;
       if (sentAttachmentsRef.current.size >= MAX_ATTACHMENT_CACHE_SIZE) {
-        // 删除最早的条目（Map 保持插入顺序）
+        // Delete the oldest entry (Map maintains insertion order)
         const firstKey = sentAttachmentsRef.current.keys().next().value;
         if (firstKey !== undefined) {
           sentAttachmentsRef.current.delete(firstKey);
@@ -748,7 +761,7 @@ const App = () => {
       })));
     }
 
-    // 创建并添加用户消息（乐观更新）
+    // Create and add user message (optimistic update)
     const userMessage: ClaudeMessage = {
       type: 'user',
       content: text || '',
@@ -758,11 +771,11 @@ const App = () => {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    // 设置 loading 状态
+    // Set loading state
     setLoading(true);
     setLoadingStartTime(Date.now());
 
-    // 滚动到底部
+    // Scroll to bottom
     isUserAtBottomRef.current = true;
     requestAnimationFrame(() => {
       if (messagesContainerRef.current) {
@@ -770,24 +783,24 @@ const App = () => {
       }
     });
 
-    // 同步 provider 设置
+    // Sync provider setting
     sendBridgeEvent('set_provider', currentProvider);
 
-    // 构建智能体信息
+    // Build agent info
     const agentInfo = selectedAgent ? {
       id: selectedAgent.id,
       name: selectedAgent.name,
       prompt: selectedAgent.prompt,
     } : null;
 
-    // 提取文件标签信息
+    // Extract file tag info
     const fileTags = chatInputRef.current?.getFileTags() ?? [];
     const fileTagsInfo = fileTags.length > 0 ? fileTags.map(tag => ({
       displayPath: tag.displayPath,
       absolutePath: tag.absolutePath,
     })) : null;
 
-    // 发送消息到后端
+    // Send message to backend
     sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo);
   }, [
     sdkStatusLoaded,
@@ -801,7 +814,7 @@ const App = () => {
   ]);
 
   /**
-   * 消息队列管理
+   * Message queue management
    */
   const {
     queue: messageQueue,
@@ -813,33 +826,33 @@ const App = () => {
   });
 
   /**
-   * 处理消息发送（来自 ChatInputBox）
+   * Handle message submission (from ChatInputBox)
    */
   const handleSubmit = (content: string, attachments?: Attachment[]) => {
     const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-    // 验证输入
+    // Validate input
     if (!text && !hasAttachments) return;
 
-    // 检查新建会话命令（/new, /clear, /reset）- 无需 SDK，无需二次确认，即使 loading 也可执行
+    // Check new session commands (/new, /clear, /reset) - no SDK needed, no confirmation, works even while loading
     if (checkNewSessionCommand(text)) return;
 
-    // 如果正在 loading，加入队列
+    // If loading, add to queue
     if (loading) {
       enqueueMessage(content, attachments);
       return;
     }
 
-    // 检查未实现的命令
+    // Check for unimplemented commands
     if (checkUnimplementedCommand(text)) return;
 
-    // 执行消息
+    // Execute message
     executeMessage(content, attachments);
   };
 
   /**
-   * 处理模式选择
+   * Handle mode selection
    */
   const handleModeSelect = (mode: PermissionMode) => {
     if (currentProvider === 'codex') {
@@ -853,7 +866,7 @@ const App = () => {
   };
 
   /**
-   * 处理模型选择
+   * Handle model selection
    */
   const handleModelSelect = (modelId: string) => {
     if (currentProvider === 'claude') {
@@ -865,13 +878,13 @@ const App = () => {
   };
 
   /**
-   * 处理提供商选择
-   * 切换 provider 时清空消息和输入框（类似新建会话）
+   * Handle provider selection
+   * Clears messages and input box when switching provider (similar to creating a new session)
    */
   const handleProviderSelect = (providerId: string) => {
-    // 清空消息列表（类似新建会话）
+    // Clear message list (similar to creating a new session)
     setMessages([]);
-    // 清空输入框
+    // Clear input box
     chatInputRef.current?.clear();
 
     setCurrentProvider(providerId);
@@ -880,13 +893,13 @@ const App = () => {
     setPermissionMode(modeToSet);
     sendBridgeEvent('set_mode', modeToSet);
 
-    // 切换 provider 时,同时发送对应的模型
+    // When switching provider, also send the corresponding model
     const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
     sendBridgeEvent('set_model', newModel);
   };
 
   /**
-   * 处理思考深度选择 (Codex only)
+   * Handle reasoning effort selection (Codex only)
    */
   const handleReasoningChange = (effort: ReasoningEffort) => {
     setReasoningEffort(effort);
@@ -894,7 +907,7 @@ const App = () => {
   };
 
   /**
-   * 处理智能体选择
+   * Handle agent selection
    */
   const handleAgentSelect = (agent: SelectedAgent | null) => {
     setSelectedAgent(agent);
@@ -910,7 +923,7 @@ const App = () => {
   };
 
   /**
-   * 处理思考模式切换
+   * Handle thinking mode toggle
    */
   const handleToggleThinking = (enabled: boolean) => {
     if (!activeProviderConfig) {
@@ -920,7 +933,7 @@ const App = () => {
       return;
     }
 
-    // 更新本地状态（乐观更新）
+    // Update local state (optimistic update)
     setActiveProviderConfig(prev => prev ? {
       ...prev,
       settingsConfig: {
@@ -929,7 +942,7 @@ const App = () => {
       }
     } : null);
 
-    // 发送更新到后端
+    // Send update to backend
     const payload = JSON.stringify({
       id: activeProviderConfig.id,
       updates: {
@@ -944,7 +957,7 @@ const App = () => {
   };
 
   /**
-   * 处理流式传输开关切换
+   * Handle streaming toggle
    */
   const handleStreamingEnabledChange = useCallback((enabled: boolean) => {
     setStreamingEnabledSetting(enabled);
@@ -954,7 +967,7 @@ const App = () => {
   }, [t, addToast]);
 
   /**
-   * 处理发送快捷键变更
+   * Handle send shortcut change
    */
   const handleSendShortcutChange = useCallback((shortcut: 'enter' | 'cmdEnter') => {
     setSendShortcut(shortcut);
@@ -963,7 +976,7 @@ const App = () => {
   }, []);
 
   /**
-   * 处理自动打开文件开关切换
+   * Handle auto-open file toggle
    */
   const handleAutoOpenFileEnabledChange = useCallback((enabled: boolean) => {
     setAutoOpenFileEnabled(enabled);
@@ -973,8 +986,8 @@ const App = () => {
   }, [t, addToast]);
 
   const interruptSession = () => {
-    // FIX: 立即重置前端状态，不等待后端回调
-    // 这样可以让用户立即看到停止效果
+    // FIX: Reset frontend state immediately without waiting for backend callback
+    // This lets the user see the stop effect right away
     setLoading(false);
     setLoadingStartTime(null);
     setStreamingActive(false);
@@ -990,7 +1003,7 @@ const App = () => {
   const normalizeBlocksCache = useRef(new WeakMap<object, ClaudeContentBlock[]>());
   const shouldShowMessageCache = useRef(new WeakMap<object, boolean>());
   const mergedAssistantMessageCache = useRef(new Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>());
-  // 持久化存储：发送消息时的非图片附件元数据，用于在后端消息替换后仍能在气泡中显示文件芯片
+  // Persistent storage: non-image attachment metadata from sent messages, used to display file chips in bubbles after backend message replacement
   const sentAttachmentsRef = useRef(new Map<string, Array<{ fileName: string; mediaType: string }>>());
   // Clear cache when dependencies change
   useEffect(() => {
@@ -1045,7 +1058,7 @@ const App = () => {
   const getContentBlocks = useCallback(
     (message: ClaudeMessage) => {
       const blocks = getContentBlocksUtil(message, normalizeBlocks, localizeMessage);
-      // 从持久化存储中注入附件块：后端消息不含 attachment 块，需要用发送时保存的元数据补回
+      // Inject attachment blocks from persistent storage: backend messages lack attachment blocks, so we restore them using metadata saved at send time
       if (message.type === 'user' && !blocks.some(b => b.type === 'attachment')) {
         const meta = sentAttachmentsRef.current.get(message.content || '');
         if (meta && meta.length > 0) {
@@ -1094,15 +1107,15 @@ const App = () => {
     isRewinding,
   });
 
-  // 从消息中提取最新的 todos 用于全局 TodoPanel 显示
+  // Extract the latest todos from messages for global TodoPanel display
   const globalTodos = useMemo(() => {
-    // 从后往前遍历，找到最新的 todowrite 工具调用
+    // Traverse backwards to find the latest todowrite tool call
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.type !== 'assistant') continue;
 
       const blocks = getContentBlocks(msg);
-      // 从后往前遍历 blocks，找到最新的 todowrite
+      // Traverse blocks backwards to find the latest todowrite
       for (let j = blocks.length - 1; j >= 0; j--) {
         const block = blocks[j];
         if (
@@ -1183,7 +1196,7 @@ const App = () => {
     return result;
   }, [mergedMessages, currentProvider]);
 
-  // 使用 useRef 存储最新的 messages，避免 findToolResult 依赖变化导致子组件重渲染
+  // Use useRef to store latest messages, preventing child re-renders from findToolResult dependency changes
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -1193,8 +1206,8 @@ const App = () => {
     }
 
     const currentMessages = messagesRef.current;
-    // 注意：在原始 messages 数组中查找，而不是 mergedMessages
-    // 因为 tool_result 可能在被过滤掉的消息中
+    // Note: Search in the original messages array, not mergedMessages
+    // because tool_result may be in filtered-out messages
     for (let i = 0; i < currentMessages.length; i += 1) {
       const candidate = currentMessages[i];
       const raw = candidate.raw;
@@ -1202,7 +1215,7 @@ const App = () => {
       if (!raw || typeof raw === 'string') {
         continue;
       }
-      // 兼容 raw.content 和 raw.message.content
+      // Compatible with both raw.content and raw.message.content
       const content = raw.content ?? raw.message?.content;
 
       if (!Array.isArray(content)) {
@@ -1221,7 +1234,7 @@ const App = () => {
     return null;
   }, []);
 
-  // 从消息中提取文件改动汇总，用于 StatusPanel 显示
+  // Extract file change summary from messages for StatusPanel display
   const fileChanges = useFileChanges({
     messages,
     getContentBlocks,
@@ -1229,13 +1242,13 @@ const App = () => {
     startFromIndex: baseMessageIndex,
   });
 
-  // 过滤掉已处理的文件（Apply/Reject）
+  // Filter out processed files (Apply/Reject)
   const filteredFileChanges = useMemo(() => {
     if (processedFiles.length === 0) return fileChanges;
     return fileChanges.filter(fc => !processedFiles.includes(fc.filePath));
   }, [fileChanges, processedFiles]);
 
-  // 文件撤销成功后的回调（从 StatusPanel 触发）
+  // Callback after file undo success (triggered from StatusPanel)
   const handleUndoFile = useCallback((filePath: string) => {
     setProcessedFiles(prev => {
       if (prev.includes(filePath)) return prev;
@@ -1257,9 +1270,9 @@ const App = () => {
     });
   }, [currentSessionId]);
 
-  // 批量撤销成功后的回调（Discard All）
+  // Callback after batch undo success (Discard All)
   const handleDiscardAll = useCallback(() => {
-    // 将所有当前显示的文件添加到已处理列表
+    // Add all currently displayed files to the processed list
     setProcessedFiles(prev => {
       const filesToAdd = filteredFileChanges.map(fc => fc.filePath);
       const newList = [...prev, ...filesToAdd.filter(f => !prev.includes(f))];
@@ -1280,19 +1293,19 @@ const App = () => {
     });
   }, [filteredFileChanges, currentSessionId]);
 
-  // 保存全部的回调（Keep All）- 将当前改动作为新基准
+  // Callback for Keep All - set current changes as the new baseline
   const handleKeepAll = useCallback(() => {
-    // 设置新的基准消息索引为当前消息长度
+    // Set new base message index to current message count
     const newBaseIndex = messages.length;
     setBaseMessageIndex(newBaseIndex);
-    // 清空已处理文件列表
+    // Clear processed files list
     setProcessedFiles([]);
 
-    // 持久化到 localStorage（按 sessionId 存储）
+    // Persist to localStorage (stored by sessionId)
     if (currentSessionId) {
       try {
         localStorage.setItem(`keep-all-base-${currentSessionId}`, String(newBaseIndex));
-        // 同时清空 processed-files
+        // Also clear processed-files
         localStorage.removeItem(`processed-files-${currentSessionId}`);
       } catch (e) {
         console.error('Failed to persist Keep All state:', e);
@@ -1381,7 +1394,7 @@ const App = () => {
     };
   }, []);
 
-  // 会话切换时恢复/重置状态，避免历史加载时被清空
+  // Restore/reset state on session switch, preventing state from being cleared during history loading
   useEffect(() => {
     // Reset processed files for new session (will be restored from localStorage below)
     setProcessedFiles([]);
@@ -1439,14 +1452,14 @@ const App = () => {
     setBaseMessageIndex(0);
   }, [currentSessionId]);
 
-  // 从消息中提取子代理信息，用于 StatusPanel 显示
+  // Extract subagent info from messages for StatusPanel display
   const subagents = useSubagents({
     messages,
     getContentBlocks,
     findToolResult,
   });
 
-  // 当有内容时自动展开 StatusPanel
+  // Auto-expand StatusPanel when there is content
   const hasStatusPanelContent = globalTodos.length > 0 || filteredFileChanges.length > 0 || subagents.length > 0;
   useEffect(() => {
     if (hasStatusPanelContent) {
@@ -1521,7 +1534,7 @@ const App = () => {
           />
         </div>
 
-        {/* 滚动控制按钮 */}
+        {/* Scroll control button */}
         <ScrollControl containerRef={messagesContainerRef} inputAreaRef={inputAreaRef} />
       </>
       ) : (
@@ -1669,6 +1682,12 @@ const App = () => {
         isLoading={isRewinding}
         onConfirm={handleRewindConfirm}
         onCancel={handleRewindCancel}
+      />
+
+      <ChangelogDialog
+        isOpen={showChangelogDialog}
+        onClose={handleCloseChangelog}
+        entries={CHANGELOG_DATA}
       />
     </>
   );

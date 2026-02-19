@@ -12,7 +12,7 @@ import {
 import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 /**
- * 获取文件图标 class（与 AttachmentList 保持一致）
+ * Get file icon class (consistent with AttachmentList)
  */
 function getFileIcon(mediaType?: string): string {
   if (!mediaType) return 'codicon-file';
@@ -24,7 +24,7 @@ function getFileIcon(mediaType?: string): string {
 }
 
 /**
- * 获取文件扩展名
+ * Get file extension
  */
 function getExtension(fileName?: string): string {
   if (!fileName) return '';

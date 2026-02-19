@@ -185,7 +185,7 @@ public class ClaudeHistoryReader {
             return sessions;
         }
 
-        // 1. 检查内存缓存
+        // 1. Check memory cache
         SessionIndexCache cache = SessionIndexCache.getInstance();
         List<SessionInfo> cachedSessions = cache.getClaudeSessions(projectPath, projectDir);
         if (cachedSessions != null) {
@@ -193,17 +193,17 @@ public class ClaudeHistoryReader {
             return cachedSessions;
         }
 
-        // 2. 检查索引文件和更新类型
+        // 2. Check index file and determine update type
         SessionIndexManager indexManager = SessionIndexManager.getInstance();
         SessionIndexManager.SessionIndex index = indexManager.readClaudeIndex();
         SessionIndexManager.ProjectIndex projectIndex = index.projects.get(projectPath);
         SessionIndexManager.UpdateType updateType = indexManager.getUpdateType(projectIndex, projectDir);
 
         if (updateType == SessionIndexManager.UpdateType.NONE) {
-            // 索引有效，从索引恢复
+            // Index is valid, restore from index
             LOG.info("[ClaudeHistoryReader] Using file index for " + projectPath + ", sessions: " + projectIndex.sessions.size());
             sessions = restoreSessionsFromIndex(projectIndex);
-            // 更新内存缓存
+            // Update memory cache
             cache.updateClaudeCache(projectPath, projectDir, sessions);
             return sessions;
         }
@@ -211,11 +211,11 @@ public class ClaudeHistoryReader {
         long startTime = System.currentTimeMillis();
 
         if (updateType == SessionIndexManager.UpdateType.INCREMENTAL && projectIndex != null) {
-            // 3a. 增量更新：只扫描新文件
+            // 3a. Incremental update: only scan new files
             LOG.info("[ClaudeHistoryReader] Incremental scan for " + projectPath);
             sessions = incrementalScan(projectDir, projectIndex);
         } else {
-            // 3b. 全量扫描
+            // 3b. Full scan
             LOG.info("[ClaudeHistoryReader] Full scan for " + projectPath);
             sessions = scanProjectSessions(projectDir);
         }
@@ -223,27 +223,27 @@ public class ClaudeHistoryReader {
         long scanTime = System.currentTimeMillis() - startTime;
         LOG.info("[ClaudeHistoryReader] Scan completed in " + scanTime + "ms, sessions: " + sessions.size());
 
-        // 4. 更新索引
+        // 4. Update index
         updateProjectIndex(index, projectPath, projectDir, sessions);
         indexManager.saveClaudeIndex(index);
 
-        // 5. 更新内存缓存
+        // 5. Update memory cache
         cache.updateClaudeCache(projectPath, projectDir, sessions);
 
         return sessions;
     }
 
     /**
-     * 增量扫描：只扫描新文件，合并已有索引
+     * Incremental scan: only scan new files and merge with existing index.
      */
     private List<SessionInfo> incrementalScan(Path projectDir, SessionIndexManager.ProjectIndex existingIndex) throws IOException {
-        // 获取已索引的 sessionId 集合
+        // Get the set of already-indexed session IDs
         Set<String> indexedIds = existingIndex.getIndexedSessionIds();
 
-        // 从现有索引恢复已有会话
+        // Restore existing sessions from index
         List<SessionInfo> sessions = restoreSessionsFromIndex(existingIndex);
 
-        // 扫描新文件
+        // Scan new files
         List<SessionInfo> newSessions = new ArrayList<>();
         Files.list(projectDir)
             .filter(path -> path.toString().endsWith(".jsonl"))
@@ -272,17 +272,17 @@ public class ClaudeHistoryReader {
 
         LOG.info("[ClaudeHistoryReader] Incremental scan found " + newSessions.size() + " new sessions");
 
-        // 合并新旧会话
+        // Merge old and new sessions
         sessions.addAll(newSessions);
 
-        // 按时间排序
+        // Sort by timestamp descending
         sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
 
         return sessions;
     }
 
     /**
-     * 扫描单个会话文件
+     * Scan a single session file.
      */
     private SessionInfo scanSingleSession(Path path) {
         try (BufferedReader reader = Files.newBufferedReader(path, java.nio.charset.StandardCharsets.UTF_8)) {
@@ -344,7 +344,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 从索引恢复会话列表
+     * Restore session list from index.
      */
     private List<SessionInfo> restoreSessionsFromIndex(SessionIndexManager.ProjectIndex projectIndex) {
         List<SessionInfo> sessions = new ArrayList<>();
@@ -361,7 +361,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 更新项目索引
+     * Update project index.
      */
     private void updateProjectIndex(
             SessionIndexManager.SessionIndex index,
@@ -392,7 +392,7 @@ public class ClaudeHistoryReader {
     }
 
     /**
-     * 扫描项目目录获取会话列表（原有逻辑）
+     * Scan the project directory to build the session list (original logic).
      */
     private List<SessionInfo> scanProjectSessions(Path projectDir) throws IOException {
         List<SessionInfo> sessions = new ArrayList<>();

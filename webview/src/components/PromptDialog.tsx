@@ -4,7 +4,7 @@ import type { PromptConfig } from '../types/prompt';
 
 interface PromptDialogProps {
   isOpen: boolean;
-  prompt?: PromptConfig | null; // null 表示添加模式
+  prompt?: PromptConfig | null; // null indicates add mode
   onClose: () => void;
   onSave: (data: { name: string; content: string }) => void;
 }
@@ -22,15 +22,15 @@ export default function PromptDialog({
   const [content, setContent] = useState('');
   const [nameError, setNameError] = useState('');
 
-  // 初始化表单
+  // Initialize form
   useEffect(() => {
     if (isOpen) {
       if (prompt) {
-        // 编辑模式
+        // Edit mode
         setName(prompt.name || '');
         setContent(prompt.content || '');
       } else {
-        // 添加模式
+        // Add mode
         setName('');
         setContent('');
       }
@@ -38,7 +38,7 @@ export default function PromptDialog({
     }
   }, [isOpen, prompt]);
 
-  // ESC 键关闭
+  // Close on ESC key
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
@@ -53,7 +53,7 @@ export default function PromptDialog({
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // 限制最多30字符
+    // Limit to 30 characters max
     if (value.length <= 30) {
       setName(value);
       setNameError('');
@@ -62,14 +62,14 @@ export default function PromptDialog({
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-    // 限制最多100000字符
+    // Limit to 100000 characters max
     if (value.length <= 100000) {
       setContent(value);
     }
   };
 
   const handleSave = () => {
-    // 验证名称
+    // Validate name
     if (!name.trim()) {
       setNameError(t('settings.prompt.dialog.nameRequired'));
       return;

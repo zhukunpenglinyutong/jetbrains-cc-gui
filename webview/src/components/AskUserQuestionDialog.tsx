@@ -3,15 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
 import './AskUserQuestionDialog.css';
 
-// 用于标识"其他"选项的特殊标记
+// Special marker to identify the "Other" option
 const OTHER_OPTION_MARKER = '__OTHER__';
 
-// 自定义输入的最大长度限制
+// Maximum length limit for custom input
 const MAX_CUSTOM_INPUT_LENGTH = 2000;
 
-// 超时配置（与后端 PermissionHandler.java 和 permission-handler.js 保持一致）
-const TIMEOUT_SECONDS = 300; // 5 分钟
-const WARNING_THRESHOLD_SECONDS = 30; // 剩余 30 秒时显示警告
+// Timeout configuration (kept in sync with backend PermissionHandler.java and permission-handler.js)
+const TIMEOUT_SECONDS = 300; // 5 minutes
+const WARNING_THRESHOLD_SECONDS = 30; // Show warning when 30 seconds remain
 
 export interface QuestionOption {
   label: string;
@@ -65,18 +65,18 @@ const AskUserQuestionDialog = ({
   onCancel,
 }: AskUserQuestionDialogProps) => {
   const { t } = useTranslation();
-  // 存储每个问题的答案：question -> selectedLabel(s)
+  // Store answers for each question: question -> selectedLabel(s)
   const [answers, setAnswers] = useState<Record<string, Set<string>>>({});
-  // 存储每个问题的自定义输入文本：question -> customText
+  // Store custom input text for each question: question -> customText
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  // 控制弹窗是否收起（紧凑模式）
+  // Controls whether the dialog is collapsed (compact mode)
   const [isCollapsed, setIsCollapsed] = useState(false);
-  // 倒计时剩余秒数
+  // Remaining countdown seconds
   const [remainingSeconds, setRemainingSeconds] = useState(TIMEOUT_SECONDS);
-  // 是否显示超时警告
+  // Whether to show timeout warning
   const isTimeWarning = remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0;
-  // 是否已超时
+  // Whether the dialog has timed out
   const isTimedOut = remainingSeconds <= 0;
 
   const customInputRef = useRef<HTMLTextAreaElement>(null);
@@ -85,17 +85,17 @@ const AskUserQuestionDialog = ({
     .map(normalizeQuestion)
     .filter(Boolean) as Question[];
 
-  // 处理取消操作
+  // Handle cancel action
   const handleCancel = useCallback(() => {
     if (request) {
       onCancel(request.requestId);
     }
   }, [request, onCancel]);
 
-  // 重置状态 - 当请求变化时重新初始化
+  // Reset state - reinitialize when request changes
   useEffect(() => {
     if (isOpen && request) {
-      // 初始化答案状态
+      // Initialize answer state
       const questions = (Array.isArray(request.questions) ? request.questions : [])
         .map(normalizeQuestion)
         .filter(Boolean) as Question[];
@@ -109,14 +109,14 @@ const AskUserQuestionDialog = ({
       setAnswers(initialAnswers);
       setCustomInputs(initialCustomInputs);
       setCurrentQuestionIndex(0);
-      // 重置折叠状态，确保对话框打开时是展开的
+      // Reset collapse state to ensure dialog is expanded when opened
       setIsCollapsed(false);
-      // 重置倒计时
+      // Reset countdown
       setRemainingSeconds(TIMEOUT_SECONDS);
     }
   }, [isOpen, request?.requestId]);
 
-  // 键盘事件处理 - 单独的 effect 以避免频繁注册/注销监听器
+  // Keyboard event handling - separate effect to avoid frequent listener registration/removal
   useEffect(() => {
     if (!isOpen || !request) return;
 
@@ -129,9 +129,9 @@ const AskUserQuestionDialog = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, request, handleCancel]);
 
-  // 倒计时定时器
+  // Countdown timer
   useEffect(() => {
-    // 清除定时器的辅助函数
+    // Helper function to clear the timer
     const clearTimer = () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -139,20 +139,20 @@ const AskUserQuestionDialog = ({
       }
     };
 
-    // 如果对话框未打开或没有请求，清理并退出
+    // If dialog is not open or there is no request, clean up and exit
     if (!isOpen || !request) {
       clearTimer();
       return;
     }
 
-    // 清除之前的定时器（防止重复）
+    // Clear previous timer (prevent duplicates)
     clearTimer();
 
-    // 启动倒计时
+    // Start countdown
     timerRef.current = setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
-          // 超时，清除定时器
+          // Timed out, clear timer
           clearTimer();
           return 0;
         }
@@ -160,11 +160,11 @@ const AskUserQuestionDialog = ({
       });
     }, 1000);
 
-    // cleanup 函数
+    // Cleanup function
     return clearTimer;
   }, [isOpen, request?.requestId]);
 
-  // 超时自动关闭
+  // Auto-close on timeout
   useEffect(() => {
     if (isTimedOut && isOpen && request) {
       handleCancel();
@@ -195,14 +195,14 @@ const AskUserQuestionDialog = ({
     );
   }
 
-  // FIX: 确保 currentQuestionIndex 不会越界
-  // 当 request 变化导致 normalizedQuestions 长度减少时，
-  // currentQuestionIndex 可能仍是旧值（因为 useEffect 的 state 更新是异步的）
+  // FIX: Ensure currentQuestionIndex does not go out of bounds
+  // When request changes cause normalizedQuestions length to decrease,
+  // currentQuestionIndex may still hold the old value (since useEffect state updates are async)
   const safeQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, normalizedQuestions.length - 1));
   const currentQuestion = normalizedQuestions[safeQuestionIndex];
 
-  // FIX: 额外的防御性检查，防止在极端边界情况下 currentQuestion 为 undefined
-  // 这可能发生在 React 并发渲染或状态更新时序问题时
+  // FIX: Additional defensive check to prevent currentQuestion being undefined in edge cases
+  // This can happen during React concurrent rendering or state update timing issues
   if (!currentQuestion) {
     return (
       <div className="permission-dialog-overlay">
@@ -234,14 +234,14 @@ const AskUserQuestionDialog = ({
       const currentSet = new Set(newAnswers[currentQuestion.question] || []);
 
       if (currentQuestion.multiSelect) {
-        // 多选模式：切换选项
+        // Multi-select mode: toggle option
         if (currentSet.has(label)) {
           currentSet.delete(label);
         } else {
           currentSet.add(label);
         }
       } else {
-        // 单选模式：清空后设置新选项
+        // Single-select mode: clear and set new option
         currentSet.clear();
         currentSet.add(label);
       }
@@ -250,7 +250,7 @@ const AskUserQuestionDialog = ({
       return newAnswers;
     });
 
-    // 如果选中"其他"选项，自动聚焦到输入框
+    // Auto-focus the input field when "Other" option is selected
     if (label === OTHER_OPTION_MARKER) {
       setTimeout(() => {
         customInputRef.current?.focus();
@@ -259,7 +259,7 @@ const AskUserQuestionDialog = ({
   };
 
   const handleCustomInputChange = (value: string) => {
-    // 限制输入长度以防止过长输入
+    // Limit input length to prevent excessively long input
     const sanitizedValue = value.slice(0, MAX_CUSTOM_INPUT_LENGTH);
     setCustomInputs((prev) => ({
       ...prev,
@@ -287,10 +287,10 @@ const AskUserQuestionDialog = ({
       const selectedSet = answers[q.question] || new Set<string>();
       const customText = customInputs[q.question] || '';
 
-      // 过滤掉"其他"标记，获取实际选中的选项
+      // Filter out the "Other" marker, get actually selected options
       const selectedLabels = Array.from(selectedSet).filter(label => label !== OTHER_OPTION_MARKER);
 
-      // 如果选中了"其他"且有自定义输入，将自定义输入添加到答案中
+      // If "Other" is selected and has custom input, add the custom input to answers
       if (selectedSet.has(OTHER_OPTION_MARKER) && customText.trim()) {
         selectedLabels.push(customText.trim());
       }
@@ -303,9 +303,9 @@ const AskUserQuestionDialog = ({
     onSubmit(request.requestId, formattedAnswers);
   };
 
-  // 检查是否可以继续：
-  // 1. 选中了普通选项（非"其他"）
-  // 2. 或者选中了"其他"且有有效的自定义输入
+  // Check if we can proceed:
+  // 1. A regular option (not "Other") is selected
+  // 2. Or "Other" is selected with valid custom input
   const hasRegularSelection = Array.from(currentAnswerSet).some(label => label !== OTHER_OPTION_MARKER);
   const hasValidCustomInput = isOtherSelected && currentCustomInput.trim().length > 0;
   const canProceed = hasRegularSelection || hasValidCustomInput;
@@ -313,7 +313,7 @@ const AskUserQuestionDialog = ({
   return (
     <div className={`permission-dialog-overlay ${isCollapsed ? 'collapsed-mode' : ''}`}>
       <div className={`ask-user-question-dialog ${isCollapsed ? 'collapsed' : 'expanded'} ${isTimeWarning ? 'time-warning' : ''}`}>
-        {/* 标题区域 - 带收起/展开按钮 */}
+        {/* Header area - with collapse/expand button */}
         <div className="ask-user-question-dialog-header">
           <h3 className="ask-user-question-dialog-title">
             {t('askUserQuestion.title', 'Claude 有一些问题想问你')}
@@ -329,7 +329,7 @@ const AskUserQuestionDialog = ({
           </button>
         </div>
 
-        {/* 超时警告提示 */}
+        {/* Timeout warning notice */}
         {isTimeWarning && !isCollapsed && (
           <div className="timeout-warning-banner">
             <span className="codicon codicon-warning" />
@@ -337,7 +337,7 @@ const AskUserQuestionDialog = ({
           </div>
         )}
 
-        {/* 收起状态下的简短提示 */}
+        {/* Brief hint in collapsed state */}
         {isCollapsed ? (
           <div className="collapsed-hint">
             <span className="collapsed-progress">
@@ -368,21 +368,21 @@ const AskUserQuestionDialog = ({
                   total: normalizedQuestions.length,
                 })}
               </span>
-              {/* 倒计时显示 */}
+              {/* Countdown display */}
               <span className={`countdown-timer ${isTimeWarning ? 'warning' : ''}`}>
                 <span className="codicon codicon-clock" />
                 <span className="countdown-time">{formatCountdown(remainingSeconds)}</span>
               </span>
             </div>
 
-            {/* 问题区域 */}
+            {/* Question area */}
             <div className="ask-user-question-dialog-question">
               <div className="question-header">
                 <span className="question-tag">{currentQuestion.header}</span>
               </div>
               <p className="question-text">{currentQuestion.question}</p>
 
-              {/* 选项列表 */}
+              {/* Options list */}
               <div className="question-options">
                 {currentQuestion.options.map((option) => {
                   const isSelected = currentAnswerSet.has(option.label);
@@ -407,7 +407,7 @@ const AskUserQuestionDialog = ({
                   );
                 })}
 
-                {/* 其他选项 - 允许用户自定义输入 */}
+                {/* "Other" option - allows custom user input */}
                 <button
                   className={`question-option other-option ${isOtherSelected ? 'selected' : ''}`}
                   onClick={() => handleOptionToggle(OTHER_OPTION_MARKER)}
@@ -426,7 +426,7 @@ const AskUserQuestionDialog = ({
                 </button>
               </div>
 
-              {/* 自定义输入框 - 仅当选中"其他"时显示 */}
+              {/* Custom input field - only shown when "Other" is selected */}
               {isOtherSelected && (
                 <div className="custom-input-container">
                   <textarea
@@ -441,7 +441,7 @@ const AskUserQuestionDialog = ({
                 </div>
               )}
 
-              {/* 提示文本 */}
+              {/* Hint text */}
               {currentQuestion.multiSelect && (
                 <p className="question-hint">
                   {t('askUserQuestion.multiSelectHint', '可以选择多个选项')}
@@ -449,7 +449,7 @@ const AskUserQuestionDialog = ({
               )}
             </div>
 
-            {/* 按钮区域 */}
+            {/* Action buttons */}
             <div className="ask-user-question-dialog-actions">
               <button
                 className="action-button secondary"

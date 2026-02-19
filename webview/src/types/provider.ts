@@ -1,5 +1,5 @@
 /**
- * 供应商配置相关类型定义
+ * Provider configuration type definitions
  */
 
 // ============ Constants ============
@@ -8,25 +8,27 @@
  * localStorage keys for provider-related data
  */
 export const STORAGE_KEYS = {
-  /** 自定义 Codex 模型列表 */
+  /** Custom Codex model list */
   CODEX_CUSTOM_MODELS: 'codex-custom-models',
-  /** Claude 模型映射配置 */
+  /** Claude model mapping configuration */
   CLAUDE_MODEL_MAPPING: 'claude-model-mapping',
+  /** Custom Claude model list */
+  CLAUDE_CUSTOM_MODELS: 'claude-custom-models',
 } as const;
 
 /**
- * 模型 ID 验证正则表达式
- * 允许: 字母、数字、连字符、下划线、点、斜杠、冒号
- * 用于验证用户输入的模型 ID 格式
+ * Model ID validation regular expression
+ * Allowed: letters, numbers, hyphens, underscores, dots, slashes, colons
+ * Used to validate user-input model ID format
  */
 export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\-/:]+$/;
 
 // ============ Validation Helpers ============
 
 /**
- * 验证模型 ID 格式是否有效
- * @param id 模型 ID
- * @returns 是否有效
+ * Validate whether a model ID format is valid
+ * @param id - Model ID
+ * @returns Whether the ID is valid
  */
 export function isValidModelId(id: string): boolean {
   if (!id || typeof id !== 'string') return false;
@@ -36,30 +38,30 @@ export function isValidModelId(id: string): boolean {
 }
 
 /**
- * 验证 CodexCustomModel 对象是否有效
- * @param model 待验证的对象
- * @returns 是否为有效的 CodexCustomModel
+ * Validate whether a CodexCustomModel object is valid
+ * @param model - Object to validate
+ * @returns Whether it is a valid CodexCustomModel
  */
 export function isValidCodexCustomModel(model: unknown): model is CodexCustomModel {
   if (!model || typeof model !== 'object') return false;
   const obj = model as Record<string, unknown>;
 
-  // id 必须是有效的模型 ID
+  // id must be a valid model ID
   if (typeof obj.id !== 'string' || !isValidModelId(obj.id)) return false;
 
-  // label 必须是字符串
+  // label must be a string
   if (typeof obj.label !== 'string' || obj.label.trim().length === 0) return false;
 
-  // description 可选，但如果存在必须是字符串
+  // description is optional, but must be a string if present
   if (obj.description !== undefined && typeof obj.description !== 'string') return false;
 
   return true;
 }
 
 /**
- * 验证并过滤 CodexCustomModel 数组
- * @param models 待验证的数组
- * @returns 有效的 CodexCustomModel 数组
+ * Validate and filter a CodexCustomModel array
+ * @param models - Array to validate
+ * @returns Array of valid CodexCustomModel entries
  */
 export function validateCodexCustomModels(models: unknown): CodexCustomModel[] {
   if (!Array.isArray(models)) return [];
@@ -69,7 +71,7 @@ export function validateCodexCustomModels(models: unknown): CodexCustomModel[] {
 // ============ Types ============
 
 /**
- * 供应商配置（简化版，适配当前项目）
+ * Provider configuration (simplified, adapted for current project)
  */
 export interface ProviderConfig {
   id: string;
@@ -81,6 +83,8 @@ export interface ProviderConfig {
   isActive?: boolean;
   source?: 'cc-switch' | string;
   isLocalProvider?: boolean;
+  /** Custom model list (displayed before built-in models in the selector) */
+  customModels?: CodexCustomModel[];
   settingsConfig?: {
     env?: {
       ANTHROPIC_AUTH_TOKEN?: string;
@@ -100,68 +104,68 @@ export interface ProviderConfig {
 }
 
 /**
- * 供应商分类
+ * Provider category
  */
 export type ProviderCategory =
-  | 'official'      // 官方
-  | 'cn_official'   // 国产官方
-  | 'aggregator'    // 聚合服务
-  | 'third_party'   // 第三方
-  | 'custom';       // 自定义
+  | 'official'      // Official
+  | 'cn_official'   // Chinese official
+  | 'aggregator'    // Aggregator service
+  | 'third_party'   // Third-party
+  | 'custom';       // Custom
 
 /**
- * Codex 自定义模型配置
+ * Codex custom model configuration
  */
 export interface CodexCustomModel {
-  /** 模型 ID（唯一标识） */
+  /** Model ID (unique identifier) */
   id: string;
-  /** 模型显示名称 */
+  /** Model display name */
   label: string;
-  /** 模型描述 */
+  /** Model description */
   description?: string;
 }
 
 /**
- * Codex 供应商配置
+ * Codex provider configuration
  */
 export interface CodexProviderConfig {
-  /** 供应商唯一 ID */
+  /** Unique provider ID */
   id: string;
-  /** 供应商名称 */
+  /** Provider name */
   name: string;
-  /** 备注 */
+  /** Remark */
   remark?: string;
-  /** 创建时间戳（毫秒） */
+  /** Creation timestamp (milliseconds) */
   createdAt?: number;
-  /** 是否为当前使用的供应商 */
+  /** Whether this is the currently active provider */
   isActive?: boolean;
-  /** config.toml 配置内容（原始字符串） */
+  /** config.toml content (raw string) */
   configToml?: string;
-  /** auth.json 配置内容（原始字符串） */
+  /** auth.json content (raw string) */
   authJson?: string;
-  /** 自定义模型列表 */
+  /** Custom model list */
   customModels?: CodexCustomModel[];
 }
 
 // ============ Provider Presets ============
 
 /**
- * 供应商预设配置
+ * Provider preset configuration
  */
 export interface ProviderPreset {
-  /** 预设唯一 ID */
+  /** Unique preset ID */
   id: string;
   /** i18n key for preset name, resolved at render time */
   nameKey: string;
-  /** 环境变量配置 */
+  /** Environment variable configuration */
   env: Record<string, string>;
 }
 
 /**
- * 供应商预设配置列表
- * 用于快捷配置供应商
+ * Provider preset configuration list
+ * Used for quick provider setup
  *
- * nameKey 在渲染时通过 t() 解析为对应语言的显示名称
+ * nameKey is resolved at render time via t() to the display name for the current language
  */
 export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
@@ -211,7 +215,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://api.minimaxi.com/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
-      // MiniMax 模型响应较慢，需要 50 分钟超时（3,000,000ms）以避免长推理请求被截断
+      // MiniMax models respond slowly; requires 50-minute timeout (3,000,000ms) to avoid truncating long reasoning requests
       API_TIMEOUT_MS: '3000000',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       ANTHROPIC_MODEL: 'MiniMax-M2.1',

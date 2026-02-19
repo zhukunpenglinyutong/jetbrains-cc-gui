@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import styles from './style.module.less';
 
 /**
- * Claude CLI 当前配置信息
+ * Current Claude CLI configuration info
  */
 export interface ClaudeConfig {
   apiKey: string;
@@ -13,7 +13,7 @@ export interface ClaudeConfig {
 }
 
 /**
- * 供应商配置
+ * Provider configuration
  */
 export interface ProviderOption {
   id: string;
@@ -31,19 +31,19 @@ interface ConfigInfoDisplayProps {
 }
 
 /**
- * 配置信息展示组件
- * 用于展示当前 ~/.claude/settings.json 的配置信息
+ * Configuration info display component
+ * Displays the current ~/.claude/settings.json configuration
  */
 const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchProvider, addToast }: ConfigInfoDisplayProps) => {
   const { t } = useTranslation();
   const [showApiKey, setShowApiKey] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // 获取当前激活的供应商
+  // Get the currently active provider
   const activeProvider = providers.find(p => p.isActive);
-  // 获取可切换的供应商（过滤掉当前选中的）
+  // Get switchable providers (excluding the currently active one)
   const switchableProviders = providers.filter(p => !p.isActive);
-  // 是否有可切换的供应商
+  // Whether there are switchable providers
   const hasSwitchableProviders = switchableProviders.length > 0;
 
   if (loading) {
@@ -81,7 +81,7 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
   const apiKey = config.apiKey || '';
   const baseUrl = config.baseUrl || '';
 
-  // API Key 预览（显示前后各几位，中间用省略号）
+  // API Key preview (show first/last few characters with dots in between)
   const getApiKeyPreview = () => {
     if (!apiKey) {
       return t('settings.provider.notConfigured');
@@ -118,7 +118,7 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
 
   return (
     <div className={styles.container}>
-      {/* 第一行：当前供应商 + 徽章 + 切换按钮 */}
+      {/* First row: current provider + badge + switch button */}
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <span className={styles.title}>
@@ -164,9 +164,9 @@ const ConfigInfoDisplay = ({ config, loading = false, providers = [], onSwitchPr
         )}
       </div>
 
-      {/* 第二行：API Key 和 Base URL 并排 */}
+      {/* Second row: API Key and Base URL side by side */}
       <div className={styles.content}>
-        {/* API Key 预览 */}
+        {/* API Key preview */}
         <div className={styles.field}>
           <span className={`codicon codicon-key ${styles.icon}`} />
           <code

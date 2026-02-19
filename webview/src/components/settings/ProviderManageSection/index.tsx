@@ -40,7 +40,7 @@ const ProviderManageSection = ({
         </>
       )}
 
-      {/* 当前 Claude CLI 配置信息展示 */}
+      {/* Current Claude CLI configuration info display */}
       <div className={styles.configInfoWrapper}>
         <ConfigInfoDisplay
           config={claudeConfig}

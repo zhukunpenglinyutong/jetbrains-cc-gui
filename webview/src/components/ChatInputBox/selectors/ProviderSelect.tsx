@@ -9,7 +9,7 @@ interface ProviderSelectProps {
 }
 
 /**
- * 提供商图标映射
+ * Provider icon mapping
  */
 const ProviderIcon = ({ providerId, size = 16, colored = false }: { providerId: string; size?: number; colored?: boolean }) => {
   switch (providerId) {
@@ -25,8 +25,8 @@ const ProviderIcon = ({ providerId, size = 16, colored = false }: { providerId: 
 };
 
 /**
- * ProviderSelect - AI 提供商选择器组件
- * 支持 Claude、Codex、Gemini 等提供商切换
+ * ProviderSelect - AI provider selector component
+ * Supports switching between Claude, Codex, Gemini, and other providers
  */
 export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
   const { t } = useTranslation();
@@ -44,7 +44,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
   };
 
   /**
-   * 切换下拉菜单
+   * Toggle dropdown
    */
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -52,7 +52,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
   }, [isOpen]);
 
   /**
-   * 显示提示信息
+   * Show toast message
    */
   const showToastMessage = useCallback((message: string) => {
     setToastMessage(message);
@@ -63,7 +63,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
   }, []);
 
   /**
-   * 选择提供商
+   * Select provider
    */
   const handleSelect = useCallback((providerId: string) => {
     const provider = AVAILABLE_PROVIDERS.find(p => p.id === providerId);
@@ -71,19 +71,19 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
     if (!provider) return;
 
     if (!provider.enabled) {
-      // 如果提供商不可用，显示提示
+      // If provider is unavailable, show toast
       showToastMessage(t('settings.provider.featureComingSoon'));
       setIsOpen(false);
       return;
     }
 
-    // 提供商可用，执行切换
+    // Provider available, perform switch
     onChange?.(providerId);
     setIsOpen(false);
   }, [onChange, showToastMessage]);
 
   /**
-   * 点击外部关闭
+   * Close on outside click
    */
   useEffect(() => {
     if (!isOpen) return;
@@ -99,7 +99,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
       }
     };
 
-    // 延迟添加事件监听，避免立即触发
+    // Delay adding event listener to prevent immediate trigger
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
     }, 0);
@@ -157,7 +157,7 @@ export const ProviderSelect = ({ value, onChange }: ProviderSelectProps) => {
         )}
       </div>
 
-      {/* 提示信息 */}
+      {/* Toast message */}
       {showToast && (
         <div className="selector-toast">
           {toastMessage}

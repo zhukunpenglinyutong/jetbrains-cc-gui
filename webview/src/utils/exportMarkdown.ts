@@ -1,12 +1,12 @@
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
 
 /**
- * 将消息列表转换为 JSON 格式
+ * Convert a message list to JSON format
  */
 export function convertMessagesToJSON(messages: ClaudeMessage[], sessionTitle: string): string {
   const exportTime = formatTimestamp(new Date().toISOString());
 
-  // 过滤掉不需要导出的消息
+  // Filter out messages that should not be exported
   const filteredMessages = messages
     .filter(msg => shouldExportMessage(msg))
     .map(msg => processMessageForExport(msg));
@@ -23,20 +23,20 @@ export function convertMessagesToJSON(messages: ClaudeMessage[], sessionTitle: s
 }
 
 /**
- * 处理单个消息以便导出
+ * Process a single message for export
  */
 function processMessageForExport(message: ClaudeMessage): any {
   const contentBlocks = getContentBlocks(message);
 
-  // 处理内容块
+  // Process content blocks
   let processedBlocks: any[] = [];
   if (contentBlocks.length > 0) {
     processedBlocks = contentBlocks.map(block => processContentBlock(block));
   } else if (message.content && message.content.trim()) {
-    // 如果没有内容块但有content字段，使用content
+    // If no content blocks but content field exists, use content
     processedBlocks = [{ type: 'text', text: message.content }];
   } else if (message.raw) {
-    // 尝试从raw中提取内容
+    // Try extracting content from raw
     const rawContent = extractRawContent(message.raw);
     if (rawContent) {
       processedBlocks = [{ type: 'text', text: rawContent }];
@@ -48,12 +48,12 @@ function processMessageForExport(message: ClaudeMessage): any {
     timestamp: message.timestamp ? formatTimestamp(message.timestamp) : null,
     content: message.content,
     contentBlocks: processedBlocks,
-    raw: message.raw // 保留原始数据用于调试
+    raw: message.raw // Preserve raw data for debugging
   };
 }
 
 /**
- * 从raw数据中提取文本内容
+ * Extract text content from raw data
  */
 function extractRawContent(raw: any): string | null {
   if (!raw) return null;
@@ -83,7 +83,7 @@ function extractRawContent(raw: any): string | null {
 }
 
 /**
- * 处理内容块
+ * Process a content block
  */
 function processContentBlock(block: ClaudeContentBlock | ToolResultBlock): any {
   if (block.type === 'text') {
@@ -106,7 +106,7 @@ function processContentBlock(block: ClaudeContentBlock | ToolResultBlock): any {
     };
   } else if (block.type === 'tool_result') {
     const toolResult = block as ToolResultBlock;
-    // 限制工具结果内容的长度
+    // Limit tool result content length
     const content = limitContentLength(toolResult.content, 10000);
     return {
       type: 'tool_result',
@@ -128,12 +128,12 @@ function processContentBlock(block: ClaudeContentBlock | ToolResultBlock): any {
 }
 
 /**
- * 限制内容长度
+ * Limit content length
  */
 function limitContentLength(content: any, maxLength: number): any {
   if (typeof content === 'string') {
     if (content.length > maxLength) {
-      return content.substring(0, maxLength) + '\n... (内容过长，已截断)';
+      return content.substring(0, maxLength) + '\n... (content too long, truncated)';
     }
     return content;
   } else if (Array.isArray(content)) {
@@ -141,7 +141,7 @@ function limitContentLength(content: any, maxLength: number): any {
       if (item.text && item.text.length > maxLength) {
         return {
           ...item,
-          text: item.text.substring(0, maxLength) + '\n... (内容过长，已截断)'
+          text: item.text.substring(0, maxLength) + '\n... (content too long, truncated)'
         };
       }
       return item;
@@ -151,7 +151,7 @@ function limitContentLength(content: any, maxLength: number): any {
 }
 
 /**
- * 格式化时间戳为 YYYY-MM-DD HH:mm:ss 格式
+ * Format timestamp to YYYY-MM-DD HH:mm:ss format
  */
 function formatTimestamp(timestamp: string): string {
   try {
@@ -169,10 +169,10 @@ function formatTimestamp(timestamp: string): string {
 }
 
 /**
- * 判断是否应该导出该消息
+ * Determine whether a message should be exported
  */
 function shouldExportMessage(message: ClaudeMessage): boolean {
-  // 跳过特殊的命令消息
+  // Skip special command messages
   const text = getMessageText(message);
   if (text && (
     text.includes('<command-name>') ||
@@ -188,7 +188,7 @@ function shouldExportMessage(message: ClaudeMessage): boolean {
 }
 
 /**
- * 获取消息的文本内容
+ * Get the text content of a message
  */
 function getMessageText(message: ClaudeMessage): string {
   if (message.content) {
@@ -226,10 +226,10 @@ function getMessageText(message: ClaudeMessage): string {
 }
 
 /**
- * 获取消息的内容块
+ * Get content blocks from a message
  */
 function getContentBlocks(message: ClaudeMessage): (ClaudeContentBlock | ToolResultBlock)[] {
-  // 优先从 raw 中获取
+  // Prefer extracting from raw
   if (message.raw) {
     const rawBlocks = normalizeBlocks(message.raw);
     if (rawBlocks && rawBlocks.length > 0) {
@@ -237,7 +237,7 @@ function getContentBlocks(message: ClaudeMessage): (ClaudeContentBlock | ToolRes
     }
   }
 
-  // 如果有 content 字段，作为文本块
+  // If content field exists, treat as text block
   if (message.content && message.content.trim()) {
     return [{ type: 'text', text: message.content }];
   }
@@ -246,7 +246,7 @@ function getContentBlocks(message: ClaudeMessage): (ClaudeContentBlock | ToolRes
 }
 
 /**
- * 规范化内容块
+ * Normalize content blocks
  */
 function normalizeBlocks(raw: any): (ClaudeContentBlock | ToolResultBlock)[] | null {
   if (!raw) {
@@ -255,11 +255,11 @@ function normalizeBlocks(raw: any): (ClaudeContentBlock | ToolResultBlock)[] | n
 
   let contentArray: any[] | null = null;
 
-  // 处理后端返回的 ConversationMessage 格式
+  // Handle backend ConversationMessage format
   if (raw.message && Array.isArray(raw.message.content)) {
     contentArray = raw.message.content;
   }
-  // 处理其他格式
+  // Handle other formats
   else if (Array.isArray(raw)) {
     contentArray = raw;
   } else if (Array.isArray(raw.content)) {
@@ -300,10 +300,10 @@ function normalizeBlocks(raw: any): (ClaudeContentBlock | ToolResultBlock)[] | n
 }
 
 /**
- * 触发文件下载（通过后端保存）
+ * Trigger file download (via backend save)
  */
 export function downloadJSON(content: string, filename: string): void {
-  // 通过后端保存文件，显示文件选择对话框
+  // Save file via backend, showing file chooser dialog
   const payload = JSON.stringify({
     content: content,
     filename: filename.endsWith('.json') ? filename : `${filename}.json`
@@ -313,13 +313,13 @@ export function downloadJSON(content: string, filename: string): void {
     window.sendToJava(`save_json:${payload}`);
   } else {
     console.error('[Frontend] sendToJava not available, falling back to browser download');
-    // 降级方案：使用浏览器下载
+    // Fallback: use browser download
     fallbackBrowserDownload(content, filename);
   }
 }
 
 /**
- * 降级方案：浏览器直接下载
+ * Fallback: direct browser download
  */
 function fallbackBrowserDownload(content: string, filename: string): void {
   const blob = new Blob([content], { type: 'application/json;charset=utf-8' });

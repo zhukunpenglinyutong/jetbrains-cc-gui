@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProviderConfig } from '../types/provider';
+import type { ProviderConfig, CodexCustomModel } from '../types/provider';
 import { PROVIDER_PRESETS } from '../types/provider';
+import { CustomModelEditor } from './settings/CustomModelEditor';
 
 interface ProviderDialogProps {
   isOpen: boolean;
-  provider?: ProviderConfig | null; // null 表示添加模式
+  provider?: ProviderConfig | null; // null indicates add mode
   onClose: () => void;
   onSave: (data: {
     providerName: string;
@@ -13,6 +14,7 @@ interface ProviderDialogProps {
     apiKey: string;
     apiUrl: string;
     jsonConfig: string;
+    customModels?: CodexCustomModel[];
   }) => void;
   onDelete?: (provider: ProviderConfig) => void;
   canDelete?: boolean;
@@ -43,6 +45,7 @@ export default function ProviderDialog({
   const [showApiKey, setShowApiKey] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
   const [jsonError, setJsonError] = useState('');
+  const [customModels, setCustomModels] = useState<CodexCustomModel[]>([]);
 
   const updateEnvField = (key: string, value: string) => {
     try {
@@ -69,7 +72,7 @@ export default function ProviderDialog({
     }
   };
 
-  // 应用预设配置
+  // Apply preset configuration
   const handlePresetClick = (presetId: string) => {
     const preset = PROVIDER_PRESETS.find(p => p.id === presetId);
     if (!preset) return;
@@ -77,7 +80,7 @@ export default function ProviderDialog({
     setActivePreset(presetId);
 
     if (presetId === 'custom') {
-      // 自定义配置：重置为空配置
+      // Custom configuration: reset to empty config
       const config = {
         env: {
           ANTHROPIC_AUTH_TOKEN: '',
@@ -97,11 +100,11 @@ export default function ProviderDialog({
       return;
     }
 
-    // 应用预设配置
+    // Apply preset configuration
     const config = { env: { ...preset.env } };
     setJsonConfig(JSON.stringify(config, null, 2));
 
-    // 同步更新表单字段
+    // Sync form fields with preset values
     const env = preset.env;
     setApiUrl(env.ANTHROPIC_BASE_URL || '');
     setApiKey(env.ANTHROPIC_AUTH_TOKEN || '');
@@ -111,7 +114,7 @@ export default function ProviderDialog({
     setJsonError('');
   };
 
-  // 根据环境变量自动检测匹配的预设
+  // Auto-detect matching preset based on environment variables
   const detectMatchingPreset = (env: Record<string, string | undefined>): string => {
     for (const preset of PROVIDER_PRESETS) {
       if (preset.id === 'custom') continue;
@@ -124,7 +127,7 @@ export default function ProviderDialog({
     return 'custom';
   };
 
-  // 格式化 JSON
+  // Format JSON
   const handleFormatJson = () => {
     try {
       const parsed = JSON.parse(jsonConfig);
@@ -135,11 +138,11 @@ export default function ProviderDialog({
     }
   };
 
-  // 初始化表单
+  // Initialize form
   useEffect(() => {
     if (isOpen) {
       if (provider) {
-        // 编辑模式
+        // Edit mode
         setProviderName(provider.name || '');
         setRemark(provider.remark || provider.websiteUrl || '');
         setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');
@@ -153,6 +156,7 @@ export default function ProviderDialog({
         setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
         setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
         setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
+        setCustomModels(provider.customModels || []);
 
         const config = provider.settingsConfig || {
           env: {
@@ -176,6 +180,7 @@ export default function ProviderDialog({
         setHaikuModel('');
         setSonnetModel('');
         setOpusModel('');
+        setCustomModels([]);
         const config = {
           env: {
             ANTHROPIC_AUTH_TOKEN: '',
@@ -292,6 +297,7 @@ export default function ProviderDialog({
       apiKey,
       apiUrl,
       jsonConfig,
+      customModels: customModels.length > 0 ? customModels : undefined,
     });
   };
 
@@ -442,16 +448,21 @@ export default function ProviderDialog({
             <small className="form-hint">{t('settings.provider.dialog.modelMappingHint')}</small>
           </div>
 
-          {/* 高级选项 - 暂时隐藏，后续会使用 */}
-          {/* <details className="advanced-section">
-            <summary className="advanced-toggle">
-              <span className="codicon codicon-chevron-right" />
-              高级选项
-            </summary>
-            <div style={{ padding: '10px 0', color: '#858585', fontSize: '13px' }}>
-              暂无高级选项
-            </div>
-          </details> */}
+          {/* Custom Models */}
+          <div className="form-group">
+            <label>
+              {t('settings.provider.dialog.customModels')}
+              <span className="optional">({t('common.optional')})</span>
+            </label>
+            <small className="form-hint" style={{ marginBottom: '8px', display: 'block' }}>
+              {t('settings.provider.dialog.customModelsHint')}
+            </small>
+            <CustomModelEditor
+              models={customModels}
+              onModelsChange={setCustomModels}
+              t={t}
+            />
+          </div>
 
           <details className="advanced-section" open>
             <summary className="advanced-toggle">

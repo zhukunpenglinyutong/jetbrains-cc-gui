@@ -41,7 +41,7 @@ export default function ProviderList({
       }
     };
 
-    // 注册全局回调函数供 Java 调用
+    // Register global callback functions for Java invocation
     (window as any).import_preview_result = (dataOrStr: any) => {
         console.log('[Frontend] Received import_preview_result:', dataOrStr);
         let data = dataOrStr;
@@ -60,7 +60,7 @@ export default function ProviderList({
         console.log('[Frontend] Received backend_notification args:', args);
         let data: any = {};
         
-        // 支持多参数调用 (type, title, message) 以避免 JSON 解析问题
+        // Support multi-argument invocation (type, title, message) to avoid JSON parsing issues
         if (args.length >= 3 && typeof args[0] === 'string' && typeof args[2] === 'string') {
             data = {
                 type: args[0],
@@ -68,7 +68,7 @@ export default function ProviderList({
                 message: args[2]
             };
         } else if (args.length > 0) {
-            // 兼容旧的单参数 JSON 方式
+            // Backward compatible with legacy single-argument JSON format
             let dataOrStr = args[0];
             data = dataOrStr;
             if (typeof data === 'string') {
@@ -85,7 +85,7 @@ export default function ProviderList({
     };
 
     const handleImportPreview = (event: CustomEvent) => {
-      setIsImporting(false); // 收到结果，关闭loading
+      setIsImporting(false); // Received result, hide loading
       const data = event.detail;
       if (data && data.providers) {
         setImportPreviewData(data.providers);
@@ -94,7 +94,7 @@ export default function ProviderList({
     };
 
     const handleBackendNotification = (event: CustomEvent) => {
-      setIsImporting(false); // 收到通知（可能是错误），关闭loading
+      setIsImporting(false); // Received notification (possibly an error), hide loading
       const data = event.detail;
       if (data && data.message) {
         addToast(data.message, data.type || 'info');
@@ -110,7 +110,7 @@ export default function ProviderList({
       window.removeEventListener('import_preview_result', handleImportPreview as EventListener);
       window.removeEventListener('backend_notification', handleBackendNotification as EventListener);
       
-      // 清理全局函数
+      // Clean up global functions
       delete (window as any).import_preview_result;
       delete (window as any).backend_notification;
     };
@@ -126,28 +126,28 @@ export default function ProviderList({
 
   const handleConvert = () => {
     if (convertingProvider) {
-      // 1. 生成新的 ID (例如在原 ID 后加 _custom 或 _local，或者保持原 ID 但删除 source)
-      // 用户需求是"断开ID连接关系"，通常意味着 cc-switch 导入时是靠 ID 匹配的。
-      // 如果我们保留原 ID 仅仅删除 source 字段：
-      //   - 再次导入 cc-switch 时，因为 ID 相同，还是会匹配到并提示"更新"。
-      //   - 覆盖更新后，source 字段又回来了。
-      // 所以，如果要彻底"断开"，我们需要修改 ID。
+      // 1. Generate a new ID (e.g., append _custom or _local to the original ID, or keep the original ID but remove the source field)
+      // The user wants to "disconnect the ID link", meaning cc-switch imports match by ID.
+      // If we keep the original ID and only remove the source field:
+      //   - The next cc-switch import would still match by ID and prompt an "update".
+      //   - After overwriting, the source field would come back.
+      // Therefore, to fully "disconnect", we need to change the ID.
 
       const oldId = convertingProvider.id;
-      const newId = `${oldId}_local`; // 或者用 uuid，这里简单加后缀以示区分
+      const newId = `${oldId}_local`; // Or use uuid; appending suffix here for simplicity
 
-      // 2. 构造新配置
+      // 2. Build the new configuration
       const newProvider = {
           ...convertingProvider,
           id: newId,
-          name: convertingProvider.name + ' (Local)', // 可选：修改名称避免混淆
+          name: convertingProvider.name + ' (Local)', // Optional: rename to avoid confusion
       };
       delete newProvider.source;
 
-      // 3. 保存新配置（作为新增）
+      // 3. Save the new configuration (as an addition)
       sendToJava('add_provider', newProvider);
 
-      // 4. 删除旧配置
+      // 4. Delete the old configuration
       sendToJava('delete_provider', { id: oldId });
 
       setConvertingProvider(null);
@@ -155,7 +155,7 @@ export default function ProviderList({
 
       if (editingCcSwitchProvider && editingCcSwitchProvider.id === convertingProvider.id) {
           setEditingCcSwitchProvider(null);
-          // 继续编辑新的 provider
+          // Continue editing the new provider
           onEdit(newProvider);
       }
     }
@@ -164,13 +164,13 @@ export default function ProviderList({
   const handleSelectFileClick = () => {
     setImportMenuOpen(false);
     setIsImporting(true);
-    // 让后端打开系统文件选择器，这样可以获取正确的绝对路径
+    // Let the backend open the system file chooser to get the correct absolute path
     sendToJava('open_file_chooser_for_cc_switch');
   };
 
   return (
     <div className={styles.container}>
-      {/* 导入弹窗 */}
+      {/* Import dialog */}
       {showImportDialog && (
         <ImportConfirmDialog
           providers={importPreviewData}
@@ -183,7 +183,7 @@ export default function ProviderList({
         />
       )}
 
-      {/* 导入加载中 */}
+      {/* Import loading */}
       {isImporting && (
         <div className={styles.loadingOverlay}>
           <div className={styles.loadingContent}>
@@ -193,7 +193,7 @@ export default function ProviderList({
         </div>
       )}
 
-      {/* 编辑警告弹窗 */}
+      {/* Edit warning dialog */}
       {editingCcSwitchProvider && (
           <div className={styles.warningOverlay}>
               <div className={styles.warningDialog}>
@@ -225,7 +225,7 @@ export default function ProviderList({
                           className={styles.btnWarning}
                           onClick={() => {
                               setConvertingProvider(editingCcSwitchProvider);
-                              // setEditingCcSwitchProvider(null); // 保持 null 以便在转换后处理
+                              // setEditingCcSwitchProvider(null); // Keep null to handle after conversion
                           }}
                       >
                           {t('settings.provider.convertAndEdit')}
@@ -235,7 +235,7 @@ export default function ProviderList({
           </div>
       )}
 
-      {/* 转换确认弹窗 */}
+      {/* Conversion confirmation dialog */}
       {convertingProvider && (
           <div className={styles.warningOverlay}>
               <div className={styles.warningDialog}>
@@ -252,7 +252,7 @@ export default function ProviderList({
                           className={styles.btnSecondary}
                           onClick={() => {
                               setConvertingProvider(null);
-                              // 如果是从编辑来的，取消转换意味着取消编辑
+                              // If triggered from editing, canceling conversion also cancels editing
                               if (editingCcSwitchProvider) {
                                   setEditingCcSwitchProvider(null);
                               }
@@ -290,7 +290,7 @@ export default function ProviderList({
                   className={styles.importMenuItem}
                   onClick={() => {
                     setImportMenuOpen(false);
-                    setIsImporting(true); // 开始加载
+                    setIsImporting(true); // Start loading
                     sendToJava('preview_cc_switch_import');
                   }}
                 >

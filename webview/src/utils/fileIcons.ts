@@ -1,15 +1,15 @@
 /**
- * 文件图标映射工具
- * 返回内联的 SVG 字符串，用于支持 vite-plugin-singlefile 打包
+ * File icon mapping utility
+ * Returns inline SVG strings to support vite-plugin-singlefile bundling
  */
 
 import * as icons from './icons';
 
 /**
- * 根据文件扩展名获取图标 SVG
+ * Get icon SVG by file extension
  */
 export function getFileIcon(extension?: string, fileName?: string): string {
-  // 1. 优先匹配文件名
+  // 1. Match by filename first
   if (fileName) {
     const name = fileName.toLowerCase();
     const nameMap: Record<string, string> = {
@@ -104,7 +104,7 @@ export function getFileIcon(extension?: string, fileName?: string): string {
       return nameMap[name];
     }
 
-    // 检查测试文件
+    // Check for test files
     if (name.endsWith('.test.ts') || name.endsWith('.test.tsx') || name.endsWith('.test.js') || name.endsWith('.test.jsx') ||
         name.endsWith('.spec.ts') || name.endsWith('.spec.tsx') || name.endsWith('.spec.js') || name.endsWith('.spec.jsx')) {
       return icons.icon_test_ts;
@@ -117,7 +117,7 @@ export function getFileIcon(extension?: string, fileName?: string): string {
 
   const ext = extension.toLowerCase();
   const iconMap: Record<string, string> = {
-    // 编程语言 - 主流
+    // Programming languages - mainstream
     ts: icons.icon_typescript,
     tsx: icons.icon_typescript,
     cts: icons.icon_typescript,
@@ -143,7 +143,7 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     swift: icons.icon_swift,
     rb: icons.icon_ruby,
 
-    // 编程语言 - 扩展
+    // Programming languages - extended
     cs: icons.icon_csharp,
     csproj: icons.icon_csharp,
     sln: icons.icon_csharp,
@@ -200,12 +200,12 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     resi: icons.icon_rescript,
     bal: icons.icon_ballerina,
 
-    // 标记语言
+    // Markup languages
     html: icons.icon_html,
     htm: icons.icon_html,
     xml: icons.icon_xml,
 
-    // 样式文件
+    // Stylesheets
     css: icons.icon_css,
     scss: icons.icon_sass,
     sass: icons.icon_sass,
@@ -215,18 +215,18 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     pcss: icons.icon_postcss,
     postcss: icons.icon_postcss,
 
-    // 框架相关
+    // Frameworks
     vue: icons.icon_vue,
     svelte: icons.icon_svelte,
     astro: icons.icon_astro,
 
-    // 配置文件
+    // Configuration files
     json: icons.icon_json,
     yaml: icons.icon_yaml,
     yml: icons.icon_yaml,
     toml: icons.icon_toml,
 
-    // 文档
+    // Documentation
     md: icons.icon_markdown,
     markdown: icons.icon_markdown,
     mdx: icons.icon_mdx,
@@ -234,7 +234,7 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     adoc: icons.icon_asciidoc,
     asciidoc: icons.icon_asciidoc,
 
-    // 模板语言
+    // Template languages
     haml: icons.icon_haml,
     pug: icons.icon_pug,
     jade: icons.icon_pug,
@@ -256,14 +256,14 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     // Prisma
     prisma: icons.icon_prisma,
 
-    // 构建/配置工具
+    // Build/config tools
     dockerfile: icons.icon_docker,
     makefile: icons.icon_makefile,
     cmake: icons.icon_cmake,
     bazelrc: icons.icon_bazel,
     gradle: icons.icon_gradle,
 
-    // Shell/脚本
+    // Shell/scripts
     sh: icons.icon_console,
     bash: icons.icon_console,
     zsh: icons.icon_console,
@@ -274,12 +274,12 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     psm1: icons.icon_powershell,
     psd1: icons.icon_powershell,
 
-    // 数据库
+    // Database
     sql: icons.icon_database,
     sqlite: icons.icon_database,
     db: icons.icon_database,
 
-    // 图片/媒体
+    // Images/media
     png: icons.icon_image,
     jpg: icons.icon_image,
     jpeg: icons.icon_image,
@@ -304,13 +304,13 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     woff2: icons.icon_font,
     eot: icons.icon_font,
 
-    // 文档
+    // Documents
     doc: icons.icon_word,
     docx: icons.icon_word,
     ppt: icons.icon_powerpoint,
     pptx: icons.icon_powerpoint,
 
-    // 压缩/二进制
+    // Archives/binaries
     zip: icons.icon_zip,
     tar: icons.icon_zip,
     gz: icons.icon_zip,
@@ -321,7 +321,7 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     so: icons.icon_dll,
     dylib: icons.icon_dll,
 
-    // 安全/密钥
+    // Security/keys
     pem: icons.icon_key,
     key: icons.icon_key,
     pub: icons.icon_key,
@@ -329,17 +329,17 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     cer: icons.icon_certificate,
     cert: icons.icon_certificate,
 
-    // 日志
+    // Logs
     log: icons.icon_log,
 
-    // 锁文件
+    // Lock files
     lock: icons.icon_lock,
 
-    // 协议
+    // Protocols
     proto: icons.icon_proto,
     wasm: icons.icon_webassembly,
 
-    // 新增 - 配置文件
+    // Additional - configuration files
     coffee: icons.icon_coffee,
     dockerignore: icons.icon_docker,
     editorconfig: icons.icon_editorconfig,
@@ -355,7 +355,7 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     babelrc: icons.icon_babel,
     browserslistrc: icons.icon_browserlist,
 
-    // 新增 - 编程语言
+    // Additional - programming languages
     h: icons.icon_h,
     hpp: icons.icon_hpp,
     hxx: icons.icon_hpp,
@@ -373,7 +373,7 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     vim: icons.icon_vim,
     ahk: icons.icon_autohotkey,
 
-    // 新增 - 数据格式
+    // Additional - data formats
     csv: icons.icon_table,
     tsv: icons.icon_table,
     ini: icons.icon_settings,
@@ -382,30 +382,30 @@ export function getFileIcon(extension?: string, fileName?: string): string {
     properties: icons.icon_settings,
     hjson: icons.icon_hjson,
 
-    // 新增 - 科学计算
+    // Additional - scientific computing
     ipynb: icons.icon_jupyter,
     nb: icons.icon_mathematica,
     mat: icons.icon_matlab,
     rdata: icons.icon_r,
 
-    // 新增 - DevOps
+    // Additional - DevOps
     tf: icons.icon_terraform,
     tfvars: icons.icon_terraform,
     hcl: icons.icon_hcl,
     k8s: icons.icon_kubernetes,
 
-    // 新增 - 数据库
+    // Additional - database
     mongodb: icons.icon_database,
     redis: icons.icon_database,
 
-    // 新增 - 文档格式
+    // Additional - document formats
     rst: icons.icon_readme,
     org: icons.icon_todo,
     txt: icons.icon_document,
     rtf: icons.icon_document,
     epub: icons.icon_epub,
 
-    // 新增 - 其他
+    // Additional - other
     http: icons.icon_http,
     rest: icons.icon_http,
     snap: icons.icon_jest,
@@ -420,12 +420,12 @@ export function getFileIcon(extension?: string, fileName?: string): string {
 }
 
 /**
- * 根据文件夹名称获取图标 SVG
+ * Get icon SVG by folder name
  */
 export function getFolderIcon(folderName: string, isOpen: boolean = false): string {
   const name = folderName.toLowerCase();
 
-  // 特殊文件夹映射
+  // Special folder mapping
   const specialFolders: Record<string, string> = {
     src: icons.icon_folder_src,
     test: icons.icon_folder_test,
@@ -446,7 +446,7 @@ export function getFolderIcon(folderName: string, isOpen: boolean = false): stri
     libs: icons.icon_folder_lib,
     library: icons.icon_folder_lib,
     libraries: icons.icon_folder_lib,
-    // 新增文件夹图标
+    // Additional folder icons
     components: icons.icon_folder_components,
     component: icons.icon_folder_components,
     assets: icons.icon_folder_images,
@@ -528,7 +528,7 @@ export function getFolderIcon(folderName: string, isOpen: boolean = false): stri
     claude: icons.icon_folder_claude,
   };
 
-  // 打开状态的通用文件夹
+  // Generic open folder
   if (isOpen && !specialFolders[name]) {
     return icons.icon_folder_open;
   }
@@ -537,30 +537,30 @@ export function getFolderIcon(folderName: string, isOpen: boolean = false): stri
 }
 
 /**
- * 获取工具/框架相关的图标 SVG
+ * Get tool/framework icon SVG
  */
 export function getToolIcon(toolName: string): string {
   const tools: Record<string, string> = {
-    // 版本控制
+    // Version control
     git: icons.icon_git,
     github: icons.icon_git,
     gitlab: icons.icon_gitlab,
     bitbucket: icons.icon_bitbucket,
 
-    // 容器与运维
+    // Containers and operations
     docker: icons.icon_docker,
     kubernetes: icons.icon_kubernetes,
     k8s: icons.icon_kubernetes,
     terraform: icons.icon_terraform,
     helm: icons.icon_helm,
 
-    // 运行时
+    // Runtimes
     node: icons.icon_nodejs,
     nodejs: icons.icon_nodejs,
     deno: icons.icon_deno,
     bun: icons.icon_bun,
 
-    // 包管理
+    // Package managers
     npm: icons.icon_npm,
     yarn: icons.icon_yarn,
     pnpm: icons.icon_pnpm,
@@ -569,7 +569,7 @@ export function getToolIcon(toolName: string): string {
     maven: icons.icon_maven,
     gradle: icons.icon_gradle,
 
-    // 前端框架
+    // Frontend frameworks
     react: icons.icon_react,
     vue: icons.icon_vue,
     angular: icons.icon_angular,
@@ -582,7 +582,7 @@ export function getToolIcon(toolName: string): string {
     solid: icons.icon_file,
     qwik: icons.icon_qwik,
 
-    // 构建工具
+    // Build tools
     webpack: icons.icon_webpack,
     vite: icons.icon_vite,
     rollup: icons.icon_rollup,
@@ -593,13 +593,13 @@ export function getToolIcon(toolName: string): string {
     turborepo: icons.icon_turborepo,
     nx: icons.icon_nx,
 
-    // 代码质量
+    // Code quality
     eslint: icons.icon_eslint,
     prettier: icons.icon_prettier,
     stylelint: icons.icon_stylelint,
     biome: icons.icon_biome,
 
-    // 测试框架
+    // Testing frameworks
     jest: icons.icon_jest,
     vitest: icons.icon_vitest,
     mocha: icons.icon_mocha,
@@ -607,7 +607,7 @@ export function getToolIcon(toolName: string): string {
     playwright: icons.icon_playwright,
     storybook: icons.icon_storybook,
 
-    // 样式工具
+    // Styling tools
     tailwind: icons.icon_tailwindcss,
     tailwindcss: icons.icon_tailwindcss,
     sass: icons.icon_sass,
@@ -615,7 +615,7 @@ export function getToolIcon(toolName: string): string {
     postcss: icons.icon_postcss,
     styled: icons.icon_file,
 
-    // ORM/数据库
+    // ORM/database
     prisma: icons.icon_prisma,
     drizzle: icons.icon_drizzle,
     sequelize: icons.icon_sequelize,
@@ -634,28 +634,28 @@ export function getToolIcon(toolName: string): string {
     swagger: icons.icon_swagger,
     openapi: icons.icon_openapi,
 
-    // 云服务
+    // Cloud services
     azure: icons.icon_azure,
     gcp: icons.icon_gcp,
     vercel: icons.icon_vercel,
     netlify: icons.icon_netlify,
     cloudflare: icons.icon_cloudfoundry,
 
-    // 编辑器/IDE
+    // Editors/IDEs
     vscode: icons.icon_vscode,
     intellij: icons.icon_file,
     vim: icons.icon_vim,
 
-    // AI工具
+    // AI tools
     claude: icons.icon_claude,
     copilot: icons.icon_copilot,
 
-    // 移动端
+    // Mobile
     reactnative: icons.icon_react,
     ionic: icons.icon_ionic,
     capacitor: icons.icon_capacitor,
 
-    // 其他工具
+    // Other tools
     jenkins: icons.icon_jenkins,
     circleci: icons.icon_circleci,
     github_actions: icons.icon_github_actions_workflow,

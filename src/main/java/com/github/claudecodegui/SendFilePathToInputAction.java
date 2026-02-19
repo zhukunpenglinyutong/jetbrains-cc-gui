@@ -17,16 +17,16 @@ import org.jetbrains.annotations.NotNull;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 从文件树发送文件路径到 CCG 输入框的 Action
- * 在项目文件树右键菜单中显示
- * 实现 DumbAware 接口允许在索引构建期间使用此功能
+ * Action to send file paths from the project tree to the CCG input box.
+ * Shown in the project file tree context menu.
+ * Implements DumbAware to allow usage during index building.
  */
 public class SendFilePathToInputAction extends AnAction implements DumbAware {
 
     private static final Logger LOG = Logger.getInstance(SendFilePathToInputAction.class);
 
     /**
-     * 构造函数 - 设置本地化的Action文本和描述
+     * Constructor - sets localized action text and description.
      */
     public SendFilePathToInputAction() {
         super(
@@ -37,8 +37,8 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
     }
 
     /**
-     * 指定 Action 更新线程为后台线程
-     * 这允许在 update() 方法中安全地访问 VirtualFile 等数据
+     * Use background thread for action updates.
+     * This allows safe access to VirtualFile data in the update() method.
      */
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
@@ -46,7 +46,7 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
     }
 
     /**
-     * 执行Action的主要逻辑
+     * Main action execution logic.
      */
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -55,7 +55,7 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
             return;
         }
 
-        // 获取选中的文件
+        // Get selected files
         VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
         if (files == null || files.length == 0) {
             VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
@@ -69,26 +69,26 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
             return;
         }
 
-        // 构建文件路径字符串（支持多选）
+        // Build file path string (supports multi-selection)
         StringBuilder pathBuilder = new StringBuilder();
         for (int i = 0; i < files.length; i++) {
             if (i > 0) {
                 pathBuilder.append(" ");
             }
-            // 添加 @ 前缀和绝对路径
+            // Add @ prefix with absolute path
             pathBuilder.append("@").append(files[i].getPath());
         }
 
         String filePaths = pathBuilder.toString();
         LOG.info("Sending file paths to input: " + filePaths);
 
-        // 发送到聊天窗口
+        // Send to chat window
         sendToChatWindow(project, filePaths);
     }
 
     /**
-     * 更新Action的可用性状态
-     * 只有在有选中文件时才启用
+     * Update action availability.
+     * Only enabled when files are selected.
      */
     @Override
     public void update(@NotNull AnActionEvent e) {
@@ -98,7 +98,7 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
             return;
         }
 
-        // 检查是否有选中的文件
+        // Check if any files are selected
         VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
         if (files == null || files.length == 0) {
             VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
@@ -112,20 +112,20 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
     }
 
     /**
-     * 发送文件路径到插件的聊天窗口输入框
+     * Send file paths to the plugin's chat input box.
      */
     private void sendToChatWindow(@NotNull Project project, @NotNull String filePaths) {
         try {
-            // 获取插件的工具窗口
+            // Get the plugin tool window
             ToolWindowManager toolWindowManager = ToolWindowManager.getInstance(project);
             ToolWindow toolWindow = toolWindowManager.getToolWindow("CCG");
 
             if (toolWindow != null) {
-                // 如果窗口未激活，先激活窗口，等待窗口打开后再发送内容
+                // If window is not visible, activate it first, then send content after it opens
                 if (!toolWindow.isVisible()) {
-                    // 激活窗口
+                    // Activate window
                     toolWindow.activate(() -> {
-                        // 窗口激活后，延迟一小段时间确保界面加载完成，然后发送内容
+                        // After activation, delay briefly to ensure UI is loaded, then send content
                         AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
                             ApplicationManager.getApplication().invokeLater(() -> {
                                 try {
@@ -139,9 +139,9 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
                         }, 300, TimeUnit.MILLISECONDS);
                     }, true);
                 } else {
-                    // 窗口已经打开，直接发送内容
+                    // Window is already visible, send content directly
                     ClaudeSDKToolWindow.addSelectionFromExternal(project, filePaths);
-                    // 确保窗口获得焦点
+                    // Ensure window gets focus
                     toolWindow.activate(null, true);
                     LOG.info("Chat window activated and sent file paths to project: " + project.getName());
                 }
