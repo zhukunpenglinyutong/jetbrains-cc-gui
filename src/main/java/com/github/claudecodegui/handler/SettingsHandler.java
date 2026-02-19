@@ -4,6 +4,7 @@ import com.github.claudecodegui.CodemossSettingsService;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.ClaudeSession;
+import com.github.claudecodegui.session.ClaudeMessageHandler;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.util.FontConfigService;
@@ -353,48 +354,13 @@ public class SettingsHandler extends BaseMessageHandler {
 
             // Extract the latest usage information from the current session
             List<ClaudeSession.Message> messages = session.getMessages();
-            JsonObject lastUsage = null;
-
-            for (int i = messages.size() - 1; i >= 0; i--) {
-                ClaudeSession.Message msg = messages.get(i);
-
-                if (msg.type != ClaudeSession.Message.Type.ASSISTANT || msg.raw == null) {
-                    continue;
-                }
-
-                // Check different possible structures
-                if (msg.raw.has("message")) {
-                    JsonObject message = msg.raw.getAsJsonObject("message");
-                    if (message.has("usage")) {
-                        lastUsage = message.getAsJsonObject("usage");
-                        break;
-                    }
-                }
-
-                // Check if usage is at the root level of raw
-                if (msg.raw.has("usage")) {
-                    lastUsage = msg.raw.getAsJsonObject("usage");
-                    break;
-                }
+            JsonObject lastUsage = ClaudeMessageHandler.findLastUsageFromSessionMessages(messages);
+            if (lastUsage == null) {
+                // No usage data available yet — send update with zero used tokens
+                sendUsageUpdate(0, newMaxTokens);
+                return;
             }
-
-            // Calculate used tokens
-            int inputTokens = lastUsage != null && lastUsage.has("input_tokens") ? lastUsage.get("input_tokens").getAsInt() : 0;
-            int cacheWriteTokens = lastUsage != null && lastUsage.has("cache_creation_input_tokens") ? lastUsage.get("cache_creation_input_tokens").getAsInt() : 0;
-            int cacheReadTokens = lastUsage != null && lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
-            int outputTokens = lastUsage != null && lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
-
-            // Calculate used token count based on provider
-            // Codex/OpenAI: input_tokens already includes cached_input_tokens, no need to add again
-            // Claude: input_tokens does not include cache, need to add cache_creation (cache reads don't consume new context window)
-            String currentProvider = context.getCurrentProvider();
-            int usedTokens;
-            if ("codex".equals(currentProvider)) {
-                usedTokens = inputTokens + outputTokens;
-            } else {
-                // Claude: cache reads don't consume new context window, so cacheReadTokens is excluded
-                usedTokens = inputTokens + cacheWriteTokens + outputTokens;
-            }
+            int usedTokens = ClaudeMessageHandler.extractUsedTokens(lastUsage, context.getCurrentProvider());
 
             // Send update
             sendUsageUpdate(usedTokens, newMaxTokens);

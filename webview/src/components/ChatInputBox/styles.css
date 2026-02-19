@@ -990,6 +990,21 @@
   cursor: not-allowed !important;
 }
 
+.selector-divider {
+  height: 1px;
+  background: var(--dropdown-border);
+  margin: 4px 0;
+}
+
+.selector-option-add {
+  opacity: 0.8;
+}
+
+.selector-add-icon {
+  font-size: 14px;
+  width: 16px;
+}
+
 /* Selector toast notification */
 .selector-toast {
   position: fixed;

@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import type { CodexProviderConfig } from '../../../types/provider';
-import { STORAGE_KEYS } from '../../../types/provider';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -8,24 +7,6 @@ const sendToJava = (message: string) => {
   }
   // Silently ignore when sendToJava is unavailable to avoid log pollution in production
 };
-
-/**
- * Safely set localStorage and dispatch a custom event to notify other components in the same tab
- * @param key localStorage key
- * @param value the value to store
- * @returns whether the operation succeeded
- */
-function safeSetLocalStorage(key: string, value: string): boolean {
-  try {
-    localStorage.setItem(key, value);
-    // Dispatch custom event to notify other components in the same tab
-    window.dispatchEvent(new CustomEvent('localStorageChange', { detail: { key } }));
-    return true;
-  } catch (e) {
-    console.warn(`Failed to save to localStorage (key: ${key}):`, e);
-    return false;
-  }
-}
 
 export interface CodexProviderDialogState {
   isOpen: boolean;
@@ -83,11 +64,8 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
       setCodexProviders((prev) =>
         prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
       );
-      // Sync customModels to localStorage
-      safeSetLocalStorage(
-        STORAGE_KEYS.CODEX_CUSTOM_MODELS,
-        JSON.stringify(activeProvider.customModels || [])
-      );
+      // Custom models are now plugin-level, managed by PluginCustomModels in ProviderTabSection.
+      // No longer sync provider-level customModels to localStorage.
     }
   }, []);
 
@@ -135,14 +113,8 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
         onSuccess?.('Codex 供应商已更新');
       }
 
-      // If updating the currently active provider, sync customModels to localStorage
-      const activeProvider = codexProviders.find(p => p.isActive);
-      if (activeProvider && activeProvider.id === providerData.id) {
-        safeSetLocalStorage(
-          STORAGE_KEYS.CODEX_CUSTOM_MODELS,
-          JSON.stringify(providerData.customModels || [])
-        );
-      }
+      // Custom models are now plugin-level, managed by PluginCustomModels in ProviderTabSection.
+      // No longer sync provider-level customModels to localStorage.
 
       setCodexProviderDialog({ isOpen: false, provider: null });
       setCodexLoading(true);

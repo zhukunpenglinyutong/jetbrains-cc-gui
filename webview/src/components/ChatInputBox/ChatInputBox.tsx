@@ -105,6 +105,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       onAgentSelect,
       onOpenAgentSettings,
       onOpenPromptSettings,
+      onOpenModelSettings,
       hasMessages = false,
       onRewind,
       statusPanelExpanded = true,
@@ -849,6 +850,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           selectedAgent={selectedAgent}
           onAgentSelect={(agent) => onAgentSelect?.(agent)}
           onOpenAgentSettings={onOpenAgentSettings}
+          onAddModel={onOpenModelSettings}
           onClearAgent={() => onAgentSelect?.(null)}
           fileCompletion={fileCompletion}
           commandCompletion={commandCompletion}

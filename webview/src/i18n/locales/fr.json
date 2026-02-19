@@ -80,7 +80,7 @@
     "disabled": "Désactivé",
     "sdkNotInstalled": "{{provider}} SDK n'est pas installé. Veuillez installer le SDK pour commencer à discuter.",
     "sdkStatusLoading": "Checking SDK status...",
-    "openSourceBanner": "Ce projet est garanti 100% open source pour toujours. N'hésitez pas à l'utiliser !",
+    "openSourceBanner": "Ce projet est garanti 100% open source (méfiez-vous des projets piratés)",
     "goInstallSdk": "Aller installer",
     "commandNotImplemented": "La fonctionnalité `{{command}}` n'est pas encore implémentée.",
     "clearCommandDescription": "Effacer l'historique et démarrer une nouvelle session",
@@ -171,6 +171,12 @@
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex"
+    },
+    "pluginModels": {
+      "title": "Modèles personnalisés",
+      "description": "Les modèles personnalisés ajoutés ici seront visibles sous tous les fournisseurs, affichés en haut de la liste de sélection de modèles",
+      "dialogTitle": "Gérer les modèles personnalisés",
+      "manage": "Gérer les modèles"
     },
     "dependencies": "Dépendances SDK",
     "dependenciesDesc": "Gérer les installations et mises à jour des dépendances AI SDK",
@@ -959,6 +965,7 @@
     }
   },
   "models": {
+    "addModel": "Ajouter un modèle",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

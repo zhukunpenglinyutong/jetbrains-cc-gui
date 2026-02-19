@@ -43,8 +43,12 @@ import { extractMarkdownContent } from './utils/copyUtils';
 import { ChatHeader } from './components/ChatHeader';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageList } from './components/MessageList';
+import { MessageAnchorRail } from './components/MessageAnchorRail';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
 import ChangelogDialog from './components/ChangelogDialog';
+import CustomModelDialog from './components/settings/CustomModelDialog';
+import { usePluginModels } from './components/settings/hooks/usePluginModels';
+import { STORAGE_KEYS } from './types/provider';
 import { CHANGELOG_DATA } from './version/changelog';
 import { APP_VERSION } from './version/version';
 import type {
@@ -61,6 +65,36 @@ type ViewMode = 'chat' | 'history' | 'settings';
 
 const DEFAULT_STATUS = 'ready';
 
+
+/**
+ * Wrapper that manages plugin-level custom models for the add-model dialog.
+ * Uses the shared usePluginModels hook for localStorage persistence.
+ */
+const AddModelDialogWrapper = ({
+  isOpen,
+  onClose,
+  currentProvider,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  currentProvider: string;
+}) => {
+  const storageKey = currentProvider === 'codex'
+    ? STORAGE_KEYS.CODEX_CUSTOM_MODELS
+    : STORAGE_KEYS.CLAUDE_CUSTOM_MODELS;
+
+  const { models, updateModels } = usePluginModels(storageKey);
+
+  return (
+    <CustomModelDialog
+      isOpen={isOpen}
+      models={models}
+      onModelsChange={updateModels}
+      onClose={onClose}
+      initialAddMode
+    />
+  );
+};
 
 const App = () => {
   const { t } = useTranslation();
@@ -103,6 +137,9 @@ const App = () => {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  // Add-model dialog state (opened from model selector in chat view)
+  const [addModelDialogOpen, setAddModelDialogOpen] = useState(false);
+
   // IDE theme state - prefer initial theme injected by Java
   const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
     // Check if Java injected an initial theme
@@ -126,6 +163,16 @@ const App = () => {
     loading,
     streamingActive,
   });
+
+  // Message anchor node registry for anchor rail navigation
+  const messageNodeMapRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const handleMessageNodeRef = useCallback((id: string, node: HTMLDivElement | null) => {
+    if (node) {
+      messageNodeMapRef.current.set(id, node);
+    } else {
+      messageNodeMapRef.current.delete(id);
+    }
+  }, []);
 
   // Streaming message state and helpers
   const {
@@ -1510,29 +1557,38 @@ const App = () => {
         />
       ) : currentView === 'chat' ? (
         <>
-          <div className="messages-container" ref={messagesContainerRef}>
-          {messages.length === 0 && (
-            <WelcomeScreen
-              currentProvider={currentProvider}
-              t={t}
-              onProviderChange={handleProviderSelect}
+          <div className="messages-shell">
+            <MessageAnchorRail
+              messages={mergedMessages}
+              containerRef={messagesContainerRef}
+              messageNodeMap={messageNodeMapRef}
             />
-          )}
+            <div className="messages-container" ref={messagesContainerRef}>
+              {messages.length === 0 && (
+                <WelcomeScreen
+                  currentProvider={currentProvider}
+                  t={t}
+                  onProviderChange={handleProviderSelect}
+                  onVersionClick={() => setShowChangelogDialog(true)}
+                />
+              )}
 
-          <MessageList
-            messages={mergedMessages}
-            streamingActive={streamingActive}
-            isThinking={isThinking}
-            loading={loading}
-            loadingStartTime={loadingStartTime}
-            t={t}
-            getMessageText={getMessageText}
-            getContentBlocks={getContentBlocks}
-            findToolResult={findToolResult}
-            extractMarkdownContent={extractMarkdownContent}
-            messagesEndRef={messagesEndRef}
-          />
-        </div>
+              <MessageList
+                messages={mergedMessages}
+                streamingActive={streamingActive}
+                isThinking={isThinking}
+                loading={loading}
+                loadingStartTime={loadingStartTime}
+                t={t}
+                getMessageText={getMessageText}
+                getContentBlocks={getContentBlocks}
+                findToolResult={findToolResult}
+                extractMarkdownContent={extractMarkdownContent}
+                messagesEndRef={messagesEndRef}
+                onMessageNodeRef={handleMessageNodeRef}
+              />
+            </div>
+          </div>
 
         {/* Scroll control button */}
         <ScrollControl containerRef={messagesContainerRef} inputAreaRef={inputAreaRef} />
@@ -1613,6 +1669,9 @@ const App = () => {
               setSettingsInitialTab('prompts');
               setCurrentView('settings');
             }}
+            onOpenModelSettings={() => {
+              setAddModelDialogOpen(true);
+            }}
             hasMessages={messages.length > 0}
             onRewind={handleOpenRewindSelectDialog}
             statusPanelExpanded={statusPanelExpanded}
@@ -1688,6 +1747,12 @@ const App = () => {
         isOpen={showChangelogDialog}
         onClose={handleCloseChangelog}
         entries={CHANGELOG_DATA}
+      />
+
+      <AddModelDialogWrapper
+        isOpen={addModelDialogOpen}
+        onClose={() => setAddModelDialogOpen(false)}
+        currentProvider={currentProvider}
       />
     </>
   );

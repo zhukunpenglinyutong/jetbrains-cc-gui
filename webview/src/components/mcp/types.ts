@@ -1,11 +1,11 @@
 /**
- * MCP 设置组件类型定义
+ * MCP settings component type definitions
  */
 
 import type { McpServer, McpServerStatusInfo } from '../../types/mcp';
 
 // ============================================================================
-// 组件 Props
+// Component Props
 // ============================================================================
 
 export interface McpSettingsSectionProps {
@@ -13,16 +13,16 @@ export interface McpSettingsSectionProps {
 }
 
 // ============================================================================
-// 缓存相关类型
+// Cache Types
 // ============================================================================
 
-/** 缓存数据结构 */
+/** Cache data structure */
 export interface CachedData<T> {
   data: T;
   timestamp: number;
 }
 
-/** 工具列表缓存结构 */
+/** Tool list cache structure */
 export interface ToolsCacheData {
   [serverId: string]: {
     tools: McpTool[];
@@ -30,7 +30,7 @@ export interface ToolsCacheData {
   };
 }
 
-/** 缓存键名集合 */
+/** Cache key collection */
 export interface CacheKeys {
   SERVERS: string;
   STATUS: string;
@@ -39,10 +39,10 @@ export interface CacheKeys {
 }
 
 // ============================================================================
-// 服务器状态相关类型
+// Server Status Types
 // ============================================================================
 
-/** 单个服务器刷新状态 */
+/** Per-server refresh state */
 export interface ServerRefreshState {
   [serverId: string]: {
     isRefreshing: boolean;
@@ -50,14 +50,14 @@ export interface ServerRefreshState {
   };
 }
 
-/** MCP 工具类型 */
+/** MCP tool type */
 export interface McpTool {
   name: string;
   description?: string;
   inputSchema?: Record<string, unknown>;
 }
 
-/** 服务器工具列表状态 */
+/** Server tool list state */
 export interface ServerToolsState {
   [serverId: string]: {
     tools: McpTool[];
@@ -67,10 +67,10 @@ export interface ServerToolsState {
 }
 
 // ============================================================================
-// 日志相关类型
+// Log Types
 // ============================================================================
 
-/** 刷新日志类型 */
+/** Refresh log entry */
 export interface RefreshLog {
   id: string;
   timestamp: Date;
@@ -84,7 +84,7 @@ export interface RefreshLog {
 }
 
 // ============================================================================
-// 重新导出 mcp 类型
+// Re-exported MCP types
 // ============================================================================
 
 export type { McpServer, McpServerStatusInfo };

@@ -1,15 +1,15 @@
 /**
- * MCP 服务器工具函数模块
- * 提供服务器状态查询、图标、颜色等工具函数
+ * MCP server utility functions module
+ * Provides utility functions for server status queries, icons, colors, etc.
  */
 
 import type { McpServer, McpServerStatusInfo } from '../types';
 
 // ============================================================================
-// 图标颜色配置
+// Icon color configuration
 // ============================================================================
 
-/** 服务器图标颜色列表 */
+/** Server icon color list */
 export const iconColors = [
   '#3B82F6', // blue
   '#10B981', // green
@@ -22,33 +22,33 @@ export const iconColors = [
 ];
 
 // ============================================================================
-// 服务器状态查询函数
+// Server status query functions
 // ============================================================================
 
 /**
- * 获取服务器状态信息
- * @param server - 服务器对象
- * @param serverStatus - 服务器状态映射
- * @returns 服务器状态信息或 undefined
+ * Get server status info
+ * @param server - Server object
+ * @param serverStatus - Server status map
+ * @returns Server status info or undefined
  */
 export function getServerStatusInfo(
   server: McpServer,
   serverStatus: Map<string, McpServerStatusInfo>
 ): McpServerStatusInfo | undefined {
-  // 尝试多种方式匹配服务器状态
-  // 1. 尝试用 id 匹配
+  // Try multiple approaches to match server status
+  // 1. Try matching by id
   let statusInfo = serverStatus.get(server.id);
   if (statusInfo) return statusInfo;
 
-  // 2. 尝试用 name 匹配
+  // 2. Try matching by name
   if (server.name) {
     statusInfo = serverStatus.get(server.name);
     if (statusInfo) return statusInfo;
   }
 
-  // 3. 遍历所有状态，尝试模糊匹配
+  // 3. Iterate all statuses and try case-insensitive matching
   for (const [key, value] of serverStatus.entries()) {
-    // 不区分大小写比较
+    // Case-insensitive comparison
     if (key.toLowerCase() === server.id.toLowerCase() ||
         (server.name && key.toLowerCase() === server.name.toLowerCase())) {
       return value;
@@ -59,10 +59,10 @@ export function getServerStatusInfo(
 }
 
 /**
- * 检查服务器是否启用
- * @param server - 服务器对象
- * @param isCodexMode - 是否为 Codex 模式
- * @returns 是否启用
+ * Check whether the server is enabled
+ * @param server - Server object
+ * @param isCodexMode - Whether in Codex mode
+ * @returns Whether enabled
  */
 export function isServerEnabled(server: McpServer, isCodexMode: boolean): boolean {
   if (server.enabled !== undefined) {
@@ -75,22 +75,22 @@ export function isServerEnabled(server: McpServer, isCodexMode: boolean): boolea
 }
 
 // ============================================================================
-// 状态图标和颜色函数
+// Status icon and color functions
 // ============================================================================
 
 /**
- * 获取状态图标
- * @param server - 服务器对象
- * @param status - 服务器状态
- * @param isCodexMode - 是否为 Codex 模式
- * @returns 图标类名
+ * Get the status icon
+ * @param server - Server object
+ * @param status - Server status
+ * @param isCodexMode - Whether in Codex mode
+ * @returns Icon class name
  */
 export function getStatusIcon(
   server: McpServer,
   status: McpServerStatusInfo['status'] | undefined,
   isCodexMode: boolean
 ): string {
-  // 如果服务器被禁用，显示禁用图标
+  // Show disabled icon if the server is disabled
   if (!isServerEnabled(server, isCodexMode)) {
     return 'codicon-circle-slash';
   }
@@ -110,18 +110,18 @@ export function getStatusIcon(
 }
 
 /**
- * 获取状态颜色
- * @param server - 服务器对象
- * @param status - 服务器状态
- * @param isCodexMode - 是否为 Codex 模式
- * @returns 颜色值
+ * Get the status color
+ * @param server - Server object
+ * @param status - Server status
+ * @param isCodexMode - Whether in Codex mode
+ * @returns Color value
  */
 export function getStatusColor(
   server: McpServer,
   status: McpServerStatusInfo['status'] | undefined,
   isCodexMode: boolean
 ): string {
-  // 如果服务器被禁用，显示灰色
+  // Show gray if the server is disabled
   if (!isServerEnabled(server, isCodexMode)) {
     return '#9CA3AF';
   }
@@ -141,12 +141,12 @@ export function getStatusColor(
 }
 
 /**
- * 获取状态文本
- * @param server - 服务器对象
- * @param status - 服务器状态
- * @param isCodexMode - 是否为 Codex 模式
- * @param t - 翻译函数
- * @returns 状态文本
+ * Get the status text
+ * @param server - Server object
+ * @param status - Server status
+ * @param isCodexMode - Whether in Codex mode
+ * @param t - Translation function
+ * @returns Status text
  */
 export function getStatusText(
   server: McpServer,
@@ -154,7 +154,7 @@ export function getStatusText(
   isCodexMode: boolean,
   t: (key: string) => string
 ): string {
-  // 如果服务器被禁用，显示"已禁用"
+  // Show "Disabled" if the server is disabled
   if (!isServerEnabled(server, isCodexMode)) {
     return t('mcp.disabled');
   }
@@ -174,13 +174,13 @@ export function getStatusText(
 }
 
 // ============================================================================
-// 服务器显示工具函数
+// Server display utility functions
 // ============================================================================
 
 /**
- * 获取服务器图标颜色
- * @param serverId - 服务器 ID
- * @returns 颜色值
+ * Get the server icon color
+ * @param serverId - Server ID
+ * @returns Color value
  */
 export function getIconColor(serverId: string): string {
   let hash = 0;
@@ -191,9 +191,9 @@ export function getIconColor(serverId: string): string {
 }
 
 /**
- * 获取服务器首字母
- * @param server - 服务器对象
- * @returns 首字母
+ * Get the server initial letter
+ * @param server - Server object
+ * @returns Initial letter
  */
 export function getServerInitial(server: McpServer): string {
   const name = server.name || server.id;
@@ -201,13 +201,13 @@ export function getServerInitial(server: McpServer): string {
 }
 
 // ============================================================================
-// 工具图标函数
+// Tool icon functions
 // ============================================================================
 
 /**
- * 根据工具名称获取图标
- * @param toolName - 工具名称
- * @returns 图标类名
+ * Get the icon based on tool name
+ * @param toolName - Tool name
+ * @returns Icon class name
  */
 export function getToolIcon(toolName: string): string {
   const name = toolName.toLowerCase();
@@ -245,13 +245,13 @@ export function getToolIcon(toolName: string): string {
 }
 
 // ============================================================================
-// 输入 Schema 渲染函数
+// Input schema rendering functions
 // ============================================================================
 
 /**
- * 渲染 inputSchema 为参数列表（文本版本）
- * @param inputSchema - 输入 Schema
- * @returns 参数列表
+ * Render inputSchema as a parameter list (text version)
+ * @param inputSchema - Input schema
+ * @returns Parameter list
  */
 export function renderInputSchemaText(
   inputSchema: Record<string, unknown> | undefined

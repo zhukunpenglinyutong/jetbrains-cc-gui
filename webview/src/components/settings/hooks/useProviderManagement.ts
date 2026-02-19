@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import type { ProviderConfig } from '../../../types/provider';
-import { STORAGE_KEYS } from '../../../types/provider';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -42,32 +41,6 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     isOpen: false,
     provider: null,
   });
-
-  // Safely set localStorage and dispatch a custom event to notify other components in the same tab
-  const safeSetLocalStorage = useCallback((key: string, value: string): boolean => {
-    try {
-      localStorage.setItem(key, value);
-      window.dispatchEvent(new CustomEvent('localStorageChange', { detail: { key } }));
-      return true;
-    } catch {
-      return false;
-    }
-  }, []);
-
-  // Sync active provider custom models to localStorage
-  const syncActiveProviderCustomModels = useCallback((provider?: ProviderConfig | null) => {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-    if (!provider || !provider.customModels || provider.customModels.length === 0) {
-      try {
-        window.localStorage.removeItem(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS);
-        window.dispatchEvent(new CustomEvent('localStorageChange', { detail: { key: STORAGE_KEYS.CLAUDE_CUSTOM_MODELS } }));
-      } catch {
-        // ignore
-      }
-      return;
-    }
-    safeSetLocalStorage(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS, JSON.stringify(provider.customModels));
-  }, [safeSetLocalStorage]);
 
   // Sync active provider model mapping to localStorage
   const syncActiveProviderModelMapping = useCallback((provider?: ProviderConfig | null) => {
@@ -112,11 +85,10 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
       const active = providersList.find((p) => p.isActive);
       if (active) {
         syncActiveProviderModelMapping(active);
-        syncActiveProviderCustomModels(active);
       }
       setLoading(false);
     },
-    [syncActiveProviderModelMapping, syncActiveProviderCustomModels]
+    [syncActiveProviderModelMapping]
   );
 
   // Update active provider (used by window callback)
@@ -127,10 +99,9 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
           prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
         );
         syncActiveProviderModelMapping(activeProvider);
-        syncActiveProviderCustomModels(activeProvider);
       }
     },
-    [syncActiveProviderModelMapping, syncActiveProviderCustomModels]
+    [syncActiveProviderModelMapping]
   );
 
   // Open edit dialog
@@ -226,12 +197,11 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
       const target = providers.find((p) => p.id === id);
       if (target) {
         syncActiveProviderModelMapping(target);
-        syncActiveProviderCustomModels(target);
       }
       sendToJava(`switch_provider:${JSON.stringify(data)}`);
       setLoading(true);
     },
-    [providers, syncActiveProviderModelMapping, syncActiveProviderCustomModels]
+    [providers, syncActiveProviderModelMapping]
   );
 
   // Delete provider
@@ -276,7 +246,6 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     confirmDeleteProvider,
     cancelDeleteProvider,
     syncActiveProviderModelMapping,
-    syncActiveProviderCustomModels,
 
     // Setter (for external loading state control)
     setLoading,

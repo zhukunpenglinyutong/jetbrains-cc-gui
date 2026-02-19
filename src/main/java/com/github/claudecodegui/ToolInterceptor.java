@@ -180,7 +180,7 @@ public class ToolInterceptor {
     }
 
     /**
-     * 工具调用信息
+     * Tool call information.
      */
     public static class ToolCall {
         public String toolName;

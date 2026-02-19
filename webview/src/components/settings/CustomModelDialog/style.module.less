@@ -1,0 +1,93 @@
+.modelList {
+  margin-bottom: 12px;
+}
+
+.emptyState {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.modelItem {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  margin-bottom: 4px;
+}
+
+.modelItemContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.modelItemId {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.modelItemLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+
+.modelItemDesc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.modelItemActions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.iconBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-tertiary);
+}
+
+.iconBtnDanger {
+  composes: iconBtn;
+  color: var(--color-error, #f44336);
+}
+
+.addEditForm {
+  padding: 12px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+
+.formRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.validationError {
+  color: var(--error-color, #f44336);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.addBtn {
+  width: 100%;
+}
+
+.dialogFooterSpacer {
+  flex: 1;
+}

@@ -737,3 +737,151 @@
     white-space: pre-wrap;
     word-break: break-all;
 }
+
+/* ============================================
+   Message Anchor Rail - Quick navigation dots
+   ============================================ */
+
+.messages-shell {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+}
+
+.messages-shell .messages-container {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Only reserve left padding when the anchor rail is actually rendered */
+.messages-shell:has(.messages-anchor-rail) .messages-container {
+    padding-left: 26px;
+}
+
+/* Anchor Rail */
+.messages-anchor-rail {
+    position: absolute;
+    left: 4px;
+    top: 48px;
+    bottom: 24px;
+    width: 20px;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* The vertical track line */
+.messages-anchor-track {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--border-primary);
+    border-radius: 1px;
+    opacity: 0.5;
+}
+
+/* Each anchor dot */
+.messages-anchor-dot {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-secondary);
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    z-index: 1;
+
+    /* Expand hit area with invisible pseudo-element */
+    &::before {
+        content: '';
+        position: absolute;
+        top: -8px;
+        left: -8px;
+        right: -8px;
+        bottom: -8px;
+        border-radius: 50%;
+    }
+
+    &:hover {
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
+        transform: translate(-50%, -50%) scale(1.3);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--accent-primary);
+        outline-offset: 2px;
+    }
+
+    &.is-active {
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
+    }
+}
+
+/* Anchor tooltip */
+.anchor-tooltip {
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-secondary);
+    box-shadow: var(--shadow-sm);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    line-height: 1.4;
+    max-width: 400px;
+    width: max-content;
+    white-space: pre-wrap;
+    word-break: break-word;
+    pointer-events: none;
+    z-index: 100;
+    animation: anchor-tooltip-fade-in 0.15s ease;
+
+    &::before {
+        content: '';
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 5px solid transparent;
+        border-right-color: var(--border-secondary);
+    }
+
+    &::after {
+        content: '';
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 4px solid transparent;
+        border-right-color: var(--bg-elevated);
+    }
+}
+
+@keyframes anchor-tooltip-fade-in {
+    from { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+    to { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+/* Hide anchor rail on narrow panels (IntelliJ side panels can be small) */
+@media (max-width: 400px) {
+    .messages-anchor-rail {
+        display: none;
+    }
+}

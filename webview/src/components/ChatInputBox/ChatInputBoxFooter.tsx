@@ -39,6 +39,7 @@ export function ChatInputBoxFooter({
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
+  onAddModel,
   onClearAgent,
   fileCompletion,
   commandCompletion,
@@ -70,6 +71,7 @@ export function ChatInputBoxFooter({
   selectedAgent?: SelectedAgent | null;
   onAgentSelect?: (agent: SelectedAgent) => void;
   onOpenAgentSettings?: () => void;
+  onAddModel?: () => void;
   onClearAgent: () => void;
   fileCompletion: CompletionController;
   commandCompletion: CompletionController;
@@ -113,6 +115,7 @@ export function ChatInputBoxFooter({
         selectedAgent={selectedAgent}
         onAgentSelect={(agent) => onAgentSelect?.(agent)}
         onOpenAgentSettings={onOpenAgentSettings}
+        onAddModel={onAddModel}
         onClearAgent={onClearAgent}
       />
 

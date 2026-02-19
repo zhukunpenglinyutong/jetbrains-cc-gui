@@ -161,6 +161,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         } else if (line.startsWith("[TOOL_RESULT]")) {
             String toolResultJson = line.substring("[TOOL_RESULT]".length()).trim();
             callback.onMessage("tool_result", toolResultJson);
+        } else if (line.startsWith("[USAGE]")) {
+            String usageJson = line.substring("[USAGE]".length()).trim();
+            callback.onMessage("usage", usageJson);
         } else if (line.startsWith("[MESSAGE_START]")) {
             callback.onMessage("message_start", "");
         } else if (line.startsWith("[MESSAGE_END]")) {
@@ -816,6 +819,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                             } else if (line.startsWith("[TOOL_RESULT]")) {
                                 String toolResultJson = line.substring("[TOOL_RESULT]".length()).trim();
                                 callback.onMessage("tool_result", toolResultJson);
+                            } else if (line.startsWith("[USAGE]")) {
+                                String usageJson = line.substring("[USAGE]".length()).trim();
+                                callback.onMessage("usage", usageJson);
                             } else if (line.startsWith("[MESSAGE_START]")) {
                                 callback.onMessage("message_start", "");
                             } else if (line.startsWith("[MESSAGE_END]")) {

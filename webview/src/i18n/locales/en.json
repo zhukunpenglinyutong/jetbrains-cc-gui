@@ -80,7 +80,7 @@
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
     "sdkStatusLoading": "Checking SDK status...",
-    "openSourceBanner": "This project is guaranteed to be 100% open source forever. Feel free to use it!",
+    "openSourceBanner": "This project is guaranteed to be 100% open source (beware of pirated projects)",
     "goInstallSdk": "Go to Install",
     "commandNotImplemented": "`{{command}}` feature is not yet implemented.",
     "clearCommandDescription": "Clear conversation history and start a new session",
@@ -171,6 +171,12 @@
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex"
+    },
+    "pluginModels": {
+      "title": "Custom Models",
+      "description": "Custom models added here will be visible under all providers, shown at the top of the model selector",
+      "dialogTitle": "Manage Custom Models",
+      "manage": "Manage Models"
     },
     "dependencies": "SDK Dependencies",
     "dependenciesDesc": "Manage AI SDK dependency installations and updates",
@@ -269,6 +275,8 @@
     },
     "community": "Community",
     "communityDesc": "Scan the QR code below to join the official WeChat group for the latest news and technical support",
+    "versionHistory": "Version History",
+    "versionHistoryDesc": "View all version update records",
     "communityQrTip": "Scan with WeChat to join the community",
     "communityQrAlt": "Official WeChat community QR code",
     "sponsor": "Sponsor",
@@ -958,6 +966,7 @@
     }
   },
   "models": {
+    "addModel": "Add Model",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

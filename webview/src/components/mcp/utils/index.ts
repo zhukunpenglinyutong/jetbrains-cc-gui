@@ -1,5 +1,5 @@
 /**
- * MCP 工具函数模块导出
+ * MCP utility module exports
  */
 
 export * from './cacheManager';

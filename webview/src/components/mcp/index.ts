@@ -1,23 +1,23 @@
 /**
- * MCP (Model Context Protocol) 相关组件
+ * MCP (Model Context Protocol) related components
  */
 
-// 主组件
+// Main component
 export { McpSettingsSection } from './McpSettingsSection';
 
-// 子组件
+// Sub-components
 export { ServerCard } from './ServerCard';
 export { ServerToolsPanel } from './ServerToolsPanel';
 export { RefreshLogsPanel } from './RefreshLogsPanel';
 
-// 对话框组件
+// Dialog components
 export { McpServerDialog } from './McpServerDialog';
 export { McpPresetDialog } from './McpPresetDialog';
 export { McpHelpDialog } from './McpHelpDialog';
 export { McpConfirmDialog } from './McpConfirmDialog';
 export { McpLogDialog } from './McpLogDialog';
 
-// 类型
+// Types
 export type {
   McpSettingsSectionProps,
   ServerRefreshState,
@@ -27,7 +27,7 @@ export type {
   CacheKeys,
 } from './types';
 
-// 工具函数
+// Utility functions
 export * from './utils';
 
 // Hooks

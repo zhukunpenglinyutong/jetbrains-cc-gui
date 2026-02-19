@@ -8,12 +8,14 @@ export interface WelcomeScreenProps {
   currentProvider: string;
   t: TFunction;
   onProviderChange: (provider: string) => void;
+  onVersionClick?: () => void;
 }
 
 export function WelcomeScreen({
   currentProvider,
   t,
   onProviderChange,
+  onVersionClick,
 }: WelcomeScreenProps): React.ReactElement {
   return (
     <div
@@ -29,7 +31,14 @@ export function WelcomeScreen({
     >
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <BlinkingLogo provider={currentProvider} onProviderChange={onProviderChange} />
-        <span className="version-tag">
+        <span
+          className="version-tag"
+          role="button"
+          tabIndex={0}
+          style={{ cursor: 'pointer' }}
+          onClick={onVersionClick}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onVersionClick?.(); }}
+        >
           v{APP_VERSION}
         </span>
       </div>

@@ -151,6 +151,7 @@ const ChangelogDialog = ({ isOpen, onClose, entries, initialPage = 0 }: Changelo
           <div className="changelog-title-area">
             <h3>{t('changelog.title')}</h3>
             <span className="changelog-version-badge">v{entry.version}</span>
+            <span className="changelog-date">{entry.date}</span>
           </div>
           <button className="changelog-close-btn" onClick={onClose}>
             <span className="codicon codicon-close" />
@@ -159,7 +160,6 @@ const ChangelogDialog = ({ isOpen, onClose, entries, initialPage = 0 }: Changelo
 
         {/* Body */}
         <div className="changelog-body">
-          <div className="changelog-date">{entry.date}</div>
           {contentParts.map((part, idx) => (
             <div key={idx}>
               {idx > 0 && <hr className="changelog-divider" />}

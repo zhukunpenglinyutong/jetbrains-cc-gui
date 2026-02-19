@@ -63,8 +63,8 @@ interface Window {
   addHistoryMessage?: (message: any) => void;
 
   /**
-   * History load complete callback - 历史消息加载完成时调用
-   * 用于触发 Markdown 重新渲染，解决历史记录首次加载时渲染不正确的问题
+   * History load complete callback - invoked when history messages finish loading.
+   * Triggers Markdown re-rendering to fix incorrect rendering on first history load.
    */
   historyLoadComplete?: () => void;
 
@@ -95,7 +95,7 @@ interface Window {
   onModeChanged?: (mode: string) => void;
 
   /**
-   * Mode received callback - 后端主动推送权限模式（窗口初始化时调用）
+   * Mode received callback - backend pushes the permission mode (called during window initialization)
    */
   onModeReceived?: (mode: string) => void;
 
@@ -105,9 +105,9 @@ interface Window {
   onModelChanged?: (modelId: string) => void;
 
   /**
-   * Model confirmed callback - 后端确认模型设置成功后调用
-   * @param modelId 确认的模型 ID
-   * @param provider 当前的提供商
+   * Model confirmed callback - called after the backend confirms the model was set successfully
+   * @param modelId The confirmed model ID
+   * @param provider The current provider
    */
   onModelConfirmed?: (modelId: string, provider: string) => void;
 
@@ -127,17 +127,17 @@ interface Window {
   showPlanApprovalDialog?: (json: string) => void;
 
   /**
-   * Add selection info (file and line numbers) - 自动监听，只更新 ContextBar
+   * Add selection info (file and line numbers) - auto-tracked, only updates ContextBar
    */
   addSelectionInfo?: (selectionInfo: string) => void;
 
   /**
-   * Add code snippet to input box - 手动发送，添加代码片段标签到输入框
+   * Add code snippet to input box - manually triggered, inserts a code snippet tag into the input box
    */
   addCodeSnippet?: (selectionInfo: string) => void;
 
   /**
-   * Insert code snippet at cursor position - 由 ChatInputBox 注册
+   * Insert code snippet at cursor position - registered by ChatInputBox
    */
   insertCodeSnippetAtCursor?: (selectionInfo: string) => void;
 
@@ -359,17 +359,17 @@ interface Window {
   updateSessionTitle?: (title: string) => void;
 
   /**
-   * Editor font config received callback - 接收 IDEA 编辑器字体配置
+   * Editor font config received callback - receives IDEA editor font configuration
    */
   onEditorFontConfigReceived?: (json: string) => void;
 
   /**
-   * IDE theme received callback - 接收 IDE 主题配置
+   * IDE theme received callback - receives IDE theme configuration
    */
   onIdeThemeReceived?: (json: string) => void;
 
   /**
-   * IDE theme changed callback - IDE 主题变化时的回调
+   * IDE theme changed callback - invoked when the IDE theme changes
    */
   onIdeThemeChanged?: (json: string) => void;
 
@@ -394,12 +394,12 @@ interface Window {
   promptOperationResult?: (json: string) => void;
 
   /**
-   * Selected agent received callback - 初始化时接收当前选中的智能体
+   * Selected agent received callback - receives the currently selected agent during initialization
    */
   onSelectedAgentReceived?: (json: string) => void;
 
   /**
-   * Selected agent changed callback - 选择智能体后的回调
+   * Selected agent changed callback - invoked after an agent is selected
    */
   onSelectedAgentChanged?: (json: string) => void;
 
@@ -419,111 +419,111 @@ interface Window {
   updateCurrentCodexConfig?: (json: string) => void;
 
 // ============================================================================
-  // 🔧 流式传输回调函数
+  // Streaming Callbacks
   // ============================================================================
 
   /**
-   * Stream start callback - 流式传输开始时调用
+   * Stream start callback - called when streaming begins
    */
   onStreamStart?: () => void;
 
   /**
-   * Content delta callback - 收到内容增量时调用
-   * @param delta 内容增量字符串
+   * Content delta callback - called when a content delta is received
+   * @param delta The content delta string
    */
   onContentDelta?: (delta: string) => void;
 
   /**
-   * Thinking delta callback - 收到思考增量时调用
-   * @param delta 思考增量字符串
+   * Thinking delta callback - called when a thinking delta is received
+   * @param delta The thinking delta string
    */
   onThinkingDelta?: (delta: string) => void;
 
   /**
-   * Stream end callback - 流式传输结束时调用
+   * Stream end callback - called when streaming ends
    */
   onStreamEnd?: () => void;
 
   /**
-   * Permission denied callback - 权限被拒绝时调用
-   * 用于标记未完成的工具调用为"中断"状态
+   * Permission denied callback - called when permission is denied.
+   * Marks incomplete tool calls as "interrupted".
    */
   onPermissionDenied?: () => void;
 
   /**
-   * 存储被拒绝的工具调用 ID 集合
-   * 用于让工具块知道哪些工具调用被用户拒绝了权限
+   * Set of denied tool call IDs.
+   * Used by tool blocks to determine which tool calls had their permission denied by the user.
    */
   __deniedToolIds?: Set<string>;
 
   /**
-   * 会话过渡抑制标志
-   * 在创建新会话期间为 true，防止旧会话回调通过 updateMessages 写回旧消息
+   * Session transition suppression flag.
+   * Set to true during new session creation to prevent stale callbacks from writing old messages via updateMessages.
    */
   __sessionTransitioning?: boolean;
 
   /**
-   * Update streaming enabled configuration - 接收流式传输配置
+   * Update streaming enabled configuration - receives streaming config
    */
   updateStreamingEnabled?: (json: string) => void;
 
   /**
-   * Rewind result callback - 回滚操作结果回调
+   * Rewind result callback - returns the result of a rewind operation
    */
   onRewindResult?: (json: string) => void;
 
   /**
-   * Undo file result callback - 单文件撤销操作结果回调
+   * Undo file result callback - returns the result of a single-file undo operation
    */
   onUndoFileResult?: (json: string) => void;
 
   /**
-   * Undo all files result callback - 批量撤销操作结果回调
+   * Undo all files result callback - returns the result of a batch undo operation
    */
   onUndoAllFileResult?: (json: string) => void;
 
   /**
-   * Handle remove file from edits list - 从编辑列表中移除文件（用户在 diff 视图中完全撤销更改时调用）
+   * Handle remove file from edits list - removes a file from the edits list (called when the user fully reverts changes in the diff view)
    */
   handleRemoveFileFromEdits?: (json: string) => void;
 
   /**
-   * Handle interactive diff result - 处理交互式 Diff 操作结果（Apply/Reject）
+   * Handle interactive diff result - processes the result of an interactive diff action (Apply/Reject)
    * @param json JSON string containing { filePath, action, content?, error? }
    */
   handleDiffResult?: (json: string) => void;
 
   // ============================================================================
-  // 🔧 依赖管理回调函数
+  // Dependency Management Callbacks
   // ============================================================================
 
   /**
-   * Update dependency status callback - 更新依赖状态
+   * Update dependency status callback
    */
   updateDependencyStatus?: (json: string) => void;
 
   /**
-   * Dependency install progress callback - 依赖安装进度
+   * Dependency install progress callback
    */
   dependencyInstallProgress?: (json: string) => void;
 
   /**
-   * Dependency install result callback - 依赖安装结果
+   * Dependency install result callback
    */
   dependencyInstallResult?: (json: string) => void;
 
   /**
-   * Dependency uninstall result callback - 依赖卸载结果
+   * Dependency uninstall result callback
    */
   dependencyUninstallResult?: (json: string) => void;
 
   /**
-   * Node environment status callback - Node.js 环境状态
+   * Node environment status callback
    */
   nodeEnvironmentStatus?: (json: string) => void;
 
   /**
-   * Dependency update available callback - 依赖更新检查结果
+   * Dependency update available callback
    */
   dependencyUpdateAvailable?: (json: string) => void;
 
