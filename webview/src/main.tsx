@@ -77,14 +77,14 @@ function createBridgeHeartbeatStarter() {
 }
 
 const startBridgeHeartbeat = createBridgeHeartbeatStarter();
-// vConsole 调试工具
+// vConsole debugging tool
 const enableVConsole =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_VCONSOLE === 'true';
 
 if (enableVConsole) {
   void import('vconsole').then(({ default: VConsole }) => {
     new VConsole();
-    // 将 vConsole 按钮移到左上角，避免遮挡右下角的发送按钮
+    // Move vConsole button to top-left corner to avoid blocking the send button in the bottom-right
     setTimeout(() => {
       const vcSwitch = document.getElementById('__vconsole') as HTMLElement;
       if (vcSwitch) {
@@ -98,7 +98,7 @@ if (enableVConsole) {
 }
 
 /**
- * 应用 IDEA 编辑器字体配置到 CSS 变量
+ * Apply IDEA editor font configuration to CSS variables
  */
 /**
  * JCEF (macOS) may occasionally render with an incorrect zoom/layout after the IDE
@@ -221,17 +221,17 @@ function setupScaleRecovery() {
 function applyFontConfig(config: { fontFamily: string; fontSize: number; lineSpacing: number; fallbackFonts?: string[] }) {
   const root = document.documentElement;
 
-  // 构建字体族字符串，包含主字体、回落字体和系统默认回落
+  // Build font family string with primary font, fallback fonts, and system defaults
   const fontParts: string[] = [`'${config.fontFamily}'`];
 
-  // 添加 IDEA 配置的回落字体
+  // Add IDEA-configured fallback fonts
   if (config.fallbackFonts && config.fallbackFonts.length > 0) {
     for (const fallback of config.fallbackFonts) {
       fontParts.push(`'${fallback}'`);
     }
   }
 
-  // 添加系统默认回落字体
+  // Add system default fallback fonts
   fontParts.push("'Consolas'", 'monospace');
 
   const fontFamily = fontParts.join(', ');
@@ -243,10 +243,10 @@ function applyFontConfig(config: { fontFamily: string; fontSize: number; lineSpa
   console.log('[Main] Applied IDEA font config:', config, 'fontFamily CSS:', fontFamily);
 }
 
-// 注册 applyIdeaFontConfig 函数
+// Register the applyIdeaFontConfig function
 window.applyIdeaFontConfig = applyFontConfig;
 
-// 检查是否有待处理的字体配置（Java 端可能先于 JS 执行）
+// Check for pending font config (Java side may execute before JS)
 if (window.__pendingFontConfig) {
   console.log('[Main] Found pending font config, applying...');
   applyFontConfig(window.__pendingFontConfig);
@@ -254,7 +254,7 @@ if (window.__pendingFontConfig) {
 }
 
 /**
- * 应用 IDEA 语言配置到 i18n
+ * Apply IDEA language configuration to i18n
  * Only applies IDEA language if user hasn't manually set a language preference
  */
 function applyLanguageConfig(config: { language: string; ideaLocale?: string }) {

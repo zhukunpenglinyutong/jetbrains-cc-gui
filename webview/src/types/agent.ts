@@ -1,19 +1,19 @@
 /**
- * 智能体配置
+ * Agent configuration
  */
 export interface AgentConfig {
-  /** 唯一标识 */
+  /** Unique identifier */
   id: string;
-  /** 智能体名称（最多20字符） */
+  /** Agent name (max 20 characters) */
   name: string;
-  /** 提示词（最多100000字符） */
+  /** Prompt (max 100000 characters) */
   prompt?: string;
-  /** 创建时间戳 */
+  /** Creation timestamp */
   createdAt?: number;
 }
 
 /**
- * 智能体操作结果
+ * Agent operation result
  */
 export interface AgentOperationResult {
   success: boolean;

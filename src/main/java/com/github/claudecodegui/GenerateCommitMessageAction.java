@@ -23,8 +23,7 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Generate Commit Message with AI Action
- * 使用 AI 生成 Git commit message
+ * Action to generate Git commit messages using AI.
  */
 public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
@@ -88,7 +87,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
                     @Override
                     public void onSuccess(String commitMessage) {
                         ApplicationManager.getApplication().invokeLater(() -> {
-                            // 设置生成的 commit message
+                            // Set the generated commit message
                             finalCommitMessagePanel.setCommitMessage(commitMessage);
                             ClaudeNotifier.showSuccess(project, ClaudeCodeGuiBundle.message("commit.generateSuccess"));
                         });
@@ -97,7 +96,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
                     @Override
                     public void onError(String error) {
                         ApplicationManager.getApplication().invokeLater(() -> {
-                            // 清空占位文案
+                            // Clear placeholder text
                             finalCommitMessagePanel.setCommitMessage("");
                             ClaudeNotifier.showError(project, ClaudeCodeGuiBundle.message("commit.generateFailed") + ": " + error);
                         });
@@ -106,7 +105,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
             } catch (Exception ex) {
                 LOG.error("Failed to generate commit message", ex);
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    // 清空占位文案
+                    // Clear placeholder text
                     finalCommitMessagePanel.setCommitMessage("");
                     ClaudeNotifier.showError(project, ClaudeCodeGuiBundle.message("commit.generateFailed") + ": " + ex.getMessage());
                 });
@@ -245,11 +244,11 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
         Project project = e.getProject();
         boolean enabled = project != null;
 
-        // 调试日志：记录 update 被调用
+        // Debug: log when update is called
         if (LOG.isDebugEnabled()) {
             LOG.debug("GenerateCommitMessageAction.update called, project=" + (project != null ? project.getName() : "null"));
 
-            // 记录所有可用的 DataKeys
+            // Log available DataKeys
             Object workflowHandler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER);
             Object messageControl = e.getData(VcsDataKeys.COMMIT_MESSAGE_CONTROL);
 
@@ -258,7 +257,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
             LOG.debug("  - COMMIT_MESSAGE_CONTROL: " + (messageControl != null ? messageControl.getClass().getName() : "null"));
         }
 
-        // 设置国际化的文案
+        // Set localized text
         e.getPresentation().setText(ClaudeCodeGuiBundle.message("action.generateCommitMessage.text"));
         e.getPresentation().setDescription(ClaudeCodeGuiBundle.message("action.generateCommitMessage.description"));
         e.getPresentation().setEnabledAndVisible(enabled);

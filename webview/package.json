@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/extract-version.mjs",
+    "prebuild": "node scripts/extract-version.mjs && node scripts/extract-changelog.mjs",
     "build": "tsc && vite build",
     "postbuild": "node scripts/copy-dist.mjs",
     "test": "vitest run && tsc -p tsconfig.test.json --noEmit",

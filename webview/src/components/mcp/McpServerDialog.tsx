@@ -53,14 +53,14 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
 
   const placeholder = isCodexMode ? codexPlaceholder : claudePlaceholder;
 
-  // 计算行数
+  // Calculate line count
   const lineCount = Math.max((jsonContent || placeholder).split('\n').length, 12);
 
-  // 验证 JSON 是否有效
+  // Validate whether JSON is valid
   const isValid = useCallback(() => {
     if (!jsonContent.trim()) return false;
 
-    // 移除注释行
+    // Remove comment lines
     const cleanedContent = jsonContent
       .split('\n')
       .filter(line => !line.trim().startsWith('//'))
@@ -70,11 +70,11 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
 
     try {
       const parsed = JSON.parse(cleanedContent);
-      // 验证结构
+      // Validate structure
       if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
         return Object.keys(parsed.mcpServers).length > 0;
       }
-      // 直接是服务器配置 (有 command 或 url)
+      // Direct server config (has command or url)
       if (parsed.command || parsed.url) {
         return true;
       }
@@ -84,13 +84,13 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
     }
   }, [jsonContent]);
 
-  // 处理输入
+  // Handle input
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setJsonContent(e.target.value);
     setParseError('');
   };
 
-  // 处理 Tab 键
+  // Handle Tab key
   const handleTab = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -109,10 +109,10 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
     }
   };
 
-  // 解析 JSON 配置
+  // Parse JSON configuration
   const parseConfig = (): McpServer[] | null => {
     try {
-      // 移除注释行
+      // Remove comment lines
       const cleanedContent = jsonContent
         .split('\n')
         .filter(line => !line.trim().startsWith('//'))
@@ -121,7 +121,7 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
       const parsed = JSON.parse(cleanedContent);
       const servers: McpServer[] = [];
 
-      // mcpServers 格式
+      // mcpServers format
       if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
         for (const [id, config] of Object.entries(parsed.mcpServers)) {
           // Check if ID already exists (except in edit mode)
@@ -131,12 +131,12 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
           }
 
           const serverConfig = config as any;
-          // 保留所有原始字段，只设置默认的 type
+          // Preserve all original fields, only set default type
           const serverSpec = {
             ...serverConfig,
             type: serverConfig.type || (serverConfig.command ? 'stdio' : serverConfig.url ? 'http' : 'stdio'),
           };
-          // 移除不属于 server spec 的字段
+          // Remove fields that don't belong to server spec
           delete serverSpec.name;
 
           const newServer: McpServer = {
@@ -153,15 +153,15 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
           servers.push(newServer);
         }
       }
-      // 直接服务器配置格式
+      // Direct server config format
       else if (parsed.command || parsed.url) {
         const id = `server-${Date.now()}`;
-        // 保留所有原始字段
+        // Preserve all original fields
         const serverSpec = {
           ...parsed,
           type: parsed.type || (parsed.command ? 'stdio' : 'http'),
         };
-        // 移除不属于 server spec 的字段
+        // Remove fields that don't belong to server spec
         delete serverSpec.name;
 
         const newServer: McpServer = {
@@ -190,14 +190,14 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
     }
   };
 
-  // 确认保存
+  // Confirm and save
   const handleConfirm = async () => {
     const servers = parseConfig();
     if (!servers) return;
 
     setSaving(true);
     try {
-      // 逐个保存服务器
+      // Save servers one by one
       for (const srv of servers) {
         onSave(srv);
       }
@@ -207,10 +207,10 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
     }
   };
 
-  // 初始化编辑模式
+  // Initialize edit mode
   useEffect(() => {
     if (server) {
-      // 编辑模式：转换为 JSON 格式
+      // Edit mode: convert to JSON format
       const config: any = {
         mcpServers: {
           [server.id]: {
@@ -222,7 +222,7 @@ export function McpServerDialog({ server, existingIds = [], currentProvider = 'c
     }
   }, [server]);
 
-  // 点击遮罩关闭
+  // Close on overlay click
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose();

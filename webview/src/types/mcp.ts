@@ -1,44 +1,44 @@
 /**
- * MCP (Model Context Protocol) 类型定义
+ * MCP (Model Context Protocol) type definitions
  *
- * MCP 是 Anthropic 的标准协议,让 AI 模型与外部工具和数据源通信。
+ * MCP is Anthropic's standard protocol for AI models to communicate with external tools and data sources.
  *
- * 支持两种配置来源:
- * 1. cc-switch 格式: ~/.cc-switch/config.json (主要)
- * 2. Claude 原生格式: ~/.claude.json (兼容)
+ * Two configuration sources are supported:
+ * 1. cc-switch format: ~/.cc-switch/config.json (primary)
+ * 2. Claude native format: ~/.claude.json (compatible)
  */
 
 /**
- * MCP 服务器连接规格
- * 支持三种连接方式: stdio, http, sse
+ * MCP server connection specification
+ * Supports three connection types: stdio, http, sse
  */
 export interface McpServerSpec {
-  /** 连接类型,默认为 stdio */
+  /** Connection type, defaults to stdio */
   type?: 'stdio' | 'http' | 'sse';
 
-  // stdio 类型字段
-  /** 执行命令 (stdio 类型必需) */
+  // stdio type fields
+  /** Command to execute (required for stdio type) */
   command?: string;
-  /** 命令参数 */
+  /** Command arguments */
   args?: string[];
-  /** 环境变量 */
+  /** Environment variables */
   env?: Record<string, string>;
-  /** 工作目录 */
+  /** Working directory */
   cwd?: string;
 
-  // http/sse 类型字段
-  /** 服务器 URL (http/sse 类型必需) */
+  // http/sse type fields
+  /** Server URL (required for http/sse type) */
   url?: string;
-  /** 请求头 */
+  /** Request headers */
   headers?: Record<string, string>;
 
-  /** 允许扩展字段 */
+  /** Allow extension fields */
   [key: string]: any;
 }
 
 /**
- * MCP 应用启用状态 (cc-switch v3.7.0 格式)
- * 标记服务器应用到哪些客户端
+ * MCP app enablement status (cc-switch v3.7.0 format)
+ * Indicates which clients the server is applied to
  */
 export interface McpApps {
   claude: boolean;
@@ -47,67 +47,67 @@ export interface McpApps {
 }
 
 /**
- * MCP 服务器完整配置
+ * MCP server full configuration
  */
 export interface McpServer {
-  /** 唯一标识符 (配置文件中的 key) */
+  /** Unique identifier (key in config file) */
   id: string;
-  /** 显示名称 */
+  /** Display name */
   name?: string;
-  /** 服务器连接规格 */
+  /** Server connection specification */
   server: McpServerSpec;
-  /** 应用启用状态 (cc-switch 格式) */
+  /** App enablement status (cc-switch format) */
   apps?: McpApps;
-  /** 描述 */
+  /** Description */
   description?: string;
-  /** 标签 */
+  /** Tags */
   tags?: string[];
-  /** 主页链接 */
+  /** Homepage link */
   homepage?: string;
-  /** 文档链接 */
+  /** Documentation link */
   docs?: string;
-  /** 是否启用 (旧格式兼容) */
+  /** Whether enabled (legacy format compatibility) */
   enabled?: boolean;
-  /** 允许扩展字段 */
+  /** Allow extension fields */
   [key: string]: any;
 }
 
 /**
- * MCP 服务器映射 (id -> McpServer)
+ * MCP server map (id -> McpServer)
  */
 export type McpServersMap = Record<string, McpServer>;
 
 /**
- * cc-switch 配置文件结构 (~/.cc-switch/config.json)
+ * cc-switch config file structure (~/.cc-switch/config.json)
  */
 export interface CCSwitchConfig {
-  /** MCP 配置 */
+  /** MCP configuration */
   mcp?: {
-    /** 服务器列表 */
+    /** Server list */
     servers?: Record<string, McpServer>;
   };
-  /** Claude 供应商配置 */
+  /** Claude provider configuration */
   claude?: {
     providers?: Record<string, any>;
     current?: string;
   };
-  /** 其他配置 */
+  /** Other configuration */
   [key: string]: any;
 }
 
 /**
- * Claude 配置文件结构 (~/.claude.json)
- * 参考官方格式
+ * Claude config file structure (~/.claude.json)
+ * Based on the official format
  */
 export interface ClaudeConfig {
-  /** MCP 服务器配置 */
+  /** MCP server configuration */
   mcpServers?: Record<string, McpServerSpec>;
-  /** 其他配置 */
+  /** Other configuration */
   [key: string]: any;
 }
 
 /**
- * MCP 预设配置
+ * MCP preset configuration
  */
 export interface McpPreset {
   id: string;
@@ -120,45 +120,45 @@ export interface McpPreset {
 }
 
 /**
- * MCP 服务器状态
+ * MCP server status
  */
 export type McpServerStatus = 'connected' | 'checking' | 'error' | 'unknown';
 
 /**
- * MCP 服务器连接状态信息 (来自 Claude SDK)
+ * MCP server connection status info (from Claude SDK)
  */
 export interface McpServerStatusInfo {
-  /** 服务器名称 */
+  /** Server name */
   name: string;
-  /** 连接状态 */
+  /** Connection status */
   status: 'connected' | 'failed' | 'needs-auth' | 'pending';
-  /** 服务器信息 (连接成功时可用) */
+  /** Server info (available on successful connection) */
   serverInfo?: {
     name: string;
     version: string;
   };
-  /** 错误信息 (连接失败时可用) */
+  /** Error message (available on connection failure) */
   error?: string;
 }
 
 /**
- * MCP 连接日志条目
+ * MCP connection log entry
  */
 export interface McpLogEntry {
-  /** 唯一标识符 */
+  /** Unique identifier */
   id: string;
-  /** 时间戳 */
+  /** Timestamp */
   timestamp: Date;
-  /** 服务器名称 */
+  /** Server name */
   serverName: string;
-  /** 日志级别 */
+  /** Log level */
   level: 'info' | 'warn' | 'error' | 'success';
-  /** 日志消息 */
+  /** Log message */
   message: string;
 }
 
 /**
- * MCP 服务器验证结果
+ * MCP server validation result
  */
 export interface McpServerValidationResult {
   valid: boolean;
@@ -170,85 +170,84 @@ export interface McpServerValidationResult {
 // ==================== Codex MCP Types ====================
 
 /**
- * Codex MCP 服务器连接规格
- * 配置格式基于 ~/.codex/config.toml
+ * Codex MCP server connection specification
+ * Configuration format based on ~/.codex/config.toml
  *
- * 支持两种连接方式:
- * 1. STDIO: 本地命令行工具
- * 2. Streamable HTTP: 远程 HTTP 服务
+ * Supports two connection types:
+ * 1. STDIO: Local command-line tool
+ * 2. Streamable HTTP: Remote HTTP service
  */
 export interface CodexMcpServerSpec {
-  // STDIO 类型字段
-  /** 执行命令 (STDIO 类型必需) */
+  // STDIO type fields
+  /** Command to execute (required for STDIO type) */
   command?: string;
-  /** 命令参数 */
+  /** Command arguments */
   args?: string[];
-  /** 环境变量 */
+  /** Environment variables */
   env?: Record<string, string>;
-  /** 工作目录 */
+  /** Working directory */
   cwd?: string;
-  /** 额外环境变量白名单 */
+  /** Additional environment variable allowlist */
   env_vars?: string[];
 
-  // Streamable HTTP 类型字段
-  /** 服务器 URL (HTTP 类型必需) */
+  // Streamable HTTP type fields
+  /** Server URL (required for HTTP type) */
   url?: string;
-  /** Bearer Token 环境变量名 */
+  /** Bearer token environment variable name */
   bearer_token_env_var?: string;
-  /** HTTP 请求头 */
+  /** HTTP request headers */
   http_headers?: Record<string, string>;
-  /** 从环境变量读取的 HTTP 请求头 */
+  /** HTTP headers read from environment variables */
   env_http_headers?: Record<string, string>;
 
-  // 通用可选字段
-  /** 是否启用 */
+  // Common optional fields
+  /** Whether enabled */
   enabled?: boolean;
-  /** 启动超时时间(秒) */
+  /** Startup timeout in seconds */
   startup_timeout_sec?: number;
-  /** 工具调用超时时间(秒) */
+  /** Tool call timeout in seconds */
   tool_timeout_sec?: number;
-  /** 启用的工具列表 */
+  /** List of enabled tools */
   enabled_tools?: string[];
-  /** 禁用的工具列表 */
+  /** List of disabled tools */
   disabled_tools?: string[];
 
-  /** 允许扩展字段 */
+  /** Allow extension fields */
   [key: string]: any;
 }
 
 /**
- * Codex MCP 服务器完整配置
+ * Codex MCP server full configuration
  */
 export interface CodexMcpServer {
-  /** 唯一标识符 (配置文件中的 key) */
+  /** Unique identifier (key in config file) */
   id: string;
-  /** 显示名称 */
+  /** Display name */
   name?: string;
-  /** 服务器连接规格 */
+  /** Server connection specification */
   server: CodexMcpServerSpec;
-  /** 应用启用状态 */
+  /** App enablement status */
   apps?: McpApps;
-  /** 是否启用 */
+  /** Whether enabled */
   enabled?: boolean;
-  /** 启动超时时间(秒) */
+  /** Startup timeout in seconds */
   startup_timeout_sec?: number;
-  /** 工具调用超时时间(秒) */
+  /** Tool call timeout in seconds */
   tool_timeout_sec?: number;
-  /** 启用的工具列表 */
+  /** List of enabled tools */
   enabled_tools?: string[];
-  /** 禁用的工具列表 */
+  /** List of disabled tools */
   disabled_tools?: string[];
-  /** 允许扩展字段 */
+  /** Allow extension fields */
   [key: string]: any;
 }
 
 /**
- * Codex config.toml 结构 (~/.codex/config.toml)
+ * Codex config.toml structure (~/.codex/config.toml)
  */
 export interface CodexConfig {
-  /** MCP 服务器配置 */
+  /** MCP server configuration */
   mcp_servers?: Record<string, CodexMcpServerSpec>;
-  /** 其他配置 */
+  /** Other configuration */
   [key: string]: any;
 }
-

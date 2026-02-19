@@ -6,7 +6,7 @@ const sendToJava = (message: string) => {
   if (window.sendToJava) {
     window.sendToJava(message);
   }
-  // sendToJava 不可用时静默处理，避免生产环境日志污染
+  // Silently ignore when sendToJava is unavailable to avoid log pollution in production
 };
 
 export interface PromptDialogState {
@@ -28,46 +28,46 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
   const { onSuccess } = options;
   const { t } = useTranslation();
 
-  // 超时定时器引用（使用 useRef 避免全局变量污染）
+  // Timeout timer reference (using useRef to avoid global variable pollution)
   const promptsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Prompt 列表状态
+  // Prompt list state
   const [prompts, setPrompts] = useState<PromptConfig[]>([]);
   const [promptsLoading, setPromptsLoading] = useState(false);
 
-  // Prompt 弹窗状态
+  // Prompt dialog state
   const [promptDialog, setPromptDialog] = useState<PromptDialogState>({
     isOpen: false,
     prompt: null,
   });
 
-  // Prompt 删除确认状态
+  // Prompt delete confirmation state
   const [deletePromptConfirm, setDeletePromptConfirm] = useState<DeletePromptConfirmState>({
     isOpen: false,
     prompt: null,
   });
 
-  // 加载 Prompt 列表（带超时保护，不再重试）
+  // Load prompt list (with timeout protection, no retries)
   const loadPrompts = useCallback(() => {
-    const TIMEOUT = 2000; // 2秒超时
+    const TIMEOUT = 2000; // 2-second timeout
 
     setPromptsLoading(true);
     sendToJava('get_prompts:');
 
-    // 设置超时定时器 - 超时后直接显示空列表
+    // Set up timeout timer - show empty list after timeout
     const timeoutId = setTimeout(() => {
-      // 超时后停止加载，显示空列表
+      // Stop loading after timeout, show empty list
       setPromptsLoading(false);
-      // 不设置空列表，保留可能已有的数据
+      // Don't clear the list, preserve any existing data
     }, TIMEOUT);
 
-    // 使用 ref 存储超时 ID
+    // Store timeout ID in ref
     promptsLoadingTimeoutRef.current = timeoutId;
   }, []);
 
-  // 更新 Prompt 列表（供 window callback 使用）
+  // Update prompt list (used by window callback)
   const updatePrompts = useCallback((promptsList: PromptConfig[]) => {
-    // 清除超时定时器
+    // Clear timeout timer
     if (promptsLoadingTimeoutRef.current) {
       clearTimeout(promptsLoadingTimeoutRef.current);
       promptsLoadingTimeoutRef.current = null;
@@ -77,7 +77,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
     setPromptsLoading(false);
   }, []);
 
-  // 清理超时定时器
+  // Clean up timeout timer
   const cleanupPromptsTimeout = useCallback(() => {
     if (promptsLoadingTimeoutRef.current) {
       clearTimeout(promptsLoadingTimeoutRef.current);
@@ -85,33 +85,33 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
     }
   }, []);
 
-  // 打开添加 Prompt 弹窗
+  // Open add prompt dialog
   const handleAddPrompt = useCallback(() => {
     setPromptDialog({ isOpen: true, prompt: null });
   }, []);
 
-  // 打开编辑 Prompt 弹窗
+  // Open edit prompt dialog
   const handleEditPrompt = useCallback((prompt: PromptConfig) => {
     setPromptDialog({ isOpen: true, prompt });
   }, []);
 
-  // 关闭 Prompt 弹窗
+  // Close prompt dialog
   const handleClosePromptDialog = useCallback(() => {
     setPromptDialog({ isOpen: false, prompt: null });
   }, []);
 
-  // 删除 Prompt
+  // Delete prompt
   const handleDeletePrompt = useCallback((prompt: PromptConfig) => {
     setDeletePromptConfirm({ isOpen: true, prompt });
   }, []);
 
-  // 保存 Prompt
+  // Save prompt
   const handleSavePrompt = useCallback(
     (data: { name: string; content: string }) => {
       const isAdding = !promptDialog.prompt;
 
       if (isAdding) {
-        // 添加新提示词
+        // Add new prompt
         const newPrompt = {
           id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
           name: data.name,
@@ -120,7 +120,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
         };
         sendToJava(`add_prompt:${JSON.stringify(newPrompt)}`);
       } else if (promptDialog.prompt) {
-        // 更新现有提示词
+        // Update existing prompt
         const updateData = {
           id: promptDialog.prompt.id,
           updates: {
@@ -133,13 +133,13 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
       }
 
       setPromptDialog({ isOpen: false, prompt: null });
-      // 提示词操作后重新加载列表（包含超时保护）
+      // Reload list after prompt operation (with timeout protection)
       loadPrompts();
     },
     [promptDialog.prompt, loadPrompts]
   );
 
-  // 确认删除 Prompt
+  // Confirm prompt deletion
   const confirmDeletePrompt = useCallback(() => {
     const prompt = deletePromptConfirm.prompt;
     if (!prompt) return;
@@ -147,16 +147,16 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
     const data = { id: prompt.id };
     sendToJava(`delete_prompt:${JSON.stringify(data)}`);
     setDeletePromptConfirm({ isOpen: false, prompt: null });
-    // 删除后重新加载列表（包含超时保护）
+    // Reload list after deletion (with timeout protection)
     loadPrompts();
   }, [deletePromptConfirm.prompt, loadPrompts]);
 
-  // 取消删除 Prompt
+  // Cancel prompt deletion
   const cancelDeletePrompt = useCallback(() => {
     setDeletePromptConfirm({ isOpen: false, prompt: null });
   }, []);
 
-  // 处理 Prompt 操作结果（供 window callback 使用）
+  // Handle prompt operation result (used by window callback)
   const handlePromptOperationResult = useCallback(
     (result: { success: boolean; operation?: string; error?: string }) => {
       if (result.success) {
@@ -172,13 +172,13 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
   );
 
   return {
-    // 状态
+    // State
     prompts,
     promptsLoading,
     promptDialog,
     deletePromptConfirm,
 
-    // 方法
+    // Methods
     loadPrompts,
     updatePrompts,
     cleanupPromptsTimeout,

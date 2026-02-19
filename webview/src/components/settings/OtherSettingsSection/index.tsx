@@ -192,7 +192,7 @@ const OtherSettingsSection = ({
       <h3 className={styles.sectionTitle}>{t('settings.other.title')}</h3>
       <p className={styles.sectionDesc}>{t('settings.other.description')}</p>
 
-      {/* 历史输入补全开关 */}
+      {/* History input completion toggle */}
       <div className={styles.historyCompletionSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-history" />
@@ -217,7 +217,7 @@ const OtherSettingsSection = ({
           <span>{t('settings.other.historyCompletion.hint')}</span>
         </small>
 
-        {/* 历史记录管理 */}
+        {/* History management */}
         <div className={styles.historyManagement}>
           <button
             type="button"

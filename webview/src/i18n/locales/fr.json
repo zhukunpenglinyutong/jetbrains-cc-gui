@@ -361,6 +361,8 @@
         "opusModel": "Modèle Opus par défaut",
         "opusModelPlaceholder": "par ex., claude-opus-4-6",
         "modelMappingHint": "Optionnel: Spécifiez les modèles Claude par défaut à utiliser. Laissez vide pour les valeurs par défaut du système.",
+        "customModels": "Modèles personnalisés",
+        "customModelsHint": "Ajoutez des modèles supplémentaires pris en charge par ce fournisseur. Les modèles personnalisés apparaîtront en haut de la liste de sélection des modèles",
         "jsonConfig": "Configuration JSON",
         "jsonConfigDescription": "Configurez ici le contenu complet de settings.json, prenant en charge tous les champs (par exemple, model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.)",
         "jsonError": "Format JSON invalide",
@@ -1162,5 +1164,10 @@
     "uploadedAttachments": "Pièce(s) jointe(s) téléchargée(s)",
     "emptyMessage": "Message vide",
     "attachment": "Pièce jointe"
+  },
+  "changelog": {
+    "title": "Nouveautés",
+    "close": "Compris",
+    "page": "{{current}} / {{total}}"
   }
 }

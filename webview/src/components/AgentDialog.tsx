@@ -4,7 +4,7 @@ import type { AgentConfig } from '../types/agent';
 
 interface AgentDialogProps {
   isOpen: boolean;
-  agent?: AgentConfig | null; // null 表示添加模式
+  agent?: AgentConfig | null; // null indicates add mode
   onClose: () => void;
   onSave: (data: { name: string; prompt: string }) => void;
 }
@@ -22,15 +22,15 @@ export default function AgentDialog({
   const [prompt, setPrompt] = useState('');
   const [nameError, setNameError] = useState('');
 
-  // 初始化表单
+  // Initialize form
   useEffect(() => {
     if (isOpen) {
       if (agent) {
-        // 编辑模式
+        // Edit mode
         setName(agent.name || '');
         setPrompt(agent.prompt || '');
       } else {
-        // 添加模式
+        // Add mode
         setName('');
         setPrompt('');
       }
@@ -38,7 +38,7 @@ export default function AgentDialog({
     }
   }, [isOpen, agent]);
 
-  // ESC 键关闭
+  // Close on ESC key
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
@@ -53,7 +53,7 @@ export default function AgentDialog({
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // 限制最多20字符
+    // Limit to 20 characters max
     if (value.length <= 20) {
       setName(value);
       setNameError('');
@@ -62,14 +62,14 @@ export default function AgentDialog({
 
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-    // 限制最多100000字符
+    // Limit to 100000 characters max
     if (value.length <= 100000) {
       setPrompt(value);
     }
   };
 
   const handleSave = () => {
-    // 验证名称
+    // Validate name
     if (!name.trim()) {
       setNameError(t('settings.agent.dialog.nameRequired'));
       return;

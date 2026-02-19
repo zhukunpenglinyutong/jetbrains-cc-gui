@@ -1,6 +1,6 @@
 /**
- * 服务器管理操作 Hook
- * 处理服务器的刷新、切换等操作
+ * Server Management Operations Hook
+ * Handles server refresh, toggle, and other operations
  */
 
 import { useState, useCallback } from 'react';
@@ -30,7 +30,7 @@ export interface UseServerManagementReturn {
 }
 
 /**
- * 服务器管理操作 Hook
+ * Server Management Operations Hook
  */
 export function useServerManagement({
   isCodexMode,
@@ -44,10 +44,10 @@ export function useServerManagement({
   onToast,
   t,
 }: UseServerManagementOptions): UseServerManagementReturn {
-  // 单个服务器刷新状态
+  // Individual server refresh state
   const [serverRefreshStates, setServerRefreshStates] = useState<ServerRefreshState>({});
 
-  // 设置单个服务器刷新状态
+  // Set individual server refresh state
   const setServerRefreshing = useCallback((serverId: string, isRefreshing: boolean, step: string = '') => {
     setServerRefreshStates(prev => ({
       ...prev,
@@ -55,24 +55,24 @@ export function useServerManagement({
     }));
   }, []);
 
-  // 刷新所有服务器
+  // Refresh all servers
   const handleRefresh = useCallback(() => {
     onLog(t('mcp.logs.refreshingAll'), 'info');
-    // 清除所有工具缓存
+    // Clear all tools cache
     clearAllToolsCache(cacheKeys);
-    // 清空当前工具状态
+    // Clear current tools state
     setServerTools({});
     loadServers();
     loadServerStatus();
   }, [cacheKeys, setServerTools, loadServers, loadServerStatus, t, onLog]);
 
-  // 刷新单个服务器
+  // Refresh a single server
   const handleRefreshSingleServer = useCallback((server: McpServer, forceRefreshTools: boolean = false) => {
     const serverName = server.name || server.id;
     setServerRefreshing(server.id, true, t('mcp.logs.startRefresh'));
 
     if (forceRefreshTools) {
-      // 强制刷新工具列表
+      // Force refresh tools list
       clearToolsCache(server.id, cacheKeys);
       setServerTools(prev => {
         const next = { ...prev };
@@ -85,21 +85,21 @@ export function useServerManagement({
       onLog(t('mcp.logs.startRefreshServer', { name: serverName }), 'info', undefined, serverName);
     }
 
-    // 模拟刷新过程（因为SDK不支持单个服务器刷新）
+    // Simulate refresh process (SDK doesn't support single server refresh)
     setTimeout(() => {
       setServerRefreshing(server.id, true, t('mcp.logs.checkingConnection'));
       onLog(t('mcp.logs.checkingConnectionServer', { name: serverName }), 'info', undefined, serverName);
     }, 300);
 
     setTimeout(() => {
-      // 刷新所有服务器状态来更新
+      // Refresh all server statuses to get updates
       loadServerStatus();
       setServerRefreshing(server.id, false, '');
       onLog(t('mcp.logs.refreshComplete', { name: serverName }), 'success', undefined, serverName);
     }, 1500);
   }, [cacheKeys, setServerTools, loadServerStatus, loadServerTools, t, onLog, setServerRefreshing]);
 
-  // 切换服务器启用状态
+  // Toggle server enabled state
   const handleToggleServer = useCallback((server: McpServer, enabled: boolean) => {
     // Set apps based on current provider mode
     const updatedServer: McpServer = {
@@ -114,7 +114,7 @@ export function useServerManagement({
 
     sendToJava(`toggle_${messagePrefix}mcp_server`, updatedServer);
 
-    // 显示Toast提示
+    // Show toast notification
     onToast(
       enabled
         ? `${t('mcp.enabled')} ${server.name || server.id}`

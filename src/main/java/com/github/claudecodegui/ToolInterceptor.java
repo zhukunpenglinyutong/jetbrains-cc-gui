@@ -15,8 +15,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 工具调用拦截器
- * 在消息发送到SDK之前拦截并处理工具调用权限
+ * Tool call interceptor.
+ * Intercepts and handles tool call permissions before messages are sent to the SDK.
  */
 public class ToolInterceptor {
 
@@ -27,25 +27,25 @@ public class ToolInterceptor {
     public ToolInterceptor(Project project) {
         this.project = project;
 
-        // 需要权限控制的工具列表
+        // List of tools that require permission control
         this.controlledTools = new HashSet<>(Arrays.asList(
-            "Write",           // 写入文件
-            "Edit",            // 编辑文件
-            "Delete",          // 删除文件
-            "Bash",            // 执行Shell命令
-            "ExecuteCommand",  // 执行系统命令
-            "CreateDirectory", // 创建目录
-            "MoveFile",        // 移动文件
-            "CopyFile"         // 复制文件
+            "Write",           // Write to file
+            "Edit",            // Edit file
+            "Delete",          // Delete file
+            "Bash",            // Execute shell command
+            "ExecuteCommand",  // Execute system command
+            "CreateDirectory", // Create directory
+            "MoveFile",        // Move file
+            "CopyFile"         // Copy file
         ));
     }
 
     /**
-     * 检查消息是否需要权限确认
+     * Checks whether a message requires permission confirmation.
      */
     public boolean needsPermission(String message) {
-        // 简单的检查逻辑，可以根据需要扩展
-        // 检查消息是否包含需要权限的关键词
+        // Simple check logic, can be extended as needed
+        // Check if the message contains keywords that require permission
         String lowerMessage = message.toLowerCase();
         return lowerMessage.contains("创建") ||
                lowerMessage.contains("写入") ||
@@ -57,16 +57,16 @@ public class ToolInterceptor {
     }
 
     /**
-     * 预处理消息，显示权限确认对话框
-     * @return 如果用户同意，返回"bypassPermissions"；否则返回null表示拒绝
+     * Pre-processes the message and shows a permission confirmation dialog.
+     * @return "bypassPermissions" if the user approves; null if rejected
      */
     public String preprocessMessage(String message) {
         if (!needsPermission(message)) {
-            // 不需要权限，使用默认模式
+            // No permission needed, use default mode
             return "default";
         }
 
-        // 需要权限确认
+        // Permission confirmation required
         AtomicBoolean userApproved = new AtomicBoolean(false);
         CountDownLatch latch = new CountDownLatch(1);
 
@@ -87,11 +87,11 @@ public class ToolInterceptor {
         });
 
         try {
-            // 设置30秒超时，防止无限等待
+            // Set a 30-second timeout to prevent indefinite waiting
             boolean responded = latch.await(30, TimeUnit.SECONDS);
             if (!responded) {
                 LOG.warn("权限请求超时，自动拒绝");
-                return null; // 超时视为拒绝
+                return null; // Timeout is treated as rejection
             }
         } catch (InterruptedException e) {
             LOG.error("Error occurred", e);
@@ -99,22 +99,22 @@ public class ToolInterceptor {
         }
 
         if (userApproved.get()) {
-            // 用户同意，使用bypassPermissions模式
+            // User approved, use bypassPermissions mode
             return "bypassPermissions";
         } else {
-            // 用户拒绝
+            // User rejected
             return null;
         }
     }
 
     /**
-     * 显示详细的权限对话框
+     * Shows a detailed permission dialog.
      */
     public CompletableFuture<Boolean> showDetailedPermissionDialog(String toolName, Map<String, Object> inputs) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
         ApplicationManager.getApplication().invokeLater(() -> {
-            // 创建权限请求
+            // Create permission request
             PermissionRequest request = new PermissionRequest(
                 UUID.randomUUID().toString(),
                 toolName,
@@ -123,7 +123,7 @@ public class ToolInterceptor {
                 this.project
             );
 
-            // 显示权限对话框
+            // Show permission dialog
             PermissionDialog dialog = new PermissionDialog(this.project, request);
             dialog.setDecisionCallback(decision -> {
                 future.complete(decision.allow);
@@ -135,13 +135,13 @@ public class ToolInterceptor {
     }
 
     /**
-     * 解析SDK响应，检测工具调用
+     * Parses the SDK response and detects tool calls.
      */
     public List<ToolCall> parseToolCalls(String sdkResponse) {
         List<ToolCall> toolCalls = new ArrayList<>();
 
         try {
-            // 解析SDK响应，查找工具调用
+            // Parse SDK response and find tool calls
             JsonObject response = JsonParser.parseString(sdkResponse).getAsJsonObject();
 
             if (response.has("message")) {
@@ -161,7 +161,7 @@ public class ToolInterceptor {
                                 call.toolName = toolName;
                                 call.inputs = new HashMap<>();
 
-                                // 转换输入参数
+                                // Convert input parameters
                                 for (Map.Entry<String, JsonElement> entry : inputs.entrySet()) {
                                     call.inputs.put(entry.getKey(), entry.getValue().toString());
                                 }
@@ -173,7 +173,7 @@ public class ToolInterceptor {
                 }
             }
         } catch (Exception e) {
-            // 解析失败，返回空列表
+            // Parse failed, return empty list
         }
 
         return toolCalls;

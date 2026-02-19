@@ -6,7 +6,7 @@
   border: 1px solid var(--vscode-widget-border, #454545);
   border-radius: 8px;
   padding: 24px;
-  /* 改为 100% 宽度 */
+  /* Set to 100% width */
   max-width: 100%;
   width: 100%;
   max-height: 80vh;
@@ -17,7 +17,7 @@
   gap: 20px;
 }
 
-/* Header 区域 */
+/* Header area */
 .plan-approval-dialog-header {
   display: flex;
   justify-content: space-between;
@@ -53,7 +53,7 @@
   line-height: 1.4;
 }
 
-/* 倒计时显示 */
+/* Countdown timer display */
 .countdown-timer {
   display: flex;
   align-items: center;
@@ -74,7 +74,7 @@
   font-weight: 500;
 }
 
-/* 倒计时警告状态 */
+/* Countdown warning state */
 .countdown-timer.warning {
   color: var(--vscode-editorWarning-foreground, #cca700);
   background: rgba(204, 167, 0, 0.15);
@@ -86,7 +86,7 @@
   50% { opacity: 0.7; }
 }
 
-/* 收起/展开按钮 */
+/* Collapse/expand button */
 .collapse-button,
 .expand-button {
   display: flex;
@@ -108,7 +108,7 @@
   border-color: var(--vscode-focusBorder, #007acc);
 }
 
-/* 超时警告横幅 */
+/* Timeout warning banner */
 .timeout-warning-banner {
   display: flex;
   align-items: center;
@@ -127,15 +127,15 @@
   flex-shrink: 0;
 }
 
-/* 收起模式样式 */
+/* Collapsed mode styles */
 .permission-dialog-overlay.collapsed-mode {
   background: transparent;
-  pointer-events: none;  /* 让 overlay 不拦截点击事件 */
+  pointer-events: none;  /* Prevent overlay from intercepting click events */
   align-items: flex-end;
   padding-bottom: 20px;
 }
 
-/* 收起模式下，对话框本身恢复点击响应 */
+/* In collapsed mode, restore click responsiveness on the dialog itself */
 .permission-dialog-overlay.collapsed-mode .plan-approval-dialog-collapsed {
   pointer-events: auto;
 }
@@ -167,7 +167,7 @@
   color: var(--vscode-foreground, #cccccc);
 }
 
-/* 警告模式下的 overlay */
+/* Overlay in warning mode */
 .permission-dialog-overlay.warning-mode {
   background: rgba(204, 167, 0, 0.05);
 }

@@ -4,10 +4,11 @@ import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from
 import { ConfigSelect, ModelSelect, ModeSelect, ReasoningSelect } from './selectors';
 import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
+import type { CodexCustomModel } from '../../types/provider';
 
 /**
- * 从 localStorage 获取自定义 Codex 模型列表
- * 使用运行时类型验证确保数据安全
+ * Get custom Codex model list from localStorage
+ * Uses runtime type validation for data safety
  */
 function getCustomCodexModels(): ModelInfo[] {
   if (typeof window === 'undefined' || !window.localStorage) {
@@ -19,7 +20,7 @@ function getCustomCodexModels(): ModelInfo[] {
       return [];
     }
     const parsed = JSON.parse(stored);
-    // 使用运行时类型验证
+    // Use runtime type validation
     const validModels = validateCodexCustomModels(parsed);
     return validModels.map(m => ({
       id: m.id,
@@ -32,8 +33,37 @@ function getCustomCodexModels(): ModelInfo[] {
 }
 
 /**
- * ButtonArea - 底部工具栏组件
- * 包含模式选择、模型选择、附件按钮、增强提示词按钮、发送/停止按钮
+ * Get custom Claude model list from localStorage
+ * Uses runtime type validation for data safety
+ */
+function getCustomClaudeModels(): ModelInfo[] {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS);
+    if (!stored) {
+      return [];
+    }
+    const parsed = JSON.parse(stored) as CodexCustomModel[];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((m): m is CodexCustomModel => !!m && typeof m === 'object' && typeof m.id === 'string' && m.id.trim().length > 0)
+      .map(m => ({
+        id: m.id,
+        label: m.label || m.id,
+        description: m.description,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * ButtonArea - Bottom toolbar component
+ * Contains mode selector, model selector, attachment button, prompt enhancer button, send/stop button
  */
 export const ButtonArea = ({
   disabled = false,
@@ -62,21 +92,21 @@ export const ButtonArea = ({
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 用于追踪 localStorage 中自定义模型的变化
-  // 当 localStorage 发生变化时，通过更新此版本号触发 useMemo 重新计算
+  // Track changes to custom models in localStorage
+  // When localStorage changes, updating this version number triggers useMemo recalculation
   const [customModelsVersion, setCustomModelsVersion] = useState(0);
 
-  // 监听 localStorage 变化（跨标签页同步 + 同标签页自定义事件）
+  // Listen for localStorage changes (cross-tab sync + same-tab custom events)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEYS.CODEX_CUSTOM_MODELS || e.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
+      if (e.key === STORAGE_KEYS.CODEX_CUSTOM_MODELS || e.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING || e.key === STORAGE_KEYS.CLAUDE_CUSTOM_MODELS) {
         setCustomModelsVersion(v => v + 1);
       }
     };
 
-    // 监听自定义事件（同标签页内的 localStorage 变化）
+    // Listen for custom events (localStorage changes within the same tab)
     const handleCustomStorageChange = (e: CustomEvent<{ key: string }>) => {
-      if (e.detail.key === STORAGE_KEYS.CODEX_CUSTOM_MODELS || e.detail.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
+      if (e.detail.key === STORAGE_KEYS.CODEX_CUSTOM_MODELS || e.detail.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING || e.detail.key === STORAGE_KEYS.CLAUDE_CUSTOM_MODELS) {
         setCustomModelsVersion(v => v + 1);
       }
     };
@@ -91,8 +121,8 @@ export const ButtonArea = ({
   }, []);
 
   /**
-   * 应用模型名称映射
-   * 将基础模型 ID 映射为实际的模型名称（如带容量后缀的版本）
+   * Apply model name mapping
+   * Maps base model IDs to actual model names (e.g., versions with capacity suffixes)
    */
   const applyModelMapping = useCallback((model: ModelInfo, mapping: { haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
     const modelKeyMap: Record<string, keyof typeof mapping> = {
@@ -105,25 +135,25 @@ export const ButtonArea = ({
     if (key && mapping[key]) {
       const actualModel = String(mapping[key]).trim();
       if (actualModel.length > 0) {
-        // 保持原始 id 作为唯一标识，只修改 label 为自定义名称
-        // 这样即使多个模型有相同的 displayName，id 仍然是唯一的
+        // Keep the original id as unique identifier, only modify label to custom name
+        // This ensures id remains unique even if multiple models share the same displayName
         return { ...model, label: actualModel };
       }
     }
     return model;
   }, []);
 
-  // 根据当前提供商选择模型列表
-  // customModelsVersion 用于在 localStorage 变化时触发重新计算
+  // Select model list based on current provider
+  // customModelsVersion triggers recalculation when localStorage changes
   const availableModels = useMemo(() => {
     if (currentProvider === 'codex') {
-      // 合并内置模型和自定义模型
+      // Merge built-in models and custom models
       const customModels = getCustomCodexModels();
       if (customModels.length === 0) {
         return CODEX_MODELS;
       }
-      // 自定义模型放在前面，内置模型放在后面
-      // 过滤掉与自定义模型重复的内置模型
+      // Custom models first, built-in models after
+      // Filter out built-in models that duplicate custom models
       const customIds = new Set(customModels.map(m => m.id));
       const filteredBuiltIn = CODEX_MODELS.filter(m => !customIds.has(m.id));
       return [...customModels, ...filteredBuiltIn];
@@ -131,25 +161,37 @@ export const ButtonArea = ({
     if (typeof window === 'undefined' || !window.localStorage) {
       return CLAUDE_MODELS;
     }
+
+    // Apply model mapping to built-in models
+    let builtInModels = CLAUDE_MODELS;
     try {
       const stored = window.localStorage.getItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING);
-      if (!stored) {
-        return CLAUDE_MODELS;
+      if (stored) {
+        const mapping = JSON.parse(stored) as {
+          main?: string;
+          haiku?: string;
+          sonnet?: string;
+          opus?: string;
+        };
+        builtInModels = CLAUDE_MODELS.map((m) => applyModelMapping(m, mapping));
       }
-      const mapping = JSON.parse(stored) as {
-        main?: string;
-        haiku?: string;
-        sonnet?: string;
-        opus?: string;
-      };
-      return CLAUDE_MODELS.map((m) => applyModelMapping(m, mapping));
     } catch {
-      return CLAUDE_MODELS;
+      // ignore
     }
+
+    // Merge custom models (displayed before built-in models)
+    const customModels = getCustomClaudeModels();
+    if (customModels.length === 0) {
+      return builtInModels;
+    }
+    // Filter out built-in models that duplicate custom models
+    const customIds = new Set(customModels.map(m => m.id));
+    const filteredBuiltIn = builtInModels.filter(m => !customIds.has(m.id));
+    return [...customModels, ...filteredBuiltIn];
   }, [currentProvider, applyModelMapping, customModelsVersion]);
 
   /**
-   * 处理提交按钮点击
+   * Handle submit button click
    */
   const handleSubmitClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -157,7 +199,7 @@ export const ButtonArea = ({
   }, [onSubmit]);
 
   /**
-   * 处理停止按钮点击
+   * Handle stop button click
    */
   const handleStopClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -165,35 +207,35 @@ export const ButtonArea = ({
   }, [onStop]);
 
   /**
-   * 处理模式选择
+   * Handle mode selection
    */
   const handleModeSelect = useCallback((mode: PermissionMode) => {
     onModeSelect?.(mode);
   }, [onModeSelect]);
 
   /**
-   * 处理模型选择
+   * Handle model selection
    */
   const handleModelSelect = useCallback((modelId: string) => {
     onModelSelect?.(modelId);
   }, [onModelSelect]);
 
   /**
-   * 处理提供商选择
+   * Handle provider selection
    */
   const handleProviderSelect = useCallback((providerId: string) => {
     onProviderSelect?.(providerId);
   }, [onProviderSelect]);
 
   /**
-   * 处理思考深度选择 (Codex only)
+   * Handle reasoning depth selection (Codex only)
    */
   const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
     onReasoningChange?.(effort);
   }, [onReasoningChange]);
 
   /**
-   * 处理增强提示词按钮点击
+   * Handle enhance prompt button click
    */
   const handleEnhanceClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -202,7 +244,7 @@ export const ButtonArea = ({
 
   return (
     <div className="button-area" data-provider={currentProvider}>
-      {/* 左侧：选择器 */}
+      {/* Left side: selectors */}
       <div className="button-area-left">
         <ConfigSelect
           currentProvider={currentProvider}
@@ -222,11 +264,11 @@ export const ButtonArea = ({
         )}
       </div>
 
-      {/* 右侧:工具按钮 */}
+      {/* Right side: tool buttons */}
       <div className="button-area-right">
         <div className="button-divider" />
 
-        {/* 增强提示词按钮 */}
+        {/* Enhance prompt button */}
         <button
           className="enhance-prompt-button has-tooltip"
           onClick={handleEnhanceClick}
@@ -236,7 +278,7 @@ export const ButtonArea = ({
           <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
         </button>
 
-        {/* 发送/停止按钮 */}
+        {/* Send/Stop button */}
         {isLoading ? (
           <button
             className="submit-button stop-button"

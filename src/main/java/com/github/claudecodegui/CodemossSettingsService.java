@@ -20,8 +20,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Codemoss 配置文件服务(门面模式)
- * 委托具体功能给各个专门的 Manager
+ * Codemoss configuration service (Facade pattern).
+ * Delegates specific functionality to specialized managers.
  */
 public class CodemossSettingsService {
 
@@ -46,13 +46,13 @@ public class CodemossSettingsService {
     public CodemossSettingsService() {
         this.gson = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
 
-        // 初始化 ConfigPathManager
+        // Initialize ConfigPathManager
         this.pathManager = new ConfigPathManager();
 
-        // 初始化 ClaudeSettingsManager
+        // Initialize ClaudeSettingsManager
         this.claudeSettingsManager = new ClaudeSettingsManager(gson, pathManager);
 
-        // 初始化 WorkingDirectoryManager
+        // Initialize WorkingDirectoryManager
         this.workingDirectoryManager = new WorkingDirectoryManager(
             (ignored) -> {
                 try {
@@ -70,13 +70,13 @@ public class CodemossSettingsService {
             }
         );
 
-        // 初始化 AgentManager
+        // Initialize AgentManager
         this.agentManager = new AgentManager(gson, pathManager);
 
-        // 初始化 PromptManager
+        // Initialize PromptManager
         this.promptManager = new PromptManager(gson, pathManager);
 
-        // 初始化 SkillManager
+        // Initialize SkillManager
         this.skillManager = new SkillManager(
             (ignored) -> {
                 try {
@@ -95,7 +95,7 @@ public class CodemossSettingsService {
             claudeSettingsManager
         );
 
-        // 初始化 McpServerManager
+        // Initialize McpServerManager
         this.mcpServerManager = new McpServerManager(
             gson,
             (ignored) -> {
@@ -115,7 +115,7 @@ public class CodemossSettingsService {
             claudeSettingsManager
         );
 
-        // 初始化 ProviderManager
+        // Initialize ProviderManager
         this.providerManager = new ProviderManager(
             gson,
             (ignored) -> {
@@ -136,13 +136,13 @@ public class CodemossSettingsService {
             claudeSettingsManager
         );
 
-        // 初始化 CodexSettingsManager
+        // Initialize CodexSettingsManager
         this.codexSettingsManager = new CodexSettingsManager(gson);
 
-        // 初始化 CodexMcpServerManager
+        // Initialize CodexMcpServerManager
         this.codexMcpServerManager = new CodexMcpServerManager(codexSettingsManager);
 
-        // 初始化 CodexProviderManager
+        // Initialize CodexProviderManager
         this.codexProviderManager = new CodexProviderManager(
             gson,
             (ignored) -> {
@@ -164,17 +164,17 @@ public class CodemossSettingsService {
         );
     }
 
-    // ==================== 基础配置管理 ====================
+    // ==================== Basic Config Management ====================
 
     /**
-     * 获取配置文件路径 (~/.codemoss/config.json)
+     * Get config file path (~/.codemoss/config.json).
      */
     public String getConfigPath() {
         return pathManager.getConfigPath();
     }
 
     /**
-     * 读取配置文件
+     * Read the config file.
      */
     public JsonObject readConfig() throws IOException {
         String configPath = getConfigPath();
@@ -196,12 +196,12 @@ public class CodemossSettingsService {
     }
 
     /**
-     * 写入配置文件
+     * Write the config file.
      */
     public void writeConfig(JsonObject config) throws IOException {
         pathManager.ensureConfigDirectory();
 
-        // 备份现有配置
+        // Back up existing config
         backupConfig();
 
         String configPath = getConfigPath();
@@ -226,13 +226,13 @@ public class CodemossSettingsService {
     }
 
     /**
-     * 创建默认配置
+     * Create default config.
      */
     private JsonObject createDefaultConfig() {
         JsonObject config = new JsonObject();
         config.addProperty("version", CONFIG_VERSION);
 
-        // Claude 配置 - 空的供应商列表
+        // Claude config - empty provider list
         JsonObject claude = new JsonObject();
         JsonObject providers = new JsonObject();
 
@@ -243,12 +243,12 @@ public class CodemossSettingsService {
         return config;
     }
 
-    // ==================== Claude Settings 管理 ====================
+    // ==================== Claude Settings Management ====================
 
     public JsonObject getCurrentClaudeConfig() throws IOException {
         JsonObject currentConfig = claudeSettingsManager.getCurrentClaudeConfig();
 
-        // 如果有 codemossProviderId,尝试从 codemoss 配置中获取供应商名称
+        // If codemossProviderId exists, try to get provider name from codemoss config
         if (currentConfig.has("providerId")) {
             String providerId = currentConfig.get("providerId").getAsString();
             try {
@@ -266,7 +266,7 @@ public class CodemossSettingsService {
                     }
                 }
             } catch (Exception e) {
-                // 忽略错误,供应商名称是可选的
+                // Ignore error - provider name is optional
             }
         }
 
@@ -293,7 +293,7 @@ public class CodemossSettingsService {
         providerManager.applyActiveProviderToClaudeSettings();
     }
 
-    // ==================== Working Directory 管理 ====================
+    // ==================== Working Directory Management ====================
 
     public String getCustomWorkingDirectory(String projectPath) throws IOException {
         return workingDirectoryManager.getCustomWorkingDirectory(projectPath);
@@ -307,61 +307,61 @@ public class CodemossSettingsService {
         return workingDirectoryManager.getAllWorkingDirectories();
     }
 
-    // ==================== Commit Prompt 配置管理 ====================
+    // ==================== Commit Prompt Config Management ====================
 
     /**
-     * 获取 commit AI 提示词
-     * @return commit 提示词
+     * Get the commit AI prompt.
+     * @return commit prompt
      */
     public String getCommitPrompt() throws IOException {
         JsonObject config = readConfig();
 
-        // 检查是否有 commitPrompt 配置
+        // Check for commitPrompt config
         if (config.has("commitPrompt")) {
             return config.get("commitPrompt").getAsString();
         }
 
-        // 返回默认值（从 i18n 资源包获取）
+        // Return default value (from i18n resource bundle)
         return ClaudeCodeGuiBundle.message("commit.defaultPrompt");
     }
 
     /**
-     * 设置 commit AI 提示词
-     * @param prompt commit 提示词
+     * Set the commit AI prompt.
+     * @param prompt commit prompt
      */
     public void setCommitPrompt(String prompt) throws IOException {
         JsonObject config = readConfig();
 
-        // 保存配置
+        // Save config
         config.addProperty("commitPrompt", prompt);
 
         writeConfig(config);
         LOG.info("[CodemossSettings] Set commit prompt: " + prompt);
     }
 
-    // ==================== 🔧 Streaming 配置管理 ====================
+    // ==================== Streaming Config Management ====================
 
     /**
-     * 获取流式传输配置
-     * @param projectPath 项目路径
-     * @return 是否启用流式传输
+     * Get streaming configuration.
+     * @param projectPath project path
+     * @return whether streaming is enabled
      */
     public boolean getStreamingEnabled(String projectPath) throws IOException {
         JsonObject config = readConfig();
 
-        // 检查是否有 streaming 配置
+        // Check for streaming config
         if (!config.has("streaming")) {
             return true;
         }
 
         JsonObject streaming = config.getAsJsonObject("streaming");
 
-        // 先检查项目特定的配置
+        // Check project-specific config first
         if (projectPath != null && streaming.has(projectPath)) {
             return streaming.get(projectPath).getAsBoolean();
         }
 
-        // 如果没有项目特定的配置，使用全局默认值
+        // Fall back to global default if no project-specific config
         if (streaming.has("default")) {
             return streaming.get("default").getAsBoolean();
         }
@@ -370,14 +370,14 @@ public class CodemossSettingsService {
     }
 
     /**
-     * 设置流式传输配置
-     * @param projectPath 项目路径
-     * @param enabled 是否启用
+     * Set streaming configuration.
+     * @param projectPath project path
+     * @param enabled whether to enable
      */
     public void setStreamingEnabled(String projectPath, boolean enabled) throws IOException {
         JsonObject config = readConfig();
 
-        // 确保 streaming 对象存在
+        // Ensure streaming object exists
         JsonObject streaming;
         if (config.has("streaming")) {
             streaming = config.getAsJsonObject("streaming");
@@ -386,7 +386,7 @@ public class CodemossSettingsService {
             config.add("streaming", streaming);
         }
 
-        // 保存项目特定配置（同时也作为默认值）
+        // Save project-specific config (also serves as default)
         if (projectPath != null) {
             streaming.addProperty(projectPath, enabled);
         }
@@ -396,29 +396,29 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set streaming enabled to " + enabled + " for project: " + projectPath);
     }
 
-    // ==================== 自动打开文件配置管理 ====================
+    // ==================== Auto Open File Config Management ====================
 
     /**
-     * 获取自动打开文件配置
-     * @param projectPath 项目路径
-     * @return 是否启用自动打开文件
+     * Get auto-open file configuration.
+     * @param projectPath project path
+     * @return whether auto-open file is enabled
      */
     public boolean getAutoOpenFileEnabled(String projectPath) throws IOException {
         JsonObject config = readConfig();
 
-        // 检查是否有 autoOpenFile 配置
+        // Check for autoOpenFile config
         if (!config.has("autoOpenFile")) {
             return true;
         }
 
         JsonObject autoOpenFile = config.getAsJsonObject("autoOpenFile");
 
-        // 先检查项目特定的配置
+        // Check project-specific config first
         if (projectPath != null && autoOpenFile.has(projectPath)) {
             return autoOpenFile.get(projectPath).getAsBoolean();
         }
 
-        // 如果没有项目特定的配置，使用全局默认值
+        // Fall back to global default if no project-specific config
         if (autoOpenFile.has("default")) {
             return autoOpenFile.get("default").getAsBoolean();
         }
@@ -427,14 +427,14 @@ public class CodemossSettingsService {
     }
 
     /**
-     * 设置自动打开文件配置
-     * @param projectPath 项目路径
-     * @param enabled 是否启用
+     * Set auto-open file configuration.
+     * @param projectPath project path
+     * @param enabled whether to enable
      */
     public void setAutoOpenFileEnabled(String projectPath, boolean enabled) throws IOException {
         JsonObject config = readConfig();
 
-        // 确保 autoOpenFile 对象存在
+        // Ensure autoOpenFile object exists
         JsonObject autoOpenFile;
         if (config.has("autoOpenFile")) {
             autoOpenFile = config.getAsJsonObject("autoOpenFile");
@@ -443,7 +443,7 @@ public class CodemossSettingsService {
             config.add("autoOpenFile", autoOpenFile);
         }
 
-        // 保存项目特定配置（同时也作为默认值）
+        // Save project-specific config (also serves as default)
         if (projectPath != null) {
             autoOpenFile.addProperty(projectPath, enabled);
         }
@@ -453,7 +453,7 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set auto open file enabled to " + enabled + " for project: " + projectPath);
     }
 
-    // ==================== Provider 管理 ====================
+    // ==================== Provider Management ====================
 
     public List<JsonObject> getClaudeProviders() throws IOException {
         return providerManager.getClaudeProviders();
@@ -503,7 +503,7 @@ public class CodemossSettingsService {
         return providerManager.isLocalProviderActive();
     }
 
-    // ==================== MCP Server 管理 ====================
+    // ==================== MCP Server Management ====================
 
     public List<JsonObject> getMcpServers() throws IOException {
         return mcpServerManager.getMcpServers();
@@ -529,7 +529,7 @@ public class CodemossSettingsService {
         return mcpServerManager.validateMcpServer(server);
     }
 
-    // ==================== Codex MCP Server 管理 ====================
+    // ==================== Codex MCP Server Management ====================
 
     public CodexMcpServerManager getCodexMcpServerManager() {
         return codexMcpServerManager;
@@ -551,7 +551,7 @@ public class CodemossSettingsService {
         return codexMcpServerManager.validateMcpServer(server);
     }
 
-    // ==================== Skills 管理 ====================
+    // ==================== Skills Management ====================
 
     public List<JsonObject> getSkills() throws IOException {
         return skillManager.getSkills();
@@ -573,7 +573,7 @@ public class CodemossSettingsService {
         skillManager.syncSkillsToClaudeSettings();
     }
 
-    // ==================== Agents 管理 ====================
+    // ==================== Agents Management ====================
 
     public List<JsonObject> getAgents() throws IOException {
         return agentManager.getAgents();
@@ -603,7 +603,7 @@ public class CodemossSettingsService {
         agentManager.setSelectedAgentId(agentId);
     }
 
-    // ==================== Prompts 管理 ====================
+    // ==================== Prompts Management ====================
 
     public List<JsonObject> getPrompts() throws IOException {
         return promptManager.getPrompts();
@@ -625,7 +625,7 @@ public class CodemossSettingsService {
         return promptManager.getPrompt(id);
     }
 
-    // ==================== Codex Provider 管理 ====================
+    // ==================== Codex Provider Management ====================
 
     public List<JsonObject> getCodexProviders() throws IOException {
         return codexProviderManager.getCodexProviders();

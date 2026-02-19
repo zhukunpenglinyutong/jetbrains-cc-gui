@@ -1,6 +1,6 @@
 /**
- * 服务器工具列表面板组件
- * 显示服务器的工具列表，支持悬停查看工具详情
+ * Server Tools List Panel Component
+ * Displays the server's tools list with hover-to-view tool details
  */
 
 import type { ServerToolsState, McpTool } from './types';
@@ -16,7 +16,7 @@ export interface ServerToolsPanelProps {
 }
 
 /**
- * 服务器工具列表面板
+ * Server Tools List Panel
  */
 export function ServerToolsPanel({
   toolsInfo,
@@ -27,7 +27,7 @@ export function ServerToolsPanel({
 }: ServerToolsPanelProps) {
   return (
     <div className="server-detail-panel">
-      {/* 工具列表 */}
+      {/* Tools list */}
       <div className="server-sidebar">
         <div className="sidebar-header">
           <span className="sidebar-title">{t('mcp.tools')}</span>

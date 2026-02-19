@@ -119,15 +119,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             assistantContent.append(content);
             callback.onMessage("content", content);
         } else if (line.startsWith("[CONTENT_DELTA]")) {
-            // 🔧 流式传输：解析 JSON 编码的 delta，保留换行符
+            // Streaming: parse JSON-encoded delta, preserving newlines
             String rawDelta = line.substring("[CONTENT_DELTA]".length());
             String jsonStr = rawDelta.startsWith(" ") ? rawDelta.substring(1) : rawDelta;
             String delta;
             try {
-                // JSON 解码，还原换行符等特殊字符
+                // JSON decode to restore newlines and other special characters
                 delta = new com.google.gson.Gson().fromJson(jsonStr, String.class);
             } catch (Exception e) {
-                // 解析失败时使用原始字符串
+                // Fall back to raw string on parse failure
                 delta = jsonStr;
             }
             assistantContent.append(delta);
@@ -136,7 +136,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String thinkingContent = line.substring("[THINKING]".length()).trim();
             callback.onMessage("thinking", thinkingContent);
         } else if (line.startsWith("[THINKING_DELTA]")) {
-            // 🔧 流式传输：解析 JSON 编码的 thinking delta
+            // Streaming: parse JSON-encoded thinking delta
             String rawDelta = line.substring("[THINKING_DELTA]".length());
             String jsonStr = rawDelta.startsWith(" ") ? rawDelta.substring(1) : rawDelta;
             String thinkingDelta;
@@ -147,10 +147,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             }
             callback.onMessage("thinking_delta", thinkingDelta);
         } else if (line.startsWith("[STREAM_START]")) {
-            // 🔧 流式传输：开始标记
+            // Streaming: start marker
             callback.onMessage("stream_start", "");
         } else if (line.startsWith("[STREAM_END]")) {
-            // 🔧 流式传输：结束标记
+            // Streaming: end marker
             callback.onMessage("stream_end", "");
         } else if (line.startsWith("[SESSION_ID]")) {
             String capturedSessionId = line.substring("[SESSION_ID]".length()).trim();
@@ -631,12 +631,12 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     stdinInput.addProperty("agentPrompt", agentPrompt);
                     LOG.info("[Agent] ✓ Adding agentPrompt to stdinInput (length: " + agentPrompt.length() + " chars)");
                 }
-                // 🔧 流式传输配置
+                // Streaming configuration
                 if (streaming != null) {
                     stdinInput.addProperty("streaming", streaming);
                     LOG.info("[Streaming] ✓ Adding streaming to stdinInput: " + streaming);
                 }
-                // 🔧 禁用思考模式配置
+                // Disable thinking mode configuration
                 if (disableThinking != null && disableThinking) {
                     stdinInput.addProperty("disableThinking", true);
                     LOG.info("[Thinking] ✓ Disabling thinking mode for this request");
@@ -776,7 +776,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                                 assistantContent.append(content);
                                 callback.onMessage("content", content);
                             } else if (line.startsWith("[CONTENT_DELTA]")) {
-                                // 🔧 流式传输：解析 JSON 编码的 delta，保留换行符
+                                // Streaming: parse JSON-encoded delta, preserving newlines
                                 String rawDelta = line.substring("[CONTENT_DELTA]".length());
                                 String jsonStr = rawDelta.startsWith(" ") ? rawDelta.substring(1) : rawDelta;
                                 String delta;
@@ -791,7 +791,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                                 String thinkingContent = line.substring("[THINKING]".length()).trim();
                                 callback.onMessage("thinking", thinkingContent);
                             } else if (line.startsWith("[THINKING_DELTA]")) {
-                                // 🔧 流式传输：解析 JSON 编码的 thinking delta
+                                // Streaming: parse JSON-encoded thinking delta
                                 String rawDelta = line.substring("[THINKING_DELTA]".length());
                                 String jsonStr = rawDelta.startsWith(" ") ? rawDelta.substring(1) : rawDelta;
                                 String thinkingDelta;
@@ -802,10 +802,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                                 }
                                 callback.onMessage("thinking_delta", thinkingDelta);
                             } else if (line.startsWith("[STREAM_START]")) {
-                                // 🔧 流式传输：开始标记
+                                // Streaming: start marker
                                 callback.onMessage("stream_start", "");
                             } else if (line.startsWith("[STREAM_END]")) {
-                                // 🔧 流式传输：结束标记
+                                // Streaming: end marker
                                 callback.onMessage("stream_end", "");
                             } else if (line.startsWith("[SESSION_ID]")) {
                                 String capturedSessionId = line.substring("[SESSION_ID]".length()).trim();
@@ -854,7 +854,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                             callback.onError(errorMsg);
                         }
                     } else {
-                        // 已经有 SEND_ERROR，不再附加输出
+                        // Already had a SEND_ERROR, no need to append additional output
                         if (exitCode == 0) {
                             result.success = true;
                             callback.onComplete(result);
@@ -1031,7 +1031,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 });
                 readerThread.start();
 
-                long deadline = System.currentTimeMillis() + 60000; // 60秒超时
+                long deadline = System.currentTimeMillis() + 60000; // 60-second timeout
                 while (!found[0] && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);
                 }
@@ -1165,7 +1165,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 });
                 readerThread.start();
 
-                // 使用 65 秒超时：STDIO 验证 30s + 进程启动/npm 下载开销
+                // 65-second timeout: STDIO verification 30s + process startup/npm download overhead
                 long deadline = System.currentTimeMillis() + 65000;
                 while (!found[0] && !readerDone[0] && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);
@@ -1194,7 +1194,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
                 LOG.info("[McpStatus] Marker not found (found=" + found[0] + ", readerDone=" + readerDone[0] + ", elapsed=" + elapsed + "ms), trying fallback");
 
-                // Fallback: 先尝试从输出中查找 [MCP_SERVER_STATUS] 标记行
+                // Fallback: first try to find the [MCP_SERVER_STATUS] marker line in the output
                 String outputStr = output.toString().trim();
                 for (String line : outputStr.split("\n")) {
                     if (line.startsWith("[MCP_SERVER_STATUS]")) {
@@ -1325,7 +1325,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 });
                 readerThread.start();
 
-                // 使用 65 秒超时：工具获取可能需要更长时间
+                // 65-second timeout: tool retrieval may take longer
                 long deadline = System.currentTimeMillis() + 65000;
                 while (!found[0] && !readerDone[0] && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);

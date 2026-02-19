@@ -22,16 +22,16 @@ import org.jetbrains.annotations.Nullable;
 import java.io.File;
 
 /**
- * 将选中的代码发送到插件聊天窗口的Action
- * 支持跨平台快捷键：Mac(Cmd+Option+K) 和 Windows/Linux(Ctrl+Alt+K)
- * 实现 DumbAware 接口允许在索引构建期间使用此功能
+ * Action that sends selected code to the plugin chat window.
+ * Supports cross-platform shortcuts: Mac (Cmd+Option+K) and Windows/Linux (Ctrl+Alt+K).
+ * Implements DumbAware to allow usage during index building.
  */
 public class SendSelectionToTerminalAction extends AnAction implements DumbAware {
 
     private static final Logger LOG = Logger.getInstance(SendSelectionToTerminalAction.class);
 
     /**
-     * 构造函数 - 设置本地化的Action文本和描述
+     * Constructor - sets up localized action text and description.
      */
     public SendSelectionToTerminalAction() {
         super(
@@ -47,7 +47,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
     }
 
     /**
-     * 执行Action的主要逻辑
+     * Main logic for executing the action.
      */
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -57,18 +57,18 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         }
 
         try {
-            // 使用 ReadAction.nonBlocking() 在后台线程中安全地获取文件信息
+            // Use ReadAction.nonBlocking() to safely retrieve file information on a background thread
             ReadAction
                 .nonBlocking(() -> {
-                    // 在后台线程中获取选中代码和文件信息
+                    // Retrieve selected code and file information on the background thread
                     return getSelectionInfo(e);
                 })
                 .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), selectionInfo -> {
                     if (selectionInfo == null) {
-                        return; // 错误信息已在方法内显示
+                        return; // Error message already shown within the method
                     }
 
-                    // 发送到插件的聊天窗口（在 UI 线程执行）
+                    // Send to the plugin chat window (executed on the UI thread)
                     sendToChatWindow(project, selectionInfo);
                     LOG.info("已添加到待发送: " + selectionInfo);
                 })
@@ -81,8 +81,8 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
     }
 
     /**
-     * 更新Action的可用性状态
-     * 只有在有编辑器、有文件打开、有选中内容时才启用
+     * Updates the action's availability state.
+     * Only enabled when an editor is active, a file is open, and text is selected.
      */
     @Override
     public void update(@NotNull AnActionEvent e) {
@@ -101,12 +101,12 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         SelectionModel selectionModel = editor.getSelectionModel();
         String selectedText = selectionModel.getSelectedText();
 
-        // 只有选中内容时才启用
+        // Only enable when there is selected text
         e.getPresentation().setEnabledAndVisible(selectedText != null && !selectedText.isEmpty());
     }
 
     /**
-     * 获取选中的代码信息并格式化为指定格式
+     * Retrieves selected code information and formats it into the specified format.
      */
     private @Nullable String getSelectionInfo(@NotNull AnActionEvent e) {
         Project project = e.getProject();
@@ -120,13 +120,13 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         SelectionModel selectionModel = editor.getSelectionModel();
         String selectedText = selectionModel.getSelectedText();
 
-        // 检查是否有选中内容
+        // Check if there is any selected text
         if (selectedText == null || selectedText.trim().isEmpty()) {
             showInfo(project, ClaudeCodeGuiBundle.message("send.selectCodeFirst"));
             return null;
         }
 
-        // 获取当前文件
+        // Get the current file
         VirtualFile[] selectedFiles = FileEditorManager.getInstance(project).getSelectedFiles();
         if (selectedFiles.length == 0) {
             showError(project, ClaudeCodeGuiBundle.message("send.cannotGetFile"));
@@ -134,22 +134,22 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
         }
         VirtualFile virtualFile = selectedFiles[0];
 
-        // 获取相对项目路径
+        // Get the project-relative path
         String relativePath = getRelativePath(project, virtualFile);
         if (relativePath == null) {
             showError(project, ClaudeCodeGuiBundle.message("send.cannotGetFilePath"));
             return null;
         }
 
-        // 获取选中范围的行号
+        // Get the line numbers for the selection range
         int startOffset = selectionModel.getSelectionStart();
         int endOffset = selectionModel.getSelectionEnd();
 
-        int startLine = editor.getDocument().getLineNumber(startOffset) + 1; // +1 因为行号从1开始
+        int startLine = editor.getDocument().getLineNumber(startOffset) + 1; // +1 because line numbers are 1-based
         int endLine = editor.getDocument().getLineNumber(endOffset) + 1;
 
-        // 格式化输出：@path#Lstart-Lend
-        // 如果是单行，只显示一个行号
+        // Format the output: @path#Lstart-Lend
+        // For a single line, show only one line number
         String formattedPath;
         if (startLine == endLine) {
             formattedPath = "@" + relativePath + "#L" + startLine;
@@ -161,11 +161,11 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
     }
 
     /**
-     * 获取文件的绝对路径（从电脑根目录开始）
+     * Gets the absolute path of the file (from the filesystem root).
      */
     private @Nullable String getRelativePath(@NotNull Project project, @NotNull VirtualFile file) {
         try {
-            // 获取文件的绝对路径
+            // Get the absolute path of the file
             String absolutePath = file.getPath();
             LOG.debug("文件绝对路径: " + absolutePath);
             return absolutePath;
@@ -176,23 +176,23 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
     }
 
     /**
-     * 发送选中信息到插件的聊天窗口
+     * Sends the selection information to the plugin chat window.
      */
     private void sendToChatWindow(@NotNull Project project, @NotNull String text) {
         try {
-            // 获取插件的工具窗口
+            // Get the plugin tool window
             ToolWindowManager toolWindowManager = ToolWindowManager.getInstance(project);
             ToolWindow toolWindow = toolWindowManager.getToolWindow("CCG");
 
             if (toolWindow != null) {
-                // 如果窗口未激活，先激活窗口，等待窗口打开后再发送内容
+                // If the window is not visible, activate it first and wait for it to open before sending content
                 if (!toolWindow.isVisible()) {
-                    // 激活窗口
+                    // Activate the window
                     toolWindow.activate(() -> {
-                        // 窗口激活后，延迟一小段时间确保界面加载完成，然后发送内容
+                        // After window activation, add a short delay to ensure the UI is fully loaded, then send content
                         ApplicationManager.getApplication().invokeLater(() -> {
                             try {
-                                Thread.sleep(300); // 等待300ms确保界面加载完成
+                                Thread.sleep(300); // Wait 300ms to ensure the UI is fully loaded
                                 ClaudeSDKToolWindow.addSelectionFromExternal(project, text);
                                 LOG.info("窗口已激活并发送内容到项目: " + project.getName());
                             } catch (InterruptedException e) {
@@ -201,9 +201,9 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
                         });
                     }, true);
                 } else {
-                    // 窗口已经打开，直接发送内容
+                    // Window is already open, send content directly
                     ClaudeSDKToolWindow.addSelectionFromExternal(project, text);
-                    // 确保窗口获得焦点
+                    // Ensure the window gains focus
                     toolWindow.activate(null, true);
                     LOG.info("聊天窗口已激活并发送内容到项目: " + project.getName());
                 }
@@ -218,7 +218,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
     }
 
     /**
-     * 显示错误信息
+     * Displays an error message.
      */
     private void showError(@Nullable Project project, @NotNull String message) {
         LOG.error(message);
@@ -230,7 +230,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
     }
 
     /**
-     * 显示信息提示
+     * Displays an informational message.
      */
     private void showInfo(@Nullable Project project, @NotNull String message) {
         LOG.info(message);

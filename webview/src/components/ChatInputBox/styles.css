@@ -1,6 +1,6 @@
 /**
- * ChatInputBox 组件样式
- * 功能: 004-refactor-input-box
+ * ChatInputBox component styles
+ * Feature: 004-refactor-input-box
  */
 
 /* ============================================================
@@ -17,7 +17,7 @@
 }
 
 /* ============================================================
-   CSS 变量 - 暗色主题（默认）
+   CSS Variables - Dark Theme (Default)
    ============================================================ */
 :root .chat-input-box,
 [data-theme="dark"] .chat-input-box {
@@ -46,7 +46,7 @@
 }
 
 /* ============================================================
-   CSS 变量 - 亮色主题
+   CSS Variables - Light Theme
    ============================================================ */
 [data-theme="light"] .chat-input-box {
   --input-bg: var(--bg-chat, #ffffff);
@@ -74,7 +74,7 @@
 }
 
 /* ============================================================
-   容器布局
+   Container Layout
    ============================================================ */
 .chat-input-box {
   display: flex;
@@ -88,13 +88,13 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* hover 时显示蓝色边框发光效果 */
+/* Show blue border glow effect on hover */
 .chat-input-box:hover {
   border-color: var(--input-focus-border);
   box-shadow: 0 0 0 1px var(--input-focus-border);
 }
 
-/* focus 时显示蓝色边框效果（与 hover 保持一致） */
+/* Show blue border effect on focus (consistent with hover) */
 .chat-input-box:focus-within {
   border-color: var(--input-focus-border);
   box-shadow: 0 0 0 1px var(--input-focus-border);
@@ -139,7 +139,7 @@
   transition: opacity 0.15s ease, background 0.15s ease;
 }
 
-/* 只有 hover 在 resize handle 本身或拖拽时才高亮 */
+/* Only highlight when hovering over the resize handle itself or while dragging */
 .resize-handle--n:hover::before,
 .chat-input-box.is-resizing .resize-handle--n::before {
   opacity: 0.85;
@@ -168,7 +168,7 @@
   transition: opacity 0.15s ease;
 }
 
-/* 只有 hover 在 resize handle 本身或拖拽时才显示 */
+/* Only show when hovering over the resize handle itself or while dragging */
 .resize-handle--e:hover::before,
 .chat-input-box.is-resizing .resize-handle--e::before {
   opacity: 0.55;
@@ -196,14 +196,14 @@
   transition: opacity 0.15s ease;
 }
 
-/* 只有 hover 在 resize handle 本身或拖拽时才显示 */
+/* Only show when hovering over the resize handle itself or while dragging */
 .resize-handle--ne:hover::before,
 .chat-input-box.is-resizing .resize-handle--ne::before {
   opacity: 0.55;
 }
 
 /* ============================================================
-   附件列表区域
+   Attachment List Area
    ============================================================ */
 .attachment-list {
   display: flex;
@@ -288,7 +288,7 @@
 }
 
 /* ============================================================
-   上下文展示条 (Top Control Bar)
+   Context Display Bar (Top Control Bar)
    ============================================================ */
 .context-bar {
   display: flex;
@@ -300,8 +300,8 @@
   min-height: 32px;
 }
 
-/* 确保第一个可见子元素（通常是 ContextBar 或 AttachmentList）拥有圆角 */
-/* ResizeHandles 是绝对定位的 :first-child，需要选择紧随其后的可见元素 */
+/* Ensure the first visible child element (usually ContextBar or AttachmentList) has rounded corners */
+/* ResizeHandles are absolutely positioned :first-child, so select the next visible element after them */
 .chat-input-box > .resize-handle + * {
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
@@ -397,7 +397,7 @@
   max-width: 200px;
 }
 
-/* Tooltip styles - 适用于 ContextBar item (CSS实现) */
+/* Tooltip styles - for ContextBar item (CSS implementation) */
 .context-item.has-tooltip {
   position: relative;
 }
@@ -443,10 +443,10 @@
   animation: tooltip-fade-in 0.2s forwards;
 }
 
-/* Tooltip Popup (JS 实现，用于 InputBox 内突破 overflow 限制) */
+/* Tooltip Popup (JS implementation, used to break out of overflow constraints in InputBox) */
 .tooltip-popup {
   position: fixed;
-  /* 移除 transform 中的 translateY，改用 margin-top 来微调，避免动画冲突 */
+  /* Remove translateY from transform, use margin-top for fine-tuning instead to avoid animation conflicts */
   transform: translateX(-50%);
   
   background: var(--dropdown-bg);
@@ -461,12 +461,12 @@
   max-width: 300px;
   width: max-content;
   
-  /* 确保 z-index 足够高 */
+  /* Ensure z-index is high enough */
   z-index: 99999;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   pointer-events: none;
   
-  /* 使用 CSS 变量控制水平位移，默认为 -50% (居中) */
+  /* Use CSS variable to control horizontal offset, defaults to -50% (centered) */
   --tooltip-tx: -50%;
   transform: translate(var(--tooltip-tx), -100%);
 }
@@ -475,7 +475,7 @@
   content: '';
   position: absolute;
   top: 100%;
-  /* 使用 CSS 变量控制箭头位置，默认为 50% (居中) */
+  /* Use CSS variable to control arrow position, defaults to 50% (centered) */
   left: var(--arrow-left, 50%);
   transform: translateX(-50%);
   border: 6px solid transparent;
@@ -491,10 +491,10 @@
   max-width: none;
   border-radius: 6px 6px 0 0;
   border-bottom: none;
-  /* 稍微调整背景色以区分 */
+  /* Slightly adjust background color to differentiate */
   background: var(--dropdown-bg);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-  /* 覆盖 transform */
+  /* Override transform */
   transform: translate(0, -100%);
   animation: tooltip-bar-fade-in 0.2s forwards;
 }
@@ -530,7 +530,7 @@
 }
 
 /* ============================================================
-   输入区域
+   Input Area
    ============================================================ */
 .input-editable-wrapper {
   position: relative;
@@ -540,7 +540,7 @@
   overflow-y: auto;
 }
 
-/* 代码片段标签容器 */
+/* Code snippet tag container */
 .code-snippets-container {
   display: flex;
   flex-wrap: wrap;
@@ -548,7 +548,7 @@
   margin-bottom: 8px;
 }
 
-/* 代码片段标签（复用 context-item 样式）*/
+/* Code snippet tag (reuses context-item styles) */
 .code-snippet-tag {
   display: flex;
   align-items: center;
@@ -682,7 +682,7 @@
   animation: tooltip-fade-in 0.2s forwards;
 }
 
-/* 输入框滚动条样式 */
+/* Input box scrollbar styles */
 
 .input-editable {
   min-height: calc(1.5em * 4);
@@ -714,7 +714,7 @@
 }
 
 /* ============================================================
-   底部工具栏
+   Bottom Toolbar
    ============================================================ */
 .button-area {
   display: flex;
@@ -755,7 +755,7 @@
 }
 
 /* ============================================================
-   智能体标签样式
+   Agent Tag Styles
    ============================================================ */
 .agent-tag {
   display: flex;
@@ -805,7 +805,7 @@
 }
 
 /* ============================================================
-   选择器样式
+   Selector Styles
    ============================================================ */
 .selector-button {
   display: flex;
@@ -990,7 +990,7 @@
   cursor: not-allowed !important;
 }
 
-/* 选择器轻提示 */
+/* Selector toast notification */
 .selector-toast {
   position: fixed;
   bottom: 80px;
@@ -1013,7 +1013,7 @@
 }
 
 /* ============================================================
-   使用量指示器
+   Usage Indicator
    ============================================================ */
 .token-indicator {
   display: flex;
@@ -1045,7 +1045,7 @@
   transition: stroke-dashoffset 0.3s;
 }
 
-/* 使用量悬浮气泡 */
+/* Usage hover tooltip bubble */
 .token-tooltip {
   position: absolute;
   bottom: 100%;
@@ -1072,7 +1072,7 @@
 }
 
 /* ============================================================
-   附件按钮
+   Attachment Button
    ============================================================ */
 .attach-button {
   display: flex;
@@ -1102,7 +1102,7 @@
 }
 
 /* ============================================================
-   发送/停止按钮
+   Send/Stop Button
    ============================================================ */
 .submit-button {
   display: flex;
@@ -1141,7 +1141,7 @@
 }
 
 /* ============================================================
-   下拉菜单
+   Dropdown Menu
    ============================================================ */
 .completion-dropdown {
   position: fixed;
@@ -1155,7 +1155,7 @@
   min-width: 280px;
 }
 
-/* 滚动条样式 */
+/* Scrollbar styles */
 
 .dropdown-item {
   display: flex;
@@ -1175,7 +1175,7 @@
   background: var(--dropdown-selected);
 }
 
-/* 禁用状态（目录） */
+/* Disabled state (directory) */
 .dropdown-item.disabled {
   cursor: default;
   opacity: 0.5;
@@ -1198,7 +1198,7 @@
   justify-content: center;
 }
 
-/* 内联 SVG 图标样式 */
+/* Inline SVG icon styles */
 .dropdown-item-icon svg {
   width: 16px;
   height: 16px;
@@ -1259,7 +1259,7 @@
 }
 
 /* ============================================================
-   图片预览对话框
+   Image Preview Dialog
    ============================================================ */
 .image-preview-overlay {
   position: fixed;
@@ -1305,7 +1305,7 @@
 }
 
 /* ============================================================
-   文件标签样式
+   File Tag Styles
    ============================================================ */
 .file-tag {
   display: inline-flex;
@@ -1362,7 +1362,7 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* 亮色主题下的文件标签样式 */
+/* File tag styles for light theme */
 [data-theme="light"] .file-tag {
   background: #f3f3f3;
   border-color: #d0d0d0;
@@ -1374,7 +1374,7 @@
 }
 
 /* ============================================================
-   增强提示词按钮
+   Enhance Prompt Button
    ============================================================ */
 .enhance-prompt-button {
   display: flex;
@@ -1405,7 +1405,7 @@
 }
 
 /* ============================================================
-   增强提示词对话框
+   Enhance Prompt Dialog
    ============================================================ */
 .prompt-enhancer-overlay {
   position: fixed;
@@ -1535,10 +1535,10 @@
   min-height: 80px;
   max-height: 250px;
   overflow-y: auto;
-  /* 自定义滚动条样式 - 始终显示 */
+  /* Custom scrollbar styles - always visible */
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-  /* 添加渐变遮罩提示可滚动 */
+  /* Add gradient mask to indicate scrollable content */
   position: relative;
 }
 
@@ -1574,7 +1574,7 @@
   background: rgba(0, 127, 212, 0.1);
   border: 1px solid var(--button-primary);
   color: var(--text-primary);
-  /* 增强后的提示词可能更长，给更多空间 */
+  /* Enhanced prompts may be longer, so give more space */
   max-height: 350px;
 }
 
@@ -1644,7 +1644,7 @@
   font-size: 14px;
 }
 
-/* 亮色主题适配 */
+/* Light theme adaptation */
 [data-theme="light"] .prompt-enhancer-overlay {
   background: rgba(0, 0, 0, 0.4);
 }
@@ -1658,7 +1658,7 @@
 }
 
 /* ============================================================
-   SDK 未安装提示条
+   SDK Not Installed Warning Bar
    ============================================================ */
 .sdk-warning-bar {
   display: flex;
@@ -1669,7 +1669,7 @@
   border-bottom: 1px solid rgba(255, 152, 0, 0.3);
   color: #ffb74d; /* Orange text */
   font-size: 12px;
-  /* 圆角由 .chat-input-box > :first-child 控制，但在某些情况下可能需要显式设置 */
+  /* Border radius is controlled by .chat-input-box > :first-child, but may need explicit setting in some cases */
 }
 
 .sdk-warning-bar .codicon-warning {
@@ -1706,7 +1706,7 @@
   border-color: rgba(255, 152, 0, 0.6);
 }
 
-/* 亮色主题适配 */
+/* Light theme adaptation */
 [data-theme="light"] .sdk-warning-bar {
   background: rgba(255, 149, 0, 0.1);
   border-bottom-color: rgba(255, 149, 0, 0.2);
@@ -1728,7 +1728,7 @@
   border-color: rgba(255, 149, 0, 0.5);
 }
 
-/* SDK 状态加载中样式 */
+/* SDK status loading styles */
 .sdk-warning-bar.sdk-loading {
   background: rgba(33, 150, 243, 0.1);
   border-bottom-color: rgba(33, 150, 243, 0.2);
@@ -1752,7 +1752,7 @@
 }
 
 /* ============================================================
-   开源宣传横幅
+   Open Source Promotional Banner
    ============================================================ */
 .open-source-banner {
   display: flex;
@@ -1796,7 +1796,7 @@
 }
 
 /* ============================================================
-   消息队列样式
+   Message Queue Styles
    ============================================================ */
 .message-queue {
   display: flex;
@@ -1870,7 +1870,7 @@
   font-size: 12px;
 }
 
-/* 亮色主题适配 */
+/* Light theme adaptation */
 [data-theme="light"] .message-queue {
   background: #f5f5f5;
 }

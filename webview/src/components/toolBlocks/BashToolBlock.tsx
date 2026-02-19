@@ -7,7 +7,7 @@ interface BashToolBlockProps {
   name?: string;
   input?: ToolInput;
   result?: ToolResultBlock | null;
-  /** 工具调用的唯一 ID，用于判断该工具是否被用户拒绝了权限 */
+  /** Unique ID of the tool call, used to determine if the user denied permission */
   toolId?: string;
 }
 
@@ -25,9 +25,9 @@ const BashToolBlock = ({ input, result, toolId }: BashToolBlockProps) => {
   const isDenied = useIsToolDenied(toolId);
 
   // Determine tool call status based on result
-  // 如果被拒绝，视为已完成（显示错误状态）
+  // If denied, treat as completed (show error state)
   const isCompleted = (result !== undefined && result !== null) || isDenied;
-  // 如果被拒绝，显示为错误状态
+  // If denied, show as error state
   const isError = isDenied || (isCompleted && result?.is_error === true);
 
   let output = '';

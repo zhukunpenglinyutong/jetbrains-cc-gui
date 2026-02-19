@@ -21,7 +21,7 @@ const CommitSection = ({
       <h3 className={styles.sectionTitle}>{t('settings.commit.title')}</h3>
       <p className={styles.sectionDesc}>{t('settings.commit.description')}</p>
 
-      {/* Commit AI 提示词配置 */}
+      {/* Commit AI prompt configuration */}
       <div className={styles.promptSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-edit" />
@@ -52,7 +52,7 @@ const CommitSection = ({
         </small>
       </div>
 
-      {/* Code Review AI 预告 */}
+      {/* Code Review AI preview */}
       <div className={styles.previewSection}>
         <div className={styles.previewBadge}>
           <span className="codicon codicon-sparkle" />

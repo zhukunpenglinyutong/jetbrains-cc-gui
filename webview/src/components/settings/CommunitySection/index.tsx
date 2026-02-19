@@ -23,14 +23,14 @@ const CommunitySection = () => {
     },
   ];
 
-  // 非简体中文时，PayPal 排第一位
+  // For non-Simplified Chinese locales, put PayPal first
   const orderedItems = isSimplifiedChinese
     ? sponsorItems
     : [sponsorItems[2], sponsorItems[0], sponsorItems[1]];
 
   return (
     <div className={styles.configSection}>
-      {/* 官方交流群 */}
+      {/* Official community group */}
       <h3 className={styles.sectionTitle}>{t('settings.community')}</h3>
       <p className={styles.sectionDesc}>{t('settings.communityDesc')}</p>
 
@@ -45,7 +45,7 @@ const CommunitySection = () => {
         </div>
       </div>
 
-      {/* 赞助支持 */}
+      {/* Sponsorship support */}
       <div className={styles.sponsorSection}>
         <h3 className={styles.sectionTitle}>{t('settings.sponsor')}</h3>
         <p className={styles.sectionDesc}>{t('settings.sponsorDesc')}</p>

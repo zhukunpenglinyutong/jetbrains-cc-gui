@@ -1,3 +1,17 @@
+##### **2026年2月19日（v0.1.9-fix）**
+
+English:
+
+✨ Features
+- New version record pop-up window
+- Add custom model support for Claude providers with per-provider model editor and model selector integration
+
+中文：
+
+✨ Features
+- 新增版本记录弹窗
+- 新增 Claude 供应商自定义模型支持，支持按供应商编辑模型并集成到模型选择器
+
 ##### **2026年2月19日（v0.1.9）**
 
 English:

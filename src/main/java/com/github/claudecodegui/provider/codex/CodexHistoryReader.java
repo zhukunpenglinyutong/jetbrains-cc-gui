@@ -147,8 +147,8 @@ public class CodexHistoryReader {
     }
 
     /**
-     * Read all sessions with cache support
-     * @param cacheKey 缓存键（用于区分不同项目的缓存）
+     * Read all sessions with cache support.
+     * @param cacheKey cache key (used to distinguish cache entries for different projects)
      */
     private List<SessionInfo> readAllSessionsWithCache(String cacheKey) throws IOException {
         List<SessionInfo> sessions = new ArrayList<>();
@@ -158,7 +158,7 @@ public class CodexHistoryReader {
             return sessions;
         }
 
-        // 1. 检查内存缓存
+        // 1. Check memory cache
         SessionIndexCache cache = SessionIndexCache.getInstance();
         List<SessionInfo> cachedSessions = cache.getCodexSessions(cacheKey, CODEX_SESSIONS_DIR);
         if (cachedSessions != null) {
@@ -166,17 +166,17 @@ public class CodexHistoryReader {
             return cachedSessions;
         }
 
-        // 2. 检查索引文件和更新类型
+        // 2. Check index file and determine update type
         SessionIndexManager indexManager = SessionIndexManager.getInstance();
         SessionIndexManager.SessionIndex index = indexManager.readCodexIndex();
         SessionIndexManager.ProjectIndex projectIndex = index.projects.get(cacheKey);
         SessionIndexManager.UpdateType updateType = indexManager.getUpdateTypeRecursive(projectIndex, CODEX_SESSIONS_DIR);
 
         if (updateType == SessionIndexManager.UpdateType.NONE) {
-            // 索引有效，从索引恢复
+            // Index is valid, restore from index
             LOG.info("[CodexHistoryReader] Using file index for " + cacheKey + ", sessions: " + projectIndex.sessions.size());
             sessions = restoreSessionsFromIndex(projectIndex);
-            // 更新内存缓存
+            // Update memory cache
             cache.updateCodexCache(cacheKey, CODEX_SESSIONS_DIR, sessions);
             return sessions;
         }
@@ -184,11 +184,11 @@ public class CodexHistoryReader {
         long startTime = System.currentTimeMillis();
 
         if (updateType == SessionIndexManager.UpdateType.INCREMENTAL && projectIndex != null) {
-            // 3a. 增量更新：只扫描新文件
+            // 3a. Incremental update: only scan new files
             LOG.info("[CodexHistoryReader] Incremental scan for Codex sessions");
             sessions = incrementalScan(projectIndex);
         } else {
-            // 3b. 全量扫描
+            // 3b. Full scan
             LOG.info("[CodexHistoryReader] Full scan for Codex sessions");
             sessions = scanAllSessions();
         }
@@ -196,27 +196,27 @@ public class CodexHistoryReader {
         long scanTime = System.currentTimeMillis() - startTime;
         LOG.info("[CodexHistoryReader] Scan completed in " + scanTime + "ms, sessions: " + sessions.size());
 
-        // 4. 更新索引
+        // 4. Update index
         updateCodexIndex(index, cacheKey, sessions);
         indexManager.saveCodexIndex(index);
 
-        // 5. 更新内存缓存
+        // 5. Update memory cache
         cache.updateCodexCache(cacheKey, CODEX_SESSIONS_DIR, sessions);
 
         return sessions;
     }
 
     /**
-     * 增量扫描：只扫描新文件，合并已有索引
+     * Incremental scan: only scan new files and merge with existing index.
      */
     private List<SessionInfo> incrementalScan(SessionIndexManager.ProjectIndex existingIndex) throws IOException {
-        // 获取已索引的 sessionId 集合
+        // Get the set of already-indexed session IDs
         Set<String> indexedIds = existingIndex.getIndexedSessionIds();
 
-        // 从现有索引恢复已有会话
+        // Restore existing sessions from index
         List<SessionInfo> sessions = restoreSessionsFromIndex(existingIndex);
 
-        // 扫描新文件
+        // Scan new files
         List<SessionInfo> newSessions = new ArrayList<>();
         try (Stream<Path> paths = Files.walk(CODEX_SESSIONS_DIR)) {
             List<Path> newFiles = paths
@@ -252,17 +252,17 @@ public class CodexHistoryReader {
 
         LOG.info("[CodexHistoryReader] Incremental scan found " + newSessions.size() + " new valid sessions");
 
-        // 合并新旧会话
+        // Merge old and new sessions
         sessions.addAll(newSessions);
 
-        // 按时间排序
+        // Sort by timestamp descending
         sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
 
         return sessions;
     }
 
     /**
-     * 从索引恢复会话列表
+     * Restore session list from index.
      */
     private List<SessionInfo> restoreSessionsFromIndex(SessionIndexManager.ProjectIndex projectIndex) {
         List<SessionInfo> sessions = new ArrayList<>();
@@ -280,7 +280,7 @@ public class CodexHistoryReader {
     }
 
     /**
-     * 更新 Codex 索引
+     * Update the Codex index.
      */
     private void updateCodexIndex(
             SessionIndexManager.SessionIndex index,
@@ -306,7 +306,7 @@ public class CodexHistoryReader {
     }
 
     /**
-     * 扫描所有 Codex 会话（原有逻辑）
+     * Scan all Codex sessions (original logic).
      */
     private List<SessionInfo> scanAllSessions() throws IOException {
         List<SessionInfo> sessions = new ArrayList<>();

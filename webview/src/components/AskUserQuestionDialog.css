@@ -15,20 +15,20 @@
   transition: all 0.3s ease;
 }
 
-/* 展开状态 - 无高度限制，可滚动 */
+/* Expanded state - no height limit, scrollable */
 .ask-user-question-dialog.expanded {
   max-height: 80vh;
   overflow-y: auto;
 }
 
-/* 收起状态 - 紧凑显示 */
+/* Collapsed state - compact display */
 .ask-user-question-dialog.collapsed {
   padding: 16px 24px;
   gap: 12px;
   overflow: hidden;
 }
 
-/* 收起模式下的 overlay - 不遮挡页面内容 */
+/* Collapsed mode overlay - does not block page content */
 .permission-dialog-overlay.collapsed-mode {
   background: transparent;
   pointer-events: none;
@@ -41,7 +41,7 @@
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
 }
 
-/* 标题区域（带收起按钮） */
+/* Header area (with collapse button) */
 .ask-user-question-dialog-header {
   display: flex;
   justify-content: space-between;
@@ -57,7 +57,7 @@
   flex: 1;
 }
 
-/* 收起/展开切换按钮 */
+/* Collapse/expand toggle button */
 .collapse-toggle-button {
   flex-shrink: 0;
   width: 28px;
@@ -78,7 +78,7 @@
   color: var(--vscode-textLink-foreground, #4daafc);
 }
 
-/* 倒计时显示 */
+/* Countdown timer display */
 .countdown-timer {
   display: flex;
   align-items: center;
@@ -102,7 +102,7 @@
   text-align: center;
 }
 
-/* 倒计时警告状态 */
+/* Countdown warning state */
 .countdown-timer.warning {
   color: var(--vscode-editorWarning-foreground, #cca700);
   background: rgba(204, 167, 0, 0.1);
@@ -115,7 +115,7 @@
   50% { opacity: 0.7; }
 }
 
-/* 超时警告横幅 */
+/* Timeout warning banner */
 .timeout-warning-banner {
   display: flex;
   align-items: center;
@@ -146,13 +146,13 @@
   }
 }
 
-/* 对话框警告状态边框 */
+/* Dialog warning state border */
 .ask-user-question-dialog.time-warning {
   border-color: var(--vscode-editorWarning-foreground, #cca700);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--vscode-editorWarning-foreground, #cca700);
 }
 
-/* 收起状态下的倒计时 */
+/* Countdown in collapsed state */
 .collapsed-timer {
   display: flex;
   align-items: center;
@@ -171,7 +171,7 @@
   font-size: 14px;
 }
 
-/* 收起状态下的提示区域 */
+/* Hint area in collapsed state */
 .collapsed-hint {
   display: flex;
   align-items: center;
@@ -188,7 +188,7 @@
   flex-shrink: 0;
 }
 
-/* 进度行（包含进度文本和倒计时） */
+/* Progress row (contains progress text and countdown) */
 .ask-user-question-dialog-progress-row {
   display: flex;
   align-items: center;
@@ -291,7 +291,7 @@
   margin: -8px 0 0 0;
 }
 
-/* 其他选项样式 */
+/* "Other" option styles */
 .question-option.other-option {
   border-style: dashed;
 }
@@ -300,12 +300,12 @@
   color: var(--vscode-textLink-foreground, #4daafc);
 }
 
-/* 自定义输入框容器 */
+/* Custom input container */
 .custom-input-container {
   margin-top: 8px;
 }
 
-/* 自定义输入框 */
+/* Custom input field */
 .custom-input {
   width: 100%;
   min-height: 80px;

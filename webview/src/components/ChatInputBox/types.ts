@@ -114,9 +114,9 @@ export interface FileItem {
   path: string;
   /** Absolute path (optional) */
   absolutePath?: string;
-  /** 类型 */
+  /** Type */
   type: 'file' | 'directory' | 'terminal' | 'service';
-  /** 扩展名 */
+  /** Extension */
   extension?: string;
 }
 

@@ -6,19 +6,19 @@ const sendToJava = (message: string) => {
   if (window.sendToJava) {
     window.sendToJava(message);
   }
-  // sendToJava 不可用时静默处理，避免生产环境日志污染
+  // Silently ignore when sendToJava is unavailable to avoid log pollution in production
 };
 
 /**
- * 安全地设置 localStorage 并派发自定义事件通知同标签页的其他组件
+ * Safely set localStorage and dispatch a custom event to notify other components in the same tab
  * @param key localStorage key
- * @param value 要存储的值
- * @returns 是否成功
+ * @param value the value to store
+ * @returns whether the operation succeeded
  */
 function safeSetLocalStorage(key: string, value: string): boolean {
   try {
     localStorage.setItem(key, value);
-    // 派发自定义事件，通知同标签页内的其他组件
+    // Dispatch custom event to notify other components in the same tab
     window.dispatchEvent(new CustomEvent('localStorageChange', { detail: { key } }));
     return true;
   } catch (e) {
@@ -45,45 +45,45 @@ export interface UseCodexProviderManagementOptions {
 export function useCodexProviderManagement(options: UseCodexProviderManagementOptions = {}) {
   const { onSuccess } = options;
 
-  // Codex Provider 列表状态
+  // Codex provider list state
   const [codexProviders, setCodexProviders] = useState<CodexProviderConfig[]>([]);
   const [codexLoading, setCodexLoading] = useState(false);
 
-  // Codex 配置（保留用于将来显示）
+  // Codex configuration (reserved for future display)
   const [_codexConfig, setCodexConfig] = useState<any>(null);
   const [_codexConfigLoading, setCodexConfigLoading] = useState(false);
 
-  // Codex 供应商弹窗状态
+  // Codex provider dialog state
   const [codexProviderDialog, setCodexProviderDialog] = useState<CodexProviderDialogState>({
     isOpen: false,
     provider: null,
   });
 
-  // Codex 供应商删除确认状态
+  // Codex provider delete confirmation state
   const [deleteCodexConfirm, setDeleteCodexConfirm] = useState<DeleteCodexConfirmState>({
     isOpen: false,
     provider: null,
   });
 
-  // 加载 Codex Provider 列表
+  // Load Codex provider list
   const loadCodexProviders = useCallback(() => {
     setCodexLoading(true);
     sendToJava('get_codex_providers:');
   }, []);
 
-  // 更新 Codex Provider 列表（供 window callback 使用）
+  // Update Codex provider list (used by window callback)
   const updateCodexProviders = useCallback((providersList: CodexProviderConfig[]) => {
     setCodexProviders(providersList);
     setCodexLoading(false);
   }, []);
 
-  // 更新激活的 Codex Provider（供 window callback 使用）
+  // Update active Codex provider (used by window callback)
   const updateActiveCodexProvider = useCallback((activeProvider: CodexProviderConfig) => {
     if (activeProvider) {
       setCodexProviders((prev) =>
         prev.map((p) => ({ ...p, isActive: p.id === activeProvider.id }))
       );
-      // 同步 customModels 到 localStorage
+      // Sync customModels to localStorage
       safeSetLocalStorage(
         STORAGE_KEYS.CODEX_CUSTOM_MODELS,
         JSON.stringify(activeProvider.customModels || [])
@@ -91,28 +91,28 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
     }
   }, []);
 
-  // 更新 Codex 配置（供 window callback 使用）
+  // Update Codex configuration (used by window callback)
   const updateCurrentCodexConfig = useCallback((config: any) => {
     setCodexConfig(config);
     setCodexConfigLoading(false);
   }, []);
 
-  // 打开添加 Codex Provider 弹窗
+  // Open add Codex provider dialog
   const handleAddCodexProvider = useCallback(() => {
     setCodexProviderDialog({ isOpen: true, provider: null });
   }, []);
 
-  // 打开编辑 Codex Provider 弹窗
+  // Open edit Codex provider dialog
   const handleEditCodexProvider = useCallback((provider: CodexProviderConfig) => {
     setCodexProviderDialog({ isOpen: true, provider });
   }, []);
 
-  // 关闭 Codex Provider 弹窗
+  // Close Codex provider dialog
   const handleCloseCodexProviderDialog = useCallback(() => {
     setCodexProviderDialog({ isOpen: false, provider: null });
   }, []);
 
-  // 保存 Codex Provider
+  // Save Codex provider
   const handleSaveCodexProvider = useCallback(
     (providerData: CodexProviderConfig) => {
       const isAdding = !codexProviderDialog.provider;
@@ -135,7 +135,7 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
         onSuccess?.('Codex 供应商已更新');
       }
 
-      // 如果更新的是当前激活的 provider，同步 customModels 到 localStorage
+      // If updating the currently active provider, sync customModels to localStorage
       const activeProvider = codexProviders.find(p => p.isActive);
       if (activeProvider && activeProvider.id === providerData.id) {
         safeSetLocalStorage(
@@ -150,19 +150,19 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
     [codexProviderDialog.provider, codexProviders, onSuccess]
   );
 
-  // 切换 Codex Provider
+  // Switch Codex provider
   const handleSwitchCodexProvider = useCallback((id: string) => {
     const data = { id };
     sendToJava(`switch_codex_provider:${JSON.stringify(data)}`);
     setCodexLoading(true);
   }, []);
 
-  // 删除 Codex Provider
+  // Delete Codex provider
   const handleDeleteCodexProvider = useCallback((provider: CodexProviderConfig) => {
     setDeleteCodexConfirm({ isOpen: true, provider });
   }, []);
 
-  // 确认删除 Codex Provider
+  // Confirm Codex provider deletion
   const confirmDeleteCodexProvider = useCallback(() => {
     const provider = deleteCodexConfirm.provider;
     if (!provider) return;
@@ -174,19 +174,19 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
     setDeleteCodexConfirm({ isOpen: false, provider: null });
   }, [deleteCodexConfirm.provider, onSuccess]);
 
-  // 取消删除 Codex Provider
+  // Cancel Codex provider deletion
   const cancelDeleteCodexProvider = useCallback(() => {
     setDeleteCodexConfirm({ isOpen: false, provider: null });
   }, []);
 
   return {
-    // 状态
+    // State
     codexProviders,
     codexLoading,
     codexProviderDialog,
     deleteCodexConfirm,
 
-    // 方法
+    // Methods
     loadCodexProviders,
     updateCodexProviders,
     updateActiveCodexProvider,
