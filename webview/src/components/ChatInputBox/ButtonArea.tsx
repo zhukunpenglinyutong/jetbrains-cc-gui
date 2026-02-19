@@ -88,6 +88,7 @@ export const ButtonArea = ({
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
+  onAddModel,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
@@ -258,7 +259,7 @@ export const ButtonArea = ({
           onOpenAgentSettings={onOpenAgentSettings}
         />
         <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
-        <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} />
+        <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} onAddModel={onAddModel} />
         {currentProvider === 'codex' && (
           <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} />
         )}

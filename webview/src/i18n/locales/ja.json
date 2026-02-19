@@ -172,6 +172,12 @@
       "claude": "Claude Code",
       "codex": "Codex"
     },
+    "pluginModels": {
+      "title": "カスタムモデル",
+      "description": "ここで追加されたカスタムモデルは、すべてのプロバイダーで表示され、モデル選択リストの先頭に表示されます",
+      "dialogTitle": "カスタムモデル管理",
+      "manage": "モデル管理"
+    },
     "dependencies": "SDK依存関係",
     "dependenciesDesc": "AI SDK依存関係のインストールと更新を管理",
     "dependency": {
@@ -964,6 +970,7 @@
     }
   },
   "models": {
+    "addModel": "モデル追加",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

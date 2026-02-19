@@ -46,6 +46,9 @@ import { MessageList } from './components/MessageList';
 import { MessageAnchorRail } from './components/MessageAnchorRail';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
 import ChangelogDialog from './components/ChangelogDialog';
+import CustomModelDialog from './components/settings/CustomModelDialog';
+import { usePluginModels } from './components/settings/hooks/usePluginModels';
+import { STORAGE_KEYS } from './types/provider';
 import { CHANGELOG_DATA } from './version/changelog';
 import { APP_VERSION } from './version/version';
 import type {
@@ -62,6 +65,36 @@ type ViewMode = 'chat' | 'history' | 'settings';
 
 const DEFAULT_STATUS = 'ready';
 
+
+/**
+ * Wrapper that manages plugin-level custom models for the add-model dialog.
+ * Uses the shared usePluginModels hook for localStorage persistence.
+ */
+const AddModelDialogWrapper = ({
+  isOpen,
+  onClose,
+  currentProvider,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  currentProvider: string;
+}) => {
+  const storageKey = currentProvider === 'codex'
+    ? STORAGE_KEYS.CODEX_CUSTOM_MODELS
+    : STORAGE_KEYS.CLAUDE_CUSTOM_MODELS;
+
+  const { models, updateModels } = usePluginModels(storageKey);
+
+  return (
+    <CustomModelDialog
+      isOpen={isOpen}
+      models={models}
+      onModelsChange={updateModels}
+      onClose={onClose}
+      initialAddMode
+    />
+  );
+};
 
 const App = () => {
   const { t } = useTranslation();
@@ -104,6 +137,9 @@ const App = () => {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  // Add-model dialog state (opened from model selector in chat view)
+  const [addModelDialogOpen, setAddModelDialogOpen] = useState(false);
+
   // IDE theme state - prefer initial theme injected by Java
   const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
     // Check if Java injected an initial theme
@@ -1632,6 +1668,9 @@ const App = () => {
               setSettingsInitialTab('prompts');
               setCurrentView('settings');
             }}
+            onOpenModelSettings={() => {
+              setAddModelDialogOpen(true);
+            }}
             hasMessages={messages.length > 0}
             onRewind={handleOpenRewindSelectDialog}
             statusPanelExpanded={statusPanelExpanded}
@@ -1707,6 +1746,12 @@ const App = () => {
         isOpen={showChangelogDialog}
         onClose={handleCloseChangelog}
         entries={CHANGELOG_DATA}
+      />
+
+      <AddModelDialogWrapper
+        isOpen={addModelDialogOpen}
+        onClose={() => setAddModelDialogOpen(false)}
+        currentProvider={currentProvider}
       />
     </>
   );

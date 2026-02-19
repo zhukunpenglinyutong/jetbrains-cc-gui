@@ -172,6 +172,12 @@
       "claude": "Claude Code",
       "codex": "Codex"
     },
+    "pluginModels": {
+      "title": "自定义模型",
+      "description": "添加的自定义模型将在所有供应商下可见，显示在模型选择列表的最前面",
+      "dialogTitle": "管理自定义模型",
+      "manage": "管理模型"
+    },
     "dependencies": "SDK 依赖",
     "dependenciesDesc": "管理 AI SDK 依赖包的安装和更新",
     "dependency": {
@@ -966,6 +972,7 @@
     }
   },
   "models": {
+    "addModel": "添加模型",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

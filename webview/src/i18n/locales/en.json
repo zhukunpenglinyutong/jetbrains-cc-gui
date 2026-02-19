@@ -172,6 +172,12 @@
       "claude": "Claude Code",
       "codex": "Codex"
     },
+    "pluginModels": {
+      "title": "Custom Models",
+      "description": "Custom models added here will be visible under all providers, shown at the top of the model selector",
+      "dialogTitle": "Manage Custom Models",
+      "manage": "Manage Models"
+    },
     "dependencies": "SDK Dependencies",
     "dependenciesDesc": "Manage AI SDK dependency installations and updates",
     "dependency": {
@@ -960,6 +966,7 @@
     }
   },
   "models": {
+    "addModel": "Add Model",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

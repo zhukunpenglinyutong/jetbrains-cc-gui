@@ -10,6 +10,7 @@ interface ModelSelectProps {
   onChange: (modelId: string) => void;
   models?: ModelInfo[];  // Optional dynamic model list
   currentProvider?: string;  // Current provider type
+  onAddModel?: () => void;  // Navigate to model management
 }
 
 const DEFAULT_MODEL_MAP: Record<string, ModelInfo> = AVAILABLE_MODELS.reduce(
@@ -93,7 +94,7 @@ const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }
  * ModelSelect - Model selector component
  * Supports switching between Sonnet 4.5, Opus 4.5, and other models, including Codex models
  */
-export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude' }: ModelSelectProps) => {
+export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude', onAddModel }: ModelSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -227,6 +228,19 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
               )}
             </div>
           ))}
+          {onAddModel && (
+            <>
+              <div style={{ height: '1px', background: 'var(--dropdown-border)', margin: '4px 0' }} />
+              <div
+                className="selector-option"
+                onClick={() => { onAddModel(); setIsOpen(false); }}
+                style={{ opacity: 0.8 }}
+              >
+                <span className="codicon codicon-add" style={{ fontSize: 14, width: 16 }} />
+                <span>{t('models.addModel')}</span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
