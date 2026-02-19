@@ -269,6 +269,8 @@
     },
     "community": "Community",
     "communityDesc": "Scan the QR code below to join the official WeChat group for the latest news and technical support",
+    "versionHistory": "Version History",
+    "versionHistoryDesc": "View all version update records",
     "communityQrTip": "Scan with WeChat to join the community",
     "communityQrAlt": "Official WeChat community QR code",
     "sponsor": "Sponsor",

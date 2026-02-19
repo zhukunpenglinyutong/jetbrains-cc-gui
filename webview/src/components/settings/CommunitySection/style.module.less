@@ -52,6 +52,37 @@
   text-align: center;
 }
 
+/* Version history */
+.versionHistorySection {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.versionHistoryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+  }
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
 /* 赞助区域 */
 .sponsorSection {
   margin-top: 48px;

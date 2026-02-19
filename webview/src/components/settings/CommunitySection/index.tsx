@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import ChangelogDialog from '../../ChangelogDialog';
+import { CHANGELOG_DATA } from '../../../version/changelog';
 import styles from './style.module.less';
 
 const CommunitySection = () => {
   const { t, i18n } = useTranslation();
   const isSimplifiedChinese = i18n.language === 'zh';
+  const [showChangelog, setShowChangelog] = useState(false);
 
   const sponsorItems = [
     {
@@ -45,6 +49,19 @@ const CommunitySection = () => {
         </div>
       </div>
 
+      {/* Version history */}
+      <div className={styles.versionHistorySection}>
+        <h3 className={styles.sectionTitle}>{t('settings.versionHistory')}</h3>
+        <p className={styles.sectionDesc}>{t('settings.versionHistoryDesc')}</p>
+        <button
+          className={styles.versionHistoryBtn}
+          onClick={() => setShowChangelog(true)}
+        >
+          <span className="codicon codicon-history" />
+          {t('settings.versionHistory')}
+        </button>
+      </div>
+
       {/* Sponsorship support */}
       <div className={styles.sponsorSection}>
         <h3 className={styles.sectionTitle}>{t('settings.sponsor')}</h3>
@@ -63,6 +80,12 @@ const CommunitySection = () => {
           ))}
         </div>
       </div>
+
+      <ChangelogDialog
+        isOpen={showChangelog}
+        onClose={() => setShowChangelog(false)}
+        entries={CHANGELOG_DATA}
+      />
     </div>
   );
 };

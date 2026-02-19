@@ -274,6 +274,8 @@
     },
     "community": "官方交流群",
     "communityDesc": "扫描下方二维码加入官方微信交流群，获取最新资讯和技术支持",
+    "versionHistory": "版本记录",
+    "versionHistoryDesc": "查看所有版本更新记录",
     "communityQrTip": "使用微信扫一扫加入交流群",
     "communityQrAlt": "官方微信交流群二维码",
     "sponsor": "赞助支持",
