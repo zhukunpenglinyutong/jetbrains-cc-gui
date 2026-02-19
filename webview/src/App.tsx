@@ -1569,6 +1569,7 @@ const App = () => {
                   currentProvider={currentProvider}
                   t={t}
                   onProviderChange={handleProviderSelect}
+                  onVersionClick={() => setShowChangelogDialog(true)}
                 />
               )}
 

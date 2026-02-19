@@ -46,7 +46,7 @@ function parseChangelog(raw) {
     const sectionContent = raw.substring(header.endIndex, nextIndex).trim();
 
     // Extract version from header like "2026年2月19日（v0.1.9）" or "12月25日（v0.1.2-beta5）"
-    const versionMatch = header.fullMatch.match(/[（(]v?(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)[）)]/);
+    const versionMatch = header.fullMatch.match(/[（(]v?(\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9.]+)?)[）)]/);
     if (!versionMatch) continue;
 
     const version = versionMatch[1];
