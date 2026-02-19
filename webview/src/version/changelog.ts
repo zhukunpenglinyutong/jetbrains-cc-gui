@@ -17,21 +17,11 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
     date: '2026-02-19',
     content: {
       en: `✨ Features
-- Add changelog dialog with paginated version history, keyboard navigation, and auto-show on version update
-- Add custom model support for Claude providers with per-provider model editor and model selector integration
-
-🔧 Improvements
-- Add build-time changelog extraction script (\`extract-changelog.mjs\`) to generate structured changelog data
-- Sync active provider custom models to localStorage for real-time model selector updates
-- Add i18n support for changelog dialog across all 8 languages`,
+- New version record pop-up window
+- Add custom model support for Claude providers with per-provider model editor and model selector integration`,
       zh: `✨ Features
-- 新增更新日志对话框，支持分页版本历史、键盘导航，版本更新时自动弹出
-- 新增 Claude 供应商自定义模型支持，支持按供应商编辑模型并集成到模型选择器
-
-🔧 Improvements
-- 新增构建时更新日志提取脚本（\`extract-changelog.mjs\`），生成结构化的更新日志数据
-- 将活跃供应商的自定义模型同步到 localStorage，实现模型选择器实时更新
-- 为更新日志对话框添加 8 种语言的国际化支持`,
+- 新增版本记录弹窗
+- 新增 Claude 供应商自定义模型支持，支持按供应商编辑模型并集成到模型选择器`,
     },
   },
   {
