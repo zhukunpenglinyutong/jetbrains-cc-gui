@@ -80,7 +80,7 @@
     "disabled": "無効",
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
     "sdkStatusLoading": "Checking SDK status...",
-    "openSourceBanner": "このプロジェクトは永遠に100%オープンソースであることを保証します。安心してご利用ください！",
+    "openSourceBanner": "このプロジェクトは100%オープンソースを保証します（海賊版プロジェクトにご注意ください）",
     "goInstallSdk": "インストールへ",
     "commandNotImplemented": "`{{command}}` 機能はまだ実装されていません。",
     "clearCommandDescription": "会話履歴をクリアして新しいセッションを開始",

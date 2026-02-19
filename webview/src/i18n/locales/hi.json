@@ -80,7 +80,7 @@
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
     "sdkStatusLoading": "Checking SDK status...",
-    "openSourceBanner": "यह प्रोजेक्ट हमेशा 100% ओपन सोर्स रहेगा। कृपया निश्चिंत होकर उपयोग करें!",
+    "openSourceBanner": "यह प्रोजेक्ट 100% ओपन सोर्स है (नकली प्रोजेक्ट से सावधान रहें)",
     "goInstallSdk": "इंस्टॉल करने जाएं",
     "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
     "clearCommandDescription": "बातचीत इतिहास साफ़ करें और नया सत्र शुरू करें",

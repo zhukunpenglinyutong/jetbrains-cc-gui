@@ -80,7 +80,7 @@
     "disabled": "Deshabilitado",
     "sdkNotInstalled": "{{provider}} SDK no está instalado. Instala el SDK para comenzar a chatear.",
     "sdkStatusLoading": "Checking SDK status...",
-    "openSourceBanner": "Este proyecto garantiza ser 100% de código abierto para siempre. ¡No dude en usarlo!",
+    "openSourceBanner": "Este proyecto garantiza ser 100% de código abierto (cuidado con los proyectos pirateados)",
     "goInstallSdk": "Ir a instalar",
     "commandNotImplemented": "La función `{{command}}` aún no está implementada.",
     "clearCommandDescription": "Borrar historial de conversación e iniciar nueva sesión",

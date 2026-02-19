@@ -80,7 +80,7 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
     "sdkStatusLoading": "正在检查 SDK 状态...",
-    "openSourceBanner": "本项目保证100%开源，请放心使用",
+    "openSourceBanner": "本项目保证100%开源（谨防盗版项目）",
     "goInstallSdk": "前往安装",
     "commandNotImplemented": "`{{command}}` 功能暂未实现。",
     "clearCommandDescription": "清除对话历史并新建会话",
