@@ -449,12 +449,9 @@ public class ClaudeMessageHandler implements MessageCallback {
             // Always update status bar with token usage if available in result
             if (resultJson.has("usage")) {
                 JsonObject resultUsage = resultJson.getAsJsonObject("usage");
-
-                int inputTokens = resultUsage.has("input_tokens") ? resultUsage.get("input_tokens").getAsInt() : 0;
-                int cacheWriteTokens = resultUsage.has("cache_creation_input_tokens") ? resultUsage.get("cache_creation_input_tokens").getAsInt() : 0;
-                int cacheReadTokens = resultUsage.has("cache_read_input_tokens") ? resultUsage.get("cache_read_input_tokens").getAsInt() : 0;
-
-                updateTokenUsageDisplay(inputTokens, cacheWriteTokens, cacheReadTokens);
+                int usedTokens = extractUsedTokens(resultUsage, state.getProvider());
+                int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+                ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
             }
 
             // If the current message's raw usage is all zeros, update it with the result's usage
@@ -723,12 +720,6 @@ public class ClaudeMessageHandler implements MessageCallback {
         return null;
     }
 
-    private void updateTokenUsageDisplay(int inputTokens, int cacheCreationTokens, int cacheReadTokens) {
-        int usedTokens = calculateContextWindowTokens(inputTokens, cacheCreationTokens, cacheReadTokens);
-        int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
-        ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
-    }
-
     /**
      * Handle usage data from the [USAGE] tag emitted by ai-bridge during streaming.
      */
@@ -736,7 +727,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         if (content == null || content.isEmpty() || !content.startsWith("{")) return;
         try {
             JsonObject usageJson = gson.fromJson(content, JsonObject.class);
-            int usedTokens = extractUsedTokens(usageJson, "claude");
+            int usedTokens = extractUsedTokens(usageJson, state.getProvider());
             int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
             ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
             backfillUsageToAssistantMessage(usageJson);
