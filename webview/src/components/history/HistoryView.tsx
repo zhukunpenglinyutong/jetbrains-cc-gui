@@ -6,17 +6,17 @@ import { Claude, OpenAI } from '@lobehub/icons';
 import { extractCommandMessageContent } from '../../utils/messageUtils';
 import { sendBridgeEvent } from '../../utils/bridge';
 
-// 深度搜索超时时间（毫秒）
+// Deep search timeout (milliseconds)
 const DEEP_SEARCH_TIMEOUT_MS = 30000;
 
 interface HistoryViewProps {
   historyData: HistoryData | null;
-  currentProvider?: string; // 当前提供商 (claude 或 codex)
+  currentProvider?: string; // Current provider (claude or codex)
   onLoadSession: (sessionId: string) => void;
-  onDeleteSession: (sessionId: string) => void; // 添加删除回调
-  onExportSession: (sessionId: string, title: string) => void; // 添加导出回调
-  onToggleFavorite: (sessionId: string) => void; // 添加收藏切换回调
-  onUpdateTitle: (sessionId: string, newTitle: string) => void; // 添加标题更新回调
+  onDeleteSession: (sessionId: string) => void; // Delete session callback
+  onExportSession: (sessionId: string, title: string) => void; // Export session callback
+  onToggleFavorite: (sessionId: string) => void; // Toggle favorite callback
+  onUpdateTitle: (sessionId: string, newTitle: string) => void; // Update title callback
 }
 
 const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string) => {
@@ -44,15 +44,15 @@ const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string
 const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
-  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // 记录待删除的会话ID
-  const [inputValue, setInputValue] = useState(''); // 搜索输入框的即时值
-  const [searchQuery, setSearchQuery] = useState(''); // 实际用于搜索的关键词（防抖后）
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null); // 正在编辑的会话ID
-  const [editingTitle, setEditingTitle] = useState(''); // 编辑中的标题内容
-  const [isDeepSearching, setIsDeepSearching] = useState(false); // 深度搜索中状态
-  const deepSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // 深度搜索超时 timer
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
+  const [inputValue, setInputValue] = useState(''); // Immediate value of search input
+  const [searchQuery, setSearchQuery] = useState(''); // Actual search keyword (debounced)
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null); // Session ID being edited
+  const [editingTitle, setEditingTitle] = useState(''); // Title content being edited
+  const [isDeepSearching, setIsDeepSearching] = useState(false); // Deep search in-progress state
+  const deepSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Deep search timeout timer
 
-  // 清理深度搜索超时 timer
+  // Clean up deep search timeout timer
   useEffect(() => {
     return () => {
       if (deepSearchTimeoutRef.current) {
@@ -68,7 +68,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 防抖：输入完成 300ms 后更新搜索关键词
+  // Debounce: update search keyword 300ms after input stops
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(inputValue);
@@ -77,8 +77,8 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     return () => clearTimeout(timer);
   }, [inputValue]);
 
-  // 当 historyData 更新时，停止深度搜索状态并清理超时 timer
-  // 使用函数式更新避免 isDeepSearching 依赖，同时清理对应的 timeout
+  // When historyData updates, stop deep search state and clean up timeout timer
+  // Uses functional update to avoid isDeepSearching dependency while cleaning up the corresponding timeout
   useEffect(() => {
     if (historyData) {
       setIsDeepSearching(prev => {
@@ -91,25 +91,25 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     }
   }, [historyData]);
 
-  // 对会话进行排序和搜索过滤：收藏的在上面（按收藏时间倒序），未收藏的在下面（保持原顺序）
+  // Sort and filter sessions: favorited on top (by favorite time descending), unfavorited below (original order)
   const sessions = useMemo(() => {
     const rawSessions = historyData?.sessions ?? [];
 
-    // 搜索过滤（不区分大小写）
+    // Search filter (case-insensitive)
     const filteredSessions = searchQuery.trim()
       ? rawSessions.filter(s =>
           s.title?.toLowerCase().includes(searchQuery.toLowerCase())
         )
       : rawSessions;
 
-    // 分离收藏和未收藏的会话
+    // Separate favorited and unfavorited sessions
     const favorited = filteredSessions.filter(s => s.isFavorited);
     const unfavorited = filteredSessions.filter(s => !s.isFavorited);
 
-    // 收藏的会话按收藏时间倒序排序
+    // Sort favorited sessions by favorite time descending
     favorited.sort((a, b) => (b.favoritedAt || 0) - (a.favoritedAt || 0));
 
-    // 合并：收藏的在前面，未收藏的在后面
+    // Merge: favorited first, unfavorited after
     return [...favorited, ...unfavorited];
   }, [historyData?.sessions, searchQuery]);
 
@@ -152,9 +152,9 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     );
   }
 
-  // 渲染空状态（搜索无结果或无会话）
+  // Render empty state (no search results or no sessions)
   const renderEmptyState = () => {
-    // 如果是搜索无结果
+    // If search returned no results
     if (searchQuery.trim() && sessions.length === 0) {
       return (
         <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -167,7 +167,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       );
     }
 
-    // 如果完全没有会话
+    // If there are no sessions at all
     if (!searchQuery.trim() && sessions.length === 0) {
       return (
         <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -183,25 +183,25 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     return null;
   };
 
-  // 处理删除按钮点击(阻止事件冒泡,避免触发会话加载)
+  // Handle delete button click (stop event bubbling to avoid triggering session load)
   const handleDeleteClick = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); // 阻止点击事件冒泡到父元素
-    setDeletingSessionId(sessionId); // 显示确认对话框
+    e.stopPropagation(); // Prevent click event from bubbling to parent
+    setDeletingSessionId(sessionId); // Show confirmation dialog
   };
 
-  // 处理导出按钮点击(阻止事件冒泡,避免触发会话加载)
+  // Handle export button click (stop event bubbling to avoid triggering session load)
   const handleExportClick = (e: React.MouseEvent, sessionId: string, title: string) => {
-    e.stopPropagation(); // 阻止点击事件冒泡到父元素
+    e.stopPropagation(); // Prevent click event from bubbling to parent
     onExportSession(sessionId, title);
   };
 
-  // 处理收藏按钮点击(阻止事件冒泡,避免触发会话加载)
+  // Handle favorite button click (stop event bubbling to avoid triggering session load)
   const handleFavoriteClick = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); // 阻止点击事件冒泡到父元素
+    e.stopPropagation(); // Prevent click event from bubbling to parent
     onToggleFavorite(sessionId);
   };
 
-  // 确认删除
+  // Confirm deletion
   const confirmDelete = () => {
     if (deletingSessionId) {
       onDeleteSession(deletingSessionId);
@@ -209,68 +209,68 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     }
   };
 
-  // 取消删除
+  // Cancel deletion
   const cancelDelete = () => {
     setDeletingSessionId(null);
   };
 
-  // 处理编辑按钮点击
+  // Handle edit button click
   const handleEditClick = (e: React.MouseEvent, sessionId: string, currentTitle: string) => {
-    e.stopPropagation(); // 阻止点击事件冒泡到父元素
+    e.stopPropagation(); // Prevent click event from bubbling to parent
     setEditingSessionId(sessionId);
     setEditingTitle(currentTitle);
   };
 
-  // 保存编辑后的标题
+  // Save the edited title
   const handleSaveTitle = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     const trimmedTitle = editingTitle.trim();
 
     if (!trimmedTitle) {
-      return; // 标题不能为空
+      return; // Title cannot be empty
     }
 
     if (trimmedTitle.length > 50) {
-      // 超过50个字符，显示错误提示
+      // Exceeds 50 characters, show error alert
       alert(t('history.titleTooLong'));
       return;
     }
 
-    // 调用回调函数更新标题
+    // Call callback to update the title
     onUpdateTitle(sessionId, trimmedTitle);
 
-    // 退出编辑模式
+    // Exit edit mode
     setEditingSessionId(null);
     setEditingTitle('');
   };
 
-  // 取消编辑
+  // Cancel editing
   const handleCancelEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingSessionId(null);
     setEditingTitle('');
   };
 
-  // 深度搜索：清空缓存后重新加载历史记录
+  // Deep search: clear cache and reload history
   const handleDeepSearch = () => {
     if (isDeepSearching) return;
 
     setIsDeepSearching(true);
     sendBridgeEvent('deep_search_history', currentProvider || 'claude');
 
-    // 清理之前的超时（如果存在）
+    // Clear previous timeout if it exists
     if (deepSearchTimeoutRef.current) {
       clearTimeout(deepSearchTimeoutRef.current);
     }
 
-    // 设置超时自动恢复状态（防止异常情况下一直 loading）
+    // Set timeout to auto-recover state (prevent infinite loading on errors)
     deepSearchTimeoutRef.current = setTimeout(() => {
       setIsDeepSearching(false);
       deepSearchTimeoutRef.current = null;
     }, DEEP_SEARCH_TIMEOUT_MS);
   };
 
-  // 高亮显示匹配的文本
+  // Highlight matching text
   const highlightText = (text: string, query: string) => {
     if (!query.trim()) {
       return <span>{text}</span>;
@@ -324,7 +324,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
               </span>
             )}
             {isEditing ? (
-              // 编辑模式：显示输入框和保存/取消按钮
+              // Edit mode: show input and save/cancel buttons
               <div className="history-title-edit-mode" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="text"
@@ -357,7 +357,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
                 </button>
               </div>
             ) : (
-              // 正常模式：显示标题（带高亮），提取 <command-message> 内容
+              // Normal mode: show title (with highlight), extract <command-message> content
               highlightText(extractCommandMessageContent(session.title), searchQuery)
             )}
           </div>
@@ -365,7 +365,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
             <div className="history-item-time">{formatTimeAgo(session.lastTimestamp, t)}</div>
             {!isEditing && (
               <>
-                {/* 编辑按钮 */}
+                {/* Edit button */}
                 <button
                   className="history-edit-btn"
                   onClick={(e) => handleEditClick(e, session.sessionId, session.title)}
@@ -374,7 +374,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
                 >
                   <span className="codicon codicon-edit"></span>
                 </button>
-                {/* 收藏按钮 */}
+                {/* Favorite button */}
                 <button
                   className={`history-favorite-btn ${session.isFavorited ? 'favorited' : ''}`}
                   onClick={(e) => handleFavoriteClick(e, session.sessionId)}
@@ -383,7 +383,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
                 >
                   <span className={session.isFavorited ? 'codicon codicon-star-full' : 'codicon codicon-star-empty'}></span>
                 </button>
-                {/* 导出按钮 */}
+                {/* Export button */}
                 <button
                   className="history-export-btn"
                   onClick={(e) => handleExportClick(e, session.sessionId, session.title)}
@@ -392,7 +392,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
                 >
                   <span className="codicon codicon-arrow-down"></span>
                 </button>
-                {/* 删除按钮 */}
+                {/* Delete button */}
                 <button
                   className="history-delete-btn"
                   onClick={(e) => handleDeleteClick(e, session.sessionId)}
@@ -419,7 +419,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="history-header">
         <div className="history-info">{infoBar}</div>
-        {/* 深度搜索按钮 */}
+        {/* Deep search button */}
         <button
           className={`history-deep-search-btn ${isDeepSearching ? 'searching' : ''}`}
           onClick={handleDeepSearch}
@@ -428,7 +428,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
         >
           <span className={`codicon ${isDeepSearching ? 'codicon-sync codicon-modifier-spin' : 'codicon-refresh'}`}></span>
         </button>
-        {/* 搜索框 */}
+        {/* Search box */}
         <div className="history-search-container">
           <input
             type="text"
@@ -457,7 +457,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
         )}
       </div>
 
-      {/* 删除确认对话框 */}
+      {/* Delete confirmation dialog */}
       {deletingSessionId && (
         <div className="modal-overlay" onClick={cancelDelete}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>

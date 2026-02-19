@@ -1,6 +1,6 @@
 /**
- * MCP 服务器设置组件
- * 支持 Claude 和 Codex 两种模式
+ * MCP Server Settings Component
+ * Supports both Claude and Codex modes
  */
 
 import { useState, useRef, useMemo, useCallback } from 'react';
@@ -15,7 +15,7 @@ import { McpLogDialog } from './McpLogDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
 import { copyToClipboard } from '../../utils/copyUtils';
 
-// 类型和工具函数
+// Types and utility functions
 import type { McpSettingsSectionProps, RefreshLog, McpTool } from './types';
 import { getCacheKeys, getToolIcon } from './utils';
 
@@ -24,11 +24,11 @@ import { useServerData } from './hooks/useServerData';
 import { useServerManagement } from './hooks/useServerManagement';
 import { useToolsUpdate } from './hooks/useToolsUpdate';
 
-// 子组件
+// Sub-components
 import { ServerCard } from './ServerCard';
 
 /**
- * MCP 服务器设置组件
+ * MCP Server Settings Component
  */
 export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSectionProps) {
   const { t } = useTranslation();
@@ -40,15 +40,15 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
   // Get provider-specific cache keys
   const cacheKeys = useMemo(() => getCacheKeys(isCodexMode ? 'codex' : 'claude'), [isCodexMode]);
 
-  // 下拉菜单状态
+  // Dropdown menu state
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 工具提示浮框状态
+  // Tool tooltip popup state
   const [hoveredTool, setHoveredTool] = useState<{ serverId: string; tool: McpTool; position: { x: number; y: number } } | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  // 弹窗状态
+  // Dialog state
   const [showServerDialog, setShowServerDialog] = useState(false);
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
@@ -57,13 +57,13 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
   const [editingServer, setEditingServer] = useState<McpServer | null>(null);
   const [deletingServer, setDeletingServer] = useState<McpServer | null>(null);
 
-  // Toast 状态管理
+  // Toast state management
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // 刷新日志状态
+  // Refresh logs state
   const [refreshLogs, setRefreshLogs] = useState<RefreshLog[]>([]);
 
-  // Toast 辅助函数
+  // Toast helper functions
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
     const id = `toast-${Date.now()}-${Math.random()}`;
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -73,7 +73,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  // 日志辅助函数
+  // Log helper functions
   const addLog = useCallback((
     message: string,
     type: RefreshLog['type'] = 'info',
@@ -101,7 +101,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     addLog(t('mcp.logs.cleared'), 'info');
   }, [addLog, t]);
 
-  // 使用服务器数据 Hook
+  // Use server data hook
   const {
     servers,
     serverStatus,
@@ -122,7 +122,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     onLog: addLog,
   });
 
-  // 使用服务器管理 Hook
+  // Use server management hook
   const {
     serverRefreshStates,
     handleRefresh,
@@ -141,7 +141,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     t,
   });
 
-  // 使用工具列表更新 Hook
+  // Use tools list update hook
   useToolsUpdate({
     isCodexMode,
     cacheKeys,
@@ -149,21 +149,21 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     onLog: addLog,
   });
 
-  // 展开/折叠服务器
+  // Toggle server expand/collapse
   const toggleExpand = useCallback((serverId: string) => {
     const server = servers.find(s => s.id === serverId);
     const isExpanding = !expandedServers.has(serverId);
 
     if (isExpanding) {
       setExpandedServers(new Set([serverId]));
-      // 保存最后展开的服务器ID到缓存
+      // Save last expanded server ID to cache
       try {
         localStorage.setItem(cacheKeys.LAST_SERVER_ID, serverId);
       } catch (e) {
         // ignore
       }
 
-      // 展开时自动加载工具列表
+      // Auto-load tools list when expanding
       if (server && !serverTools[serverId] && !isCodexMode) {
         loadServerTools(server, false);
       }
@@ -174,19 +174,19 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     }
   }, [servers, expandedServers, serverTools, isCodexMode, cacheKeys, setExpandedServers, loadServerTools]);
 
-  // 编辑服务器
+  // Edit server
   const handleEdit = useCallback((server: McpServer) => {
     setEditingServer(server);
     setShowServerDialog(true);
   }, []);
 
-  // 删除服务器
+  // Delete server
   const handleDelete = useCallback((server: McpServer) => {
     setDeletingServer(server);
     setShowConfirmDialog(true);
   }, []);
 
-  // 确认删除
+  // Confirm deletion
   const confirmDelete = useCallback(() => {
     if (deletingServer) {
       sendToJava(`delete_${messagePrefix}mcp_server`, { id: deletingServer.id });
@@ -200,26 +200,26 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     setDeletingServer(null);
   }, [deletingServer, messagePrefix, addToast, t, loadServers]);
 
-  // 取消删除
+  // Cancel deletion
   const cancelDelete = useCallback(() => {
     setShowConfirmDialog(false);
     setDeletingServer(null);
   }, []);
 
-  // 手动添加服务器
+  // Add server manually
   const handleAddManual = useCallback(() => {
     setShowDropdown(false);
     setEditingServer(null);
     setShowServerDialog(true);
   }, []);
 
-  // 从市场添加服务器
+  // Add server from marketplace
   const handleAddFromMarket = useCallback(() => {
     setShowDropdown(false);
     alert(t('mcp.marketComingSoon'));
   }, [t]);
 
-  // 保存服务器
+  // Save server
   const handleSaveServer = useCallback((server: McpServer) => {
     if (editingServer) {
       if (editingServer.id !== server.id) {
@@ -243,7 +243,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     setEditingServer(null);
   }, [editingServer, messagePrefix, addToast, t, loadServers]);
 
-  // 选择预设
+  // Select preset
   const handleSelectPreset = useCallback((preset: McpPreset) => {
     const server: McpServer = {
       id: preset.id,
@@ -270,7 +270,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     setShowPresetDialog(false);
   }, [isCodexMode, messagePrefix, addToast, t, loadServers]);
 
-  // 复制 URL
+  // Copy URL
   const handleCopyUrl = useCallback(async (url: string) => {
     const success = await copyToClipboard(url);
     if (success) {
@@ -280,7 +280,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     }
   }, [addToast, t]);
 
-  // 复制服务器配置（脱敏处理 env/headers 中的敏感值）
+  // Copy server config (redact sensitive values in env/headers)
   const handleCopyConfig = useCallback(async (server: McpServer) => {
     const { env, headers, ...safeFields } = server.server;
     const serverConfig: Record<string, unknown> = { ...safeFields };
@@ -308,7 +308,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     }
   }, [addToast, t]);
 
-  // 工具悬停处理
+  // Tool hover handler
   const handleToolHover = useCallback((tool: McpTool | null, position?: { x: number; y: number }, serverId?: string) => {
     if (tool && position && serverId) {
       setHoveredTool({ serverId, tool, position });
@@ -319,7 +319,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
 
   return (
     <div className="mcp-settings-section">
-      {/* 头部 */}
+      {/* Header */}
       <div className="mcp-header">
         <div className="header-left">
           <span className="header-title">{t('mcp.title')}</span>
@@ -372,9 +372,9 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         </div>
       </div>
 
-      {/* 上下布局：服务器列表 | 刷新日志 */}
+      {/* Vertical layout: server list | refresh logs */}
       <div className="mcp-panels-container">
-        {/* 上方面板：服务器列表 */}
+        {/* Top panel: server list */}
         <div className="mcp-server-panel">
           {!loading || servers.length > 0 ? (
             <div className="server-list">
@@ -400,7 +400,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
                 />
               ))}
 
-              {/* 空状态 */}
+              {/* Empty state */}
               {servers.length === 0 && !loading && (
                 <div className="empty-state">
                   <span className="codicon codicon-server"></span>
@@ -411,7 +411,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
             </div>
           ) : null}
 
-          {/* 加载状态 */}
+          {/* Loading state */}
           {loading && servers.length === 0 && (
             <div className="loading-state">
               <span className="codicon codicon-loading codicon-modifier-spin"></span>
@@ -421,7 +421,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         </div>
       </div>
 
-      {/* 弹窗 */}
+      {/* Dialogs */}
       {showServerDialog && (
         <McpServerDialog
           server={editingServer}
@@ -471,10 +471,10 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
         />
       )}
 
-      {/* Toast 通知 */}
+      {/* Toast notifications */}
       <ToastContainer messages={toasts} onDismiss={dismissToast} />
 
-      {/* 工具提示浮框 */}
+      {/* Tool tooltip popup */}
       {hoveredTool && (
         <div
           ref={tooltipRef}
@@ -505,7 +505,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
 }
 
 /**
- * 渲染 inputSchema 为参数列表
+ * Render inputSchema as a parameter list
  */
 function renderInputSchema(
   schema: Record<string, unknown> | undefined,

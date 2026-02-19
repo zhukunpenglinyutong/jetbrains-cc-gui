@@ -21,7 +21,7 @@ const PlaceholderSection = ({ type, currentProvider }: PlaceholderSectionProps) 
       title: t('settings.mcp'),
       desc: t('settings.mcpDesc'),
       icon: 'codicon-server',
-      message: null, // MCP有专门的组件
+      message: null, // MCP has its own dedicated component
     },
     agents: {
       title: t('settings.agents'),

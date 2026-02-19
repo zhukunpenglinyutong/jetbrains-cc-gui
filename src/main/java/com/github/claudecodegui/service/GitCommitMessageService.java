@@ -167,7 +167,7 @@ Footer 包含：
                 return;
             }
 
-            // 2. Build the full prompt (built-in prompt + user's additional prompt + diff)
+            // 2. Build the full prompt (built-in + user's additional prompt + diff)
             String fullPrompt = buildFullPrompt(diff);
 
             // 3. Call the AI SDK
@@ -197,7 +197,7 @@ Footer 包含：
                 ContentRevision afterRevision = change.getAfterRevision();
 
                 if (changeType == Change.Type.NEW && afterRevision != null) {
-                    // New file
+                    // New file: include content up to 500 characters
                     String content = afterRevision.getContent();
                     if (content != null && content.length() <= 500) {
                         diff.append("+++ ").append(content).append("\n");
@@ -206,10 +206,10 @@ Footer 包含：
                         diff.append(content, 0, Math.min(500, content.length())).append("\n");
                     }
                 } else if (changeType == Change.Type.DELETED && beforeRevision != null) {
-                    // Deleted file
+                    // Deleted file marker
                     diff.append("--- 文件已删除\n");
                 } else if (changeType == Change.Type.MODIFICATION && beforeRevision != null && afterRevision != null) {
-                    // Modified file - generate simple diff
+                    // Modified file: generate a simple diff
                     String before = beforeRevision.getContent();
                     String after = afterRevision.getContent();
 
@@ -242,7 +242,7 @@ Footer 包含：
         StringBuilder diff = new StringBuilder();
         int maxLines = Math.max(beforeLines.length, afterLines.length);
         int shownLines = 0;
-        int maxShownLines = 30; // Show at most 30 lines
+        int maxShownLines = 30; // Maximum lines to display
 
         for (int i = 0; i < maxLines && shownLines < maxShownLines; i++) {
             String beforeLine = i < beforeLines.length ? beforeLines[i] : "";
@@ -295,10 +295,10 @@ Footer 包含：
     private String buildFullPrompt(String diff) {
         StringBuilder prompt = new StringBuilder();
 
-        // 1. Add the built-in prompt
+        // 1. Built-in commit prompt
         prompt.append(BUILTIN_COMMIT_PROMPT);
 
-        // 2. Add the user's additional prompt (if any)
+        // 2. User's additional prompt (if any, takes priority)
         String userAdditionalPrompt = getUserAdditionalPrompt();
         if (!userAdditionalPrompt.isEmpty()) {
             prompt.append("\n\n## 用户附加要求（优先遵循）\n\n");
@@ -306,14 +306,14 @@ Footer 包含：
             prompt.append(userAdditionalPrompt);
         }
 
-        // 3. Add the git diff information
+        // 3. Git diff content
         prompt.append("\n\n---\n\n");
         prompt.append("以下是 git diff 信息，请根据以上规则生成 commit message：\n\n");
         prompt.append("```diff\n");
         prompt.append(diff);
         prompt.append("\n```");
 
-        // 4. Add output format requirements (enforce XML tag wrapping for easy parsing)
+        // 4. Output format requirements (enforce XML tag wrapping for easy parsing)
         prompt.append("\n\n【输出格式要求 - 必须严格遵守】\n");
         prompt.append("请将 commit message 用 XML 标签包裹输出，格式如下：\n");
         prompt.append("<commit>\n");
@@ -361,31 +361,31 @@ Footer 包含：
         try {
             ClaudeSDKBridge bridge = new ClaudeSDKBridge();
 
-            // 创建简单的回调处理
+            // Simple callback handler
             StringBuilder result = new StringBuilder();
 
-            // 使用 12 参数版本的 sendMessage，指定：
-            // - model: COMMIT_MESSAGE_MODEL (使用 Sonnet 模型)
-            // - streaming: false (非流式，一次性返回完整结果)
-            // - disableThinking: true (禁用思考模式，避免返回大量思考内容)
+            // Use the 12-parameter sendMessage overload:
+            // - model: COMMIT_MESSAGE_MODEL (Sonnet model)
+            // - streaming: false (non-streaming, returns complete result at once)
+            // - disableThinking: true (disable thinking mode to avoid verbose reasoning output)
             bridge.sendMessage(
                 "git-commit-message",      // channelId
                 prompt,                     // message
-                null,                       // sessionId (null 表示新会话)
+                null,                       // sessionId (null = new session)
                 project.getBasePath(),      // cwd
-                null,                       // attachments (不需要附件)
-                null,                       // permissionMode (使用默认)
-                COMMIT_MESSAGE_MODEL,       // model (使用 sonnet)
+                null,                       // attachments (not needed)
+                null,                       // permissionMode (use default)
+                COMMIT_MESSAGE_MODEL,       // model (Sonnet)
                 null,                       // openedFiles
                 null,                       // agentPrompt
-                false,                      // streaming (非流式模式)
-                true,                       // disableThinking (禁用思考模式)
+                false,                      // streaming (non-streaming mode)
+                true,                       // disableThinking (disable thinking mode)
                 new MessageCallback() {
                     @Override
                     public void onMessage(String type, String content) {
-                        // 只收集 assistant 类型的内容，忽略 thinking/reasoning
+                        // Only collect assistant content, ignore thinking/reasoning
                         if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
-                            // 检查是否是思考过程（通常以特定标记开头）
+                            // Skip thinking content (typically starts with specific markers)
                             if (!isThinkingContent(content)) {
                                 result.append(content);
                             }
@@ -418,33 +418,33 @@ Footer 包含：
     }
 
     /**
-     * 调用 Codex API
+     * Call the Codex API.
      */
     private void callCodexAPI(String prompt, CommitMessageCallback callback) {
         try {
             CodexSDKBridge bridge = new CodexSDKBridge();
 
-            // 创建简单的回调处理
+            // Simple callback handler
             StringBuilder result = new StringBuilder();
 
-            // CodexSDKBridge.sendMessage 需要 10 个参数：
+            // CodexSDKBridge.sendMessage requires 10 parameters:
             // (channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, callback)
             bridge.sendMessage(
                 "git-commit-message",      // channelId
                 prompt,                     // message
-                null,                       // threadId (null 表示新会话)
+                null,                       // threadId (null = new session)
                 project.getBasePath(),      // cwd
-                null,                       // attachments (不需要附件)
-                null,                       // permissionMode (使用默认)
-                null,                       // model (使用默认)
-                null,                       // agentPrompt (不需要)
-                null,                       // reasoningEffort (使用默认)
+                null,                       // attachments (not needed)
+                null,                       // permissionMode (use default)
+                null,                       // model (use default)
+                null,                       // agentPrompt (not needed)
+                null,                       // reasoningEffort (use default)
                 new MessageCallback() {
                     @Override
                     public void onMessage(String type, String content) {
-                        // 只收集 assistant 类型的内容，忽略 thinking/reasoning
+                        // Only collect assistant content, ignore thinking/reasoning
                         if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
-                            // 检查是否是思考过程
+                            // Skip thinking content
                             if (!isThinkingContent(content)) {
                                 result.append(content);
                             }
@@ -477,8 +477,8 @@ Footer 包含：
     }
 
     /**
-     * 清理并提取 commit message
-     * 优先从 XML 标签中提取，支持多种格式作为 fallback
+     * Clean up and extract the commit message.
+     * Prioritizes extraction from XML tags, with multiple format fallbacks.
      */
     private String cleanupCommitMessage(String message) {
         if (message == null || message.isEmpty()) {
@@ -487,24 +487,23 @@ Footer 包含：
 
         String cleaned = message;
 
-        // 0. 先移除思考过程标记（如 "思考 ▸" 等）
+        // 0. Remove thinking markers first (e.g. "Thinking >" etc.)
         cleaned = removeThinkingMarkers(cleaned);
 
-        // 1. 优先尝试从 <commit>...</commit> 标签中提取
+        // 1. First try to extract from <commit>...</commit> tags
         int startIdx = cleaned.indexOf(COMMIT_TAG_START);
         int endIdx = cleaned.indexOf(COMMIT_TAG_END);
 
         if (startIdx != -1 && endIdx != -1 && endIdx > startIdx) {
             cleaned = cleaned.substring(startIdx + COMMIT_TAG_START.length(), endIdx);
-            // 将字面的 \n 转换为真正的换行符
+            // Convert literal \n to actual newlines
             return convertLiteralNewlines(cleaned.trim());
         }
 
-        // 2. Fallback: 尝试从 markdown 代码块中提取
-        // 匹配 ```commit 或 ``` 开头的代码块
+        // 2. Fallback: try to extract from markdown code blocks
         if (cleaned.contains("```")) {
             int codeBlockStart = cleaned.indexOf("```");
-            // 找到代码块开始后的第一个换行
+            // Find the first newline after the code block opener
             int contentStart = cleaned.indexOf('\n', codeBlockStart);
             if (contentStart != -1) {
                 int codeBlockEnd = cleaned.indexOf("```", contentStart);
@@ -515,34 +514,34 @@ Footer 包含：
             }
         }
 
-        // 3. Fallback: 尝试提取第一个符合 conventional commit 格式的行
-        // 格式: type(scope): description 或 type: description
+        // 3. Fallback: try to extract the first conventional commit formatted line
+        // Format: type(scope): description or type: description
         String[] lines = cleaned.split("\n");
         for (String line : lines) {
             String trimmedLine = line.trim();
             if (isConventionalCommitLine(trimmedLine)) {
-                // 找到第一行后，继续收集后续的 body 内容（直到遇到分析说明等无关内容）
+                // After finding the first line, continue collecting the body until hitting analysis sections
                 StringBuilder result = new StringBuilder(trimmedLine);
                 int idx = java.util.Arrays.asList(lines).indexOf(line);
                 boolean inBody = false;
 
                 for (int i = idx + 1; i < lines.length; i++) {
                     String nextLine = lines[i].trim();
-                    // 遇到分析说明、变更特征等关键词时停止
+                    // Stop when hitting analysis keywords
                     if (isAnalysisSection(nextLine)) {
                         break;
                     }
-                    // 空行表示 body 开始
+                    // Empty line indicates body start
                     if (nextLine.isEmpty()) {
                         inBody = true;
                         result.append("\n");
                         continue;
                     }
-                    // 在 body 中收集内容
+                    // Collect body content
                     if (inBody && !nextLine.startsWith("#") && !nextLine.startsWith("*")) {
                         result.append("\n").append(nextLine);
                     } else if (!inBody) {
-                        // 如果还没到 body 但遇到非空行，说明是单行 commit
+                        // Not in body yet but hit a non-empty line, means single-line commit
                         break;
                     }
                 }
@@ -550,7 +549,7 @@ Footer 包含：
             }
         }
 
-        // 4. 最后的 fallback: 返回原始内容的前几行（排除明显的分析内容）
+        // 4. Last resort fallback: return the first few lines of raw content (excluding analysis sections)
         StringBuilder fallback = new StringBuilder();
         for (String line : lines) {
             String trimmedLine = line.trim();
@@ -560,7 +559,7 @@ Footer 包含：
             if (!trimmedLine.isEmpty()) {
                 fallback.append(trimmedLine).append("\n");
             }
-            // 最多取 5 行
+            // Take at most 5 lines
             if (fallback.toString().split("\n").length >= 5) {
                 break;
             }
@@ -570,32 +569,32 @@ Footer 包含：
     }
 
     /**
-     * 将字面的 \n 转换为真正的换行符，并清理多余的空行
+     * Convert literal \n characters to actual newlines and clean up excess blank lines.
      */
     private String convertLiteralNewlines(String text) {
         if (text == null) {
             return null;
         }
-        // 将字面的 \n (两个字符) 转换为真正的换行符
+        // Convert literal \n (two characters) to actual newlines
         String result = text.replace("\\n", "\n");
 
-        // 移除开头的空行
+        // Remove leading blank lines
         result = result.replaceFirst("^\\n+", "");
 
-        // 将连续的多个空行替换为单个空行（保留 conventional commit 的标题和 body 之间的单个空行）
+        // Collapse multiple consecutive blank lines into a single one (preserve the conventional commit title/body separator)
         result = result.replaceAll("\\n{3,}", "\n\n");
 
         return result.trim();
     }
 
     /**
-     * 检查是否是 conventional commit 格式的行
+     * Check whether a line follows the conventional commit format.
      */
     private boolean isConventionalCommitLine(String line) {
         if (line == null || line.isEmpty()) {
             return false;
         }
-        // 匹配: feat:, fix:, refactor:, feat(scope):, etc.
+        // Match: feat:, fix:, refactor:, feat(scope):, etc.
         String[] types = {"feat", "fix", "refactor", "docs", "test", "chore", "perf", "ci", "style", "build"};
         for (String type : types) {
             if (line.startsWith(type + ":") || line.startsWith(type + "(")) {
@@ -606,7 +605,7 @@ Footer 包含：
     }
 
     /**
-     * 检查是否是分析说明部分（需要排除的内容）
+     * Check whether a line belongs to an analysis section (content to exclude).
      */
     private boolean isAnalysisSection(String line) {
         if (line == null) {
@@ -623,7 +622,7 @@ Footer 包含：
                 return true;
             }
         }
-        // 检查是否是数字列表开头（如 "1. xxx"）
+        // Check for numbered list items (e.g. "1. xxx")
         if (line.matches("^\\d+\\.\\s+.*")) {
             return true;
         }
@@ -631,13 +630,13 @@ Footer 包含：
     }
 
     /**
-     * 检查内容是否是思考过程
+     * Check whether the content is a thinking/reasoning process.
      */
     private boolean isThinkingContent(String content) {
         if (content == null || content.isEmpty()) {
             return false;
         }
-        // 思考过程的常见标记
+        // Common markers for thinking/reasoning content
         String[] thinkingMarkers = {
             "思考", "thinking", "Thinking", "<thinking>", "</thinking>",
             "让我分析", "让我思考", "我来分析", "首先分析",
@@ -653,7 +652,7 @@ Footer 包含：
     }
 
     /**
-     * 移除思考过程标记和内容
+     * Remove thinking markers and their content.
      */
     private String removeThinkingMarkers(String content) {
         if (content == null || content.isEmpty()) {
@@ -662,7 +661,7 @@ Footer 包含：
 
         String result = content;
 
-        // 移除 <thinking>...</thinking> 标签及其内容
+        // Remove <thinking>...</thinking> tags and their content
         while (result.contains("<thinking>") && result.contains("</thinking>")) {
             int start = result.indexOf("<thinking>");
             int end = result.indexOf("</thinking>") + "</thinking>".length();
@@ -673,13 +672,13 @@ Footer 包含：
             }
         }
 
-        // 移除 "思考 ▸" 等 UI 标记
+        // Remove UI thinking markers like "Thinking >" etc.
         String[] uiMarkers = {"思考 ▸", "思考▸", "思考 ►", "思考►", "Thinking ▸", "Thinking▸"};
         for (String marker : uiMarkers) {
             result = result.replace(marker, "");
         }
 
-        // 移除开头的空行
+        // Remove leading blank lines
         result = result.replaceFirst("^\\s*\\n+", "");
 
         return result.trim();

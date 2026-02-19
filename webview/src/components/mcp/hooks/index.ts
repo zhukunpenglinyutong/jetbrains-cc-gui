@@ -1,5 +1,5 @@
 /**
- * MCP Hooks 模块导出
+ * MCP Hooks Module Exports
  */
 
 export * from './useServerData';

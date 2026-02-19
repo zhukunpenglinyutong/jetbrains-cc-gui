@@ -3,16 +3,16 @@ import type { TriggerQuery, DropdownPosition } from '../types';
 import { getVirtualCursorPosition } from '../utils/virtualCursorUtils.js';
 
 /**
- * 辅助函数：检查文本是否以换行符结尾
+ * Helper function: check if text ends with a newline character
  */
 function textEndsWithNewline(text: string | null): boolean {
   return text !== null && text.length > 0 && text.endsWith('\n');
 }
 
 /**
- * 获取指定字符偏移位置的屏幕坐标
- * 注意：需要与 getTextContent 返回的文本格式一致
- * 文件标签会被转换为 @文件路径 格式，需要计算其虚拟长度
+ * Get screen coordinates at a given character offset
+ * Note: Must be consistent with the text format returned by getTextContent
+ * File tags are converted to @filepath format, requiring virtual length calculation
  */
 export function getRectAtCharOffset(
   element: HTMLElement,
@@ -21,7 +21,7 @@ export function getRectAtCharOffset(
   let position = 0;
   let targetNode: Node | null = null;
   let targetOffset = 0;
-  // 跟踪当前是否以换行结尾，与 getTextContent 的 text.endsWith('\n') 逻辑一致
+  // Track whether current position ends with newline, consistent with getTextContent's text.endsWith('\n') logic
   let endsWithNewline = false;
 
   const walk = (node: Node): boolean => {
@@ -29,38 +29,38 @@ export function getRectAtCharOffset(
       const text = node.textContent ?? '';
       const len = text.length;
       if (position + len >= charOffset) {
-        // 找到目标文本节点
+        // Found the target text node
         targetNode = node;
         targetOffset = charOffset - position;
         return true;
       }
       position += len;
-      // 更新换行状态
+      // Update newline state
       endsWithNewline = textEndsWithNewline(text);
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
       const tagName = el.tagName.toLowerCase();
 
-      // 处理 <br> 标签 - 与 getTextContent 保持一致
+      // Handle <br> tags - consistent with getTextContent
       if (tagName === 'br') {
         if (position + 1 >= charOffset) {
-          // 目标位置在换行符处
+          // Target position is at the line break
           targetNode = el;
           targetOffset = 0;
           return true;
         }
-        position += 1; // br 标签对应一个换行符
+        position += 1; // br tag corresponds to one newline character
         endsWithNewline = true;
         return false;
       }
 
-      // 处理块级元素 (div, p) - 与 getTextContent 保持一致
-      // getTextContent 逻辑: if (text.length > 0 && !text.endsWith('\n')) { text += '\n'; }
+      // Handle block elements (div, p) - consistent with getTextContent
+      // getTextContent logic: if (text.length > 0 && !text.endsWith('\n')) { text += '\n'; }
       if (tagName === 'div' || tagName === 'p') {
-        // 只有在 position > 0 且不以换行结尾时才添加隐式换行
+        // Only add implicit newline when position > 0 and doesn't already end with newline
         if (position > 0 && !endsWithNewline) {
           if (position + 1 >= charOffset) {
-            // 目标位置在块级元素的隐式换行处
+            // Target position is at the block element's implicit newline
             targetNode = el;
             targetOffset = 0;
             return true;
@@ -69,29 +69,29 @@ export function getRectAtCharOffset(
           endsWithNewline = true;
         }
 
-        // 递归处理子节点
+        // Recursively process child nodes
         for (const child of Array.from(el.childNodes)) {
           if (walk(child)) return true;
         }
         return false;
       }
 
-      // 如果是文件标签，计算其虚拟长度 (@ + 文件路径)
+      // If it's a file tag, calculate its virtual length (@ + filepath)
       if (el.classList.contains('file-tag')) {
         const filePath = el.getAttribute('data-file-path') || '';
-        const tagLength = filePath.length + 1; // @ + 文件路径
+        const tagLength = filePath.length + 1; // @ + filepath
 
         if (position + tagLength >= charOffset) {
-          // 目标位置在文件标签内，返回标签末尾位置
+          // Target position is inside file tag, return tag end position
           targetNode = el;
           targetOffset = 0;
           return true;
         }
         position += tagLength;
-        // 文件路径不以换行结尾
+        // File paths don't end with newline
         endsWithNewline = false;
       } else {
-        // 递归处理子节点
+        // Recursively process child nodes
         for (const child of Array.from(node.childNodes)) {
           if (walk(child)) return true;
         }
@@ -100,28 +100,28 @@ export function getRectAtCharOffset(
     return false;
   };
 
-  // 遍历所有子节点
+  // Traverse all child nodes
   for (const child of Array.from(element.childNodes)) {
     if (walk(child)) break;
   }
 
-  // 如果找到目标位置，创建 range 并返回其坐标
+  // If target position found, create a range and return its coordinates
   if (targetNode) {
     const range = document.createRange();
     try {
-      // 使用类型断言来避免TypeScript的never类型推断
+      // Use type assertion to avoid TypeScript's never type inference
       const node: Node = targetNode;
       if (node.nodeType === Node.TEXT_NODE) {
         const textNode = node as Text;
         range.setStart(textNode, Math.max(0, Math.min(targetOffset, textNode.textContent?.length ?? 0)));
         range.collapse(true);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
-        // 元素节点，使用已设置的范围
+        // Element node, use the pre-set range
         range.selectNodeContents(node as HTMLElement);
         range.collapse(false);
       }
       const rect = range.getBoundingClientRect();
-      // 如果获取的坐标无效（全为0），回退到元素自身的坐标
+      // If the coordinates are invalid (all zeros), fall back to the element's own coordinates
       if (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0) {
         return element.getBoundingClientRect();
       }
@@ -131,7 +131,7 @@ export function getRectAtCharOffset(
     }
   }
 
-  // 如果偏移超出范围，返回元素末尾位置
+  // If offset is out of range, return the element's end position
   if (element.lastChild) {
     const range = document.createRange();
     range.selectNodeContents(element);
@@ -147,15 +147,15 @@ export function getRectAtCharOffset(
 }
 
 /**
- * 检查文本位置是否在文件标签内
- * @param element - contenteditable 元素
- * @param textPosition - 文本位置（基于 getTextContent 的虚拟位置）
- * @returns 是否在文件标签内
+ * Check if a text position is inside a file tag
+ * @param element - contenteditable element
+ * @param textPosition - text position (virtual position based on getTextContent)
+ * @returns whether the position is inside a file tag
  */
 function isPositionInFileTag(element: HTMLElement, textPosition: number): boolean {
   let position = 0;
   let inFileTag = false;
-  // 跟踪当前是否以换行结尾，与 getTextContent 的 text.endsWith('\n') 逻辑一致
+  // Track whether current position ends with newline, consistent with getTextContent's text.endsWith('\n') logic
   let endsWithNewline = false;
 
   const walk = (node: Node): boolean => {
@@ -163,7 +163,7 @@ function isPositionInFileTag(element: HTMLElement, textPosition: number): boolea
       const text = node.textContent ?? '';
       const len = text.length;
       if (position + len > textPosition) {
-        // 目标位置在这个文本节点内，不在文件标签内
+        // Target position is within this text node, not inside a file tag
         return true;
       }
       position += len;
@@ -172,10 +172,10 @@ function isPositionInFileTag(element: HTMLElement, textPosition: number): boolea
       const el = node as HTMLElement;
       const tagName = el.tagName.toLowerCase();
 
-      // 处理 <br> 标签 - 与 getTextContent 保持一致
+      // Handle <br> tags - consistent with getTextContent
       if (tagName === 'br') {
         if (position + 1 > textPosition) {
-          // 目标位置在换行符处
+          // Target position is at the line break
           return true;
         }
         position += 1;
@@ -183,9 +183,9 @@ function isPositionInFileTag(element: HTMLElement, textPosition: number): boolea
         return false;
       }
 
-      // 处理块级元素 (div, p) - 与 getTextContent 保持一致
+      // Handle block elements (div, p) - consistent with getTextContent
       if (tagName === 'div' || tagName === 'p') {
-        // 只有在 position > 0 且不以换行结尾时才添加隐式换行
+        // Only add implicit newline when position > 0 and doesn't already end with newline
         if (position > 0 && !endsWithNewline) {
           if (position + 1 > textPosition) {
             return true;
@@ -194,27 +194,27 @@ function isPositionInFileTag(element: HTMLElement, textPosition: number): boolea
           endsWithNewline = true;
         }
 
-        // 递归处理子节点
+        // Recursively process child nodes
         for (const child of Array.from(el.childNodes)) {
           if (walk(child)) return true;
         }
         return false;
       }
 
-      // 如果是文件标签，计算其虚拟长度 (@ + 文件路径)
+      // If it's a file tag, calculate its virtual length (@ + filepath)
       if (el.classList.contains('file-tag')) {
         const filePath = el.getAttribute('data-file-path') || '';
-        const tagLength = filePath.length + 1; // @ + 文件路径
+        const tagLength = filePath.length + 1; // @ + filepath
 
         if (position <= textPosition && textPosition < position + tagLength) {
-          // 目标位置在文件标签内
+          // Target position is inside the file tag
           inFileTag = true;
           return true;
         }
         position += tagLength;
         endsWithNewline = false;
       } else {
-        // 递归处理子节点
+        // Recursively process child nodes
         for (const child of Array.from(node.childNodes)) {
           if (walk(child)) return true;
         }
@@ -223,7 +223,7 @@ function isPositionInFileTag(element: HTMLElement, textPosition: number): boolea
     return false;
   };
 
-  // 遍历所有子节点
+  // Traverse all child nodes
   for (const child of Array.from(element.childNodes)) {
     if (walk(child)) break;
   }

@@ -5,7 +5,7 @@ import i18n from '../../../i18n/config';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
 // ============================================================================
-// 类型定义
+// Type Definitions
 // ============================================================================
 
 export interface PromptItem {
@@ -15,7 +15,7 @@ export interface PromptItem {
 }
 
 // ============================================================================
-// 状态管理
+// State Management
 // ============================================================================
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'failed';
@@ -28,12 +28,12 @@ let retryCount = 0;
 let pendingWaiters: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
 
 const MIN_REFRESH_INTERVAL = 2000;
-const LOADING_TIMEOUT = 1500; // 减少到1.5秒，更快的超时反馈
-const MAX_RETRY_COUNT = 1; // 最多重试1次，避免长时间等待
-const MAX_PENDING_WAITERS = 10; // 最大并发等待数
+const LOADING_TIMEOUT = 1500; // Reduced to 1.5s for faster timeout feedback
+const MAX_RETRY_COUNT = 1; // Max 1 retry to avoid long waits
+const MAX_PENDING_WAITERS = 10; // Maximum concurrent waiters
 
 // ============================================================================
-// 核心函数
+// Core Functions
 // ============================================================================
 
 export function resetPromptsState() {
@@ -67,7 +67,7 @@ export function setupPromptsCallback() {
 
       cachedPrompts = prompts;
       loadingState = 'success';
-      retryCount = 0; // 成功后重置重试计数
+      retryCount = 0; // Reset retry count on success
       pendingWaiters.forEach(w => w.resolve());
       pendingWaiters = [];
       debugLog('[PromptProvider] Successfully loaded ' + prompts.length + ' prompts');
@@ -79,13 +79,13 @@ export function setupPromptsCallback() {
     }
   };
 
-  // 保存原有的回调
+  // Save original callback
   const originalHandler = window.updatePrompts;
 
   window.updatePrompts = (json: string) => {
-    // 调用我们的处理器
+    // Call our handler
     handler(json);
-    // 也调用原有的处理器（如果存在）
+    // Also call original handler (if exists)
     originalHandler?.(json);
   };
 
@@ -198,14 +198,14 @@ export async function promptProvider(
 
   const now = Date.now();
 
-  // 创建提示词项
+  // Create prompt item
   const createNewPromptItem: PromptItem = {
     id: CREATE_NEW_PROMPT_ID,
     name: i18n.t('settings.prompt.createPrompt'),
     content: '',
   };
 
-  // 如果已经有缓存数据，直接使用缓存
+  // If cached data exists, use cache directly
   if (loadingState === 'success' && cachedPrompts.length > 0) {
     const filtered = filterPrompts(cachedPrompts, query);
     if (filtered.length === 0) {
@@ -218,7 +218,7 @@ export async function promptProvider(
     return [...filtered, createNewPromptItem];
   }
 
-  // 尝试刷新数据（非阻塞）
+  // Attempt to refresh data (non-blocking)
   if (loadingState === 'idle' || loadingState === 'failed') {
     requestRefresh();
   } else if (loadingState === 'loading' && now - lastRefreshTime > LOADING_TIMEOUT) {
@@ -226,12 +226,12 @@ export async function promptProvider(
     loadingState = 'failed';
   }
 
-  // 只等待很短时间（500ms），然后返回当前可用数据
+  // Wait only briefly (500ms), then return currently available data
   if (loadingState === 'loading') {
     await waitForPrompts(signal, 500).catch(() => {});
   }
 
-  // 无论加载状态如何，都返回结果
+  // Return results regardless of loading state
   if (loadingState === 'success' && cachedPrompts.length > 0) {
     const filtered = filterPrompts(cachedPrompts, query);
     if (filtered.length === 0) {
@@ -244,7 +244,7 @@ export async function promptProvider(
     return [...filtered, createNewPromptItem];
   }
 
-  // 没有数据时，直接显示空状态和创建按钮
+  // When no data available, show empty state and create button
   return [{
     id: EMPTY_STATE_ID,
     name: i18n.t('settings.prompt.noPromptsDropdown'),
@@ -253,7 +253,7 @@ export async function promptProvider(
 }
 
 export function promptToDropdownItem(prompt: PromptItem): DropdownItemData {
-  // 特殊处理加载中和空状态
+  // Special handling for loading and empty states
   if (prompt.id === '__loading__' || prompt.id === '__empty__' || prompt.id === EMPTY_STATE_ID) {
     return {
       id: prompt.id,
@@ -265,7 +265,7 @@ export function promptToDropdownItem(prompt: PromptItem): DropdownItemData {
     };
   }
 
-  // 特殊处理创建提示词
+  // Special handling for create prompt item
   if (prompt.id === CREATE_NEW_PROMPT_ID) {
     return {
       id: prompt.id,

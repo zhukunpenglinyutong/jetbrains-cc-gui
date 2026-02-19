@@ -7,7 +7,7 @@ import 'highlight.js/styles/github-dark.css';
 import { markedHighlight } from 'marked-highlight';
 import mermaid from 'mermaid';
 
-// 初始化 mermaid 配置
+// Initialize mermaid configuration
 mermaid.initialize({
   startOnLoad: false,
   theme: 'dark',
@@ -15,11 +15,11 @@ mermaid.initialize({
   fontFamily: 'inherit',
 });
 
-// 配置 marked 使用语法高亮
+// Configure marked to use syntax highlighting
 marked.use(
   markedHighlight({
     highlight(code: string, lang: string) {
-      // mermaid 代码块不做高亮处理
+      // Skip syntax highlighting for mermaid code blocks
       if (lang === 'mermaid') {
         return code;
       }
@@ -35,7 +35,7 @@ marked.use(
   })
 );
 
-// Mermaid 语法关键字，用于检测代码内容
+// Mermaid syntax keywords used to detect diagram content
 const MERMAID_KEYWORDS = [
   'flowchart',
   'graph',
@@ -68,39 +68,39 @@ interface MarkdownBlockProps {
 }
 
 /**
- * 流式安全处理：处理未闭合的代码块和其他 markdown 结构
- * 在流式传输过程中，代码块可能被截断，导致 markdown 解析错误
- * 此函数检测并临时闭合未完成的代码块
+ * Stream-safe processing: handle unclosed code blocks and other markdown structures.
+ * During streaming, code blocks may be truncated, causing markdown parsing errors.
+ * This function detects and temporarily closes incomplete code blocks.
  */
 function makeStreamSafe(content: string): string {
   if (!content) return content;
 
   let result = content;
 
-  // 处理代码块：检测是否有未闭合的围栏代码块（```）
-  // 使用状态机方式追踪代码块
+  // Handle code blocks: detect unclosed fenced code blocks (```)
+  // Track code block state using a state machine approach
   const lines = result.split('\n');
   let inCodeBlock = false;
 
   for (const line of lines) {
     const trimmedLine = line.trim();
-    // 检测代码块开始或结束
+    // Detect code block opening or closing
     if (trimmedLine.startsWith('```')) {
       inCodeBlock = !inCodeBlock;
     }
   }
 
-  // 如果仍在代码块内，添加闭合标记
+  // If still inside a code block, append a closing fence
   if (inCodeBlock) {
     result = result + '\n```';
   }
 
-  // 处理行内代码：检测是否有未闭合的行内代码（`）
-  // 只处理最后一行，避免影响多行结构
+  // Handle inline code: detect unclosed inline code (`)
+  // Only process the last line to avoid affecting multiline structures
   const lastNewlineIndex = result.lastIndexOf('\n');
   const lastLine = lastNewlineIndex >= 0 ? result.slice(lastNewlineIndex + 1) : result;
 
-  // 计算最后一行中单个反引号的数量（排除双反引号和三反引号）
+  // Count single backticks in the last line (excluding double and triple backticks)
   const singleBacktickMatches = lastLine.match(/(?<!`)`(?!`)/g);
   if (singleBacktickMatches && singleBacktickMatches.length % 2 !== 0) {
     result = result + '`';
@@ -109,7 +109,7 @@ function makeStreamSafe(content: string): string {
   return result;
 }
 
-// Mermaid 渲染计数器，用于生成唯一 ID
+// Mermaid render counter for generating unique IDs
 let mermaidIdCounter = 0;
 
 const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps) => {
@@ -117,20 +117,20 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   const containerRef = useRef<HTMLDivElement>(null);
   const { t, i18n } = useTranslation();
 
-  // 追踪上一次的 isStreaming 状态，用于检测流式结束
+  // Track previous isStreaming state to detect when streaming ends
   const prevIsStreamingRef = useRef(isStreaming);
 
-  // 用于追踪重试次数的 ref
+  // Ref for tracking retry count
   const mermaidRetryRef = useRef(0);
   const MERMAID_MAX_RETRIES = 3;
 
-  // 渲染 mermaid 图表
+  // Render mermaid diagrams
   const renderMermaidDiagrams = useCallback(async () => {
     if (!containerRef.current) return;
 
     const codeBlocks = containerRef.current.querySelectorAll('pre code');
 
-    // 如果没有代码块，重置重试计数
+    // If no code blocks found, reset retry count
     if (codeBlocks.length === 0) {
       mermaidRetryRef.current = 0;
       return;
@@ -145,15 +145,15 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       const wrapper = pre.parentElement;
       if (wrapper?.classList.contains('mermaid-rendered')) continue;
 
-      // 获取代码文本内容
+      // Get the text content of the code block
       let code = codeBlock.textContent || '';
 
-      // 清理可能残留的 markdown 标记（如 ```mermaid）
+      // Clean up any remaining markdown markers (e.g., ```mermaid)
       code = code.replace(/^```mermaid\s*/i, '').replace(/```\s*$/, '').trim();
 
       if (!code) continue;
 
-      // 检查是否是 mermaid 语法（以关键字开头）
+      // Check if the content is mermaid syntax (starts with a keyword)
       const firstWord = code.split(/[\s\n]/)[0].toLowerCase();
       const isMermaid = MERMAID_KEYWORDS.some(kw =>
         firstWord === kw.toLowerCase() || firstWord.startsWith(kw.toLowerCase())
@@ -185,7 +185,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       }
     }
 
-    // 如果渲染了任何图表，重置重试计数
+    // If any diagrams were rendered, reset retry count
     if (renderedAny) {
       mermaidRetryRef.current = 0;
     }
@@ -193,16 +193,16 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     return renderedAny;
   }, []);
 
-  // 在 HTML 更新后渲染 mermaid 图表
+  // Render mermaid diagrams after HTML updates
   useEffect(() => {
     let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let retryRafId: number | null = null;
 
-    // 使用双重 requestAnimationFrame 确保 DOM 已完全渲染
+    // Use double requestAnimationFrame to ensure the DOM is fully rendered
     let rafId1 = requestAnimationFrame(() => {
       rafId1 = requestAnimationFrame(() => {
         renderMermaidDiagrams().then((rendered) => {
-          // 如果没有渲染任何图表且重试次数未达到上限，延迟重试
+          // If no diagrams were rendered and retry limit not reached, retry after a delay
           if (!rendered && mermaidRetryRef.current < MERMAID_MAX_RETRIES) {
             mermaidRetryRef.current++;
             retryTimeoutId = setTimeout(() => {
@@ -222,7 +222,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     };
   }, [content, renderMermaidDiagrams]);
 
-  // 复制图标 SVG
+  // Copy icon SVG
   const copyIconSvg = `
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fill-opacity="0.9"/>
@@ -230,7 +230,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     </svg>
   `;
 
-  // 复制功能实现
+  // Copy to clipboard implementation
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -258,15 +258,15 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
 
   const html = useMemo(() => {
     try {
-      // 去除内容末尾的换行符，避免产生额外空白
+      // Strip trailing newlines to avoid extra whitespace
       let trimmedContent = content.replace(/[\r\n]+$/, '');
 
-      // 流式传输时，处理未闭合的代码块
+      // During streaming, handle unclosed code blocks
       if (isStreaming) {
         trimmedContent = makeStreamSafe(trimmedContent);
       }
 
-      // marked.parse 返回的 HTML 末尾可能有换行符，也需要去除
+      // The HTML returned by marked.parse may have trailing newlines that need to be trimmed
       const parsed = marked.parse(trimmedContent);
       const rawHtml = typeof parsed === 'string' ? parsed.trim() : String(parsed);
 
@@ -317,7 +317,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     }
   }, [content, isStreaming, i18n.language, t]);
 
-  // 流式结束时强制刷新 DOM，修复流式渲染可能导致的布局错乱
+  // Force DOM refresh when streaming ends to fix potential layout corruption from streaming render
   useEffect(() => {
     if (prevIsStreamingRef.current && !isStreaming && containerRef.current) {
       let rafId2: number | null = null;
@@ -331,12 +331,12 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         renderMermaidDiagrams();
       };
 
-      // 使用双重 requestAnimationFrame 确保 DOM 完全更新
+      // Use double requestAnimationFrame to ensure DOM is fully updated
       const rafId1 = requestAnimationFrame(() => {
         rafId2 = requestAnimationFrame(() => {
           applyRefresh();
         });
-        // 备用方案：如果 raf 不生效（某些环境），使用 setTimeout
+        // Fallback: use setTimeout in case rAF doesn't fire in some environments
         fallbackTimer = setTimeout(() => {
           applyRefresh();
         }, 100);

@@ -12,8 +12,8 @@ interface PromptEnhancerDialogProps {
 }
 
 /**
- * PromptEnhancerDialog - 增强提示词对话框
- * 展示原始提示词和增强后的提示词，让用户选择使用哪个版本
+ * PromptEnhancerDialog - Prompt enhancement dialog
+ * Displays original and enhanced prompts, letting the user choose which version to use
  */
 export const PromptEnhancerDialog = ({
   isOpen,
@@ -26,7 +26,7 @@ export const PromptEnhancerDialog = ({
 }: PromptEnhancerDialogProps) => {
   const { t } = useTranslation();
 
-  // 处理键盘事件
+  // Handle keyboard events
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose();
@@ -47,7 +47,7 @@ export const PromptEnhancerDialog = ({
     return null;
   }
 
-  // 点击遮罩关闭
+  // Close on overlay click
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose();
@@ -57,7 +57,7 @@ export const PromptEnhancerDialog = ({
   return (
     <div className="prompt-enhancer-overlay" onClick={handleOverlayClick}>
       <div className="prompt-enhancer-dialog" onClick={(e) => e.stopPropagation()}>
-        {/* 头部 */}
+        {/* Header */}
         <div className="prompt-enhancer-header">
           <div className="prompt-enhancer-title">
             <span className="codicon codicon-sparkle" />
@@ -68,9 +68,9 @@ export const PromptEnhancerDialog = ({
           </button>
         </div>
 
-        {/* 内容区域 */}
+        {/* Content area */}
         <div className="prompt-enhancer-content">
-          {/* 原始提示词 */}
+          {/* Original prompt */}
           <div className="prompt-section">
             <div className="prompt-section-header">
               <span className="codicon codicon-edit" />
@@ -81,7 +81,7 @@ export const PromptEnhancerDialog = ({
             </div>
           </div>
 
-          {/* 增强后的提示词 */}
+          {/* Enhanced prompt */}
           <div className="prompt-section">
             <div className="prompt-section-header">
               <span className="codicon codicon-sparkle" />
@@ -100,7 +100,7 @@ export const PromptEnhancerDialog = ({
           </div>
         </div>
 
-        {/* 底部按钮 */}
+        {/* Footer buttons */}
         <div className="prompt-enhancer-footer">
           <button
             className="prompt-enhancer-btn secondary"

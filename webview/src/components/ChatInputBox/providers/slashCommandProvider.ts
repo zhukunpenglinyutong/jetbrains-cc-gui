@@ -4,7 +4,7 @@ import i18n from '../../../i18n/config';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
 /**
- * 本地命令列表（需要被过滤掉的命令）
+ * Local command list (commands to be filtered out)
  */
 const HIDDEN_COMMANDS = new Set([
   '/context',
@@ -16,8 +16,8 @@ const HIDDEN_COMMANDS = new Set([
 ]);
 
 /**
- * 本地新建会话命令（/clear, /new, /reset 是同一个命令的别名）
- * 这些命令在前端直接处理，不需要发送到 SDK
+ * Local new session commands (/clear, /new, /reset are aliases for the same command)
+ * These commands are handled directly on the frontend, no need to send to SDK
  */
 const NEW_SESSION_COMMAND_ALIASES = new Set(['/clear', '/new', '/reset']);
 
@@ -31,7 +31,7 @@ function getLocalNewSessionCommands(): CommandItem[] {
 }
 
 // ============================================================================
-// 状态管理
+// State Management
 // ============================================================================
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'failed';
@@ -43,11 +43,11 @@ let callbackRegistered = false;
 let retryCount = 0;
 let pendingWaiters: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
 const MIN_REFRESH_INTERVAL = 2000;
-const LOADING_TIMEOUT = 30000; // 增加到30秒，解决部分Windows用户首次加载慢的问题
+const LOADING_TIMEOUT = 30000; // Increased to 30s to handle slow initial load for some Windows users
 const MAX_RETRY_COUNT = 3;
 
 // ============================================================================
-// 核心函数
+// Core Functions
 // ============================================================================
 
 export function resetSlashCommandsState() {
@@ -217,7 +217,7 @@ function requestRefresh(): boolean {
 function isHiddenCommand(name: string): boolean {
   const normalized = name.startsWith('/') ? name : `/${name}`;
   if (HIDDEN_COMMANDS.has(normalized)) return true;
-  // 隐藏 SDK 返回的 /clear（使用本地版本替代）
+  // Hide SDK-returned /clear (use local version instead)
   if (NEW_SESSION_COMMAND_ALIASES.has(normalized)) return true;
   const baseName = normalized.split(' ')[0];
   return HIDDEN_COMMANDS.has(baseName) || NEW_SESSION_COMMAND_ALIASES.has(baseName);
@@ -315,16 +315,16 @@ export function forceRefreshSlashCommands(): void {
 }
 
 /**
- * 应用初始化时预加载斜杠命令
- * 在用户输入 "/" 之前就加载命令数据，提升体感性能
+ * Preload slash commands during app initialization
+ * Load command data before user types "/" to improve perceived performance
  *
- * 安全保证：
- * - 如果已在加载中或已加载完成则跳过（检查 loadingState）
- * - requestRefresh() 有 MIN_REFRESH_INTERVAL 防重复请求保护
- * - 与 slashCommandProvider 共享状态，后续调用可直接命中缓存
+ * Safety guarantees:
+ * - Skips if already loading or loaded (checks loadingState)
+ * - requestRefresh() has MIN_REFRESH_INTERVAL deduplication protection
+ * - Shares state with slashCommandProvider, subsequent calls hit cache directly
  */
 export function preloadSlashCommands(): void {
-  // 仅在空闲状态下预加载，不干扰正在进行或已完成的加载
+  // Only preload in idle state, don't interfere with in-progress or completed loads
   if (loadingState !== 'idle') {
     debugLog('[SlashCommand] Preload skipped (state=' + loadingState + ')');
     return;
@@ -332,10 +332,10 @@ export function preloadSlashCommands(): void {
 
   debugLog('[SlashCommand] Preloading commands on app init');
 
-  // 确保回调已注册后再请求刷新
+  // Ensure callback is registered before requesting refresh
   setupSlashCommandsCallback();
 
-  // 请求刷新 — 内置防重复请求保护
+  // Request refresh -- built-in deduplication protection
   requestRefresh();
 }
 

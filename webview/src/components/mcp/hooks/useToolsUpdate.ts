@@ -1,6 +1,6 @@
 /**
- * 工具列表更新 Hook
- * 监听工具列表更新事件并处理状态更新
+ * Tools List Update Hook
+ * Listens for tools list update events and handles state updates
  */
 
 import { useEffect } from 'react';
@@ -15,8 +15,8 @@ export interface UseToolsUpdateOptions {
 }
 
 /**
- * 工具列表更新 Hook
- * 注册 window.updateMcpServerTools 回调
+ * Tools List Update Hook
+ * Registers window.updateMcpServerTools callback
  */
 export function useToolsUpdate({
   isCodexMode,
@@ -26,11 +26,11 @@ export function useToolsUpdate({
 }: UseToolsUpdateOptions): void {
   useEffect(() => {
     if (isCodexMode) {
-      // Codex 模式不需要工具列表更新
+      // Tools list update not needed in Codex mode
       return;
     }
 
-    // 注册工具列表更新回调
+    // Register tools list update callback
     const handleToolsUpdate = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
@@ -57,9 +57,9 @@ export function useToolsUpdate({
           writeToolsCache(serverId, toolList, cacheKeys);
 
           onLog(
-            `工具列表加载完成: ${toolList.length} 个工具`,
+            `Tools loaded: ${toolList.length} tool(s)`,
             error ? 'warning' : 'success',
-            `工具: ${toolList.slice(0, 5).map(t => t.name).join(', ')}${toolList.length > 5 ? '...' : ''}`,
+            `Tools: ${toolList.slice(0, 5).map(t => t.name).join(', ')}${toolList.length > 5 ? '...' : ''}`,
             serverName || serverId
           );
           return;

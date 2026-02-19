@@ -3,14 +3,14 @@ import { getFileIcon, getFolderIcon } from '../../../utils/fileIcons';
 import { icon_terminal, icon_server } from '../../../utils/icons';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
-// 请求队列管理
+// Request queue management
 let pendingResolve: ((files: FileItem[]) => void) | null = null;
 let pendingReject: ((error: Error) => void) | null = null;
 let lastQuery: string = '';
 
 /**
- * 重置文件引用提供者状态
- * 在组件初始化时调用，确保状态是干净的
+ * Reset file reference provider state
+ * Called during component initialization to ensure clean state
  */
 export function resetFileReferenceState() {
   debugLog('[fileReferenceProvider] Resetting file reference state');
@@ -20,7 +20,7 @@ export function resetFileReferenceState() {
 }
 
 /**
- * 注册 Java 回调
+ * Register Java callback
  */
 function setupFileListCallback() {
   if (typeof window !== 'undefined' && !window.onFileListResult) {
@@ -29,7 +29,7 @@ function setupFileListCallback() {
         const data = JSON.parse(json);
         let files: FileItem[] = data.files || data || [];
 
-        // 过滤掉应该隐藏的文件
+        // Filter out files that should be hidden
         files = files.filter(file => !shouldHideFile(file.name));
 
         const result = files.length > 0 ? files : filterFiles(DEFAULT_FILES, lastQuery);
@@ -46,7 +46,7 @@ function setupFileListCallback() {
 }
 
 /**
- * 发送请求到 Java
+ * Send request to Java
  */
 function sendToJava(event: string, payload: Record<string, unknown>) {
   if (window.sendToJava) {
@@ -57,33 +57,33 @@ function sendToJava(event: string, payload: Record<string, unknown>) {
 }
 
 /**
- * 检查文件是否应该被隐藏（不显示在列表中）
+ * Check if a file should be hidden (not displayed in the list)
  */
 function shouldHideFile(fileName: string): boolean {
-  // 隐藏的文件/文件夹列表
+  // Hidden files/folders list
   const hiddenItems = [
-    '.DS_Store',      // macOS 系统文件
-    '.git',           // Git 仓库文件夹
-    'node_modules',   // npm 依赖文件夹
-    '.idea',          // IntelliJ IDEA 配置文件夹
+    '.DS_Store',      // macOS system file
+    '.git',           // Git repository folder
+    'node_modules',   // npm dependency folder
+    '.idea',          // IntelliJ IDEA configuration folder
   ];
 
   return hiddenItems.includes(fileName);
 }
 
 /**
- * 默认文件列表（当 Java 端未实现时返回空列表）
+ * Default file list (returns empty list when Java side is not implemented)
  */
 const DEFAULT_FILES: FileItem[] = [];
 
 /**
- * 过滤文件
+ * Filter files
  */
 function filterFiles(files: FileItem[], query: string): FileItem[] {
-  // 首先过滤掉应该隐藏的文件
+  // First filter out files that should be hidden
   let filtered = files.filter(file => !shouldHideFile(file.name));
 
-  // 如果有搜索关键词，再根据关键词过滤
+  // If there's a search keyword, filter by keyword as well
   if (query) {
     const lowerQuery = query.toLowerCase();
     filtered = filtered.filter(file =>
@@ -96,8 +96,8 @@ function filterFiles(files: FileItem[], query: string): FileItem[] {
 }
 
 /**
- * 从查询字符串中提取当前路径和搜索关键词
- * 例如：
+ * Extract current path and search keyword from query string
+ * Examples:
  *   "" → { currentPath: "", searchQuery: "" }
  *   "src/" → { currentPath: "src/", searchQuery: "" }
  *   "src/com" → { currentPath: "src/", searchQuery: "com" }
@@ -108,15 +108,15 @@ function parseQuery(query: string): { currentPath: string; searchQuery: string }
     return { currentPath: '', searchQuery: '' };
   }
 
-  // 检查是否包含 / 符号
+  // Check if the query contains a / character
   const lastSlashIndex = query.lastIndexOf('/');
 
   if (lastSlashIndex === -1) {
-    // 没有斜杠，说明是在根目录搜索
+    // No slash means searching in root directory
     return { currentPath: '', searchQuery: query };
   }
 
-  // 有斜杠，分离路径和搜索词
+  // Has slash, separate path and search term
   const currentPath = query.substring(0, lastSlashIndex + 1);
   const searchQuery = query.substring(lastSlashIndex + 1);
 
@@ -124,45 +124,45 @@ function parseQuery(query: string): { currentPath: string; searchQuery: string }
 }
 
 /**
- * 文件引用数据提供者
+ * File reference data provider
  */
 export async function fileReferenceProvider(
   query: string,
   signal: AbortSignal
 ): Promise<FileItem[]> {
-  // 检查是否被取消
+  // Check if aborted
   if (signal.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  // 设置回调
+  // Set up callback
   setupFileListCallback();
 
   return new Promise((resolve, reject) => {
-    // 检查是否被取消
+    // Check if aborted
     if (signal.aborted) {
       reject(new DOMException('Aborted', 'AbortError'));
       return;
     }
 
-    // 解析查询：分离路径和搜索关键词
+    // Parse query: separate path and search keyword
     const { currentPath, searchQuery } = parseQuery(query);
 
-    // 保存回调
+    // Save callbacks
     pendingResolve = resolve;
     pendingReject = reject;
     lastQuery = query;
 
-    // 监听取消信号
+    // Listen for abort signal
     signal.addEventListener('abort', () => {
       pendingResolve = null;
       pendingReject = null;
       reject(new DOMException('Aborted', 'AbortError'));
     });
 
-    // 检查 sendToJava 是否可用
+    // Check if sendToJava is available
     if (!window.sendToJava) {
-      // 使用默认文件列表进行本地过滤
+      // Use default file list for local filtering
       const filtered = filterFiles(DEFAULT_FILES, searchQuery);
       pendingResolve = null;
       pendingReject = null;
@@ -170,18 +170,18 @@ export async function fileReferenceProvider(
       return;
     }
 
-    // 发送请求，包含当前路径和搜索关键词
+    // Send request with current path and search keyword
     sendToJava('list_files', {
-      query: searchQuery,        // 搜索关键词
-      currentPath: currentPath,  // 当前路径
+      query: searchQuery,        // Search keyword
+      currentPath: currentPath,  // Current path
     });
 
-    // 超时处理（3秒），超时后使用默认文件列表
+    // Timeout handling (3 seconds), fall back to default file list on timeout
     setTimeout(() => {
       if (pendingResolve === resolve) {
         pendingResolve = null;
         pendingReject = null;
-        // 超时时返回过滤后的默认文件列表
+        // Return filtered default file list on timeout
         resolve(filterFiles(DEFAULT_FILES, searchQuery));
       }
     }, 3000);
@@ -189,7 +189,7 @@ export async function fileReferenceProvider(
 }
 
 /**
- * 将 FileItem 转换为 DropdownItemData
+ * Convert FileItem to DropdownItemData
  */
 export function fileToDropdownItem(file: FileItem): DropdownItemData {
   let iconSvg: string;
@@ -212,8 +212,8 @@ export function fileToDropdownItem(file: FileItem): DropdownItemData {
   return {
     id: file.path,
     label: file.name,
-    description: file.absolutePath || file.path, // 优先显示完整路径
-    icon: iconSvg, // 直接使用 SVG 字符串
+    description: file.absolutePath || file.path, // Prefer full path
+    icon: iconSvg, // Use SVG string directly
     type: type,
     data: { file },
   };

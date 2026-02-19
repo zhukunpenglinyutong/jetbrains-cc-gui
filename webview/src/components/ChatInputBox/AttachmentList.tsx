@@ -4,8 +4,8 @@ import type { Attachment, AttachmentListProps } from './types';
 import { isImageAttachment } from './types';
 
 /**
- * AttachmentList - 附件列表组件
- * 显示图片缩略图或文件图标
+ * AttachmentList - Attachment list component
+ * Displays image thumbnails or file icons
  */
 export const AttachmentList = ({
   attachments,
@@ -16,7 +16,7 @@ export const AttachmentList = ({
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
 
   /**
-   * 处理附件点击
+   * Handle attachment click
    */
   const handleClick = useCallback((attachment: Attachment) => {
     if (isImageAttachment(attachment)) {
@@ -29,7 +29,7 @@ export const AttachmentList = ({
   }, [onPreview]);
 
   /**
-   * 处理移除附件
+   * Handle attachment removal
    */
   const handleRemove = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -37,14 +37,14 @@ export const AttachmentList = ({
   }, [onRemove]);
 
   /**
-   * 关闭预览
+   * Close preview
    */
   const closePreview = useCallback(() => {
     setPreviewImage(null);
   }, []);
 
   /**
-   * 获取文件图标
+   * Get file icon
    */
   const getFileIcon = (mediaType: string): string => {
     if (mediaType.startsWith('text/')) return 'codicon-file-text';
@@ -55,7 +55,7 @@ export const AttachmentList = ({
   };
 
   /**
-   * 获取文件扩展名
+   * Get file extension
    */
   const getExtension = (fileName: string): string => {
     const parts = fileName.split('.');
@@ -102,7 +102,7 @@ export const AttachmentList = ({
         ))}
       </div>
 
-      {/* 图片预览对话框 */}
+      {/* Image preview dialog */}
       {previewImage && (
         <div
           className="image-preview-overlay"

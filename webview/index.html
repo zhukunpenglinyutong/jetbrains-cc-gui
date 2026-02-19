@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Claude Chat Webview</title>
-    <!-- 在 React 加载前立即设置主题 data-theme 属性 -->
-    <!-- 注意：背景色由 Java 在 HTML 标签上注入内联样式，这里只需设置 data-theme -->
+    <!-- Set theme data-theme attribute immediately before React loads -->
+    <!-- Note: Background color is injected as inline style on the HTML tag by Java; only data-theme needs to be set here -->
     <script>
       (function() {
         try {
@@ -14,13 +14,13 @@
           var theme;
 
           if (savedTheme === 'light' || savedTheme === 'dark') {
-            // 用户明确选择的主题优先
+            // User's explicit theme selection takes priority
             theme = savedTheme;
           } else if (ideTheme === 'light' || ideTheme === 'dark') {
-            // Follow IDE 模式，使用 Java 注入的主题
+            // Follow IDE mode, using the theme injected by Java
             theme = ideTheme;
           } else {
-            // Fallback（理论上不会发生，因为 Java 一定会注入）
+            // Fallback (should not happen in theory, as Java always injects the theme)
             theme = 'dark';
           }
 

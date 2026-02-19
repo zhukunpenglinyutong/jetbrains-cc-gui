@@ -5,7 +5,7 @@ const sendToJava = (message: string) => {
   if (window.sendToJava) {
     window.sendToJava(message);
   }
-  // sendToJava 不可用时静默处理，避免生产环境日志污染
+  // Silently ignore when sendToJava is unavailable to avoid log pollution in production
 };
 
 export interface AgentDialogState {
@@ -26,52 +26,52 @@ export interface UseAgentManagementOptions {
 export function useAgentManagement(options: UseAgentManagementOptions = {}) {
   const { onSuccess } = options;
 
-  // 超时定时器引用（使用 useRef 避免全局变量污染）
+  // Timeout timer reference (using useRef to avoid global variable pollution)
   const agentsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Agent 列表状态
+  // Agent list state
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
 
-  // Agent 弹窗状态
+  // Agent dialog state
   const [agentDialog, setAgentDialog] = useState<AgentDialogState>({
     isOpen: false,
     agent: null,
   });
 
-  // Agent 删除确认状态
+  // Agent delete confirmation state
   const [deleteAgentConfirm, setDeleteAgentConfirm] = useState<DeleteAgentConfirmState>({
     isOpen: false,
     agent: null,
   });
 
-  // 加载 Agent 列表（带重试机制）
+  // Load agent list (with retry mechanism)
   const loadAgents = useCallback((retryCount = 0) => {
     const MAX_RETRIES = 2;
-    const TIMEOUT = 3000; // 3秒超时
+    const TIMEOUT = 3000; // 3-second timeout
 
     setAgentsLoading(true);
     sendToJava('get_agents:');
 
-    // 设置超时定时器
+    // Set up timeout timer
     const timeoutId = setTimeout(() => {
       if (retryCount < MAX_RETRIES) {
-        // 重试
+        // Retry
         loadAgents(retryCount + 1);
       } else {
-        // 达到最大重试次数，停止加载
+        // Reached max retries, stop loading
         setAgentsLoading(false);
-        setAgents([]); // 显示空列表，允许用户继续使用
+        setAgents([]); // Show empty list, allow user to continue
       }
     }, TIMEOUT);
 
-    // 使用 ref 存储超时 ID
+    // Store timeout ID in ref
     agentsLoadingTimeoutRef.current = timeoutId;
   }, []);
 
-  // 更新 Agent 列表（供 window callback 使用）
+  // Update agent list (used by window callback)
   const updateAgents = useCallback((agentsList: AgentConfig[]) => {
-    // 清除超时定时器
+    // Clear timeout timer
     if (agentsLoadingTimeoutRef.current) {
       clearTimeout(agentsLoadingTimeoutRef.current);
       agentsLoadingTimeoutRef.current = null;
@@ -81,7 +81,7 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     setAgentsLoading(false);
   }, []);
 
-  // 清理超时定时器
+  // Clean up timeout timer
   const cleanupAgentsTimeout = useCallback(() => {
     if (agentsLoadingTimeoutRef.current) {
       clearTimeout(agentsLoadingTimeoutRef.current);
@@ -89,33 +89,33 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     }
   }, []);
 
-  // 打开添加 Agent 弹窗
+  // Open add agent dialog
   const handleAddAgent = useCallback(() => {
     setAgentDialog({ isOpen: true, agent: null });
   }, []);
 
-  // 打开编辑 Agent 弹窗
+  // Open edit agent dialog
   const handleEditAgent = useCallback((agent: AgentConfig) => {
     setAgentDialog({ isOpen: true, agent });
   }, []);
 
-  // 关闭 Agent 弹窗
+  // Close agent dialog
   const handleCloseAgentDialog = useCallback(() => {
     setAgentDialog({ isOpen: false, agent: null });
   }, []);
 
-  // 删除 Agent
+  // Delete agent
   const handleDeleteAgent = useCallback((agent: AgentConfig) => {
     setDeleteAgentConfirm({ isOpen: true, agent });
   }, []);
 
-  // 保存 Agent
+  // Save agent
   const handleSaveAgent = useCallback(
     (data: { name: string; prompt: string }) => {
       const isAdding = !agentDialog.agent;
 
       if (isAdding) {
-        // 添加新智能体
+        // Add new agent
         const newAgent = {
           id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
           name: data.name,
@@ -123,7 +123,7 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
         };
         sendToJava(`add_agent:${JSON.stringify(newAgent)}`);
       } else if (agentDialog.agent) {
-        // 更新现有智能体
+        // Update existing agent
         const updateData = {
           id: agentDialog.agent.id,
           updates: {
@@ -135,13 +135,13 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
       }
 
       setAgentDialog({ isOpen: false, agent: null });
-      // 智能体操作后重新加载列表（包含超时保护）
+      // Reload list after agent operation (with timeout protection)
       loadAgents();
     },
     [agentDialog.agent, loadAgents]
   );
 
-  // 确认删除 Agent
+  // Confirm agent deletion
   const confirmDeleteAgent = useCallback(() => {
     const agent = deleteAgentConfirm.agent;
     if (!agent) return;
@@ -149,16 +149,16 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     const data = { id: agent.id };
     sendToJava(`delete_agent:${JSON.stringify(data)}`);
     setDeleteAgentConfirm({ isOpen: false, agent: null });
-    // 删除后重新加载列表（包含超时保护）
+    // Reload list after deletion (with timeout protection)
     loadAgents();
   }, [deleteAgentConfirm.agent, loadAgents]);
 
-  // 取消删除 Agent
+  // Cancel agent deletion
   const cancelDeleteAgent = useCallback(() => {
     setDeleteAgentConfirm({ isOpen: false, agent: null });
   }, []);
 
-  // 处理 Agent 操作结果（供 window callback 使用）
+  // Handle agent operation result (used by window callback)
   const handleAgentOperationResult = useCallback(
     (result: { success: boolean; operation?: string; error?: string }) => {
       if (result.success) {
@@ -174,13 +174,13 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
   );
 
   return {
-    // 状态
+    // State
     agents,
     agentsLoading,
     agentDialog,
     deleteAgentConfirm,
 
-    // 方法
+    // Methods
     loadAgents,
     updateAgents,
     cleanupAgentsTimeout,

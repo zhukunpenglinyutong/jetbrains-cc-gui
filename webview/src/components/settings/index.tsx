@@ -13,7 +13,7 @@ import CodexProviderDialog from '../CodexProviderDialog';
 import AgentDialog from '../AgentDialog';
 import PromptDialog from '../PromptDialog';
 
-// 导入拆分后的组件
+// Import split-out components
 import SettingsHeader from './SettingsHeader';
 import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
 import BasicConfigSection from './BasicConfigSection';
@@ -28,7 +28,7 @@ import CommitSection from './CommitSection';
 import OtherSettingsSection from './OtherSettingsSection';
 import { SkillsSettingsSection } from '../skills';
 
-// 导入自定义 hooks
+// Import custom hooks
 import {
   useProviderManagement,
   useCodexProviderManagement,
@@ -61,7 +61,7 @@ const sendToJava = (message: string) => {
   }
 };
 
-// 自动折叠阈值（窗口宽度）
+// Auto-collapse threshold (window width)
 const AUTO_COLLAPSE_THRESHOLD = 900;
 
 const SettingsView = ({
@@ -91,10 +91,10 @@ const SettingsView = ({
     return initial;
   });
 
-  // Toast 状态管理
+  // Toast state management
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Toast 辅助函数
+  // Toast helper function
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
     const id = `toast-${Date.now()}-${Math.random()}`;
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -104,7 +104,7 @@ const SettingsView = ({
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  // 使用 Provider 管理 hook
+  // Use provider management hook
   const {
     providers,
     loading,
@@ -127,7 +127,7 @@ const SettingsView = ({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
 
-  // 使用 Codex Provider 管理 hook
+  // Use Codex provider management hook
   const {
     codexProviders,
     codexLoading,
@@ -151,7 +151,7 @@ const SettingsView = ({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
 
-  // 使用 Agent 管理 hook
+  // Use agent management hook
   const {
     agents,
     agentsLoading,
@@ -172,7 +172,7 @@ const SettingsView = ({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
 
-  // 使用 Prompt 管理 hook
+  // Use prompt management hook
   const {
     prompts,
     promptsLoading,
@@ -193,20 +193,20 @@ const SettingsView = ({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
 
-  // Claude CLI 当前配置（来自 ~/.claude/settings.json）
+  // Current Claude CLI configuration (from ~/.claude/settings.json)
   const [claudeConfig, setClaudeConfig] = useState<ClaudeConfig | null>(null);
   const [claudeConfigLoading, setClaudeConfigLoading] = useState(false);
 
-  // 侧边栏响应式状态
+  // Sidebar responsive state
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [manualCollapsed, setManualCollapsed] = useState<boolean | null>(null);
 
-  // 计算是否应该折叠：优先使用手动设置，否则根据窗口宽度自动判断
+  // Determine whether to collapse: prefer manual setting, otherwise auto-detect based on window width
   const isCollapsed = manualCollapsed !== null
       ? manualCollapsed
       : windowWidth < AUTO_COLLAPSE_THRESHOLD;
 
-  // 页面内弹窗状态
+  // In-page alert dialog state
   const [alertDialog, setAlertDialog] = useState<{
     isOpen: boolean;
     type: AlertType;
@@ -214,19 +214,19 @@ const SettingsView = ({
     message: string;
   }>({ isOpen: false, type: 'info', title: '', message: '' });
 
-  // 主题状态
+  // Theme state
   const [themePreference, setThemePreference] = useState<'light' | 'dark' | 'system'>(() => {
-    // 从 localStorage 读取主题设置
+    // Read theme preference from localStorage
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
       return savedTheme;
     }
-    return 'system'; // 默认跟随 IDE
+    return 'system'; // Default: follow IDE
   });
 
-  // IDE 主题状态（优先使用 Java 注入的初始主题，用于处理动态变化）
+  // IDE theme state (prefer Java-injected initial theme, used to handle dynamic changes)
   const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
-    // 检查 Java 是否注入了初始主题
+    // Check if Java has injected the initial theme
     const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
     if (injectedTheme === 'light' || injectedTheme === 'dark') {
       return injectedTheme;
@@ -234,47 +234,47 @@ const SettingsView = ({
     return null;
   });
 
-  // 字体缩放状态 (1-6，默认为 2，即 90%)
+  // Font size level state (1-6, default is 2, i.e. 90%)
   const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {
     const savedLevel = localStorage.getItem('fontSizeLevel');
     const level = savedLevel ? parseInt(savedLevel, 10) : 2;
     return level >= 1 && level <= 6 ? level : 2;
   });
 
-  // Node.js 路径（手动指定时使用）
+  // Node.js path (used when manually specified)
   const [nodePath, setNodePath] = useState('');
   const [nodeVersion, setNodeVersion] = useState<string | null>(null);
   const [minNodeVersion, setMinNodeVersion] = useState(18);
   const [savingNodePath, setSavingNodePath] = useState(false);
 
-  // 工作目录配置
+  // Working directory configuration
   const [workingDirectory, setWorkingDirectory] = useState('');
   const [savingWorkingDirectory, setSavingWorkingDirectory] = useState(false);
 
-  // IDEA 编辑器字体配置（只读展示）
+  // IDEA editor font configuration (read-only display)
   const [editorFontConfig, setEditorFontConfig] = useState<{
     fontFamily: string;
     fontSize: number;
     lineSpacing: number;
   } | undefined>();
 
-  // 🔧 流式传输配置 - 优先使用 props，否则使用本地状态（兼容未传递 props 的场景）
+  // Streaming configuration - prefer props, fallback to local state (for backward compatibility when props are not passed)
   const [localStreamingEnabled, setLocalStreamingEnabled] = useState<boolean>(false);
   const streamingEnabled = streamingEnabledProp ?? localStreamingEnabled;
 
-  // 发送快捷键配置 - 优先使用 props，否则使用本地状态
+  // Send shortcut configuration - prefer props, fallback to local state
   const [localSendShortcut, setLocalSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
   const sendShortcut = sendShortcutProp ?? localSendShortcut;
 
-  // 自动打开文件配置 - 优先使用 props，否则使用本地状态
+  // Auto open file configuration - prefer props, fallback to local state
   const [localAutoOpenFileEnabled, setLocalAutoOpenFileEnabled] = useState<boolean>(true);
   const autoOpenFileEnabled = autoOpenFileEnabledProp ?? localAutoOpenFileEnabled;
 
-  // Commit AI 提示词配置
+  // Commit AI prompt configuration
   const [commitPrompt, setCommitPrompt] = useState('');
   const [savingCommitPrompt, setSavingCommitPrompt] = useState(false);
 
-  // 聊天背景色配置
+  // Chat background color configuration
   const [chatBgColor, setChatBgColor] = useState<string>(() => {
     const saved = localStorage.getItem('chatBgColor');
     if (saved && /^#[0-9a-fA-F]{6}$/.test(saved)) {
@@ -283,10 +283,10 @@ const SettingsView = ({
     return '';
   });
 
-  // 历史补全开关配置
+  // History completion toggle configuration
   const [historyCompletionEnabled, setHistoryCompletionEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('historyCompletionEnabled');
-    return saved !== 'false'; // 默认开启
+    return saved !== 'false'; // Enabled by default
   });
 
   const handleTabChange = (tab: SettingsTab) => {
@@ -297,7 +297,7 @@ const SettingsView = ({
     setCurrentTab(tab);
   };
 
-  // 显示页面内弹窗的帮助函数
+  // Helper function to show in-page alert dialog
   const showAlert = (type: AlertType, title: string, message: string) => {
     console.log('[SettingsView] showAlert called:', { type, title, message });
     setAlertDialog({ isOpen: true, type, title, message });
@@ -307,14 +307,14 @@ const SettingsView = ({
     setAlertDialog({ ...alertDialog, isOpen: false });
   };
 
-  // 显示切换成功弹窗
+  // Show switch success dialog
   const showSwitchSuccess = (message: string) => {
     console.log('[SettingsView] showSwitchSuccess called:', message);
     showAlert('success', t('toast.switchSuccess'), message);
   };
 
   useEffect(() => {
-    // 设置全局回调 - 使用 hooks 提供的更新函数
+    // Set up global callbacks - using update functions provided by hooks
     window.updateProviders = (jsonStr: string) => {
       try {
         const providersList: ProviderConfig[] = JSON.parse(jsonStr);
@@ -336,7 +336,7 @@ const SettingsView = ({
       }
     };
 
-    // Claude CLI 配置回调
+    // Claude CLI configuration callback
     window.updateCurrentClaudeConfig = (jsonStr: string) => {
       try {
         const config: ClaudeConfig = JSON.parse(jsonStr);
@@ -372,7 +372,7 @@ const SettingsView = ({
           setMinNodeVersion(data.minVersion);
         }
       } catch (e) {
-        // 兼容旧格式（纯字符串路径）
+        // Backward compatible with legacy format (plain string path)
         console.warn('[SettingsView] Failed to parse updateNodePath JSON, fallback to legacy format:', e);
         setNodePath(jsonStr || '');
       }
@@ -407,7 +407,7 @@ const SettingsView = ({
       }
     };
 
-    // IDE 主题回调 - 保存之前的回调以便恢复
+    // IDE theme callback - save previous callback for restoration
     const previousOnIdeThemeReceived = window.onIdeThemeReceived;
     window.onIdeThemeReceived = (jsonStr: string) => {
       try {
@@ -415,14 +415,14 @@ const SettingsView = ({
         const theme = themeData.isDark ? 'dark' : 'light';
         setIdeTheme(theme);
         console.log('[SettingsView] IDE theme received:', themeData, 'resolved to:', theme);
-        // 同时调用之前的回调（App.tsx 的回调）
+        // Also invoke the previous callback (from App.tsx)
         previousOnIdeThemeReceived?.(jsonStr);
       } catch (error) {
         console.error('[SettingsView] Failed to parse IDE theme:', error);
       }
     };
 
-    // 🔧 流式传输配置回调 - 仅在未从 App.tsx 传递 props 时使用本地状态
+    // Streaming configuration callback - only use local state when props are not passed from App.tsx
     const previousUpdateStreamingEnabled = window.updateStreamingEnabled;
     if (!onStreamingEnabledChangeProp) {
       window.updateStreamingEnabled = (jsonStr: string) => {
@@ -435,7 +435,7 @@ const SettingsView = ({
       };
     }
 
-    // 发送快捷键配置回调 - 仅在未从 App.tsx 传递 props 时使用本地状态
+    // Send shortcut configuration callback - only use local state when props are not passed from App.tsx
     const previousUpdateSendShortcut = window.updateSendShortcut;
     if (!onSendShortcutChangeProp) {
       window.updateSendShortcut = (jsonStr: string) => {
@@ -448,13 +448,13 @@ const SettingsView = ({
       };
     }
 
-    // Commit AI 提示词回调
+    // Commit AI prompt callback
     window.updateCommitPrompt = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
         setCommitPrompt(data.commitPrompt || '');
         setSavingCommitPrompt(false);
-        // 如果是保存操作，显示成功提示
+        // If this is a save operation, show success toast
         if (data.saved) {
           addToast(t('toast.saveSuccess'), 'success');
         }
@@ -465,7 +465,7 @@ const SettingsView = ({
       }
     };
 
-    // Agent 智能体回调 - 使用 hooks 提供的更新函数
+    // Agent callback - using update functions provided by hooks
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
       try {
@@ -486,7 +486,7 @@ const SettingsView = ({
       }
     };
 
-    // Prompt 提示词库回调 - 使用 hooks 提供的更新函数
+    // Prompt library callback - using update functions provided by hooks
     const previousUpdatePrompts = window.updatePrompts;
     window.updatePrompts = (jsonStr: string) => {
       try {
@@ -507,7 +507,7 @@ const SettingsView = ({
       }
     };
 
-    // Codex provider callbacks - 使用 hooks 提供的更新函数
+    // Codex provider callbacks - using update functions provided by hooks
     window.updateCodexProviders = (jsonStr: string) => {
       try {
         const providersList: CodexProviderConfig[] = JSON.parse(jsonStr);
@@ -539,31 +539,31 @@ const SettingsView = ({
       }
     };
 
-    // 加载供应商列表
+    // Load provider list
     loadProviders();
-    // 加载 Codex 供应商列表
+    // Load Codex provider list
     loadCodexProviders();
-    // 加载智能体列表
+    // Load agent list
     loadAgents();
-    // 加载提示词列表
+    // Load prompt list
     loadPrompts();
-    // 加载 Claude CLI 当前配置
+    // Load current Claude CLI configuration
     loadClaudeConfig();
-    // 加载 Node.js 路径
+    // Load Node.js path
     sendToJava('get_node_path:');
-    // 加载工作目录配置
+    // Load working directory configuration
     sendToJava('get_working_directory:');
-    // 加载 IDEA 编辑器字体配置
+    // Load IDEA editor font configuration
     sendToJava('get_editor_font_config:');
-    // 🔧 加载流式传输配置
+    // Load streaming configuration
     sendToJava('get_streaming_enabled:');
-    // 加载 Commit AI 提示词
+    // Load Commit AI prompt
     sendToJava('get_commit_prompt:');
 
     return () => {
-      // 清理 Agent 超时定时器 - 使用 hook 提供的清理函数
+      // Clean up agent timeout timer - using cleanup function from hook
       cleanupAgentsTimeout();
-      // 清理 Prompt 超时定时器 - 使用 hook 提供的清理函数
+      // Clean up prompt timeout timer - using cleanup function from hook
       cleanupPromptsTimeout();
 
       window.updateProviders = undefined;
@@ -575,7 +575,7 @@ const SettingsView = ({
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
       window.onEditorFontConfigReceived = undefined;
-      // 恢复之前的 IDE 主题回调（App.tsx 的回调）
+      // Restore previous IDE theme callback (from App.tsx)
       window.onIdeThemeReceived = previousOnIdeThemeReceived;
       // Restore previous streaming callback if we overrode it
       if (!onStreamingEnabledChangeProp) {
@@ -597,16 +597,16 @@ const SettingsView = ({
       window.updateCurrentCodexConfig = undefined;
     };
 
-    // 请求 IDE 主题信息
+    // Request IDE theme info
     sendToJava('get_ide_theme:');
   }, [t, onStreamingEnabledChangeProp, onSendShortcutChangeProp]);
 
-  // 监听窗口大小变化
+  // Listen for window resize events
   useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
 
-      // 如果窗口大小变化导致应该自动切换状态，重置手动设置
+      // If window resize should trigger auto-collapse state change, reset manual setting
       const shouldAutoCollapse = window.innerWidth < AUTO_COLLAPSE_THRESHOLD;
       if (manualCollapsed !== null && manualCollapsed === shouldAutoCollapse) {
         setManualCollapsed(null);
@@ -620,44 +620,44 @@ const SettingsView = ({
     };
   }, [manualCollapsed]);
 
-  // 手动切换侧边栏折叠状态
+  // Manually toggle sidebar collapse state
   const toggleManualCollapse = () => {
     if (manualCollapsed === null) {
-      // 如果当前是自动模式，切换到手动模式
+      // If currently in auto mode, switch to manual mode
       setManualCollapsed(!isCollapsed);
     } else {
-      // 如果已经是手动模式，切换状态
+      // If already in manual mode, toggle the state
       setManualCollapsed(!manualCollapsed);
     }
   };
 
-  // 主题切换处理（支持跟随 IDE）
+  // Theme switching handler (supports following IDE theme)
   useEffect(() => {
     const applyTheme = (preference: 'light' | 'dark' | 'system') => {
       if (preference === 'system') {
-        // 如果是跟随 IDE，需要等待 IDE 主题加载完成
+        // If following IDE, need to wait for IDE theme to load
         if (ideTheme === null) {
           console.log('[SettingsView] Waiting for IDE theme to load...');
-          return; // 等待 ideTheme 加载
+          return; // Wait for ideTheme to load
         }
         document.documentElement.setAttribute('data-theme', ideTheme);
       } else {
-        // 明确的 light/dark 选择，立即应用
+        // Explicit light/dark selection, apply immediately
         document.documentElement.setAttribute('data-theme', preference);
       }
     };
 
     applyTheme(themePreference);
-    // 保存到 localStorage
+    // Save to localStorage
     localStorage.setItem('theme', themePreference);
   }, [themePreference, ideTheme]);
 
-  // 字体缩放处理
+  // Font size scaling handler
   useEffect(() => {
-    // 将档位映射到缩放比例
+    // Map level to scale ratio
     const fontSizeMap: Record<number, number> = {
       1: 0.8,   // 80%
-      2: 0.9,   // 90% (默认)
+      2: 0.9,   // 90% (default)
       3: 1.0,   // 100%
       4: 1.1,   // 110%
       5: 1.2,   // 120%
@@ -665,14 +665,14 @@ const SettingsView = ({
     };
     const scale = fontSizeMap[fontSizeLevel] || 1.0;
 
-    // 应用到根元素
+    // Apply to root element
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
-    // 保存到 localStorage
+    // Save to localStorage
     localStorage.setItem('fontSizeLevel', fontSizeLevel.toString());
   }, [fontSizeLevel]);
 
-  // 聊天背景色处理
+  // Chat background color handler
   useEffect(() => {
     if (chatBgColor) {
       document.documentElement.style.setProperty('--bg-chat', chatBgColor);
@@ -706,7 +706,7 @@ const SettingsView = ({
     sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
   };
 
-  // 🔧 流式传输开关变更处理
+  // Streaming toggle change handler
   const handleStreamingEnabledChange = (enabled: boolean) => {
     // If prop callback is provided (from App.tsx), use it for centralized state management
     if (onStreamingEnabledChangeProp) {
@@ -719,7 +719,7 @@ const SettingsView = ({
     }
   };
 
-  // 发送快捷键变更处理
+  // Send shortcut change handler
   const handleSendShortcutChange = (shortcut: 'enter' | 'cmdEnter') => {
     // If prop callback is provided (from App.tsx), use it for centralized state management
     if (onSendShortcutChangeProp) {
@@ -732,7 +732,7 @@ const SettingsView = ({
     }
   };
 
-  // 自动打开文件开关变更处理
+  // Auto open file toggle change handler
   const handleAutoOpenFileEnabledChange = (enabled: boolean) => {
     // If prop callback is provided (from App.tsx), use it for centralized state management
     if (onAutoOpenFileEnabledChangeProp) {
@@ -745,14 +745,14 @@ const SettingsView = ({
     }
   };
 
-  // Commit AI 提示词保存处理
+  // Commit AI prompt save handler
   const handleSaveCommitPrompt = () => {
     setSavingCommitPrompt(true);
     const payload = { prompt: commitPrompt };
     sendToJava(`set_commit_prompt:${JSON.stringify(payload)}`);
   };
 
-  // 保存供应商（带验证逻辑的包装函数）
+  // Save provider (wrapper function with validation logic)
   const handleSaveProviderFromDialog = (data: {
     providerName: string;
     remark: string;
@@ -765,7 +765,7 @@ const SettingsView = ({
       return;
     }
 
-    // 解析 JSON 配置
+    // Parse JSON configuration
     let parsedConfig;
     try {
       parsedConfig = JSON.parse(data.jsonConfig || '{}');
@@ -777,14 +777,14 @@ const SettingsView = ({
     const updates = {
       name: data.providerName,
       remark: data.remark,
-      websiteUrl: null, // 清除可能存在的旧字段，避免显示混淆
+      websiteUrl: null, // Clear potentially existing legacy field to avoid display confusion
       settingsConfig: parsedConfig,
     };
 
     const isAdding = !providerDialog.provider;
 
     if (isAdding) {
-      // 添加新供应商
+      // Add new provider
       const newProvider = {
         id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
         ...updates
@@ -792,12 +792,12 @@ const SettingsView = ({
       sendToJava(`add_provider:${JSON.stringify(newProvider)}`);
       addToast(t('toast.providerAdded'), 'success');
     } else {
-      // 更新现有供应商
+      // Update existing provider
       if (!providerDialog.provider) return;
 
       const providerId = providerDialog.provider.id;
-      // 检查当前编辑的供应商是否是激活状态
-      // 优先从 providers 列表中查找最新状态，如果找不到则使用 dialog 中的状态
+      // Check if the currently edited provider is active
+      // Prefer the latest state from providers list; fall back to dialog state if not found
       const currentProvider = providers.find(p => p.id === providerId) || providerDialog.provider;
       const isActive = currentProvider.isActive;
 
@@ -808,15 +808,15 @@ const SettingsView = ({
       sendToJava(`update_provider:${JSON.stringify(updateData)}`);
       addToast(t('toast.providerUpdated'), 'success');
 
-      // 如果是当前正在使用的供应商，更新后立即重新应用配置
+      // If this is the currently active provider, immediately re-apply the configuration after update
       if (isActive) {
         console.log('[SettingsView] Re-applying active provider config:', providerId);
         syncActiveProviderModelMapping({
           ...currentProvider,
           settingsConfig: parsedConfig,
         });
-        // 使用 setTimeout 稍微延迟一下，确保 update_provider 先处理完成
-        // 虽然在单线程模型中通常不需要，但为了保险起见
+        // Use setTimeout for a slight delay to ensure update_provider finishes first
+        // Although usually unnecessary in a single-threaded model, added for safety
         setTimeout(() => {
           sendToJava(`switch_provider:${JSON.stringify({ id: providerId })}`);
         }, 100);
@@ -827,24 +827,24 @@ const SettingsView = ({
     setLoading(true);
   };
 
-  // 保存 Codex 供应商（带验证逻辑的包装函数）
+  // Save Codex provider (wrapper function with validation logic)
   const handleSaveCodexProviderFromDialog = (providerData: CodexProviderConfig) => {
     handleSaveCodexProvider(providerData);
   };
 
-  // 保存智能体（带验证逻辑的包装函数）
+  // Save agent (wrapper function with validation logic)
   const handleSaveAgentFromDialog = (data: { name: string; prompt: string }) => {
     handleSaveAgent(data);
   };
 
   return (
     <div className={styles.settingsPage}>
-      {/* 顶部标题栏 */}
+      {/* Top header bar */}
       <SettingsHeader onClose={onClose} />
 
-      {/* 主体内容 */}
+      {/* Main content */}
       <div className={styles.settingsMain}>
-        {/* 侧边栏 */}
+        {/* Sidebar */}
         <SettingsSidebar
           currentTab={currentTab}
           onTabChange={handleTabChange}
@@ -854,9 +854,9 @@ const SettingsView = ({
           onDisabledTabClick={() => addToast(t('settings.codexFeatureUnavailable'), 'warning')}
         />
 
-        {/* 内容区域 */}
+        {/* Content area */}
         <div className={`${styles.settingsContent} ${currentTab === 'providers' ? styles.providerSettingsContent : ''}`}>
-          {/* 基础配置 */}
+          {/* Basic configuration */}
           <div style={{ display: currentTab === 'basic' ? 'block' : 'none' }}>
             <BasicConfigSection
               theme={themePreference}
@@ -885,7 +885,7 @@ const SettingsView = ({
             />
           </div>
 
-          {/* 供应商管理 (Claude + Codex 内部 Tab 切换) */}
+          {/* Provider management (Claude + Codex internal tab switching) */}
           <div style={{ display: currentTab === 'providers' ? 'block' : 'none' }}>
             <ProviderTabSection
               currentProvider={currentProvider}
@@ -907,27 +907,27 @@ const SettingsView = ({
             />
           </div>
 
-          {/* SDK 依赖管理 */}
+          {/* SDK dependency management */}
           <div style={{ display: currentTab === 'dependencies' ? 'block' : 'none' }}>
             <DependencySection addToast={addToast} />
           </div>
 
-          {/* 使用统计 */}
+          {/* Usage statistics */}
           <div style={{ display: currentTab === 'usage' ? 'block' : 'none' }}>
             <UsageSection currentProvider={currentProvider} />
           </div>
 
-          {/* MCP服务器 */}
+          {/* MCP servers */}
           <div style={{ display: currentTab === 'mcp' ? 'block' : 'none' }}>
             <PlaceholderSection type="mcp" currentProvider={currentProvider} />
           </div>
 
-          {/* 权限配置 */}
+          {/* Permissions configuration */}
           <div style={{ display: currentTab === 'permissions' ? 'block' : 'none' }}>
             <PlaceholderSection type="permissions" />
           </div>
 
-          {/* Commit AI 配置 */}
+          {/* Commit AI configuration */}
           <div style={{ display: currentTab === 'commit' ? 'block' : 'none' }}>
             <CommitSection
               commitPrompt={commitPrompt}
@@ -964,7 +964,7 @@ const SettingsView = ({
             <SkillsSettingsSection />
           </div>
 
-          {/* 其他设置 */}
+          {/* Other settings */}
           <div style={{ display: currentTab === 'other' ? 'block' : 'none' }}>
             <OtherSettingsSection
               historyCompletionEnabled={historyCompletionEnabled}
@@ -977,14 +977,14 @@ const SettingsView = ({
             />
           </div>
 
-          {/* 官方交流群 */}
+          {/* Community */}
           <div style={{ display: currentTab === 'community' ? 'block' : 'none' }}>
             <CommunitySection />
           </div>
         </div>
       </div>
 
-      {/* 页面内弹窗 */}
+      {/* In-page alert dialog */}
       <AlertDialog
         isOpen={alertDialog.isOpen}
         type={alertDialog.type}
@@ -993,7 +993,7 @@ const SettingsView = ({
         onClose={closeAlert}
       />
 
-      {/* 删除确认弹窗 */}
+      {/* Delete confirmation dialog */}
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
         title={t('settings.provider.deleteConfirm')}
@@ -1004,7 +1004,7 @@ const SettingsView = ({
         onCancel={cancelDeleteProvider}
       />
 
-      {/* 供应商添加/编辑弹窗 */}
+      {/* Provider add/edit dialog */}
       <ProviderDialog
         isOpen={providerDialog.isOpen}
         provider={providerDialog.provider}
@@ -1015,7 +1015,7 @@ const SettingsView = ({
         addToast={addToast}
       />
 
-      {/* 智能体添加/编辑弹窗 */}
+      {/* Agent add/edit dialog */}
       <AgentDialog
         isOpen={agentDialog.isOpen}
         agent={agentDialog.agent}
@@ -1023,7 +1023,7 @@ const SettingsView = ({
         onSave={handleSaveAgentFromDialog}
       />
 
-      {/* 智能体删除确认弹窗 */}
+      {/* Agent delete confirmation dialog */}
       <ConfirmDialog
         isOpen={deleteAgentConfirm.isOpen}
         title={t('settings.agent.deleteConfirmTitle')}
@@ -1034,7 +1034,7 @@ const SettingsView = ({
         onCancel={cancelDeleteAgent}
       />
 
-      {/* 提示词添加/编辑弹窗 */}
+      {/* Prompt add/edit dialog */}
       <PromptDialog
         isOpen={promptDialog.isOpen}
         prompt={promptDialog.prompt}
@@ -1042,7 +1042,7 @@ const SettingsView = ({
         onSave={handleSavePrompt}
       />
 
-      {/* 提示词删除确认弹窗 */}
+      {/* Prompt delete confirmation dialog */}
       <ConfirmDialog
         isOpen={deletePromptConfirm.isOpen}
         title={t('settings.prompt.deleteConfirmTitle')}
@@ -1053,7 +1053,7 @@ const SettingsView = ({
         onCancel={cancelDeletePrompt}
       />
 
-      {/* Codex 供应商添加/编辑弹窗 */}
+      {/* Codex provider add/edit dialog */}
       <CodexProviderDialog
         isOpen={codexProviderDialog.isOpen}
         provider={codexProviderDialog.provider}
@@ -1062,7 +1062,7 @@ const SettingsView = ({
         addToast={addToast}
       />
 
-      {/* Codex 供应商删除确认弹窗 */}
+      {/* Codex provider delete confirmation dialog */}
       <ConfirmDialog
         isOpen={deleteCodexConfirm.isOpen}
         title={t('settings.codexProvider.deleteConfirmTitle')}
@@ -1073,7 +1073,7 @@ const SettingsView = ({
         onCancel={cancelDeleteCodexProvider}
       />
 
-      {/* Toast 通知 */}
+      {/* Toast notifications */}
       <ToastContainer messages={toasts} onDismiss={dismissToast} />
     </div>
   );

@@ -5,7 +5,7 @@ import i18n from '../../../i18n/config';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
 // ============================================================================
-// 类型定义
+// Type Definitions
 // ============================================================================
 
 export interface AgentItem {
@@ -15,7 +15,7 @@ export interface AgentItem {
 }
 
 // ============================================================================
-// 状态管理
+// State Management
 // ============================================================================
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'failed';
@@ -28,11 +28,11 @@ let retryCount = 0;
 let pendingWaiters: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
 
 const MIN_REFRESH_INTERVAL = 2000;
-const LOADING_TIMEOUT = 3000; // 减少到3秒，更快的超时反馈
-const MAX_RETRY_COUNT = 2; // 最多重试2次，避免无限循环
+const LOADING_TIMEOUT = 3000; // Reduced to 3s for faster timeout feedback
+const MAX_RETRY_COUNT = 2; // Max 2 retries to avoid infinite loops
 
 // ============================================================================
-// 核心函数
+// Core Functions
 // ============================================================================
 
 export function resetAgentsState() {
@@ -66,7 +66,7 @@ export function setupAgentsCallback() {
 
       cachedAgents = agents;
       loadingState = 'success';
-      retryCount = 0; // 成功后重置重试计数
+      retryCount = 0; // Reset retry count on success
       pendingWaiters.forEach(w => w.resolve());
       pendingWaiters = [];
       debugLog('[AgentProvider] Successfully loaded ' + agents.length + ' agents');
@@ -78,13 +78,13 @@ export function setupAgentsCallback() {
     }
   };
 
-  // 保存原有的回调
+  // Save original callback
   const originalHandler = window.updateAgents;
 
   window.updateAgents = (json: string) => {
-    // 调用我们的处理器
+    // Call our handler
     handler(json);
-    // 也调用原有的处理器（如果存在）
+    // Also call original handler (if exists)
     originalHandler?.(json);
   };
 
@@ -191,7 +191,7 @@ export async function agentProvider(
 
   const now = Date.now();
   
-  // 创建智能体项
+  // Create new agent item
   const createNewAgentItem: AgentItem = {
     id: CREATE_NEW_AGENT_ID,
     name: i18n.t('settings.agent.createAgent'),
@@ -232,7 +232,7 @@ export async function agentProvider(
 }
 
 export function agentToDropdownItem(agent: AgentItem): DropdownItemData {
-  // 特殊处理加载中和空状态
+  // Special handling for loading and empty states
   if (agent.id === '__loading__' || agent.id === '__empty__' || agent.id === EMPTY_STATE_ID) {
     return {
       id: agent.id,
@@ -244,7 +244,7 @@ export function agentToDropdownItem(agent: AgentItem): DropdownItemData {
     };
   }
   
-  // 特殊处理创建智能体
+  // Special handling for create agent item
   if (agent.id === CREATE_NEW_AGENT_ID) {
     return {
       id: agent.id,
@@ -272,7 +272,7 @@ export function forceRefreshAgents(): void {
   debugLog('[AgentProvider] Force refresh requested');
   loadingState = 'idle';
   lastRefreshTime = 0;
-  retryCount = 0; // 重置重试计数
+  retryCount = 0; // Reset retry count
   pendingWaiters.forEach(w => w.reject(new Error('Agents refresh requested')));
   pendingWaiters = [];
   requestRefresh();

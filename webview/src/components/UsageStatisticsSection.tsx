@@ -37,7 +37,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
   const isFirstMount = useRef(true);
 
   useEffect(() => {
-    // 设置全局回调
+    // Set up global callback
     window.updateUsageStatistics = (jsonStr: string) => {
       try {
         const data: ProjectStatistics = JSON.parse(jsonStr);
@@ -49,7 +49,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
       }
     };
 
-    // 仅在首次挂载时检查 pending 数据
+    // Only check for pending data on first mount
     if (isFirstMount.current && window.__pendingUsageStatistics) {
       console.log('[UsageStatisticsSection] Found pending usage statistics, applying...');
       try {
@@ -85,7 +85,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
     setSessionPage(1);
   };
 
-  // 数字格式化
+  // Number formatting
   const formatNumber = (num: number): string => {
     if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(1)}B`;
     if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
@@ -110,7 +110,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
     return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   };
 
-  // 中文日期格式化
+  // Short date formatting
   const formatChineseDate = (dateStr: string): string => {
     const date = new Date(dateStr);
     const month = date.getMonth() + 1;
@@ -118,7 +118,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
     return `${month}月${day}日`;
   };
 
-  // 相对时间格式化（用于最后更新时间）
+  // Relative time formatting (used for last updated time)
   const formatRelativeTime = (timestamp: number): string => {
     const now = Date.now();
     const diffMs = now - timestamp;
@@ -133,7 +133,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
     return formatDate(timestamp);
   };
 
-  // 趋势渲染函数
+  // Trend rendering function
   const renderTrend = (value: number) => {
     if (value === 0) return <span className="trend neutral">→ 0% {t('usage.comparedToLastWeek')}</span>;
     const isUp = value > 0;
@@ -144,7 +144,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
     );
   };
 
-  // 日期筛选函数
+  // Date range filter function
   const filterByDateRange = <T extends { timestamp?: number; date?: string }>(
     items: T[],
     range: DateRangeType
@@ -162,7 +162,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
     });
   };
 
-  // 筛选和排序会话
+  // Filter and sort sessions
   const filteredSessions = filterByDateRange(statistics?.sessions || [], dateRange).slice().sort((a, b) => {
     if (sessionSortBy === 'cost') {
       return b.cost - a.cost;
@@ -178,13 +178,13 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
 
   const totalPages = Math.ceil(filteredSessions.length / sessionsPerPage);
 
-  // 获取Token百分比
+  // Get token percentage
   const getTokenPercentage = (value: number): number => {
     if (!statistics || statistics.totalUsage.totalTokens === 0) return 0;
     return (value / statistics.totalUsage.totalTokens) * 100;
   };
 
-  // 筛选日期范围内的数据
+  // Filter data within date range
   const getFilteredDailyUsage = (): DailyUsage[] => {
     if (!statistics) return [];
 
@@ -237,7 +237,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
 
   return (
     <div className="usage-statistics-section">
-      {/* 控制栏 */}
+      {/* Controls bar */}
       <div className="usage-controls">
         <div className="controls-left">
           <div className="scope-selector">
@@ -284,7 +284,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
         </button>
       </div>
 
-      {/* Tab导航 */}
+      {/* Tab navigation */}
       <div className="usage-tabs">
         <button
           className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
@@ -316,18 +316,18 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
         </button>
       </div>
 
-      {/* Tab内容 */}
+      {/* Tab content */}
       <div className="usage-content">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="overview-tab">
-            {/* 项目信息 - 简化版 */}
+            {/* Project info - simplified */}
             <div className="project-info-simple">
               <span className="codicon codicon-folder" />
               <span className="project-name">{statistics.projectName}</span>
             </div>
 
-            {/* 统计卡片 - 带趋势指示器 */}
+            {/* Statistics cards - with trend indicators */}
             <div className="stat-cards">
               <div className="stat-card cost-card">
                 <div className="stat-icon">
@@ -377,7 +377,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
               </div>
             </div>
 
-            {/* Token分解 - 独立进度条形式 */}
+            {/* Token breakdown - individual progress bars */}
             <div className="token-breakdown-section">
               <h4>{t('usage.tokenBreakdown')}</h4>
               <div className="token-breakdown-independent">
@@ -435,7 +435,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
               </div>
             </div>
 
-            {/* Top模型 */}
+            {/* Top models */}
             {statistics.byModel.length > 0 && (
               <div className="top-models-section">
                 <h4>{t('usage.topModels')}</h4>
@@ -522,7 +522,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
                     {(sessionPage - 1) * sessionsPerPage + index + 1}
                   </div>
                   <div className="session-info">
-                    {/* 优先显示 summary 作为标题 */}
+                    {/* Prefer showing summary as the title */}
                     <div className="session-title">
                       {session.summary || session.sessionId}
                     </div>
@@ -542,7 +542,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
               ))}
             </div>
 
-            {/* 分页 */}
+            {/* Pagination */}
             {totalPages > 1 && (
               <div className="pagination">
                 <button
@@ -579,7 +579,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
 
                   return (
                     <div className="chart-with-axis">
-                      {/* Y轴标签 */}
+                      {/* Y-axis labels */}
                       <div className="chart-y-axis">
                         {yAxisValues.reverse().map((val, i) => (
                           <div key={i} className="y-axis-label">
@@ -588,16 +588,16 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
                         ))}
                       </div>
 
-                      {/* 图表主体 */}
+                      {/* Chart body */}
                       <div className="chart-main">
-                        {/* 网格线 */}
+                        {/* Grid lines */}
                         <div className="chart-grid">
                           {[0, 1, 2, 3, 4].map(i => (
                             <div key={i} className="chart-grid-line" style={{ bottom: `${i * 25}%` }} />
                           ))}
                         </div>
 
-                        {/* 柱状图滚动区域 */}
+                        {/* Bar chart scroll area */}
                         <div className="chart-scroll-view">
                           <div className="chart-bars">
                             {filteredDailyUsage.map((day) => {
@@ -641,7 +641,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
         )}
       </div>
 
-      {/* 自定义 Tooltip */}
+      {/* Custom Tooltip */}
       {tooltip.visible && (
         <div
           className="chart-tooltip"
@@ -653,7 +653,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
         </div>
       )}
 
-      {/* 最后更新时间 */}
+      {/* Last updated time */}
       {statistics.lastUpdated && (
         <div className="last-updated">
           <span className="codicon codicon-sync" />

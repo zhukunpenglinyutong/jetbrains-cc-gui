@@ -47,14 +47,14 @@ interface ToastContainerProps {
   onDismiss: (id: string) => void;
 }
 
-// Toast 显示时长常量（毫秒）
+// Toast display duration constants (milliseconds)
 const TOAST_DURATION = {
-  error: 5000,   // 错误消息显示 5 秒
-  warning: 3000, // 警告消息显示 3 秒
-  default: 2000, // 其他消息显示 2 秒
+  error: 5000,   // Error messages display for 5 seconds
+  warning: 3000, // Warning messages display for 3 seconds
+  default: 2000, // Other messages display for 2 seconds
 } as const;
 
-// 根据消息类型设置不同的显示时长
+// Set different display durations based on message type
 const getDuration = (type?: ToastMessage['type']) => {
   switch (type) {
     case 'error':

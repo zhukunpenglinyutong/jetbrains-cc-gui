@@ -7,11 +7,11 @@ interface McpPresetDialogProps {
 }
 
 /**
- * MCP 预设服务器选择对话框
+ * MCP Preset Server Selection Dialog
  */
 export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
   const { t } = useTranslation();
-  // MCP 预设服务器配置
+  // MCP preset server configurations
   const MCP_PRESETS: McpPreset[] = [
     {
       id: 'fetch',
@@ -80,7 +80,7 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
     },
   ];
 
-  // 服务器图标颜色
+  // Server icon colors
   const iconColors = [
     '#3B82F6', // blue
     '#10B981', // green
@@ -118,7 +118,7 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
     onSelect(preset);
   };
 
-  // 点击遮罩关闭
+  // Close on overlay click
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose();

@@ -1,8 +1,8 @@
 package com.github.claudecodegui;
 
 /**
- * 会话加载服务（单例）
- * 用于在"历史会话"和"Claude Code GUI"工具窗口之间传递会话加载请求
+ * Session load service (singleton).
+ * Used to pass session load requests between the "Session History" and "Claude Code GUI" tool windows.
  */
 public class SessionLoadService {
 
@@ -20,19 +20,19 @@ public class SessionLoadService {
     }
 
     /**
-     * 会话加载监听器
+     * Listener for session load events.
      */
     public interface SessionLoadListener {
         void onLoadSessionRequest(String sessionId, String projectPath);
     }
 
     /**
-     * 设置监听器（由 Claude Code GUI 窗口调用）
+     * Sets the listener (called by the Claude Code GUI window).
      */
     public void setListener(SessionLoadListener listener) {
         this.listener = listener;
 
-        // 如果有待处理的加载请求，立即触发
+        // If there is a pending load request, trigger it immediately
         if (pendingSessionId != null && listener != null) {
             listener.onLoadSessionRequest(pendingSessionId, pendingProjectPath);
             pendingSessionId = null;
@@ -41,20 +41,20 @@ public class SessionLoadService {
     }
 
     /**
-     * 请求加载会话（由"历史会话"窗口调用）
+     * Requests loading a session (called by the "Session History" window).
      */
     public void requestLoadSession(String sessionId, String projectPath) {
         if (listener != null) {
             listener.onLoadSessionRequest(sessionId, projectPath);
         } else {
-            // 如果监听器还未设置，保存待处理的请求
+            // If the listener has not been set yet, save the request as pending
             pendingSessionId = sessionId;
             pendingProjectPath = projectPath;
         }
     }
 
     /**
-     * 清除监听器
+     * Clears the listener.
      */
     public void clearListener() {
         this.listener = null;

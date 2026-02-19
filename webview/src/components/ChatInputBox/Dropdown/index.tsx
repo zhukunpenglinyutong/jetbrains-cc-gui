@@ -13,7 +13,7 @@ interface CompletionDropdownProps extends Omit<DropdownProps, 'children'> {
 }
 
 /**
- * Dropdown - 通用下拉菜单组件
+ * Dropdown - Generic dropdown menu component
  */
 export const Dropdown = ({
   isVisible,
@@ -25,12 +25,12 @@ export const Dropdown = ({
   onClose,
   children,
 }: DropdownProps) => {
-  // selectedIndex 用于父组件传递，当前组件不直接使用
+  // selectedIndex is passed from parent component, not directly used here
   void _selectedIndex;
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   /**
-   * 点击外部关闭
+   * Close on outside click
    */
   useEffect(() => {
     if (!isVisible) return;
@@ -41,7 +41,7 @@ export const Dropdown = ({
       }
     };
 
-    // 延迟添加事件监听，避免立即触发
+    // Delay adding event listener to prevent immediate trigger
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
     }, 0);
@@ -101,7 +101,7 @@ export const Dropdown = ({
 };
 
 /**
- * CompletionDropdown - 补全专用下拉菜单
+ * CompletionDropdown - Completion-specific dropdown menu
  */
 export const CompletionDropdown = ({
   isVisible,
@@ -121,34 +121,34 @@ export const CompletionDropdown = ({
   const listRef = useRef<HTMLDivElement>(null);
 
   /**
-   * 滚动高亮项到可见区域
+   * Scroll highlighted item into view
    */
   useEffect(() => {
     if (!listRef.current) return;
 
     const activeItem = listRef.current.querySelector('.dropdown-item.active');
     if (activeItem) {
-      // 使用 'auto' 瞬间滚动，避免平滑动画导致的延迟
+      // Use 'auto' for instant scroll to avoid smooth animation delay
       activeItem.scrollIntoView({ block: 'nearest', behavior: 'auto' });
     }
   }, [selectedIndex]);
 
   /**
-   * 处理选择
+   * Handle selection
    */
   const handleSelect = useCallback((item: DropdownItemData, index: number) => {
-    // 允许选择所有类型（文件和目录）
+    // Allow selecting all types (files and directories)
     onSelect?.(item, index);
   }, [onSelect]);
 
   /**
-   * 处理鼠标进入
+   * Handle mouse enter
    */
   const handleMouseEnter = useCallback((index: number) => {
     onMouseEnter?.(index);
   }, [onMouseEnter]);
 
-  // 过滤可选择的项（排除分隔线和标题）
+  // Filter selectable items (exclude separators and section headers)
   const selectableItems = items.filter(
     item => item.type !== 'separator' && item.type !== 'section-header'
   );
@@ -170,7 +170,7 @@ export const CompletionDropdown = ({
           <div className="dropdown-empty">{emptyText || t('chat.loadingDropdown')}</div>
         ) : (
           items.map((item) => {
-            // 计算在可选择项中的索引
+            // Calculate index within selectable items
             const selectableIndex = selectableItems.findIndex(i => i.id === item.id);
             const isActive = selectableIndex === selectedIndex;
 

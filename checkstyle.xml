@@ -8,13 +8,13 @@
     <property name="severity" value="error"/>
 
     <module name="TreeWalker">
-        <!-- 禁止使用 System.out 和 System.err 和 e.printStackTrace -->
+        <!-- Prohibit use of System.out, System.err, and e.printStackTrace -->
         <module name="RegexpSinglelineJava">
             <property name="format" value="System\.(out|err)\.print|e\.printStackTrace"/>
             <property name="message" value="禁止使用 System.out/err，请使用 com.intellij.openapi.diagnostic.Logger"/>
             <property name="ignoreComments" value="true"/>
         </module>
-        <!-- 要求ApplicationManager.getApplication().invokeLater 而不是 SwingUtilities.invokeLater 进行 EDT 操作 -->
+        <!-- Require ApplicationManager.getApplication().invokeLater instead of SwingUtilities.invokeLater for EDT operations -->
         <module name="RegexpSinglelineJava">
             <property name="format" value="SwingUtilities\.invokeLater"/>
             <property name="message" value="请使用 ApplicationManager.getApplication().invokeLater 替代 SwingUtilities.invokeLater"/>

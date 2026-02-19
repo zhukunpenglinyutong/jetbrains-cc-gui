@@ -1,68 +1,68 @@
 /**
- * Skills 类型定义
+ * Skills type definitions
  *
- * Skills 是自定义的命令和功能扩展，存储在特定目录中：
- * - 全局: ~/.claude/skills（启用）/ ~/.codemoss/skills/global（停用）
- * - 本地: {workspace}/.claude/skills（启用）/ ~/.codemoss/skills/{项目哈希}（停用）
+ * Skills are custom command and feature extensions stored in specific directories:
+ * - Global: ~/.claude/skills (enabled) / ~/.codemoss/skills/global (disabled)
+ * - Local: {workspace}/.claude/skills (enabled) / ~/.codemoss/skills/{project-hash} (disabled)
  *
- * 每个 Skill 可以是文件（.md）或目录（包含 skill.md）
+ * Each skill can be a file (.md) or a directory (containing skill.md)
  */
 
 /**
- * Skill 类型：文件或目录
+ * Skill type: file or directory
  */
 export type SkillType = 'file' | 'directory';
 
 /**
- * Skill 作用域：全局或本地
+ * Skill scope: global or local
  */
 export type SkillScope = 'global' | 'local';
 
 /**
- * Skill 配置
+ * Skill configuration
  */
 export interface Skill {
-  /** 唯一标识符（格式：{scope}-{name} 或 {scope}-{name}-disabled） */
+  /** Unique identifier (format: {scope}-{name} or {scope}-{name}-disabled) */
   id: string;
-  /** 显示名称 */
+  /** Display name */
   name: string;
-  /** 类型：文件或目录 */
+  /** Type: file or directory */
   type: SkillType;
-  /** 作用域：全局或本地 */
+  /** Scope: global or local */
   scope: SkillScope;
-  /** 完整路径 */
+  /** Full path */
   path: string;
-  /** 是否启用（true: 在使用中目录，false: 在管理目录） */
+  /** Whether enabled (true: in active directory, false: in managed directory) */
   enabled: boolean;
-  /** 描述（从 skill.md 的 frontmatter 提取） */
+  /** Description (extracted from skill.md frontmatter) */
   description?: string;
-  /** 创建时间 */
+  /** Creation time */
   createdAt?: string;
-  /** 修改时间 */
+  /** Modification time */
   modifiedAt?: string;
 }
 
 /**
- * Skills 映射 (id -> Skill)
+ * Skills map (id -> Skill)
  */
 export type SkillsMap = Record<string, Skill>;
 
 /**
- * Skills 配置结构
+ * Skills configuration structure
  */
 export interface SkillsConfig {
-  /** 全局 Skills */
+  /** Global skills */
   global: SkillsMap;
-  /** 本地 Skills */
+  /** Local skills */
   local: SkillsMap;
 }
 
 /**
- * Skills 筛选器
+ * Skills filter
  */
 export type SkillFilter = 'all' | 'global' | 'local';
 
 /**
- * Skills 启用状态筛选器
+ * Skills enabled status filter
  */
 export type SkillEnabledFilter = 'all' | 'enabled' | 'disabled';

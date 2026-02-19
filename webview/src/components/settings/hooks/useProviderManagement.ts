@@ -5,7 +5,7 @@ const sendToJava = (message: string) => {
   if (window.sendToJava) {
     window.sendToJava(message);
   }
-  // sendToJava 不可用时静默处理，避免生产环境日志污染
+  // Silently ignore when sendToJava is unavailable to avoid log pollution in production
 };
 
 export interface ProviderDialogState {
@@ -26,23 +26,23 @@ export interface UseProviderManagementOptions {
 export function useProviderManagement(options: UseProviderManagementOptions = {}) {
   const { onError, onSuccess } = options;
 
-  // Provider 列表状态
+  // Provider list state
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 供应商弹窗状态
+  // Provider dialog state
   const [providerDialog, setProviderDialog] = useState<ProviderDialogState>({
     isOpen: false,
     provider: null,
   });
 
-  // 确认删除弹窗状态
+  // Delete confirmation dialog state
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
     isOpen: false,
     provider: null,
   });
 
-  // 同步激活的 Provider 模型映射到 localStorage
+  // Sync active provider model mapping to localStorage
   const syncActiveProviderModelMapping = useCallback((provider?: ProviderConfig | null) => {
     if (typeof window === 'undefined' || !window.localStorage) return;
     if (!provider || !provider.settingsConfig || !provider.settingsConfig.env) {
@@ -72,13 +72,13 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     }
   }, []);
 
-  // 加载 Provider 列表
+  // Load provider list
   const loadProviders = useCallback(() => {
     setLoading(true);
     sendToJava('get_providers:');
   }, []);
 
-  // 更新 Provider 列表（供 window callback 使用）
+  // Update provider list (used by window callback)
   const updateProviders = useCallback(
     (providersList: ProviderConfig[]) => {
       setProviders(providersList);
@@ -91,7 +91,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     [syncActiveProviderModelMapping]
   );
 
-  // 更新激活的 Provider（供 window callback 使用）
+  // Update active provider (used by window callback)
   const updateActiveProvider = useCallback(
     (activeProvider: ProviderConfig) => {
       if (activeProvider) {
@@ -104,22 +104,22 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     [syncActiveProviderModelMapping]
   );
 
-  // 打开编辑弹窗
+  // Open edit dialog
   const handleEditProvider = useCallback((provider: ProviderConfig) => {
     setProviderDialog({ isOpen: true, provider });
   }, []);
 
-  // 打开添加弹窗
+  // Open add dialog
   const handleAddProvider = useCallback(() => {
     setProviderDialog({ isOpen: true, provider: null });
   }, []);
 
-  // 关闭弹窗
+  // Close dialog
   const handleCloseProviderDialog = useCallback(() => {
     setProviderDialog({ isOpen: false, provider: null });
   }, []);
 
-  // 保存 Provider
+  // Save provider
   const handleSaveProvider = useCallback(
     (data: {
       providerName: string;
@@ -190,7 +190,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     [providerDialog.provider, providers, syncActiveProviderModelMapping, onError, onSuccess]
   );
 
-  // 切换 Provider
+  // Switch provider
   const handleSwitchProvider = useCallback(
     (id: string) => {
       const data = { id };
@@ -204,12 +204,12 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     [providers, syncActiveProviderModelMapping]
   );
 
-  // 删除 Provider
+  // Delete provider
   const handleDeleteProvider = useCallback((provider: ProviderConfig) => {
     setDeleteConfirm({ isOpen: true, provider });
   }, []);
 
-  // 确认删除
+  // Confirm deletion
   const confirmDeleteProvider = useCallback(() => {
     const provider = deleteConfirm.provider;
     if (!provider) return;
@@ -221,19 +221,19 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     setDeleteConfirm({ isOpen: false, provider: null });
   }, [deleteConfirm.provider, onSuccess]);
 
-  // 取消删除
+  // Cancel deletion
   const cancelDeleteProvider = useCallback(() => {
     setDeleteConfirm({ isOpen: false, provider: null });
   }, []);
 
   return {
-    // 状态
+    // State
     providers,
     loading,
     providerDialog,
     deleteConfirm,
 
-    // 方法
+    // Methods
     loadProviders,
     updateProviders,
     updateActiveProvider,
@@ -247,7 +247,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     cancelDeleteProvider,
     syncActiveProviderModelMapping,
 
-    // Setter（用于外部设置 loading 状态）
+    // Setter (for external loading state control)
     setLoading,
   };
 }

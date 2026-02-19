@@ -22,7 +22,7 @@ public class NodeDetector {
     private static final Logger LOG = Logger.getInstance(NodeDetector.class);
     // Common Node.js installation paths on Windows
     private static final String[] WINDOWS_NODE_PATHS = {
-        // Official installer default paths
+        // Official installer defaults
         "C:\\Program Files\\nodejs\\node.exe",
         "C:\\Program Files (x86)\\nodejs\\node.exe",
         // Chocolatey

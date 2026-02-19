@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
 import './PlanApprovalDialog.css';
 
-// 超时配置（与后端 PermissionHandler.java 保持一致）
-const TIMEOUT_SECONDS = 300; // 5 分钟
-const WARNING_THRESHOLD_SECONDS = 30; // 剩余 30 秒时显示警告
+// Timeout configuration (kept in sync with backend PermissionHandler.java)
+const TIMEOUT_SECONDS = 300; // 5 minutes
+const WARNING_THRESHOLD_SECONDS = 30; // Show warning when 30 seconds remain
 
 export interface AllowedPrompt {
   tool: string;
@@ -41,16 +41,16 @@ const PlanApprovalDialog = ({
 }: PlanApprovalDialogProps) => {
   const { t } = useTranslation();
   const [selectedMode, setSelectedMode] = useState('default');
-  // 控制弹窗是否收起（紧凑模式）
+  // Controls whether the dialog is collapsed (compact mode)
   const [isCollapsed, setIsCollapsed] = useState(false);
-  // 倒计时剩余秒数
+  // Remaining countdown seconds
   const [remainingSeconds, setRemainingSeconds] = useState(TIMEOUT_SECONDS);
-  // 是否显示超时警告
+  // Whether to show timeout warning
   const isTimeWarning = remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0;
-  // 是否已超时
+  // Whether the dialog has timed out
   const isTimedOut = remainingSeconds <= 0;
 
-  // 定时器引用
+  // Timer reference
   const timerRef = useRef<number | null>(null);
 
   const handleApprove = useCallback(() => {
@@ -63,18 +63,18 @@ const PlanApprovalDialog = ({
     onReject(request.requestId);
   }, [request, onReject]);
 
-  // 重置状态
+  // Reset state
   useEffect(() => {
     if (isOpen && request) {
       // Reset to default mode when dialog opens
       setSelectedMode('default');
       setIsCollapsed(false);
-      // 重置倒计时
+      // Reset countdown
       setRemainingSeconds(TIMEOUT_SECONDS);
     }
   }, [isOpen, request?.requestId]);
 
-  // 键盘事件处理
+  // Keyboard event handling
   useEffect(() => {
     if (isOpen && request) {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -89,9 +89,9 @@ const PlanApprovalDialog = ({
     }
   }, [isOpen, request, handleApprove, handleReject]);
 
-  // 倒计时定时器
+  // Countdown timer
   useEffect(() => {
-    // 清除定时器的辅助函数
+    // Helper function to clear the timer
     const clearTimer = () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -99,20 +99,20 @@ const PlanApprovalDialog = ({
       }
     };
 
-    // 如果对话框未打开或没有请求，清理并退出
+    // If dialog is not open or there is no request, clean up and exit
     if (!isOpen || !request) {
       clearTimer();
       return;
     }
 
-    // 清除之前的定时器（防止重复）
+    // Clear previous timer (prevent duplicates)
     clearTimer();
 
-    // 启动倒计时
+    // Start countdown
     timerRef.current = window.setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
-          // 超时，清除定时器
+          // Timed out, clear timer
           clearTimer();
           return 0;
         }
@@ -120,14 +120,14 @@ const PlanApprovalDialog = ({
       });
     }, 1000);
 
-    // cleanup 函数
+    // Cleanup function
     return clearTimer;
   }, [isOpen, request?.requestId]);
 
-  // 超时自动关闭
+  // Auto-close on timeout
   useEffect(() => {
     if (isTimedOut && request) {
-      // 超时自动拒绝
+      // Auto-reject on timeout
       handleReject();
     }
   }, [isTimedOut, request, handleReject]);
@@ -140,7 +140,7 @@ const PlanApprovalDialog = ({
     setSelectedMode(modeId);
   };
 
-  // 收起模式的渲染
+  // Render collapsed mode
   if (isCollapsed) {
     return (
       <div className="permission-dialog-overlay collapsed-mode">
@@ -169,7 +169,7 @@ const PlanApprovalDialog = ({
   return (
     <div className={`permission-dialog-overlay ${isTimeWarning ? 'warning-mode' : ''}`}>
       <div className="plan-approval-dialog">
-        {/* 超时警告提示 */}
+        {/* Timeout warning notice */}
         {isTimeWarning && (
           <div className="timeout-warning-banner">
             <span className="codicon codicon-warning" />
@@ -188,12 +188,12 @@ const PlanApprovalDialog = ({
             </p>
           </div>
           <div className="header-right">
-            {/* 倒计时显示 */}
+            {/* Countdown display */}
             <span className={`countdown-timer ${isTimeWarning ? 'warning' : ''}`}>
               <span className="codicon codicon-clock" />
               <span className="countdown-time">{formatCountdown(remainingSeconds)}</span>
             </span>
-            {/* 收起按钮 */}
+            {/* Collapse button */}
             <button
               className="collapse-button"
               onClick={() => setIsCollapsed(true)}

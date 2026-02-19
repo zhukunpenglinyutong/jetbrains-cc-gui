@@ -711,8 +711,8 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       focusInput,
     });
 
-    // 组件挂载时预加载斜杠命令，提升体感性能
-    // 在用户输入 "/" 之前就加载命令数据，使其立即可用
+    // Preload slash commands on mount to improve perceived performance
+    // Load command data before user types "/" so it's immediately available
     useEffect(() => {
       preloadSlashCommands();
     }, []);

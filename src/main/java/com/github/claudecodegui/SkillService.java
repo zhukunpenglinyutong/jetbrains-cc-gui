@@ -15,35 +15,35 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Skills 服务
+ * Skills service.
  *
- * 管理 Skills 的导入、删除、启用、停用等功能
+ * Manages skill import, deletion, enabling, and disabling.
  *
- * Skills 存储位置（使用中）:
- * - 全局: ~/.claude/skills
- * - 本地: {workspace}/.claude/skills
+ * Active skills storage locations:
+ * - Global: ~/.claude/skills
+ * - Local: {workspace}/.claude/skills
  *
- * Skills 管理目录（停用的）:
- * - 全局: ~/.codemoss/skills/global
- * - 本地: ~/.codemoss/skills/{项目路径哈希}
+ * Management directories (disabled skills):
+ * - Global: ~/.codemoss/skills/global
+ * - Local: ~/.codemoss/skills/{project-path-hash}
  */
 public class SkillService {
     private static final Logger LOG = Logger.getInstance(SkillService.class);
     private static final Gson gson = new Gson();
 
-    // 管理目录根路径
+    // Management directory root path
     private static final String CONFIG_DIR_NAME = ".codemoss";
     private static final String SKILLS_DIR_NAME = "skills";
     private static final String GLOBAL_DIR_NAME = "global";
 
-    // 用于匹配 frontmatter 中 description 的正则
+    // Regex patterns for matching description in YAML frontmatter
     private static final Pattern FRONTMATTER_PATTERN = Pattern.compile("^---\\s*\\n([\\s\\S]*?)\\n---");
     private static final Pattern DESCRIPTION_PATTERN = Pattern.compile("description:\\s*(.+?)(?:\\n[a-z-]+:|$)", Pattern.DOTALL);
 
-    // ==================== 使用中目录（Claude 读取的目录） ====================
+    // ==================== Active Directories (read by Claude) ====================
 
     /**
-     * 获取全局 Skills 使用中目录 (~/.claude/skills)
+     * Gets the global active skills directory (~/.claude/skills).
      */
     public static String getGlobalSkillsDir() {
         String homeDir = System.getProperty("user.home");
@@ -51,7 +51,7 @@ public class SkillService {
     }
 
     /**
-     * 获取本地 Skills 使用中目录 ({workspace}/.claude/skills)
+     * Gets the local active skills directory ({workspace}/.claude/skills).
      */
     public static String getLocalSkillsDir(String workspaceRoot) {
         if (workspaceRoot == null || workspaceRoot.isEmpty()) {
@@ -60,10 +60,10 @@ public class SkillService {
         return Paths.get(workspaceRoot, ".claude", "skills").toString();
     }
 
-    // ==================== 管理目录（停用的 Skills 存放处） ====================
+    // ==================== Management Directories (storage for disabled skills) ====================
 
     /**
-     * 获取管理目录根路径 (~/.codemoss/skills)
+     * Gets the management directory root path (~/.codemoss/skills).
      */
     private static String getManagementRootDir() {
         String homeDir = System.getProperty("user.home");
@@ -71,21 +71,21 @@ public class SkillService {
     }
 
     /**
-     * 获取全局 Skills 管理目录 (~/.codemoss/skills/global)
+     * Gets the global skills management directory (~/.codemoss/skills/global).
      */
     public static String getGlobalManagementDir() {
         return Paths.get(getManagementRootDir(), GLOBAL_DIR_NAME).toString();
     }
 
     /**
-     * 获取本地 Skills 管理目录 (~/.codemoss/skills/{项目路径哈希})
-     * 使用项目路径的哈希值作为子目录名，避免路径特殊字符问题
+     * Gets the local skills management directory (~/.codemoss/skills/{project-path-hash}).
+     * Uses a hash of the project path as the subdirectory name to avoid special character issues.
      */
     public static String getLocalManagementDir(String workspaceRoot) {
         if (workspaceRoot == null || workspaceRoot.isEmpty()) {
             return null;
         }
-        // 将项目路径转换为安全的目录名（使用哈希 + 项目名）
+        // Convert the project path to a safe directory name (hash + project name)
         String projectName = Paths.get(workspaceRoot).getFileName().toString();
         String pathHash = Integer.toHexString(workspaceRoot.hashCode());
         String safeDirName = projectName + "_" + pathHash;
@@ -93,7 +93,7 @@ public class SkillService {
     }
 
     /**
-     * 确保目录存在
+     * Ensures that the directory exists, creating it if necessary.
      */
     private static boolean ensureDirectoryExists(String dirPath) {
         if (dirPath == null) return false;
@@ -109,7 +109,7 @@ public class SkillService {
     }
 
     /**
-     * 获取所有 Skills (全局 + 本地)，包含启用和停用的
+     * Gets all skills (global + local), including both enabled and disabled.
      */
     public static JsonObject getAllSkills(String workspaceRoot) {
         JsonObject result = new JsonObject();
@@ -119,26 +119,26 @@ public class SkillService {
     }
 
     /**
-     * 获取指定作用域的所有 Skills（包含启用和停用的）
+     * Gets all skills for a given scope (including both enabled and disabled).
      */
     public static JsonObject getAllSkillsByScope(String scope, String workspaceRoot) {
         JsonObject allSkills = new JsonObject();
 
-        // 1. 扫描使用中目录（enabled = true）
+        // 1. Scan the active directory (enabled = true)
         String activeDir = "global".equals(scope) ? getGlobalSkillsDir() : getLocalSkillsDir(workspaceRoot);
         if (activeDir != null) {
             JsonObject activeSkills = scanSkillsDirectory(activeDir, scope, true);
-            // 合并到结果中
+            // Merge into results
             for (String key : activeSkills.keySet()) {
                 allSkills.add(key, activeSkills.get(key));
             }
         }
 
-        // 2. 扫描管理目录（enabled = false）
+        // 2. Scan the management directory (enabled = false)
         String managementDir = "global".equals(scope) ? getGlobalManagementDir() : getLocalManagementDir(workspaceRoot);
         if (managementDir != null) {
             JsonObject disabledSkills = scanSkillsDirectory(managementDir, scope, false);
-            // 合并到结果中
+            // Merge into results
             for (String key : disabledSkills.keySet()) {
                 allSkills.add(key, disabledSkills.get(key));
             }
@@ -148,7 +148,7 @@ public class SkillService {
     }
 
     /**
-     * 获取指定作用域的 Skills（仅使用中的，保持向后兼容）
+     * Gets skills for a given scope (active only, for backward compatibility).
      */
     public static JsonObject getSkillsByScope(String scope, String workspaceRoot) {
         String dir = "global".equals(scope) ? getGlobalSkillsDir() : getLocalSkillsDir(workspaceRoot);
@@ -160,10 +160,10 @@ public class SkillService {
     }
 
     /**
-     * 扫描目录获取 Skills
-     * @param dirPath 目录路径
-     * @param scope 作用域 (global/local)
-     * @param enabled 是否为启用状态
+     * Scans a directory to discover skills.
+     * @param dirPath directory path
+     * @param scope scope (global/local)
+     * @param enabled whether these skills are in the enabled state
      */
     private static JsonObject scanSkillsDirectory(String dirPath, String scope, boolean enabled) {
         JsonObject skills = new JsonObject();
@@ -180,13 +180,13 @@ public class SkillService {
         }
 
         for (File entry : entries) {
-            // 跳过隐藏文件/文件夹
+            // Skip hidden files/directories
             if (entry.getName().startsWith(".")) {
                 continue;
             }
 
             String type = entry.isDirectory() ? "directory" : "file";
-            // ID 格式包含启用状态标记，便于区分同名的启用/停用 Skill
+            // ID format includes an enabled/disabled marker to distinguish same-named skills
             String id = scope + "-" + entry.getName() + (enabled ? "" : "-disabled");
             String description = extractDescription(entry.getAbsolutePath(), entry.isDirectory());
 
@@ -217,13 +217,13 @@ public class SkillService {
     }
 
     /**
-     * 从 skill.md 文件中提取 description
+     * Extracts the description from a skill.md file.
      */
     private static String extractDescription(String skillPath, boolean isDirectory) {
         try {
             String mdPath;
             if (isDirectory) {
-                // 如果是目录，查找 skill.md 或 SKILL.md 文件
+                // If it's a directory, look for a skill.md or SKILL.md file
                 File skillMd = new File(skillPath, "skill.md");
                 if (!skillMd.exists()) {
                     skillMd = new File(skillPath, "SKILL.md");
@@ -233,7 +233,7 @@ public class SkillService {
                 }
                 mdPath = skillMd.getAbsolutePath();
             } else {
-                // 如果是文件且是 .md 文件
+                // If it's a file, check if it's a .md file
                 if (!skillPath.toLowerCase().endsWith(".md")) {
                     return null;
                 }
@@ -242,7 +242,7 @@ public class SkillService {
 
             String content = Files.readString(Path.of(mdPath), StandardCharsets.UTF_8);
 
-            // 提取 YAML frontmatter 中的 description
+            // Extract description from the YAML frontmatter
             Matcher frontmatterMatcher = FRONTMATTER_PATTERN.matcher(content);
             if (frontmatterMatcher.find()) {
                 String frontmatter = frontmatterMatcher.group(1);
@@ -260,11 +260,11 @@ public class SkillService {
     }
 
     /**
-     * 导入 Skill（复制文件/文件夹到 Skills 目录）
-     * @param sourcePaths 源文件/文件夹路径列表
-     * @param scope 作用域
-     * @param workspaceRoot 工作区根目录
-     * @return 导入结果
+     * Imports skills (copies files/directories to the skills directory).
+     * @param sourcePaths list of source file/directory paths
+     * @param scope scope (global/local)
+     * @param workspaceRoot workspace root directory
+     * @return import result
      */
     public static JsonObject importSkills(List<String> sourcePaths, String scope, String workspaceRoot) {
         JsonObject result = new JsonObject();
@@ -278,7 +278,7 @@ public class SkillService {
             return result;
         }
 
-        // 确保目标目录存在
+        // Ensure the target directory exists
         File targetDirFile = new File(targetDir);
         if (!targetDirFile.exists()) {
             if (!targetDirFile.mkdirs()) {
@@ -302,7 +302,7 @@ public class SkillService {
             String name = source.getName();
             File targetPath = new File(targetDir, name);
 
-            // 检查是否已存在同名 Skill
+            // Check if a skill with the same name already exists
             if (targetPath.exists()) {
                 JsonObject err = new JsonObject();
                 err.addProperty("path", sourcePath);
@@ -312,14 +312,14 @@ public class SkillService {
             }
 
             try {
-                // 复制文件/文件夹
+                // Copy file/directory
                 if (source.isDirectory()) {
                     copyDirectory(source.toPath(), targetPath.toPath());
                 } else {
                     Files.copy(source.toPath(), targetPath.toPath());
                 }
 
-                // 构建导入结果
+                // Build the import result
                 String type = source.isDirectory() ? "directory" : "file";
                 String id = scope + "-" + name;
                 String description = extractDescription(targetPath.getAbsolutePath(), source.isDirectory());
@@ -358,16 +358,16 @@ public class SkillService {
     }
 
     /**
-     * 删除 Skill（支持删除启用或停用状态的 Skill）
-     * @param name Skill 名称
-     * @param scope 作用域 (global/local)
-     * @param enabled 当前是否启用
-     * @param workspaceRoot 工作区根目录
+     * Deletes a skill (supports deleting both enabled and disabled skills).
+     * @param name skill name
+     * @param scope scope (global/local)
+     * @param enabled whether the skill is currently enabled
+     * @param workspaceRoot workspace root directory
      */
     public static JsonObject deleteSkill(String name, String scope, boolean enabled, String workspaceRoot) {
         JsonObject result = new JsonObject();
 
-        // 根据启用状态选择对应的目录
+        // Select the appropriate directory based on the enabled state
         String dir;
         if (enabled) {
             dir = "global".equals(scope) ? getGlobalSkillsDir() : getLocalSkillsDir(workspaceRoot);
@@ -407,10 +407,10 @@ public class SkillService {
     }
 
     /**
-     * 旧版删除方法（保持向后兼容）
+     * Legacy delete method (for backward compatibility).
      */
     public static JsonObject deleteSkill(String id, String scope, String workspaceRoot) {
-        // 从 ID 中提取名称 (格式: {scope}-{name} 或 {scope}-{name}-disabled)
+        // Extract the name from the ID (format: {scope}-{name} or {scope}-{name}-disabled)
         String name = id.replace(scope + "-", "");
         boolean enabled = true;
         if (name.endsWith("-disabled")) {
@@ -421,17 +421,17 @@ public class SkillService {
     }
 
     /**
-     * 启用 Skill（从管理目录移动到使用中目录）
-     * @param name Skill 名称
-     * @param scope 作用域 (global/local)
-     * @param workspaceRoot 工作区根目录
+     * Enables a skill (moves it from the management directory to the active directory).
+     * @param name skill name
+     * @param scope scope (global/local)
+     * @param workspaceRoot workspace root directory
      */
     public static JsonObject enableSkill(String name, String scope, String workspaceRoot) {
         JsonObject result = new JsonObject();
 
-        // 源目录：管理目录（停用的 Skills）
+        // Source directory: management directory (disabled skills)
         String sourceDir = "global".equals(scope) ? getGlobalManagementDir() : getLocalManagementDir(workspaceRoot);
-        // 目标目录：使用中目录
+        // Target directory: active directory
         String targetDir = "global".equals(scope) ? getGlobalSkillsDir() : getLocalSkillsDir(workspaceRoot);
 
         if (sourceDir == null || targetDir == null) {
@@ -443,30 +443,30 @@ public class SkillService {
         File source = new File(sourceDir, name);
         File target = new File(targetDir, name);
 
-        // 检查源文件是否存在
+        // Check if the source file exists
         if (!source.exists()) {
             result.addProperty("success", false);
-            result.addProperty("error", "Skill 不存在于管理目录: " + name);
+            result.addProperty("error", "Skill does not exist in the management directory: " + name);
             return result;
         }
 
-        // 检查目标位置是否已存在同名 Skill
+        // Check if a skill with the same name already exists at the target
         if (target.exists()) {
             result.addProperty("success", false);
-            result.addProperty("error", "使用中目录已存在同名 Skill: " + name);
+            result.addProperty("error", "A skill with the same name already exists in the active directory: " + name);
             result.addProperty("conflict", true);
             return result;
         }
 
-        // 确保目标目录存在
+        // Ensure the target directory exists
         if (!ensureDirectoryExists(targetDir)) {
             result.addProperty("success", false);
-            result.addProperty("error", "无法创建目标目录: " + targetDir);
+            result.addProperty("error", "Unable to create target directory: " + targetDir);
             return result;
         }
 
         try {
-            // 移动文件/文件夹
+            // Move the file/directory
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE);
             result.addProperty("success", true);
             result.addProperty("name", name);
@@ -475,7 +475,7 @@ public class SkillService {
             result.addProperty("path", target.getAbsolutePath());
             LOG.info("[Skills] 成功启用 " + scope + " Skill: " + name);
         } catch (IOException e) {
-            // 如果 ATOMIC_MOVE 失败（跨文件系统），尝试复制后删除
+            // If ATOMIC_MOVE fails (cross-filesystem), fall back to copy-then-delete
             try {
                 if (source.isDirectory()) {
                     copyDirectory(source.toPath(), target.toPath());
@@ -489,11 +489,11 @@ public class SkillService {
                 result.addProperty("scope", scope);
                 result.addProperty("enabled", true);
                 result.addProperty("path", target.getAbsolutePath());
-                LOG.info("[Skills] 成功启用 " + scope + " Skill (copy+delete): " + name);
+                LOG.info("[Skills] Successfully enabled " + scope + " Skill (copy+delete): " + name);
             } catch (IOException e2) {
                 result.addProperty("success", false);
-                result.addProperty("error", "移动失败: " + e2.getMessage());
-                LOG.error("[Skills] 启用 Skill 失败: " + e2.getMessage());
+                result.addProperty("error", "Move failed: " + e2.getMessage());
+                LOG.error("[Skills] Failed to enable Skill: " + e2.getMessage());
             }
         }
 
@@ -501,17 +501,17 @@ public class SkillService {
     }
 
     /**
-     * 停用 Skill（从使用中目录移动到管理目录）
-     * @param name Skill 名称
-     * @param scope 作用域 (global/local)
-     * @param workspaceRoot 工作区根目录
+     * Disables a skill (moves it from the active directory to the management directory).
+     * @param name skill name
+     * @param scope scope (global/local)
+     * @param workspaceRoot workspace root directory
      */
     public static JsonObject disableSkill(String name, String scope, String workspaceRoot) {
         JsonObject result = new JsonObject();
 
-        // 源目录：使用中目录
+        // Source directory: active directory
         String sourceDir = "global".equals(scope) ? getGlobalSkillsDir() : getLocalSkillsDir(workspaceRoot);
-        // 目标目录：管理目录（停用的 Skills）
+        // Target directory: management directory (disabled skills)
         String targetDir = "global".equals(scope) ? getGlobalManagementDir() : getLocalManagementDir(workspaceRoot);
 
         if (sourceDir == null || targetDir == null) {
@@ -523,30 +523,30 @@ public class SkillService {
         File source = new File(sourceDir, name);
         File target = new File(targetDir, name);
 
-        // 检查源文件是否存在
+        // Check if the source file exists
         if (!source.exists()) {
             result.addProperty("success", false);
-            result.addProperty("error", "Skill 不存在于使用中目录: " + name);
+            result.addProperty("error", "Skill does not exist in the active directory: " + name);
             return result;
         }
 
-        // 检查目标位置是否已存在同名 Skill
+        // Check if a skill with the same name already exists at the target
         if (target.exists()) {
             result.addProperty("success", false);
-            result.addProperty("error", "管理目录已存在同名 Skill: " + name);
+            result.addProperty("error", "A skill with the same name already exists in the management directory: " + name);
             result.addProperty("conflict", true);
             return result;
         }
 
-        // 确保目标目录存在
+        // Ensure the target directory exists
         if (!ensureDirectoryExists(targetDir)) {
             result.addProperty("success", false);
-            result.addProperty("error", "无法创建目标目录: " + targetDir);
+            result.addProperty("error", "Unable to create target directory: " + targetDir);
             return result;
         }
 
         try {
-            // 移动文件/文件夹
+            // Move the file/directory
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE);
             result.addProperty("success", true);
             result.addProperty("name", name);
@@ -555,7 +555,7 @@ public class SkillService {
             result.addProperty("path", target.getAbsolutePath());
             LOG.info("[Skills] 成功停用 " + scope + " Skill: " + name);
         } catch (IOException e) {
-            // 如果 ATOMIC_MOVE 失败（跨文件系统），尝试复制后删除
+            // If ATOMIC_MOVE fails (cross-filesystem), fall back to copy-then-delete
             try {
                 if (source.isDirectory()) {
                     copyDirectory(source.toPath(), target.toPath());
@@ -569,11 +569,11 @@ public class SkillService {
                 result.addProperty("scope", scope);
                 result.addProperty("enabled", false);
                 result.addProperty("path", target.getAbsolutePath());
-                LOG.info("[Skills] 成功停用 " + scope + " Skill (copy+delete): " + name);
+                LOG.info("[Skills] Successfully disabled " + scope + " Skill (copy+delete): " + name);
             } catch (IOException e2) {
                 result.addProperty("success", false);
-                result.addProperty("error", "移动失败: " + e2.getMessage());
-                LOG.error("[Skills] 停用 Skill 失败: " + e2.getMessage());
+                result.addProperty("error", "Move failed: " + e2.getMessage());
+                LOG.error("[Skills] Failed to disable Skill: " + e2.getMessage());
             }
         }
 
@@ -581,11 +581,11 @@ public class SkillService {
     }
 
     /**
-     * 切换 Skill 启用状态
-     * @param name Skill 名称
-     * @param scope 作用域 (global/local)
-     * @param currentEnabled 当前启用状态
-     * @param workspaceRoot 工作区根目录
+     * Toggles the enabled state of a skill.
+     * @param name skill name
+     * @param scope scope (global/local)
+     * @param currentEnabled current enabled state
+     * @param workspaceRoot workspace root directory
      */
     public static JsonObject toggleSkill(String name, String scope, boolean currentEnabled, String workspaceRoot) {
         if (currentEnabled) {
@@ -596,7 +596,7 @@ public class SkillService {
     }
 
     /**
-     * 递归复制目录
+     * Recursively copies a directory.
      */
     private static void copyDirectory(Path source, Path target) throws IOException {
         Files.walkFileTree(source, new SimpleFileVisitor<>() {
@@ -617,7 +617,7 @@ public class SkillService {
     }
 
     /**
-     * 递归删除目录
+     * Recursively deletes a directory.
      */
     private static void deleteDirectory(Path dir) throws IOException {
         Files.walkFileTree(dir, new SimpleFileVisitor<>() {

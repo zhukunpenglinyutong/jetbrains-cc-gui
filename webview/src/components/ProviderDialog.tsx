@@ -5,7 +5,7 @@ import { PROVIDER_PRESETS } from '../types/provider';
 
 interface ProviderDialogProps {
   isOpen: boolean;
-  provider?: ProviderConfig | null; // null 表示添加模式
+  provider?: ProviderConfig | null; // null indicates add mode
   onClose: () => void;
   onSave: (data: {
     providerName: string;
@@ -69,7 +69,7 @@ export default function ProviderDialog({
     }
   };
 
-  // 应用预设配置
+  // Apply preset configuration
   const handlePresetClick = (presetId: string) => {
     const preset = PROVIDER_PRESETS.find(p => p.id === presetId);
     if (!preset) return;
@@ -77,7 +77,7 @@ export default function ProviderDialog({
     setActivePreset(presetId);
 
     if (presetId === 'custom') {
-      // 自定义配置：重置为空配置
+      // Custom configuration: reset to empty config
       const config = {
         env: {
           ANTHROPIC_AUTH_TOKEN: '',
@@ -97,11 +97,11 @@ export default function ProviderDialog({
       return;
     }
 
-    // 应用预设配置
+    // Apply preset configuration
     const config = { env: { ...preset.env } };
     setJsonConfig(JSON.stringify(config, null, 2));
 
-    // 同步更新表单字段
+    // Sync form fields with preset values
     const env = preset.env;
     setApiUrl(env.ANTHROPIC_BASE_URL || '');
     setApiKey(env.ANTHROPIC_AUTH_TOKEN || '');
@@ -111,7 +111,7 @@ export default function ProviderDialog({
     setJsonError('');
   };
 
-  // 根据环境变量自动检测匹配的预设
+  // Auto-detect matching preset based on environment variables
   const detectMatchingPreset = (env: Record<string, string | undefined>): string => {
     for (const preset of PROVIDER_PRESETS) {
       if (preset.id === 'custom') continue;
@@ -124,7 +124,7 @@ export default function ProviderDialog({
     return 'custom';
   };
 
-  // 格式化 JSON
+  // Format JSON
   const handleFormatJson = () => {
     try {
       const parsed = JSON.parse(jsonConfig);
@@ -135,11 +135,11 @@ export default function ProviderDialog({
     }
   };
 
-  // 初始化表单
+  // Initialize form
   useEffect(() => {
     if (isOpen) {
       if (provider) {
-        // 编辑模式
+        // Edit mode
         setProviderName(provider.name || '');
         setRemark(provider.remark || provider.websiteUrl || '');
         setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');

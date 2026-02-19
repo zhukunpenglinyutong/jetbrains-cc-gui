@@ -11,7 +11,7 @@ interface EditToolBlockProps {
   name?: string;
   input?: ToolInput;
   result?: ToolResultBlock | null;
-  /** 工具调用的唯一 ID，用于判断该工具是否被用户拒绝了权限 */
+  /** Unique ID of the tool call, used to determine if the user denied permission */
   toolId?: string;
 }
 
@@ -28,7 +28,7 @@ interface DiffResult {
   deletions: number;
 }
 
-// 使用 LCS 算法计算真正的 diff
+// Compute actual diff using the LCS algorithm
 function computeDiff(oldLines: string[], newLines: string[]): DiffResult {
   if (oldLines.length === 0 && newLines.length === 0) {
     return { lines: [], additions: 0, deletions: 0 };
@@ -51,7 +51,7 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffResult {
   const m = oldLines.length;
   const n = newLines.length;
 
-  // 计算 LCS 的 DP 表
+  // Build the LCS dynamic programming table
   const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
 
   for (let i = 1; i <= m; i++) {
@@ -64,7 +64,7 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffResult {
     }
   }
 
-  // 回溯生成 diff
+  // Backtrack to generate the diff
   const diffLines: DiffLine[] = [];
   let i = m, j = n;
 
@@ -95,9 +95,9 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
   const isDenied = useIsToolDenied(toolId);
 
   // Determine tool call status based on result
-  // 如果被拒绝，视为已完成（显示错误状态）
+  // If denied, treat as completed (show error state)
   const isCompleted = (result !== undefined && result !== null) || isDenied;
-  // 如果被拒绝，显示为错误状态
+  // If denied, show as error state
   const isError = isDenied || (isCompleted && result?.is_error === true);
 
   const filePath =
@@ -285,20 +285,20 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
         <div className="task-details" style={{ padding: 0, borderTop: '1px solid var(--border-primary)' }}>
           <div
             style={{
-              // 使用等宽字体确保制表符与空格宽度一致
+              // Use monospace font to ensure consistent tab and space widths
               fontFamily: 'var(--idea-editor-font-family, monospace)',
               fontSize: '12px',
               lineHeight: 1.5,
               background: '#1e1e1e',
-              // 统一设置 Tab 宽度，避免不同环境默认值造成缩进偏移
+              // Normalize tab width to prevent indentation shifts across environments
               tabSize: 4 as unknown as number,
               MozTabSize: 4 as unknown as number,
-              // 保持空白和换行，不进行自动换行，防止选择过程重排
+              // Preserve whitespace and line breaks without wrapping to prevent reflow during selection
               whiteSpace: 'pre' as const,
-              // 横向滚动，避免纵向与横向同时变化造成抖动和卡顿
+              // Horizontal scroll only to avoid jitter from simultaneous horizontal and vertical changes
               overflowX: 'auto' as const,
               overflowY: 'hidden' as const,
-              // 提示浏览器在该容器进行合成层优化，提升选择性能
+              // Hint the browser to promote this container to a compositing layer for better selection performance
               willChange: 'transform' as const,
               transform: 'translateZ(0)',
             }}
@@ -353,15 +353,15 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
                   </div>
                   <pre
                     style={{
-                      // 保持原始空白与制表符宽度一致
+                      // Preserve original whitespace with consistent tab width
                       whiteSpace: 'pre',
                       margin: 0,
                       paddingLeft: '4px',
                       flex: 1,
-                      // 再次声明 tabSize 以防高亮/包裹层影响
+                      // Re-declare tabSize in case highlight or wrapper layers override it
                       tabSize: 4 as unknown as number,
                       MozTabSize: 4 as unknown as number,
-                      // 禁止任意断行，保持选择与滚动稳定
+                      // Disable arbitrary line breaks to keep selection and scrolling stable
                       overflowWrap: 'normal' as const,
                     }}
                   >

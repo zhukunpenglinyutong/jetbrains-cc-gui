@@ -314,9 +314,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     env.put("CODEX_MODEL", model);
                 }
 
-                // 【关键修复】通过环境变量覆盖用户配置文件中的 sandbox 和 approval 设置
-                // Override user's ~/.codex/config.toml settings via environment variables
-                // 【Windows 特殊处理】Windows 沙箱支持是实验性的，使用 danger-full-access 模式
+                // Override user's ~/.codex/config.toml sandbox and approval settings via environment variables
                 // Windows sandbox support is experimental, use danger-full-access mode
                 if (permissionMode != null && !permissionMode.isEmpty()) {
                     // Check if running on Windows - Windows sandbox is experimental and may not work properly

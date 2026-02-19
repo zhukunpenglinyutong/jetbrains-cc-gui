@@ -9,8 +9,8 @@ export interface CustomModelEditorProps {
 }
 
 /**
- * 自定义模型编辑器组件
- * 用于管理 Codex 供应商的自定义模型列表
+ * Custom model editor component
+ * Manages the custom model list for Codex providers
  */
 export function CustomModelEditor({
   models,
@@ -25,7 +25,7 @@ export function CustomModelEditor({
   const [validationError, setValidationError] = useState<string | null>(null);
 
   /**
-   * 验证模型 ID 并返回错误消息
+   * Validate model ID and return an error message if invalid
    */
   const validateModelId = useCallback((id: string): string | null => {
     const trimmedId = id.trim();
@@ -35,7 +35,7 @@ export function CustomModelEditor({
     if (!isValidModelId(trimmedId)) {
       return t('settings.codexProvider.dialog.modelIdInvalid') || 'Invalid model ID format';
     }
-    // 检查重复（编辑时排除当前模型）
+    // Check for duplicates (exclude current model when editing)
     const isDuplicate = models.some(m =>
       m.id === trimmedId && (!editingModel || m.id !== editingModel.id)
     );
@@ -119,7 +119,7 @@ export function CustomModelEditor({
 
   const handleModelIdChange = useCallback((value: string) => {
     setNewModelId(value);
-    // 清除之前的验证错误
+    // Clear previous validation error
     if (validationError) {
       setValidationError(null);
     }
@@ -127,7 +127,7 @@ export function CustomModelEditor({
 
   return (
     <div className="custom-models-editor" role="region" aria-label={t('settings.codexProvider.dialog.customModels')}>
-      {/* 模型列表 */}
+      {/* Model list */}
       <div className="models-list" role="list" aria-label={t('settings.codexProvider.dialog.customModels')}>
         {models.length === 0 ? (
           <div className="empty-models" role="status">{t('settings.codexProvider.dialog.noCustomModels')}</div>
@@ -168,7 +168,7 @@ export function CustomModelEditor({
         )}
       </div>
 
-      {/* 添加/编辑模型表单 */}
+      {/* Add/edit model form */}
       {isAdding ? (
         <div className="add-model-form" role="form" aria-label={editingModel ? t('common.edit') : t('common.add')}>
           <div className="form-row">

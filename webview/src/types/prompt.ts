@@ -1,21 +1,21 @@
 /**
- * 提示词库配置
+ * Prompt library configuration
  */
 export interface PromptConfig {
-  /** 唯一标识 */
+  /** Unique identifier */
   id: string;
-  /** 提示词名称（最多30字符） */
+  /** Prompt name (max 30 characters) */
   name: string;
-  /** 提示词内容（最多100000字符） */
+  /** Prompt content (max 100000 characters) */
   content: string;
-  /** 创建时间戳 */
+  /** Creation timestamp */
   createdAt?: number;
-  /** 更新时间戳 */
+  /** Last updated timestamp */
   updatedAt?: number;
 }
 
 /**
- * 提示词操作结果
+ * Prompt operation result
  */
 export interface PromptOperationResult {
   success: boolean;

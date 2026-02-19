@@ -1,6 +1,6 @@
 /**
- * 刷新日志面板组件
- * 显示 MCP 服务器刷新操作的日志记录
+ * Refresh Logs Panel Component
+ * Displays log entries for MCP server refresh operations
  */
 
 import { useRef, useEffect } from 'react';
@@ -13,7 +13,7 @@ export interface RefreshLogsPanelProps {
 }
 
 /**
- * 刷新日志面板
+ * Refresh Logs Panel
  */
 export function RefreshLogsPanel({
   logs,
@@ -22,13 +22,13 @@ export function RefreshLogsPanel({
 }: RefreshLogsPanelProps) {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // 自动滚动到日志底部
+  // Auto-scroll to bottom of logs
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
   /**
-   * 获取日志图标
+   * Get log entry icon
    */
   const getLogIcon = (type: RefreshLog['type']): string => {
     switch (type) {

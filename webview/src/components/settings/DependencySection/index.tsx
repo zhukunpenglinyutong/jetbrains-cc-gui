@@ -60,19 +60,19 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
 
   // Setup window callbacks - only run once on mount
   useEffect(() => {
-    // 🔧 使用更安全的回调管理方式：
-    // 1. 保存原有回调的引用（在 effect 执行时捕获）
-    // 2. 创建包装函数而不是直接覆盖
-    // 3. 清理时恢复原有回调
+    // Use a safer callback management approach:
+    // 1. Save references to existing callbacks (captured when effect runs)
+    // 2. Create wrapper functions instead of directly overwriting
+    // 3. Restore original callbacks on cleanup
 
-    // 捕获当前的回调引用（可能是 App.tsx 设置的）
+    // Capture current callback references (may have been set by App.tsx)
     const savedUpdateDependencyStatus = window.updateDependencyStatus;
     const savedDependencyInstallProgress = window.dependencyInstallProgress;
     const savedDependencyInstallResult = window.dependencyInstallResult;
     const savedDependencyUninstallResult = window.dependencyUninstallResult;
     const savedNodeEnvironmentStatus = window.nodeEnvironmentStatus;
 
-    // 🔧 创建包装后的回调函数
+    // Create wrapped callback functions
     window.updateDependencyStatus = (jsonStr: string) => {
       try {
         const status = JSON.parse(jsonStr);
@@ -82,7 +82,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         console.error('[DependencySection] Failed to parse dependency status:', error);
         setLoading(false);
       }
-      // 🔧 链式调用：同时触发之前保存的回调（如 App.tsx 的）
+      // Chain call: also trigger previously saved callbacks (e.g., from App.tsx)
       if (typeof savedUpdateDependencyStatus === 'function') {
         try {
           savedUpdateDependencyStatus(jsonStr);
@@ -99,7 +99,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       } catch (error) {
         console.error('[DependencySection] Failed to parse install progress:', error);
       }
-      // 链式调用
+      // Chain call
       if (typeof savedDependencyInstallProgress === 'function') {
         try {
           savedDependencyInstallProgress(jsonStr);
@@ -127,7 +127,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         console.error('[DependencySection] Failed to parse install result:', error);
         setInstallingSdk(null);
       }
-      // 链式调用
+      // Chain call
       if (typeof savedDependencyInstallResult === 'function') {
         try {
           savedDependencyInstallResult(jsonStr);
@@ -153,7 +153,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         console.error('[DependencySection] Failed to parse uninstall result:', error);
         setUninstallingSdk(null);
       }
-      // 链式调用
+      // Chain call
       if (typeof savedDependencyUninstallResult === 'function') {
         try {
           savedDependencyUninstallResult(jsonStr);
@@ -170,7 +170,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       } catch (error) {
         console.error('[DependencySection] Failed to parse node environment status:', error);
       }
-      // 链式调用
+      // Chain call
       if (typeof savedNodeEnvironmentStatus === 'function') {
         try {
           savedNodeEnvironmentStatus(jsonStr);
@@ -185,7 +185,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
     sendToJava('check_node_environment:');
 
     return () => {
-      // 🔧 清理时恢复之前保存的回调，确保不丢失其他组件的回调
+      // Restore previously saved callbacks on cleanup to avoid losing other components' callbacks
       window.updateDependencyStatus = savedUpdateDependencyStatus;
       window.dependencyInstallProgress = savedDependencyInstallProgress;
       window.dependencyInstallResult = savedDependencyInstallResult;

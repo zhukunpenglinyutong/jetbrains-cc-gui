@@ -11,7 +11,7 @@ interface SkillHelpDialogProps {
  */
 export function SkillHelpDialog({ onClose }: SkillHelpDialogProps) {
   const { t } = useTranslation();
-  // 阻止事件冒泡
+  // Prevent event bubbling
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();

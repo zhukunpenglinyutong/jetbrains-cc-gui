@@ -322,7 +322,7 @@ public abstract class BaseSDKBridge {
                             callback.onError(errorMsg);
                         }
                     } else {
-                        // 发送阶段已处理错误，不再附加 Recent Output
+                        // Send phase already handled the error, no need to append recent output
                         if (exitCode != 0 && result.error != null) {
                             callback.onError(result.error);
                         }
