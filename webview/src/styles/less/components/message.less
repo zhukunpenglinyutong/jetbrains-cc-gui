@@ -753,7 +753,10 @@
 .messages-shell .messages-container {
     flex: 1;
     min-width: 0;
-    /* Always reserve space for the anchor rail to prevent layout shift */
+}
+
+/* Only reserve left padding when the anchor rail is actually rendered */
+.messages-shell:has(.messages-anchor-rail) .messages-container {
     padding-left: 26px;
 }
 
@@ -880,9 +883,5 @@
 @media (max-width: 400px) {
     .messages-anchor-rail {
         display: none;
-    }
-
-    .messages-shell .messages-container {
-        padding-left: 0;
     }
 }
