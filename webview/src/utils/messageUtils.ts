@@ -2,6 +2,16 @@ import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
 
 /**
+ * Generate a stable key for a message, used for React list keys and anchor navigation.
+ * Prefer raw.uuid > type-timestamp > fallback to type-index.
+ */
+export function getMessageKey(message: ClaudeMessage, index: number): string {
+  const rawObj = typeof message.raw === 'object' ? message.raw as Record<string, unknown> : null;
+  return (rawObj?.uuid as string)
+    || (message.timestamp ? `${message.type}-${message.timestamp}` : `${message.type}-${index}`);
+}
+
+/**
  * Extract content from <command-message> and <command-args> tags if present.
  * Returns the combined content: "command-message content command-args content"
  *

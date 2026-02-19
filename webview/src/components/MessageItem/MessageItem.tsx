@@ -20,6 +20,7 @@ import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, i
 export interface MessageItemProps {
   message: ClaudeMessage;
   messageIndex: number;
+  messageKey: string;
   isLast: boolean;
   streamingActive: boolean;
   isThinking: boolean;
@@ -28,6 +29,7 @@ export interface MessageItemProps {
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
   extractMarkdownContent: (message: ClaudeMessage) => string;
+  onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
 }
 
 type GroupedBlock =
@@ -192,6 +194,7 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
 export const MessageItem = memo(function MessageItem({
   message,
   messageIndex,
+  messageKey,
   isLast,
   streamingActive,
   isThinking,
@@ -200,6 +203,7 @@ export const MessageItem = memo(function MessageItem({
   getContentBlocks,
   findToolResult,
   extractMarkdownContent,
+  onNodeRef,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
@@ -317,6 +321,14 @@ export const MessageItem = memo(function MessageItem({
     () => ({ contentVisibility: 'auto', containIntrinsicSize: '0 320px' } as const),
     []
   );
+
+  // Register user message DOM node for anchor navigation
+  // Must be called before any early returns to satisfy React hooks rules
+  const anchorRefCallback = useCallback((node: HTMLDivElement | null) => {
+    if (message.type === 'user' && onNodeRef) {
+      onNodeRef(messageKey, node);
+    }
+  }, [message.type, messageKey, onNodeRef]);
 
   const renderGroupedBlocks = () => {
     if (message.type === 'error') {
@@ -481,7 +493,12 @@ export const MessageItem = memo(function MessageItem({
   }
 
   return (
-    <div className={`message ${message.type}`} style={messageStyle}>
+    <div
+      className={`message ${message.type}`}
+      style={messageStyle}
+      ref={anchorRefCallback}
+      data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
+    >
       {/* Timestamp and copy button for user messages */}
       {message.type === 'user' && message.timestamp && (
         <div className="message-header-row">

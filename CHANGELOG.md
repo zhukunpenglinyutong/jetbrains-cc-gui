@@ -1,3 +1,41 @@
+##### **2026年2月20日（v0.2）**
+
+English:
+
+✨ Features
+- Add message anchor navigation rail with quick-scroll dots for jumping between user messages
+- Refactor custom model management to plugin-level with standalone CRUD dialog and cross-provider localStorage sync
+- Add version history entry in community settings with link to changelog dialog
+- Update open-source banner text with piracy warning across all 8 locales
+
+🐛 Fixes
+- Fix context window token calculation formula: include cache_read_input_tokens instead of output_tokens in all 5 code paths #gadfly3173
+- Fix reserved padding-left layout shift when message anchor rail is hidden
+
+🔧 Improvements
+- Simplify token usage display by reusing extractUsedTokens with dynamic provider detection
+- Add [USAGE] tag pipeline for accurate token data flow from ai-bridge to Java backend #gadfly3173
+- Continue translating remaining Chinese comments to English across Java backend and React frontend
+- Remove sponsor QR codes section from community settings
+
+中文：
+
+✨ Features
+- 新增消息锚点导航栏，支持快速滚动定位到各条用户消息
+- 重构自定义模型管理为插件级别，新增独立 CRUD 对话框，支持跨供应商 localStorage 同步
+- 在社区设置中新增版本历史入口，链接到更新日志弹窗
+- 更新开源横幅文案，增加盗版警告提示（覆盖全部 8 种语言）
+
+🐛 Fixes
+- 修复上下文窗口 Token 计算公式：在全部 5 个代码路径中使用 cache_read_input_tokens 替代 output_tokens #gadfly3173
+- 修复消息锚点导航栏隐藏时多余的左侧内边距导致的布局偏移
+
+🔧 Improvements
+- 简化 Token 使用量显示，复用 extractUsedTokens 并支持动态供应商检测
+- 新增 [USAGE] 标签管道，实现 ai-bridge 到 Java 后端的精确 Token 数据流 #gadfly3173
+- 继续将 Java 后端和 React 前端中的剩余中文注释翻译为英文
+- 移除社区设置中的赞助二维码部分
+
 ##### **2026年2月19日（v0.1.9-fix）**
 
 English:

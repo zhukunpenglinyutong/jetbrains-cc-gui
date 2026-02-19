@@ -80,7 +80,7 @@
     "disabled": "無効",
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
     "sdkStatusLoading": "Checking SDK status...",
-    "openSourceBanner": "このプロジェクトは永遠に100%オープンソースであることを保証します。安心してご利用ください！",
+    "openSourceBanner": "このプロジェクトは100%オープンソースを保証します（海賊版プロジェクトにご注意ください）",
     "goInstallSdk": "インストールへ",
     "commandNotImplemented": "`{{command}}` 機能はまだ実装されていません。",
     "clearCommandDescription": "会話履歴をクリアして新しいセッションを開始",
@@ -171,6 +171,12 @@
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex"
+    },
+    "pluginModels": {
+      "title": "カスタムモデル",
+      "description": "ここで追加されたカスタムモデルは、すべてのプロバイダーで表示され、モデル選択リストの先頭に表示されます",
+      "dialogTitle": "カスタムモデル管理",
+      "manage": "モデル管理"
     },
     "dependencies": "SDK依存関係",
     "dependenciesDesc": "AI SDK依存関係のインストールと更新を管理",
@@ -964,6 +970,7 @@
     }
   },
   "models": {
+    "addModel": "モデル追加",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProviderConfig, CodexCustomModel } from '../types/provider';
+import type { ProviderConfig } from '../types/provider';
 import { PROVIDER_PRESETS } from '../types/provider';
-import { CustomModelEditor } from './settings/CustomModelEditor';
 
 interface ProviderDialogProps {
   isOpen: boolean;
@@ -14,7 +13,6 @@ interface ProviderDialogProps {
     apiKey: string;
     apiUrl: string;
     jsonConfig: string;
-    customModels?: CodexCustomModel[];
   }) => void;
   onDelete?: (provider: ProviderConfig) => void;
   canDelete?: boolean;
@@ -45,7 +43,6 @@ export default function ProviderDialog({
   const [showApiKey, setShowApiKey] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
   const [jsonError, setJsonError] = useState('');
-  const [customModels, setCustomModels] = useState<CodexCustomModel[]>([]);
 
   const updateEnvField = (key: string, value: string) => {
     try {
@@ -146,17 +143,16 @@ export default function ProviderDialog({
         setProviderName(provider.name || '');
         setRemark(provider.remark || provider.websiteUrl || '');
         setApiKey(provider.settingsConfig?.env?.ANTHROPIC_AUTH_TOKEN || provider.settingsConfig?.env?.ANTHROPIC_API_KEY || '');
-        // 编辑模式下不填充默认值，避免覆盖用户实际使用的第三方代理 URL
+        // In edit mode, do not populate default values to avoid overwriting the user's third-party proxy URL
         setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || '');
         const env = provider.settingsConfig?.env || {};
 
-        // 自动检测匹配的预设
+        // Auto-detect matching preset
         setActivePreset(detectMatchingPreset(env));
 
         setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
         setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
         setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
-        setCustomModels(provider.customModels || []);
 
         const config = provider.settingsConfig || {
           env: {
@@ -170,7 +166,7 @@ export default function ProviderDialog({
         };
         setJsonConfig(JSON.stringify(config, null, 2));
       } else {
-        // 添加模式
+        // Add mode
         setActivePreset('custom');
         setProviderName('');
         setRemark('');
@@ -180,7 +176,6 @@ export default function ProviderDialog({
         setHaikuModel('');
         setSonnetModel('');
         setOpusModel('');
-        setCustomModels([]);
         const config = {
           env: {
             ANTHROPIC_AUTH_TOKEN: '',
@@ -198,7 +193,7 @@ export default function ProviderDialog({
     }
   }, [isOpen, provider]);
 
-  // ESC 键关闭
+  // Close on ESC key press
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
@@ -297,7 +292,6 @@ export default function ProviderDialog({
       apiKey,
       apiUrl,
       jsonConfig,
-      customModels: customModels.length > 0 ? customModels : undefined,
     });
   };
 
@@ -320,7 +314,7 @@ export default function ProviderDialog({
             {isAdding ? t('settings.provider.dialog.addDescription') : t('settings.provider.dialog.editDescription')}
           </p>
 
-          {/* 快捷配置按钮组 */}
+          {/* Preset configuration button group */}
           <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.presetGroup')}>
             {PROVIDER_PRESETS.map((preset) => (
               <button
@@ -448,22 +442,6 @@ export default function ProviderDialog({
             <small className="form-hint">{t('settings.provider.dialog.modelMappingHint')}</small>
           </div>
 
-          {/* Custom Models */}
-          <div className="form-group">
-            <label>
-              {t('settings.provider.dialog.customModels')}
-              <span className="optional">({t('common.optional')})</span>
-            </label>
-            <small className="form-hint" style={{ marginBottom: '8px', display: 'block' }}>
-              {t('settings.provider.dialog.customModelsHint')}
-            </small>
-            <CustomModelEditor
-              models={customModels}
-              onModelsChange={setCustomModels}
-              t={t}
-            />
-          </div>
-
           <details className="advanced-section" open>
             <summary className="advanced-toggle">
               <span className="codicon codicon-chevron-right" />
@@ -474,7 +452,7 @@ export default function ProviderDialog({
                 {t('settings.provider.dialog.jsonConfigDescription')}
               </p>
 
-              {/* 工具栏 */}
+              {/* Toolbar */}
               <div className="json-toolbar">
                 <button
                   type="button"

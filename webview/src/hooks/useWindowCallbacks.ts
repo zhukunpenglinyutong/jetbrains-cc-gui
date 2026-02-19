@@ -218,8 +218,8 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         return [...nextList, optimisticMsg];
       }
 
-      // 后端消息已匹配到乐观消息。将乐观消息中的 attachment 块保留到后端消息的 raw 中，
-      // 否则用户上传的非图片文件附件在气泡中不可见。
+      // Backend message matched the optimistic message. Preserve attachment blocks from the optimistic
+      // message into the backend message's raw data; otherwise non-image file attachments won't be visible.
       const optimisticRaw = optimisticMsg.raw as any;
       const optimisticContent: unknown[] | undefined = optimisticRaw?.message?.content;
       if (Array.isArray(optimisticContent)) {
@@ -265,14 +265,14 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Message Callbacks ==========
     window.updateMessages = (json) => {
-      // 会话过渡期间，忽略旧会话回调发来的消息更新，防止已清空的消息被写回
+      // During session transition, ignore message updates from stale session callbacks to prevent cleared messages from being restored
       if (window.__sessionTransitioning) return;
 
       try {
         const parsed = JSON.parse(json) as ClaudeMessage[];
 
         setMessages((prev) => {
-          // 如果正在流式传输，交给流式逻辑处理
+          // If streaming is active, delegate to the streaming logic
           if (isStreamingRef.current) {
             if (useBackendStreamingRenderRef.current) {
               let smartMerged = parsed.map((newMsg, i) => {
@@ -293,14 +293,14 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
               smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
               const result = appendOptimisticMessageIfMissing(prev, smartMerged);
 
-              // FIX: 在 Claude 模式下，需要更新 streamingMessageIndexRef
-              // 这样 onContentDelta 才能知道应该更新哪个 assistant
+              // FIX: In Claude mode, update streamingMessageIndexRef so that
+              // onContentDelta knows which assistant message to update.
               const lastAssistantIdx = findLastAssistantIndex(result);
               if (lastAssistantIdx >= 0) {
                 streamingMessageIndexRef.current = lastAssistantIdx;
 
-                // FIX: 如果有缓存的流式内容（onContentDelta 可能先于 updateMessages 被调用）
-                // 需要立即应用到 assistant 消息上，确保内容不丢失
+                // FIX: If there is buffered streaming content (onContentDelta may fire before updateMessages),
+                // apply it to the assistant message immediately to prevent content loss.
                 if (streamingContentRef.current && result[lastAssistantIdx]?.type === 'assistant') {
                   result[lastAssistantIdx] = patchAssistantForStreaming({
                     ...result[lastAssistantIdx],
@@ -318,16 +318,16 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
               return appendOptimisticMessageIfMissing(prev, parsed);
             }
             // ... (rest of streaming logic)
-            // 由于代码结构原因，这里简化处理，流式传输时直接复用原有逻辑
-            // 为了避免重复代码，这里我们只处理非流式的情况
+            // Simplified handling due to code structure — reuse existing streaming logic.
+            // Only the non-streaming case is handled below to avoid code duplication.
           }
 
-          // 非流式传输情况（或流式还没开始）
+          // Non-streaming case (or streaming hasn't started yet)
           if (!isStreamingRef.current) {
-            // 智能合并：复用旧消息对象以优化性能（配合 App.tsx 中的 WeakMap 缓存）
-            // 如果不是最后一条消息，且 timestamp/type/content 相同，则认为消息未变，复用引用
+            // Smart merge: reuse old message objects for performance (works with WeakMap cache in App.tsx).
+            // If a message is not the last one and its timestamp/type/content are identical, keep the old reference.
             let smartMerged = parsed.map((newMsg, i) => {
-              // 总是更新最后一条消息（可能在流式生成中，或者状态在变）
+              // Always update the last message (it may still be streaming or its status may be changing)
               if (i === parsed.length - 1) return newMsg;
               
               if (i < prev.length) {
@@ -347,9 +347,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
             return appendOptimisticMessageIfMissing(prev, smartMerged);
           }
 
-          // 下面是原有的流式处理逻辑，我们需要保留它
-          // 因为不能在 if (!isStreamingRef.current) 里 return，所以这里需要重复一下或者重构
-          // 为了最小化改动，我将把流式逻辑复制在这里（或者保持原样）
+          // Below is the original streaming logic that must be preserved.
+          // Because we cannot return inside the `if (!isStreamingRef.current)` block above,
+          // the streaming path is duplicated here to minimize structural changes.
           
           if (useBackendStreamingRenderRef.current) {
             let smartMerged = parsed.map((newMsg, i) => {
@@ -370,12 +370,12 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
             smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
             const result = appendOptimisticMessageIfMissing(prev, smartMerged);
 
-            // FIX: 在 Claude 模式下，需要更新 streamingMessageIndexRef
+            // FIX: In Claude mode, update streamingMessageIndexRef
             const lastAssistantIdx = findLastAssistantIndex(result);
             if (lastAssistantIdx >= 0) {
               streamingMessageIndexRef.current = lastAssistantIdx;
 
-              // FIX: 如果有缓存的流式内容，需要立即应用
+              // FIX: If there is buffered streaming content, apply it immediately
               if (streamingContentRef.current && result[lastAssistantIdx]?.type === 'assistant') {
                 result[lastAssistantIdx] = patchAssistantForStreaming({
                   ...result[lastAssistantIdx],
@@ -430,7 +430,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     };
 
     window.updateStatus = (text) => {
-      // 后端创建新会话完成后会发送 updateStatus，解除消息更新抑制
+      // Backend sends updateStatus after creating a new session; clear the message update suppression flag
       if (window.__sessionTransitioning) {
         window.__sessionTransitioning = false;
       }
@@ -445,8 +445,8 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     window.showLoading = (value) => {
       const isLoading = isTruthy(value);
 
-      // FIX: 流式传输期间忽略 loading=false，由 onStreamEnd 统一处理
-      // 必须在发送事件之前检查，避免后端状态与前端不一致
+      // FIX: Ignore loading=false during streaming — onStreamEnd handles it uniformly.
+      // This check must happen before dispatching events to keep backend and frontend state consistent.
       if (!isLoading && isStreamingRef.current) {
         console.log('[Frontend] Ignoring showLoading(false) during streaming');
         return;
@@ -455,16 +455,16 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       // Notify backend about loading state change for tab indicator
       sendBridgeEvent('tab_loading_changed', JSON.stringify({ loading: isLoading }));
 
-      // FIX: 使用闭包捕获当前loading状态，确保状态转换时正确设置时间戳
+      // FIX: Use closure to capture the current loading state, ensuring timestamps are set correctly during transitions
       setLoading((prevLoading) => {
         if (isLoading) {
-          // 如果是从 false -> true 的转换，设置新的时间戳（新的loading周期）
-          // 如果是 true -> true 的转换，保持旧的时间戳（避免重复调用导致计时器重置）
+          // false -> true transition: set a new timestamp (new loading cycle).
+          // true -> true transition: keep the existing timestamp (avoid timer reset on repeated calls).
           if (!prevLoading) {
             setLoadingStartTime(Date.now());
           }
         } else {
-          // loading结束，重置时间戳
+          // Loading ended — reset the timestamp
           setLoadingStartTime(null);
         }
         return isLoading;
@@ -483,13 +483,13 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       setMessages((prev) => [...prev, message]);
     };
 
-    // 历史消息加载完成回调 - 触发 Markdown 重新渲染
-    // 解决历史记录首次加载时 Markdown 不渲染的问题
+    // History load complete callback — triggers Markdown re-rendering
+    // to fix the issue where Markdown doesn't render on first history load.
     window.historyLoadComplete = () => {
-      // 通过递增版本号触发组件重新渲染，避免 O(n) 数组浅拷贝
+      // Trigger a component re-render by updating the last message reference (avoids O(n) shallow copy)
       setMessages((prev) => {
         if (prev.length === 0) return prev;
-        // 更新最后一条消息的引用以触发渲染
+        // Update the last message's reference to trigger rendering
         const updated = [...prev];
         updated[updated.length - 1] = { ...updated[updated.length - 1] };
         return updated;
@@ -526,8 +526,8 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       activeThinkingSegmentIndexRef.current = -1;
       seenToolUseCountRef.current = 0;
 
-      // FIX: 无论是否使用后端流式渲染，都必须重置 streamingMessageIndexRef
-      // 否则第二次提问时会使用第一次的索引，导致回复位置错乱
+      // FIX: Always reset streamingMessageIndexRef regardless of backend streaming mode,
+      // otherwise the second question would reuse the first question's index, causing misplaced responses
       streamingMessageIndexRef.current = -1;
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -563,13 +563,13 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         const currentContent = streamingContentRef.current;
         setMessages((prev) => {
           const newMessages = [...prev];
-          // FIX: 在 Claude 模式下，不使用 getOrCreateStreamingAssistantIndex 查找
-          // 而是直接使用 streamingMessageIndexRef.current，避免找到错误的旧 assistant
+          // FIX: In Claude mode, use streamingMessageIndexRef.current directly instead of
+          // getOrCreateStreamingAssistantIndex, to avoid matching a stale assistant message.
           let idx: number;
           if (useBackendStreamingRenderRef.current) {
             idx = streamingMessageIndexRef.current;
-            // 如果索引还是 -1，说明后端还没有通过 updateMessages 创建 assistant
-            // 这时候需要等待后端创建，暂时不更新
+            // Index is still -1, meaning the backend hasn't created the assistant via updateMessages yet.
+            // Wait for the backend to create it; skip the update for now.
             if (idx < 0) {
               return prev;
             }
@@ -621,13 +621,13 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       const updateMessages = () => {
         setMessages((prev) => {
           const newMessages = [...prev];
-          // FIX: 在 Claude 模式下，不使用 getOrCreateStreamingAssistantIndex 查找
-          // 而是直接使用 streamingMessageIndexRef.current，避免找到错误的旧 assistant
+          // FIX: In Claude mode, use streamingMessageIndexRef.current directly instead of
+          // getOrCreateStreamingAssistantIndex, to avoid matching a stale assistant message.
           let idx: number;
           if (useBackendStreamingRenderRef.current) {
             idx = streamingMessageIndexRef.current;
-            // 如果索引还是 -1，说明后端还没有通过 updateMessages 创建 assistant
-            // 这时候需要等待后端创建，暂时不更新
+            // Index is still -1, meaning the backend hasn't created the assistant via updateMessages yet.
+            // Wait for the backend to create it; skip the update for now.
             if (idx < 0) {
               return prev;
             }
@@ -714,18 +714,18 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       setStreamingActive(false);
     };
 
-    // 权限被拒绝回调 - 标记未完成的工具调用为"中断"状态
+    // Permission denied callback — marks incomplete tool calls as "interrupted"
     window.onPermissionDenied = () => {
       if (!window.__deniedToolIds) {
         window.__deniedToolIds = new Set<string>();
       }
 
-      // 收集需要标记为拒绝的工具 ID
+      // Collect tool IDs that need to be marked as denied
       const idsToAdd: string[] = [];
 
       setMessages((currentMessages) => {
         try {
-          // 从后向前遍历，找到最后一条包含未完成工具调用的消息
+          // Traverse from the end to find the last message containing incomplete tool calls
           for (let i = currentMessages.length - 1; i >= 0; i--) {
             const msg = currentMessages[i];
             if (msg.type === 'assistant' && msg.raw) {
@@ -738,7 +738,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
                 ) as Array<{ type: string; id: string; name?: string }>;
 
                 if (toolUses.length > 0) {
-                  // 检查这些工具调用是否已经有结果
+                  // Check whether these tool calls already have results
                   const nextMsg = currentMessages[i + 1];
                   const existingResultIds = new Set<string>();
 
@@ -754,7 +754,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
                     }
                   }
 
-                  // 收集没有结果的工具调用 ID
+                  // Collect tool call IDs that have no corresponding result
                   for (const tu of toolUses) {
                     if (!existingResultIds.has(tu.id)) {
                       idsToAdd.push(tu.id);
@@ -770,11 +770,11 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           console.error('[Frontend] Error in onPermissionDenied:', e);
         }
 
-        // 返回新数组引用以触发重新渲染
+        // Return a new array reference to trigger a re-render
         return [...currentMessages];
       });
 
-      // 在 updater 外部修改全局状态，避免并发模式下的副作用问题
+      // Mutate global state outside the updater to avoid side-effect issues in concurrent mode
       for (const id of idsToAdd) {
         window.__deniedToolIds!.add(id);
       }
@@ -851,13 +851,13 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           let used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
           const max = typeof data.maxTokens === 'number' ? data.maxTokens : (typeof data.limit === 'number' ? data.limit : undefined);
 
-          // 数据校验：如果 usedTokens 超过 maxTokens 的 2 倍，说明数据可能有问题
-          // 记录警告但仍然显示（不强制截断，以便用户能看到异常）
+          // Data validation: if usedTokens exceeds 2x maxTokens, the data may be incorrect.
+          // Log a warning but still display the value (don't clamp, so users can see the anomaly).
           if (used !== undefined && max !== undefined && used > max * 2) {
             console.warn('[Frontend] Usage data may be incorrect: used=' + used + ', max=' + max);
           }
 
-          // 百分比限制在 0-100 之间
+          // Clamp percentage to the 0-100 range
           const safePercentage = Math.max(0, Math.min(100, data.percentage));
 
           setUsagePercentage(safePercentage);

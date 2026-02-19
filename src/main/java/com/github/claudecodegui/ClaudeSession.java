@@ -5,6 +5,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
+import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
@@ -1119,6 +1121,10 @@ public class ClaudeSession {
                 }
 
                 LOG.debug("Total messages in session: " + state.getMessages().size());
+
+                // Extract token usage from the last assistant message for status bar display
+                extractAndDisplayTokenUsage(serverMessages);
+
                 notifyMessageUpdate();
             } catch (Exception e) {
                 LOG.error("Error loading session: " + e.getMessage(), e);
@@ -1128,6 +1134,24 @@ public class ClaudeSession {
                 updateState();
             }
         });
+    }
+
+    /**
+     * Extract token usage from the last assistant message in loaded history
+     * and update the status bar.
+     */
+    private void extractAndDisplayTokenUsage(List<JsonObject> serverMessages) {
+        try {
+            JsonObject lastUsage = ClaudeMessageHandler.findLastUsageFromRawMessages(serverMessages);
+            if (lastUsage == null) return;
+
+            int usedTokens = ClaudeMessageHandler.extractUsedTokens(lastUsage, state.getProvider());
+            int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+            ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
+            LOG.debug("Restored token usage from history: " + usedTokens + " / " + maxTokens);
+        } catch (Exception e) {
+            LOG.warn("Failed to extract token usage from history: " + e.getMessage());
+        }
     }
 
     /** Notify callback of message updates. */

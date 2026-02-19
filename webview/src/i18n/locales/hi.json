@@ -80,7 +80,7 @@
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
     "sdkStatusLoading": "Checking SDK status...",
-    "openSourceBanner": "यह प्रोजेक्ट हमेशा 100% ओपन सोर्स रहेगा। कृपया निश्चिंत होकर उपयोग करें!",
+    "openSourceBanner": "यह प्रोजेक्ट 100% ओपन सोर्स है (नकली प्रोजेक्ट से सावधान रहें)",
     "goInstallSdk": "इंस्टॉल करने जाएं",
     "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
     "clearCommandDescription": "बातचीत इतिहास साफ़ करें और नया सत्र शुरू करें",
@@ -171,6 +171,12 @@
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex"
+    },
+    "pluginModels": {
+      "title": "कस्टम मॉडल",
+      "description": "यहाँ जोड़े गए कस्टम मॉडल सभी प्रदाताओं के अंतर्गत दिखाई देंगे, मॉडल चयन सूची में सबसे ऊपर प्रदर्शित होंगे",
+      "dialogTitle": "कस्टम मॉडल प्रबंधन",
+      "manage": "मॉडल प्रबंधन"
     },
     "dependencies": "SDK निर्भरताएं",
     "dependenciesDesc": "AI SDK निर्भरताओं की इंस्टॉलेशन और अपडेट प्रबंधित करें",
@@ -958,6 +964,7 @@
     }
   },
   "models": {
+    "addModel": "मॉडल जोड़ें",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

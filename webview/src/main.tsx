@@ -267,16 +267,16 @@ function applyLanguageConfig(config: { language: string; ideaLocale?: string }) 
     return;
   }
 
-  // 验证语言代码是否支持
+  // Validate that the language code is supported
   const supportedLanguages = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja', 'ru'];
   const targetLanguage = supportedLanguages.includes(language) ? language : 'en';
 
   console.log('[Main] Applying IDEA language config:', config, 'target language:', targetLanguage);
 
-  // 切换 i18n 语言
+  // Switch i18n language
   i18n.changeLanguage(targetLanguage)
     .then(() => {
-      // 保存到 localStorage，以便下次启动时使用
+      // Persist to localStorage so it's available on next launch
       localStorage.setItem('language', targetLanguage);
       console.log('[Main] Language changed successfully to:', targetLanguage);
     })
@@ -285,17 +285,17 @@ function applyLanguageConfig(config: { language: string; ideaLocale?: string }) 
     });
 }
 
-// 注册 applyIdeaLanguageConfig 函数
+// Register the applyIdeaLanguageConfig function
 window.applyIdeaLanguageConfig = applyLanguageConfig;
 
-// 检查是否有待处理的语言配置（Java 端可能先于 JS 执行）
+// Check for pending language config (Java side may execute before JS)
 if (window.__pendingLanguageConfig) {
   console.log('[Main] Found pending language config, applying...');
   applyLanguageConfig(window.__pendingLanguageConfig);
   delete window.__pendingLanguageConfig;
 }
 
-// 预注册 updateSlashCommands，避免后端调用早于 React 初始化
+// Pre-register updateSlashCommands to handle backend calls that arrive before React initializes
 if (typeof window !== 'undefined' && !window.updateSlashCommands) {
   console.log('[Main] Pre-registering updateSlashCommands placeholder');
   window.updateSlashCommands = (json: string) => {
@@ -304,8 +304,8 @@ if (typeof window !== 'undefined' && !window.updateSlashCommands) {
   };
 }
 
-// 预注册 setSessionId，避免后端调用早于 React 初始化
-// 这是 rewind 功能所需的会话 ID
+// Pre-register setSessionId to handle backend calls that arrive before React initializes.
+// This stores the session ID required by the rewind feature.
 if (typeof window !== 'undefined' && !window.setSessionId) {
   console.log('[Main] Pre-registering setSessionId placeholder');
   window.setSessionId = (sessionId: string) => {
@@ -314,7 +314,7 @@ if (typeof window !== 'undefined' && !window.setSessionId) {
   };
 }
 
-// 预注册 updateDependencyStatus，避免后端返回状态早于 React 初始化
+// Pre-register updateDependencyStatus to handle backend status responses that arrive before React initializes
 if (typeof window !== 'undefined' && !window.updateDependencyStatus) {
   console.log('[Main] Pre-registering updateDependencyStatus placeholder');
   window.updateDependencyStatus = (json: string) => {
@@ -323,7 +323,7 @@ if (typeof window !== 'undefined' && !window.updateDependencyStatus) {
   };
 }
 
-// 预注册 dependencyUpdateAvailable，避免后端检查更新早于 Settings/React 初始化
+// Pre-register dependencyUpdateAvailable to handle backend update checks that arrive before Settings/React initializes
 if (typeof window !== 'undefined' && !window.dependencyUpdateAvailable) {
   console.log('[Main] Pre-registering dependencyUpdateAvailable placeholder');
   window.dependencyUpdateAvailable = (json: string) => {
@@ -332,7 +332,7 @@ if (typeof window !== 'undefined' && !window.dependencyUpdateAvailable) {
   };
 }
 
-// 预注册 updateStreamingEnabled，避免后端返回状态早于 React 初始化
+// Pre-register updateStreamingEnabled to handle backend status responses that arrive before React initializes
 if (typeof window !== 'undefined' && !window.updateStreamingEnabled) {
   console.log('[Main] Pre-registering updateStreamingEnabled placeholder');
   window.updateStreamingEnabled = (json: string) => {
@@ -341,7 +341,7 @@ if (typeof window !== 'undefined' && !window.updateStreamingEnabled) {
   };
 }
 
-// 预注册 updateSendShortcut，避免后端返回状态早于 React 初始化
+// Pre-register updateSendShortcut to handle backend status responses that arrive before React initializes
 if (typeof window !== 'undefined' && !window.updateSendShortcut) {
   console.log('[Main] Pre-registering updateSendShortcut placeholder');
   window.updateSendShortcut = (json: string) => {
@@ -350,7 +350,7 @@ if (typeof window !== 'undefined' && !window.updateSendShortcut) {
   };
 }
 
-// 预注册 updateUsageStatistics，避免后端返回状态早于 Settings/UsageStatisticsSection 初始化
+// Pre-register updateUsageStatistics to handle backend status responses that arrive before Settings/UsageStatisticsSection initializes
 if (typeof window !== 'undefined' && !window.updateUsageStatistics) {
   console.log('[Main] Pre-registering updateUsageStatistics placeholder');
   window.updateUsageStatistics = (json: string) => {
@@ -386,7 +386,7 @@ if (typeof window !== 'undefined' && !window.showPlanApprovalDialog) {
   };
 }
 
-// 渲染 React 应用
+// Render the React application
 ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
   <ErrorBoundary>
     <App />
@@ -394,7 +394,7 @@ ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
 );
 
 /**
- * 等待 sendToJava 桥接函数可用
+ * Wait for the sendToJava bridge function to become available
  */
 setupScaleRecovery();
 
@@ -416,7 +416,7 @@ function waitForBridge(callback: () => void, maxAttempts = 50, interval = 100) {
   check();
 }
 
-// 等待桥接可用后，初始化斜杠命令
+// Once the bridge is available, initialize slash commands
 waitForBridge(() => {
   console.log('[Main] Bridge ready, setting up slash commands');
   setupSlashCommandsCallback();
