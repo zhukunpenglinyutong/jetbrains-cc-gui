@@ -44,6 +44,9 @@ import { ChatHeader } from './components/ChatHeader';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageList } from './components/MessageList';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
+import ChangelogDialog from './components/ChangelogDialog';
+import { CHANGELOG_DATA } from './version/changelog';
+import { APP_VERSION } from './version/version';
 import type {
   ClaudeContentBlock,
   ClaudeMessage,
@@ -182,6 +185,17 @@ const App = () => {
   const [processedFiles, setProcessedFiles] = useState<string[]>([]);
   // Base message index (for Keep All feature, only counts changes after this index)
   const [baseMessageIndex, setBaseMessageIndex] = useState(0);
+
+  // Changelog dialog state (show once per version update)
+  const LAST_SEEN_VERSION_KEY = 'lastSeenChangelogVersion';
+  const [showChangelogDialog, setShowChangelogDialog] = useState(() => {
+    const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY);
+    return lastSeen !== APP_VERSION;
+  });
+  const handleCloseChangelog = useCallback(() => {
+    localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
+    setShowChangelogDialog(false);
+  }, []);
 
   // SDK installation status (used to prevent sending messages when SDK is not installed)
   const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
@@ -1668,6 +1682,12 @@ const App = () => {
         isLoading={isRewinding}
         onConfirm={handleRewindConfirm}
         onCancel={handleRewindCancel}
+      />
+
+      <ChangelogDialog
+        isOpen={showChangelogDialog}
+        onClose={handleCloseChangelog}
+        entries={CHANGELOG_DATA}
       />
     </>
   );

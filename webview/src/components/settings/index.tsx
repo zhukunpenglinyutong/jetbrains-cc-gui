@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProviderConfig, CodexProviderConfig } from '../../types/provider';
+import type { ProviderConfig, CodexProviderConfig, CodexCustomModel } from '../../types/provider';
 import type { AgentConfig } from '../../types/agent';
 import type { PromptConfig } from '../../types/prompt';
 import { type ClaudeConfig } from './ConfigInfoDisplay';
@@ -121,6 +121,7 @@ const SettingsView = ({
     confirmDeleteProvider,
     cancelDeleteProvider,
     syncActiveProviderModelMapping,
+    syncActiveProviderCustomModels,
     setLoading,
   } = useProviderManagement({
     onError: (msg) => showAlert('error', t('common.error'), msg),
@@ -759,6 +760,7 @@ const SettingsView = ({
     apiKey: string;
     apiUrl: string;
     jsonConfig: string;
+    customModels?: CodexCustomModel[];
   }) => {
     if (!data.providerName) {
       showAlert('warning', t('common.warning'), t('toast.pleaseEnterProviderName'));
@@ -774,11 +776,12 @@ const SettingsView = ({
       return;
     }
 
-    const updates = {
+    const updates: Record<string, any> = {
       name: data.providerName,
       remark: data.remark,
       websiteUrl: null, // Clear potentially existing legacy field to avoid display confusion
       settingsConfig: parsedConfig,
+      customModels: data.customModels,
     };
 
     const isAdding = !providerDialog.provider;
@@ -810,10 +813,13 @@ const SettingsView = ({
 
       // If this is the currently active provider, immediately re-apply the configuration after update
       if (isActive) {
-        console.log('[SettingsView] Re-applying active provider config:', providerId);
         syncActiveProviderModelMapping({
           ...currentProvider,
           settingsConfig: parsedConfig,
+        });
+        syncActiveProviderCustomModels({
+          ...currentProvider,
+          customModels: data.customModels,
         });
         // Use setTimeout for a slight delay to ensure update_provider finishes first
         // Although usually unnecessary in a single-threaded model, added for safety

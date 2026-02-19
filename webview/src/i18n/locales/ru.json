@@ -371,6 +371,8 @@
         "opusModel": "Модель Opus по умолчанию",
         "opusModelPlaceholder": "например, claude-opus-4-6",
         "modelMappingHint": "Необязательно: укажите модели Claude по умолчанию. Оставьте пустым для системных значений.",
+        "customModels": "Пользовательские модели",
+        "customModelsHint": "Добавьте дополнительные модели, поддерживаемые этим провайдером. Пользовательские модели будут отображаться вверху списка выбора моделей",
         "jsonConfig": "JSON-конфигурация",
         "jsonConfigDescription": "Настройте полное содержимое settings.json, поддерживаются все поля (model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId и т.д.)",
         "jsonError": "Некорректный формат JSON",
@@ -1171,5 +1173,10 @@
     "uploadedAttachments": "Вложения загружены",
     "emptyMessage": "Пустое сообщение",
     "attachment": "Вложение"
+  },
+  "changelog": {
+    "title": "Что нового",
+    "close": "Понятно",
+    "page": "{{current}} / {{total}}"
   }
 }

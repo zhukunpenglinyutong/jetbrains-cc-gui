@@ -12,6 +12,8 @@ export const STORAGE_KEYS = {
   CODEX_CUSTOM_MODELS: 'codex-custom-models',
   /** Claude model mapping configuration */
   CLAUDE_MODEL_MAPPING: 'claude-model-mapping',
+  /** Custom Claude model list */
+  CLAUDE_CUSTOM_MODELS: 'claude-custom-models',
 } as const;
 
 /**
@@ -81,6 +83,8 @@ export interface ProviderConfig {
   isActive?: boolean;
   source?: 'cc-switch' | string;
   isLocalProvider?: boolean;
+  /** Custom model list (displayed before built-in models in the selector) */
+  customModels?: CodexCustomModel[];
   settingsConfig?: {
     env?: {
       ANTHROPIC_AUTH_TOKEN?: string;

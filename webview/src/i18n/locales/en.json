@@ -361,6 +361,8 @@
         "opusModel": "Opus Default Model",
         "opusModelPlaceholder": "e.g., claude-opus-4-6",
         "modelMappingHint": "Optional: Specify default Claude models to use. Leave empty for system defaults.",
+        "customModels": "Custom Models",
+        "customModelsHint": "Add extra models supported by this provider. Custom models will appear at the top of the model selector list",
         "jsonConfig": "JSON Configuration",
         "jsonConfigDescription": "Configure complete settings.json content here, supporting all fields (e.g., model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.)",
         "jsonError": "Invalid JSON format",
@@ -1161,5 +1163,10 @@
     "uploadedAttachments": "Uploaded attachment(s)",
     "emptyMessage": "Empty message",
     "attachment": "Attachment"
+  },
+  "changelog": {
+    "title": "What's New",
+    "close": "Got it",
+    "page": "{{current}} / {{total}}"
   }
 }
