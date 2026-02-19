@@ -43,6 +43,7 @@ import { extractMarkdownContent } from './utils/copyUtils';
 import { ChatHeader } from './components/ChatHeader';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageList } from './components/MessageList';
+import { MessageAnchorRail } from './components/MessageAnchorRail';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
 import ChangelogDialog from './components/ChangelogDialog';
 import { CHANGELOG_DATA } from './version/changelog';
@@ -126,6 +127,16 @@ const App = () => {
     loading,
     streamingActive,
   });
+
+  // Message anchor node registry for anchor rail navigation
+  const messageNodeMapRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const handleMessageNodeRef = useCallback((id: string, node: HTMLDivElement | null) => {
+    if (node) {
+      messageNodeMapRef.current.set(id, node);
+    } else {
+      messageNodeMapRef.current.delete(id);
+    }
+  }, []);
 
   // Streaming message state and helpers
   const {
@@ -1510,29 +1521,37 @@ const App = () => {
         />
       ) : currentView === 'chat' ? (
         <>
-          <div className="messages-container" ref={messagesContainerRef}>
-          {messages.length === 0 && (
-            <WelcomeScreen
-              currentProvider={currentProvider}
-              t={t}
-              onProviderChange={handleProviderSelect}
+          <div className="messages-shell">
+            <MessageAnchorRail
+              messages={mergedMessages}
+              containerRef={messagesContainerRef}
+              messageNodeMap={messageNodeMapRef}
             />
-          )}
+            <div className="messages-container" ref={messagesContainerRef}>
+              {messages.length === 0 && (
+                <WelcomeScreen
+                  currentProvider={currentProvider}
+                  t={t}
+                  onProviderChange={handleProviderSelect}
+                />
+              )}
 
-          <MessageList
-            messages={mergedMessages}
-            streamingActive={streamingActive}
-            isThinking={isThinking}
-            loading={loading}
-            loadingStartTime={loadingStartTime}
-            t={t}
-            getMessageText={getMessageText}
-            getContentBlocks={getContentBlocks}
-            findToolResult={findToolResult}
-            extractMarkdownContent={extractMarkdownContent}
-            messagesEndRef={messagesEndRef}
-          />
-        </div>
+              <MessageList
+                messages={mergedMessages}
+                streamingActive={streamingActive}
+                isThinking={isThinking}
+                loading={loading}
+                loadingStartTime={loadingStartTime}
+                t={t}
+                getMessageText={getMessageText}
+                getContentBlocks={getContentBlocks}
+                findToolResult={findToolResult}
+                extractMarkdownContent={extractMarkdownContent}
+                messagesEndRef={messagesEndRef}
+                onMessageNodeRef={handleMessageNodeRef}
+              />
+            </div>
+          </div>
 
         {/* Scroll control button */}
         <ScrollControl containerRef={messagesContainerRef} inputAreaRef={inputAreaRef} />

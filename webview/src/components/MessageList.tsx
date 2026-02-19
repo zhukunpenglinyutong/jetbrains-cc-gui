@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
+import { getMessageKey } from '../utils/messageUtils';
 import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
 
@@ -16,6 +17,7 @@ interface MessageListProps {
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
   extractMarkdownContent: (message: ClaudeMessage) => string;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  onMessageNodeRef?: (id: string, node: HTMLDivElement | null) => void;
 }
 
 export const MessageList = memo(function MessageList({
@@ -30,20 +32,19 @@ export const MessageList = memo(function MessageList({
   findToolResult,
   extractMarkdownContent,
   messagesEndRef,
+  onMessageNodeRef,
 }: MessageListProps) {
   return (
     <>
       {messages.map((message, messageIndex) => {
-        // Use stable key: prefer raw.uuid > type-timestamp > fallback to index
-        const rawObj = typeof message.raw === 'object' ? message.raw as Record<string, unknown> : null;
-        const messageKey = rawObj?.uuid as string
-          || (message.timestamp ? `${message.type}-${message.timestamp}` : `${message.type}-${messageIndex}`);
+        const messageKey = getMessageKey(message, messageIndex);
 
         return (
           <MessageItem
             key={messageKey}
             message={message}
             messageIndex={messageIndex}
+            messageKey={messageKey}
             isLast={messageIndex === messages.length - 1}
             streamingActive={streamingActive}
             isThinking={isThinking}
@@ -52,6 +53,7 @@ export const MessageList = memo(function MessageList({
             getContentBlocks={getContentBlocks}
             findToolResult={findToolResult}
             extractMarkdownContent={extractMarkdownContent}
+            onNodeRef={onMessageNodeRef}
           />
         );
       })}
