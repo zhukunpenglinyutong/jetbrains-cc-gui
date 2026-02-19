@@ -2725,7 +2725,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             if (window == null) {
                 // If no window instance exists, open the tool window automatically
-                LOG.info("窗口实例不存在，自动打开工具窗口: " + project.getName());
+                LOG.info("Window instance not found, opening tool window automatically: " + project.getName());
                 ApplicationManager.getApplication().invokeLater(() -> {
                     try {
                         ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
@@ -2974,7 +2974,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             try {
                 if (session != null) session.interrupt();
             } catch (Exception e) {
-                LOG.warn("清理会话失败: " + e.getMessage());
+                LOG.warn("Failed to clean up session: " + e.getMessage());
             }
 
             // Clean up all active Node.js child processes

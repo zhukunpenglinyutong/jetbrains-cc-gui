@@ -14,6 +14,17 @@ interface CustomModelDialogProps {
 }
 
 /**
+ * Sanitize user input by stripping control characters and collapsing whitespace.
+ * React JSX auto-escapes HTML entities, but this provides defense-in-depth
+ * for values persisted to localStorage which may be consumed by non-React code.
+ */
+function sanitizeInput(value: string): string {
+  return value
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+/**
  * Custom Model Management Dialog
  * Full CRUD for plugin-level custom models in a modal dialog
  */
@@ -94,9 +105,9 @@ export function CustomModelDialog({
       return;
     }
     const newModel: CodexCustomModel = {
-      id: newModelId.trim(),
-      label: newModelLabel.trim() || newModelId.trim(),
-      description: newModelDesc.trim() || undefined,
+      id: sanitizeInput(newModelId).trim(),
+      label: sanitizeInput(newModelLabel).trim() || sanitizeInput(newModelId).trim(),
+      description: sanitizeInput(newModelDesc).trim() || undefined,
     };
     onModelsChange([...models, newModel]);
     setNewModelId('');
@@ -116,9 +127,9 @@ export function CustomModelDialog({
     const updatedModels = models.map(m => {
       if (m.id === editingModel.id) {
         return {
-          id: newModelId.trim(),
-          label: newModelLabel.trim() || newModelId.trim(),
-          description: newModelDesc.trim() || undefined,
+          id: sanitizeInput(newModelId).trim(),
+          label: sanitizeInput(newModelLabel).trim() || sanitizeInput(newModelId).trim(),
+          description: sanitizeInput(newModelDesc).trim() || undefined,
         };
       }
       return m;
@@ -170,14 +181,14 @@ export function CustomModelDialog({
           <p className="dialog-desc">{t('settings.pluginModels.description')}</p>
 
           {/* Model list */}
-          <div className={styles.modelList}>
+          <div className={styles.modelList} role="list" aria-label={t('settings.pluginModels.dialogTitle')}>
             {models.length === 0 && !isAdding ? (
-              <div className={styles.emptyState}>
+              <div className={styles.emptyState} role="status">
                 {t('settings.codexProvider.dialog.noCustomModels')}
               </div>
             ) : (
               models.map((model) => (
-                <div key={model.id} className={styles.modelItem}>
+                <div key={model.id} className={styles.modelItem} role="listitem">
                   <div className={styles.modelItemContent}>
                     <div className={styles.modelItemId}>{model.id}</div>
                     {model.label !== model.id && (
@@ -193,18 +204,22 @@ export function CustomModelDialog({
                   </div>
                   <div className={styles.modelItemActions}>
                     <button
+                      type="button"
                       className={styles.iconBtn}
                       onClick={() => handleEditModel(model)}
                       title={t('common.edit')}
+                      aria-label={`${t('common.edit')} ${model.id}`}
                     >
-                      <span className="codicon codicon-edit" />
+                      <span className="codicon codicon-edit" aria-hidden="true" />
                     </button>
                     <button
+                      type="button"
                       className={styles.iconBtnDanger}
                       onClick={() => handleRemoveModel(model.id)}
                       title={t('common.delete')}
+                      aria-label={`${t('common.delete')} ${model.id}`}
                     >
-                      <span className="codicon codicon-trash" />
+                      <span className="codicon codicon-trash" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -214,9 +229,13 @@ export function CustomModelDialog({
 
           {/* Add/edit form */}
           {isAdding ? (
-            <div className={styles.addEditForm}>
+            <div className={styles.addEditForm} role="form" aria-label={editingModel ? t('common.edit') : t('common.add')}>
               <div className={styles.formRow}>
+                <label htmlFor="model-id-input" className="sr-only">
+                  {t('settings.codexProvider.dialog.modelIdPlaceholder')}
+                </label>
                 <input
+                  id="model-id-input"
                   type="text"
                   className={`form-input ${validationError ? 'input-error' : ''}`}
                   placeholder={t('settings.codexProvider.dialog.modelIdPlaceholder')}
@@ -224,8 +243,14 @@ export function CustomModelDialog({
                   onChange={(e) => { setNewModelId(e.target.value); if (validationError) setValidationError(null); }}
                   style={{ flex: 1 }}
                   autoFocus
+                  aria-invalid={!!validationError}
+                  aria-describedby={validationError ? 'model-id-error' : undefined}
                 />
+                <label htmlFor="model-label-input" className="sr-only">
+                  {t('settings.codexProvider.dialog.modelLabelPlaceholder')}
+                </label>
                 <input
+                  id="model-label-input"
                   type="text"
                   className="form-input"
                   placeholder={t('settings.codexProvider.dialog.modelLabelPlaceholder')}
@@ -235,11 +260,15 @@ export function CustomModelDialog({
                 />
               </div>
               {validationError && (
-                <div className={styles.validationError}>
+                <div id="model-id-error" className={styles.validationError} role="alert">
                   {validationError}
                 </div>
               )}
+              <label htmlFor="model-desc-input" className="sr-only">
+                {t('settings.codexProvider.dialog.modelDescPlaceholder')}
+              </label>
               <input
+                id="model-desc-input"
                 type="text"
                 className="form-input"
                 placeholder={t('settings.codexProvider.dialog.modelDescPlaceholder')}
@@ -262,10 +291,12 @@ export function CustomModelDialog({
             </div>
           ) : (
             <button
+              type="button"
               className={`btn btn-secondary btn-sm ${styles.addBtn}`}
               onClick={() => setIsAdding(true)}
+              aria-label={t('settings.codexProvider.dialog.addModel')}
             >
-              <span className="codicon codicon-add" style={{ marginRight: '4px' }} />
+              <span className="codicon codicon-add" aria-hidden="true" style={{ marginRight: '4px' }} />
               {t('settings.codexProvider.dialog.addModel')}
             </button>
           )}

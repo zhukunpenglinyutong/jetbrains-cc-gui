@@ -355,6 +355,11 @@ public class SettingsHandler extends BaseMessageHandler {
             // Extract the latest usage information from the current session
             List<ClaudeSession.Message> messages = session.getMessages();
             JsonObject lastUsage = ClaudeMessageHandler.findLastUsageFromSessionMessages(messages);
+            if (lastUsage == null) {
+                // No usage data available yet — send update with zero used tokens
+                sendUsageUpdate(0, newMaxTokens);
+                return;
+            }
             int usedTokens = ClaudeMessageHandler.extractUsedTokens(lastUsage, context.getCurrentProvider());
 
             // Send update

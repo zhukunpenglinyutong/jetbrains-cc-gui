@@ -364,11 +364,15 @@ function truncateErrorContent(content, maxLen = 1000) {
 
 /**
  * Emit [USAGE] tag for Java-side token tracking.
+ * NOTE: The console.log below is intentional IPC — the Java backend parses
+ * stdout lines starting with "[USAGE]" to extract token metrics.
+ * This follows the same pattern used by other IPC tags (e.g. [TOOL_RESULT]).
  */
 function emitUsageTag(msg) {
   if (msg.type === 'assistant' && msg.message?.usage) {
     const { input_tokens = 0, output_tokens = 0,
             cache_creation_input_tokens = 0, cache_read_input_tokens = 0 } = msg.message.usage;
+    // Intentional stdout IPC — parsed by Java backend (see ClaudeMessageHandler.parseUsageTag)
     console.log('[USAGE]', JSON.stringify({
       input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens
     }));

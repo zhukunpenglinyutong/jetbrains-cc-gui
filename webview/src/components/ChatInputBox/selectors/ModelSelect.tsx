@@ -230,13 +230,12 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
           ))}
           {onAddModel && (
             <>
-              <div style={{ height: '1px', background: 'var(--dropdown-border)', margin: '4px 0' }} />
+              <div className="selector-divider" />
               <div
-                className="selector-option"
+                className="selector-option selector-option-add"
                 onClick={() => { onAddModel(); setIsOpen(false); }}
-                style={{ opacity: 0.8 }}
               >
-                <span className="codicon codicon-add" style={{ fontSize: 14, width: 16 }} />
+                <span className="codicon codicon-add selector-add-icon" />
                 <span>{t('models.addModel')}</span>
               </div>
             </>

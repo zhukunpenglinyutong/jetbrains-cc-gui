@@ -78,6 +78,7 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
         });
       }
     }
+    // Guard: also prevents division by zero in the position calculation below
     if (userMessages.length <= 1) return [];
     // Distribute positions evenly between 4% and 96%
     return userMessages.map((item, idx) => ({
