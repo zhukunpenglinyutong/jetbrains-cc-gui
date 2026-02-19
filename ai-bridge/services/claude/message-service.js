@@ -362,6 +362,19 @@ function truncateErrorContent(content, maxLen = 1000) {
   return content.substring(0, maxLen) + `... [truncated, total ${content.length} chars]`;
 }
 
+/**
+ * Emit [USAGE] tag for Java-side token tracking.
+ */
+function emitUsageTag(msg) {
+  if (msg.type === 'assistant' && msg.message?.usage) {
+    const { input_tokens = 0, output_tokens = 0,
+            cache_creation_input_tokens = 0, cache_read_input_tokens = 0 } = msg.message.usage;
+    console.log('[USAGE]', JSON.stringify({
+      input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens
+    }));
+  }
+}
+
 const MAX_TOOL_RESULT_CONTENT_CHARS = 20000;
 
 /**
@@ -888,6 +901,9 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
           }
         }
       }
+
+      // Emit usage data for Java-side token tracking
+      emitUsageTag(msg);
 
       // Output tool call results in real-time (tool_result in user messages)
       if (msg.type === 'user') {
@@ -1594,6 +1610,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	          }
 	    	        }
 	    	      }
+
+	    	      // Emit usage data for Java-side token tracking
+	    	      emitUsageTag(msg);
 
 	    	      // Output tool call results in real-time (tool_result in user messages)
 	    	      if (msg.type === 'user') {
