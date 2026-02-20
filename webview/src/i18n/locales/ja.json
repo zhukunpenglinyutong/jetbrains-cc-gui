@@ -907,6 +907,7 @@
     "description": "説明",
     "noDescription": "説明なし",
     "noSkills": "スキルなし",
+    "noMatchingSkills": "一致するスキルが見つかりません",
     "importHint": "+ボタンをクリックしてスキルファイルまたはフォルダーをインポート",
     "deleteTitle": "スキルを削除",
     "deleteMessage": "{{scope}}スキル\"{{name}}\"を削除してもよろしいですか?\n\nこの操作は元に戻せません。",

@@ -909,6 +909,7 @@
     "description": "描述",
     "noDescription": "暂无描述",
     "noSkills": "暂无 Skills",
+    "noMatchingSkills": "未找到匹配的 Skills",
     "importHint": "点击 + 按钮导入 Skill 文件或文件夹",
     "deleteTitle": "删除 Skill",
     "deleteMessage": "确定要删除{{scope}} Skill \"{{name}}\" 吗？\n\n此操作无法撤销。",

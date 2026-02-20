@@ -370,11 +370,11 @@ export function SkillsSettingsSection() {
               <div className="dropdown-menu">
                 <div className="dropdown-item" onClick={() => handleImport('global')}>
                   <span className="codicon codicon-globe"></span>
-                  导入到全局
+                  {t('skills.importGlobalSkill')}
                 </div>
                 <div className="dropdown-item" onClick={() => handleImport('local')}>
                   <span className="codicon codicon-desktop-download"></span>
-                  导入到本项目
+                  {t('skills.importLocalSkill')}
                 </div>
               </div>
             )}
@@ -473,7 +473,7 @@ export function SkillsSettingsSection() {
         {filteredSkills.length === 0 && !loading && (
           <div className="empty-state">
             <span className="codicon codicon-extensions"></span>
-            <p>未找到匹配的 Skills</p>
+            <p>{t('skills.noMatchingSkills')}</p>
             <p className="hint">{t('skills.importHint')}</p>
           </div>
         )}

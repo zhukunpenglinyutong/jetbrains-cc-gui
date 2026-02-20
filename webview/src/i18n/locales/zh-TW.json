@@ -907,6 +907,7 @@
     "description": "描述",
     "noDescription": "暫無描述",
     "noSkills": "No Skills",
+    "noMatchingSkills": "未找到匹配的技能",
     "importHint": "Click + button to import Skill file or folder",
     "deleteTitle": "Delete Skill",
     "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
