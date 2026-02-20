@@ -526,6 +526,7 @@
     "messageCount": "{{count}} 条消息",
     "searchPlaceholder": "搜索会话标题...",
     "noSearchResults": "未找到匹配的会话",
+    "tryOtherKeywords": "尝试其他搜索关键词",
     "deepSearchTooltip": "深度搜索（清空缓存后重新加载）",
     "editTitle": "编辑标题",
     "saveTitleButton": "保存",

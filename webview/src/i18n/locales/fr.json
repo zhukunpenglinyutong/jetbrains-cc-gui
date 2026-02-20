@@ -519,6 +519,7 @@
     "messageCount": "{{count}} messages",
     "searchPlaceholder": "Rechercher titre de session...",
     "noSearchResults": "Aucune session correspondante trouvée",
+    "tryOtherKeywords": "Essayez d'autres mots-clés de recherche",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "Modifier le titre",
     "saveTitleButton": "Enregistrer",

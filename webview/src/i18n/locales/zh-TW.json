@@ -524,6 +524,7 @@
     "messageCount": "{{count}} 條訊息",
     "searchPlaceholder": "搜尋會話標題...",
     "noSearchResults": "未找到相符的會話",
+    "tryOtherKeywords": "嘗試其他搜尋關鍵詞",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "編輯標題",
     "saveTitleButton": "儲存",

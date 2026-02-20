@@ -519,6 +519,7 @@
     "messageCount": "{{count}} संदेश",
     "searchPlaceholder": "सत्र शीर्षक खोजें...",
     "noSearchResults": "कोई मिलान सत्र नहीं मिला",
+    "tryOtherKeywords": "अन्य खोज कीवर्ड आज़माएं",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "शीर्षक संपादित करें",
     "saveTitleButton": "सहेजें",

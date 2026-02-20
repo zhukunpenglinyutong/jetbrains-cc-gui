@@ -519,6 +519,7 @@
     "messageCount": "{{count}} mensajes",
     "searchPlaceholder": "Buscar título de sesión...",
     "noSearchResults": "No se encontraron sesiones coincidentes",
+    "tryOtherKeywords": "Intente con otras palabras clave de búsqueda",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "Editar título",
     "saveTitleButton": "Guardar",

@@ -524,6 +524,7 @@
     "messageCount": "{{count}}メッセージ",
     "searchPlaceholder": "セッションタイトルを検索...",
     "noSearchResults": "一致するセッションが見つかりません",
+    "tryOtherKeywords": "他の検索キーワードを試してください",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "タイトルを編集",
     "saveTitleButton": "保存",

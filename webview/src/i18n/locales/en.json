@@ -521,6 +521,7 @@
     "messageCount": "{{count}} messages",
     "searchPlaceholder": "Search session titles...",
     "noSearchResults": "No matching sessions found",
+    "tryOtherKeywords": "Try other search keywords",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "Edit title",
     "saveTitleButton": "Save",
