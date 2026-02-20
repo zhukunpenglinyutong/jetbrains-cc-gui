@@ -16,6 +16,7 @@ import com.github.claudecodegui.handler.MessageDispatcher;
 import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.handler.PromptEnhancerHandler;
 import com.github.claudecodegui.handler.PromptHandler;
+import com.github.claudecodegui.handler.PromptSuggestionHandler;
 import com.github.claudecodegui.handler.ProviderHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
@@ -255,6 +256,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
         messageDispatcher.registerHandler(new DiffHandler(handlerContext));
         messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
+        messageDispatcher.registerHandler(new PromptSuggestionHandler(handlerContext));
         messageDispatcher.registerHandler(new AgentHandler(handlerContext));
         messageDispatcher.registerHandler(new PromptHandler(handlerContext));
         messageDispatcher.registerHandler(new TabHandler(handlerContext));

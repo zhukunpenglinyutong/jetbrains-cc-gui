@@ -240,6 +240,21 @@ public class ClaudeSettingsManager {
     }
 
     /**
+     * Check if prompt suggestion is enabled (default: true).
+     */
+    public boolean isPromptSuggestionEnabled() throws IOException {
+        JsonObject settings = readClaudeSettings();
+        if (settings.has("promptSuggestionEnabled") && !settings.get("promptSuggestionEnabled").isJsonNull()) {
+            try {
+                return settings.get("promptSuggestionEnabled").getAsBoolean();
+            } catch (Exception e) {
+                return true;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Apply provider configuration to Claude settings.json.
      * Uses an incremental merge strategy:
      * - User-customized fields are preserved

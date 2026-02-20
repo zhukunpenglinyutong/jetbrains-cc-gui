@@ -27,3 +27,4 @@ export { useChatInputImperativeHandle } from './useChatInputImperativeHandle.js'
 export { useSpaceKeyListener } from './useSpaceKeyListener.js';
 export { useResizableChatInputBox, computeResize } from './useResizableChatInputBox.js';
 export { useInlineHistoryCompletion } from './useInlineHistoryCompletion.js';
+export { usePromptSuggestion } from './usePromptSuggestion.js';

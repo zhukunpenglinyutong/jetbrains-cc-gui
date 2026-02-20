@@ -39,6 +39,7 @@ import {
   useSpaceKeyListener,
   useResizableChatInputBox,
   useInlineHistoryCompletion,
+  usePromptSuggestion,
 } from './hooks/index.js';
 import {
   commandToDropdownItem,
@@ -335,6 +336,9 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       minQueryLength: 2,
     });
 
+    // Prompt suggestion hook (AI-predicted next input)
+    const promptSuggestion = usePromptSuggestion();
+
     // Tooltip hook
     const { tooltip, handleMouseOver, handleMouseLeave } = useTooltip();
 
@@ -456,6 +460,11 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
           inlineCompletion.clear();
         }
 
+        // Clear prompt suggestion when user starts typing
+        if (!isEmpty) {
+          promptSuggestion.clearSuggestion();
+        }
+
         // Notify parent component (use debounced version to reduce re-renders)
         // If determined empty (only zero-width characters), pass empty string to parent
         debouncedOnInput(isEmpty ? '' : text);
@@ -475,6 +484,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         agentCompletion,
         promptCompletion,
         inlineCompletion,
+        promptSuggestion,
       ]
     );
 
@@ -500,6 +510,26 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       handleInput();
       return true;
     }, [inlineCompletion, handleInput]);
+
+    /**
+     * Apply prompt suggestion (Tab key when input is empty)
+     */
+    const applyPromptSuggestion = useCallback(() => {
+      const text = promptSuggestion.acceptSuggestion();
+      if (!text || !editableRef.current) return false;
+
+      editableRef.current.innerText = text;
+
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.selectNodeContents(editableRef.current);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      handleInput();
+      return true;
+    }, [promptSuggestion, handleInput]);
 
     // IME composition hook
     const {
@@ -599,9 +629,12 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       handleMacCursorMovement,
       handleHistoryKeyDown,
       // Inline completion: Tab key applies suggestion
-      inlineCompletion: inlineCompletion.hasSuggestion ? {
-        applySuggestion: applyInlineCompletion,
-      } : undefined,
+      // Priority: prompt suggestion (empty input) > history completion (non-empty input)
+      inlineCompletion: promptSuggestion.suggestion
+        ? { applySuggestion: applyPromptSuggestion }
+        : inlineCompletion.hasSuggestion
+          ? { applySuggestion: applyInlineCompletion }
+          : undefined,
       completionSelectedRef,
       submittedOnEnterRef,
       handleSubmit,
@@ -720,6 +753,22 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
     useSpaceKeyListener({ editableRef, onKeyDown: handleKeyDownForTagRendering });
 
+    // Prompt suggestion: bump epoch when AI response starts, request suggestion when it ends
+    // Use refs to avoid unstable promptSuggestion object in deps (would cause missed transitions)
+    const promptSuggestionRef = useRef(promptSuggestion);
+    promptSuggestionRef.current = promptSuggestion;
+    const prevIsLoadingRef = useRef(isLoading);
+    useEffect(() => {
+      const wasLoading = prevIsLoadingRef.current;
+      prevIsLoadingRef.current = isLoading;
+
+      if (isLoading && !wasLoading) {
+        promptSuggestionRef.current.bumpEpoch();
+      } else if (!isLoading && wasLoading) {
+        promptSuggestionRef.current.requestSuggestion();
+      }
+    }, [isLoading]);
+
     const {
       isResizing: isResizingInputBox,
       containerStyle,
@@ -781,7 +830,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
             className="input-editable"
             contentEditable={!disabled}
             data-placeholder={placeholder}
-            data-completion-suffix={inlineCompletion.suffix || ''}
+            data-completion-suffix={promptSuggestion.suggestion || inlineCompletion.suffix || ''}
             onInput={(e) => {
               // Pass native event isComposing state, more accurate than React state
               // Can correctly capture input before compositionStart

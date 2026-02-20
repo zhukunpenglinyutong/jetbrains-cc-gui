@@ -701,6 +701,11 @@
   pointer-events: none;
 }
 
+/* Hide placeholder when a non-empty prompt suggestion is shown */
+.input-editable:empty[data-completion-suffix]:not([data-completion-suffix=""])::before {
+  display: none;
+}
+
 .input-editable:focus {
   outline: none;
 }

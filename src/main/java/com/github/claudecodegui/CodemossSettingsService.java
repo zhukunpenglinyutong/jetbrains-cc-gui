@@ -277,6 +277,10 @@ public class CodemossSettingsService {
         return claudeSettingsManager.getAlwaysThinkingEnabled();
     }
 
+    public boolean isPromptSuggestionEnabled() throws IOException {
+        return claudeSettingsManager.isPromptSuggestionEnabled();
+    }
+
     public void setAlwaysThinkingEnabledInClaudeSettings(boolean enabled) throws IOException {
         claudeSettingsManager.setAlwaysThinkingEnabled(enabled);
     }
