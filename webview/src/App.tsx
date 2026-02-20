@@ -359,6 +359,14 @@ const App = () => {
       }
     };
 
+    // Register permission mode sync callback from Java
+    window.onModeReceived = (mode: string) => {
+      if (mode) {
+        setPermissionMode(mode as PermissionMode);
+        setClaudePermissionMode(mode as PermissionMode);
+      }
+    };
+
     // Initialize font scaling
     const savedLevel = localStorage.getItem('fontSizeLevel');
     const level = savedLevel ? parseInt(savedLevel, 10) : 2; // Default level 2 (90%)

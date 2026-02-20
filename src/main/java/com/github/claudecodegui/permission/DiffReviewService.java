@@ -1,0 +1,248 @@
+package com.github.claudecodegui.permission;
+
+import com.github.claudecodegui.handler.diff.DiffResult;
+import com.github.claudecodegui.handler.diff.InteractiveDiffManager;
+import com.github.claudecodegui.handler.diff.InteractiveDiffRequest;
+import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import com.github.claudecodegui.ClaudeCodeGuiBundle;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.util.Computable;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Service for reviewing file-modifying tool calls (Edit, Write) via an interactive diff view.
+ * Integrates with the permission system to provide "review-before-write" capability.
+ *
+ * This service computes the proposed file content from tool inputs, opens an interactive
+ * diff view in the IDE, and returns the user's decision (accept/reject) along with the
+ * possibly user-edited content.
+ */
+public class DiffReviewService {
+
+    private static final Logger LOG = Logger.getInstance(DiffReviewService.class);
+
+    /** Tool names that modify files and should trigger diff review */
+    private static final Set<String> FILE_MODIFYING_TOOLS = Set.of("Edit", "Write");
+
+    /**
+     * Check if a tool is a file-modifying tool that should trigger diff review.
+     */
+    public static boolean isFileModifyingTool(@Nullable String toolName) {
+        return toolName != null && FILE_MODIFYING_TOOLS.contains(toolName);
+    }
+
+    /**
+     * Review a file change by opening an interactive diff view.
+     * Reads the original file, computes the proposed content, and opens the diff.
+     *
+     * @param project  The current project
+     * @param toolName The tool name (Edit, Write, etc.)
+     * @param inputs   The tool input parameters
+     * @return CompletableFuture resolving to the review result, or null if diff review is not possible
+     */
+    @Nullable
+    public static CompletableFuture<DiffReviewResult> reviewFileChange(
+            @NotNull Project project,
+            @NotNull String toolName,
+            @NotNull JsonObject inputs
+    ) {
+        String filePath = extractFilePath(inputs);
+        if (filePath == null || filePath.isEmpty()) {
+            LOG.warn("DiffReview: No file path found in tool inputs for " + toolName);
+            return null;
+        }
+
+        // Security: validate file path is within project directory
+        String projectBasePath = project.getBasePath();
+        if (projectBasePath != null) {
+            try {
+                String canonicalFile = new File(filePath).getCanonicalPath();
+                String canonicalBase = new File(projectBasePath).getCanonicalPath();
+                if (!canonicalFile.startsWith(canonicalBase + File.separator)
+                        && !canonicalFile.equals(canonicalBase)) {
+                    LOG.warn("DiffReview: Security - file path outside project: " + filePath);
+                    return null;
+                }
+            } catch (IOException e) {
+                LOG.warn("DiffReview: Security - failed to validate path: " + filePath, e);
+                return null;
+            }
+        }
+
+        LOG.info("DiffReview: Starting review for " + toolName + " on " + filePath);
+
+        try {
+            String originalContent = readFileContent(filePath);
+            String proposedContent = computeProposedContent(toolName, inputs, originalContent);
+
+            if (proposedContent == null) {
+                LOG.warn("DiffReview: Could not compute proposed content for " + toolName);
+                return null;
+            }
+
+            boolean isNewFile = (originalContent == null);
+            String safeOriginal = originalContent != null ? originalContent : "";
+
+            // Build tab name
+            String fileName = new File(filePath).getName();
+            String tabName = ClaudeCodeGuiBundle.message("diff.reviewTabName", fileName);
+
+            // Create the diff request (read-only: permission review is preview-only)
+            InteractiveDiffRequest request;
+            if (isNewFile) {
+                request = InteractiveDiffRequest.forReadOnlyNewFile(filePath, proposedContent, tabName);
+            } else {
+                request = InteractiveDiffRequest.forReadOnlyModifiedFile(filePath, safeOriginal, proposedContent, tabName);
+            }
+
+            // Open the interactive diff and map the result
+            CompletableFuture<DiffResult> diffFuture = InteractiveDiffManager.showInteractiveDiff(project, request);
+
+            return diffFuture.thenApply(diffResult -> {
+                if (diffResult.isApplied()) {
+                    LOG.info("DiffReview: User accepted changes for " + filePath
+                            + (diffResult.isAppliedAlways() ? " (always allow)" : ""));
+                    return diffResult.isAppliedAlways()
+                            ? DiffReviewResult.acceptedAlways(diffResult.getFinalContent(), filePath)
+                            : DiffReviewResult.accepted(diffResult.getFinalContent(), filePath);
+                } else {
+                    String action = diffResult.isRejected() ? "rejected" : "dismissed";
+                    LOG.info("DiffReview: User " + action + " changes for " + filePath);
+                    return DiffReviewResult.rejected(filePath);
+                }
+            });
+        } catch (Exception e) {
+            LOG.error("DiffReview: Failed to set up diff review for " + filePath, e);
+            return null;
+        }
+    }
+
+    /**
+     * Extract the file path from tool inputs.
+     * Supports Edit (file_path), Write (file_path), and NotebookEdit (notebook_path).
+     */
+    @Nullable
+    private static String extractFilePath(@NotNull JsonObject inputs) {
+        if (inputs.has("file_path") && !inputs.get("file_path").isJsonNull()) {
+            return inputs.get("file_path").getAsString();
+        }
+        if (inputs.has("notebook_path") && !inputs.get("notebook_path").isJsonNull()) {
+            return inputs.get("notebook_path").getAsString();
+        }
+        if (inputs.has("path") && !inputs.get("path").isJsonNull()) {
+            return inputs.get("path").getAsString();
+        }
+        return null;
+    }
+
+    /**
+     * Read the content of a file. Returns null if the file does not exist.
+     */
+    @Nullable
+    private static String readFileContent(@NotNull String filePath) {
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+            try {
+                VirtualFile vFile = LocalFileSystem.getInstance()
+                        .refreshAndFindFileByPath(filePath.replace('\\', '/'));
+                if (vFile != null && vFile.exists() && !vFile.isDirectory()) {
+                    Charset charset = vFile.getCharset() != null ? vFile.getCharset() : StandardCharsets.UTF_8;
+                    return new String(vFile.contentsToByteArray(), charset);
+                }
+            } catch (IOException e) {
+                LOG.warn("DiffReview: Failed to read file: " + filePath, e);
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Compute the proposed file content based on tool name and inputs.
+     *
+     * @param toolName        The tool name
+     * @param inputs          The tool input parameters
+     * @param originalContent The original file content (null if file doesn't exist)
+     * @return The proposed new content, or null if computation fails
+     */
+    @Nullable
+    private static String computeProposedContent(
+            @NotNull String toolName,
+            @NotNull JsonObject inputs,
+            @Nullable String originalContent
+    ) {
+        switch (toolName) {
+            case "Edit":
+                return computeEditProposedContent(inputs, originalContent);
+            case "Write":
+                return computeWriteProposedContent(inputs);
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Compute proposed content for the Edit tool.
+     * Replaces old_string with new_string in the original content.
+     */
+    @Nullable
+    private static String computeEditProposedContent(
+            @NotNull JsonObject inputs,
+            @Nullable String originalContent
+    ) {
+        if (originalContent == null) {
+            LOG.warn("DiffReview: Edit tool called on non-existent file");
+            return null;
+        }
+
+        String oldString = inputs.has("old_string") && !inputs.get("old_string").isJsonNull()
+                ? inputs.get("old_string").getAsString() : null;
+        String newString = inputs.has("new_string") && !inputs.get("new_string").isJsonNull()
+                ? inputs.get("new_string").getAsString() : null;
+
+        if (oldString == null || newString == null) {
+            LOG.warn("DiffReview: Edit tool missing old_string or new_string");
+            return null;
+        }
+
+        boolean replaceAll = inputs.has("replace_all") && inputs.get("replace_all").getAsBoolean();
+
+        if (replaceAll) {
+            return originalContent.replace(oldString, newString);
+        } else {
+            int index = originalContent.indexOf(oldString);
+            if (index >= 0) {
+                return originalContent.substring(0, index)
+                        + newString
+                        + originalContent.substring(index + oldString.length());
+            } else {
+                LOG.warn("DiffReview: old_string not found in file content");
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Compute proposed content for the Write tool.
+     * The Write tool provides the complete new file content.
+     */
+    @Nullable
+    private static String computeWriteProposedContent(@NotNull JsonObject inputs) {
+        if (inputs.has("content") && !inputs.get("content").isJsonNull()) {
+            return inputs.get("content").getAsString();
+        }
+        LOG.warn("DiffReview: Write tool missing content field");
+        return null;
+    }
+}

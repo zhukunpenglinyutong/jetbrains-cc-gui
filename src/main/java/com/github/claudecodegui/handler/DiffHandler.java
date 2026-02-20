@@ -257,8 +257,8 @@ public class DiffHandler extends BaseMessageHandler {
                         diffTitle,
                         leftContent,
                         rightContent,
-                        fileName + " (修改前)",
-                        fileName + " (修改后)"
+                        fileName + " (Before)",
+                        fileName + " (After)"
                     );
 
                     // Show diff window
