@@ -815,6 +815,7 @@
     "runCommand": "Ejecutar comando",
     "contextEngine": "Motor de contexto",
     "task": "Tarea",
+    "promptLabel": "Prompt",
     "readFile": "Leer archivo",
     "editFile": "Editar archivo",
     "writeFile": "Escribir archivo",
@@ -842,6 +843,7 @@
     "searchBatchTitle": "Buscar en lote",
     "editPrefix": "Editar: {{fileName}}",
     "lineRange": "Líneas {{start}}-{{end}}",
+    "lineSingle": "Línea {{line}}",
     "filePath": "Ruta del archivo:",
     "unknownTool": "Herramienta desconocida",
     "bashGroupBatchRun": "Batch Run Commands",
@@ -916,6 +918,12 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status",
+    "deleteFailed": "Error al eliminar el Skill",
+    "enableSuccess": "Skill habilitado con éxito: {{name}}",
+    "disableSuccess": "Skill deshabilitado con éxito: {{name}}",
+    "operationFailed": "Error en la operación: {{error}}",
+    "operationError": "Error en la operación de Skill",
+    "refreshed": "Lista de Skills actualizada",
     "help": {
       "title": "¿Qué son las Skills?",
       "overview": {

@@ -842,6 +842,7 @@
     "runCommand": "Выполнить команду",
     "contextEngine": "Контекстный движок",
     "task": "Задача",
+    "promptLabel": "Промпт",
     "readFile": "Чтение файла",
     "editFile": "Редактирование файла",
     "writeFile": "Запись файла",
@@ -869,6 +870,7 @@
     "searchBatchTitle": "Пакетный поиск",
     "editPrefix": "Правка: {{fileName}}",
     "lineRange": "Строки {{start}}-{{end}}",
+    "lineSingle": "Строка {{line}}",
     "filePath": "Путь к файлу:",
     "unknownTool": "Неизвестный инструмент",
     "bashGroupBatchRun": "Пакетное выполнение команд",
@@ -942,6 +944,12 @@
     "deleteSuccess": "Навык успешно удалён",
     "toggleSuccess": "Статус навыка обновлён",
     "toggleFailed": "Не удалось обновить статус навыка",
+    "deleteFailed": "Не удалось удалить навык",
+    "enableSuccess": "Навык успешно включён: {{name}}",
+    "disableSuccess": "Навык успешно отключён: {{name}}",
+    "operationFailed": "Ошибка операции: {{error}}",
+    "operationError": "Ошибка операции с навыком",
+    "refreshed": "Список навыков обновлён",
     "help": {
       "title": "Что такое навыки?",
       "overview": {

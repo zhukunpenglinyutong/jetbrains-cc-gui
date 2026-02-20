@@ -815,6 +815,7 @@
     "runCommand": "कमांड चलाएं",
     "contextEngine": "संदर्भ इंजन",
     "task": "कार्य",
+    "promptLabel": "प्रॉम्प्ट",
     "readFile": "फ़ाइल पढ़ें",
     "editFile": "फ़ाइल संपादित करें",
     "writeFile": "फ़ाइल लिखें",
@@ -842,6 +843,7 @@
     "searchBatchTitle": "बैच खोज",
     "editPrefix": "संपादित करें: {{fileName}}",
     "lineRange": "पंक्तियाँ {{start}}-{{end}}",
+    "lineSingle": "पंक्ति {{line}}",
     "filePath": "फ़ाइल पथ:",
     "unknownTool": "अज्ञात टूल",
     "bashGroupBatchRun": "Batch Run Commands",
@@ -915,6 +917,12 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status",
+    "deleteFailed": "Skill हटाने में विफल",
+    "enableSuccess": "Skill सफलतापूर्वक सक्षम: {{name}}",
+    "disableSuccess": "Skill सफलतापूर्वक अक्षम: {{name}}",
+    "operationFailed": "ऑपरेशन विफल: {{error}}",
+    "operationError": "Skill ऑपरेशन विफल",
+    "refreshed": "Skills सूची ताज़ा की गई",
     "help": {
       "title": "Skills क्या हैं?",
       "overview": {

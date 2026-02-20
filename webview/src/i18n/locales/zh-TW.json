@@ -820,6 +820,7 @@
     "runCommand": "運行命令",
     "contextEngine": "上下文引擎",
     "task": "任務",
+    "promptLabel": "提示詞 (Prompt)",
     "readFile": "讀取文件",
     "editFile": "編輯文件",
     "writeFile": "寫入文件",
@@ -847,6 +848,7 @@
     "searchBatchTitle": "批量搜尋",
     "editPrefix": "編輯: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
+    "lineSingle": "第 {{line}} 行",
     "filePath": "檔案路徑：",
     "unknownTool": "未知工具",
     "bashGroupBatchRun": "Batch Run Commands",
@@ -921,6 +923,12 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status",
+    "deleteFailed": "刪除 Skill 失敗",
+    "enableSuccess": "已成功啟用 Skill: {{name}}",
+    "disableSuccess": "已成功停用 Skill: {{name}}",
+    "operationFailed": "操作失敗: {{error}}",
+    "operationError": "操作 Skill 失敗",
+    "refreshed": "已重新整理 Skills 清單",
     "help": {
       "title": "什麼是 Skills?",
       "overview": {
