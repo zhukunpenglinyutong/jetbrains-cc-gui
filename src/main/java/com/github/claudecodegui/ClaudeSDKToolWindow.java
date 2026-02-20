@@ -36,6 +36,7 @@ import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.LanguageConfigService;
+import com.github.claudecodegui.util.IgnoreRuleMatcher;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -1008,12 +1009,22 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     FileEditorManager editorManager = FileEditorManager.getInstance(project);
                     Editor editor = editorManager.getSelectedTextEditor();
 
+                    // Get cached .gitignore matcher for filtering sensitive files
+                    IgnoreRuleMatcher gitIgnoreMatcher = IgnoreRuleMatcher.forProjectSafe(project.getBasePath());
+
                     String selectionInfo = null;
 
                     if (editor != null) {
                         VirtualFile file = FileDocumentManager.getInstance().getFile(editor.getDocument());
                         if (file != null) {
                             String path = file.getPath();
+
+                            // Filter out .gitignore'd files to prevent sensitive files from being auto-opened
+                            if (gitIgnoreMatcher != null && gitIgnoreMatcher.isFileIgnored(path)) {
+                                clearSelectionInfo();
+                                return;
+                            }
+
                             selectionInfo = "@" + path;
 
                             com.intellij.openapi.editor.SelectionModel selectionModel = editor.getSelectionModel();
@@ -1030,7 +1041,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     } else {
                          VirtualFile[] files = editorManager.getSelectedFiles();
                          if (files.length > 0) {
-                             selectionInfo = "@" + files[0].getPath();
+                             String path = files[0].getPath();
+
+                             // Filter out .gitignore'd files
+                             if (gitIgnoreMatcher != null && gitIgnoreMatcher.isFileIgnored(path)) {
+                                 clearSelectionInfo();
+                                 return;
+                             }
+
+                             selectionInfo = "@" + path;
                          }
                     }
 
