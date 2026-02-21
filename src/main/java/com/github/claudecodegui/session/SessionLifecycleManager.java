@@ -109,7 +109,7 @@ public class SessionLifecycleManager {
             LOG.error("Failed to create new session: " + ex.getMessage(), ex);
             ApplicationManager.getApplication().invokeLater(() -> {
                 host.callJavaScript("updateStatus",
-                    JsUtils.escapeJs("创建新会话失败: " + ex.getMessage()));
+                    JsUtils.escapeJs("Failed to create new session: " + ex.getMessage()));
             });
             return null;
         });
@@ -165,7 +165,7 @@ public class SessionLifecycleManager {
         })).exceptionally(ex -> {
             ApplicationManager.getApplication().invokeLater(() ->
                 host.callJavaScript("addErrorMessage",
-                    JsUtils.escapeJs("加载会话失败: " + ex.getMessage())));
+                    JsUtils.escapeJs("Failed to load session: " + ex.getMessage())));
             return null;
         });
     }

@@ -206,32 +206,41 @@ public class PermissionManager {
             return false;
         }
 
-        // Validate that the target file path is within the project directory
-        if (project != null && inputs != null) {
-            String filePath = null;
-            if (inputs.containsKey("file_path")) {
-                filePath = String.valueOf(inputs.get("file_path"));
-            } else if (inputs.containsKey("path")) {
-                filePath = String.valueOf(inputs.get("path"));
-            }
+        // Validate that the target file path is within the project directory.
+        // When project or inputs are unavailable, do NOT auto-approve to prevent
+        // unvalidated edits from bypassing the project-boundary check.
+        if (project == null || inputs == null) {
+            return false;
+        }
 
-            if (filePath != null) {
-                String basePath = project.getBasePath();
-                if (basePath != null) {
-                    try {
-                        String canonicalFilePath = new File(filePath).getCanonicalPath();
-                        String canonicalBasePath = new File(basePath).getCanonicalPath();
-                        if (!canonicalFilePath.startsWith(canonicalBasePath + File.separator)
-                            && !canonicalFilePath.equals(canonicalBasePath)) {
-                            // Path is outside the project directory, do not auto-approve
-                            return false;
-                        }
-                    } catch (IOException e) {
-                        // If we can't resolve the path, do not auto-approve
-                        return false;
-                    }
-                }
+        String filePath = null;
+        if (inputs.containsKey("file_path")) {
+            filePath = String.valueOf(inputs.get("file_path"));
+        } else if (inputs.containsKey("path")) {
+            filePath = String.valueOf(inputs.get("path"));
+        }
+
+        // If no file path is provided, do not auto-approve
+        if (filePath == null) {
+            return false;
+        }
+
+        String basePath = project.getBasePath();
+        if (basePath == null) {
+            return false;
+        }
+
+        try {
+            String canonicalFilePath = new File(filePath).getCanonicalPath();
+            String canonicalBasePath = new File(basePath).getCanonicalPath();
+            if (!canonicalFilePath.startsWith(canonicalBasePath + File.separator)
+                && !canonicalFilePath.equals(canonicalBasePath)) {
+                // Path is outside the project directory, do not auto-approve
+                return false;
             }
+        } catch (IOException e) {
+            // If we can't resolve the path, do not auto-approve
+            return false;
         }
 
         return true;

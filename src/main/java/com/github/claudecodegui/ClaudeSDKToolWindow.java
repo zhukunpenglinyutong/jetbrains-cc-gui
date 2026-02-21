@@ -384,11 +384,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 Future<?> future = executor.submit(() -> {
                     for (ClaudeChatWindow window : new java.util.ArrayList<>(instances.values())) {
                         try {
-                            if (window != null && window.claudeSDKBridge != null) {
-                                window.claudeSDKBridge.cleanupAllProcesses();
+                            if (window != null && window.getClaudeSDKBridge() != null) {
+                                window.getClaudeSDKBridge().cleanupAllProcesses();
                             }
-                            if (window != null && window.codexSDKBridge != null) {
-                                window.codexSDKBridge.cleanupAllProcesses();
+                            if (window != null && window.getCodexSDKBridge() != null) {
+                                window.getCodexSDKBridge().cleanupAllProcesses();
                             }
                         } catch (Exception e) {
                             LOG.error("[ShutdownHook] Error cleaning up processes: " + e.getMessage());

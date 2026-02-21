@@ -171,7 +171,7 @@ public class PermissionHandler extends BaseMessageHandler {
                 com.github.claudecodegui.ClaudeSDKToolWindow.getChatWindow(targetProject);
 
             if (targetWindow == null) {
-                LOG.error("[PermissionHandler] 错误: 找不到项目 " + targetProject.getName() + " 的窗口实例");
+                LOG.error("[PermissionHandler] Error: cannot find window instance for project " + targetProject.getName());
                 // If target window is not found, deny the permission request
                 this.context.getSession().handlePermissionDecision(
                     request.getChannelId(),

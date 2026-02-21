@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openFile } from '../utils/bridge';
@@ -175,6 +176,17 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
 
       if (!isMermaid) continue;
 
+      // Show loading placeholder while mermaid library loads
+      const loadingEl = document.createElement('div');
+      loadingEl.className = 'mermaid-loading';
+      loadingEl.textContent = 'Loading diagram\u2026';
+      loadingEl.style.cssText = 'padding:12px;color:var(--text-secondary,#888);font-style:italic;';
+      if (wrapper?.classList.contains('code-block-wrapper')) {
+        wrapper.insertBefore(loadingEl, pre);
+      } else {
+        pre.parentNode?.insertBefore(loadingEl, pre);
+      }
+
       try {
         const mmd = await getMermaid();
         const id = `mermaid-${++mermaidIdCounter}`;
@@ -183,6 +195,9 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         const mermaidContainer = document.createElement('div');
         mermaidContainer.className = 'mermaid-diagram';
         mermaidContainer.innerHTML = svg;
+
+        // Remove loading placeholder
+        loadingEl.remove();
 
         if (wrapper?.classList.contains('code-block-wrapper')) {
           wrapper.classList.add('mermaid-rendered');
@@ -196,7 +211,8 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         }
         renderedAny = true;
       } catch {
-        // Mermaid render error - silently skip invalid diagrams
+        // Mermaid render error - remove loading indicator and silently skip
+        loadingEl.remove();
       }
     }
 
@@ -277,7 +293,12 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
 
       // The HTML returned by marked.parse may have trailing newlines that need to be trimmed
       const parsed = marked.parse(trimmedContent);
-      const rawHtml = typeof parsed === 'string' ? parsed.trim() : String(parsed);
+      // Sanitize parsed HTML to prevent XSS from malicious markdown content
+      const sanitized = DOMPurify.sanitize(
+        typeof parsed === 'string' ? parsed : String(parsed),
+        { ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title'] }
+      );
+      const rawHtml = sanitized.trim();
 
       if (typeof window === 'undefined' || !rawHtml) {
         return rawHtml;

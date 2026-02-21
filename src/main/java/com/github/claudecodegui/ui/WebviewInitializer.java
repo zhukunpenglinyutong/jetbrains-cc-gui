@@ -366,15 +366,11 @@ public class WebviewInitializer {
 
     public void showErrorPanel() {
         ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
-        String message = "Node.js not found (please save below and restart)\n\n" +
-            "Please ensure:\n" +
-            "• Node.js is installed (run in terminal: node --version)\n\n" +
-            "If auto-detection fails, run the following command in terminal to get the Node.js path:\n" +
-            "    node -p \"process.execPath\"\n\n" +
-            "Detected Node.js path: " + claudeSDKBridge.getNodeExecutable();
+        String message = ClaudeCodeGuiBundle.message(
+            "error.nodeNotFound.message", claudeSDKBridge.getNodeExecutable());
 
         JPanel errorPanel = ErrorPanelBuilder.build(
-            "Environment Check Failed",
+            ClaudeCodeGuiBundle.message("error.nodeNotFound.title"),
             message,
             claudeSDKBridge.getNodeExecutable(),
             this::handleNodePathSave
@@ -385,14 +381,12 @@ public class WebviewInitializer {
     private void showVersionErrorPanel(String currentVersion) {
         ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
         int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
-        String message = "Node.js version too old\n\n" +
-            "Current version: " + currentVersion + "\n" +
-            "Minimum required: v" + minVersion + "\n\n" +
-            "Please upgrade Node.js to v" + minVersion + " or later and try again.\n\n" +
-            "Detected Node.js path: " + claudeSDKBridge.getNodeExecutable();
+        String message = ClaudeCodeGuiBundle.message(
+            "error.nodeVersionTooOld.message",
+            currentVersion, String.valueOf(minVersion), claudeSDKBridge.getNodeExecutable());
 
         JPanel errorPanel = ErrorPanelBuilder.build(
-            "Node.js Version Not Supported",
+            ClaudeCodeGuiBundle.message("error.nodeVersionTooOld.title"),
             message,
             claudeSDKBridge.getNodeExecutable(),
             this::handleNodePathSave

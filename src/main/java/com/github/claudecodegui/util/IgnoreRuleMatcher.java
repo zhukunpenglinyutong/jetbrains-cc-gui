@@ -28,6 +28,7 @@ public class IgnoreRuleMatcher {
 
     // Cache matcher instances per project to avoid re-reading .gitignore on every editor event
     private static final ConcurrentHashMap<String, CachedMatcher> MATCHER_CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_MATCHER_CACHE_SIZE = 50;
     private static final long CACHE_TTL_MS = 30_000; // 30 seconds
 
     private static class CachedMatcher {
@@ -67,9 +68,16 @@ public class IgnoreRuleMatcher {
         }
 
         private Pattern getOrCompilePattern(String regex) {
-            // Simple cache size control
+            // Evict oldest entries when cache exceeds max size to avoid unbounded growth.
+            // Using individual removal instead of clear() to prevent concurrent access issues.
             if (PATTERN_CACHE.size() > MAX_CACHE_SIZE) {
-                PATTERN_CACHE.clear();
+                int toRemove = PATTERN_CACHE.size() - MAX_CACHE_SIZE + MAX_CACHE_SIZE / 4;
+                var iterator = PATTERN_CACHE.keySet().iterator();
+                while (iterator.hasNext() && toRemove > 0) {
+                    iterator.next();
+                    iterator.remove();
+                    toRemove--;
+                }
             }
             // Use case-insensitive matching on Windows/macOS; Linux is typically case-sensitive
             boolean caseInsensitive = SystemInfo.isWindows || SystemInfo.isMac;
@@ -239,6 +247,20 @@ public class IgnoreRuleMatcher {
         }
         try {
             IgnoreRuleMatcher matcher = forProject(projectBasePath);
+            // Evict expired entries and enforce size limit
+            if (MATCHER_CACHE.size() >= MAX_MATCHER_CACHE_SIZE) {
+                MATCHER_CACHE.entrySet().removeIf(e -> e.getValue().isExpired());
+                // If still over limit after purging expired, remove oldest entries
+                if (MATCHER_CACHE.size() >= MAX_MATCHER_CACHE_SIZE) {
+                    var iterator = MATCHER_CACHE.keySet().iterator();
+                    int toRemove = MATCHER_CACHE.size() - MAX_MATCHER_CACHE_SIZE + 1;
+                    while (iterator.hasNext() && toRemove > 0) {
+                        iterator.next();
+                        iterator.remove();
+                        toRemove--;
+                    }
+                }
+            }
             MATCHER_CACHE.put(key, new CachedMatcher(matcher));
             return matcher;
         } catch (Exception e) {

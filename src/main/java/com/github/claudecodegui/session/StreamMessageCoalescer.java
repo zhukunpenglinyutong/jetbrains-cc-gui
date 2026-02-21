@@ -53,8 +53,11 @@ public class StreamMessageCoalescer {
         if (callbackTarget.isDisposed()) {
             return;
         }
+        // Defensive copy: the caller's list may be mutated on another thread,
+        // so we snapshot it here to guarantee a consistent read in sendToWebView.
+        final List<ClaudeSession.Message> snapshot = List.copyOf(messages);
         synchronized (lock) {
-            pendingMessages = messages;
+            pendingMessages = snapshot;
         }
         schedulePush();
     }

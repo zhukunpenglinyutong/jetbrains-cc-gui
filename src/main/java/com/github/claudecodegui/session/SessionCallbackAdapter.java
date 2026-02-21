@@ -57,14 +57,14 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
             if (!loading && streamCoalescer.isStreamActive()) {
                 LOG.debug("Suppressing showLoading(false) during active streaming");
                 if (error != null) {
-                    jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
+                    jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs("Error: " + error));
                 }
                 return;
             }
 
             jsTarget.callJavaScript("showLoading", String.valueOf(loading));
             if (error != null) {
-                jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs("错误: " + error));
+                jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs("Error: " + error));
             }
             if (!busy && !loading) {
                 VirtualFileManager.getInstance().asyncRefresh(null);

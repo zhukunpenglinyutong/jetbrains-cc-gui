@@ -334,16 +334,21 @@ export async function requestPermissionFromJava(toolName, input) {
     const isWindows = process.platform === 'win32';
 
     const dangerousPatterns = [
-      // Unix/macOS paths
+      // Unix/macOS system paths
       '/etc/',
       '/System/',
       '/usr/',
       '/bin/',
+      '/sbin/',
+      // User-sensitive directories (credentials, config)
       `${userHomeDir}/.ssh/`,
       `${userHomeDir}/.aws/`,
       `${userHomeDir}/.gnupg/`,
       `${userHomeDir}/.kube/`,
       `${userHomeDir}/.docker/`,
+      `${userHomeDir}/.config/`,
+      `${userHomeDir}/.local/`,
+      `${userHomeDir}/.claude/.credentials.json`,
     ];
 
     if (isWindows) {
@@ -357,6 +362,9 @@ export async function requestPermissionFromJava(toolName, input) {
         `${userHomeDir}\\.gnupg\\`,
         `${userHomeDir}\\.kube\\`,
         `${userHomeDir}\\.docker\\`,
+        `${userHomeDir}\\AppData\\`,
+        `${userHomeDir}\\.config\\`,
+        `${userHomeDir}\\.local\\`,
       );
     }
 

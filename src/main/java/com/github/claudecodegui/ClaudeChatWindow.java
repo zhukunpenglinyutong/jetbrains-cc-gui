@@ -38,8 +38,8 @@ public class ClaudeChatWindow {
     private static final Logger LOG = Logger.getInstance(ClaudeChatWindow.class);
 
     private final JPanel mainPanel;
-    final ClaudeSDKBridge claudeSDKBridge;
-    final CodexSDKBridge codexSDKBridge;
+    private final ClaudeSDKBridge claudeSDKBridge;
+    private final CodexSDKBridge codexSDKBridge;
     private final Project project;
     private final CodemossSettingsService settingsService;
     private final HtmlLoader htmlLoader;
@@ -48,20 +48,20 @@ public class ClaudeChatWindow {
     private String originalTabName;
     private volatile String sessionId = null;
 
-    JBCefBrowser browser;
-    ClaudeSession session;
+    private JBCefBrowser browser;
+    private ClaudeSession session;
     private WebviewWatchdog webviewWatchdog;
     private StreamMessageCoalescer streamCoalescer;
 
     private volatile boolean disposed = false;
     private volatile boolean initialized = false;
-    volatile boolean frontendReady = false;
+    private volatile boolean frontendReady = false;
     private volatile boolean slashCommandsFetched = false;
     private volatile int fetchedSlashCommandsCount = 0;
 
-    HandlerContext handlerContext;
-    MessageDispatcher messageDispatcher;
-    PermissionHandler permissionHandler;
+    private HandlerContext handlerContext;
+    private MessageDispatcher messageDispatcher;
+    private PermissionHandler permissionHandler;
     private HistoryHandler historyHandler;
     private SessionLifecycleManager sessionLifecycleManager;
 
@@ -185,6 +185,8 @@ public class ClaudeChatWindow {
     public boolean isInitialized() { return initialized; }
     public Content getParentContent() { return parentContent; }
     public JPanel getContent() { return mainPanel; }
+    public ClaudeSDKBridge getClaudeSDKBridge() { return claudeSDKBridge; }
+    public CodexSDKBridge getCodexSDKBridge() { return codexSDKBridge; }
 
     public void addCodeSnippetFromExternal(String selectionInfo) {
         addCodeSnippet(selectionInfo);
