@@ -48,7 +48,7 @@ public class CreateNewTabAction extends AnAction {
         }
 
         // Create a new chat window instance with skipRegister=true (don't replace the main instance)
-        ClaudeSDKToolWindow.ClaudeChatWindow newChatWindow = new ClaudeSDKToolWindow.ClaudeChatWindow(project, true);
+        ClaudeChatWindow newChatWindow = new ClaudeChatWindow(project, true);
 
         // Create a tab name in the format "AIN"
         String tabName = ClaudeSDKToolWindow.getNextTabName(toolWindow);

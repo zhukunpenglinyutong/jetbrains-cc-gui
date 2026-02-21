@@ -64,7 +64,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
 
   useEffect(() => {
     const handleResize = () => setViewportHeight(window.innerHeight || 600);
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -161,7 +161,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
           <div style={{ textAlign: 'center', color: '#858585' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
             <div>{t('history.noSearchResults')}</div>
-            <div style={{ fontSize: '12px', marginTop: '8px' }}>尝试其他搜索关键词</div>
+            <div style={{ fontSize: '12px', marginTop: '8px' }}>{t('history.tryOtherKeywords')}</div>
           </div>
         </div>
       );

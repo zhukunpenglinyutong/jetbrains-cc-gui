@@ -289,6 +289,15 @@ const SettingsView = ({
     return saved !== 'false'; // Enabled by default
   });
 
+  // Diff expanded by default configuration (localStorage-only)
+  const [diffExpandedByDefault, setDiffExpandedByDefault] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('diffExpandedByDefault') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   const handleTabChange = (tab: SettingsTab) => {
     if (isCodexMode && disabledTabs.includes(tab)) {
       addToast(t('settings.codexFeatureUnavailable'), 'warning');
@@ -683,6 +692,17 @@ const SettingsView = ({
     }
   }, [chatBgColor]);
 
+  // Diff expanded by default handler
+  useEffect(() => {
+    try {
+      if (diffExpandedByDefault) {
+        localStorage.setItem('diffExpandedByDefault', 'true');
+      } else {
+        localStorage.removeItem('diffExpandedByDefault');
+      }
+    } catch { /* ignore storage errors */ }
+  }, [diffExpandedByDefault]);
+
   useEffect(() => {
     if (isCodexMode && disabledTabs.includes(currentTab)) {
       setCurrentTab('basic');
@@ -881,6 +901,8 @@ const SettingsView = ({
               onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
               chatBgColor={chatBgColor}
               onChatBgColorChange={setChatBgColor}
+              diffExpandedByDefault={diffExpandedByDefault}
+              onDiffExpandedByDefaultChange={setDiffExpandedByDefault}
             />
           </div>
 

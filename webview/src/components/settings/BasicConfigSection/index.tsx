@@ -87,6 +87,9 @@ interface BasicConfigSectionProps {
   // Chat background color configuration
   chatBgColor?: string;
   onChatBgColorChange?: (color: string) => void;
+  // Diff expanded by default configuration
+  diffExpandedByDefault?: boolean;
+  onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
 }
 
 const BasicConfigSection = ({
@@ -117,6 +120,9 @@ const BasicConfigSection = ({
   // Chat background color configuration
   chatBgColor = '',
   onChatBgColorChange = () => {},
+  // Diff expanded by default configuration
+  diffExpandedByDefault = false,
+  onDiffExpandedByDefaultChange = () => {},
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
   const colorInputRef = useRef<HTMLInputElement>(null);
@@ -515,6 +521,32 @@ const BasicConfigSection = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.autoOpenFile.hint')}</span>
+        </small>
+      </div>
+
+      {/* Diff expanded by default configuration */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-diff" />
+          <span className={styles.fieldLabel}>{t('settings.basic.diffExpanded.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={diffExpandedByDefault}
+            onChange={(e) => onDiffExpandedByDefaultChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {diffExpandedByDefault
+              ? t('settings.basic.diffExpanded.enabled')
+              : t('settings.basic.diffExpanded.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.diffExpanded.hint')}</span>
         </small>
       </div>
 

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig } from '../../../types/provider';
 
 const sendToJava = (message: string) => {
@@ -24,6 +25,7 @@ export interface UseCodexProviderManagementOptions {
 }
 
 export function useCodexProviderManagement(options: UseCodexProviderManagementOptions = {}) {
+  const { t } = useTranslation();
   const { onSuccess } = options;
 
   // Codex provider list state
@@ -97,7 +99,7 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
 
       if (isAdding) {
         sendToJava(`add_codex_provider:${JSON.stringify(providerData)}`);
-        onSuccess?.('Codex 供应商已添加');
+        onSuccess?.(t('toast.providerAdded'));
       } else {
         const updateData = {
           id: providerData.id,
@@ -110,7 +112,7 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
           },
         };
         sendToJava(`update_codex_provider:${JSON.stringify(updateData)}`);
-        onSuccess?.('Codex 供应商已更新');
+        onSuccess?.(t('toast.providerUpdated'));
       }
 
       // Custom models are now plugin-level, managed by PluginCustomModels in ProviderTabSection.
@@ -141,7 +143,7 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
 
     const data = { id: provider.id };
     sendToJava(`delete_codex_provider:${JSON.stringify(data)}`);
-    onSuccess?.('Codex 供应商已删除');
+    onSuccess?.(t('toast.providerDeleted'));
     setCodexLoading(true);
     setDeleteCodexConfirm({ isOpen: false, provider: null });
   }, [deleteCodexConfirm.provider, onSuccess]);

@@ -25,7 +25,7 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     private final Project project;
     private StatusBar statusBar;
     private JLabel label;
-    private final AtomicReference<String> textRef = new AtomicReference<>("GUI \uD83E\uDD16");
+    private final AtomicReference<String> textRef = new AtomicReference<>("GUI 🤖");
     private final AtomicReference<String> tooltipRef = new AtomicReference<>(ClaudeCodeGuiBundle.message("status.defaultTooltip"));
     private final AtomicLong visibleUntil = new AtomicLong(0);
 
@@ -123,12 +123,12 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
         String tokenInfo = currentTokenInfo.get();
 
         String icon = switch (status) {
-            case "thinking" -> "\uD83D\uDCAD";
-            case "generating" -> "✏\uFE0F";
+            case "thinking" -> "💭";
+            case "generating" -> "✏️";
             case "waiting" -> "⏳";
             case "success" -> "✓";
             case "error" -> "✗";
-            default -> "\uD83E\uDD16";
+            default -> "🤖";
         };
 
         String statusText = "";

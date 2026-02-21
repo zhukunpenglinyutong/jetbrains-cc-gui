@@ -227,7 +227,7 @@ export function setupApiKey() {
   console.log('[DIAG-CONFIG] apiKeySource:', apiKeySource);
   console.log('[DIAG-CONFIG] baseUrl:', baseUrl || '(not set)');
   console.log('[DIAG-CONFIG] baseUrlSource:', baseUrlSource);
-  console.log('[DIAG-CONFIG] apiKey preview:', apiKey ? `${apiKey.substring(0, 10)}...` : '(null)');
+  console.log('[DIAG-CONFIG] apiKey configured:', apiKey ? 'YES' : 'NO');
 
   return { apiKey, baseUrl, authType, apiKeySource, baseUrlSource };
 }

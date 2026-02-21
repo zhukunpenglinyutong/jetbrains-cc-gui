@@ -231,7 +231,7 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
         ClaudeNotifier.setWaiting(project);
 
         // 1. Create a new "Secondary" chat window specifically for this Quick Fix
-        ClaudeSDKToolWindow.ClaudeChatWindow quickFixWindow = new ClaudeSDKToolWindow.ClaudeChatWindow(project, true);
+        ClaudeChatWindow quickFixWindow = new ClaudeChatWindow(project, true);
 
         // 2. Add as a new tab in the tool window with "AIN" naming format
         ContentFactory contentFactory = ContentFactory.getInstance();

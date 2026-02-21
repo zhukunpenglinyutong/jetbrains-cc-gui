@@ -2,6 +2,7 @@ package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.handler.context.ContextCollector;
 import com.github.claudecodegui.util.EditorFileUtils;
+import com.github.claudecodegui.util.IgnoreRuleMatcher;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -114,9 +115,16 @@ public class EditorContextCollector {
         List<String> allOpenedFiles = EditorFileUtils.getOpenedFiles(project);
         Map<String, Object> selectionInfo = EditorFileUtils.getSelectedCodeInfo(project);
 
+        // Get cached .gitignore matcher for filtering sensitive files
+        IgnoreRuleMatcher gitIgnoreMatcher = IgnoreRuleMatcher.forProjectSafe(project.getBasePath());
+
         JsonObject openedFilesJson = new JsonObject();
 
-        if (activeFile != null) {
+        // Check if the active file is ignored by .gitignore
+        boolean activeFileIgnored = activeFile != null && gitIgnoreMatcher != null
+                && gitIgnoreMatcher.isFileIgnored(activeFile);
+
+        if (activeFile != null && !activeFileIgnored) {
             // Add the currently active file path
             openedFilesJson.addProperty("active", activeFile);
             LOG.debug("Current active file: " + activeFile);
@@ -133,7 +141,7 @@ public class EditorContextCollector {
             }
 
             // Collect PSI semantic context (all files)
-            if (psiContextEnabled && editor != null && activeFile != null) {
+            if (psiContextEnabled && editor != null) {
                 try {
                     ContextCollector semanticCollector = new ContextCollector();
                     JsonObject semanticContext = semanticCollector.collectSemanticContext(editor, project);
@@ -148,12 +156,15 @@ public class EditorContextCollector {
                     LOG.warn("Failed to collect PSI semantic context: " + e.getMessage());
                 }
             }
+        } else if (activeFileIgnored) {
+            LOG.debug("Active file is .gitignore'd, skipping: " + activeFile);
         }
 
-        // Add other open files (excluding the active file to avoid duplication)
+        // Add other open files (excluding the active file and .gitignore'd files)
         JsonArray othersArray = new JsonArray();
         for (String file : allOpenedFiles) {
-            if (!file.equals(activeFile)) {
+            if (!file.equals(activeFile)
+                    && (gitIgnoreMatcher == null || !gitIgnoreMatcher.isFileIgnored(file))) {
                 othersArray.add(file);
             }
         }
@@ -168,4 +179,5 @@ public class EditorContextCollector {
 
         return openedFilesJson;
     }
+
 }
