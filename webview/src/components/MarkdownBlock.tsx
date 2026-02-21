@@ -1,19 +1,25 @@
 import { marked } from 'marked';
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openFile } from '../utils/bridge';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 import { markedHighlight } from 'marked-highlight';
-import mermaid from 'mermaid';
-
-// Initialize mermaid configuration
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'dark',
-  securityLevel: 'strict',
-  fontFamily: 'inherit',
-});
+// Lazy-loaded mermaid singleton (deferred until first diagram is encountered)
+let mermaidInstance: typeof import('mermaid').default | null = null;
+async function getMermaid() {
+  if (!mermaidInstance) {
+    const mod = await import('mermaid');
+    mermaidInstance = mod.default;
+    mermaidInstance.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      securityLevel: 'strict',
+      fontFamily: 'inherit',
+    });
+  }
+  return mermaidInstance;
+}
 
 // Configure marked to use syntax highlighting
 marked.use(
@@ -35,27 +41,29 @@ marked.use(
   })
 );
 
-// Mermaid syntax keywords used to detect diagram content
-const MERMAID_KEYWORDS = [
+// Mermaid syntax keywords used to detect diagram content (Set for O(1) lookup)
+const MERMAID_KEYWORDS = new Set([
   'flowchart',
   'graph',
-  'sequenceDiagram',
-  'classDiagram',
-  'stateDiagram',
-  'erDiagram',
+  'sequencediagram',
+  'classdiagram',
+  'statediagram',
+  'statediagram-v2',
+  'erdiagram',
   'journey',
   'gantt',
   'pie',
-  'quadrantChart',
-  'requirementDiagram',
-  'gitGraph',
+  'quadrantchart',
+  'requirementdiagram',
+  'gitgraph',
   'mindmap',
   'timeline',
   'zenuml',
   'sankey',
   'xychart',
+  'xychart-beta',
   'block-beta',
-];
+]);
 
 marked.setOptions({
   breaks: false,
@@ -112,6 +120,14 @@ function makeStreamSafe(content: string): string {
 // Mermaid render counter for generating unique IDs
 let mermaidIdCounter = 0;
 
+// Copy icon SVG (hoisted to module scope to avoid recreation on each render)
+const copyIconSvg = `
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fill-opacity="0.9"/>
+      <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fill-opacity="0.6"/>
+    </svg>
+  `;
+
 const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps) => {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -155,15 +171,14 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
 
       // Check if the content is mermaid syntax (starts with a keyword)
       const firstWord = code.split(/[\s\n]/)[0].toLowerCase();
-      const isMermaid = MERMAID_KEYWORDS.some(kw =>
-        firstWord === kw.toLowerCase() || firstWord.startsWith(kw.toLowerCase())
-      );
+      const isMermaid = MERMAID_KEYWORDS.has(firstWord);
 
       if (!isMermaid) continue;
 
       try {
+        const mmd = await getMermaid();
         const id = `mermaid-${++mermaidIdCounter}`;
-        const { svg } = await mermaid.render(id, code);
+        const { svg } = await mmd.render(id, code);
 
         const mermaidContainer = document.createElement('div');
         mermaidContainer.className = 'mermaid-diagram';
@@ -193,8 +208,10 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     return renderedAny;
   }, []);
 
-  // Render mermaid diagrams after HTML updates
+  // Render mermaid diagrams after HTML updates (skip during streaming to prevent flicker)
   useEffect(() => {
+    if (isStreaming) return;
+
     let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let retryRafId: number | null = null;
 
@@ -220,15 +237,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       if (retryTimeoutId) clearTimeout(retryTimeoutId);
       if (retryRafId) cancelAnimationFrame(retryRafId);
     };
-  }, [content, renderMermaidDiagrams]);
-
-  // Copy icon SVG
-  const copyIconSvg = `
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fill-opacity="0.9"/>
-      <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fill-opacity="0.6"/>
-    </svg>
-  `;
+  }, [content, isStreaming, renderMermaidDiagrams]);
 
   // Copy to clipboard implementation
   const copyToClipboard = async (text: string) => {
@@ -431,4 +440,4 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   );
 };
 
-export default MarkdownBlock;
+export default memo(MarkdownBlock);

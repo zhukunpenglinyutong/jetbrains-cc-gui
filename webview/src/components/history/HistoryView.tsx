@@ -64,7 +64,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
 
   useEffect(() => {
     const handleResize = () => setViewportHeight(window.innerHeight || 600);
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
