@@ -152,6 +152,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
+      "diffExpanded": {
+        "label": "差分をデフォルトで展開",
+        "enabled": "展開",
+        "disabled": "折りたたみ",
+        "hint": "有効にすると、チャット内のコード差分がデフォルトで展開表示されます。無効の場合、差分は折りたたまれた状態で表示されます。"
+      },
       "sendShortcut": {
         "label": "送信ショートカット",
         "enter": "Enterで送信",
@@ -524,6 +530,7 @@
     "messageCount": "{{count}}メッセージ",
     "searchPlaceholder": "セッションタイトルを検索...",
     "noSearchResults": "一致するセッションが見つかりません",
+    "tryOtherKeywords": "他の検索キーワードを試してください",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "タイトルを編集",
     "saveTitleButton": "保存",
@@ -819,6 +826,7 @@
     "runCommand": "コマンドを実行",
     "contextEngine": "コンテキストエンジン",
     "task": "タスク",
+    "promptLabel": "プロンプト",
     "readFile": "ファイルを読み取る",
     "editFile": "ファイルを編集",
     "writeFile": "ファイルを書き込む",
@@ -846,13 +854,15 @@
     "searchBatchTitle": "一括検索",
     "editPrefix": "編集: {{fileName}}",
     "lineRange": "{{start}}-{{end}}行目",
+    "lineSingle": "{{line}}行目",
     "filePath": "ファイルパス：",
     "unknownTool": "不明なツール",
     "bashGroupBatchRun": "Batch Run Commands",
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "promptLabel": "プロンプト"
   },
   "todo": {
     "inProgress": "進行中 {{completed}}/{{total}} タスク",
@@ -907,6 +917,7 @@
     "description": "説明",
     "noDescription": "説明なし",
     "noSkills": "スキルなし",
+    "noMatchingSkills": "一致するスキルが見つかりません",
     "importHint": "+ボタンをクリックしてスキルファイルまたはフォルダーをインポート",
     "deleteTitle": "スキルを削除",
     "deleteMessage": "{{scope}}スキル\"{{name}}\"を削除してもよろしいですか?\n\nこの操作は元に戻せません。",
@@ -919,6 +930,12 @@
     "deleteSuccess": "スキルが正常に削除されました",
     "toggleSuccess": "スキルステータスが更新されました",
     "toggleFailed": "スキルステータスの更新に失敗しました",
+    "deleteFailed": "Skillの削除に失敗しました",
+    "enableSuccess": "Skillを有効化しました: {{name}}",
+    "disableSuccess": "Skillを無効化しました: {{name}}",
+    "operationFailed": "操作に失敗しました: {{error}}",
+    "operationError": "Skill操作に失敗しました",
+    "refreshed": "Skillsリストを更新しました",
     "help": {
       "title": "Skills とは？",
       "overview": {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { memo, useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAppViewport } from '../utils/viewport';
 
@@ -16,7 +16,7 @@ interface ScrollControlProps {
  * - Hidden when content fits within one screen
  * - Always positioned 20px above the input area
  */
-export const ScrollControl = ({ containerRef, inputAreaRef }: ScrollControlProps) => {
+export const ScrollControl = memo(({ containerRef, inputAreaRef }: ScrollControlProps) => {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [direction, setDirection] = useState<'up' | 'down'>('down');
@@ -214,4 +214,4 @@ export const ScrollControl = ({ containerRef, inputAreaRef }: ScrollControlProps
       </svg>
     </button>
   );
-};
+});

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 
 interface TaskExecutionBlockProps {
@@ -7,6 +8,7 @@ interface TaskExecutionBlockProps {
 }
 
 const TaskExecutionBlock = ({ input, result }: TaskExecutionBlockProps) => {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   if (!input) {
@@ -26,7 +28,7 @@ const TaskExecutionBlock = ({ input, result }: TaskExecutionBlockProps) => {
           <span className="codicon codicon-tools tool-title-icon" />
 
           <span className="tool-title-text">
-            任务
+            {t('tools.task')}
           </span>
           {typeof subagentType === 'string' && subagentType && (
             <span className="tool-title-summary">{subagentType}</span>
@@ -49,7 +51,7 @@ const TaskExecutionBlock = ({ input, result }: TaskExecutionBlockProps) => {
               <div className="task-field">
                 <div className="task-field-label">
                   <span className="codicon codicon-comment" />
-                  提示词 (Prompt)
+                  {t('tools.promptLabel')}
                 </div>
                 <div className="task-field-content">{prompt}</div>
               </div>

@@ -152,6 +152,12 @@
         "disabled": "已关闭",
         "hint": "开启后，在项目树选择文件时会自动在编辑器中打开。关闭后需要手动操作才能打开文件。"
       },
+      "diffExpanded": {
+        "label": "默认展开差异",
+        "enabled": "已展开",
+        "disabled": "已折叠",
+        "hint": "开启后，聊天中的代码差异将默认展开显示。关闭后，差异默认折叠，可点击展开。"
+      },
       "sendShortcut": {
         "label": "发送快捷键",
         "enter": "Enter 发送",
@@ -526,6 +532,7 @@
     "messageCount": "{{count}} 条消息",
     "searchPlaceholder": "搜索会话标题...",
     "noSearchResults": "未找到匹配的会话",
+    "tryOtherKeywords": "尝试其他搜索关键词",
     "deepSearchTooltip": "深度搜索（清空缓存后重新加载）",
     "editTitle": "编辑标题",
     "saveTitleButton": "保存",
@@ -821,6 +828,7 @@
     "runCommand": "运行命令",
     "contextEngine": "上下文引擎",
     "task": "任务",
+    "promptLabel": "提示词 (Prompt)",
     "readFile": "读取文件",
     "editFile": "编辑文件",
     "writeFile": "写入文件",
@@ -848,6 +856,7 @@
     "searchBatchTitle": "批量搜索",
     "editPrefix": "编辑: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
+    "lineSingle": "第 {{line}} 行",
     "filePath": "文件路径：",
     "unknownTool": "未知工具",
     "bashGroupBatchRun": "批量运行命令",
@@ -855,6 +864,7 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
+    "promptLabel": "提示词",
     "updatePlan": "更新计划"
   },
   "todo": {
@@ -909,6 +919,7 @@
     "description": "描述",
     "noDescription": "暂无描述",
     "noSkills": "暂无 Skills",
+    "noMatchingSkills": "未找到匹配的 Skills",
     "importHint": "点击 + 按钮导入 Skill 文件或文件夹",
     "deleteTitle": "删除 Skill",
     "deleteMessage": "确定要删除{{scope}} Skill \"{{name}}\" 吗？\n\n此操作无法撤销。",
@@ -921,6 +932,12 @@
     "deleteSuccess": "已成功删除 Skill",
     "toggleSuccess": "已更新 Skill 状态",
     "toggleFailed": "更新 Skill 状态失败",
+    "deleteFailed": "删除 Skill 失败",
+    "enableSuccess": "已成功启用 Skill: {{name}}",
+    "disableSuccess": "已成功停用 Skill: {{name}}",
+    "operationFailed": "操作失败: {{error}}",
+    "operationError": "操作 Skill 失败",
+    "refreshed": "已刷新 Skills 列表",
     "help": {
       "title": "什么是 Skills?",
       "overview": {

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TFunction } from 'i18next';
 
 import { BlinkingLogo } from '../BlinkingLogo';
@@ -11,7 +12,7 @@ export interface WelcomeScreenProps {
   onVersionClick?: () => void;
 }
 
-export function WelcomeScreen({
+export const WelcomeScreen = memo(function WelcomeScreen({
   currentProvider,
   t,
   onProviderChange,
@@ -47,4 +48,4 @@ export function WelcomeScreen({
       </div>
     </div>
   );
-}
+});
