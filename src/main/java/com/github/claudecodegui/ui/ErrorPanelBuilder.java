@@ -124,4 +124,85 @@ public class ErrorPanelBuilder {
 
         return errorPanel;
     }
+
+    /**
+     * Build a centered icon+title+message panel (used for JCEF errors and loading).
+     */
+    public static JPanel buildCenteredPanel(String icon, String title, String message) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(30, 30, 30));
+
+        JPanel centerPanel = new JPanel();
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setBackground(new Color(30, 30, 30));
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(50, 50, 50, 50));
+
+        JLabel iconLabel = new JLabel(icon);
+        iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 48));
+        iconLabel.setForeground(Color.WHITE);
+        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+        titleLabel.setForeground(Color.WHITE);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JTextArea messageArea = new JTextArea();
+        messageArea.setText(message);
+        messageArea.setEditable(false);
+        messageArea.setBackground(new Color(45, 45, 45));
+        messageArea.setForeground(new Color(200, 200, 200));
+        messageArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+        messageArea.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        messageArea.setAlignmentX(Component.CENTER_ALIGNMENT);
+        messageArea.setMaximumSize(new Dimension(500, 300));
+
+        centerPanel.add(iconLabel);
+        centerPanel.add(Box.createVerticalStrut(15));
+        centerPanel.add(titleLabel);
+        centerPanel.add(Box.createVerticalStrut(20));
+        centerPanel.add(messageArea);
+
+        panel.add(centerPanel, BorderLayout.CENTER);
+        return panel;
+    }
+
+    /**
+     * Build a loading panel with icon, title, and description.
+     */
+    public static JPanel buildLoadingPanel(String icon, String title, String description) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(30, 30, 30));
+
+        JPanel centerPanel = new JPanel();
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setBackground(new Color(30, 30, 30));
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(100, 50, 100, 50));
+
+        JLabel iconLabel = new JLabel(icon);
+        iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 48));
+        iconLabel.setForeground(Color.WHITE);
+        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+        titleLabel.setForeground(Color.WHITE);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        JLabel descLabel = new JLabel("<html><center>" + description.replace("\n", "<br>") + "</center></html>");
+        descLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        descLabel.setForeground(new Color(180, 180, 180));
+        descLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        descLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        centerPanel.add(iconLabel);
+        centerPanel.add(Box.createVerticalStrut(20));
+        centerPanel.add(titleLabel);
+        centerPanel.add(Box.createVerticalStrut(10));
+        centerPanel.add(descLabel);
+
+        panel.add(centerPanel, BorderLayout.CENTER);
+        return panel;
+    }
 }
