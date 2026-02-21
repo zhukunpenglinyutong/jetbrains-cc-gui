@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AgentConfig } from '../../../types/agent';
 
 const sendToJava = (message: string) => {
@@ -24,6 +25,7 @@ export interface UseAgentManagementOptions {
 }
 
 export function useAgentManagement(options: UseAgentManagementOptions = {}) {
+  const { t } = useTranslation();
   const { onSuccess } = options;
 
   // Timeout timer reference (using useRef to avoid global variable pollution)
@@ -163,11 +165,11 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     (result: { success: boolean; operation?: string; error?: string }) => {
       if (result.success) {
         const operationMessages: Record<string, string> = {
-          add: '智能体已添加',
-          update: '智能体已更新',
-          delete: '智能体已删除',
+          add: t('settings.agent.addSuccess'),
+          update: t('settings.agent.updateSuccess'),
+          delete: t('settings.agent.deleteSuccess'),
         };
-        onSuccess?.(operationMessages[result.operation || ''] || '操作成功');
+        onSuccess?.(operationMessages[result.operation || ''] || t('settings.agent.operationSuccess'));
       }
     },
     [onSuccess]
