@@ -152,6 +152,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
+      "diffExpanded": {
+        "label": "डिफ़ॉल्ट रूप से अंतर दिखाएं",
+        "enabled": "विस्तारित",
+        "disabled": "संक्षिप्त",
+        "hint": "सक्षम होने पर, चैट में कोड अंतर डिफ़ॉल्ट रूप से विस्तारित होंगे। अक्षम होने पर, अंतर संक्षिप्त शुरू होते हैं।"
+      },
       "sendShortcut": {
         "label": "भेजने का शॉर्टकट",
         "enter": "Enter से भेजें",
@@ -847,7 +853,8 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "promptLabel": "प्रॉम्प्ट"
   },
   "todo": {
     "inProgress": "{{completed}}/{{total}} कार्य प्रगति में",

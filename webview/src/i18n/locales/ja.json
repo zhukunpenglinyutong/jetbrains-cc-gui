@@ -152,6 +152,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
+      "diffExpanded": {
+        "label": "差分をデフォルトで展開",
+        "enabled": "展開",
+        "disabled": "折りたたみ",
+        "hint": "有効にすると、チャット内のコード差分がデフォルトで展開表示されます。無効の場合、差分は折りたたまれた状態で表示されます。"
+      },
       "sendShortcut": {
         "label": "送信ショートカット",
         "enter": "Enterで送信",
@@ -852,7 +858,8 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "promptLabel": "プロンプト"
   },
   "todo": {
     "inProgress": "進行中 {{completed}}/{{total}} タスク",
