@@ -78,10 +78,13 @@ export function useNativeEventCapture({
 
     const nativeKeyDown = (ev: KeyboardEvent) => {
       const latest = latestRef.current;
-      const isIMEProcessing = ev.keyCode === 229 || ev.isComposing;
-      if (isIMEProcessing) {
-        latest.isComposingRef.current = true;
-      }
+
+      // NOTE: We intentionally do NOT set isComposingRef here based on keyCode 229.
+      // IME composing state is managed exclusively by compositionStart/End events.
+      // In JCEF, keyCode 229 is reported for ALL keys while the Korean IME is active,
+      // including space, which is not an actual composition. Setting isComposingRef=true
+      // here without a corresponding compositionEnd to clear it causes the ref to get
+      // stuck, blocking handleInput and causing cursor jumping on space key.
 
       const isEnterKey = ev.key === 'Enter' || ev.keyCode === 13;
 
