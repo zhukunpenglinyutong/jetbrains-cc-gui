@@ -226,8 +226,9 @@ const App = () => {
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
   // Auto-open file setting
   const [autoOpenFileEnabled, setAutoOpenFileEnabled] = useState(true);
-  // StatusPanel expanded/collapsed state (collapsed by default, auto-expands when content is present)
-  const [statusPanelExpanded, setStatusPanelExpanded] = useState(false);
+  // StatusPanel: track whether user manually collapsed; use state to trigger re-render on toggle
+  const userCollapsedRef = useRef(false);
+  const [, forceStatusUpdate] = useState(0);
   // List of processed file paths (filtered from fileChanges after Apply/Reject, persisted to localStorage)
   const [processedFiles, setProcessedFiles] = useState<string[]>([]);
   // Base message index (for Keep All feature, only counts changes after this index)
@@ -250,9 +251,13 @@ const App = () => {
 
   // Use useRef to store the latest provider value, avoiding stale closures in callbacks
   const currentProviderRef = useRef(currentProvider);
+  const activeProviderConfigRef = useRef(activeProviderConfig);
   useEffect(() => {
     currentProviderRef.current = currentProvider;
   }, [currentProvider]);
+  useEffect(() => {
+    activeProviderConfigRef.current = activeProviderConfig;
+  }, [activeProviderConfig]);
 
   // Use useRef to store the latest sessionId value for access in callbacks
   const currentSessionIdRef = useRef(currentSessionId);
@@ -267,10 +272,8 @@ const App = () => {
   const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
 
   // Determine whether the SDK for the current provider is installed
-  const currentSdkInstalled = (() => {
-    // Return false when status hasn't loaded yet (show loading or not-installed prompt)
+  const currentSdkInstalled = useMemo(() => {
     if (!sdkStatusLoaded) return false;
-    // Provider -> SDK mapping
     const providerToSdk: Record<string, string> = {
       claude: 'claude-sdk',
       anthropic: 'claude-sdk',
@@ -280,11 +283,10 @@ const App = () => {
     };
     const sdkId = providerToSdk[currentProvider] || 'claude-sdk';
     const status = sdkStatus[sdkId];
-    // Check the status field (preferred) or the installed field
     return status?.status === 'installed' || status?.installed === true;
-  })();
+  }, [sdkStatusLoaded, currentProvider, sdkStatus]);
 
-  const syncActiveProviderModelMapping = (provider?: ProviderConfig | null) => {
+  const syncActiveProviderModelMapping = useCallback((provider?: ProviderConfig | null) => {
     if (typeof window === 'undefined' || !window.localStorage) return;
     if (!provider || !provider.settingsConfig || !provider.settingsConfig.env) {
       try {
@@ -309,7 +311,7 @@ const App = () => {
       }
     } catch {
     }
-  };
+  }, []);
 
   // Global drag event interception - prevent browser default file-open behavior
   // This ensures dragging files anywhere in the plugin won't trigger the browser to open files
@@ -530,17 +532,17 @@ const App = () => {
   }, []);
 
   // Toast helper functions
-  const addToast = (message: string, type: ToastMessage['type'] = 'info') => {
+  const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
     // Don't show toast for default status
     if (message === DEFAULT_STATUS || !message) return;
 
     const id = `toast-${Date.now()}-${Math.random()}`;
     setToasts((prev) => [...prev, { id, message, type }]);
-  };
+  }, []);
 
-  const dismissToast = (id: string) => {
+  const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
+  }, []);
 
   // Session management (create, load, delete, export, etc.)
   const {
@@ -901,8 +903,8 @@ const App = () => {
   /**
    * Handle mode selection
    */
-  const handleModeSelect = (mode: PermissionMode) => {
-    if (currentProvider === 'codex') {
+  const handleModeSelect = useCallback((mode: PermissionMode) => {
+    if (currentProviderRef.current === 'codex') {
       setPermissionMode('bypassPermissions');
       sendBridgeEvent('set_mode', 'bypassPermissions');
       return;
@@ -910,28 +912,26 @@ const App = () => {
     setPermissionMode(mode);
     setClaudePermissionMode(mode);
     sendBridgeEvent('set_mode', mode);
-  };
+  }, []);
 
   /**
    * Handle model selection
    */
-  const handleModelSelect = (modelId: string) => {
-    if (currentProvider === 'claude') {
+  const handleModelSelect = useCallback((modelId: string) => {
+    if (currentProviderRef.current === 'claude') {
       setSelectedClaudeModel(modelId);
-    } else if (currentProvider === 'codex') {
+    } else if (currentProviderRef.current === 'codex') {
       setSelectedCodexModel(modelId);
     }
     sendBridgeEvent('set_model', modelId);
-  };
+  }, []);
 
   /**
    * Handle provider selection
    * Clears messages and input box when switching provider (similar to creating a new session)
    */
-  const handleProviderSelect = (providerId: string) => {
-    // Clear message list (similar to creating a new session)
+  const handleProviderSelect = useCallback((providerId: string) => {
     setMessages([]);
-    // Clear input box
     chatInputRef.current?.clear();
 
     setCurrentProvider(providerId);
@@ -940,23 +940,22 @@ const App = () => {
     setPermissionMode(modeToSet);
     sendBridgeEvent('set_mode', modeToSet);
 
-    // When switching provider, also send the corresponding model
     const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
     sendBridgeEvent('set_model', newModel);
-  };
+  }, [claudePermissionMode, selectedCodexModel, selectedClaudeModel]);
 
   /**
    * Handle reasoning effort selection (Codex only)
    */
-  const handleReasoningChange = (effort: ReasoningEffort) => {
+  const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
     setReasoningEffort(effort);
     sendBridgeEvent('set_reasoning_effort', effort);
-  };
+  }, []);
 
   /**
    * Handle agent selection
    */
-  const handleAgentSelect = (agent: SelectedAgent | null) => {
+  const handleAgentSelect = useCallback((agent: SelectedAgent | null) => {
     setSelectedAgent(agent);
     if (agent) {
       sendBridgeEvent('set_selected_agent', JSON.stringify({
@@ -967,20 +966,20 @@ const App = () => {
     } else {
       sendBridgeEvent('set_selected_agent', '');
     }
-  };
+  }, []);
 
   /**
    * Handle thinking mode toggle
    */
-  const handleToggleThinking = (enabled: boolean) => {
-    if (!activeProviderConfig) {
+  const handleToggleThinking = useCallback((enabled: boolean) => {
+    const config = activeProviderConfigRef.current;
+    if (!config) {
       setClaudeSettingsAlwaysThinkingEnabled(enabled);
       sendBridgeEvent('set_thinking_enabled', JSON.stringify({ enabled }));
       addToast(enabled ? t('toast.thinkingEnabled') : t('toast.thinkingDisabled'), 'success');
       return;
     }
 
-    // Update local state (optimistic update)
     setActiveProviderConfig(prev => prev ? {
       ...prev,
       settingsConfig: {
@@ -989,19 +988,18 @@ const App = () => {
       }
     } : null);
 
-    // Send update to backend
     const payload = JSON.stringify({
-      id: activeProviderConfig.id,
+      id: config.id,
       updates: {
         settingsConfig: {
-          ...(activeProviderConfig.settingsConfig || {}),
+          ...(config.settingsConfig || {}),
           alwaysThinkingEnabled: enabled
         }
       }
     });
     sendBridgeEvent('update_provider', payload);
     addToast(enabled ? t('toast.thinkingEnabled') : t('toast.thinkingDisabled'), 'success');
-  };
+  }, [addToast, t]);
 
   /**
    * Handle streaming toggle
@@ -1032,7 +1030,7 @@ const App = () => {
     addToast(enabled ? t('settings.basic.autoOpenFile.enabled') : t('settings.basic.autoOpenFile.disabled'), 'success');
   }, [t, addToast]);
 
-  const interruptSession = () => {
+  const interruptSession = useCallback(() => {
     // FIX: Reset frontend state immediately without waiting for backend callback
     // This lets the user see the stop effect right away
     setLoading(false);
@@ -1041,7 +1039,7 @@ const App = () => {
     isStreamingRef.current = false;
 
     sendBridgeEvent('interrupt_session');
-  };
+  }, []);
 
   // Message utility functions (use imported utilities with bound dependencies)
   const localizeMessage = useMemo(() => createLocalizeMessage(t), [t]);
@@ -1506,13 +1504,12 @@ const App = () => {
     findToolResult,
   });
 
-  // Auto-expand StatusPanel when there is content
+  // Derive expanded state: auto-expand when content exists, unless user manually collapsed
   const hasStatusPanelContent = globalTodos.length > 0 || filteredFileChanges.length > 0 || subagents.length > 0;
-  useEffect(() => {
-    if (hasStatusPanelContent) {
-      setStatusPanelExpanded(true);
-    }
-  }, [hasStatusPanelContent]);
+  if (!hasStatusPanelContent) {
+    userCollapsedRef.current = false;
+  }
+  const statusPanelExpanded = hasStatusPanelContent && !userCollapsedRef.current;
 
   const sessionTitle = useMemo(() => {
     if (messages.length === 0) {
@@ -1675,7 +1672,7 @@ const App = () => {
             hasMessages={messages.length > 0}
             onRewind={handleOpenRewindSelectDialog}
             statusPanelExpanded={statusPanelExpanded}
-            onToggleStatusPanel={() => setStatusPanelExpanded(!statusPanelExpanded)}
+            onToggleStatusPanel={() => { userCollapsedRef.current = !userCollapsedRef.current; forceStatusUpdate(c => c + 1); }}
             addToast={addToast}
             messageQueue={messageQueue}
             onRemoveFromQueue={dequeueMessage}

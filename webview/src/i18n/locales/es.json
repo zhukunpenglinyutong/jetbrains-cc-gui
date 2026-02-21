@@ -152,6 +152,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
+      "diffExpanded": {
+        "label": "Expandir diferencias por defecto",
+        "enabled": "Expandido",
+        "disabled": "Colapsado",
+        "hint": "Cuando está habilitado, las diferencias de código en el chat se expandirán por defecto. Cuando está deshabilitado, las diferencias comienzan colapsadas."
+      },
       "sendShortcut": {
         "label": "Atajo de envío",
         "enter": "Enter para enviar",
@@ -519,6 +525,7 @@
     "messageCount": "{{count}} mensajes",
     "searchPlaceholder": "Buscar título de sesión...",
     "noSearchResults": "No se encontraron sesiones coincidentes",
+    "tryOtherKeywords": "Intente con otras palabras clave de búsqueda",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "Editar título",
     "saveTitleButton": "Guardar",
@@ -814,6 +821,7 @@
     "runCommand": "Ejecutar comando",
     "contextEngine": "Motor de contexto",
     "task": "Tarea",
+    "promptLabel": "Prompt",
     "readFile": "Leer archivo",
     "editFile": "Editar archivo",
     "writeFile": "Escribir archivo",
@@ -841,13 +849,15 @@
     "searchBatchTitle": "Buscar en lote",
     "editPrefix": "Editar: {{fileName}}",
     "lineRange": "Líneas {{start}}-{{end}}",
+    "lineSingle": "Línea {{line}}",
     "filePath": "Ruta del archivo:",
     "unknownTool": "Herramienta desconocida",
     "bashGroupBatchRun": "Batch Run Commands",
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "promptLabel": "Prompt"
   },
   "todo": {
     "inProgress": "En progreso {{completed}}/{{total}} tareas",
@@ -902,6 +912,7 @@
     "description": "Description",
     "noDescription": "No description",
     "noSkills": "No Skills",
+    "noMatchingSkills": "No se encontraron Skills coincidentes",
     "importHint": "Click + button to import Skill file or folder",
     "deleteTitle": "Delete Skill",
     "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
@@ -914,6 +925,12 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status",
+    "deleteFailed": "Error al eliminar el Skill",
+    "enableSuccess": "Skill habilitado con éxito: {{name}}",
+    "disableSuccess": "Skill deshabilitado con éxito: {{name}}",
+    "operationFailed": "Error en la operación: {{error}}",
+    "operationError": "Error en la operación de Skill",
+    "refreshed": "Lista de Skills actualizada",
     "help": {
       "title": "¿Qué son las Skills?",
       "overview": {

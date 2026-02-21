@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../../types/provider';
 
 const sendToJava = (message: string) => {
@@ -24,6 +25,7 @@ export interface UseProviderManagementOptions {
 }
 
 export function useProviderManagement(options: UseProviderManagementOptions = {}) {
+  const { t } = useTranslation();
   const { onError, onSuccess } = options;
 
   // Provider list state
@@ -129,7 +131,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
       jsonConfig: string;
     }) => {
       if (!data.providerName) {
-        onError?.('请输入供应商名称');
+        onError?.(t('toast.pleaseEnterProviderName'));
         return false;
       }
 
@@ -137,7 +139,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
       try {
         parsedConfig = JSON.parse(data.jsonConfig || '{}');
       } catch (e) {
-        onError?.('JSON 配置格式无效');
+        onError?.(t('toast.invalidJsonConfig'));
         return false;
       }
 
@@ -156,7 +158,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
           ...updates,
         };
         sendToJava(`add_provider:${JSON.stringify(newProvider)}`);
-        onSuccess?.('供应商已添加');
+        onSuccess?.(t('toast.providerAdded'));
       } else {
         if (!providerDialog.provider) return false;
 
@@ -170,7 +172,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
           updates,
         };
         sendToJava(`update_provider:${JSON.stringify(updateData)}`);
-        onSuccess?.('供应商已更新');
+        onSuccess?.(t('toast.providerUpdated'));
 
         if (isActive) {
           syncActiveProviderModelMapping({
@@ -216,7 +218,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
 
     const data = { id: provider.id };
     sendToJava(`delete_provider:${JSON.stringify(data)}`);
-    onSuccess?.('供应商已删除');
+    onSuccess?.(t('toast.providerDeleted'));
     setLoading(true);
     setDeleteConfirm({ isOpen: false, provider: null });
   }, [deleteConfirm.provider, onSuccess]);

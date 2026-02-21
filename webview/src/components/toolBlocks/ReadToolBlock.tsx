@@ -126,9 +126,9 @@ const ReadToolBlock = ({ input }: ReadToolBlockProps) => {
       const startLine = match[1];
       const endLine = match[2];
       if (endLine) {
-        lineInfo = `第 ${startLine}-${endLine} 行`;
+        lineInfo = t('tools.lineRange', { start: startLine, end: endLine });
       } else {
-        lineInfo = `第 ${startLine} 行`;
+        lineInfo = t('tools.lineSingle', { line: startLine });
       }
     }
   }

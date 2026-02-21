@@ -26,6 +26,25 @@ public class IgnoreRuleMatcher {
     private static final ConcurrentHashMap<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
     private static final int MAX_CACHE_SIZE = 1000;
 
+    // Cache matcher instances per project to avoid re-reading .gitignore on every editor event
+    private static final ConcurrentHashMap<String, CachedMatcher> MATCHER_CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_MATCHER_CACHE_SIZE = 50;
+    private static final long CACHE_TTL_MS = 30_000; // 30 seconds
+
+    private static class CachedMatcher {
+        final IgnoreRuleMatcher matcher;
+        final long createdAt;
+
+        CachedMatcher(IgnoreRuleMatcher matcher) {
+            this.matcher = matcher;
+            this.createdAt = System.currentTimeMillis();
+        }
+
+        boolean isExpired() {
+            return System.currentTimeMillis() - createdAt > CACHE_TTL_MS;
+        }
+    }
+
     /**
      * A compiled rule containing pre-compiled regex patterns.
      */
@@ -49,9 +68,16 @@ public class IgnoreRuleMatcher {
         }
 
         private Pattern getOrCompilePattern(String regex) {
-            // Simple cache size control
+            // Evict oldest entries when cache exceeds max size to avoid unbounded growth.
+            // Using individual removal instead of clear() to prevent concurrent access issues.
             if (PATTERN_CACHE.size() > MAX_CACHE_SIZE) {
-                PATTERN_CACHE.clear();
+                int toRemove = PATTERN_CACHE.size() - MAX_CACHE_SIZE + MAX_CACHE_SIZE / 4;
+                var iterator = PATTERN_CACHE.keySet().iterator();
+                while (iterator.hasNext() && toRemove > 0) {
+                    iterator.next();
+                    iterator.remove();
+                    toRemove--;
+                }
             }
             // Use case-insensitive matching on Windows/macOS; Linux is typically case-sensitive
             boolean caseInsensitive = SystemInfo.isWindows || SystemInfo.isMac;
@@ -173,6 +199,21 @@ public class IgnoreRuleMatcher {
     }
 
     /**
+     * Check if an absolute file path is ignored.
+     * Uses the instance's basePath for relative path resolution.
+     * Only checks file rules; directory-only rules (patterns ending with /) are not matched.
+     *
+     * @param absoluteFilePath the absolute path of the file to check
+     * @return true if the file should be ignored
+     */
+    public boolean isFileIgnored(String absoluteFilePath) {
+        if (absoluteFilePath == null) {
+            return false;
+        }
+        return isIgnored(absoluteFilePath, false);
+    }
+
+    /**
      * Static factory method: create a matcher and load the project root .gitignore.
      */
     public static IgnoreRuleMatcher forProject(String projectBasePath) {
@@ -185,5 +226,46 @@ public class IgnoreRuleMatcher {
         }
 
         return matcher;
+    }
+
+    /**
+     * Cached, null-safe factory method.
+     * Returns a cached matcher instance for the given project path (30s TTL),
+     * or null if creation fails.
+     *
+     * @param projectBasePath the project root path
+     * @return matcher instance, or null on failure
+     */
+    public static IgnoreRuleMatcher forProjectSafe(String projectBasePath) {
+        if (projectBasePath == null) {
+            return null;
+        }
+        String key = projectBasePath.replace('\\', '/');
+        CachedMatcher cached = MATCHER_CACHE.get(key);
+        if (cached != null && !cached.isExpired()) {
+            return cached.matcher;
+        }
+        try {
+            IgnoreRuleMatcher matcher = forProject(projectBasePath);
+            // Evict expired entries and enforce size limit
+            if (MATCHER_CACHE.size() >= MAX_MATCHER_CACHE_SIZE) {
+                MATCHER_CACHE.entrySet().removeIf(e -> e.getValue().isExpired());
+                // If still over limit after purging expired, remove oldest entries
+                if (MATCHER_CACHE.size() >= MAX_MATCHER_CACHE_SIZE) {
+                    var iterator = MATCHER_CACHE.keySet().iterator();
+                    int toRemove = MATCHER_CACHE.size() - MAX_MATCHER_CACHE_SIZE + 1;
+                    while (iterator.hasNext() && toRemove > 0) {
+                        iterator.next();
+                        iterator.remove();
+                        toRemove--;
+                    }
+                }
+            }
+            MATCHER_CACHE.put(key, new CachedMatcher(matcher));
+            return matcher;
+        } catch (Exception e) {
+            LOG.warn("Failed to create .gitignore matcher: " + e.getMessage());
+            return null;
+        }
     }
 }

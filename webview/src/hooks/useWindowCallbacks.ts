@@ -301,12 +301,19 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
                 // FIX: If there is buffered streaming content (onContentDelta may fire before updateMessages),
                 // apply it to the assistant message immediately to prevent content loss.
+                // Guard: only use streaming buffer if it's longer; otherwise adopt backend content.
                 if (streamingContentRef.current && result[lastAssistantIdx]?.type === 'assistant') {
-                  result[lastAssistantIdx] = patchAssistantForStreaming({
-                    ...result[lastAssistantIdx],
-                    content: streamingContentRef.current,
-                    isStreaming: true,
-                  });
+                  const backendContent = result[lastAssistantIdx].content || '';
+                  if (streamingContentRef.current.length >= backendContent.length) {
+                    result[lastAssistantIdx] = patchAssistantForStreaming({
+                      ...result[lastAssistantIdx],
+                      content: streamingContentRef.current,
+                      isStreaming: true,
+                    });
+                  } else {
+                    // Backend has more complete content (e.g. includes tool_use blocks); sync buffer
+                    streamingContentRef.current = backendContent;
+                  }
                 }
               }
 
@@ -347,47 +354,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
             return appendOptimisticMessageIfMissing(prev, smartMerged);
           }
 
-          // Below is the original streaming logic that must be preserved.
-          // Because we cannot return inside the `if (!isStreamingRef.current)` block above,
-          // the streaming path is duplicated here to minimize structural changes.
-          
-          if (useBackendStreamingRenderRef.current) {
-            let smartMerged = parsed.map((newMsg, i) => {
-              if (i === parsed.length - 1) return newMsg;
-              if (i < prev.length) {
-                const oldMsg = prev[i];
-                if (
-                  oldMsg.timestamp === newMsg.timestamp &&
-                  oldMsg.type === newMsg.type &&
-                  oldMsg.content === newMsg.content
-                ) {
-                  return oldMsg;
-                }
-              }
-              return newMsg;
-            });
-
-            smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
-            const result = appendOptimisticMessageIfMissing(prev, smartMerged);
-
-            // FIX: In Claude mode, update streamingMessageIndexRef
-            const lastAssistantIdx = findLastAssistantIndex(result);
-            if (lastAssistantIdx >= 0) {
-              streamingMessageIndexRef.current = lastAssistantIdx;
-
-              // FIX: If there is buffered streaming content, apply it immediately
-              if (streamingContentRef.current && result[lastAssistantIdx]?.type === 'assistant') {
-                result[lastAssistantIdx] = patchAssistantForStreaming({
-                  ...result[lastAssistantIdx],
-                  content: streamingContentRef.current,
-                  isStreaming: true,
-                });
-              }
-            }
-
-            return result;
-          }
-
+          // Streaming + !useBackendStreamingRender: only update on tool_use changes
           const lastAssistantIdx = findLastAssistantIndex(parsed);
           if (lastAssistantIdx < 0) {
             return parsed;
@@ -662,12 +629,11 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     window.onStreamEnd = () => {
       console.log('[Frontend] Stream ended');
-      isStreamingRef.current = false;
-      useBackendStreamingRenderRef.current = false;
 
       // Notify backend about stream completion for tab status indicator
       sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'completed' }));
 
+      // Clear pending throttle timeouts — their content is already in streamingContentRef
       if (contentUpdateTimeoutRef.current) {
         clearTimeout(contentUpdateTimeoutRef.current);
         contentUpdateTimeoutRef.current = null;
@@ -677,6 +643,8 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         thinkingUpdateTimeoutRef.current = null;
       }
 
+      // Flush final content BEFORE marking stream as ended,
+      // so late-arriving deltas are not discarded by the isStreamingRef guard.
       setMessages((prev) => {
         const newMessages = [...prev];
         const idx = streamingMessageIndexRef.current;
@@ -690,6 +658,10 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         }
         return newMessages;
       });
+
+      // Mark streaming as ended AFTER flushing content
+      isStreamingRef.current = false;
+      useBackendStreamingRenderRef.current = false;
 
       if (setExpandedThinking) {
         setExpandedThinking((prev) => {
