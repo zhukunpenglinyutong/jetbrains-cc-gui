@@ -152,6 +152,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
+      "diffExpanded": {
+        "label": "預設展開差異",
+        "enabled": "已展開",
+        "disabled": "已折疊",
+        "hint": "開啟後，聊天中的程式碼差異將預設展開顯示。關閉後，差異預設摺疊，可點擊展開。"
+      },
       "sendShortcut": {
         "label": "發送快捷鍵",
         "enter": "Enter 發送",
@@ -524,6 +530,7 @@
     "messageCount": "{{count}} 條訊息",
     "searchPlaceholder": "搜尋會話標題...",
     "noSearchResults": "未找到相符的會話",
+    "tryOtherKeywords": "嘗試其他搜尋關鍵詞",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "編輯標題",
     "saveTitleButton": "儲存",
@@ -819,6 +826,7 @@
     "runCommand": "運行命令",
     "contextEngine": "上下文引擎",
     "task": "任務",
+    "promptLabel": "提示詞 (Prompt)",
     "readFile": "讀取文件",
     "editFile": "編輯文件",
     "writeFile": "寫入文件",
@@ -846,13 +854,15 @@
     "searchBatchTitle": "批量搜尋",
     "editPrefix": "編輯: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",
+    "lineSingle": "第 {{line}} 行",
     "filePath": "檔案路徑：",
     "unknownTool": "未知工具",
     "bashGroupBatchRun": "Batch Run Commands",
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "promptLabel": "提示詞"
   },
   "todo": {
     "inProgress": "進行中 {{completed}}/{{total}} 個任務",
@@ -907,6 +917,7 @@
     "description": "描述",
     "noDescription": "暫無描述",
     "noSkills": "No Skills",
+    "noMatchingSkills": "未找到匹配的技能",
     "importHint": "Click + button to import Skill file or folder",
     "deleteTitle": "Delete Skill",
     "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
@@ -919,6 +930,12 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status",
+    "deleteFailed": "刪除 Skill 失敗",
+    "enableSuccess": "已成功啟用 Skill: {{name}}",
+    "disableSuccess": "已成功停用 Skill: {{name}}",
+    "operationFailed": "操作失敗: {{error}}",
+    "operationError": "操作 Skill 失敗",
+    "refreshed": "已重新整理 Skills 清單",
     "help": {
       "title": "什麼是 Skills?",
       "overview": {

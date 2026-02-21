@@ -152,6 +152,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
+      "diffExpanded": {
+        "label": "Expand Diffs by Default",
+        "enabled": "Expanded",
+        "disabled": "Collapsed",
+        "hint": "When enabled, code diffs in chat will be expanded by default. When disabled, diffs start collapsed and can be expanded by clicking."
+      },
       "sendShortcut": {
         "label": "Send Shortcut",
         "enter": "Enter to Send",
@@ -521,6 +527,7 @@
     "messageCount": "{{count}} messages",
     "searchPlaceholder": "Search session titles...",
     "noSearchResults": "No matching sessions found",
+    "tryOtherKeywords": "Try other search keywords",
     "deepSearchTooltip": "Deep Search (clear cache and reload)",
     "editTitle": "Edit title",
     "saveTitleButton": "Save",
@@ -816,6 +823,7 @@
     "runCommand": "Run Command",
     "contextEngine": "Context Engine",
     "task": "Task",
+    "promptLabel": "Prompt",
     "readFile": "Read File",
     "editFile": "Edit File",
     "writeFile": "Write File",
@@ -843,13 +851,15 @@
     "searchBatchTitle": "Batch Search",
     "editPrefix": "Edit: {{fileName}}",
     "lineRange": "Lines {{start}}-{{end}}",
+    "lineSingle": "Line {{line}}",
     "filePath": "File path:",
     "unknownTool": "Unknown tool",
     "bashGroupBatchRun": "Batch Run Commands",
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "promptLabel": "Prompt"
   },
   "todo": {
     "inProgress": "In Progress {{completed}}/{{total}} tasks",
@@ -903,6 +913,7 @@
     "description": "Description",
     "noDescription": "No description",
     "noSkills": "No Skills",
+    "noMatchingSkills": "No matching Skills found",
     "importHint": "Click + button to import Skill file or folder",
     "deleteTitle": "Delete Skill",
     "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
@@ -915,6 +926,12 @@
     "deleteSuccess": "Successfully deleted Skill",
     "toggleSuccess": "Updated Skill status",
     "toggleFailed": "Failed to update Skill status",
+    "deleteFailed": "Failed to delete Skill",
+    "enableSuccess": "Successfully enabled Skill: {{name}}",
+    "disableSuccess": "Successfully disabled Skill: {{name}}",
+    "operationFailed": "Operation failed: {{error}}",
+    "operationError": "Skill operation failed",
+    "refreshed": "Skills list refreshed",
     "help": {
       "title": "What are Skills?",
       "overview": {

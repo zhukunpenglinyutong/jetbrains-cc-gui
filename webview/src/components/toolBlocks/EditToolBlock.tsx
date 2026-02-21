@@ -90,7 +90,13 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffResult {
 
 const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => {
+    try {
+      return localStorage.getItem('diffExpandedByDefault') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   const isDenied = useIsToolDenied(toolId);
 
