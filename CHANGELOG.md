@@ -1,3 +1,39 @@
+##### **2026年2月21日（v0.2.1）**
+
+English:
+
+✨ Features
+- Filter .gitignore'd files from editor context to prevent sensitive file leakage with cached IgnoreRuleMatcher (30s TTL)
+- Add "Diff expanded by default" toggle in Settings → Basic with localStorage persistence #dsudomoin
+
+🐛 Fixes
+- Stabilize streaming and prevent content loss: atomic IPC output, consistent JSON encoding for deltas, flush final content before stream end #gadfly3173
+- Harden security: path traversal protection in permission-handler, stop logging API key prefix, add Content-Security-Policy meta tag to webview
+- Replace hardcoded Chinese/text with i18n translation functions and add missing translations across all locales #serega0005
+
+🔧 Improvements
+- Optimize React rendering with React.memo, useCallback, useMemo and lazy-load mermaid (~500KB deferred) #gadfly3173
+- Decompose ClaudeSDKToolWindow (~2700 lines) into 11 single-responsibility classes (SessionLifecycleManager, StreamMessageCoalescer, WebviewInitializer, etc.)
+- Improve Russian localization: natural first-person verb forms, session→chat terminology, translate settings.prompt section #dsudomoin
+- Replace Chinese log/UI messages with English and normalize Unicode emoji escape sequences
+
+中文：
+
+✨ Features
+- 过滤 .gitignore 规则匹配的文件，防止敏感文件泄漏到编辑器上下文，使用带 30 秒 TTL 缓存的 IgnoreRuleMatcher
+- 新增"Diff 默认展开"开关（设置 → 基础），支持 localStorage 持久化 #dsudomoin
+
+🐛 Fixes
+- 稳定流式传输并防止内容丢失：原子化 IPC 输出、统一 delta JSON 编码、流结束前刷新最终内容 #gadfly3173
+- 加固安全性：权限处理器路径遍历防护、停止记录 API Key 前缀、为 webview 添加 CSP meta 标签
+- 将硬编码中文/文本替换为 i18n 翻译函数，补充所有语言环境的缺失翻译 #serega0005
+
+🔧 Improvements
+- 优化 React 渲染：使用 React.memo、useCallback、useMemo，懒加载 mermaid（延迟 ~500KB 解析） #gadfly3173
+- 拆解 ClaudeSDKToolWindow（约 2700 行）为 11 个单一职责类（SessionLifecycleManager、StreamMessageCoalescer、WebviewInitializer 等）
+- 改进俄语本地化：使用自然第一人称动词形式、session→chat 术语替换、翻译 settings.prompt 部分 #dsudomoin
+- 将中文日志/UI 消息替换为英文，规范化 Unicode emoji 转义序列
+
 ##### **2026年2月20日（v0.2）**
 
 English:
