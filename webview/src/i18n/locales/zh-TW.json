@@ -152,6 +152,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
+      "diffExpanded": {
+        "label": "預設展開差異",
+        "enabled": "已展開",
+        "disabled": "已折疊",
+        "hint": "開啟後，聊天中的程式碼差異將預設展開顯示。關閉後，差異預設摺疊，可點擊展開。"
+      },
       "sendShortcut": {
         "label": "發送快捷鍵",
         "enter": "Enter 發送",
@@ -855,7 +861,8 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "promptLabel": "提示詞"
   },
   "todo": {
     "inProgress": "進行中 {{completed}}/{{total}} 個任務",

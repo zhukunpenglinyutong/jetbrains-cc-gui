@@ -152,6 +152,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
       },
+      "diffExpanded": {
+        "label": "Développer les différences par défaut",
+        "enabled": "Développé",
+        "disabled": "Réduit",
+        "hint": "Lorsque activé, les différences de code dans le chat seront développées par défaut. Lorsque désactivé, les différences commencent réduites."
+      },
       "sendShortcut": {
         "label": "Raccourci d'envoi",
         "enter": "Entrée pour envoyer",
@@ -850,7 +856,8 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "promptLabel": "Prompt"
   },
   "todo": {
     "inProgress": "En cours {{completed}}/{{total}} tâches",

@@ -152,6 +152,12 @@
         "disabled": "已关闭",
         "hint": "开启后，在项目树选择文件时会自动在编辑器中打开。关闭后需要手动操作才能打开文件。"
       },
+      "diffExpanded": {
+        "label": "默认展开差异",
+        "enabled": "已展开",
+        "disabled": "已折叠",
+        "hint": "开启后，聊天中的代码差异将默认展开显示。关闭后，差异默认折叠，可点击展开。"
+      },
       "sendShortcut": {
         "label": "发送快捷键",
         "enter": "Enter 发送",
@@ -858,6 +864,7 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
+    "promptLabel": "提示词",
     "updatePlan": "更新计划"
   },
   "todo": {
