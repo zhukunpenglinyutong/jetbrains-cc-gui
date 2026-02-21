@@ -787,7 +787,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
       // Streaming: output stream start marker (only once)
       if (streamingEnabled && !streamStarted) {
-        console.log('[STREAM_START]');
+        process.stdout.write('[STREAM_START]\n');
         streamStarted = true;
       }
 
@@ -802,13 +802,13 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
           // content_block_delta: text or JSON incremental update
           if (event.type === 'content_block_delta' && event.delta) {
             if (event.delta.type === 'text_delta' && event.delta.text) {
-              // Use JSON encoding to preserve newlines and special characters
-              console.log('[CONTENT_DELTA]', JSON.stringify(event.delta.text));
+              // Atomic write to prevent interleaved output
+              process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(event.delta.text)}\n`);
               // Accumulate synchronously to prevent duplicate output from fallback diff
               lastAssistantContent += event.delta.text;
             } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
-              // Use JSON encoding to preserve newlines and special characters
-              console.log('[THINKING_DELTA]', JSON.stringify(event.delta.thinking));
+              // Atomic write to prevent interleaved output
+              process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(event.delta.thinking)}\n`);
               lastThinkingContent += event.delta.thinking;
             }
             // input_json_delta is for tool calls; not handled yet
@@ -855,7 +855,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
               if (streamingEnabled && !hasStreamEvents && currentText.length > lastAssistantContent.length) {
                 const delta = currentText.substring(lastAssistantContent.length);
                 if (delta) {
-                  console.log('[CONTENT_DELTA]', delta);
+                  process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
                 }
                 lastAssistantContent = currentText;
               } else if (streamingEnabled && hasStreamEvents) {
@@ -874,7 +874,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
               if (streamingEnabled && !hasStreamEvents && thinkingText.length > lastThinkingContent.length) {
                 const delta = thinkingText.substring(lastThinkingContent.length);
                 if (delta) {
-                  console.log('[THINKING_DELTA]', delta);
+                  process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
                 }
                 lastThinkingContent = thinkingText;
               } else if (streamingEnabled && hasStreamEvents) {
@@ -893,7 +893,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
           if (streamingEnabled && !hasStreamEvents && content.length > lastAssistantContent.length) {
             const delta = content.substring(lastAssistantContent.length);
             if (delta) {
-              console.log('[CONTENT_DELTA]', delta);
+              process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
             }
             lastAssistantContent = content;
           } else if (streamingEnabled && hasStreamEvents) {
@@ -1505,7 +1505,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 		      messageCount++;
 		      // Streaming: output stream start marker (only once)
 		      if (streamingEnabled && !streamStarted) {
-		        console.log('[STREAM_START]');
+		        process.stdout.write('[STREAM_START]\n');
 		        streamStarted = true;
 		      }
 
@@ -1519,10 +1519,10 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 		          // content_block_delta: text or JSON incremental update
 		          if (event.type === 'content_block_delta' && event.delta) {
 		            if (event.delta.type === 'text_delta' && event.delta.text) {
-		              console.log('[CONTENT_DELTA]', event.delta.text);
+		              process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(event.delta.text)}\n`);
 		              lastAssistantContent += event.delta.text;
 		            } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
-		              console.log('[THINKING_DELTA]', event.delta.thinking);
+		              process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(event.delta.thinking)}\n`);
 		              lastThinkingContent += event.delta.thinking;
 		            }
 		          }
@@ -1565,7 +1565,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	              if (streamingEnabled && !hasStreamEvents && currentText.length > lastAssistantContent.length) {
 	    	                const delta = currentText.substring(lastAssistantContent.length);
 	    	                if (delta) {
-	    	                  console.log('[CONTENT_DELTA]', delta);
+	    	                  process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
 	    	                }
 	    	                lastAssistantContent = currentText;
 	    	              } else if (streamingEnabled && hasStreamEvents) {
@@ -1581,7 +1581,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	              if (streamingEnabled && !hasStreamEvents && thinkingText.length > lastThinkingContent.length) {
 	    	                const delta = thinkingText.substring(lastThinkingContent.length);
 	    	                if (delta) {
-	    	                  console.log('[THINKING_DELTA]', delta);
+	    	                  process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
 	    	                }
 	    	                lastThinkingContent = thinkingText;
 	    	              } else if (streamingEnabled && hasStreamEvents) {
@@ -1602,7 +1602,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 	    	          if (streamingEnabled && !hasStreamEvents && content.length > lastAssistantContent.length) {
 	    	            const delta = content.substring(lastAssistantContent.length);
 	    	            if (delta) {
-	    	              console.log('[CONTENT_DELTA]', delta);
+	    	              process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
 	    	            }
 	    	            lastAssistantContent = content;
 	    	          } else if (streamingEnabled && hasStreamEvents) {

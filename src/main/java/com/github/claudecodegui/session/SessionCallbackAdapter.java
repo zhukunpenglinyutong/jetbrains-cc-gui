@@ -153,15 +153,11 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
 
     @Override
     public void onContentDelta(String delta) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            jsTarget.callJavaScript("onContentDelta", JsUtils.escapeJs(delta));
-        });
+        jsTarget.callJavaScript("onContentDelta", JsUtils.escapeJs(delta));
     }
 
     @Override
     public void onThinkingDelta(String delta) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            jsTarget.callJavaScript("onThinkingDelta", JsUtils.escapeJs(delta));
-        });
+        jsTarget.callJavaScript("onThinkingDelta", JsUtils.escapeJs(delta));
     }
 }
