@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 interface UseIMECompositionOptions {
   handleInput: () => void;
@@ -6,9 +6,7 @@ interface UseIMECompositionOptions {
 }
 
 interface UseIMECompositionReturn {
-  /** Whether IME composition is active (React state) */
-  isComposing: boolean;
-  /** Sync IME state ref (faster than React state) */
+  /** Sync IME state ref (primary source of truth, avoids re-renders) */
   isComposingRef: React.MutableRefObject<boolean>;
   /** Last composition end timestamp */
   lastCompositionEndTimeRef: React.MutableRefObject<number>;
@@ -25,13 +23,16 @@ interface UseIMECompositionReturn {
  * - Completion dropdown detection during composition
  * - File tag rendering during composition
  * - Submit handling during composition
+ *
+ * Uses ref-only approach (no React state) to avoid triggering re-renders
+ * during composition, which is critical for JCEF/Korean IME performance.
  */
 export function useIMEComposition({
   handleInput,
   renderFileTags,
 }: UseIMECompositionOptions): UseIMECompositionReturn {
-  const [isComposing, setIsComposing] = useState(false);
-  // Sync IME state ref, faster than React state
+  // Ref-only composing state: avoids React re-renders during IME composition.
+  // In JCEF, re-renders during composition cause visible stutter and character duplication.
   const isComposingRef = useRef(false);
   const compositionTimeoutRef = useRef<number | null>(null);
   const lastCompositionEndTimeRef = useRef<number>(0);
@@ -66,9 +67,8 @@ export function useIMEComposition({
       clearTimeout(compositionTimeoutRef.current);
       compositionTimeoutRef.current = null;
     }
-    // Update both ref and state, ref is sync, state is async
+    // Update ref only (no React state) to avoid re-renders during composition
     isComposingRef.current = true;
-    setIsComposing(true);
   }, []);
 
   /**
@@ -97,9 +97,8 @@ export function useIMEComposition({
         compositionTimeoutRef.current = null;
       }
 
-      // Update both ref and state
+      // Update ref only (no React state) to avoid triggering re-renders
       isComposingRef.current = false;
-      setIsComposing(false);
 
       // After composition ends, force sync input state once
       // At this point DOM is stable, safe to read and update
@@ -115,7 +114,6 @@ export function useIMEComposition({
   }, [handleInput, renderFileTags]);
 
   return {
-    isComposing,
     isComposingRef,
     lastCompositionEndTimeRef,
     handleCompositionStart,

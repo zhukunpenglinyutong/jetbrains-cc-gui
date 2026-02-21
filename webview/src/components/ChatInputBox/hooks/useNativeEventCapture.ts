@@ -7,7 +7,6 @@ interface CompletionOpenLike {
 
 export interface UseNativeEventCaptureOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
-  isComposing: boolean;
   isComposingRef: MutableRefObject<boolean>;
   lastCompositionEndTimeRef: MutableRefObject<number>;
   sendShortcut: 'enter' | 'cmdEnter';
@@ -31,7 +30,6 @@ export interface UseNativeEventCaptureOptions {
  */
 export function useNativeEventCapture({
   editableRef,
-  isComposing,
   isComposingRef,
   lastCompositionEndTimeRef,
   sendShortcut,
@@ -47,7 +45,6 @@ export function useNativeEventCapture({
   // Keep latest values without re-subscribing native listeners on every render.
   const latestRef = useRef<UseNativeEventCaptureOptions>({
     editableRef,
-    isComposing,
     isComposingRef,
     lastCompositionEndTimeRef,
     sendShortcut,
@@ -62,7 +59,6 @@ export function useNativeEventCapture({
   });
   latestRef.current = {
     editableRef,
-    isComposing,
     isComposingRef,
     lastCompositionEndTimeRef,
     sendShortcut,
@@ -120,11 +116,10 @@ export function useNativeEventCapture({
       const metaOrCtrl = ev.metaKey || ev.ctrlKey;
       const isSendKey =
         latest.sendShortcut === 'cmdEnter'
-          ? isEnterKey && metaOrCtrl && !latest.isComposingRef.current && !latest.isComposing
+          ? isEnterKey && metaOrCtrl && !latest.isComposingRef.current
           : isEnterKey &&
             !shift &&
             !latest.isComposingRef.current &&
-            !latest.isComposing &&
             !isRecentlyComposing;
 
       if (!isSendKey) return;
