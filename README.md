@@ -253,6 +253,11 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
         <img src="https://avatars.githubusercontent.com/u/155488585?size=100" width="100" height="100" alt="dsudomoin" style="border-radius: 50%;" />
       </a>
     </td>
+    <td align="center">
+      <a href="https://github.com/serega0005">
+        <img src="https://avatars.githubusercontent.com/u/39858725?size=100" width="100" height="100" alt="serega0005" style="border-radius: 50%;" />
+      </a>
+    </td>
   </tr>
 </table>
 
