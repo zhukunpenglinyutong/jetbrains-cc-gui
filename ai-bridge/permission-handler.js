@@ -6,7 +6,7 @@
  */
 
 import { writeFileSync, readFileSync, existsSync, unlinkSync, readdirSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, resolve, sep } from 'path';
 import { tmpdir } from 'os';
 import { getRealHomeDir } from './utils/path-utils.js';
 
@@ -71,7 +71,15 @@ function rewriteToolInputPaths(toolName, input) {
     if (!relative) {
       relative = basename(pathValue);
     }
-    const sanitized = join(projectRoot, relative);
+    const sanitized = resolve(projectRoot, relative);
+
+    // Verify the resolved path is still within the project root
+    const resolvedRoot = resolve(projectRoot);
+    if (!sanitized.startsWith(resolvedRoot + sep) && sanitized !== resolvedRoot) {
+      debugLog('PATH_REWRITE_BLOCKED', `Rewritten path escaped project root`, { from: pathValue, to: sanitized, projectRoot: resolvedRoot });
+      return pathValue; // Return the original path unchanged
+    }
+
     rewrites.push({ from: pathValue, to: sanitized });
     return sanitized;
   };
@@ -323,21 +331,43 @@ export async function requestPermissionFromJava(toolName, input) {
     // Immediately deny obviously dangerous operations
     // Retrieve the user's home directory for path checks
     const userHomeDir = getRealHomeDir();
+    const isWindows = process.platform === 'win32';
+
     const dangerousPatterns = [
+      // Unix/macOS paths
       '/etc/',
       '/System/',
       '/usr/',
       '/bin/',
       `${userHomeDir}/.ssh/`,
-      `${userHomeDir}/.aws/`
+      `${userHomeDir}/.aws/`,
+      `${userHomeDir}/.gnupg/`,
+      `${userHomeDir}/.kube/`,
+      `${userHomeDir}/.docker/`,
     ];
+
+    if (isWindows) {
+      // Windows system paths (case-insensitive matching applied below)
+      dangerousPatterns.push(
+        'C:\\Windows\\',
+        'C:\\Program Files\\',
+        'C:\\Program Files (x86)\\',
+        `${userHomeDir}\\.ssh\\`,
+        `${userHomeDir}\\.aws\\`,
+        `${userHomeDir}\\.gnupg\\`,
+        `${userHomeDir}\\.kube\\`,
+        `${userHomeDir}\\.docker\\`,
+      );
+    }
 
     // Check whether the file path matches any dangerous pattern
     if (input.file_path || input.path) {
-      const path = input.file_path || input.path;
+      const filePath = input.file_path || input.path;
+      const normalizedPath = isWindows ? filePath.toLowerCase() : filePath;
       for (const pattern of dangerousPatterns) {
-        if (path.includes(pattern)) {
-          debugLog('SECURITY', `Dangerous path detected, denying`, { path, pattern });
+        const normalizedPattern = isWindows ? pattern.toLowerCase() : pattern;
+        if (normalizedPath.includes(normalizedPattern)) {
+          debugLog('SECURITY', `Dangerous path detected, denying`, { path: filePath, pattern });
           return false;
         }
       }
