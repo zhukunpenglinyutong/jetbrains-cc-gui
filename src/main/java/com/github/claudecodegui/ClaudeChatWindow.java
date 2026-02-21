@@ -218,7 +218,7 @@ public class ClaudeChatWindow {
 
     void callJavaScript(String functionName, String... args) {
         if (disposed || browser == null) {
-            LOG.warn("\u65e0\u6cd5\u8c03\u7528 JS \u51fd\u6570 " + functionName + ": disposed=" + disposed + ", browser=" + (browser == null ? "null" : "exists"));
+            LOG.warn("Cannot call JS function " + functionName + ": disposed=" + disposed + ", browser=" + (browser == null ? "null" : "exists"));
             return;
         }
 
@@ -254,7 +254,7 @@ public class ClaudeChatWindow {
 
                 browser.getCefBrowser().executeJavaScript(checkAndCall, browser.getCefBrowser().getURL(), 0);
             } catch (Exception e) {
-                LOG.warn("\u8c03\u7528 JS \u51fd\u6570\u5931\u8d25: " + functionName + ", \u9519\u8bef: " + e.getMessage(), e);
+                LOG.warn("Failed to call JS function: " + functionName + ", error: " + e.getMessage(), e);
             }
         });
     }
@@ -372,7 +372,7 @@ public class ClaudeChatWindow {
             LOG.warn("Failed to unregister dialog showers or remove session instance: " + e.getMessage());
         }
 
-        LOG.info("\u5f00\u59cb\u6e05\u7406\u7a97\u53e3\u8d44\u6e90\uff0c\u9879\u76ee: " + project.getName());
+        LOG.info("Starting window resource cleanup, project: " + project.getName());
 
         disposed = true;
         handlerContext.setDisposed(true);
@@ -394,24 +394,24 @@ public class ClaudeChatWindow {
             if (claudeSDKBridge != null) {
                 int activeCount = claudeSDKBridge.getActiveProcessCount();
                 if (activeCount > 0) {
-                    LOG.info("\u6b63\u5728\u6e05\u7406 " + activeCount + " \u4e2a\u6d3b\u8dc3\u7684 Claude \u8fdb\u7a0b...");
+                    LOG.info("Cleaning up " + activeCount + " active Claude process(es)...");
                 }
                 claudeSDKBridge.cleanupAllProcesses();
             }
         } catch (Exception e) {
-            LOG.warn("\u6e05\u7406 Claude \u8fdb\u7a0b\u5931\u8d25: " + e.getMessage());
+            LOG.warn("Failed to clean up Claude processes: " + e.getMessage());
         }
 
         try {
             if (codexSDKBridge != null) {
                 int activeCount = codexSDKBridge.getActiveProcessCount();
                 if (activeCount > 0) {
-                    LOG.info("\u6b63\u5728\u6e05\u7406 " + activeCount + " \u4e2a\u6d3b\u8dc3\u7684 Codex \u8fdb\u7a0b...");
+                    LOG.info("Cleaning up " + activeCount + " active Codex process(es)...");
                 }
                 codexSDKBridge.cleanupAllProcesses();
             }
         } catch (Exception e) {
-            LOG.warn("\u6e05\u7406 Codex \u8fdb\u7a0b\u5931\u8d25: " + e.getMessage());
+            LOG.warn("Failed to clean up Codex processes: " + e.getMessage());
         }
 
         try {
@@ -420,12 +420,12 @@ public class ClaudeChatWindow {
                 browser = null;
             }
         } catch (Exception e) {
-            LOG.warn("\u6e05\u7406\u6d4f\u89c8\u5668\u5931\u8d25: " + e.getMessage());
+            LOG.warn("Failed to clean up browser: " + e.getMessage());
         }
 
         messageDispatcher.clear();
 
-        LOG.info("\u7a97\u53e3\u8d44\u6e90\u5df2\u5b8c\u5168\u6e05\u7406\uff0c\u9879\u76ee: " + project.getName());
+        LOG.info("Window resources fully cleaned up, project: " + project.getName());
     }
 
     // ==================== Host Interface Factories ====================

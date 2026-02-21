@@ -235,7 +235,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
         centerPanel.setOpaque(false);
 
-        JLabel iconLabel = new JLabel("\u2699");
+        JLabel iconLabel = new JLabel("⚙");
         iconLabel.setFont(iconLabel.getFont().deriveFont(48f));
         iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         centerPanel.add(iconLabel);
@@ -258,7 +258,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
         centerPanel.setOpaque(false);
 
-        JLabel iconLabel = new JLabel("\u26A0");
+        JLabel iconLabel = new JLabel("⚠");
         iconLabel.setFont(iconLabel.getFont().deriveFont(48f));
         iconLabel.setForeground(Color.ORANGE);
         iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);

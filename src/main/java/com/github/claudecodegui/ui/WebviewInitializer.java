@@ -366,15 +366,15 @@ public class WebviewInitializer {
 
     public void showErrorPanel() {
         ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
-        String message = "\u65e0\u6cd5\u627e\u5230 Node.js\uff08\u4e0b\u65b9\u4fdd\u5b58\u540e\u8bf7\u91cd\u542f\u5c1d\u8bd5\uff09\n\n" +
-            "\u8bf7\u786e\u4fdd\uff1a\n" +
-            "\u2022 Node.js \u5df2\u5b89\u88c5 (\u53ef\u4ee5\u5728\u7ec8\u7aef\u8fd0\u884c: node --version)\n\n" +
-            "\u5982\u679c\u81ea\u52a8\u68c0\u6d4b Node.js \u5931\u8d25\uff0c\u53ef\u4ee5\u5728\u7ec8\u7aef\u8fd0\u884c\u4ee5\u4e0b\u547d\u4ee4\u83b7\u53d6 Node.js \u8def\u5f84\uff1a\n" +
+        String message = "Node.js not found (please save below and restart)\n\n" +
+            "Please ensure:\n" +
+            "• Node.js is installed (run in terminal: node --version)\n\n" +
+            "If auto-detection fails, run the following command in terminal to get the Node.js path:\n" +
             "    node -p \"process.execPath\"\n\n" +
-            "\u5f53\u524d\u68c0\u6d4b\u5230\u7684 Node.js \u8def\u5f84: " + claudeSDKBridge.getNodeExecutable();
+            "Detected Node.js path: " + claudeSDKBridge.getNodeExecutable();
 
         JPanel errorPanel = ErrorPanelBuilder.build(
-            "\u73af\u5883\u68c0\u67e5\u5931\u8d25",
+            "Environment Check Failed",
             message,
             claudeSDKBridge.getNodeExecutable(),
             this::handleNodePathSave
@@ -385,14 +385,14 @@ public class WebviewInitializer {
     private void showVersionErrorPanel(String currentVersion) {
         ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
         int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
-        String message = "Node.js \u7248\u672c\u8fc7\u4f4e\n\n" +
-            "\u5f53\u524d\u7248\u672c: " + currentVersion + "\n" +
-            "\u6700\u4f4e\u8981\u6c42: v" + minVersion + "\n\n" +
-            "\u8bf7\u5347\u7ea7 Node.js \u5230 v" + minVersion + " \u6216\u66f4\u9ad8\u7248\u672c\u540e\u91cd\u8bd5\u3002\n\n" +
-            "\u5f53\u524d\u68c0\u6d4b\u5230\u7684 Node.js \u8def\u5f84: " + claudeSDKBridge.getNodeExecutable();
+        String message = "Node.js version too old\n\n" +
+            "Current version: " + currentVersion + "\n" +
+            "Minimum required: v" + minVersion + "\n\n" +
+            "Please upgrade Node.js to v" + minVersion + " or later and try again.\n\n" +
+            "Detected Node.js path: " + claudeSDKBridge.getNodeExecutable();
 
         JPanel errorPanel = ErrorPanelBuilder.build(
-            "Node.js \u7248\u672c\u4e0d\u6ee1\u8db3\u8981\u6c42",
+            "Node.js Version Not Supported",
             message,
             claudeSDKBridge.getNodeExecutable(),
             this::handleNodePathSave
@@ -401,12 +401,12 @@ public class WebviewInitializer {
     }
 
     private void showInvalidNodePathPanel(String path, String errMsg) {
-        String message = "\u4fdd\u5b58\u7684 Node.js \u8def\u5f84\u4e0d\u53ef\u7528: " + path + "\n\n" +
+        String message = "Saved Node.js path is not available: " + path + "\n\n" +
             (errMsg != null ? errMsg + "\n\n" : "") +
-            "\u8bf7\u5728\u4e0b\u65b9\u91cd\u65b0\u4fdd\u5b58\u6b63\u786e\u7684 Node.js \u8def\u5f84\u3002";
+            "Please save a valid Node.js path below.";
 
         JPanel errorPanel = ErrorPanelBuilder.build(
-            "Node.js \u8def\u5f84\u4e0d\u53ef\u7528",
+            "Node.js Path Unavailable",
             message,
             path,
             this::handleNodePathSave
@@ -416,7 +416,7 @@ public class WebviewInitializer {
 
     private void showJcefNotSupportedPanel() {
         JPanel panel = ErrorPanelBuilder.buildCenteredPanel(
-            "\u26A0\uFE0F",
+            "⚠️",
             ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalled"),
             ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalledSolution")
         );
@@ -425,7 +425,7 @@ public class WebviewInitializer {
 
     private void showJcefRemoteModeErrorPanel() {
         JPanel panel = ErrorPanelBuilder.buildCenteredPanel(
-            "\u26A0\uFE0F",
+            "⚠️",
             ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteError"),
             ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteSolution")
         );
@@ -434,7 +434,7 @@ public class WebviewInitializer {
 
     private void showLoadingPanel() {
         JPanel panel = ErrorPanelBuilder.buildLoadingPanel(
-            "\u23F3",
+            "⏳",
             ClaudeCodeGuiBundle.message("toolwindow.extractingTitle"),
             ClaudeCodeGuiBundle.message("toolwindow.extractingDesc")
         );
@@ -523,8 +523,8 @@ public class WebviewInitializer {
 
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(mainPanel,
-                "\u4fdd\u5b58\u6216\u5e94\u7528 Node.js \u8def\u5f84\u65f6\u51fa\u9519: " + ex.getMessage(),
-                "\u9519\u8bef", JOptionPane.ERROR_MESSAGE);
+                "Error saving or applying Node.js path: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
