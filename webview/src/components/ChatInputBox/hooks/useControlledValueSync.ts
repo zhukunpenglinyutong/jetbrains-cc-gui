@@ -18,7 +18,12 @@ export interface UseControlledValueSyncOptions {
  * Only updates when:
  * - `value` is provided (controlled mode)
  * - Not currently in IME composition
+ * - The editable element does NOT have focus (user is not actively typing)
  * - External value differs from current DOM content
+ *
+ * When the element has focus, the DOM is the source of truth and the `value` prop
+ * may lag behind due to debounced onInput callbacks. Overwriting innerText while
+ * the user types causes characters to disappear.
  */
 export function useControlledValueSync({
   value,
@@ -34,6 +39,11 @@ export function useControlledValueSync({
     if (value === undefined) return;
     if (!editableRef.current) return;
     if (isComposingRef.current) return;
+
+    // Skip sync while the user is actively typing.
+    // The DOM content is ahead of the `value` prop due to debounced onInput,
+    // so overwriting innerText here would lose the most recent keystrokes.
+    if (document.activeElement === editableRef.current) return;
 
     invalidateCache();
     const currentText = getTextContent();
