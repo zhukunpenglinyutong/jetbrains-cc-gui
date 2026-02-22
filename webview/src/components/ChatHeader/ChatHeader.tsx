@@ -98,6 +98,7 @@ export function ChatHeader({
               onKeyDown={handleKeyDown}
               onBlur={handleBlur}
               maxLength={50}
+              spellCheck={false}
               aria-label="Session title"
             />
             <button className="session-title-save-btn" onClick={commitEdit} aria-label="Save title">
