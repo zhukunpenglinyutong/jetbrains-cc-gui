@@ -69,6 +69,7 @@ export interface UseWindowCallbacksOptions {
   currentProviderRef: MutableRefObject<string>;
   messagesContainerRef: RefObject<HTMLDivElement | null>;
   isUserAtBottomRef: MutableRefObject<boolean>;
+  userPausedRef: MutableRefObject<boolean>;
   suppressNextStatusToastRef: MutableRefObject<boolean>;
 
   // Streaming refs from useStreamingMessages
@@ -138,6 +139,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     currentProviderRef,
     messagesContainerRef,
     isUserAtBottomRef,
+    userPausedRef,
     suppressNextStatusToastRef,
     streamingContentRef,
     isStreamingRef,
@@ -470,6 +472,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, userMessage]);
+      userPausedRef.current = false;
       isUserAtBottomRef.current = true;
       requestAnimationFrame(() => {
         if (messagesContainerRef.current) {
@@ -486,7 +489,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       useBackendStreamingRenderRef.current = false;
       autoExpandedThinkingKeysRef.current.clear();
       setStreamingActive(true);
-      isUserAtBottomRef.current = true;
+      // Don't force isUserAtBottomRef to true here — if the user scrolled up
+      // to read earlier content, auto-scroll should stay paused.
+      // The flag is already set to true when the user sends a message (addUserMessage/executeMessage).
       streamingTextSegmentsRef.current = [];
       activeTextSegmentIndexRef.current = -1;
       streamingThinkingSegmentsRef.current = [];
