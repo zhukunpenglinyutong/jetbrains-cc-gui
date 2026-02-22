@@ -1,17 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProviderConfig, CodexProviderConfig } from '../../types/provider';
-import type { AgentConfig } from '../../types/agent';
-import type { PromptConfig } from '../../types/prompt';
+import type { CodexProviderConfig } from '../../types/provider';
 import { type ClaudeConfig } from './ConfigInfoDisplay';
-import AlertDialog from '../AlertDialog';
 import type { AlertType } from '../AlertDialog';
-import ConfirmDialog from '../ConfirmDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
-import ProviderDialog from '../ProviderDialog';
-import CodexProviderDialog from '../CodexProviderDialog';
-import AgentDialog from '../AgentDialog';
-import PromptDialog from '../PromptDialog';
 
 // Import split-out components
 import SettingsHeader from './SettingsHeader';
@@ -27,6 +19,7 @@ import PromptSection from './PromptSection';
 import CommitSection from './CommitSection';
 import OtherSettingsSection from './OtherSettingsSection';
 import { SkillsSettingsSection } from '../skills';
+import SettingsDialogs from './SettingsDialogs';
 
 // Import custom hooks
 import {
@@ -34,6 +27,7 @@ import {
   useCodexProviderManagement,
   useAgentManagement,
   usePromptManagement,
+  useSettingsWindowCallbacks,
 } from './hooks';
 
 import styles from './style.module.less';
@@ -316,299 +310,45 @@ const SettingsView = ({
     setAlertDialog({ ...alertDialog, isOpen: false });
   };
 
-  // Show switch success dialog
-  const showSwitchSuccess = (message: string) => {
-    console.log('[SettingsView] showSwitchSuccess called:', message);
-    showAlert('success', t('toast.switchSuccess'), message);
-  };
-
-  useEffect(() => {
-    // Set up global callbacks - using update functions provided by hooks
-    window.updateProviders = (jsonStr: string) => {
-      try {
-        const providersList: ProviderConfig[] = JSON.parse(jsonStr);
-        updateProviders(providersList);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse providers:', error);
-        setLoading(false);
-      }
-    };
-
-    window.updateActiveProvider = (jsonStr: string) => {
-      try {
-        const activeProvider: ProviderConfig = JSON.parse(jsonStr);
-        if (activeProvider) {
-          updateActiveProvider(activeProvider);
-        }
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse active provider:', error);
-      }
-    };
-
-    // Claude CLI configuration callback
-    window.updateCurrentClaudeConfig = (jsonStr: string) => {
-      try {
-        const config: ClaudeConfig = JSON.parse(jsonStr);
-        setClaudeConfig(config);
-        setClaudeConfigLoading(false);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse claude config:', error);
-        setClaudeConfigLoading(false);
-      }
-    };
-
-    window.showError = (message: string) => {
-      console.log('[SettingsView] window.showError called:', message);
-      showAlert('error', t('toast.operationFailed'), message);
-      setLoading(false);
-      setSavingNodePath(false);
-      setSavingWorkingDirectory(false);
-      setSavingCommitPrompt(false);
-    };
-
-    window.showSwitchSuccess = (message: string) => {
-      console.log('[SettingsView] window.showSwitchSuccess called:', message);
-      showSwitchSuccess(message);
-    };
-
-    window.updateNodePath = (jsonStr: string) => {
-      console.log('[SettingsView] window.updateNodePath called:', jsonStr);
-      try {
-        const data = JSON.parse(jsonStr);
-        setNodePath(data.path || '');
-        setNodeVersion(data.version || null);
-        if (data.minVersion) {
-          setMinNodeVersion(data.minVersion);
-        }
-      } catch (e) {
-        // Backward compatible with legacy format (plain string path)
-        console.warn('[SettingsView] Failed to parse updateNodePath JSON, fallback to legacy format:', e);
-        setNodePath(jsonStr || '');
-      }
-      setSavingNodePath(false);
-    };
-
-    window.updateWorkingDirectory = (jsonStr: string) => {
-      console.log('[SettingsView] window.updateWorkingDirectory called:', jsonStr);
-      try {
-        const data = JSON.parse(jsonStr);
-        setWorkingDirectory(data.customWorkingDir || '');
-        setSavingWorkingDirectory(false);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse working directory:', error);
-        setSavingWorkingDirectory(false);
-      }
-    };
-
-    window.showSuccess = (message: string) => {
-      console.log('[SettingsView] window.showSuccess called:', message);
-      showAlert('success', t('toast.operationSuccess'), message);
-      setSavingNodePath(false);
-      setSavingWorkingDirectory(false);
-    };
-
-    window.onEditorFontConfigReceived = (jsonStr: string) => {
-      try {
-        const config = JSON.parse(jsonStr);
-        setEditorFontConfig(config);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse editor font config:', error);
-      }
-    };
-
-    // IDE theme callback - save previous callback for restoration
-    const previousOnIdeThemeReceived = window.onIdeThemeReceived;
-    window.onIdeThemeReceived = (jsonStr: string) => {
-      try {
-        const themeData = JSON.parse(jsonStr);
-        const theme = themeData.isDark ? 'dark' : 'light';
-        setIdeTheme(theme);
-        console.log('[SettingsView] IDE theme received:', themeData, 'resolved to:', theme);
-        // Also invoke the previous callback (from App.tsx)
-        previousOnIdeThemeReceived?.(jsonStr);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse IDE theme:', error);
-      }
-    };
-
-    // Streaming configuration callback - only use local state when props are not passed from App.tsx
-    const previousUpdateStreamingEnabled = window.updateStreamingEnabled;
-    if (!onStreamingEnabledChangeProp) {
-      window.updateStreamingEnabled = (jsonStr: string) => {
-        try {
-          const data = JSON.parse(jsonStr);
-          setLocalStreamingEnabled(data.streamingEnabled ?? true);
-        } catch (error) {
-          console.error('[SettingsView] Failed to parse streaming config:', error);
-        }
-      };
-    }
-
-    // Send shortcut configuration callback - only use local state when props are not passed from App.tsx
-    const previousUpdateSendShortcut = window.updateSendShortcut;
-    if (!onSendShortcutChangeProp) {
-      window.updateSendShortcut = (jsonStr: string) => {
-        try {
-          const data = JSON.parse(jsonStr);
-          setLocalSendShortcut(data.sendShortcut ?? 'enter');
-        } catch (error) {
-          console.error('[SettingsView] Failed to parse send shortcut config:', error);
-        }
-      };
-    }
-
-    // Commit AI prompt callback
-    window.updateCommitPrompt = (jsonStr: string) => {
-      try {
-        const data = JSON.parse(jsonStr);
-        setCommitPrompt(data.commitPrompt || '');
-        setSavingCommitPrompt(false);
-        // If this is a save operation, show success toast
-        if (data.saved) {
-          addToast(t('toast.saveSuccess'), 'success');
-        }
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse commit prompt:', error);
-        setSavingCommitPrompt(false);
-        addToast(t('toast.saveFailed'), 'error');
-      }
-    };
-
-    // Agent callback - using update functions provided by hooks
-    const previousUpdateAgents = window.updateAgents;
-    window.updateAgents = (jsonStr: string) => {
-      try {
-        const agentsList: AgentConfig[] = JSON.parse(jsonStr);
-        updateAgents(agentsList);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse agents:', error);
-      }
-      previousUpdateAgents?.(jsonStr);
-    };
-
-    window.agentOperationResult = (jsonStr: string) => {
-      try {
-        const result = JSON.parse(jsonStr);
-        handleAgentOperationResult(result);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse agent operation result:', error);
-      }
-    };
-
-    // Prompt library callback - using update functions provided by hooks
-    const previousUpdatePrompts = window.updatePrompts;
-    window.updatePrompts = (jsonStr: string) => {
-      try {
-        const promptsList: PromptConfig[] = JSON.parse(jsonStr);
-        updatePrompts(promptsList);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse prompts:', error);
-      }
-      previousUpdatePrompts?.(jsonStr);
-    };
-
-    window.promptOperationResult = (jsonStr: string) => {
-      try {
-        const result = JSON.parse(jsonStr);
-        handlePromptOperationResult(result);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse prompt operation result:', error);
-      }
-    };
-
-    // Codex provider callbacks - using update functions provided by hooks
-    window.updateCodexProviders = (jsonStr: string) => {
-      try {
-        const providersList: CodexProviderConfig[] = JSON.parse(jsonStr);
-        updateCodexProviders(providersList);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse Codex providers:', error);
-        setCodexLoading(false);
-      }
-    };
-
-    window.updateActiveCodexProvider = (jsonStr: string) => {
-      try {
-        const activeProvider: CodexProviderConfig = JSON.parse(jsonStr);
-        if (activeProvider) {
-          updateActiveCodexProvider(activeProvider);
-        }
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse active Codex provider:', error);
-      }
-    };
-
-    window.updateCurrentCodexConfig = (jsonStr: string) => {
-      try {
-        const config = JSON.parse(jsonStr);
-        updateCurrentCodexConfig(config);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse Codex config:', error);
-        setCodexConfigLoading(false);
-      }
-    };
-
-    // Load provider list
-    loadProviders();
-    // Load Codex provider list
-    loadCodexProviders();
-    // Load agent list
-    loadAgents();
-    // Load prompt list
-    loadPrompts();
-    // Load current Claude CLI configuration
-    loadClaudeConfig();
-    // Load Node.js path
-    sendToJava('get_node_path:');
-    // Load working directory configuration
-    sendToJava('get_working_directory:');
-    // Load IDEA editor font configuration
-    sendToJava('get_editor_font_config:');
-    // Load streaming configuration
-    sendToJava('get_streaming_enabled:');
-    // Load Commit AI prompt
-    sendToJava('get_commit_prompt:');
-
-    return () => {
-      // Clean up agent timeout timer - using cleanup function from hook
-      cleanupAgentsTimeout();
-      // Clean up prompt timeout timer - using cleanup function from hook
-      cleanupPromptsTimeout();
-
-      window.updateProviders = undefined;
-      window.updateActiveProvider = undefined;
-      window.updateCurrentClaudeConfig = undefined;
-      window.showError = undefined;
-      window.showSwitchSuccess = undefined;
-      window.updateNodePath = undefined;
-      window.updateWorkingDirectory = undefined;
-      window.showSuccess = undefined;
-      window.onEditorFontConfigReceived = undefined;
-      // Restore previous IDE theme callback (from App.tsx)
-      window.onIdeThemeReceived = previousOnIdeThemeReceived;
-      // Restore previous streaming callback if we overrode it
-      if (!onStreamingEnabledChangeProp) {
-        window.updateStreamingEnabled = previousUpdateStreamingEnabled;
-      }
-      // Restore previous send shortcut callback if we overrode it
-      if (!onSendShortcutChangeProp) {
-        window.updateSendShortcut = previousUpdateSendShortcut;
-      }
-      window.updateCommitPrompt = undefined;
-      window.updateAgents = previousUpdateAgents;
-      window.agentOperationResult = undefined;
-      // Cleanup Prompt callbacks
-      window.updatePrompts = previousUpdatePrompts;
-      window.promptOperationResult = undefined;
-      // Cleanup Codex callbacks
-      window.updateCodexProviders = undefined;
-      window.updateActiveCodexProvider = undefined;
-      window.updateCurrentCodexConfig = undefined;
-    };
-
-    // Request IDE theme info
-    sendToJava('get_ide_theme:');
-  }, [t, onStreamingEnabledChangeProp, onSendShortcutChangeProp]);
+  // Register window callbacks for Java bridge communication
+  useSettingsWindowCallbacks({
+    setClaudeConfig,
+    setClaudeConfigLoading,
+    setNodePath,
+    setNodeVersion,
+    setMinNodeVersion,
+    setSavingNodePath,
+    setWorkingDirectory,
+    setSavingWorkingDirectory,
+    setCommitPrompt,
+    setSavingCommitPrompt,
+    setEditorFontConfig,
+    setIdeTheme,
+    setLocalStreamingEnabled,
+    setLocalSendShortcut,
+    setLoading,
+    setCodexLoading,
+    setCodexConfigLoading,
+    updateProviders,
+    updateActiveProvider,
+    loadProviders,
+    loadCodexProviders,
+    loadAgents,
+    loadPrompts,
+    updateAgents,
+    handleAgentOperationResult,
+    updatePrompts,
+    handlePromptOperationResult,
+    updateCodexProviders,
+    updateActiveCodexProvider,
+    updateCurrentCodexConfig,
+    cleanupAgentsTimeout,
+    cleanupPromptsTimeout,
+    showAlert,
+    addToast,
+    onStreamingEnabledChangeProp,
+    onSendShortcutChangeProp,
+  });
 
   // Listen for window resize events
   useEffect(() => {
@@ -708,11 +448,6 @@ const SettingsView = ({
       setCurrentTab('basic');
     }
   }, [isCodexMode, disabledTabs, currentTab]);
-
-  const loadClaudeConfig = () => {
-    setClaudeConfigLoading(true);
-    sendToJava('get_current_claude_config:');
-  };
 
   const handleSaveNodePath = () => {
     setSavingNodePath(true);
@@ -1005,93 +740,36 @@ const SettingsView = ({
         </div>
       </div>
 
-      {/* In-page alert dialog */}
-      <AlertDialog
-        isOpen={alertDialog.isOpen}
-        type={alertDialog.type}
-        title={alertDialog.title}
-        message={alertDialog.message}
-        onClose={closeAlert}
-      />
-
-      {/* Delete confirmation dialog */}
-      <ConfirmDialog
-        isOpen={deleteConfirm.isOpen}
-        title={t('settings.provider.deleteConfirm')}
-        message={t('settings.provider.deleteProviderMessage', { name: deleteConfirm.provider?.name || '' })}
-        confirmText={t('common.delete')}
-        cancelText={t('common.cancel')}
-        onConfirm={confirmDeleteProvider}
-        onCancel={cancelDeleteProvider}
-      />
-
-      {/* Provider add/edit dialog */}
-      <ProviderDialog
-        isOpen={providerDialog.isOpen}
-        provider={providerDialog.provider}
-        onClose={handleCloseProviderDialog}
-        onSave={handleSaveProviderFromDialog}
-        onDelete={handleDeleteProvider}
-        canDelete={true}
+      {/* All dialogs (alert, confirm, provider, agent, prompt, codex) */}
+      <SettingsDialogs
+        alertDialog={alertDialog}
+        onCloseAlert={closeAlert}
+        providerDialog={providerDialog}
+        deleteConfirm={deleteConfirm}
+        onCloseProviderDialog={handleCloseProviderDialog}
+        onSaveProvider={handleSaveProviderFromDialog}
+        onDeleteProvider={handleDeleteProvider}
+        onConfirmDeleteProvider={confirmDeleteProvider}
+        onCancelDeleteProvider={cancelDeleteProvider}
+        codexProviderDialog={codexProviderDialog}
+        deleteCodexConfirm={deleteCodexConfirm}
+        onCloseCodexProviderDialog={handleCloseCodexProviderDialog}
+        onSaveCodexProvider={handleSaveCodexProviderFromDialog}
+        onConfirmDeleteCodexProvider={confirmDeleteCodexProvider}
+        onCancelDeleteCodexProvider={cancelDeleteCodexProvider}
+        agentDialog={agentDialog}
+        deleteAgentConfirm={deleteAgentConfirm}
+        onCloseAgentDialog={handleCloseAgentDialog}
+        onSaveAgent={handleSaveAgentFromDialog}
+        onConfirmDeleteAgent={confirmDeleteAgent}
+        onCancelDeleteAgent={cancelDeleteAgent}
+        promptDialog={promptDialog}
+        deletePromptConfirm={deletePromptConfirm}
+        onClosePromptDialog={handleClosePromptDialog}
+        onSavePrompt={handleSavePrompt}
+        onConfirmDeletePrompt={confirmDeletePrompt}
+        onCancelDeletePrompt={cancelDeletePrompt}
         addToast={addToast}
-      />
-
-      {/* Agent add/edit dialog */}
-      <AgentDialog
-        isOpen={agentDialog.isOpen}
-        agent={agentDialog.agent}
-        onClose={handleCloseAgentDialog}
-        onSave={handleSaveAgentFromDialog}
-      />
-
-      {/* Agent delete confirmation dialog */}
-      <ConfirmDialog
-        isOpen={deleteAgentConfirm.isOpen}
-        title={t('settings.agent.deleteConfirmTitle')}
-        message={t('settings.agent.deleteConfirmMessage', { name: deleteAgentConfirm.agent?.name || '' })}
-        confirmText={t('common.delete')}
-        cancelText={t('common.cancel')}
-        onConfirm={confirmDeleteAgent}
-        onCancel={cancelDeleteAgent}
-      />
-
-      {/* Prompt add/edit dialog */}
-      <PromptDialog
-        isOpen={promptDialog.isOpen}
-        prompt={promptDialog.prompt}
-        onClose={handleClosePromptDialog}
-        onSave={handleSavePrompt}
-      />
-
-      {/* Prompt delete confirmation dialog */}
-      <ConfirmDialog
-        isOpen={deletePromptConfirm.isOpen}
-        title={t('settings.prompt.deleteConfirmTitle')}
-        message={t('settings.prompt.deleteConfirmMessage', { name: deletePromptConfirm.prompt?.name || '' })}
-        confirmText={t('common.delete')}
-        cancelText={t('common.cancel')}
-        onConfirm={confirmDeletePrompt}
-        onCancel={cancelDeletePrompt}
-      />
-
-      {/* Codex provider add/edit dialog */}
-      <CodexProviderDialog
-        isOpen={codexProviderDialog.isOpen}
-        provider={codexProviderDialog.provider}
-        onClose={handleCloseCodexProviderDialog}
-        onSave={handleSaveCodexProviderFromDialog}
-        addToast={addToast}
-      />
-
-      {/* Codex provider delete confirmation dialog */}
-      <ConfirmDialog
-        isOpen={deleteCodexConfirm.isOpen}
-        title={t('settings.codexProvider.deleteConfirmTitle')}
-        message={t('settings.codexProvider.deleteConfirmMessage', { name: deleteCodexConfirm.provider?.name || '' })}
-        confirmText={t('common.delete')}
-        cancelText={t('common.cancel')}
-        onConfirm={confirmDeleteCodexProvider}
-        onCancel={cancelDeleteCodexProvider}
       />
 
       {/* Toast notifications */}

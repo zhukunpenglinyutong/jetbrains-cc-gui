@@ -157,6 +157,7 @@ const App = () => {
     messagesEndRef,
     inputAreaRef,
     isUserAtBottomRef,
+    userPausedRef,
   } = useScrollBehavior({
     currentView,
     messages,
@@ -616,6 +617,7 @@ const App = () => {
     currentProviderRef,
     messagesContainerRef,
     isUserAtBottomRef,
+    userPausedRef,
     suppressNextStatusToastRef,
     streamingContentRef,
     isStreamingRef,
@@ -824,7 +826,8 @@ const App = () => {
     setLoading(true);
     setLoadingStartTime(Date.now());
 
-    // Scroll to bottom
+    // Scroll to bottom — user sent a message, so clear any scroll-pause
+    userPausedRef.current = false;
     isUserAtBottomRef.current = true;
     requestAnimationFrame(() => {
       if (messagesContainerRef.current) {

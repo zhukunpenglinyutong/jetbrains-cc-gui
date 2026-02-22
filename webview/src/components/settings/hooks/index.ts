@@ -30,3 +30,6 @@ export type {
   PromptDialogState,
   DeletePromptConfirmState,
 } from './usePromptManagement';
+
+export { useSettingsWindowCallbacks } from './useSettingsWindowCallbacks';
+export type { SettingsWindowCallbacksDeps } from './useSettingsWindowCallbacks';

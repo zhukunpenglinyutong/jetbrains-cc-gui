@@ -115,4 +115,35 @@ describe('useControlledValueSync', () => {
     expect(editable.innerText).toBe('abcd');
     expect(isExternalUpdateRef.current).toBe(false);
   });
+
+  it('does not sync while editable element has focus', () => {
+    const editable = createEditable();
+    editable.setAttribute('contenteditable', 'true');
+    editable.innerText = 'typing in progress';
+    editable.focus();
+    const setHasContent = vi.fn();
+    const adjustHeight = vi.fn();
+    const invalidateCache = vi.fn();
+    const isComposingRef = { current: false };
+    const isInputDirtyRef = { current: false };
+    const isExternalUpdateRef = { current: false };
+
+    renderHook(() =>
+      useControlledValueSync({
+        value: 'stale value from parent',
+        editableRef: { current: editable },
+        isComposingRef,
+        isInputDirtyRef,
+        isExternalUpdateRef,
+        getTextContent: () => editable.innerText,
+        setHasContent,
+        adjustHeight,
+        invalidateCache,
+      })
+    );
+
+    // Should NOT overwrite — DOM is source of truth while user is typing
+    expect(editable.innerText).toBe('typing in progress');
+    expect(setHasContent).not.toHaveBeenCalled();
+  });
 });
