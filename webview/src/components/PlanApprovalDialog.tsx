@@ -53,6 +53,13 @@ const PlanApprovalDialog = ({
   // Timer reference
   const timerRef = useRef<number | null>(null);
 
+  // Resize state: user can drag the top edge to make the dialog taller
+  const [dialogHeight, setDialogHeight] = useState<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartYRef = useRef(0);
+  const dragStartHeightRef = useRef(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   const handleApprove = useCallback(() => {
     if (!request) return;
     onApprove(request.requestId, selectedMode);
@@ -63,6 +70,37 @@ const PlanApprovalDialog = ({
     onReject(request.requestId);
   }, [request, onReject]);
 
+  // Resize handlers: drag the top edge to make the dialog taller/shorter
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    dragStartYRef.current = e.clientY;
+    dragStartHeightRef.current = dialogRef.current?.offsetHeight ?? 0;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  useEffect(() => {
+    const handleResizeMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = dragStartYRef.current - e.clientY;
+      const newHeight = Math.max(200, Math.min(window.innerHeight * 0.9, dragStartHeightRef.current + delta));
+      setDialogHeight(newHeight);
+    };
+    const handleResizeEnd = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', handleResizeMove);
+    window.addEventListener('mouseup', handleResizeEnd);
+    return () => {
+      window.removeEventListener('mousemove', handleResizeMove);
+      window.removeEventListener('mouseup', handleResizeEnd);
+    };
+  }, []);
+
   // Reset state
   useEffect(() => {
     if (isOpen && request) {
@@ -71,6 +109,7 @@ const PlanApprovalDialog = ({
       setIsCollapsed(false);
       // Reset countdown
       setRemainingSeconds(TIMEOUT_SECONDS);
+      setDialogHeight(null);
     }
   }, [isOpen, request?.requestId]);
 
@@ -168,7 +207,13 @@ const PlanApprovalDialog = ({
 
   return (
     <div className={`permission-dialog-overlay ${isTimeWarning ? 'warning-mode' : ''}`}>
-      <div className="plan-approval-dialog">
+      <div
+        ref={dialogRef}
+        className="plan-approval-dialog"
+        style={dialogHeight ? { height: dialogHeight, maxHeight: '90vh' } : undefined}
+      >
+        {/* Resize handle at the top edge */}
+        <div className="plan-approval-resize-handle" onMouseDown={handleResizeStart} />
         {/* Timeout warning notice */}
         {isTimeWarning && (
           <div className="timeout-warning-banner">

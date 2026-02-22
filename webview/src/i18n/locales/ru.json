@@ -87,7 +87,7 @@
     "attachmentFile": "[Вложение: {{fileName}}]",
     "unknownFile": "Неизвестный файл",
     "attachmentsUploaded": "[Вложения загружены]",
-    "streamingConnected": "Claude подключён и обрабатывает запрос"
+    "streamingConnected": "Claude обрабатывает запрос"
   },
   "settings": {
     "title": "Настройки",

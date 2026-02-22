@@ -6,6 +6,7 @@
   border: 1px solid var(--vscode-widget-border, #454545);
   border-radius: 8px;
   padding: 24px;
+  padding-top: 28px; /* extra space for resize handle */
   /* Set to 100% width */
   max-width: 100%;
   width: 100%;
@@ -15,6 +16,35 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Resize handle at the top of the dialog */
+.plan-approval-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  border-radius: 8px 8px 0 0;
+  z-index: 1;
+}
+
+.plan-approval-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 3px;
+  background: var(--vscode-widget-border, #454545);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.plan-approval-resize-handle:hover::after {
+  background: var(--vscode-focusBorder, #007acc);
 }
 
 /* Header area */

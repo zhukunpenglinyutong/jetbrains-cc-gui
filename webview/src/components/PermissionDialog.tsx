@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export interface PermissionRequest {
@@ -27,6 +27,43 @@ const PermissionDialog = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { t } = useTranslation();
 
+  // Resize state
+  const [dialogHeight, setDialogHeight] = useState<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartYRef = useRef(0);
+  const dragStartHeightRef = useRef(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    dragStartYRef.current = e.clientY;
+    dragStartHeightRef.current = dialogRef.current?.offsetHeight ?? 0;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  useEffect(() => {
+    const handleResizeMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = dragStartYRef.current - e.clientY;
+      const newHeight = Math.max(150, Math.min(window.innerHeight * 0.9, dragStartHeightRef.current + delta));
+      setDialogHeight(newHeight);
+    };
+    const handleResizeEnd = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', handleResizeMove);
+    window.addEventListener('mouseup', handleResizeEnd);
+    return () => {
+      window.removeEventListener('mousemove', handleResizeMove);
+      window.removeEventListener('mouseup', handleResizeEnd);
+    };
+  }, []);
+
   const handleApprove = () => {
     if (!request) return;
     onApprove(request.channelId);
@@ -46,6 +83,7 @@ const PermissionDialog = ({
     if (isOpen && request) {
       setShowCommand(true); // Expand by default each time it opens
       setSelectedIndex(0);
+      setDialogHeight(null);
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === '1') {
@@ -142,7 +180,13 @@ const PermissionDialog = ({
 
   return (
     <div className="permission-dialog-overlay">
-      <div className="permission-dialog-v3">
+      <div
+        ref={dialogRef}
+        className="permission-dialog-v3"
+        style={dialogHeight ? { height: dialogHeight, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' as const } : undefined}
+      >
+        {/* Resize handle */}
+        <div className="permission-dialog-v3-resize-handle" onMouseDown={handleResizeStart} />
         {/* Title area */}
         <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
         <p className="permission-dialog-v3-subtitle">{t('permission.fromExternalProcess')}</p>
@@ -163,7 +207,10 @@ const PermissionDialog = ({
           </div>
 
           {showCommand && (
-            <div className="permission-dialog-v3-command-content">
+            <div
+              className="permission-dialog-v3-command-content"
+              style={dialogHeight ? { maxHeight: 'none' } : undefined}
+            >
               <pre>{commandContent}</pre>
             </div>
           )}
