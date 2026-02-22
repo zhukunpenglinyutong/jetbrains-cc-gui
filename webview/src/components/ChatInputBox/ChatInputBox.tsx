@@ -780,6 +780,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
             ref={editableRef}
             className="input-editable"
             contentEditable={!disabled}
+            spellCheck={false}
             data-placeholder={placeholder}
             data-completion-suffix={inlineCompletion.suffix || ''}
             onInput={(e) => {
