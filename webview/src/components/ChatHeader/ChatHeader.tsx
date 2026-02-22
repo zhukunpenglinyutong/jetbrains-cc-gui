@@ -47,7 +47,7 @@ export function ChatHeader({
 
   const commitEdit = useCallback(() => {
     setEditing(false);
-    const trimmed = editValue.trim();
+    const trimmed = editValue.trim().slice(0, 50);
     if (trimmed && trimmed !== sessionTitle && onTitleChange) {
       onTitleChange(trimmed);
     }
@@ -66,6 +66,15 @@ export function ChatHeader({
       cancelEdit();
     }
   }, [commitEdit, cancelEdit]);
+
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    // If focus moves to save/cancel button inside edit container, let that button handle it
+    const editContainer = e.currentTarget.closest('.session-title-edit-mode');
+    if (editContainer && editContainer.contains(e.relatedTarget as Node)) {
+      return;
+    }
+    commitEdit();
+  }, [commitEdit]);
 
   if (currentView === 'settings') {
     return null;
@@ -87,12 +96,14 @@ export function ChatHeader({
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={handleKeyDown}
+              onBlur={handleBlur}
               maxLength={50}
+              aria-label="Session title"
             />
-            <button className="session-title-save-btn" onClick={commitEdit}>
+            <button className="session-title-save-btn" onClick={commitEdit} aria-label="Save title">
               <span className="codicon codicon-check" />
             </button>
-            <button className="session-title-cancel-btn" onClick={cancelEdit}>
+            <button className="session-title-cancel-btn" onClick={cancelEdit} aria-label="Cancel editing">
               <span className="codicon codicon-close" />
             </button>
           </div>
@@ -102,7 +113,7 @@ export function ChatHeader({
               {sessionTitle}
             </div>
             {titleEditable && (
-              <button className="session-title-edit-btn" onClick={startEditing}>
+              <button className="session-title-edit-btn" onClick={startEditing} aria-label="Edit session title">
                 <span className="codicon codicon-edit" />
               </button>
             )}

@@ -62,6 +62,8 @@ export function useSessionManagement({
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const pendingActionRef = useRef<'newSession' | null>(null);
   const suppressNextStatusToastRef = useRef(false);
+  const historyDataRef = useRef(historyData);
+  historyDataRef.current = historyData;
 
   // Create new session
   const createNewSession = useCallback(() => {
@@ -141,11 +143,11 @@ export function useSessionManagement({
     setCurrentSessionId(sessionId);
 
     // Set the custom title from history data so the chat header shows it immediately
-    const session = historyData?.sessions?.find(s => s.sessionId === sessionId);
+    const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
     setCustomSessionTitle(session?.title ?? null);
 
     setCurrentView('chat');
-  }, [loading, historyData, setCurrentSessionId, setCustomSessionTitle, setCurrentView]);
+  }, [loading, setCurrentSessionId, setCustomSessionTitle, setCurrentView]);
 
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
@@ -170,6 +172,7 @@ export function useSessionManagement({
         if (loading) {
           sendBridgeEvent('interrupt_session');
         }
+        setCustomSessionTitle(null);
         setMessages([]);
         setCurrentSessionId(null);
         setUsagePercentage(0);
@@ -182,7 +185,7 @@ export function useSessionManagement({
       // Show success toast
       addToast(t('history.sessionDeleted'), 'success');
     }
-  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, addToast, t]);
+  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, addToast, t]);
 
   // Export history session
   const exportHistorySession = useCallback((sessionId: string, title: string) => {

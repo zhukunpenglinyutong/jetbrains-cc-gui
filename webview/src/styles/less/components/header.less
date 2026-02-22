@@ -141,8 +141,8 @@
     }
 
     &:hover {
-        background-color: rgba(10, 132, 255, 0.15);
-        color: #0a84ff;
+        background-color: var(--color-button-accent-hover-bg);
+        color: var(--accent-primary);
     }
 
     &:active {
@@ -168,7 +168,7 @@
     padding: 4px 8px;
     font-size: 14px;
     font-weight: 600;
-    border: 1px solid #0a84ff;
+    border: 1px solid var(--accent-primary);
     border-radius: 4px;
     background-color: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -177,15 +177,15 @@
     max-width: 300px;
 
     &:focus {
-        border-color: #0a84ff;
-        box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 2px var(--color-button-accent-hover-bg);
     }
 }
 
 .session-title-save-btn {
     background: transparent;
     border: none;
-    color: #30d158;
+    color: var(--color-success);
     cursor: pointer;
     font-size: 16px;
     padding: 4px;
@@ -197,7 +197,7 @@
     line-height: 1;
 
     &:hover {
-        background-color: rgba(48, 209, 88, 0.15);
+        background-color: var(--color-button-success-bg);
     }
 
     &:active {
@@ -208,7 +208,7 @@
 .session-title-cancel-btn {
     background: transparent;
     border: none;
-    color: #ff3b30;
+    color: var(--color-danger);
     cursor: pointer;
     font-size: 16px;
     padding: 4px;
@@ -220,7 +220,7 @@
     line-height: 1;
 
     &:hover {
-        background-color: rgba(255, 59, 48, 0.15);
+        background-color: var(--color-button-danger-hover-bg);
     }
 
     &:active {
