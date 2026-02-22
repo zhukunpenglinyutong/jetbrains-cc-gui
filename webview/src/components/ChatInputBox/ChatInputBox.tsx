@@ -146,10 +146,6 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
     // Flag to track if we're updating from external value
     const isExternalUpdateRef = useRef(false);
 
-    // Flag to track if user is actively typing (between keystroke and debounce fire)
-    // Prevents useControlledValueSync from overwriting DOM with stale debounced value
-    const isInputDirtyRef = useRef(false);
-
     // Shared composing state ref - created early so it can be used by detectAndTriggerCompletion
     // This ref is synced with useIMEComposition's isComposingRef
     const sharedComposingRef = useRef(false);
@@ -394,9 +390,6 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
     const debouncedOnInput = useMemo(
       () =>
         debounce((text: string) => {
-          // Clear dirty flag: debounce has caught up with user input,
-          // so controlled value sync is now safe to run
-          isInputDirtyRef.current = false;
           // Skip if this is an external value update to avoid loops
           if (isExternalUpdateRef.current) {
             isExternalUpdateRef.current = false;
@@ -427,10 +420,6 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
         if (isCurrentlyComposing) {
           return;
         }
-
-        // Mark input as dirty: user has typed but debounce hasn't fired yet.
-        // This prevents useControlledValueSync from overwriting DOM with stale value.
-        isInputDirtyRef.current = true;
 
         // Invalidate cache since content changed
         invalidateCache();
@@ -566,7 +555,6 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       currentProvider,
       clearInput,
       cancelPendingInput: () => {
-        isInputDirtyRef.current = false;
         debouncedOnInput.cancel();
       },
       externalAttachments,
@@ -625,7 +613,6 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       value,
       editableRef,
       isComposingRef,
-      isInputDirtyRef,
       isExternalUpdateRef,
       getTextContent,
       setHasContent,
@@ -663,7 +650,6 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       commandCompletion,
       handleInput,
       flushInput: () => {
-        isInputDirtyRef.current = false;
         debouncedOnInput.flush();
       },
     });

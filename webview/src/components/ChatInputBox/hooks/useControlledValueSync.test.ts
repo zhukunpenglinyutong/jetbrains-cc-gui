@@ -27,7 +27,6 @@ describe('useControlledValueSync', () => {
     const adjustHeight = vi.fn();
     const invalidateCache = vi.fn();
     const isComposingRef = { current: false };
-    const isInputDirtyRef = { current: false };
     const isExternalUpdateRef = { current: false };
 
     const selection = {
@@ -42,7 +41,6 @@ describe('useControlledValueSync', () => {
           value,
           editableRef: { current: editable },
           isComposingRef,
-          isInputDirtyRef,
           isExternalUpdateRef,
           getTextContent: () => editable.innerText,
           setHasContent,
@@ -67,7 +65,6 @@ describe('useControlledValueSync', () => {
     const adjustHeight = vi.fn();
     const invalidateCache = vi.fn();
     const isComposingRef = { current: true };
-    const isInputDirtyRef = { current: false };
     const isExternalUpdateRef = { current: false };
 
     renderHook(() =>
@@ -75,7 +72,6 @@ describe('useControlledValueSync', () => {
         value: 'new',
         editableRef: { current: editable },
         isComposingRef,
-        isInputDirtyRef,
         isExternalUpdateRef,
         getTextContent: () => editable.innerText,
         setHasContent,
@@ -87,35 +83,6 @@ describe('useControlledValueSync', () => {
     expect(editable.innerText).toBe('old');
   });
 
-  it('does not sync while input is dirty (user typing faster than debounce)', () => {
-    const editable = createEditable();
-    editable.innerText = 'abcd';
-    const setHasContent = vi.fn();
-    const adjustHeight = vi.fn();
-    const invalidateCache = vi.fn();
-    const isComposingRef = { current: false };
-    const isInputDirtyRef = { current: true };
-    const isExternalUpdateRef = { current: false };
-
-    renderHook(() =>
-      useControlledValueSync({
-        value: 'abc', // stale debounced value
-        editableRef: { current: editable },
-        isComposingRef,
-        isInputDirtyRef,
-        isExternalUpdateRef,
-        getTextContent: () => editable.innerText,
-        setHasContent,
-        adjustHeight,
-        invalidateCache,
-      })
-    );
-
-    // DOM should NOT be overwritten with stale value
-    expect(editable.innerText).toBe('abcd');
-    expect(isExternalUpdateRef.current).toBe(false);
-  });
-
   it('does not sync while editable element has focus', () => {
     const editable = createEditable();
     editable.setAttribute('contenteditable', 'true');
@@ -125,7 +92,6 @@ describe('useControlledValueSync', () => {
     const adjustHeight = vi.fn();
     const invalidateCache = vi.fn();
     const isComposingRef = { current: false };
-    const isInputDirtyRef = { current: false };
     const isExternalUpdateRef = { current: false };
 
     renderHook(() =>
@@ -133,7 +99,6 @@ describe('useControlledValueSync', () => {
         value: 'stale value from parent',
         editableRef: { current: editable },
         isComposingRef,
-        isInputDirtyRef,
         isExternalUpdateRef,
         getTextContent: () => editable.innerText,
         setHasContent,
