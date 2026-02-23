@@ -33,6 +33,12 @@ export function ChatHeader({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!titleEditable) {
+      setEditing(false);
+    }
+  }, [titleEditable]);
+
+  useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
