@@ -1570,7 +1570,7 @@ const App = () => {
           setSettingsInitialTab(undefined);
           setCurrentView('settings');
         }}
-        titleEditable={!!currentSessionId}
+        titleEditable
         onTitleChange={(newTitle) => {
           setCustomSessionTitle(newTitle);
           if (currentSessionId) {
