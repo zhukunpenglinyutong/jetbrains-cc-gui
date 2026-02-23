@@ -686,7 +686,7 @@ public class HistoryHandler extends BaseMessageHandler {
         CompletableFuture.runAsync(() -> {
             try {
                 LOG.info("[HistoryHandler] Deleting orphaned title for sessionId: " + sessionId);
-                String result = callNodeJsDeleteTitle(sessionId);
+                String result = nodeJsServiceCaller.callNodeJsDeleteTitle(sessionId);
                 LOG.info("[HistoryHandler] Delete title result: " + result);
             } catch (Exception e) {
                 LOG.warn("[HistoryHandler] Failed to delete orphaned title: " + e.getMessage());

@@ -163,7 +163,7 @@ public class NodeJsServiceCaller {
             "const result = deleteTitle('%s'); " +
             "console.log(JSON.stringify({ success: result }));",
             bridgePath.replace("\\", "\\\\"),
-            sessionId
+            sessionId.replace("\\", "\\\\").replace("'", "\\'")
         );
 
         ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
