@@ -96,6 +96,13 @@ const AddModelDialogWrapper = ({
   );
 };
 
+const getCustomModels = (key: string): { id: string }[] => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
 const App = () => {
   const { t } = useTranslation();
 
@@ -451,14 +458,22 @@ const App = () => {
           }
         }
 
-        // Validate and restore Claude model
-        if (CLAUDE_MODELS.find(m => m.id === state.claudeModel)) {
+        // Validate and restore Claude model (check both built-in and custom models)
+        const savedClaudeCustomModels = getCustomModels('claude-custom-models');
+        if (
+          CLAUDE_MODELS.find(m => m.id === state.claudeModel) ||
+          savedClaudeCustomModels.find((m: { id: string }) => m.id === state.claudeModel)
+        ) {
           restoredClaudeModel = state.claudeModel;
           setSelectedClaudeModel(state.claudeModel);
         }
 
-        // Validate and restore Codex model
-        if (CODEX_MODELS.find(m => m.id === state.codexModel)) {
+        // Validate and restore Codex model (check both built-in and custom models)
+        const savedCodexCustomModels = getCustomModels('codex-custom-models');
+        if (
+          CODEX_MODELS.find(m => m.id === state.codexModel) ||
+          savedCodexCustomModels.find((m: { id: string }) => m.id === state.codexModel)
+        ) {
           restoredCodexModel = state.codexModel;
           setSelectedCodexModel(state.codexModel);
         }
