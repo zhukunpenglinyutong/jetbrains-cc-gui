@@ -26,6 +26,7 @@ public class HistoryHandler extends BaseMessageHandler {
         "export_session",  // Export session
         "toggle_favorite", // Toggle favorite status
         "update_title",    // Update session title
+        "delete_title",    // Delete orphaned custom title (B-011)
         "deep_search_history" // Deep search (clear cache and reload)
     };
 
@@ -78,6 +79,10 @@ public class HistoryHandler extends BaseMessageHandler {
             case "update_title":
                 LOG.info("[HistoryHandler] 处理: update_title");
                 handleUpdateTitle(content);
+                return true;
+            case "delete_title":
+                LOG.info("[HistoryHandler] 处理: delete_title, sessionId=" + content);
+                handleDeleteTitle(content);
                 return true;
             case "deep_search_history":
                 LOG.info("[HistoryHandler] 处理: deep_search_history, provider=" + content);
@@ -670,6 +675,21 @@ public class HistoryHandler extends BaseMessageHandler {
                         "}";
                     context.executeJavaScriptOnEDT(jsCode);
                 });
+            }
+        });
+    }
+
+    /**
+     * Delete an orphaned custom title entry (B-011: session ID migration cleanup).
+     */
+    private void handleDeleteTitle(String sessionId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                LOG.info("[HistoryHandler] Deleting orphaned title for sessionId: " + sessionId);
+                String result = callNodeJsDeleteTitle(sessionId);
+                LOG.info("[HistoryHandler] Delete title result: " + result);
+            } catch (Exception e) {
+                LOG.warn("[HistoryHandler] Failed to delete orphaned title: " + e.getMessage());
             }
         });
     }

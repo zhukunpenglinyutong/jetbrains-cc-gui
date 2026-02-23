@@ -101,6 +101,11 @@ export interface UseWindowCallbacksOptions {
   openPermissionDialog: (request: PermissionRequest) => void;
   openAskUserQuestionDialog: (request: AskUserQuestionRequest) => void;
   openPlanApprovalDialog: (request: PlanApprovalRequest) => void;
+
+  // B-011: Title migration on session ID change
+  customSessionTitleRef: MutableRefObject<string | null>;
+  currentSessionIdRef: MutableRefObject<string | null>;
+  updateHistoryTitle: (sessionId: string, newTitle: string) => void;
 }
 
 export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
@@ -163,6 +168,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     openPermissionDialog,
     openAskUserQuestionDialog,
     openPlanApprovalDialog,
+    customSessionTitleRef,
+    currentSessionIdRef,
+    updateHistoryTitle,
   } = options;
 
   // Store t in ref to avoid stale closures
@@ -759,8 +767,18 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Session Callbacks ==========
     window.setSessionId = (sessionId: string) => {
+      const oldId = currentSessionIdRef.current;
       console.log('[Frontend] setSessionId:', sessionId);
       setCurrentSessionId(sessionId);
+
+      // B-011: If a custom title was set under the provisional session ID,
+      // re-persist it under the real SDK session ID and clean up the orphan.
+      const title = customSessionTitleRef.current;
+      if (title && oldId && oldId !== sessionId) {
+        console.log('[Frontend] B-011: migrating custom title from', oldId, 'to', sessionId);
+        updateHistoryTitle(sessionId, title);
+        sendBridgeEvent('delete_title', oldId);
+      }
     };
 
     window.addToast = (message, type) => {
