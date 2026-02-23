@@ -277,6 +277,15 @@ const SettingsView = ({
     return '';
   });
 
+  // User message bubble color configuration
+  const [userMsgColor, setUserMsgColor] = useState<string>(() => {
+    const saved = localStorage.getItem('userMsgColor');
+    if (saved && /^#[0-9a-fA-F]{6}$/.test(saved)) {
+      return saved;
+    }
+    return '';
+  });
+
   // History completion toggle configuration
   const [historyCompletionEnabled, setHistoryCompletionEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('historyCompletionEnabled');
@@ -431,6 +440,17 @@ const SettingsView = ({
       localStorage.removeItem('chatBgColor');
     }
   }, [chatBgColor]);
+
+  // User message bubble color handler
+  useEffect(() => {
+    if (userMsgColor) {
+      document.documentElement.style.setProperty('--color-message-user-bg', userMsgColor);
+      localStorage.setItem('userMsgColor', userMsgColor);
+    } else {
+      document.documentElement.style.removeProperty('--color-message-user-bg');
+      localStorage.removeItem('userMsgColor');
+    }
+  }, [userMsgColor]);
 
   // Diff expanded by default handler
   useEffect(() => {
@@ -636,6 +656,8 @@ const SettingsView = ({
               onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
               chatBgColor={chatBgColor}
               onChatBgColorChange={setChatBgColor}
+              userMsgColor={userMsgColor}
+              onUserMsgColorChange={setUserMsgColor}
               diffExpandedByDefault={diffExpandedByDefault}
               onDiffExpandedByDefaultChange={setDiffExpandedByDefault}
             />

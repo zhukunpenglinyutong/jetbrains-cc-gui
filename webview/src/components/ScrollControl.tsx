@@ -156,8 +156,16 @@ export const ScrollControl = memo(({ containerRef, inputAreaRef }: ScrollControl
     checkScrollPosition();
     updatePosition();
 
-    // Add scroll listener (to detect if bottom is reached)
-    container.addEventListener('scroll', checkScrollPosition);
+    // Throttled scroll listener via rAF (passive to avoid blocking scroll)
+    let scrollRafId: number | null = null;
+    const handleScroll = () => {
+      if (scrollRafId !== null) return;
+      scrollRafId = requestAnimationFrame(() => {
+        scrollRafId = null;
+        checkScrollPosition();
+      });
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
 
     // Add wheel listener (to detect scroll direction)
     container.addEventListener('wheel', handleWheel, { passive: true });
@@ -177,9 +185,10 @@ export const ScrollControl = memo(({ containerRef, inputAreaRef }: ScrollControl
     }
 
     return () => {
-      container.removeEventListener('scroll', checkScrollPosition);
+      container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('wheel', handleWheel);
       window.removeEventListener('resize', handleResize);
+      if (scrollRafId !== null) cancelAnimationFrame(scrollRafId);
       if (resizeObserver) {
         resizeObserver.disconnect();
       }

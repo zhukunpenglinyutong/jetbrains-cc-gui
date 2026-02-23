@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import MarkdownBlock from './MarkdownBlock';
 
 export interface PermissionRequest {
   channelId: string;
@@ -211,7 +212,7 @@ const PermissionDialog = ({
               className="permission-dialog-v3-command-content"
               style={dialogHeight ? { maxHeight: 'none' } : undefined}
             >
-              <pre>{commandContent}</pre>
+              <MarkdownBlock content={commandContent} isStreaming={false} />
             </div>
           )}
         </div>

@@ -248,6 +248,23 @@
   color: var(--vscode-descriptionForeground, #999999);
 }
 
+/* Plan content (markdown) */
+.plan-approval-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px;
+  margin: 0;
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 6px;
+  background: var(--vscode-input-background, #3c3c3c);
+  min-height: 0;
+  max-height: 40vh;
+}
+
+.plan-approval-content .markdown-content {
+  font-size: 13px;
+}
+
 /* Execution Mode Section */
 .plan-approval-mode-section {
   display: flex;

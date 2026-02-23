@@ -69,6 +69,7 @@ public class ClaudeChatWindow {
     private WebviewInitializer webviewInitializer;
     private EditorContextTracker editorContextTracker;
     private ChatWindowDelegate chatWindowDelegate;
+    private SessionCallbackAdapter sessionCallbackAdapter;
 
     public ClaudeChatWindow(Project project) {
         this(project, false);
@@ -308,12 +309,13 @@ public class ClaudeChatWindow {
     // ==================== Session Delegates ====================
 
     private void setupSessionCallbacks() {
-        session.setCallback(new SessionCallbackAdapter(
+        this.sessionCallbackAdapter = new SessionCallbackAdapter(
             streamCoalescer,
             this::callJavaScript,
             permissionHandler,
             () -> slashCommandsFetched
-        ));
+        );
+        session.setCallback(sessionCallbackAdapter);
     }
 
     private void initializeSessionInfo() {
@@ -358,6 +360,9 @@ public class ClaudeChatWindow {
         chatWindowDelegate.dispose();
         editorContextTracker.dispose();
         streamCoalescer.dispose();
+        if (sessionCallbackAdapter != null) {
+            sessionCallbackAdapter.dispose();
+        }
         webviewWatchdog.stop();
 
         // Unregister permission service dialog showers

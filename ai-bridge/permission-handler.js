@@ -226,6 +226,7 @@ export async function requestPlanApproval(input) {
     const requestData = {
       requestId,
       toolName: 'ExitPlanMode',
+      plan: input?.plan || '',
       allowedPrompts: input?.allowedPrompts || [],
       timestamp: new Date().toISOString(),
       cwd: process.cwd()  // Add working directory for project matching in multi-IDEA scenarios

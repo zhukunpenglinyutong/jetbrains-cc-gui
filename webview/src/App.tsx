@@ -382,6 +382,12 @@ const App = () => {
       document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
     }
 
+    // Initialize user message bubble color
+    const savedUserMsgColor = localStorage.getItem('userMsgColor');
+    if (savedUserMsgColor && /^#[0-9a-fA-F]{6}$/.test(savedUserMsgColor)) {
+      document.documentElement.style.setProperty('--color-message-user-bg', savedUserMsgColor);
+    }
+
     // Apply the user's explicit theme choice (light/dark) first; Follow IDE mode is handled after ideTheme updates
     const savedTheme = localStorage.getItem('theme');
 

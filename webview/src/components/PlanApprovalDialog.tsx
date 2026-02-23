@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
+import MarkdownBlock from './MarkdownBlock';
 import './PlanApprovalDialog.css';
 
 // Timeout configuration (kept in sync with backend PermissionHandler.java)
@@ -15,6 +16,7 @@ export interface AllowedPrompt {
 export interface PlanApprovalRequest {
   requestId: string;
   toolName: string;
+  plan?: string;
   allowedPrompts?: AllowedPrompt[];
   timestamp?: string;
 }
@@ -248,6 +250,13 @@ const PlanApprovalDialog = ({
             </button>
           </div>
         </div>
+
+        {/* Plan content (markdown) */}
+        {request.plan && (
+          <div className="plan-approval-content">
+            <MarkdownBlock content={request.plan} isStreaming={false} />
+          </div>
+        )}
 
         {/* Execution Mode Selection */}
         <div className="plan-approval-mode-section">
