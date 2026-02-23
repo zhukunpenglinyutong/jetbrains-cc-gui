@@ -771,13 +771,17 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       console.log('[Frontend] setSessionId:', sessionId);
       setCurrentSessionId(sessionId);
 
-      // B-011: If a custom title was set under the provisional session ID,
-      // re-persist it under the real SDK session ID and clean up the orphan.
+      // B-011 + B-014: Persist custom title under the real SDK session ID.
+      // Covers two cases:
+      //   1. oldId is null (B-014): new session, title edited before first prompt
+      //   2. oldId differs (B-011): provisional ID replaced by SDK — also clean up orphan
       const title = customSessionTitleRef.current;
-      if (title && oldId && oldId !== sessionId) {
-        console.log('[Frontend] B-011: migrating custom title from', oldId, 'to', sessionId);
+      if (title) {
+        console.log('[Frontend] B-011: persisting custom title under', sessionId, '(oldId:', oldId, ')');
         updateHistoryTitle(sessionId, title);
-        sendBridgeEvent('delete_title', oldId);
+        if (oldId && oldId !== sessionId) {
+          sendBridgeEvent('delete_title', oldId);
+        }
       }
     };
 

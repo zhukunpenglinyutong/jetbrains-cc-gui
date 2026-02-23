@@ -79,10 +79,11 @@ export function useSessionManagement({
       setShowNewSessionConfirm(true);
     } else {
       // If empty and not loading, directly create new session
+      setCurrentSessionId(null);
       setCustomSessionTitle(null);
       sendBridgeEvent('create_new_session');
     }
-  }, [messages.length, loading, setCustomSessionTitle]);
+  }, [messages.length, loading, setCurrentSessionId, setCustomSessionTitle]);
 
   // Force create new session (no confirmation, used by /clear /new /reset commands)
   const forceCreateNewSession = useCallback(() => {
@@ -91,10 +92,11 @@ export function useSessionManagement({
     }
     // Set the transition flag to prevent stale session callbacks from writing old messages via updateMessages
     window.__sessionTransitioning = true;
+    setCurrentSessionId(null);
     setCustomSessionTitle(null);
     setMessages([]);
     sendBridgeEvent('create_new_session');
-  }, [setMessages, loading, setCustomSessionTitle]);
+  }, [setMessages, loading, setCurrentSessionId, setCustomSessionTitle]);
 
   // Confirm new session
   const handleConfirmNewSession = useCallback(() => {
@@ -104,11 +106,12 @@ export function useSessionManagement({
       sendBridgeEvent('interrupt_session');
     }
     // Clear current messages and create new session
+    setCurrentSessionId(null);
     setCustomSessionTitle(null);
     setMessages([]);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
-  }, [setMessages, loading, setCustomSessionTitle]);
+  }, [setMessages, loading, setCurrentSessionId, setCustomSessionTitle]);
 
   // Cancel new session
   const handleCancelNewSession = useCallback(() => {
@@ -121,11 +124,12 @@ export function useSessionManagement({
     setShowInterruptConfirm(false);
     // Send interrupt signal and create new session
     sendBridgeEvent('interrupt_session');
+    setCurrentSessionId(null);
     setCustomSessionTitle(null);
     setMessages([]);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
-  }, [setMessages, setCustomSessionTitle]);
+  }, [setMessages, setCurrentSessionId, setCustomSessionTitle]);
 
   // Cancel interrupt
   const handleCancelInterrupt = useCallback(() => {
