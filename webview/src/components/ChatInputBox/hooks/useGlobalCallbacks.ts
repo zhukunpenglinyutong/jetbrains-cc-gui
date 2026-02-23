@@ -129,8 +129,13 @@ export function useGlobalCallbacks({
       }, 50);
     };
 
-    // Initial focus
-    focusInput();
+    // Initial focus — but only if no other input/editable element is focused (B-013)
+    const active = document.activeElement;
+    const isOtherInputFocused = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement ||
+      (active instanceof HTMLElement && active.isContentEditable && active !== editableRef.current);
+    if (!isOtherInputFocused) {
+      focusInput();
+    }
 
     // Cleanup function
     return () => {
