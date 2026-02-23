@@ -150,6 +150,7 @@ const App = () => {
     return null;
   });
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [customSessionTitle, setCustomSessionTitle] = useState<string | null>(null);
 
   // Scroll behavior management
   const {
@@ -570,6 +571,7 @@ const App = () => {
     setMessages,
     setCurrentView,
     setCurrentSessionId,
+    setCustomSessionTitle,
     setUsagePercentage,
     setUsageUsedTokens,
     addToast,
@@ -1515,6 +1517,9 @@ const App = () => {
   const statusPanelExpanded = hasStatusPanelContent && !userCollapsedRef.current;
 
   const sessionTitle = useMemo(() => {
+    if (customSessionTitle) {
+      return customSessionTitle;
+    }
     if (messages.length === 0) {
       return t('common.newSession');
     }
@@ -1524,7 +1529,7 @@ const App = () => {
     }
     const text = getMessageText(firstUserMessage);
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;
-  }, [messages, t, getMessageText]);
+  }, [customSessionTitle, messages, t, getMessageText]);
 
   return (
     <>
@@ -1540,6 +1545,13 @@ const App = () => {
         onSettings={() => {
           setSettingsInitialTab(undefined);
           setCurrentView('settings');
+        }}
+        titleEditable={!!currentSessionId}
+        onTitleChange={(newTitle) => {
+          setCustomSessionTitle(newTitle);
+          if (currentSessionId) {
+            updateHistoryTitle(currentSessionId, newTitle);
+          }
         }}
       />
 

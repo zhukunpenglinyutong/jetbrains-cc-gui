@@ -16,6 +16,7 @@ interface UseSessionManagementOptions {
   setMessages: React.Dispatch<React.SetStateAction<ClaudeMessage[]>>;
   setCurrentView: (view: ViewMode) => void;
   setCurrentSessionId: (id: string | null) => void;
+  setCustomSessionTitle: (title: string | null) => void;
   setUsagePercentage: (percent: number) => void;
   setUsageUsedTokens: (tokens: number | undefined) => void;
   addToast: (message: string, type?: ToastType) => void;
@@ -51,6 +52,7 @@ export function useSessionManagement({
   setMessages,
   setCurrentView,
   setCurrentSessionId,
+  setCustomSessionTitle,
   setUsagePercentage,
   setUsageUsedTokens,
   addToast,
@@ -60,6 +62,8 @@ export function useSessionManagement({
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
   const pendingActionRef = useRef<'newSession' | null>(null);
   const suppressNextStatusToastRef = useRef(false);
+  const historyDataRef = useRef(historyData);
+  historyDataRef.current = historyData;
 
   // Create new session
   const createNewSession = useCallback(() => {
@@ -75,9 +79,10 @@ export function useSessionManagement({
       setShowNewSessionConfirm(true);
     } else {
       // If empty and not loading, directly create new session
+      setCustomSessionTitle(null);
       sendBridgeEvent('create_new_session');
     }
-  }, [messages.length, loading]);
+  }, [messages.length, loading, setCustomSessionTitle]);
 
   // Force create new session (no confirmation, used by /clear /new /reset commands)
   const forceCreateNewSession = useCallback(() => {
@@ -86,9 +91,10 @@ export function useSessionManagement({
     }
     // Set the transition flag to prevent stale session callbacks from writing old messages via updateMessages
     window.__sessionTransitioning = true;
+    setCustomSessionTitle(null);
     setMessages([]);
     sendBridgeEvent('create_new_session');
-  }, [setMessages, loading]);
+  }, [setMessages, loading, setCustomSessionTitle]);
 
   // Confirm new session
   const handleConfirmNewSession = useCallback(() => {
@@ -98,10 +104,11 @@ export function useSessionManagement({
       sendBridgeEvent('interrupt_session');
     }
     // Clear current messages and create new session
+    setCustomSessionTitle(null);
     setMessages([]);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
-  }, [setMessages, loading]);
+  }, [setMessages, loading, setCustomSessionTitle]);
 
   // Cancel new session
   const handleCancelNewSession = useCallback(() => {
@@ -114,10 +121,11 @@ export function useSessionManagement({
     setShowInterruptConfirm(false);
     // Send interrupt signal and create new session
     sendBridgeEvent('interrupt_session');
+    setCustomSessionTitle(null);
     setMessages([]);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
-  }, [setMessages]);
+  }, [setMessages, setCustomSessionTitle]);
 
   // Cancel interrupt
   const handleCancelInterrupt = useCallback(() => {
@@ -133,8 +141,13 @@ export function useSessionManagement({
     }
     sendBridgeEvent('load_session', sessionId);
     setCurrentSessionId(sessionId);
+
+    // Set the custom title from history data so the chat header shows it immediately
+    const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
+    setCustomSessionTitle(session?.title ?? null);
+
     setCurrentView('chat');
-  }, [loading, setCurrentSessionId, setCurrentView]);
+  }, [loading, setCurrentSessionId, setCustomSessionTitle, setCurrentView]);
 
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
@@ -159,6 +172,7 @@ export function useSessionManagement({
         if (loading) {
           sendBridgeEvent('interrupt_session');
         }
+        setCustomSessionTitle(null);
         setMessages([]);
         setCurrentSessionId(null);
         setUsagePercentage(0);
@@ -171,7 +185,7 @@ export function useSessionManagement({
       // Show success toast
       addToast(t('history.sessionDeleted'), 'success');
     }
-  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, addToast, t]);
+  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, addToast, t]);
 
   // Export history session
   const exportHistorySession = useCallback((sessionId: string, title: string) => {
