@@ -35,8 +35,9 @@ const PermissionDialog = ({
   const dragStartHeightRef = useRef(0);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     isDraggingRef.current = true;
     dragStartYRef.current = e.clientY;
     dragStartHeightRef.current = dialogRef.current?.offsetHeight ?? 0;
@@ -45,7 +46,7 @@ const PermissionDialog = ({
   }, []);
 
   useEffect(() => {
-    const handleResizeMove = (e: MouseEvent) => {
+    const handleResizeMove = (e: PointerEvent) => {
       if (!isDraggingRef.current) return;
       const delta = dragStartYRef.current - e.clientY;
       const newHeight = Math.max(150, Math.min(window.innerHeight * 0.9, dragStartHeightRef.current + delta));
@@ -57,11 +58,17 @@ const PermissionDialog = ({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-    window.addEventListener('mousemove', handleResizeMove);
-    window.addEventListener('mouseup', handleResizeEnd);
+    window.addEventListener('pointermove', handleResizeMove);
+    window.addEventListener('pointerup', handleResizeEnd);
     return () => {
-      window.removeEventListener('mousemove', handleResizeMove);
-      window.removeEventListener('mouseup', handleResizeEnd);
+      window.removeEventListener('pointermove', handleResizeMove);
+      window.removeEventListener('pointerup', handleResizeEnd);
+      // Ensure body styles are cleaned up if dialog closes mid-drag
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
     };
   }, []);
 
@@ -187,7 +194,7 @@ const PermissionDialog = ({
         style={dialogHeight ? { height: dialogHeight, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' as const } : undefined}
       >
         {/* Resize handle */}
-        <div className="permission-dialog-v3-resize-handle" onMouseDown={handleResizeStart} />
+        <div className="permission-dialog-v3-resize-handle" onPointerDown={handleResizeStart} />
         {/* Title area */}
         <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
         <p className="permission-dialog-v3-subtitle">{t('permission.fromExternalProcess')}</p>

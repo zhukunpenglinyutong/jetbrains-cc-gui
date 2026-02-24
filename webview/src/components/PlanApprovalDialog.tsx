@@ -73,8 +73,9 @@ const PlanApprovalDialog = ({
   }, [request, onReject]);
 
   // Resize handlers: drag the top edge to make the dialog taller/shorter
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     isDraggingRef.current = true;
     dragStartYRef.current = e.clientY;
     dragStartHeightRef.current = dialogRef.current?.offsetHeight ?? 0;
@@ -83,7 +84,7 @@ const PlanApprovalDialog = ({
   }, []);
 
   useEffect(() => {
-    const handleResizeMove = (e: MouseEvent) => {
+    const handleResizeMove = (e: PointerEvent) => {
       if (!isDraggingRef.current) return;
       const delta = dragStartYRef.current - e.clientY;
       const newHeight = Math.max(200, Math.min(window.innerHeight * 0.9, dragStartHeightRef.current + delta));
@@ -95,11 +96,17 @@ const PlanApprovalDialog = ({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-    window.addEventListener('mousemove', handleResizeMove);
-    window.addEventListener('mouseup', handleResizeEnd);
+    window.addEventListener('pointermove', handleResizeMove);
+    window.addEventListener('pointerup', handleResizeEnd);
     return () => {
-      window.removeEventListener('mousemove', handleResizeMove);
-      window.removeEventListener('mouseup', handleResizeEnd);
+      window.removeEventListener('pointermove', handleResizeMove);
+      window.removeEventListener('pointerup', handleResizeEnd);
+      // Ensure body styles are cleaned up if dialog closes mid-drag
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
     };
   }, []);
 
@@ -215,7 +222,7 @@ const PlanApprovalDialog = ({
         style={dialogHeight ? { height: dialogHeight, maxHeight: '90vh' } : undefined}
       >
         {/* Resize handle at the top edge */}
-        <div className="plan-approval-resize-handle" onMouseDown={handleResizeStart} />
+        <div className="plan-approval-resize-handle" onPointerDown={handleResizeStart} />
         {/* Timeout warning notice */}
         {isTimeWarning && (
           <div className="timeout-warning-banner">

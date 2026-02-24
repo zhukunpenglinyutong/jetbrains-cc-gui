@@ -118,6 +118,7 @@ export function useScrollBehavior({
     // Wheel events are ALWAYS user-initiated and cannot be confused with
     // programmatic scrolls. This is the primary mechanism for detecting
     // user intent to pause or resume auto-scroll.
+    let wheelRafId: number | null = null;
     const handleWheel = (e: WheelEvent) => {
       if (e.deltaY < 0) {
         // User is scrolling UP → pause auto-scroll immediately
@@ -125,7 +126,9 @@ export function useScrollBehavior({
         isUserAtBottomRef.current = false;
       } else if (e.deltaY > 0) {
         // User is scrolling DOWN → check if they reached the bottom to unpause
-        requestAnimationFrame(() => {
+        if (wheelRafId !== null) cancelAnimationFrame(wheelRafId);
+        wheelRafId = requestAnimationFrame(() => {
+          wheelRafId = null;
           const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
           if (distanceFromBottom < 100) {
             userPausedRef.current = false;
@@ -141,6 +144,7 @@ export function useScrollBehavior({
       container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('wheel', handleWheel);
       if (scrollRafId !== null) cancelAnimationFrame(scrollRafId);
+      if (wheelRafId !== null) cancelAnimationFrame(wheelRafId);
     };
   }, [currentView]);
 

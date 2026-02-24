@@ -34,7 +34,7 @@
     border-bottom: 1px solid var(--color-message-divider);
     min-width: 0; /* 允许内容缩小 */
     max-width: 100%; /* 防止超出容器 */
-    contain: content; /* Isolate layout — prevents cross-message recalculation during scroll */
+    contain: layout style; /* Isolate layout — prevents cross-message recalculation during scroll */
 }
 
 .message:last-child {
@@ -140,7 +140,7 @@
         font-size: 12px;
         opacity: 0;
         visibility: hidden;
-        transition: opacity 0.2s ease, visibility 0.2s ease;
+        transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
         pointer-events: none;
         white-space: nowrap;
         z-index: 20;

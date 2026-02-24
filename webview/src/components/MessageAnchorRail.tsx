@@ -10,6 +10,8 @@ interface AnchorItem {
 
 interface MessageAnchorRailProps {
   messages: ClaudeMessage[];
+  /** Number of messages hidden by the collapse feature. Anchors start after this offset. */
+  collapsedCount?: number;
   containerRef: React.RefObject<HTMLDivElement | null>;
   messageNodeMap: React.RefObject<Map<string, HTMLDivElement>>;
 }
@@ -36,6 +38,7 @@ function getMessagePreview(message: ClaudeMessage): string {
 
 export const MessageAnchorRail = memo(function MessageAnchorRail({
   messages,
+  collapsedCount = 0,
   containerRef,
   messageNodeMap,
 }: MessageAnchorRailProps) {
@@ -65,10 +68,11 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
   // Cleanup timer on unmount
   useEffect(() => clearTooltipTimer, [clearTooltipTimer]);
 
-  // Compute anchor items from user messages only
+  // Compute anchor items from visible user messages only (skip collapsed ones)
   const anchors = useMemo<AnchorItem[]>(() => {
     const userMessages: AnchorItem[] = [];
-    for (let i = 0; i < messages.length; i++) {
+    const startIndex = collapsedCount;
+    for (let i = startIndex; i < messages.length; i++) {
       if (messages[i].type === 'user') {
         userMessages.push({
           id: getMessageKey(messages[i], i),
@@ -84,7 +88,7 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
       ...item,
       position: 0.04 + (idx / (userMessages.length - 1)) * 0.92,
     }));
-  }, [messages]);
+  }, [messages, collapsedCount]);
 
   // Scroll to a specific anchor message
   const scrollToAnchor = useCallback((messageId: string) => {

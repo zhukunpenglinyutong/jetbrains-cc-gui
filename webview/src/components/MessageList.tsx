@@ -21,6 +21,8 @@ interface MessageListProps {
   extractMarkdownContent: (message: ClaudeMessage) => string;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   onMessageNodeRef?: (id: string, node: HTMLDivElement | null) => void;
+  /** Notify parent when the number of collapsed (hidden) messages changes. */
+  onCollapsedCountChange?: (count: number) => void;
 }
 
 export const MessageList = memo(function MessageList({
@@ -36,20 +38,27 @@ export const MessageList = memo(function MessageList({
   extractMarkdownContent,
   messagesEndRef,
   onMessageNodeRef,
+  onCollapsedCountChange,
 }: MessageListProps) {
   const [showAll, setShowAll] = useState(false);
 
-  // Reset showAll when a new session starts (message count drops)
-  const prevLengthRef = useRef(messages.length);
+  // Reset showAll when a new session starts (first message ID changes)
+  const firstMsgIdRef = useRef(messages[0]?.id);
   useEffect(() => {
-    if (messages.length < prevLengthRef.current) {
+    const currentFirstId = messages[0]?.id;
+    if (currentFirstId !== firstMsgIdRef.current) {
       setShowAll(false);
     }
-    prevLengthRef.current = messages.length;
-  }, [messages.length]);
+    firstMsgIdRef.current = currentFirstId;
+  }, [messages]);
 
   const shouldCollapse = !showAll && messages.length > VISIBLE_MESSAGE_WINDOW;
   const collapsedCount = shouldCollapse ? messages.length - VISIBLE_MESSAGE_WINDOW : 0;
+
+  // Notify parent of collapsed count changes (for anchor rail sync)
+  useEffect(() => {
+    onCollapsedCountChange?.(collapsedCount);
+  }, [collapsedCount, onCollapsedCountChange]);
   const visibleMessages = useMemo(
     () => (shouldCollapse ? messages.slice(collapsedCount) : messages),
     [messages, shouldCollapse, collapsedCount]

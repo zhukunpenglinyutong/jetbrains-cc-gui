@@ -124,6 +124,11 @@ function makeStreamSafe(content: string): string {
  * without the heavy marked.parse() + DOMPurify + DOMParser pipeline.
  * Full markdown parsing is deferred to when streaming ends.
  */
+/** Sanitize code language identifier — only allow safe characters for HTML class attribute. */
+function safeLang(lang: string): string {
+  return lang.replace(/[^a-zA-Z0-9_.-]/g, '');
+}
+
 function renderStreamingContent(content: string): string {
   if (!content) return '';
 
@@ -143,7 +148,7 @@ function renderStreamingContent(content: string): string {
         if (current) segments.push(current);
         current = '';
         inCode = true;
-        codeLang = trimmed.slice(3).trim();
+        codeLang = safeLang(trimmed.slice(3).trim());
       } else {
         // End code block — emit as <pre><code>
         const escaped = current
@@ -178,7 +183,7 @@ function renderStreamingContent(content: string): string {
   }
 
   // Process prose segments (non-code)
-  return segments
+  const raw = segments
     .map((seg) => {
       // Already wrapped in <pre> — pass through
       if (seg.startsWith('<pre>')) return seg;
@@ -205,6 +210,12 @@ function renderStreamingContent(content: string): string {
       return `<p>${html}</p>`;
     })
     .join('');
+
+  // Sanitize the assembled HTML to prevent XSS even during streaming
+  return DOMPurify.sanitize(raw, {
+    ALLOWED_TAGS: ['p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    ALLOWED_ATTR: ['class'],
+  });
 }
 
 // Mermaid render counter for generating unique IDs

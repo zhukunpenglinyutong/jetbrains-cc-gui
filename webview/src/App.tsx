@@ -175,6 +175,8 @@ const App = () => {
 
   // Message anchor node registry for anchor rail navigation
   const messageNodeMapRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Track how many messages are collapsed (hidden) by MessageList
+  const [anchorCollapsedCount, setAnchorCollapsedCount] = useState(0);
   const handleMessageNodeRef = useCallback((id: string, node: HTMLDivElement | null) => {
     if (node) {
       messageNodeMapRef.current.set(id, node);
@@ -1610,6 +1612,7 @@ const App = () => {
           <div className="messages-shell">
             <MessageAnchorRail
               messages={mergedMessages}
+              collapsedCount={anchorCollapsedCount}
               containerRef={messagesContainerRef}
               messageNodeMap={messageNodeMapRef}
             />
@@ -1636,6 +1639,7 @@ const App = () => {
                 extractMarkdownContent={extractMarkdownContent}
                 messagesEndRef={messagesEndRef}
                 onMessageNodeRef={handleMessageNodeRef}
+                onCollapsedCountChange={setAnchorCollapsedCount}
               />
             </div>
           </div>
