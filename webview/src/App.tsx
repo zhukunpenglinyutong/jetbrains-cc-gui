@@ -274,6 +274,12 @@ const App = () => {
     currentSessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
 
+  // B-011: Ref to access customSessionTitle in window callbacks (avoids stale closure)
+  const customSessionTitleRef = useRef(customSessionTitle);
+  useEffect(() => {
+    customSessionTitleRef.current = customSessionTitle;
+  }, [customSessionTitle]);
+
   // Context state (active file and selection) - retained for ContextBar display
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
 
@@ -658,6 +664,9 @@ const App = () => {
     openPermissionDialog,
     openAskUserQuestionDialog,
     openPlanApprovalDialog,
+    customSessionTitleRef,
+    currentSessionIdRef,
+    updateHistoryTitle,
   });
 
   /**
@@ -1561,7 +1570,7 @@ const App = () => {
           setSettingsInitialTab(undefined);
           setCurrentView('settings');
         }}
-        titleEditable={!!currentSessionId}
+        titleEditable
         onTitleChange={(newTitle) => {
           setCustomSessionTitle(newTitle);
           if (currentSessionId) {

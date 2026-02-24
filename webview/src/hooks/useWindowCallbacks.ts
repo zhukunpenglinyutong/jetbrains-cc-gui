@@ -101,6 +101,11 @@ export interface UseWindowCallbacksOptions {
   openPermissionDialog: (request: PermissionRequest) => void;
   openAskUserQuestionDialog: (request: AskUserQuestionRequest) => void;
   openPlanApprovalDialog: (request: PlanApprovalRequest) => void;
+
+  // B-011: Title migration on session ID change
+  customSessionTitleRef: MutableRefObject<string | null>;
+  currentSessionIdRef: MutableRefObject<string | null>;
+  updateHistoryTitle: (sessionId: string, newTitle: string) => void;
 }
 
 export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
@@ -163,6 +168,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     openPermissionDialog,
     openAskUserQuestionDialog,
     openPlanApprovalDialog,
+    customSessionTitleRef,
+    currentSessionIdRef,
+    updateHistoryTitle,
   } = options;
 
   // Store t in ref to avoid stale closures
@@ -759,8 +767,22 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Session Callbacks ==========
     window.setSessionId = (sessionId: string) => {
+      const oldId = currentSessionIdRef.current;
       console.log('[Frontend] setSessionId:', sessionId);
       setCurrentSessionId(sessionId);
+
+      // B-011 + B-014: Persist custom title under the real SDK session ID.
+      // Covers two cases:
+      //   1. oldId is null (B-014): new session, title edited before first prompt
+      //   2. oldId differs (B-011): provisional ID replaced by SDK — also clean up orphan
+      const title = customSessionTitleRef.current;
+      if (title) {
+        console.log('[Frontend] B-011: persisting custom title under', sessionId, '(oldId:', oldId, ')');
+        updateHistoryTitle(sessionId, title);
+        if (oldId && oldId !== sessionId) {
+          sendBridgeEvent('delete_title', oldId);
+        }
+      }
     };
 
     window.addToast = (message, type) => {
