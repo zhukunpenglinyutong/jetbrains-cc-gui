@@ -1,3 +1,71 @@
+##### **2026年2月24日（v0.2.2）**
+
+English:
+
+✨ Features
+- Add task completion sound notification with 5 built-in sounds (default, chime, bell, ding, success) and custom sound file support #hpstream
+- Add review-before-write diff preview with "Apply Always" button for file-modifying tools #gadfly3173
+- Add editable session titles in chat header with inline edit mode and history sync #jhaan83
+- Add auto-scroll pause when user scrolls up during streaming, resumes on scroll-to-bottom or new message #jhaan83
+- Add import/export for agents and prompts with conflict resolution strategies (skip, overwrite, duplicate) #hpstream
+- Add markdown rendering in permission and plan approval dialogs #dsudomoin
+- Add collapsible earlier messages with show/hide toggle in MessageList #dsudomoin
+- Add user message bubble color customization in settings (8 languages) #dsudomoin
+
+🐛 Fixes
+- Eliminate React re-renders during IME composition for JCEF Korean/CJK input using ref-only approach #Stackerr
+- Fix contenteditable input: disable spellcheck, prevent character loss during fast typing, fix ArrowUp navigation with pasted text #jhaan83 #dsudomoin
+- Fix enhance prompt output language to match source prompt language #Olexandr1904
+- Fix session title persistence: migrate title on SDK session ID change, clear ID on new session, prevent focus stealing during title edit #jhaan83
+- Fix custom model restoration in session state validation
+- Cancel pending reject task and close diff view on Apply Always action
+- Replace native select with upward-opening dropdown for sound selector (JCEF clipping fix)
+- Harden security: command injection prevention in NodeJsServiceCaller (function name whitelist + env vars), path traversal protection in SoundNotificationService, permission mode whitelist, DOMPurify XSS sanitization for streaming markdown
+- Fix stale closures in useSettingsWindowCallbacks via ref pattern
+- Improve anchor rail sync with collapsed message count and skip hidden anchors
+
+🔧 Improvements
+- Scroll performance: IntersectionObserver in MessageAnchorRail, rAF throttle + passive listeners in ScrollControl #dsudomoin
+- CSS performance: contain:layout on messages, border instead of box-shadow, remove will-change per char #dsudomoin
+- Split large files into smaller focused modules: CSS (12 files), SettingsDialogs, icons (3 modules), CodexMessageConverter, NodeJsServiceCaller
+- Extract shared useDialogResize hook from PermissionDialog and PlanApprovalDialog
+- Use deepCopy for duplicate operations in AgentManager/PromptManager to prevent object mutation
+- Translate PromptEnhancerHandler Chinese content to English
+- Console forwarding only in devMode, remove excessive console.log statements
+
+中文：
+
+✨ Features
+- 新增任务完成提示音功能：5 种内置提示音（默认、风铃、铃声、叮咚、成功）及自定义音频文件支持 #hpstream
+- 新增写入前 Diff 预览功能，支持"始终应用"按钮，用于文件修改类工具 #gadfly3173
+- 新增聊天标题栏内联编辑模式，支持自定义会话标题并同步到历史记录 #jhaan83
+- 新增流式输出时鼠标滚轮上滑自动暂停滚动，滑到底部或发送新消息时恢复 #jhaan83
+- 新增 Agent 和 Prompt 导入/导出功能，支持冲突解决策略（跳过、覆盖、复制） #hpstream
+- 新增权限对话框和计划审批对话框的 Markdown 渲染 #dsudomoin
+- 新增消息列表中历史消息的折叠/展开功能 #dsudomoin
+- 新增用户消息气泡颜色自定义（支持 8 种语言） #dsudomoin
+
+🐛 Fixes
+- 修复 JCEF 环境下韩语/CJK 输入法组合输入导致的 React 重渲染问题，改用 ref-only 方案 #Stackerr
+- 修复 contenteditable 输入框：禁用拼写检查、防止快速打字丢字、修复粘贴文本后方向键导航 #jhaan83 #dsudomoin
+- 修复增强提示词输出语言始终为中文的问题，现在匹配源语言 #Olexandr1904
+- 修复会话标题持久化：SDK 会话 ID 变更时迁移标题、新建会话时清除 ID、防止编辑标题时焦点被抢 #jhaan83
+- 修复自定义模型在会话状态恢复时的验证逻辑
+- 修复"始终应用"操作后取消挂起的拒绝任务并关闭 Diff 视图
+- 修复 JCEF 环境下原生 select 被裁剪问题，替换为向上展开的自定义下拉框
+- 安全加固：NodeJsServiceCaller 命令注入防护（函数名白名单 + 环境变量传参）、SoundNotificationService 路径遍历防护、权限模式白名单验证、流式 Markdown DOMPurify XSS 防护
+- 修复 useSettingsWindowCallbacks 中的闭包过期问题，改用 ref 模式
+- 改进消息锚点导航栏与折叠消息的同步，跳过隐藏的锚点
+
+🔧 Improvements
+- 滚动性能优化：MessageAnchorRail 使用 IntersectionObserver、ScrollControl 使用 rAF 节流 + passive 监听器 #dsudomoin
+- CSS 性能优化：消息元素使用 contain:layout、border 替代 box-shadow、移除逐字符 will-change #dsudomoin
+- 拆分大文件为小型聚焦模块：CSS（12 个文件）、SettingsDialogs、icons（3 个模块）、CodexMessageConverter、NodeJsServiceCaller
+- 提取 useDialogResize 共享 hook，消除 PermissionDialog 和 PlanApprovalDialog 的重复代码
+- AgentManager/PromptManager 复制操作使用 deepCopy 防止对象变异
+- 将 PromptEnhancerHandler 中的中文内容翻译为英文
+- 控制台转发仅在开发模式启用，移除多余的 console.log 语句
+
 ##### **2026年2月21日（v0.2.1）**
 
 English:
