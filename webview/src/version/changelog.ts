@@ -14,7 +14,7 @@ export interface ChangelogEntry {
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     version: '0.2.2',
-    date: '2026-02-24',
+    date: '2026-02-25',
     content: {
       en: `✨ Features
 - Add task completion sound notification with 5 built-in sounds (default, chime, bell, ding, success) and custom sound file support #hpstream
@@ -27,14 +27,14 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - Add user message bubble color customization in settings (8 languages) #dsudomoin
 
 🐛 Fixes
-- Eliminate React re-renders during IME composition for JCEF Korean/CJK input using ref-only approach #Stackerr
+- Eliminate React re-renders during IME composition for JCEF CJK input using ref-only approach #Stackerr
 - Fix contenteditable input: disable spellcheck, prevent character loss during fast typing, fix ArrowUp navigation with pasted text #jhaan83 #dsudomoin
 - Fix enhance prompt output language to match source prompt language #Olexandr1904
 - Fix session title persistence: migrate title on SDK session ID change, clear ID on new session, prevent focus stealing during title edit #jhaan83
 - Fix custom model restoration in session state validation
 - Cancel pending reject task and close diff view on Apply Always action
 - Replace native select with upward-opening dropdown for sound selector (JCEF clipping fix)
-- Harden security: command injection prevention in NodeJsServiceCaller, path traversal protection in SoundNotificationService, permission mode whitelist, DOMPurify XSS sanitization
+- Harden security: command injection prevention in NodeJsServiceCaller (function name whitelist + env vars), path traversal protection in SoundNotificationService, permission mode whitelist, DOMPurify XSS sanitization for streaming markdown
 - Fix stale closures in useSettingsWindowCallbacks via ref pattern
 - Improve anchor rail sync with collapsed message count and skip hidden anchors
 
@@ -57,14 +57,14 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - 新增用户消息气泡颜色自定义（支持 8 种语言） #dsudomoin
 
 🐛 Fixes
-- 修复 JCEF 环境下韩语/CJK 输入法组合输入导致的 React 重渲染问题，改用 ref-only 方案 #Stackerr
+- 修复 JCEF 环境下CJK 输入法组合输入导致的 React 重渲染问题，改用 ref-only 方案 #Stackerr
 - 修复 contenteditable 输入框：禁用拼写检查、防止快速打字丢字、修复粘贴文本后方向键导航 #jhaan83 #dsudomoin
 - 修复增强提示词输出语言始终为中文的问题，现在匹配源语言 #Olexandr1904
 - 修复会话标题持久化：SDK 会话 ID 变更时迁移标题、新建会话时清除 ID、防止编辑标题时焦点被抢 #jhaan83
 - 修复自定义模型在会话状态恢复时的验证逻辑
 - 修复"始终应用"操作后取消挂起的拒绝任务并关闭 Diff 视图
 - 修复 JCEF 环境下原生 select 被裁剪问题，替换为向上展开的自定义下拉框
-- 安全加固：NodeJsServiceCaller 命令注入防护、SoundNotificationService 路径遍历防护、权限模式白名单验证、流式 Markdown DOMPurify XSS 防护
+- 安全加固：NodeJsServiceCaller 命令注入防护（函数名白名单 + 环境变量传参）、SoundNotificationService 路径遍历防护、权限模式白名单验证、流式 Markdown DOMPurify XSS 防护
 - 修复 useSettingsWindowCallbacks 中的闭包过期问题，改用 ref 模式
 - 改进消息锚点导航栏与折叠消息的同步，跳过隐藏的锚点
 
