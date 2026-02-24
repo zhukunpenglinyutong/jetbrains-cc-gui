@@ -170,6 +170,19 @@
         "custom": "Custom",
         "reset": "Reset",
         "hint": "Customize the chat area background color. Leave empty to follow the theme default."
+      },
+      "soundNotification": {
+        "label": "Task Completion Sound",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, a notification sound will play when AI completes a task, so you'll know even when away from the screen.",
+        "customSound": "Custom Sound",
+        "customSoundPlaceholder": "Leave empty for default sound",
+        "customSoundHint": "Supports WAV, MP3, AIFF formats",
+        "testSound": "Test",
+        "browse": "Browse",
+        "useDefault": "Use Default",
+        "customSoundSaved": "Custom sound saved"
       }
     },
     "providers": "Provider Management",

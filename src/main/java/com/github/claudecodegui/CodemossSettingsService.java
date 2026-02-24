@@ -625,6 +625,91 @@ public class CodemossSettingsService {
         return promptManager.getPrompt(id);
     }
 
+    // ==================== Sound Notification Management ====================
+
+    /**
+     * Get whether sound notification is enabled.
+     * @return whether sound notification is enabled, default is false
+     */
+    public boolean getSoundNotificationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return false;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("enabled")) {
+            return soundConfig.get("enabled").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set whether sound notification is enabled.
+     * @param enabled whether to enable
+     */
+    public void setSoundNotificationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("enabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set sound notification enabled: " + enabled);
+    }
+
+    /**
+     * Get custom sound file path.
+     * @return custom sound path, null means use default sound
+     */
+    public String getCustomSoundPath() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return null;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("customSoundPath") && !soundConfig.get("customSoundPath").isJsonNull()) {
+            return soundConfig.get("customSoundPath").getAsString();
+        }
+
+        return null;
+    }
+
+    /**
+     * Set custom sound file path.
+     * @param path file path, null means use default sound
+     */
+    public void setCustomSoundPath(String path) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        if (path == null || path.isEmpty()) {
+            soundConfig.remove("customSoundPath");
+        } else {
+            soundConfig.addProperty("customSoundPath", path);
+        }
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set custom sound path: " + path);
+    }
+
     // ==================== Codex Provider Management ====================
 
     public List<JsonObject> getCodexProviders() throws IOException {
