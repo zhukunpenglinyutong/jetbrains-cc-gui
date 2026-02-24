@@ -35,7 +35,7 @@ describe('useKeyboardHandler', () => {
 
     const { result } = renderHook(() =>
       useKeyboardHandler({
-        isComposing: false,
+        isComposingRef: { current: false },
         lastCompositionEndTimeRef: { current: Date.now() - 1000 },
         sendShortcut: 'enter',
         sdkStatusLoading: false,
@@ -66,7 +66,7 @@ describe('useKeyboardHandler', () => {
 
     const { result } = renderHook(() =>
       useKeyboardHandler({
-        isComposing: false,
+        isComposingRef: { current: false },
         lastCompositionEndTimeRef: { current: Date.now() - 1000 },
         sendShortcut: 'enter',
         sdkStatusLoading: false,
@@ -98,7 +98,7 @@ describe('useKeyboardHandler', () => {
 
     const { result } = renderHook(() =>
       useKeyboardHandler({
-        isComposing: false,
+        isComposingRef: { current: false },
         lastCompositionEndTimeRef: { current: Date.now() - 1000 },
         sendShortcut: 'enter',
         sdkStatusLoading: false,

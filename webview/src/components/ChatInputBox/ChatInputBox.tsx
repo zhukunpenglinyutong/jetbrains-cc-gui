@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -68,7 +69,7 @@ import './styles.css';
  * - Debounced onInput callback to reduce parent component updates
  * - Cached getTextContent to avoid repeated DOM traversal
  */
-export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
+export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
   (
     {
       isLoading = false,
@@ -387,12 +388,19 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
     // Performance optimization: Debounced onInput callback
     // Reduces parent component re-renders during rapid typing
+    // Also skips during IME composition to prevent parent re-renders that cause JCEF stutter
     const debouncedOnInput = useMemo(
       () =>
         debounce((text: string) => {
           // Skip if this is an external value update to avoid loops
           if (isExternalUpdateRef.current) {
             isExternalUpdateRef.current = false;
+            return;
+          }
+          // Skip during active IME composition to prevent parent re-renders
+          // that can disrupt Korean/CJK input in JCEF environments.
+          // The update will be triggered after compositionEnd via handleInput.
+          if (sharedComposingRef.current) {
             return;
           }
           onInput?.(text);
@@ -402,24 +410,26 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
     /**
      * Handle input event (optimized: use debounce to reduce performance overhead)
-     * @param isComposingFromEvent - isComposing state from native event (higher priority)
      */
     const handleInput = useCallback(
-      (isComposingFromEvent?: boolean) => {
+      () => {
         const timer = perfTimer('handleInput');
 
-        // Use multiple checks to correctly detect IME state:
-        // 1. Native event isComposing (most accurate, can detect before compositionStart)
-        // 2. isComposingRef (sync ref, faster than React state)
-        // 3. React state isComposing (as fallback)
-        const isCurrentlyComposing =
-          isComposingFromEvent ?? isComposingRef.current ?? isComposing;
-
-        // Key fix: During IME composition, completely skip all DOM operations and state updates
-        // Avoid interrupting IME normal operation, wait for compositionend to handle uniformly
-        if (isCurrentlyComposing) {
+        // Only trust our own isComposingRef for IME state detection.
+        // JCEF's InputEvent.isComposing is unreliable (can be false during active
+        // composition, or true after compositionEnd). Our ref is set synchronously
+        // by compositionStart/End and keyCode 229 detection, making it the sole
+        // reliable source of truth.
+        if (isComposingRef.current) {
           return;
         }
+
+        // Cancel any pending compositionEnd fallback timeout.
+        // The normal input event path handles state sync, so the fallback
+        // (which would redundantly call handleInput again) is no longer needed.
+        // This prevents: 1) double handleInput calls, 2) debouncedOnInput timer
+        // reset that delays parent notification by an extra 100ms.
+        cancelPendingFallback();
 
         // Invalidate cache since content changed
         invalidateCache();
@@ -501,23 +511,28 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       return true;
     }, [inlineCompletion, handleInput]);
 
-    // IME composition hook
+    // IME composition hook (ref-only, no React state to avoid re-renders during composition)
     const {
-      isComposing,
       isComposingRef,
       lastCompositionEndTimeRef,
-      handleCompositionStart,
-      handleCompositionEnd,
+      handleCompositionStart: rawHandleCompositionStart,
+      handleCompositionEnd: rawHandleCompositionEnd,
+      cancelPendingFallback,
     } = useIMEComposition({
       handleInput,
-      renderFileTags,
     });
 
-    // Sync sharedComposingRef with isComposingRef for reliable composing state access
-    // This ensures detectAndTriggerCompletion always has the latest composing state
-    useEffect(() => {
-      sharedComposingRef.current = isComposing;
-    }, [isComposing]);
+    // Wrap composition handlers to sync sharedComposingRef (used by completion detection)
+    // Both refs are now set synchronously — no RAF, no race conditions.
+    const handleCompositionStart = useCallback(() => {
+      rawHandleCompositionStart();
+      sharedComposingRef.current = true;
+    }, [rawHandleCompositionStart]);
+
+    const handleCompositionEnd = useCallback(() => {
+      rawHandleCompositionEnd();
+      sharedComposingRef.current = false;
+    }, [rawHandleCompositionEnd]);
 
     const { record: recordInputHistory, handleKeyDown: handleHistoryKeyDown } = useInputHistory({
       editableRef,
@@ -587,7 +602,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
     });
 
     const { onKeyDown: handleKeyDown, onKeyUp: handleKeyUp } = useKeyboardHandler({
-      isComposing,
+      isComposingRef,
       lastCompositionEndTimeRef,
       sendShortcut,
       sdkStatusLoading,
@@ -620,7 +635,6 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
 
     useNativeEventCapture({
       editableRef,
-      isComposing,
       isComposingRef,
       lastCompositionEndTimeRef,
       sendShortcut,
@@ -780,12 +794,14 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
             ref={editableRef}
             className="input-editable"
             contentEditable={!disabled}
+            spellCheck={false}
             data-placeholder={placeholder}
             data-completion-suffix={inlineCompletion.suffix || ''}
-            onInput={(e) => {
-              // Pass native event isComposing state, more accurate than React state
-              // Can correctly capture input before compositionStart
-              handleInput((e.nativeEvent as InputEvent).isComposing);
+            onInput={() => {
+              // Don't pass browser's isComposing — it's unreliable in JCEF.
+              // isComposingRef (set by compositionStart/End + keyCode 229) is the
+              // sole source of truth for IME state.
+              handleInput();
             }}
             onKeyDown={handleKeyDown}
             onKeyUp={handleKeyUp}
@@ -811,7 +827,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
                   return;
                 }
                 // Only allow submit when not loading and not in IME composition
-                if (!isLoading && !isComposing) {
+                if (!isLoading && !isComposingRef.current) {
                   handleSubmit();
                 }
               }
@@ -871,7 +887,7 @@ export const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>(
       </div>
     );
   }
-);
+));
 
 // Display name for React DevTools
 ChatInputBox.displayName = 'ChatInputBox';

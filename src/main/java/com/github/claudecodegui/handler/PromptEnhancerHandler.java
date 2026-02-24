@@ -40,7 +40,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     private final Gson gson = new Gson();
     private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
 
-    // Number of lines to capture around the cursor (before and after)
+    // Number of context lines to capture before and after the cursor
     private static final int CURSOR_CONTEXT_LINES = 10;
 
     private static final String[] SUPPORTED_TYPES = {
@@ -48,46 +48,47 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     };
 
     // System prompt for prompt enhancement
-    // Note: Must emphasize "only output the enhanced prompt", otherwise the AI may add explanatory text
-    // Update: Added guidance on how to use context information
+    // Note: Must emphasize "only output the enhanced prompt" to prevent the AI from adding explanatory text
+    // Includes guidance on leveraging editor context information
     private static final String ENHANCE_SYSTEM_PROMPT =
-        "你是一个提示词优化专家。用户会发送一个需要优化的提示词，格式为：\n" +
-        "\"请优化以下提示词：\n[原始提示词]\"\n\n" +
-        "用户可能还会提供相关的上下文信息，包括：\n" +
-        "- 【用户选中的代码】：用户在编辑器中选中的代码片段\n" +
-        "- 【光标位置周围的代码】：用户当前编辑位置的上下文\n" +
-        "- 【当前文件】：用户正在编辑的文件路径\n" +
-        "- 【语言类型】：当前文件的编程语言\n" +
-        "- 【文件内容预览】：当前文件的部分内容\n" +
-        "- 【相关文件】：与当前文件相关的其他文件\n" +
-        "- 【项目类型】：项目的类型（如 Java、React 等）\n\n" +
-        "你的任务是优化这个提示词，使其更清晰、更具体、减少歧义性。\n\n" +
-        "【重要】输出规则：\n" +
-        "- 只输出优化后的提示词本身，不要有任何其他内容\n" +
-        "- 不要添加任何解释、前缀、后缀或评论\n" +
-        "- 不要使用 \"优化后的提示词：\" 这样的前缀\n" +
-        "- 不要使用 Markdown 标题或格式\n" +
-        "- 不要询问用户任何问题\n" +
-        "- 直接输出可以复制使用的提示词文本\n\n" +
-        "【如何利用上下文信息】：\n" +
-        "1. 如果用户提示词中有模糊的指代（如\"这段代码\"、\"这个文件\"、\"这里\"），根据上下文将其替换为具体描述\n" +
-        "2. 根据代码语言类型，添加相关的专业术语和最佳实践\n" +
-        "3. 根据选中的代码内容，推断用户可能的意图并在提示词中体现\n" +
-        "4. 如果有文件路径信息，可以在提示词中引用具体的文件名或模块名\n" +
-        "5. 不要在优化后的提示词中直接包含代码片段，而是描述代码的特征或位置\n\n" +
-        "优化原则：\n" +
-        "1. 保持用户的原始意图不变\n" +
-        "2. 添加必要的上下文和细节\n" +
-        "3. 使用清晰、专业的语言\n" +
-        "4. 纠正语法错误或拼写错误\n" +
-        "5. 如果原始提示词过于模糊，添加合理的假设和约束\n" +
-        "6. 保持简洁，不要过度扩展\n\n" +
-        "示例1（无上下文）：\n" +
-        "用户输入：请优化以下提示词：\\n\\n分析下逻辑\n" +
-        "你的输出：请分析当前代码文件的业务逻辑，包括主要功能、数据流向和关键处理步骤。\n\n" +
-        "示例2（有上下文）：\n" +
-        "用户输入：请优化以下提示词：\\n\\n这段代码有什么问题\\n\\n---\\n以下是相关的上下文信息：\\n\\n【用户选中的代码】\\n```java\\npublic void process() { ... }\\n```\\n\\n【当前文件】UserService.java\\n【语言类型】java\n" +
-        "你的输出：请分析 UserService.java 中的 process() 方法，检查是否存在潜在的问题，包括但不限于：空指针异常风险、资源泄漏、线程安全问题、性能瓶颈等，并提供改进建议。";
+        "You are a prompt optimization expert. The user will send a prompt to be optimized in the format:\n" +
+        "\"Please optimize the following prompt:\n[Original prompt]\"\n\n" +
+        "The user may also provide relevant context information, including:\n" +
+        "- [User's Selected Code]: Code snippet selected by the user in the editor\n" +
+        "- [Code Around Cursor]: Context around the user's current editing position\n" +
+        "- [Current File]: Path of the file the user is editing\n" +
+        "- [Language Type]: Programming language of the current file\n" +
+        "- [File Content Preview]: Partial content of the current file\n" +
+        "- [Related Files]: Other files related to the current file\n" +
+        "- [Project Type]: Type of the project (e.g., Java, React, etc.)\n\n" +
+        "Your task is to optimize this prompt, making it clearer, more specific, and less ambiguous.\n\n" +
+        "[IMPORTANT] Output Rules:\n" +
+        "- Output ONLY the optimized prompt itself, with no additional content\n" +
+        "- Do NOT add any explanations, prefixes, suffixes, or comments\n" +
+        "- Do NOT use prefixes like \"Optimized prompt:\"\n" +
+        "- Do NOT use Markdown headings or formatting\n" +
+        "- Do NOT ask the user any questions\n" +
+        "- Output the prompt text directly, ready to be copied and used\n" +
+        "- [KEY] The optimized prompt MUST be in the same language as the user's original prompt. If the original is in English, output in English; if in Chinese, output in Chinese; if in Japanese, output in Japanese. Always match the language of the original prompt.\n\n" +
+        "[How to Utilize Context Information]:\n" +
+        "1. If the user's prompt contains vague references (e.g., \"this code\", \"this file\", \"here\"), replace them with specific descriptions based on the context\n" +
+        "2. Add relevant professional terminology and best practices based on the code language type\n" +
+        "3. Infer the user's possible intent from the selected code content and reflect it in the prompt\n" +
+        "4. If file path information is available, reference specific file names or module names in the prompt\n" +
+        "5. Do NOT include code snippets directly in the optimized prompt; instead, describe the code's characteristics or location\n\n" +
+        "Optimization Principles:\n" +
+        "1. Preserve the user's original intent\n" +
+        "2. Add necessary context and details\n" +
+        "3. Use clear, professional language\n" +
+        "4. Correct grammar errors or typos\n" +
+        "5. If the original prompt is too vague, add reasonable assumptions and constraints\n" +
+        "6. Keep it concise; do not over-expand\n\n" +
+        "Example 1 (without context):\n" +
+        "User input: Please optimize the following prompt:\\n\\nAnalyze the logic\n" +
+        "Your output: Please analyze the business logic of the current code file, including the main functionality, data flow, and key processing steps.\n\n" +
+        "Example 2 (with context):\n" +
+        "User input: Please optimize the following prompt:\\n\\nWhat's wrong with this code\\n\\n---\\nBelow is the relevant context information:\\n\\n[User's Selected Code]\\n```java\\npublic void process() { ... }\\n```\\n\\n[Current File] UserService.java\\n[Language Type] java\n" +
+        "Your output: Please analyze the process() method in UserService.java, checking for potential issues including but not limited to: null pointer exception risks, resource leaks, thread safety concerns, performance bottlenecks, and provide improvement suggestions.";
 
     public PromptEnhancerHandler(HandlerContext context) {
         super(context);
@@ -119,13 +120,13 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                 String model = payload.has("model") ? payload.get("model").getAsString() : null;
 
                 if (originalPrompt.isEmpty()) {
-                    sendEnhanceResult(false, "", "提示词为空");
+                    sendEnhanceResult(false, "", "Prompt is empty");
                     return;
                 }
 
-                LOG.info("[PromptEnhancer] 开始增强提示词: " + originalPrompt.substring(0, Math.min(50, originalPrompt.length())) + "...");
+                LOG.info("[PromptEnhancer] Starting prompt enhancement: " + originalPrompt.substring(0, Math.min(50, originalPrompt.length())) + "...");
                 if (model != null) {
-                    LOG.info("[PromptEnhancer] 使用模型: " + model);
+                    LOG.info("[PromptEnhancer] Using model: " + model);
                 }
 
                 // Automatically collect context information from the editor
@@ -133,48 +134,48 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
 
                 // Log context information
                 if (contextObj != null) {
-                    LOG.info("[PromptEnhancer] 已收集编辑器上下文信息:");
+                    LOG.info("[PromptEnhancer] Editor context collected:");
                     if (contextObj.has("selectedCode")) {
                         String selectedCode = contextObj.get("selectedCode").getAsString();
-                        LOG.info("  - 选中代码: " + selectedCode.length() + " 字符");
+                        LOG.info("  - Selected code: " + selectedCode.length() + " characters");
                     }
                     if (contextObj.has("currentFile")) {
                         JsonObject currentFile = contextObj.getAsJsonObject("currentFile");
                         if (currentFile.has("path")) {
-                            LOG.info("  - 当前文件: " + currentFile.get("path").getAsString());
+                            LOG.info("  - Current file: " + currentFile.get("path").getAsString());
                         }
                         if (currentFile.has("language")) {
-                            LOG.info("  - 语言类型: " + currentFile.get("language").getAsString());
+                            LOG.info("  - Language type: " + currentFile.get("language").getAsString());
                         }
                     }
                     if (contextObj.has("cursorPosition")) {
                         JsonObject cursorPos = contextObj.getAsJsonObject("cursorPosition");
                         if (cursorPos.has("line")) {
-                            LOG.info("  - 光标位置: 第 " + cursorPos.get("line").getAsInt() + " 行");
+                            LOG.info("  - Cursor position: line " + cursorPos.get("line").getAsInt());
                         }
                     }
                     if (contextObj.has("cursorContext")) {
                         String cursorContext = contextObj.get("cursorContext").getAsString();
-                        LOG.info("  - 光标上下文: " + cursorContext.length() + " 字符");
+                        LOG.info("  - Cursor context: " + cursorContext.length() + " characters");
                     }
                 } else {
-                    LOG.info("[PromptEnhancer] 未能获取编辑器上下文信息");
+                    LOG.info("[PromptEnhancer] Failed to collect editor context");
                 }
 
                 // Call AI service for enhancement (passing context information)
                 String enhancedPrompt = callAIForEnhancement(originalPrompt, model, contextObj);
 
                 if (enhancedPrompt != null && !enhancedPrompt.isEmpty()) {
-                    LOG.info("[PromptEnhancer] 增强成功");
+                    LOG.info("[PromptEnhancer] Enhancement successful");
                     sendEnhanceResult(true, enhancedPrompt, null);
                 } else {
-                    LOG.warn("[PromptEnhancer] 增强失败：返回结果为空");
-                    sendEnhanceResult(false, "", "增强失败：返回结果为空");
+                    LOG.warn("[PromptEnhancer] Enhancement failed: empty result returned");
+                    sendEnhanceResult(false, "", "Enhancement failed: empty result returned");
                 }
 
             } catch (Exception e) {
-                LOG.error("[PromptEnhancer] 增强提示词失败: " + e.getMessage(), e);
-                sendEnhanceResult(false, "", "增强失败: " + e.getMessage());
+                LOG.error("[PromptEnhancer] Prompt enhancement failed: " + e.getMessage(), e);
+                sendEnhanceResult(false, "", "Enhancement failed: " + e.getMessage());
             }
         });
     }
@@ -254,12 +255,12 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                             contextRef.set(contextObj);
                         }
                     } catch (Exception e) {
-                        LOG.warn("[PromptEnhancer] 获取编辑器上下文失败: " + e.getMessage());
+                        LOG.warn("[PromptEnhancer] Failed to get editor context: " + e.getMessage());
                     }
                 });
             });
         } catch (Exception e) {
-            LOG.warn("[PromptEnhancer] 调用 ReadAction 失败: " + e.getMessage());
+            LOG.warn("[PromptEnhancer] ReadAction invocation failed: " + e.getMessage());
         }
 
         return contextRef.get();
@@ -283,7 +284,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
 
             return document.getText().substring(startOffset, endOffset);
         } catch (Exception e) {
-            LOG.warn("[PromptEnhancer] 获取光标上下文失败: " + e.getMessage());
+            LOG.warn("[PromptEnhancer] Failed to get cursor context: " + e.getMessage());
             return null;
         }
     }
@@ -334,31 +335,31 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
      * @param contextObj context information (optional)
      */
     private String callAIForEnhancement(String originalPrompt, String model, JsonObject contextObj) {
-        LOG.info("[PromptEnhancer] 开始调用 AI 服务进行提示词增强");
-        LOG.info("[PromptEnhancer] 原始提示词: " + originalPrompt);
-        LOG.info("[PromptEnhancer] 使用模型: " + (model != null ? model : "默认"));
+        LOG.info("[PromptEnhancer] Starting AI service call for prompt enhancement");
+        LOG.info("[PromptEnhancer] Original prompt: " + originalPrompt);
+        LOG.info("[PromptEnhancer] Using model: " + (model != null ? model : "default"));
 
         try {
             // Call AI service using a Node.js script
             String nodeExecutable = context.getClaudeSDKBridge().getNodeExecutable();
             if (nodeExecutable == null) {
-                LOG.error("[PromptEnhancer] Node.js 未配置");
+                LOG.error("[PromptEnhancer] Node.js is not configured");
                 return null;
             }
-            LOG.info("[PromptEnhancer] Node.js 路径: " + nodeExecutable);
+            LOG.info("[PromptEnhancer] Node.js path: " + nodeExecutable);
 
             File bridgeDir = context.getClaudeSDKBridge().getSdkTestDir();
             if (bridgeDir == null || !bridgeDir.exists()) {
-                LOG.error("[PromptEnhancer] AI Bridge 目录不存在");
+                LOG.error("[PromptEnhancer] AI Bridge directory does not exist");
                 return null;
             }
-            LOG.info("[PromptEnhancer] AI Bridge 目录: " + bridgeDir.getAbsolutePath());
+            LOG.info("[PromptEnhancer] AI Bridge directory: " + bridgeDir.getAbsolutePath());
 
             // Build the command
             List<String> command = new ArrayList<>();
             command.add(nodeExecutable);
             command.add(new File(bridgeDir, "services/prompt-enhancer.js").getAbsolutePath());
-            LOG.info("[PromptEnhancer] 执行命令: " + String.join(" ", command));
+            LOG.info("[PromptEnhancer] Executing command: " + String.join(" ", command));
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(bridgeDir);
@@ -368,7 +369,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             envConfigurator.updateProcessEnvironment(pb, nodeExecutable);
 
             Process process = pb.start();
-            LOG.info("[PromptEnhancer] Node.js 进程已启动");
+            LOG.info("[PromptEnhancer] Node.js process started");
 
             // Send request data to stdin (including context information)
             JsonObject stdinInput = new JsonObject();
@@ -406,16 +407,16 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             }
 
             int exitCode = process.waitFor();
-            LOG.info("[PromptEnhancer] Node.js 进程退出码: " + exitCode);
+            LOG.info("[PromptEnhancer] Node.js process exit code: " + exitCode);
 
             if (response.length() == 0 && allOutput.length() > 0) {
-                LOG.warn("[PromptEnhancer] 未找到 [ENHANCED] 标记，完整输出:\n" + allOutput);
+                LOG.warn("[PromptEnhancer] [ENHANCED] marker not found, full output:\n" + allOutput);
             }
 
             return response.toString();
 
         } catch (Exception e) {
-            LOG.error("[PromptEnhancer] 调用 AI 服务失败: " + e.getMessage(), e);
+            LOG.error("[PromptEnhancer] AI service call failed: " + e.getMessage(), e);
             return null;
         }
     }

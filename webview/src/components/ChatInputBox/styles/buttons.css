@@ -1,0 +1,69 @@
+/* ============================================================
+   Attachment Button
+   ============================================================ */
+.attach-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--button-bg);
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.attach-button:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+.attach-button .codicon {
+  font-size: 16px;
+}
+
+.attach-input {
+  display: none;
+}
+
+/* ============================================================
+   Send/Stop Button
+   ============================================================ */
+.submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--button-primary);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.submit-button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.submit-button:disabled {
+  background: var(--button-disabled);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.submit-button .codicon {
+  font-size: 14px;
+}
+
+.stop-button {
+  background: var(--error-color);
+}
+
+.stop-button:hover {
+  background: #d32f2f;
+}
+

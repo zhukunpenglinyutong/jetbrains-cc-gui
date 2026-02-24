@@ -8,8 +8,6 @@ export { McpSettingsSection } from './McpSettingsSection';
 // Sub-components
 export { ServerCard } from './ServerCard';
 export { ServerToolsPanel } from './ServerToolsPanel';
-export { RefreshLogsPanel } from './RefreshLogsPanel';
-
 // Dialog components
 export { McpServerDialog } from './McpServerDialog';
 export { McpPresetDialog } from './McpPresetDialog';

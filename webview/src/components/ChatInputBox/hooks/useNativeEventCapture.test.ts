@@ -13,7 +13,6 @@ describe('useNativeEventCapture', () => {
     renderHook(() =>
       useNativeEventCapture({
         editableRef: { current: el },
-        isComposing: false,
         isComposingRef: { current: false },
         lastCompositionEndTimeRef: { current: Date.now() - 1000 },
         sendShortcut: 'enter',
@@ -41,7 +40,6 @@ describe('useNativeEventCapture', () => {
     renderHook(() =>
       useNativeEventCapture({
         editableRef: { current: el },
-        isComposing: false,
         isComposingRef: { current: false },
         lastCompositionEndTimeRef: { current: Date.now() - 1000 },
         sendShortcut: 'enter',
@@ -68,7 +66,6 @@ describe('useNativeEventCapture', () => {
     renderHook(() =>
       useNativeEventCapture({
         editableRef: { current: el },
-        isComposing: false,
         isComposingRef: { current: false },
         lastCompositionEndTimeRef: { current: Date.now() - 1000 },
         sendShortcut: 'enter',
