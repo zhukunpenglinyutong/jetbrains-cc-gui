@@ -87,7 +87,8 @@
     "attachmentFile": "[Adjunto: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[Archivos adjuntos cargados]",
-    "streamingConnected": "Claude conectado, entendiendo tu pregunta"
+    "streamingConnected": "Claude conectado, entendiendo tu pregunta",
+    "showEarlierMessages": "Mostrar {{count}} mensajes anteriores"
   },
   "settings": {
     "title": "Configuración",
@@ -170,6 +171,12 @@
         "custom": "Personalizado",
         "reset": "Restablecer",
         "hint": "Personalizar el color de fondo del área de chat. Dejar vacío para seguir el tema predeterminado."
+      },
+      "userMsgColor": {
+        "label": "Color de mensajes del usuario",
+        "custom": "Personalizado",
+        "reset": "Restablecer",
+        "hint": "Personalizar el color de fondo de sus mensajes. Dejar vacío para seguir el tema predeterminado."
       }
     },
     "providers": "Gestión de proveedores",

@@ -40,7 +40,7 @@ export function useControlledValueSync({
     if (!editableRef.current) return;
     if (isComposingRef.current) return;
 
-    // Skip sync while the user is actively typing.
+    // Skip sync while the user is focused on the editable element.
     // The DOM content is ahead of the `value` prop due to debounced onInput,
     // so overwriting innerText here would lose the most recent keystrokes.
     if (document.activeElement === editableRef.current) return;
@@ -79,4 +79,3 @@ export function useControlledValueSync({
     invalidateCache,
   ]);
 }
-

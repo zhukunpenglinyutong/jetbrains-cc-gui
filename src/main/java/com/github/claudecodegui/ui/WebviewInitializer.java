@@ -10,6 +10,7 @@ import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.LanguageConfigService;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.JsonArray;
 import com.intellij.ide.util.PropertiesComponent;
@@ -247,24 +248,26 @@ public class WebviewInitializer {
                         "};";
                     cefBrowser.executeJavaScript(clipboardPathInjection, cefBrowser.getURL(), 0);
 
-                    // Forward console logs to IDEA console
-                    String consoleForward =
-                        "const originalLog = console.log;" +
-                        "const originalError = console.error;" +
-                        "const originalWarn = console.warn;" +
-                        "console.log = function(...args) {" +
-                        "  originalLog.apply(console, args);" +
-                        "  window.sendToJava(JSON.stringify({type: 'console.log', args: args}));" +
-                        "};" +
-                        "console.error = function(...args) {" +
-                        "  originalError.apply(console, args);" +
-                        "  window.sendToJava(JSON.stringify({type: 'console.error', args: args}));" +
-                        "};" +
-                        "console.warn = function(...args) {" +
-                        "  originalWarn.apply(console, args);" +
-                        "  window.sendToJava(JSON.stringify({type: 'console.warn', args: args}));" +
-                        "};";
-                    cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
+                    // Forward console logs to IDEA console (dev mode only — IPC overhead hurts scroll FPS in production)
+                    if (PlatformUtils.isPluginDevMode()) {
+                        String consoleForward =
+                            "const originalLog = console.log;" +
+                            "const originalError = console.error;" +
+                            "const originalWarn = console.warn;" +
+                            "console.log = function(...args) {" +
+                            "  originalLog.apply(console, args);" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.log', args: args}));" +
+                            "};" +
+                            "console.error = function(...args) {" +
+                            "  originalError.apply(console, args);" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.error', args: args}));" +
+                            "};" +
+                            "console.warn = function(...args) {" +
+                            "  originalWarn.apply(console, args);" +
+                            "  window.sendToJava(JSON.stringify({type: 'console.warn', args: args}));" +
+                            "};";
+                        cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
+                    }
 
                     // Pass IDEA editor font configuration to the frontend
                     String fontConfig = FontConfigService.getEditorFontConfigJson();

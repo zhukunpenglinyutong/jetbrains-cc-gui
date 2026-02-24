@@ -87,7 +87,8 @@
     "attachmentFile": "[Attachment: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[Attachments Uploaded]",
-    "streamingConnected": "Claude connected, understanding your question"
+    "streamingConnected": "Claude connected, understanding your question",
+    "showEarlierMessages": "Show {{count}} earlier messages"
   },
   "settings": {
     "title": "Settings",
@@ -190,6 +191,12 @@
         "browse": "Browse",
         "useDefault": "Use Default",
         "customSoundSaved": "Custom sound saved"
+      },
+      "userMsgColor": {
+        "label": "User Message Color",
+        "custom": "Custom",
+        "reset": "Reset",
+        "hint": "Customize the background color of your messages. Leave empty to follow the theme default."
       }
     },
     "providers": "Provider Management",
