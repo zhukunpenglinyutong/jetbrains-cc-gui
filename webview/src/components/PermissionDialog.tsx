@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import MarkdownBlock from './MarkdownBlock';
+import { useDialogResize } from '../hooks/useDialogResize';
 
 export interface PermissionRequest {
   channelId: string;
@@ -27,6 +29,9 @@ const PermissionDialog = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { t } = useTranslation();
 
+  // Resize state
+  const { dialogRef, dialogHeight, setDialogHeight, handleResizeStart } = useDialogResize({ minHeight: 150 });
+
   const handleApprove = () => {
     if (!request) return;
     onApprove(request.channelId);
@@ -46,6 +51,7 @@ const PermissionDialog = ({
     if (isOpen && request) {
       setShowCommand(true); // Expand by default each time it opens
       setSelectedIndex(0);
+      setDialogHeight(null);
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === '1') {
@@ -142,7 +148,13 @@ const PermissionDialog = ({
 
   return (
     <div className="permission-dialog-overlay">
-      <div className="permission-dialog-v3">
+      <div
+        ref={dialogRef}
+        className="permission-dialog-v3"
+        style={dialogHeight ? { height: dialogHeight, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' as const } : undefined}
+      >
+        {/* Resize handle */}
+        <div className="permission-dialog-v3-resize-handle" onPointerDown={handleResizeStart} />
         {/* Title area */}
         <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
         <p className="permission-dialog-v3-subtitle">{t('permission.fromExternalProcess')}</p>
@@ -163,8 +175,11 @@ const PermissionDialog = ({
           </div>
 
           {showCommand && (
-            <div className="permission-dialog-v3-command-content">
-              <pre>{commandContent}</pre>
+            <div
+              className="permission-dialog-v3-command-content"
+              style={dialogHeight ? { maxHeight: 'none' } : undefined}
+            >
+              <MarkdownBlock content={commandContent} isStreaming={false} />
             </div>
           )}
         </div>

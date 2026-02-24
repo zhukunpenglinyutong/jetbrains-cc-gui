@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export type AlertType = 'error' | 'warning' | 'info' | 'success';
 
@@ -16,9 +17,11 @@ const AlertDialog = ({
   type = 'info',
   title,
   message,
-  confirmText = '确定',
+  confirmText,
   onClose,
 }: AlertDialogProps) => {
+  const { t } = useTranslation();
+  const buttonText = confirmText || t('common.confirm');
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
@@ -64,19 +67,19 @@ const AlertDialog = ({
   return (
     <div className="confirm-dialog-overlay" onClick={onClose}>
       <div className="confirm-dialog alert-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="confirm-dialog-header">
+        <div className="confirm-dialog-header" style={{ display: 'flex', alignItems: 'center' }}>
           <span
             className={`codicon ${getIconClass()}`}
-            style={{ color: getIconColor(), marginRight: '8px', fontSize: '16px' }}
+            style={{ color: getIconColor(), marginRight: '8px', fontSize: '16px', lineHeight: 1 }}
           />
-          <h3 className="confirm-dialog-title">{title}</h3>
+          <h3 className="confirm-dialog-title" style={{ margin: 0, lineHeight: 1.2 }}>{title}</h3>
         </div>
         <div className="confirm-dialog-body">
           <p className="confirm-dialog-message" style={{ whiteSpace: 'pre-wrap' }}>{message}</p>
         </div>
         <div className="confirm-dialog-footer" style={{ justifyContent: 'center' }}>
           <button className="confirm-dialog-button confirm-button" onClick={onClose} autoFocus>
-            {confirmText}
+            {buttonText}
           </button>
         </div>
       </div>

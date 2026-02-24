@@ -57,32 +57,7 @@
 
 ## 项目状态
 
-当前版本：**v0.1.5**（2026年1月18日更新）
-
-本次为最大的一次版本更新：113个文件改动，30次commit，新增代码13.6k，删除代码4.7k
-
-本次修改内容如下：
-
-- [x] P0（feat）Claude 计划模式 开放
-- [x] P0（fix）修复了 AskUserQuestion 弹窗异常问题
-- [x] P0（perf）优化了历史记录过多时候，输入框输入卡顿以及发送卡顿问题
-- [x] P0（fix）彻底解决了 Codex window下无法写入的问题
-- [x] P0（feat）支持了 Codex MCP功能
-- [x] P0（feat）支持了 Codex的AGENTS.md指令集合
-- [x] P1（feat）支持了 Codex自动注入当前活动文件内容
-- [x] P1（feat）按当前项目路径过滤Codex会话历史（之前是全都展示）
-- [x] P1（feat）实现todolist新UI交互
-- [x] P1（feat）实现 批量写入 和 批量读取 新交互
-- [x] P1（feat）流式输出时自动展开最新的思考块
-- [x] P1（refactor）拆分重构了输入框和对话过程的代码，使其后续更易维护
-- [x] P2（chore）预留了OpenCode支持
-- [x] P2（style）修改其他细节交互舒适性
-
-接下来将进行v0.1.6版本的开发
-
-v0.1.6版本，将带来更多功能，更好的性能 和 大家心心念念的 vscode端 和 客户端；
-
-项目处于活跃开发阶段，代码持续更新中。更多迭代进度请阅读 [CHANGELOG.md](CHANGELOG.md)
+项目处于活跃开发阶段，代码持续更新中。版本历史和迭代进度请阅读 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
@@ -251,6 +226,18 @@ MIT
     <td align="center">
       <a href="https://github.com/dsudomoin">
         <img src="https://avatars.githubusercontent.com/u/155488585?size=100" width="100" height="100" alt="dsudomoin" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/serega0005">
+        <img src="https://avatars.githubusercontent.com/u/39858725?size=100" width="100" height="100" alt="serega0005" style="border-radius: 50%;" />
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/jhaan83">
+        <img src="https://avatars.githubusercontent.com/u/45828854?size=100" width="100" height="100" alt="jhaan83" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>

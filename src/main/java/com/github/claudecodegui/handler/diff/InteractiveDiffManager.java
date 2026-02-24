@@ -163,8 +163,11 @@ public class InteractiveDiffManager {
                 ClaudeCodeGuiBundle.message("diff.proposedTitle")
         );
 
-        // Set read-only flags: left=true, right=false
-        boolean[] readOnly = {true, false};
+        // Set read-only flags based on request:
+        // Left side (original) is always read-only.
+        // Right side (proposed) is read-only when request.isReadOnly() is true
+        // (e.g., permission review flow where user can only accept/reject).
+        boolean[] readOnly = {true, request.isReadOnly()};
         diffRequest.putUserData(DiffUserDataKeys.FORCE_READ_ONLY_CONTENTS, readOnly);
         diffRequest.putUserData(DiffUserDataKeys.PREFERRED_FOCUS_SIDE, Side.RIGHT);
 
@@ -178,14 +181,18 @@ public class InteractiveDiffManager {
         // Set up window event listener first (before creating buttons that reference connection)
         MessageBusConnection connection = project.getMessageBus().connect();
 
-        // Create Apply/Reject actions for toolbar
+        // Create Apply/Reject actions for toolbar (ApplyAlways only for permission review)
         final DocumentContent finalProposedContent = proposedDiffContent;
+        boolean isPermissionReview = request.isReadOnly();
         AnAction rejectAction = createRejectAction(actionApplied, resultFuture, connection);
         AnAction applyAction = createApplyAction(actionApplied, resultFuture, finalProposedContent, proposedFile, connection);
 
         // Add actions to toolbar
         List<AnAction> actions = new ArrayList<>();
         actions.add(rejectAction);
+        if (isPermissionReview) {
+            actions.add(createApplyAlwaysAction(actionApplied, resultFuture, finalProposedContent, proposedFile, connection, rejectFutureRef, project, diffRequestChain));
+        }
         actions.add(applyAction);
         diffRequest.putUserData(DiffUserDataKeysEx.CONTEXT_ACTIONS, actions);
 
@@ -218,6 +225,21 @@ public class InteractiveDiffManager {
         // Create button panel
         JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
         buttonsPanel.add(rejectButton);
+        if (isPermissionReview) {
+            JButton applyAlwaysButton = new JButton(ClaudeCodeGuiBundle.message("diff.applyAlways"));
+            applyAlwaysButton.setIcon(AllIcons.Actions.Checked_selected);
+            applyAlwaysButton.setMaximumSize(applyAlwaysButton.getPreferredSize());
+            applyAlwaysButton.addActionListener(e -> {
+                if (actionApplied.compareAndSet(false, true)) {
+                    connection.disconnect();
+                    cancelPendingRejectTask(rejectFutureRef);
+                    String content = getEditedContent(finalProposedContent, proposedFile);
+                    resultFuture.complete(DiffResult.applyAlways(content));
+                    closeDiffView(project, diffRequestChain);
+                }
+            });
+            buttonsPanel.add(applyAlwaysButton);
+        }
         buttonsPanel.add(applyButton);
 
         // Create wrapper panel with padding
@@ -311,6 +333,36 @@ public class InteractiveDiffManager {
                 if (actionApplied.compareAndSet(false, true)) {
                     connection.disconnect();
                     resultFuture.complete(DiffResult.reject());
+                }
+            }
+
+            @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.EDT;
+            }
+        };
+    }
+
+    private static AnAction createApplyAlwaysAction(
+            AtomicBoolean actionApplied,
+            CompletableFuture<DiffResult> resultFuture,
+            DocumentContent proposedContent,
+            LightVirtualFile proposedFile,
+            MessageBusConnection connection,
+            AtomicReference<ScheduledFuture<?>> rejectFutureRef,
+            Project project,
+            SimpleDiffRequestChain diffRequestChain
+    ) {
+        return new AnAction(ClaudeCodeGuiBundle.message("diff.applyAlways"), ClaudeCodeGuiBundle.message("diff.applyAlways.description"), AllIcons.Actions.Checked_selected) {
+            @Override
+            @RequiresEdt
+            public void actionPerformed(@NotNull AnActionEvent e) {
+                if (actionApplied.compareAndSet(false, true)) {
+                    connection.disconnect();
+                    cancelPendingRejectTask(rejectFutureRef);
+                    String content = getEditedContent(proposedContent, proposedFile);
+                    resultFuture.complete(DiffResult.applyAlways(content));
+                    closeDiffView(project, diffRequestChain);
                 }
             }
 

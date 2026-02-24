@@ -1,0 +1,184 @@
+/* ============================================================
+   Input Area
+   ============================================================ */
+.input-editable-wrapper {
+  position: relative;
+  padding: 6px 8px;
+  min-height: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Code snippet tag container */
+.code-snippets-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+/* Code snippet tag (reuses context-item styles) */
+.code-snippet-tag {
+  display: flex;
+  align-items: center;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  max-width: 300px;
+  cursor: default;
+  position: relative;
+}
+
+.code-snippet-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  width: 16px;
+  height: 16px;
+}
+
+.code-snippet-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  direction: ltr;
+  user-select: none;
+}
+
+.code-snippet-close {
+  margin-left: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.2s;
+}
+
+.code-snippet-close:hover {
+  opacity: 1;
+}
+
+/* Tooltip for code snippet tags */
+.code-snippet-tag.has-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 400px;
+  width: max-content;
+
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+.code-snippet-tag.has-tooltip:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  border: 6px solid transparent;
+  border-top-color: var(--dropdown-border);
+  z-index: 1000;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+/* Tooltip for tool buttons (rewind, enhance prompt, etc.) */
+.context-tool-btn.has-tooltip,
+.enhance-prompt-button.has-tooltip {
+  position: relative;
+}
+
+.context-tool-btn.has-tooltip:hover::after,
+.enhance-prompt-button.has-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+.context-tool-btn.has-tooltip:hover::before,
+.enhance-prompt-button.has-tooltip:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  border: 6px solid transparent;
+  border-top-color: var(--dropdown-border);
+  z-index: 1000;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+/* Input box scrollbar styles */
+
+.input-editable {
+  min-height: calc(1.5em * 4);
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.input-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--input-placeholder);
+  pointer-events: none;
+}
+
+.input-editable:focus {
+  outline: none;
+}
+
+/* Inline history completion hint - displays gray suggestion text after user input */
+.input-editable[data-completion-suffix]::after {
+  content: attr(data-completion-suffix);
+  color: var(--input-placeholder);
+  opacity: 0.6;
+  pointer-events: none;
+}
+

@@ -317,10 +317,6 @@ export const MessageItem = memo(function MessageItem({
   }, [blocks, isMessageStreaming]);
 
   const groupedBlocks = useMemo(() => groupBlocks(blocks), [blocks]);
-  const messageStyle = useMemo(
-    () => ({ contentVisibility: 'auto', containIntrinsicSize: '0 320px' } as const),
-    []
-  );
 
   // Register user message DOM node for anchor navigation
   // Must be called before any early returns to satisfy React hooks rules
@@ -495,7 +491,6 @@ export const MessageItem = memo(function MessageItem({
   return (
     <div
       className={`message ${message.type}`}
-      style={messageStyle}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >

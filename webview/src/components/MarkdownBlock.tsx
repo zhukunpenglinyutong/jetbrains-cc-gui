@@ -118,6 +118,106 @@ function makeStreamSafe(content: string): string {
   return result;
 }
 
+/**
+ * Lightweight renderer for streaming content.
+ * Provides basic formatting (code fences, line breaks, inline code, bold)
+ * without the heavy marked.parse() + DOMPurify + DOMParser pipeline.
+ * Full markdown parsing is deferred to when streaming ends.
+ */
+/** Sanitize code language identifier — only allow safe characters for HTML class attribute. */
+function safeLang(lang: string): string {
+  return lang.replace(/[^a-zA-Z0-9_.-]/g, '');
+}
+
+function renderStreamingContent(content: string): string {
+  if (!content) return '';
+
+  const safeContent = makeStreamSafe(content);
+
+  // Split by code fence blocks, keeping delimiters
+  const segments: string[] = [];
+  let current = '';
+  let inCode = false;
+  let codeLang = '';
+
+  for (const line of safeContent.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('```')) {
+      if (!inCode) {
+        // Flush prose before code block
+        if (current) segments.push(current);
+        current = '';
+        inCode = true;
+        codeLang = safeLang(trimmed.slice(3).trim());
+      } else {
+        // End code block — emit as <pre><code>
+        const escaped = current
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        segments.push(
+          `<pre><code${codeLang ? ` class="language-${codeLang}"` : ''}>${escaped}</code></pre>`
+        );
+        current = '';
+        inCode = false;
+        codeLang = '';
+      }
+      continue;
+    }
+    current += (current ? '\n' : '') + line;
+  }
+
+  // Handle remaining content
+  if (current) {
+    if (inCode) {
+      const escaped = current
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      segments.push(
+        `<pre><code${codeLang ? ` class="language-${codeLang}"` : ''}>${escaped}</code></pre>`
+      );
+    } else {
+      segments.push(current);
+    }
+  }
+
+  // Process prose segments (non-code)
+  const raw = segments
+    .map((seg) => {
+      // Already wrapped in <pre> — pass through
+      if (seg.startsWith('<pre>')) return seg;
+
+      let html = seg
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // Inline code
+      html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+      // Bold
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      // Headings (# ... ######)
+      html = html.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes: string, text: string) => {
+        const level = hashes.length;
+        return `<h${level}>${text}</h${level}>`;
+      });
+      // Paragraph breaks
+      html = html.replace(/\n\n/g, '</p><p>');
+      // Single line breaks
+      html = html.replace(/\n/g, '<br/>');
+
+      return `<p>${html}</p>`;
+    })
+    .join('');
+
+  // Sanitize the assembled HTML to prevent XSS even during streaming
+  return DOMPurify.sanitize(raw, {
+    ALLOWED_TAGS: ['p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    ALLOWED_ATTR: ['class'],
+  });
+}
+
 // Mermaid render counter for generating unique IDs
 let mermaidIdCounter = 0;
 
@@ -283,17 +383,15 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
 
   const html = useMemo(() => {
     try {
-      // Strip trailing newlines to avoid extra whitespace
-      let trimmedContent = content.replace(/[\r\n]+$/, '');
+      const trimmedContent = content.replace(/[\r\n]+$/, '');
 
-      // During streaming, handle unclosed code blocks
+      // During streaming, use lightweight renderer to avoid heavy parsing on every delta
       if (isStreaming) {
-        trimmedContent = makeStreamSafe(trimmedContent);
+        return renderStreamingContent(trimmedContent);
       }
 
-      // The HTML returned by marked.parse may have trailing newlines that need to be trimmed
+      // Non-streaming: full markdown pipeline
       const parsed = marked.parse(trimmedContent);
-      // Sanitize parsed HTML to prevent XSS from malicious markdown content
       const sanitized = DOMPurify.sanitize(
         typeof parsed === 'string' ? parsed : String(parsed),
         { ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title'] }

@@ -7,6 +7,7 @@ Thanks to the following sponsors for their support ❤️
 <!-- SPONSORS:START -->
 | 名称 | 金额 | 日期 |
 |------|------|------|
+| Overseas Donations | $23.60 | - |
 | *归 | ¥50 | 2026.2.12 |
 | *黑 | ¥20 | 2026.2.11 |
 | x*n | ¥10 | 2026.2.11 |

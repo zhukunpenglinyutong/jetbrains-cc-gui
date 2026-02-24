@@ -11,7 +11,7 @@ interface InlineCompletionHandler {
 }
 
 export interface UseKeyboardHandlerOptions {
-  isComposing: boolean;
+  isComposingRef: MutableRefObject<boolean>;
   lastCompositionEndTimeRef: MutableRefObject<number>;
   sendShortcut: 'enter' | 'cmdEnter';
   sdkStatusLoading: boolean;
@@ -47,7 +47,7 @@ export interface UseKeyboardHandlerOptions {
  * - Preventing IME "confirm enter" false send
  */
 export function useKeyboardHandler({
-  isComposing,
+  isComposingRef,
   lastCompositionEndTimeRef,
   sendShortcut,
   sdkStatusLoading,
@@ -65,7 +65,7 @@ export function useKeyboardHandler({
 }: UseKeyboardHandlerOptions) {
   const onKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLDivElement>) => {
-      const isIMEComposing = isComposing || e.nativeEvent.isComposing;
+      const isIMEComposing = isComposingRef.current || e.nativeEvent.isComposing;
 
       const isEnterKey =
         e.key === 'Enter' || e.nativeEvent.keyCode === 13;
@@ -146,7 +146,7 @@ export function useKeyboardHandler({
       handleSubmit();
     },
     [
-      isComposing,
+      isComposingRef,
       handleMacCursorMovement,
       fileCompletion,
       commandCompletion,

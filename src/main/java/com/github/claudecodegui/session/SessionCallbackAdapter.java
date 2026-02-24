@@ -160,4 +160,11 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     public void onThinkingDelta(String delta) {
         jsTarget.callJavaScript("onThinkingDelta", JsUtils.escapeJs(delta));
     }
+
+    /**
+     * Dispose internal resources. Call when the parent window is disposed.
+     */
+    public void dispose() {
+        // No-op: no resources to dispose currently
+    }
 }

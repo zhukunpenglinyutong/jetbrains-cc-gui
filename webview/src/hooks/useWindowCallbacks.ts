@@ -69,6 +69,7 @@ export interface UseWindowCallbacksOptions {
   currentProviderRef: MutableRefObject<string>;
   messagesContainerRef: RefObject<HTMLDivElement | null>;
   isUserAtBottomRef: MutableRefObject<boolean>;
+  userPausedRef: MutableRefObject<boolean>;
   suppressNextStatusToastRef: MutableRefObject<boolean>;
 
   // Streaming refs from useStreamingMessages
@@ -100,6 +101,11 @@ export interface UseWindowCallbacksOptions {
   openPermissionDialog: (request: PermissionRequest) => void;
   openAskUserQuestionDialog: (request: AskUserQuestionRequest) => void;
   openPlanApprovalDialog: (request: PlanApprovalRequest) => void;
+
+  // B-011: Title migration on session ID change
+  customSessionTitleRef: MutableRefObject<string | null>;
+  currentSessionIdRef: MutableRefObject<string | null>;
+  updateHistoryTitle: (sessionId: string, newTitle: string) => void;
 }
 
 export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
@@ -138,6 +144,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     currentProviderRef,
     messagesContainerRef,
     isUserAtBottomRef,
+    userPausedRef,
     suppressNextStatusToastRef,
     streamingContentRef,
     isStreamingRef,
@@ -161,6 +168,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     openPermissionDialog,
     openAskUserQuestionDialog,
     openPlanApprovalDialog,
+    customSessionTitleRef,
+    currentSessionIdRef,
+    updateHistoryTitle,
   } = options;
 
   // Store t in ref to avoid stale closures
@@ -415,7 +425,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       // FIX: Ignore loading=false during streaming — onStreamEnd handles it uniformly.
       // This check must happen before dispatching events to keep backend and frontend state consistent.
       if (!isLoading && isStreamingRef.current) {
-        console.log('[Frontend] Ignoring showLoading(false) during streaming');
         return;
       }
 
@@ -470,6 +479,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, userMessage]);
+      userPausedRef.current = false;
       isUserAtBottomRef.current = true;
       requestAnimationFrame(() => {
         if (messagesContainerRef.current) {
@@ -480,13 +490,14 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Streaming Callbacks ==========
     window.onStreamStart = () => {
-      console.log('[Frontend] Stream started');
       streamingContentRef.current = '';
       isStreamingRef.current = true;
       useBackendStreamingRenderRef.current = false;
       autoExpandedThinkingKeysRef.current.clear();
       setStreamingActive(true);
-      isUserAtBottomRef.current = true;
+      // Don't force isUserAtBottomRef to true here — if the user scrolled up
+      // to read earlier content, auto-scroll should stay paused.
+      // The flag is already set to true when the user sends a message (addUserMessage/executeMessage).
       streamingTextSegmentsRef.current = [];
       activeTextSegmentIndexRef.current = -1;
       streamingThinkingSegmentsRef.current = [];
@@ -628,8 +639,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     };
 
     window.onStreamEnd = () => {
-      console.log('[Frontend] Stream ended');
-
       // Notify backend about stream completion for tab status indicator
       sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'completed' }));
 
@@ -754,8 +763,20 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Session Callbacks ==========
     window.setSessionId = (sessionId: string) => {
-      console.log('[Frontend] setSessionId:', sessionId);
+      const oldId = currentSessionIdRef.current;
       setCurrentSessionId(sessionId);
+
+      // B-011 + B-014: Persist custom title under the real SDK session ID.
+      // Covers two cases:
+      //   1. oldId is null (B-014): new session, title edited before first prompt
+      //   2. oldId differs (B-011): provisional ID replaced by SDK — also clean up orphan
+      const title = customSessionTitleRef.current;
+      if (title) {
+        updateHistoryTitle(sessionId, title);
+        if (oldId && oldId !== sessionId) {
+          sendBridgeEvent('delete_title', oldId);
+        }
+      }
     };
 
     window.addToast = (message, type) => {
@@ -793,7 +814,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     window.updateDependencyStatus = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
-        console.log('[Frontend] updateDependencyStatus:', data);
         setSdkStatus(data);
         setSdkStatusLoaded(true);
       } catch (error) {
@@ -858,7 +878,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     window.onModelChanged = (modelId) => {
       const provider = currentProviderRef.current;
-      console.log('[Frontend] onModelChanged:', { modelId, provider });
       if (provider === 'claude') {
         setSelectedClaudeModel(modelId);
       } else if (provider === 'codex') {
@@ -867,7 +886,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     };
 
     window.onModelConfirmed = (modelId, provider) => {
-      console.log('[Frontend] onModelConfirmed:', { modelId, provider });
       if (provider === 'claude') {
         setSelectedClaudeModel(modelId);
       } else if (provider === 'codex') {
@@ -1052,7 +1070,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Selection Context Callbacks ==========
     window.addSelectionInfo = (selectionInfo) => {
-      console.log('[Frontend] addSelectionInfo (auto) called:', selectionInfo);
       if (selectionInfo) {
         const match = selectionInfo.match(/^@([^#]+)(?:#L(\d+)(?:-(\d+))?)?$/);
         if (match) {
@@ -1065,26 +1082,22 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
             endLine,
             raw: selectionInfo
           });
-          console.log('[Frontend] Updated ContextBar (auto):', { file, startLine, endLine });
         }
       }
     };
 
     window.addCodeSnippet = (selectionInfo) => {
-      console.log('[Frontend] addCodeSnippet (manual) called:', selectionInfo);
       if (selectionInfo && window.insertCodeSnippetAtCursor) {
         window.insertCodeSnippetAtCursor(selectionInfo);
       }
     };
 
     window.clearSelectionInfo = () => {
-      console.log('[Frontend] clearSelectionInfo called');
       setContextInfo(null);
     };
 
     // ========== Agent Callbacks ==========
     window.onSelectedAgentReceived = (json) => {
-      console.log('[Frontend] onSelectedAgentReceived:', json);
       try {
         if (!json || json === 'null' || json === '{}') {
           setSelectedAgent(null);
@@ -1112,7 +1125,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     };
 
     window.onSelectedAgentChanged = (json) => {
-      console.log('[Frontend] onSelectedAgentChanged:', json);
       try {
         if (!json || json === 'null' || json === '{}') {
           setSelectedAgent(null);

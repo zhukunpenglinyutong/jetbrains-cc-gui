@@ -12,7 +12,7 @@ public class DiffResult {
     /**
      * Creates a new DiffResult.
      *
-     * @param action       The action taken by the user (APPLY, REJECT, or DISMISS)
+     * @param action       The action taken by the user (APPLY, APPLY_ALWAYS, REJECT, or DISMISS)
      * @param finalContent The final content after user edits (null if rejected or dismissed)
      */
     public DiffResult(DiffAction action, @Nullable String finalContent) {
@@ -25,6 +25,13 @@ public class DiffResult {
      */
     public static DiffResult apply(String finalContent) {
         return new DiffResult(DiffAction.APPLY, finalContent);
+    }
+
+    /**
+     * Creates an APPLY_ALWAYS result with the given content.
+     */
+    public static DiffResult applyAlways(String finalContent) {
+        return new DiffResult(DiffAction.APPLY_ALWAYS, finalContent);
     }
 
     /**
@@ -51,7 +58,11 @@ public class DiffResult {
     }
 
     public boolean isApplied() {
-        return action == DiffAction.APPLY;
+        return action == DiffAction.APPLY || action == DiffAction.APPLY_ALWAYS;
+    }
+
+    public boolean isAppliedAlways() {
+        return action == DiffAction.APPLY_ALWAYS;
     }
 
     public boolean isRejected() {

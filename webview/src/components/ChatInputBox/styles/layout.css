@@ -1,0 +1,129 @@
+/* ============================================================
+   Container Layout
+   ============================================================ */
+.chat-input-box {
+  display: flex;
+  flex-direction: column;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  overflow: visible;
+  position: relative;
+  margin: 0 auto;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Show blue border glow effect on hover */
+.chat-input-box:hover {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 1px var(--input-focus-border);
+}
+
+/* Show blue border effect on focus (consistent with hover) */
+.chat-input-box:focus-within {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 1px var(--input-focus-border);
+}
+
+.chat-input-box.is-resizing {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 1px var(--input-focus-border);
+}
+
+/* ============================================================
+   Resize handles (Augment-like)
+   ============================================================ */
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Top-center grip: vertical resize */
+.resize-handle--n {
+  top: -20px;
+  left: 50%;
+  width: 112px;
+  height: 14px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.resize-handle--n::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  width: 60px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--text-muted);
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+/* Only highlight when hovering over the resize handle itself or while dragging */
+.resize-handle--n:hover::before,
+.chat-input-box.is-resizing .resize-handle--n::before {
+  opacity: 0.85;
+  background: var(--text-secondary);
+}
+
+/* Right edge: horizontal resize */
+.resize-handle--e {
+  top: 0;
+  right: -8px;
+  width: 14px;
+  height: 100%;
+  cursor: ew-resize;
+}
+
+.resize-handle--e::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0.0;
+  transition: opacity 0.15s ease;
+}
+
+/* Only show when hovering over the resize handle itself or while dragging */
+.resize-handle--e:hover::before,
+.chat-input-box.is-resizing .resize-handle--e::before {
+  opacity: 0.55;
+}
+
+/* Top-right corner: resize both */
+.resize-handle--ne {
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  cursor: nesw-resize;
+}
+
+.resize-handle--ne::before {
+  content: '';
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-muted);
+  border-top: 2px solid var(--text-muted);
+  opacity: 0.0;
+  transition: opacity 0.15s ease;
+}
+
+/* Only show when hovering over the resize handle itself or while dragging */
+.resize-handle--ne:hover::before,
+.chat-input-box.is-resizing .resize-handle--ne::before {
+  opacity: 0.55;
+}
+

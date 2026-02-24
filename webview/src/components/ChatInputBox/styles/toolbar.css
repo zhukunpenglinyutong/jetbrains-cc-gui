@@ -1,0 +1,91 @@
+/* ============================================================
+   Bottom Toolbar
+   ============================================================ */
+.button-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px;
+  border-top: none;
+  background: rgba(0, 0, 0, 0.1);
+  font-family: inherit;
+  /* Enable container queries for responsive button behavior */
+  container-type: inline-size;
+  container-name: button-area;
+  position: relative;
+  z-index: 20;
+}
+
+.button-area-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
+}
+
+.button-area-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.button-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-color);
+  opacity: 0.5;
+}
+
+/* ============================================================
+   Agent Tag Styles
+   ============================================================ */
+.agent-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  background: var(--accent-color-alpha);
+  border: 1px solid var(--accent-color);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--accent-color);
+  max-width: 150px;
+  cursor: default;
+}
+
+.agent-tag .codicon-hubot {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.agent-tag-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-tag-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: 2px;
+  background: transparent;
+  border: none;
+  color: var(--accent-color);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.agent-tag-close:hover {
+  opacity: 1;
+}
+
+.agent-tag-close .codicon {
+  font-size: 10px;
+}
+
