@@ -292,6 +292,10 @@ const SettingsView = ({
     }
   });
 
+  // 提示音配置
+  const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
+  const [customSoundPath, setCustomSoundPath] = useState<string>('');
+
   const handleTabChange = (tab: SettingsTab) => {
     if (isCodexMode && disabledTabs.includes(tab)) {
       addToast(t('settings.codexFeatureUnavailable'), 'warning');
@@ -307,7 +311,7 @@ const SettingsView = ({
   };
 
   const closeAlert = () => {
-    setAlertDialog({ ...alertDialog, isOpen: false });
+    setAlertDialog(prev => ({ ...prev, isOpen: false }));
   };
 
   // Register window callbacks for Java bridge communication
@@ -348,6 +352,8 @@ const SettingsView = ({
     addToast,
     onStreamingEnabledChangeProp,
     onSendShortcutChangeProp,
+    setSoundNotificationEnabled,
+    setCustomSoundPath,
   });
 
   // Listen for window resize events
@@ -500,6 +506,35 @@ const SettingsView = ({
     }
   };
 
+  // Sound notification toggle change handler
+  const handleSoundNotificationEnabledChange = (enabled: boolean) => {
+    setSoundNotificationEnabled(enabled);
+    const payload = { enabled };
+    sendToJava(`set_sound_notification_enabled:${JSON.stringify(payload)}`);
+  };
+
+  // Custom sound path change handler
+  const handleCustomSoundPathChange = (path: string) => {
+    setCustomSoundPath(path);
+  };
+
+  // Save custom sound path
+  const handleSaveCustomSoundPath = () => {
+    const payload = { path: customSoundPath };
+    sendToJava(`set_custom_sound_path:${JSON.stringify(payload)}`);
+  };
+
+  // Test sound
+  const handleTestSound = () => {
+    const payload = { path: customSoundPath };
+    sendToJava(`test_sound:${JSON.stringify(payload)}`);
+  };
+
+  // Browse sound file
+  const handleBrowseSound = () => {
+    sendToJava('browse_sound_file:');
+  };
+
   // Commit AI prompt save handler
   const handleSaveCommitPrompt = () => {
     setSavingCommitPrompt(true);
@@ -638,6 +673,13 @@ const SettingsView = ({
               onChatBgColorChange={setChatBgColor}
               diffExpandedByDefault={diffExpandedByDefault}
               onDiffExpandedByDefaultChange={setDiffExpandedByDefault}
+              soundNotificationEnabled={soundNotificationEnabled}
+              onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
+              customSoundPath={customSoundPath}
+              onCustomSoundPathChange={handleCustomSoundPathChange}
+              onSaveCustomSoundPath={handleSaveCustomSoundPath}
+              onTestSound={handleTestSound}
+              onBrowseSound={handleBrowseSound}
             />
           </div>
 

@@ -90,6 +90,14 @@ interface BasicConfigSectionProps {
   // Diff expanded by default configuration
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
+  // Sound notification configuration
+  soundNotificationEnabled?: boolean;
+  onSoundNotificationEnabledChange?: (enabled: boolean) => void;
+  customSoundPath?: string;
+  onCustomSoundPathChange?: (path: string) => void;
+  onSaveCustomSoundPath?: () => void;
+  onTestSound?: () => void;
+  onBrowseSound?: () => void;
 }
 
 const BasicConfigSection = ({
@@ -123,6 +131,14 @@ const BasicConfigSection = ({
   // Diff expanded by default configuration
   diffExpandedByDefault = false,
   onDiffExpandedByDefaultChange = () => {},
+  // Sound notification configuration
+  soundNotificationEnabled = false,
+  onSoundNotificationEnabledChange = () => {},
+  customSoundPath = '',
+  onCustomSoundPathChange = () => {},
+  onSaveCustomSoundPath = () => {},
+  onTestSound = () => {},
+  onBrowseSound = () => {},
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
   const colorInputRef = useRef<HTMLInputElement>(null);
@@ -585,6 +601,75 @@ const BasicConfigSection = ({
             <div className={styles.themeCardDesc}>{t('settings.basic.sendShortcut.cmdEnterDesc')}</div>
           </div>
         </div>
+      </div>
+
+      {/* 任务完成提示音配置 */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-unmute" />
+          <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={soundNotificationEnabled}
+            onChange={(e) => onSoundNotificationEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {soundNotificationEnabled
+              ? t('settings.basic.soundNotification.enabled')
+              : t('settings.basic.soundNotification.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.soundNotification.hint')}</span>
+        </small>
+
+        {/* 自定义提示音（仅在启用提示音时显示） */}
+        {soundNotificationEnabled && (
+          <div className={styles.customSoundSection}>
+            <div className={styles.fieldHeader}>
+              <span className="codicon codicon-file-media" />
+              <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.customSound')}</span>
+            </div>
+            <div className={styles.nodePathInputWrapper}>
+              <input
+                type="text"
+                className={styles.nodePathInput}
+                placeholder={t('settings.basic.soundNotification.customSoundPlaceholder')}
+                value={customSoundPath}
+                onChange={(e) => onCustomSoundPathChange(e.target.value)}
+              />
+              <button
+                className={styles.saveBtn}
+                onClick={onBrowseSound}
+                title={t('settings.basic.soundNotification.browse')}
+              >
+                <span className="codicon codicon-folder-opened" />
+              </button>
+              <button
+                className={styles.saveBtn}
+                onClick={onTestSound}
+                title={t('settings.basic.soundNotification.testSound')}
+              >
+                <span className="codicon codicon-play" />
+              </button>
+              <button
+                className={styles.saveBtn}
+                onClick={onSaveCustomSoundPath}
+              >
+                {t('common.save')}
+              </button>
+            </div>
+            <small className={styles.formHint}>
+              <span className="codicon codicon-info" />
+              <span>{t('settings.basic.soundNotification.customSoundHint')}</span>
+            </small>
+          </div>
+        )}
       </div>
     </div>
   );

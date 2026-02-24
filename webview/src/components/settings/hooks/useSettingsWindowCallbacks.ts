@@ -35,6 +35,9 @@ export interface SettingsWindowCallbacksDeps {
   setLoading: (loading: boolean) => void;
   setCodexLoading: (loading: boolean) => void;
   setCodexConfigLoading: (loading: boolean) => void;
+  // Sound notification setters
+  setSoundNotificationEnabled?: (enabled: boolean) => void;
+  setCustomSoundPath?: (path: string) => void;
 
   // Hook functions
   updateProviders: (providers: ProviderConfig[]) => void;
@@ -218,6 +221,21 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // Sound notification config callback
+    window.updateSoundNotificationConfig = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        if (data.enabled !== undefined && deps.setSoundNotificationEnabled) {
+          deps.setSoundNotificationEnabled(data.enabled);
+        }
+        if (data.customSoundPath !== undefined && deps.setCustomSoundPath) {
+          deps.setCustomSoundPath(data.customSoundPath);
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse sound notification config:', error);
+      }
+    };
+
     // Agent callbacks
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
@@ -304,6 +322,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_editor_font_config:');
     sendToJava('get_streaming_enabled:');
     sendToJava('get_commit_prompt:');
+    sendToJava('get_sound_notification_config:');
 
     return () => {
       deps.cleanupAgentsTimeout();
@@ -326,6 +345,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         window.updateSendShortcut = previousUpdateSendShortcut;
       }
       window.updateCommitPrompt = undefined;
+      window.updateSoundNotificationConfig = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.updatePrompts = previousUpdatePrompts;
