@@ -87,7 +87,8 @@
     "attachmentFile": "[附件: {{fileName}}]",
     "unknownFile": "未知文件",
     "attachmentsUploaded": "[已上传附件]",
-    "streamingConnected": "Claude 已成功连接，正在理解问题"
+    "streamingConnected": "Claude 已成功连接，正在理解问题",
+    "showEarlierMessages": "显示之前的 {{count}} 条消息"
   },
   "settings": {
     "title": "设置",
@@ -190,6 +191,12 @@
         "browse": "浏览",
         "useDefault": "使用默认",
         "customSoundSaved": "自定义提示音已保存"
+      },
+      "userMsgColor": {
+        "label": "用户消息颜色",
+        "custom": "自定义",
+        "reset": "恢复默认",
+        "hint": "自定义您的消息背景颜色，留空则跟随主题默认颜色"
       }
     },
     "providers": "供应商管理",

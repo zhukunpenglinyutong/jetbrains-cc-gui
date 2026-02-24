@@ -28,6 +28,32 @@ const LIGHT_PRESETS = [
 const DEFAULT_DARK_BG = '#1e1e1e';
 const DEFAULT_LIGHT_BG = '#ffffff';
 
+// User message bubble color presets
+const USER_MSG_DARK_PRESETS = [
+  { color: '#005fb8', label: 'Default' },
+  { color: '#1a7f37', label: 'Green' },
+  { color: '#6e40c9', label: 'Purple' },
+  { color: '#9a6700', label: 'Amber' },
+  { color: '#cf222e', label: 'Red' },
+  { color: '#0e6b8a', label: 'Teal' },
+  { color: '#6b4c9a', label: 'Violet' },
+  { color: '#4a5568', label: 'Gray' },
+];
+
+const USER_MSG_LIGHT_PRESETS = [
+  { color: '#0078d4', label: 'Default' },
+  { color: '#1a7f37', label: 'Green' },
+  { color: '#8250df', label: 'Purple' },
+  { color: '#bf8700', label: 'Amber' },
+  { color: '#cf222e', label: 'Red' },
+  { color: '#0e8a9a', label: 'Teal' },
+  { color: '#7c5cbf', label: 'Violet' },
+  { color: '#57606a', label: 'Gray' },
+];
+
+const DEFAULT_DARK_USER_MSG = '#005fb8';
+const DEFAULT_LIGHT_USER_MSG = '#0078d4';
+
 const SunIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 17C14.7614 17 17 14.7614 17 12C17 9.23858 14.7614 7 12 7C9.23858 7 7 9.23858 7 12C7 14.7614 9.23858 17 12 17Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -157,6 +183,9 @@ interface BasicConfigSectionProps {
   // Chat background color configuration
   chatBgColor?: string;
   onChatBgColorChange?: (color: string) => void;
+  // User message bubble color configuration
+  userMsgColor?: string;
+  onUserMsgColorChange?: (color: string) => void;
   // Diff expanded by default configuration
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
@@ -200,6 +229,9 @@ const BasicConfigSection = ({
   // Chat background color configuration
   chatBgColor = '',
   onChatBgColorChange = () => {},
+  // User message bubble color configuration
+  userMsgColor = '',
+  onUserMsgColorChange = () => {},
   // Diff expanded by default configuration
   diffExpandedByDefault = false,
   onDiffExpandedByDefaultChange = () => {},
@@ -216,12 +248,18 @@ const BasicConfigSection = ({
 }: BasicConfigSectionProps) => {
   const { t, i18n } = useTranslation();
   const colorInputRef = useRef<HTMLInputElement>(null);
+  const userMsgColorInputRef = useRef<HTMLInputElement>(null);
   const [hexInput, setHexInput] = useState(chatBgColor || '');
+  const [userMsgHexInput, setUserMsgHexInput] = useState(userMsgColor || '');
 
   // H1 fix: sync hexInput when chatBgColor prop changes
   useEffect(() => {
     setHexInput(chatBgColor || '');
   }, [chatBgColor]);
+
+  useEffect(() => {
+    setUserMsgHexInput(userMsgColor || '');
+  }, [userMsgColor]);
 
   // L1 fix: use useMemo + data-theme attribute cache to avoid direct DOM reads during render
   const resolvedTheme = useMemo(() => {
@@ -232,6 +270,10 @@ const BasicConfigSection = ({
   // M4 fix: extract default background color constants
   const defaultBgColor = resolvedTheme === 'light' ? DEFAULT_LIGHT_BG : DEFAULT_DARK_BG;
   const presets = resolvedTheme === 'light' ? LIGHT_PRESETS : DARK_PRESETS;
+
+  // User message color presets
+  const defaultUserMsgColor = resolvedTheme === 'light' ? DEFAULT_LIGHT_USER_MSG : DEFAULT_DARK_USER_MSG;
+  const userMsgPresets = resolvedTheme === 'light' ? USER_MSG_LIGHT_PRESETS : USER_MSG_DARK_PRESETS;
 
   const handlePresetClick = (color: string) => {
     if (color === defaultBgColor) {
@@ -255,6 +297,36 @@ const BasicConfigSection = ({
 
   const handleResetBgColor = () => {
     onChatBgColorChange('');
+  };
+
+  // User message color handlers
+  const handleUserMsgPresetClick = (color: string) => {
+    if (color === defaultUserMsgColor) {
+      onUserMsgColorChange('');
+    } else {
+      onUserMsgColorChange(color);
+    }
+  };
+
+  const handleUserMsgColorInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onUserMsgColorChange(e.target.value);
+  };
+
+  const handleUserMsgHexInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setUserMsgHexInput(value);
+    if (/^#[0-9a-fA-F]{6}$/.test(value)) {
+      onUserMsgColorChange(value);
+    }
+  };
+
+  const handleResetUserMsgColor = () => {
+    onUserMsgColorChange('');
+  };
+
+  const isUserMsgPresetActive = (presetColor: string) => {
+    if (presetColor === defaultUserMsgColor && !userMsgColor) return true;
+    return userMsgColor.toLowerCase() === presetColor.toLowerCase();
   };
 
   const isPresetActive = (presetColor: string) => {
@@ -434,6 +506,84 @@ const BasicConfigSection = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.chatBgColor.hint')}</span>
+        </small>
+      </div>
+
+      {/* User message bubble color */}
+      <div className={styles.bgColorSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-comment" />
+          <span className={styles.fieldLabel}>{t('settings.basic.userMsgColor.label')}</span>
+        </div>
+
+        {/* Preset colors */}
+        <div className={styles.colorPresets}>
+          {userMsgPresets.map((preset) => (
+            <div
+              key={preset.color}
+              className={`${styles.colorSwatch} ${isUserMsgPresetActive(preset.color) ? styles.active : ''}`}
+              onClick={() => handleUserMsgPresetClick(preset.color)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleUserMsgPresetClick(preset.color);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title={preset.label}
+              aria-label={preset.label}
+            >
+              <div
+                className={styles.colorSwatchInner}
+                style={{ backgroundColor: preset.color }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Custom color */}
+        <div className={styles.customColorRow}>
+          <span className={styles.customColorLabel}>{t('settings.basic.userMsgColor.custom')}</span>
+          <div
+            className={styles.colorPickerWrapper}
+            onClick={() => userMsgColorInputRef.current?.click()}
+          >
+            <div
+              className={styles.colorPickerPreview}
+              style={{ backgroundColor: userMsgColor || defaultUserMsgColor }}
+            />
+            <input
+              ref={userMsgColorInputRef}
+              type="color"
+              className={styles.colorPickerInput}
+              value={userMsgColor || defaultUserMsgColor}
+              onChange={handleUserMsgColorInputChange}
+            />
+          </div>
+          <input
+            type="text"
+            className={styles.hexInput}
+            value={userMsgHexInput}
+            onChange={handleUserMsgHexInputChange}
+            placeholder="#000000"
+            maxLength={7}
+          />
+          {userMsgColor && (
+            <button
+              className={styles.resetBtn}
+              onClick={handleResetUserMsgColor}
+              title={t('settings.basic.userMsgColor.reset')}
+            >
+              <span className="codicon codicon-discard" />
+              {t('settings.basic.userMsgColor.reset')}
+            </button>
+          )}
+        </div>
+
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.userMsgColor.hint')}</span>
         </small>
       </div>
 

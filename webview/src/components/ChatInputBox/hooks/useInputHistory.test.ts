@@ -148,18 +148,16 @@ describe('useInputHistory', () => {
   });
 
   it('handles localStorage quota by dropping older entries and retrying', () => {
-    const original = Storage.prototype.setItem;
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
-      this: Storage,
-      key: string,
-      value: string
-    ) {
-      const str = String(value);
-      if (key === STORAGE_KEY && str.length > SIMULATED_QUOTA_LIMIT) {
-        throw new DOMException('quota', 'QuotaExceededError');
+    const original = window.localStorage.setItem.bind(window.localStorage);
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation(
+      (key: string, value: string) => {
+        const str = String(value);
+        if (key === STORAGE_KEY && str.length > SIMULATED_QUOTA_LIMIT) {
+          throw new DOMException('quota', 'QuotaExceededError');
+        }
+        return original(key, str);
       }
-      return original.call(this, key, str);
-    });
+    );
 
     const editable = createEditable();
     const { result } = renderHook(() =>

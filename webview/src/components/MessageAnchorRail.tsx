@@ -41,7 +41,6 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
 }: MessageAnchorRailProps) {
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
   const [tooltipAnchorId, setTooltipAnchorId] = useState<string | null>(null);
-  const rafRef = useRef<number>(0);
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTooltipTimer = useCallback(() => {
@@ -105,52 +104,58 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
     setActiveAnchorId(messageId);
   }, [containerRef, messageNodeMap]);
 
-  // Compute which anchor is closest to the viewport reference point
-  const computeActiveAnchor = useCallback((): string | null => {
-    const container = containerRef.current;
-    const nodeMap = messageNodeMap.current;
-    if (!container || !nodeMap) return null;
-
-    const viewportAnchorY =
-      container.getBoundingClientRect().top + Math.min(96, container.clientHeight * 0.32);
-
-    let bestId: string | null = null;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const [messageId, node] of nodeMap) {
-      const distance = Math.abs(node.getBoundingClientRect().top - viewportAnchorY);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestId = messageId;
-      }
-    }
-    return bestId;
-  }, [containerRef, messageNodeMap]);
-
-  // Track scroll to update active anchor
+  // Use IntersectionObserver to track which anchor message is visible.
+  // This replaces the old scroll-handler + getBoundingClientRect() loop
+  // which caused layout thrashing (N forced layout reads per scroll frame).
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || anchors.length === 0) return;
+    const nodeMap = messageNodeMap.current;
+    if (!container || !nodeMap || anchors.length === 0) return;
 
-    const handleScroll = () => {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        const activeId = computeActiveAnchor();
-        if (activeId) {
-          setActiveAnchorId((prev) => (prev === activeId ? prev : activeId));
+    // Track which anchor IDs are currently intersecting the viewport
+    const visibleSet = new Set<string>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.messageAnchorId;
+          if (!id) continue;
+          if (entry.isIntersecting) {
+            visibleSet.add(id);
+          } else {
+            visibleSet.delete(id);
+          }
         }
-      });
-    };
 
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    // Compute initial active anchor
-    handleScroll();
+        // Pick the first visible anchor (topmost in DOM order)
+        // by iterating anchors in order and checking membership
+        for (const anchor of anchors) {
+          if (visibleSet.has(anchor.id)) {
+            setActiveAnchorId((prev) => (prev === anchor.id ? prev : anchor.id));
+            return;
+          }
+        }
+      },
+      {
+        root: container,
+        // Trigger when a message enters the top ~32% of the viewport
+        rootMargin: '0px 0px -68% 0px',
+        threshold: 0,
+      }
+    );
+
+    // Observe all user-message nodes that have anchors
+    const anchorIds = new Set(anchors.map((a) => a.id));
+    for (const [id, node] of nodeMap) {
+      if (anchorIds.has(id)) {
+        observer.observe(node);
+      }
+    }
 
     return () => {
-      container.removeEventListener('scroll', handleScroll);
-      cancelAnimationFrame(rafRef.current);
+      observer.disconnect();
     };
-  }, [containerRef, anchors, computeActiveAnchor]);
+  }, [containerRef, messageNodeMap, anchors]);
 
   if (anchors.length === 0) return null;
 

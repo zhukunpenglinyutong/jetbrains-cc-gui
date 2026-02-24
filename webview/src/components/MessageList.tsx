@@ -1,9 +1,12 @@
-import { memo } from 'react';
+import { memo, useState, useEffect, useRef, useMemo } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
 import { getMessageKey } from '../utils/messageUtils';
 import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
+
+/** Always render at least this many recent messages. Earlier messages are collapsed. */
+const VISIBLE_MESSAGE_WINDOW = 15;
 
 interface MessageListProps {
   messages: ClaudeMessage[];
@@ -34,9 +37,37 @@ export const MessageList = memo(function MessageList({
   messagesEndRef,
   onMessageNodeRef,
 }: MessageListProps) {
+  const [showAll, setShowAll] = useState(false);
+
+  // Reset showAll when a new session starts (message count drops)
+  const prevLengthRef = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length < prevLengthRef.current) {
+      setShowAll(false);
+    }
+    prevLengthRef.current = messages.length;
+  }, [messages.length]);
+
+  const shouldCollapse = !showAll && messages.length > VISIBLE_MESSAGE_WINDOW;
+  const collapsedCount = shouldCollapse ? messages.length - VISIBLE_MESSAGE_WINDOW : 0;
+  const visibleMessages = useMemo(
+    () => (shouldCollapse ? messages.slice(collapsedCount) : messages),
+    [messages, shouldCollapse, collapsedCount]
+  );
+
   return (
     <>
-      {messages.map((message, messageIndex) => {
+      {shouldCollapse && (
+        <div
+          className="collapsed-messages-indicator"
+          onClick={() => setShowAll(true)}
+        >
+          {t('chat.showEarlierMessages', { count: collapsedCount })}
+        </div>
+      )}
+
+      {visibleMessages.map((message, visibleIndex) => {
+        const messageIndex = shouldCollapse ? visibleIndex + collapsedCount : visibleIndex;
         const messageKey = getMessageKey(message, messageIndex);
 
         return (

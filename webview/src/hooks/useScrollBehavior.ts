@@ -76,20 +76,43 @@ export function useScrollBehavior({
     }
   }, []);
 
+  // Warm up layout after window regains focus (macOS JCEF drops GPU layers
+  // when the window is in the background, causing a scroll stutter on return)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) return;
+      const container = messagesContainerRef.current;
+      if (!container) return;
+      // Force layout recalculation before user's first scroll frame
+      requestAnimationFrame(() => {
+        void container.scrollHeight;
+        void container.offsetHeight;
+      });
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   // Listen to scroll and wheel events to detect user scroll intent
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    // Throttle scroll handler via rAF — fires at most once per frame
+    let scrollRafId: number | null = null;
     const handleScroll = () => {
-      // Skip check during auto-scrolling to prevent false detection during fast streaming
-      if (isAutoScrollingRef.current) return;
-      // If user explicitly paused via wheel-up, don't let scroll handler override
-      if (userPausedRef.current) return;
-      // Calculate distance from bottom
-      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      // Consider user at bottom if within 100 pixels
-      isUserAtBottomRef.current = distanceFromBottom < 100;
+      if (scrollRafId !== null) return; // already scheduled
+      scrollRafId = requestAnimationFrame(() => {
+        scrollRafId = null;
+        // Skip check during auto-scrolling to prevent false detection during fast streaming
+        if (isAutoScrollingRef.current) return;
+        // If user explicitly paused via wheel-up, don't let scroll handler override
+        if (userPausedRef.current) return;
+        // Calculate distance from bottom
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        // Consider user at bottom if within 100 pixels
+        isUserAtBottomRef.current = distanceFromBottom < 100;
+      });
     };
 
     // Wheel events are ALWAYS user-initiated and cannot be confused with
@@ -112,11 +135,12 @@ export function useScrollBehavior({
       }
     };
 
-    container.addEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll, { passive: true });
     container.addEventListener('wheel', handleWheel, { passive: true });
     return () => {
       container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('wheel', handleWheel);
+      if (scrollRafId !== null) cancelAnimationFrame(scrollRafId);
     };
   }, [currentView]);
 

@@ -569,7 +569,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       sdkInstalled,
       currentProvider,
       clearInput,
-      cancelPendingInput: debouncedOnInput.cancel,
+      cancelPendingInput: () => {
+        debouncedOnInput.cancel();
+      },
       externalAttachments,
       setInternalAttachments,
       fileCompletion,
@@ -661,7 +663,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       fileCompletion,
       commandCompletion,
       handleInput,
-      flushInput: debouncedOnInput.flush,
+      flushInput: () => {
+        debouncedOnInput.flush();
+      },
     });
 
     const { handleAddAttachment, handleRemoveAttachment } = useAttachmentHandlers({
