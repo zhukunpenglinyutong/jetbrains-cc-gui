@@ -57,7 +57,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - 新增用户消息气泡颜色自定义（支持 8 种语言） #dsudomoin
 
 🐛 Fixes
-- 修复 JCEF 环境下CJK 输入法组合输入导致的 React 重渲染问题，改用 ref-only 方案 #Stackerr
+- 修复 JCEF 环境下CJK输入法组合输入导致的 React 重渲染问题，改用 ref-only 方案 #Stackerr
 - 修复 contenteditable 输入框：禁用拼写检查、防止快速打字丢字、修复粘贴文本后方向键导航 #jhaan83 #dsudomoin
 - 修复增强提示词输出语言始终为中文的问题，现在匹配源语言 #Olexandr1904
 - 修复会话标题持久化：SDK 会话 ID 变更时迁移标题、新建会话时清除 ID、防止编辑标题时焦点被抢 #jhaan83
