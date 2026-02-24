@@ -29,9 +29,12 @@ export function insertTextAtCursor(text: string, element?: HTMLElement | null): 
     return false;
   }
 
-  // For large text, use fast Range API method (sacrifices undo for performance)
-  // execCommand('insertText') is extremely slow for large text (6+ seconds for 50KB)
-  if (text.length > TEXT_LENGTH_THRESHOLDS.LARGE_TEXT_INSERTION) {
+  // For large or multiline text, use fast Range API method with <br> elements.
+  // - Large text: execCommand('insertText') is extremely slow (6+ seconds for 50KB)
+  // - Multiline text: execCommand creates a single TextNode with \n, which breaks
+  //   ArrowUp cursor navigation in Chromium's contentEditable. Using <br> elements
+  //   gives the browser proper line boundaries for vertical cursor movement.
+  if (text.length > TEXT_LENGTH_THRESHOLDS.LARGE_TEXT_INSERTION || text.includes('\n')) {
     return insertTextFast(text, element, selection, range);
   }
 
@@ -49,8 +52,28 @@ export function insertTextAtCursor(text: string, element?: HTMLElement | null): 
 }
 
 /**
+ * Create a DocumentFragment from text, converting \n to <br> elements.
+ * This ensures proper DOM structure for contentEditable cursor navigation.
+ * A single TextNode with \n breaks ArrowUp navigation in Chromium.
+ */
+export function createTextFragment(text: string): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) {
+      fragment.appendChild(document.createElement('br'));
+    }
+    if (lines[i]) {
+      fragment.appendChild(document.createTextNode(lines[i]));
+    }
+  }
+  return fragment;
+}
+
+/**
  * Fast text insertion using Range API
  * Much faster than execCommand for large text, but doesn't support native undo
+ * Uses <br> elements for newlines to ensure proper cursor navigation
  */
 function insertTextFast(
   text: string,
@@ -63,12 +86,15 @@ function insertTextFast(
     range.deleteContents();
   }
 
-  // Create and insert text node
-  const textNode = document.createTextNode(text);
-  range.insertNode(textNode);
+  // Create fragment with <br> for newlines (instead of single TextNode with \n)
+  const fragment = createTextFragment(text);
+  const lastChild = fragment.lastChild;
+  range.insertNode(fragment);
 
-  // Move cursor to after inserted text
-  range.setStartAfter(textNode);
+  // Move cursor to after inserted content
+  if (lastChild) {
+    range.setStartAfter(lastChild);
+  }
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);

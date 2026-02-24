@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createTextFragment } from '../utils/selectionUtils.js';
 
 interface UseGlobalCallbacksOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
@@ -172,25 +173,32 @@ export function useGlobalCallbacks({
         // Cursor inside input box, insert at cursor position
         const range = selection.getRangeAt(0);
         range.deleteContents();
-        const textNode = document.createTextNode(selectionInfo + ' ');
-        range.insertNode(textNode);
+        // Use <br> elements for newlines to ensure proper ArrowUp/Down cursor navigation
+        const fragment = createTextFragment(selectionInfo + ' ');
+        const lastChild = fragment.lastChild;
+        range.insertNode(fragment);
 
-        // Move cursor after inserted text
-        range.setStartAfter(textNode);
+        // Move cursor after inserted content
+        if (lastChild) {
+          range.setStartAfter(lastChild);
+        }
         range.collapse(true);
         selection.removeAllRanges();
         selection.addRange(range);
       } else {
         // Cursor not inside input box, append to end
-        const textNode = document.createTextNode(selectionInfo + ' ');
-        editableRef.current.appendChild(textNode);
+        const fragment = createTextFragment(selectionInfo + ' ');
+        const lastChild = fragment.lastChild;
+        editableRef.current.appendChild(fragment);
 
         // Move cursor to end
-        const range = document.createRange();
-        range.setStartAfter(textNode);
-        range.collapse(true);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
+        if (lastChild) {
+          const range = document.createRange();
+          range.setStartAfter(lastChild);
+          range.collapse(true);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
       }
 
       // Trigger state update
