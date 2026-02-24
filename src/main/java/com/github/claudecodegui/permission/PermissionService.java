@@ -891,6 +891,14 @@ public class PermissionService {
                 return;
             }
 
+            // === Diff Review for file-modifying tools (Edit, Write) ===
+            // Runs AFTER memory check so that "Apply Always" skips the diff view on subsequent calls.
+            if (DiffReviewService.isFileModifyingTool(toolName)) {
+                if (tryDiffReview(request, requestFile, fileName, requestId, toolName, inputs)) {
+                    return;
+                }
+            }
+
             // Generate memory key (tool + parameters)
             String memoryKey = toolName + ":" + inputs.toString().hashCode();
             debugLog("MEMORY_KEY", "Generated memory key: " + memoryKey);
@@ -1415,6 +1423,87 @@ public class PermissionService {
             debugLog("PLAN_WRITE_ERROR", "Failed to write PlanApproval response file: " + e.getMessage());
             LOG.error("Error occurred", e);
         }
+    }
+
+    /**
+     * Attempt to handle a file-modifying tool via interactive diff review.
+     * @return true if diff review was initiated (caller should return), false to fall back to standard dialog
+     */
+    private boolean tryDiffReview(JsonObject request, Path requestFile, String fileName,
+                                  String requestId, String toolName, JsonObject inputs) {
+        debugLog("DIFF_REVIEW", "File-modifying tool detected: " + toolName + ", attempting diff review");
+
+        Project matchedProject = findProjectByCwd(request);
+        if (matchedProject == null) {
+            debugLog("DIFF_REVIEW", "No matched project found, falling back to standard dialog");
+            return false;
+        }
+
+        CompletableFuture<DiffReviewResult> reviewFuture =
+                DiffReviewService.reviewFileChange(matchedProject, toolName, inputs);
+        if (reviewFuture == null) {
+            debugLog("DIFF_REVIEW", "Diff review not available, falling back to standard dialog");
+            return false;
+        }
+
+        debugLog("DIFF_REVIEW", "Diff review initiated for: " + toolName);
+        try {
+            Files.deleteIfExists(requestFile);
+            debugLog("FILE_DELETE", "Deleted request file: " + fileName);
+        } catch (Exception e) {
+            debugLog("FILE_DELETE_ERROR", "Failed to delete request file: " + e.getMessage());
+        }
+
+        reviewFuture.thenAccept(result -> {
+            try {
+                if (result.isAccepted()) {
+                    debugLog("DIFF_REVIEW", "User accepted changes for: " + result.getFilePath()
+                            + (result.isAlwaysAllow() ? " (always allow)" : ""));
+                    if (result.isAlwaysAllow()) {
+                        toolOnlyPermissionMemory.put(toolName, true);
+                    }
+                    writeResponse(requestId, true);
+                    notifyDecision(toolName, inputs,
+                            result.isAlwaysAllow() ? PermissionResponse.ALLOW_ALWAYS : PermissionResponse.ALLOW);
+                } else {
+                    debugLog("DIFF_REVIEW", "User rejected changes for: " + result.getFilePath());
+                    writeResponse(requestId, false);
+                    notifyDecision(toolName, inputs, PermissionResponse.DENY);
+                }
+            } catch (Exception e) {
+                LOG.error("Error processing diff review result", e);
+                writeResponse(requestId, false);
+                notifyDecision(toolName, inputs, PermissionResponse.DENY);
+            }
+            processingRequests.remove(fileName);
+        }).exceptionally(ex -> {
+            LOG.error("Diff review failed", ex);
+            writeResponse(requestId, false);
+            notifyDecision(toolName, inputs, PermissionResponse.DENY);
+            processingRequests.remove(fileName);
+            return null;
+        });
+
+        return true;
+    }
+
+    /**
+     * Delegates to findDialogShowerByCwd to reuse the cwd matching logic.
+     *
+     * @param request the request data (containing a cwd field)
+     * @return the matched Project, or null if none available
+     */
+    private Project findProjectByCwd(JsonObject request) {
+        PermissionDialogShower shower = findDialogShowerByCwd(request, dialogShowers, "DIFF_REVIEW_MATCH");
+        if (shower == null) {
+            return null;
+        }
+        for (Map.Entry<Project, PermissionDialogShower> entry : dialogShowers.entrySet()) {
+            if (entry.getValue() == shower) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 
     /**

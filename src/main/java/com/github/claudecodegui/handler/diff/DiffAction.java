@@ -10,6 +10,11 @@ public enum DiffAction {
     APPLY,
 
     /**
+     * User accepted the proposed changes and chose "always allow" for this tool type.
+     */
+    APPLY_ALWAYS,
+
+    /**
      * User rejected the proposed changes (clicked Reject button).
      */
     REJECT,
