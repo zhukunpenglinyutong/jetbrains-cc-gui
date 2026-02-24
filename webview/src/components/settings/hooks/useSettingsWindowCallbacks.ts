@@ -37,6 +37,7 @@ export interface SettingsWindowCallbacksDeps {
   setCodexConfigLoading: (loading: boolean) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
+  setSelectedSound?: (soundId: string) => void;
   setCustomSoundPath?: (path: string) => void;
 
   // Hook functions
@@ -156,6 +157,11 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       deps.setSavingWorkingDirectory(false);
     };
 
+    window.showSuccessI18n = (i18nKey: string) => {
+      const message = t(i18nKey);
+      deps.addToast(message, 'success');
+    };
+
     window.onEditorFontConfigReceived = (jsonStr: string) => {
       try {
         const config = JSON.parse(jsonStr);
@@ -227,6 +233,9 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         const data = JSON.parse(jsonStr);
         if (data.enabled !== undefined && deps.setSoundNotificationEnabled) {
           deps.setSoundNotificationEnabled(data.enabled);
+        }
+        if (data.selectedSound !== undefined && deps.setSelectedSound) {
+          deps.setSelectedSound(data.selectedSound);
         }
         if (data.customSoundPath !== undefined && deps.setCustomSoundPath) {
           deps.setCustomSoundPath(data.customSoundPath);
@@ -336,6 +345,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateNodePath = undefined;
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
+      window.showSuccessI18n = undefined;
       window.onEditorFontConfigReceived = undefined;
       window.onIdeThemeReceived = previousOnIdeThemeReceived;
       if (!deps.onStreamingEnabledChangeProp) {

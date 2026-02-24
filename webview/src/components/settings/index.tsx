@@ -294,6 +294,7 @@ const SettingsView = ({
 
   // 提示音配置
   const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
+  const [selectedSound, setSelectedSound] = useState<string>('default');
   const [customSoundPath, setCustomSoundPath] = useState<string>('');
 
   const handleTabChange = (tab: SettingsTab) => {
@@ -353,6 +354,7 @@ const SettingsView = ({
     onStreamingEnabledChangeProp,
     onSendShortcutChangeProp,
     setSoundNotificationEnabled,
+    setSelectedSound,
     setCustomSoundPath,
   });
 
@@ -513,6 +515,13 @@ const SettingsView = ({
     sendToJava(`set_sound_notification_enabled:${JSON.stringify(payload)}`);
   };
 
+  // Selected sound change handler
+  const handleSelectedSoundChange = (soundId: string) => {
+    setSelectedSound(soundId);
+    const payload = { soundId };
+    sendToJava(`set_selected_sound:${JSON.stringify(payload)}`);
+  };
+
   // Custom sound path change handler
   const handleCustomSoundPathChange = (path: string) => {
     setCustomSoundPath(path);
@@ -526,7 +535,7 @@ const SettingsView = ({
 
   // Test sound
   const handleTestSound = () => {
-    const payload = { path: customSoundPath };
+    const payload = { soundId: selectedSound, path: customSoundPath };
     sendToJava(`test_sound:${JSON.stringify(payload)}`);
   };
 
@@ -675,6 +684,8 @@ const SettingsView = ({
               onDiffExpandedByDefaultChange={setDiffExpandedByDefault}
               soundNotificationEnabled={soundNotificationEnabled}
               onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
+              selectedSound={selectedSound}
+              onSelectedSoundChange={handleSelectedSoundChange}
               customSoundPath={customSoundPath}
               onCustomSoundPathChange={handleCustomSoundPathChange}
               onSaveCustomSoundPath={handleSaveCustomSoundPath}

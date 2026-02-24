@@ -710,6 +710,45 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set custom sound path: " + path);
     }
 
+    /**
+     * Get selected sound ID.
+     * @return sound ID (e.g. "default", "chime", "bell", "ding", "success", "custom"), defaults to "default"
+     */
+    public String getSelectedSound() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return "default";
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("selectedSound") && !soundConfig.get("selectedSound").isJsonNull()) {
+            return soundConfig.get("selectedSound").getAsString();
+        }
+
+        return "default";
+    }
+
+    /**
+     * Set selected sound ID.
+     * @param soundId sound ID, null or empty means "default"
+     */
+    public void setSelectedSound(String soundId) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("selectedSound", (soundId == null || soundId.isEmpty()) ? "default" : soundId);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set selected sound: " + soundId);
+    }
+
     // ==================== Codex Provider Management ====================
 
     public List<JsonObject> getCodexProviders() throws IOException {

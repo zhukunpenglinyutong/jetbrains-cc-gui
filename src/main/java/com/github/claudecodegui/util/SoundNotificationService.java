@@ -8,6 +8,10 @@ import javax.sound.sampled.*;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.InputStream;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -17,7 +21,21 @@ import java.util.concurrent.TimeUnit;
 public class SoundNotificationService {
 
     private static final Logger LOG = Logger.getInstance(SoundNotificationService.class);
-    private static final String DEFAULT_SOUND_PATH = "/sounds/task-complete.wav";
+
+    /**
+     * Built-in sound resources: soundId -> resource path.
+     * Insertion order preserved for UI display.
+     */
+    public static final Map<String, String> SOUND_RESOURCES;
+    static {
+        Map<String, String> map = new LinkedHashMap<>();
+        map.put("default", "/sounds/success.wav");
+        map.put("chime",   "/sounds/chime.wav");
+        map.put("bell",    "/sounds/bell.wav");
+        map.put("ding",    "/sounds/ding.wav");
+        map.put("success", "/sounds/task-complete.wav");
+        SOUND_RESOURCES = Collections.unmodifiableMap(map);
+    }
 
     // 单例模式
     private static volatile SoundNotificationService instance;
@@ -37,30 +55,20 @@ public class SoundNotificationService {
     }
 
     /**
-     * 播放任务完成提示音
+     * Play task completion notification sound based on user settings.
      */
     public void playTaskCompleteSound() {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
                 CodemossSettingsService settings = new CodemossSettingsService();
 
-                // 检查是否启用提示音
                 if (!settings.getSoundNotificationEnabled()) {
                     LOG.debug("[SoundNotification] Sound notification is disabled");
                     return;
                 }
 
-                String customSoundPath = settings.getCustomSoundPath();
-
-                if (customSoundPath != null && !customSoundPath.isEmpty()) {
-                    // 播放自定义音频
-                    LOG.info("[SoundNotification] Playing custom sound: " + customSoundPath);
-                    playFromFile(new File(customSoundPath));
-                } else {
-                    // 播放默认音频
-                    LOG.info("[SoundNotification] Playing default sound");
-                    playFromResource(DEFAULT_SOUND_PATH);
-                }
+                String selectedSound = settings.getSelectedSound();
+                playBySelection(selectedSound, settings.getCustomSoundPath());
             } catch (Exception e) {
                 LOG.warn("[SoundNotification] Failed to play notification sound: " + e.getMessage(), e);
             }
@@ -68,20 +76,37 @@ public class SoundNotificationService {
     }
 
     /**
-     * 测试播放提示音（用于设置预览）
-     *
-     * @param soundPath 声音文件路径，为空则使用默认声音
+     * Play sound by selection: built-in soundId or custom file path.
      */
-    public void testPlaySound(String soundPath) {
+    private void playBySelection(String soundId, String customPath) throws Exception {
+        if ("custom".equals(soundId)) {
+            if (customPath != null && !customPath.isEmpty()) {
+                LOG.debug("[SoundNotification] Playing custom sound");
+                playFromFile(new File(customPath));
+            } else {
+                LOG.debug("[SoundNotification] Custom selected but no path, falling back to default");
+                playFromResource(SOUND_RESOURCES.get("default"));
+            }
+        } else {
+            String resourcePath = SOUND_RESOURCES.getOrDefault(soundId, SOUND_RESOURCES.get("default"));
+            LOG.debug("[SoundNotification] Playing built-in sound: " + soundId);
+            playFromResource(resourcePath);
+        }
+    }
+
+    /**
+     * Test play a sound (for settings preview).
+     *
+     * @param soundId  sound ID ("default", "chime", "bell", "ding", "success", "custom")
+     * @param customPath custom file path (only used when soundId is "custom")
+     */
+    public void testPlaySound(String soundId, String customPath) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                if (soundPath == null || soundPath.isEmpty()) {
-                    LOG.info("[SoundNotification] Testing default sound");
-                    playFromResource(DEFAULT_SOUND_PATH);
-                } else {
-                    LOG.info("[SoundNotification] Testing custom sound: " + soundPath);
-                    playFromFile(new File(soundPath));
-                }
+                playBySelection(
+                    soundId != null ? soundId : "default",
+                    customPath
+                );
             } catch (Exception e) {
                 LOG.warn("[SoundNotification] Failed to play test sound: " + e.getMessage(), e);
             }
@@ -142,29 +167,39 @@ public class SoundNotificationService {
     }
 
     /**
-     * 使用系统命令播放音频文件（支持 MP3）
+     * Play audio file using system command (for MP3 support).
      */
     private void playWithSystemCommand(File file) {
         try {
             String os = System.getProperty("os.name").toLowerCase();
+            String filePath = file.getAbsolutePath();
             ProcessBuilder pb;
 
             if (os.contains("mac")) {
-                // macOS 使用 afplay
-                pb = new ProcessBuilder("afplay", file.getAbsolutePath());
+                pb = new ProcessBuilder("afplay", filePath);
             } else if (os.contains("win")) {
-                // Windows 使用 PowerShell 播放
-                pb = new ProcessBuilder("powershell", "-c",
-                    "(New-Object Media.SoundPlayer '" + file.getAbsolutePath() + "').PlaySync()");
+                // Use PowerShell Add-Type to avoid string injection via file path.
+                // Pass file path as a separate -FilePath argument to the script block.
+                pb = new ProcessBuilder("powershell", "-NoProfile", "-Command",
+                    "Add-Type -AssemblyName PresentationCore; " +
+                    "$p = New-Object System.Windows.Media.MediaPlayer; " +
+                    "$p.Open([Uri]::new($args[0])); " +
+                    "$p.Play(); Start-Sleep -Seconds 5; $p.Close()",
+                    filePath);
             } else {
-                // Linux 尝试使用 aplay 或 paplay
-                pb = new ProcessBuilder("aplay", file.getAbsolutePath());
+                // Linux: try ffplay (most MP3-compatible), then paplay, then aplay
+                if (isCommandAvailable("ffplay")) {
+                    pb = new ProcessBuilder("ffplay", "-nodisp", "-autoexit", filePath);
+                } else if (isCommandAvailable("mpv")) {
+                    pb = new ProcessBuilder("mpv", "--no-video", filePath);
+                } else {
+                    pb = new ProcessBuilder("aplay", filePath);
+                }
             }
 
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
-            // 等待播放完成，最多 30 秒
             boolean finished = process.waitFor(30, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
@@ -172,35 +207,42 @@ public class SoundNotificationService {
             }
         } catch (Exception e) {
             LOG.warn("[SoundNotification] Failed to play with system command: " + e.getMessage());
-            // 回退到系统 beep
             playSystemBeep();
         }
     }
 
     /**
-     * 播放音频流
+     * Check if a command is available on the system PATH.
+     */
+    private boolean isCommandAvailable(String command) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("which", command);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            boolean finished = process.waitFor(3, TimeUnit.SECONDS);
+            return finished && process.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Play an audio stream and block until playback completes.
      */
     private void playAudioStream(AudioInputStream audioIn) throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
         Clip clip = AudioSystem.getClip();
+        clip.addLineListener(event -> {
+            if (event.getType() == LineEvent.Type.STOP) {
+                latch.countDown();
+            }
+        });
         clip.open(audioIn);
         clip.start();
 
-        // 等待播放完成后关闭
-        clip.addLineListener(event -> {
-            if (event.getType() == LineEvent.Type.STOP) {
-                clip.close();
-            }
-        });
+        // Wait for playback to complete (max 10 seconds)
+        latch.await(10, TimeUnit.SECONDS);
 
-        // 等待播放完成（最多等待 10 秒）
-        int maxWaitMs = 10000;
-        int waitedMs = 0;
-        while (clip.isRunning() && waitedMs < maxWaitMs) {
-            Thread.sleep(100);
-            waitedMs += 100;
-        }
-
-        // 确保资源被释放
         if (clip.isOpen()) {
             clip.close();
         }
@@ -220,31 +262,30 @@ public class SoundNotificationService {
         File file = new File(filePath);
 
         if (!file.exists()) {
-            return new ValidationResult(false, "文件不存在");
+            return new ValidationResult(false, "File not found");
         }
 
         if (!file.canRead()) {
-            return new ValidationResult(false, "文件无法读取");
+            return new ValidationResult(false, "File is not readable");
         }
 
-        // 验证文件格式
         String lowerPath = filePath.toLowerCase();
         if (!lowerPath.endsWith(".wav") && !lowerPath.endsWith(".mp3") && !lowerPath.endsWith(".aiff")) {
-            return new ValidationResult(false, "仅支持 WAV、MP3、AIFF 格式");
+            return new ValidationResult(false, "Only WAV, MP3, AIFF formats are supported");
         }
 
-        // MP3 格式需要使用系统命令播放，跳过 AudioSystem 验证
+        // MP3 uses system command playback, skip AudioSystem validation
         if (lowerPath.endsWith(".mp3")) {
             return new ValidationResult(true, null);
         }
 
-        // 对于 WAV 和 AIFF 格式，尝试加载文件验证格式
+        // For WAV and AIFF, try loading to validate format
         try (AudioInputStream audioIn = AudioSystem.getAudioInputStream(file)) {
             return new ValidationResult(true, null);
         } catch (UnsupportedAudioFileException e) {
-            return new ValidationResult(false, "不支持的音频格式");
+            return new ValidationResult(false, "Unsupported audio format");
         } catch (Exception e) {
-            return new ValidationResult(false, "无法读取音频文件: " + e.getMessage());
+            return new ValidationResult(false, "Cannot read audio file: " + e.getMessage());
         }
     }
 

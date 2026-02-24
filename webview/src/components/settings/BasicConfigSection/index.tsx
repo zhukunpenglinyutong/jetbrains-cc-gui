@@ -93,6 +93,8 @@ interface BasicConfigSectionProps {
   // Sound notification configuration
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
+  selectedSound?: string;
+  onSelectedSoundChange?: (soundId: string) => void;
   customSoundPath?: string;
   onCustomSoundPathChange?: (path: string) => void;
   onSaveCustomSoundPath?: () => void;
@@ -134,6 +136,8 @@ const BasicConfigSection = ({
   // Sound notification configuration
   soundNotificationEnabled = false,
   onSoundNotificationEnabledChange = () => {},
+  selectedSound = 'default',
+  onSelectedSoundChange = () => {},
   customSoundPath = '',
   onCustomSoundPathChange = () => {},
   onSaveCustomSoundPath = () => {},
@@ -628,46 +632,70 @@ const BasicConfigSection = ({
           <span>{t('settings.basic.soundNotification.hint')}</span>
         </small>
 
-        {/* 自定义提示音（仅在启用提示音时显示） */}
+        {/* 提示音选择（仅在启用时显示） */}
         {soundNotificationEnabled && (
           <div className={styles.customSoundSection}>
             <div className={styles.fieldHeader}>
-              <span className="codicon codicon-file-media" />
-              <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.customSound')}</span>
+              <span className="codicon codicon-library" />
+              <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.selectSound')}</span>
             </div>
-            <div className={styles.nodePathInputWrapper}>
-              <input
-                type="text"
-                className={styles.nodePathInput}
-                placeholder={t('settings.basic.soundNotification.customSoundPlaceholder')}
-                value={customSoundPath}
-                onChange={(e) => onCustomSoundPathChange(e.target.value)}
-              />
-              <button
-                className={styles.saveBtn}
-                onClick={onBrowseSound}
-                title={t('settings.basic.soundNotification.browse')}
+            <div className={styles.soundSelectRow}>
+              <select
+                className={styles.languageSelect}
+                value={selectedSound}
+                onChange={(e) => onSelectedSoundChange(e.target.value)}
               >
-                <span className="codicon codicon-folder-opened" />
-              </button>
+                <option value="default">{t('settings.basic.soundNotification.soundDefault')}</option>
+                <option value="chime">{t('settings.basic.soundNotification.soundChime')}</option>
+                <option value="bell">{t('settings.basic.soundNotification.soundBell')}</option>
+                <option value="ding">{t('settings.basic.soundNotification.soundDing')}</option>
+                <option value="success">{t('settings.basic.soundNotification.soundSuccess')}</option>
+                <option value="custom">{t('settings.basic.soundNotification.soundCustom')}</option>
+              </select>
               <button
-                className={styles.saveBtn}
+                className={styles.soundTestBtn}
                 onClick={onTestSound}
                 title={t('settings.basic.soundNotification.testSound')}
               >
                 <span className="codicon codicon-play" />
               </button>
-              <button
-                className={styles.saveBtn}
-                onClick={onSaveCustomSoundPath}
-              >
-                {t('common.save')}
-              </button>
             </div>
-            <small className={styles.formHint}>
-              <span className="codicon codicon-info" />
-              <span>{t('settings.basic.soundNotification.customSoundHint')}</span>
-            </small>
+
+            {/* 自定义提示音文件路径（仅在选择 "custom" 时显示） */}
+            {selectedSound === 'custom' && (
+              <div className={styles.customSoundFileSection}>
+                <div className={styles.fieldHeader}>
+                  <span className="codicon codicon-file-media" />
+                  <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.customSound')}</span>
+                </div>
+                <div className={styles.nodePathInputWrapper}>
+                  <input
+                    type="text"
+                    className={styles.nodePathInput}
+                    placeholder={t('settings.basic.soundNotification.customSoundPlaceholder')}
+                    value={customSoundPath}
+                    onChange={(e) => onCustomSoundPathChange(e.target.value)}
+                  />
+                  <button
+                    className={styles.saveBtn}
+                    onClick={onBrowseSound}
+                    title={t('settings.basic.soundNotification.browse')}
+                  >
+                    <span className="codicon codicon-folder-opened" />
+                  </button>
+                  <button
+                    className={styles.saveBtn}
+                    onClick={onSaveCustomSoundPath}
+                  >
+                    {t('common.save')}
+                  </button>
+                </div>
+                <small className={styles.formHint}>
+                  <span className="codicon codicon-info" />
+                  <span>{t('settings.basic.soundNotification.customSoundHint')}</span>
+                </small>
+              </div>
+            )}
           </div>
         )}
       </div>

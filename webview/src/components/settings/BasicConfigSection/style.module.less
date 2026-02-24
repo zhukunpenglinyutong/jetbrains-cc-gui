@@ -584,11 +584,52 @@
   margin-bottom: 24px;
 }
 
-/* 自定义提示音区域 */
+/* 提示音选择区域 */
 .customSoundSection {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--border-secondary);
+}
+
+/* 提示音下拉 + 试听按钮行 */
+.soundSelectRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 400px;
+
+  .languageSelect {
+    flex: 1;
+    max-width: none;
+  }
+}
+
+/* 试听图标按钮（紧凑） */
+.soundTestBtn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: rgba(0, 120, 212, 0.06);
+  }
+}
+
+/* 自定义音频文件路径区域 */
+.customSoundFileSection {
+  margin-top: 12px;
 }
 
 /* 响应式适配 */
