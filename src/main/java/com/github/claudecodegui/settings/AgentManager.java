@@ -1,5 +1,6 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.model.ConflictStrategy;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -10,8 +11,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * Agent Manager.
@@ -224,5 +225,161 @@ public class AgentManager {
         }
         writeAgentConfig(config);
         LOG.info("[AgentManager] Set selected agent: " + agentId);
+    }
+
+    /**
+     * Validate an agent object for import.
+     * @param agent The agent to validate
+     * @return Validation error message, or null if valid
+     */
+    public String validateAgent(JsonObject agent) {
+        if (agent == null) {
+            return "Agent data is null";
+        }
+
+        if (!agent.has("id") || agent.get("id").isJsonNull()) {
+            return "Missing required field: id";
+        }
+
+        if (!agent.has("name") || agent.get("name").isJsonNull()) {
+            return "Missing required field: name";
+        }
+
+        String name = agent.get("name").getAsString();
+        if (name.isEmpty() || name.length() > 20) {
+            return "Agent name must be 1-20 characters";
+        }
+
+        if (agent.has("prompt") && !agent.get("prompt").isJsonNull()) {
+            String prompt = agent.get("prompt").getAsString();
+            if (prompt.length() > 100000) {
+                return "Agent prompt must be less than 100,000 characters";
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Detect conflicts with existing agents.
+     * @param agentsToImport List of agents to check
+     * @return Set of IDs that conflict with existing agents
+     */
+    public Set<String> detectConflicts(List<JsonObject> agentsToImport) throws IOException {
+        Set<String> conflicts = new HashSet<>();
+        JsonObject config = readAgentConfig();
+        JsonObject existingAgents = config.getAsJsonObject("agents");
+
+        for (JsonObject agent : agentsToImport) {
+            if (agent.has("id")) {
+                String id = agent.get("id").getAsString();
+                if (existingAgents.has(id)) {
+                    conflicts.add(id);
+                }
+            }
+        }
+
+        return conflicts;
+    }
+
+    /**
+     * Generate a unique ID based on a base ID by appending a suffix.
+     * @param baseId The base ID to use
+     * @return A unique ID that doesn't conflict with existing agents
+     */
+    public String generateUniqueId(String baseId) throws IOException {
+        JsonObject config = readAgentConfig();
+        JsonObject agents = config.getAsJsonObject("agents");
+
+        String uniqueId = baseId;
+        int suffix = 1;
+
+        while (agents.has(uniqueId)) {
+            uniqueId = baseId + "-" + suffix;
+            suffix++;
+        }
+
+        return uniqueId;
+    }
+
+    /**
+     * Batch import agents with conflict resolution strategy.
+     * @param agentsToImport List of agents to import
+     * @param strategy Conflict resolution strategy
+     * @return Map with import statistics (imported, skipped, updated, errors)
+     */
+    public Map<String, Object> batchImportAgents(List<JsonObject> agentsToImport, ConflictStrategy strategy) throws IOException {
+        Map<String, Object> result = new HashMap<>();
+        int imported = 0;
+        int skipped = 0;
+        int updated = 0;
+        List<String> errors = new ArrayList<>();
+
+        JsonObject config = readAgentConfig();
+        JsonObject agents = config.getAsJsonObject("agents");
+        Set<String> conflicts = detectConflicts(agentsToImport);
+
+        for (JsonObject agent : agentsToImport) {
+            try {
+                String validationError = validateAgent(agent);
+                if (validationError != null) {
+                    errors.add("Validation failed: " + validationError);
+                    skipped++;
+                    continue;
+                }
+
+                String id = agent.get("id").getAsString();
+                boolean hasConflict = conflicts.contains(id);
+
+                if (hasConflict) {
+                    switch (strategy) {
+                        case SKIP:
+                            LOG.info("[AgentManager] Skipping conflicting agent: " + id);
+                            skipped++;
+                            continue;
+
+                        case OVERWRITE:
+                            LOG.info("[AgentManager] Overwriting existing agent: " + id);
+                            agents.add(id, agent);
+                            updated++;
+                            break;
+
+                        case DUPLICATE:
+                            String newId = generateUniqueId(id);
+                            LOG.info("[AgentManager] Creating duplicate with new ID: " + newId);
+                            agent.addProperty("id", newId);
+                            if (!agent.has("createdAt")) {
+                                agent.addProperty("createdAt", System.currentTimeMillis());
+                            }
+                            agents.add(newId, agent);
+                            imported++;
+                            break;
+                    }
+                } else {
+                    if (!agent.has("createdAt")) {
+                        agent.addProperty("createdAt", System.currentTimeMillis());
+                    }
+                    agents.add(id, agent);
+                    imported++;
+                }
+            } catch (Exception e) {
+                String errorMsg = "Failed to import agent: " + e.getMessage();
+                LOG.warn("[AgentManager] " + errorMsg);
+                errors.add(errorMsg);
+                skipped++;
+            }
+        }
+
+        writeAgentConfig(config);
+        LOG.info(String.format("[AgentManager] Batch import completed: %d imported, %d updated, %d skipped",
+                imported, updated, skipped));
+
+        result.put("imported", imported);
+        result.put("updated", updated);
+        result.put("skipped", skipped);
+        result.put("errors", errors);
+        result.put("success", errors.isEmpty());
+
+        return result;
     }
 }

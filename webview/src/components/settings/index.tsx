@@ -151,6 +151,8 @@ const SettingsView = ({
     agentsLoading,
     agentDialog,
     deleteAgentConfirm,
+    importPreviewDialog: agentImportPreviewDialog,
+    exportDialog: agentExportDialog,
     loadAgents,
     updateAgents,
     cleanupAgentsTimeout,
@@ -162,6 +164,14 @@ const SettingsView = ({
     confirmDeleteAgent,
     cancelDeleteAgent,
     handleAgentOperationResult,
+    handleExportAgents,
+    handleCloseExportDialog: handleCloseAgentExportDialog,
+    handleConfirmExport: handleConfirmAgentExport,
+    handleImportAgentsFile,
+    handleAgentImportPreviewResult,
+    handleCloseImportPreview: handleCloseAgentImportPreview,
+    handleSaveImportedAgents,
+    handleAgentImportResult,
   } = useAgentManagement({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
@@ -172,6 +182,8 @@ const SettingsView = ({
     promptsLoading,
     promptDialog,
     deletePromptConfirm,
+    importPreviewDialog: promptImportPreviewDialog,
+    exportDialog: promptExportDialog,
     loadPrompts,
     updatePrompts,
     cleanupPromptsTimeout,
@@ -183,6 +195,14 @@ const SettingsView = ({
     confirmDeletePrompt,
     cancelDeletePrompt,
     handlePromptOperationResult,
+    handleExportPrompts,
+    handleCloseExportDialog: handleClosePromptExportDialog,
+    handleConfirmExport: handleConfirmPromptExport,
+    handleImportPromptsFile,
+    handlePromptImportPreviewResult,
+    handleCloseImportPreview: handleClosePromptImportPreview,
+    handleSaveImportedPrompts,
+    handlePromptImportResult,
   } = usePromptManagement({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
@@ -342,8 +362,12 @@ const SettingsView = ({
     loadPrompts,
     updateAgents,
     handleAgentOperationResult,
+    handleAgentImportPreviewResult,
+    handleAgentImportResult,
     updatePrompts,
     handlePromptOperationResult,
+    handlePromptImportPreviewResult,
+    handlePromptImportResult,
     updateCodexProviders,
     updateActiveCodexProvider,
     updateCurrentCodexConfig,
@@ -754,6 +778,8 @@ const SettingsView = ({
               onAdd={handleAddAgent}
               onEdit={handleEditAgent}
               onDelete={handleDeleteAgent}
+              onExport={handleExportAgents}
+              onImport={handleImportAgentsFile}
             />
           </div>
 
@@ -765,6 +791,8 @@ const SettingsView = ({
               onAdd={handleAddPrompt}
               onEdit={handleEditPrompt}
               onDelete={handleDeletePrompt}
+              onExport={handleExportPrompts}
+              onImport={handleImportPromptsFile}
             />
           </div>
 
@@ -816,12 +844,26 @@ const SettingsView = ({
         onSaveAgent={handleSaveAgentFromDialog}
         onConfirmDeleteAgent={confirmDeleteAgent}
         onCancelDeleteAgent={cancelDeleteAgent}
+        agentExportDialog={agentExportDialog}
+        agentImportPreviewDialog={agentImportPreviewDialog}
+        agents={agents}
+        onCloseAgentExportDialog={handleCloseAgentExportDialog}
+        onConfirmAgentExport={handleConfirmAgentExport}
+        onCloseAgentImportPreview={handleCloseAgentImportPreview}
+        onSaveImportedAgents={handleSaveImportedAgents}
         promptDialog={promptDialog}
         deletePromptConfirm={deletePromptConfirm}
         onClosePromptDialog={handleClosePromptDialog}
         onSavePrompt={handleSavePrompt}
         onConfirmDeletePrompt={confirmDeletePrompt}
         onCancelDeletePrompt={cancelDeletePrompt}
+        promptExportDialog={promptExportDialog}
+        promptImportPreviewDialog={promptImportPreviewDialog}
+        prompts={prompts}
+        onClosePromptExportDialog={handleClosePromptExportDialog}
+        onConfirmPromptExport={handleConfirmPromptExport}
+        onClosePromptImportPreview={handleClosePromptImportPreview}
+        onSaveImportedPrompts={handleSaveImportedPrompts}
         addToast={addToast}
       />
 

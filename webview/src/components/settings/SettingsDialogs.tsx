@@ -1,6 +1,8 @@
 // SettingsDialogs.tsx
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig, CodexProviderConfig } from '../../types/provider';
+import type { AgentConfig } from '../../types/agent';
+import type { PromptConfig } from '../../types/prompt';
 import AlertDialog from '../AlertDialog';
 import type { AlertType } from '../AlertDialog';
 import ConfirmDialog from '../ConfirmDialog';
@@ -8,11 +10,16 @@ import ProviderDialog from '../ProviderDialog';
 import CodexProviderDialog from '../CodexProviderDialog';
 import AgentDialog from '../AgentDialog';
 import PromptDialog from '../PromptDialog';
+import AgentExportDialog from './AgentSection/AgentExportDialog';
+import AgentImportConfirmDialog from './AgentSection/AgentImportConfirmDialog';
+import PromptExportDialog from './PromptSection/PromptExportDialog';
+import PromptImportConfirmDialog from './PromptSection/PromptImportConfirmDialog';
 import type { ToastMessage } from '../Toast';
 import type { ProviderDialogState, DeleteConfirmState } from './hooks/useProviderManagement';
-import type { AgentDialogState, DeleteAgentConfirmState } from './hooks/useAgentManagement';
-import type { PromptDialogState, DeletePromptConfirmState } from './hooks/usePromptManagement';
+import type { AgentDialogState, DeleteAgentConfirmState, ExportDialogState as AgentExportDialogState, ImportPreviewDialogState as AgentImportPreviewDialogState } from './hooks/useAgentManagement';
+import type { PromptDialogState, DeletePromptConfirmState, ExportDialogState as PromptExportDialogState, ImportPreviewDialogState as PromptImportPreviewDialogState } from './hooks/usePromptManagement';
 import type { CodexProviderDialogState, DeleteCodexConfirmState } from './hooks/useCodexProviderManagement';
+import type { ConflictStrategy } from '../../types/import';
 
 interface SettingsDialogsProps {
   // Alert dialog
@@ -44,6 +51,15 @@ interface SettingsDialogsProps {
   onConfirmDeleteAgent: () => void;
   onCancelDeleteAgent: () => void;
 
+  // Agent import/export
+  agentExportDialog: AgentExportDialogState;
+  agentImportPreviewDialog: AgentImportPreviewDialogState;
+  agents: AgentConfig[];
+  onCloseAgentExportDialog: () => void;
+  onConfirmAgentExport: (selectedIds: string[]) => void;
+  onCloseAgentImportPreview: () => void;
+  onSaveImportedAgents: (selectedIds: string[], strategy: ConflictStrategy) => void;
+
   // Prompt dialog
   promptDialog: PromptDialogState;
   deletePromptConfirm: DeletePromptConfirmState;
@@ -51,6 +67,15 @@ interface SettingsDialogsProps {
   onSavePrompt: (data: any) => void;
   onConfirmDeletePrompt: () => void;
   onCancelDeletePrompt: () => void;
+
+  // Prompt import/export
+  promptExportDialog: PromptExportDialogState;
+  promptImportPreviewDialog: PromptImportPreviewDialogState;
+  prompts: PromptConfig[];
+  onClosePromptExportDialog: () => void;
+  onConfirmPromptExport: (selectedIds: string[]) => void;
+  onClosePromptImportPreview: () => void;
+  onSaveImportedPrompts: (selectedIds: string[], strategy: ConflictStrategy) => void;
 
   addToast: (message: string, type?: ToastMessage['type']) => void;
 }
@@ -77,12 +102,26 @@ const SettingsDialogs = ({
   onSaveAgent,
   onConfirmDeleteAgent,
   onCancelDeleteAgent,
+  agentExportDialog,
+  agentImportPreviewDialog,
+  agents,
+  onCloseAgentExportDialog,
+  onConfirmAgentExport,
+  onCloseAgentImportPreview,
+  onSaveImportedAgents,
   promptDialog,
   deletePromptConfirm,
   onClosePromptDialog,
   onSavePrompt,
   onConfirmDeletePrompt,
   onCancelDeletePrompt,
+  promptExportDialog,
+  promptImportPreviewDialog,
+  prompts,
+  onClosePromptExportDialog,
+  onConfirmPromptExport,
+  onClosePromptImportPreview,
+  onSaveImportedPrompts,
   addToast,
 }: SettingsDialogsProps) => {
   const { t } = useTranslation();
@@ -177,6 +216,42 @@ const SettingsDialogs = ({
         onConfirm={onConfirmDeleteCodexProvider}
         onCancel={onCancelDeleteCodexProvider}
       />
+
+      {/* Agent export dialog */}
+      {agentExportDialog.isOpen && (
+        <AgentExportDialog
+          agents={agents}
+          onConfirm={onConfirmAgentExport}
+          onCancel={onCloseAgentExportDialog}
+        />
+      )}
+
+      {/* Agent import preview dialog */}
+      {agentImportPreviewDialog.isOpen && agentImportPreviewDialog.previewData && (
+        <AgentImportConfirmDialog
+          previewData={agentImportPreviewDialog.previewData}
+          onConfirm={onSaveImportedAgents}
+          onCancel={onCloseAgentImportPreview}
+        />
+      )}
+
+      {/* Prompt export dialog */}
+      {promptExportDialog.isOpen && (
+        <PromptExportDialog
+          prompts={prompts}
+          onConfirm={onConfirmPromptExport}
+          onCancel={onClosePromptExportDialog}
+        />
+      )}
+
+      {/* Prompt import preview dialog */}
+      {promptImportPreviewDialog.isOpen && promptImportPreviewDialog.previewData && (
+        <PromptImportConfirmDialog
+          previewData={promptImportPreviewDialog.previewData}
+          onConfirm={onSaveImportedPrompts}
+          onCancel={onClosePromptImportPreview}
+        />
+      )}
     </>
   );
 };

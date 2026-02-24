@@ -603,6 +603,10 @@ public class CodemossSettingsService {
         agentManager.setSelectedAgentId(agentId);
     }
 
+    public AgentManager getAgentManager() {
+        return agentManager;
+    }
+
     // ==================== Prompts Management ====================
 
     public List<JsonObject> getPrompts() throws IOException {
@@ -623,6 +627,10 @@ public class CodemossSettingsService {
 
     public JsonObject getPrompt(String id) throws IOException {
         return promptManager.getPrompt(id);
+    }
+
+    public PromptManager getPromptManager() {
+        return promptManager;
     }
 
     // ==================== Sound Notification Management ====================

@@ -49,8 +49,12 @@ export interface SettingsWindowCallbacksDeps {
   loadPrompts: () => void;
   updateAgents: (agents: AgentConfig[]) => void;
   handleAgentOperationResult: (result: any) => void;
+  handleAgentImportPreviewResult: (previewData: any) => void;
+  handleAgentImportResult: (result: any) => void;
   updatePrompts: (prompts: PromptConfig[]) => void;
   handlePromptOperationResult: (result: any) => void;
+  handlePromptImportPreviewResult: (previewData: any) => void;
+  handlePromptImportResult: (result: any) => void;
   updateCodexProviders: (providers: CodexProviderConfig[]) => void;
   updateActiveCodexProvider: (provider: CodexProviderConfig) => void;
   updateCurrentCodexConfig: (config: any) => void;
@@ -266,6 +270,24 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    window.agentImportPreviewResult = (jsonStr: string) => {
+      try {
+        const previewData = JSON.parse(jsonStr);
+        deps.handleAgentImportPreviewResult(previewData);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse agent import preview result:', error);
+      }
+    };
+
+    window.agentImportResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        deps.handleAgentImportResult(result);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse agent import result:', error);
+      }
+    };
+
     // Prompt library callbacks
     const previousUpdatePrompts = window.updatePrompts;
     window.updatePrompts = (jsonStr: string) => {
@@ -284,6 +306,24 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         deps.handlePromptOperationResult(result);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt operation result:', error);
+      }
+    };
+
+    window.promptImportPreviewResult = (jsonStr: string) => {
+      try {
+        const previewData = JSON.parse(jsonStr);
+        deps.handlePromptImportPreviewResult(previewData);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse prompt import preview result:', error);
+      }
+    };
+
+    window.promptImportResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        deps.handlePromptImportResult(result);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse prompt import result:', error);
       }
     };
 
@@ -358,8 +398,12 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateSoundNotificationConfig = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
+      window.agentImportPreviewResult = undefined;
+      window.agentImportResult = undefined;
       window.updatePrompts = previousUpdatePrompts;
       window.promptOperationResult = undefined;
+      window.promptImportPreviewResult = undefined;
+      window.promptImportResult = undefined;
       window.updateCodexProviders = undefined;
       window.updateActiveCodexProvider = undefined;
       window.updateCurrentCodexConfig = undefined;
