@@ -1,12 +1,25 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.CodemossSettingsService;
+import com.github.claudecodegui.model.ConflictStrategy;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.LocalFileSystem;
 
+import java.awt.*;
+import java.io.File;
+import java.io.FileWriter;
+import java.nio.file.Files;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Agent management message handler.
@@ -21,7 +34,10 @@ public class AgentHandler extends BaseMessageHandler {
         "update_agent",
         "delete_agent",
         "get_selected_agent",
-        "set_selected_agent"
+        "set_selected_agent",
+        "export_agents",
+        "import_agents_file",
+        "save_imported_agents"
     };
 
     private final CodemossSettingsService settingsService;
@@ -58,6 +74,15 @@ public class AgentHandler extends BaseMessageHandler {
                 return true;
             case "set_selected_agent":
                 handleSetSelectedAgent(content);
+                return true;
+            case "export_agents":
+                handleExportAgents(content);
+                return true;
+            case "import_agents_file":
+                handleImportAgentsFile();
+                return true;
+            case "save_imported_agents":
+                handleSaveImportedAgents(content);
                 return true;
             default:
                 return false;
@@ -269,6 +294,257 @@ public class AgentHandler extends BaseMessageHandler {
             errorResult.addProperty("error", e.getMessage());
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.onSelectedAgentChanged", escapeJs(gson.toJson(errorResult)));
+            });
+        }
+    }
+
+    /**
+     * Export selected agents to a JSON file.
+     */
+    private void handleExportAgents(String content) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                List<JsonObject> agents = settingsService.getAgents();
+
+                // Filter agents by selected IDs if provided
+                if (content != null && !content.isEmpty()) {
+                    try {
+                        JsonObject data = gson.fromJson(content, JsonObject.class);
+                        if (data.has("agentIds")) {
+                            JsonArray agentIdsArray = data.getAsJsonArray("agentIds");
+                            java.util.Set<String> selectedIds = new java.util.HashSet<>();
+                            for (int i = 0; i < agentIdsArray.size(); i++) {
+                                selectedIds.add(agentIdsArray.get(i).getAsString());
+                            }
+
+                            agents = agents.stream()
+                                .filter(agent -> {
+                                    String id = agent.has("id") ? agent.get("id").getAsString() : "";
+                                    return selectedIds.contains(id);
+                                })
+                                .collect(java.util.stream.Collectors.toList());
+                        }
+                    } catch (Exception e) {
+                        LOG.warn("[AgentHandler] Failed to parse agentIds, exporting all: " + e.getMessage());
+                    }
+                }
+
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                String exportTime = dateFormat.format(new Date());
+
+                JsonObject exportData = new JsonObject();
+                exportData.addProperty("format", "claude-code-agents-export-v1");
+                exportData.addProperty("exportTime", exportTime);
+                exportData.addProperty("agentCount", agents.size());
+
+                JsonArray agentsArray = new JsonArray();
+                for (JsonObject agent : agents) {
+                    agentsArray.add(agent);
+                }
+                exportData.add("agents", agentsArray);
+
+                String projectPath = context.getProject().getBasePath();
+                FileDialog fileDialog = new FileDialog((Frame) null, "Export Agents", FileDialog.SAVE);
+
+                if (projectPath != null) {
+                    fileDialog.setDirectory(projectPath);
+                }
+
+                SimpleDateFormat filenameDateFormat = new SimpleDateFormat("yyyyMMdd-HHmmss");
+                String defaultFilename = "agents-" + filenameDateFormat.format(new Date()) + ".json";
+                fileDialog.setFile(defaultFilename);
+
+                fileDialog.setFilenameFilter((dir, name) -> name.toLowerCase().endsWith(".json"));
+                fileDialog.setVisible(true);
+
+                String selectedDir = fileDialog.getDirectory();
+                String selectedFile = fileDialog.getFile();
+
+                if (selectedDir != null && selectedFile != null) {
+                    File fileToSave = new File(selectedDir, selectedFile);
+
+                    String path = fileToSave.getAbsolutePath();
+                    if (!path.toLowerCase().endsWith(".json")) {
+                        fileToSave = new File(path + ".json");
+                    }
+
+                    try (FileWriter writer = new FileWriter(fileToSave)) {
+                        gson.toJson(exportData, writer);
+                        LOG.info("[AgentHandler] Successfully exported " + agents.size() + " agents to: " + fileToSave.getAbsolutePath());
+
+                        com.github.claudecodegui.notifications.ClaudeNotifier.showSuccess(
+                                context.getProject(),
+                                "Exported " + agents.size() + " agents to " + fileToSave.getName()
+                        );
+                    }
+                } else {
+                    LOG.info("[AgentHandler] Export cancelled by user");
+                }
+            } catch (Exception e) {
+                LOG.error("[AgentHandler] Failed to export agents: " + e.getMessage(), e);
+                com.github.claudecodegui.notifications.ClaudeNotifier.showError(
+                        context.getProject(),
+                        "Failed to export agents: " + e.getMessage()
+                );
+            }
+        });
+    }
+
+    /**
+     * Open file chooser to select agents JSON file for import.
+     */
+    private void handleImportAgentsFile() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                // Create file chooser descriptor for JSON files
+                FileChooserDescriptor descriptor = new FileChooserDescriptor(
+                    true,  // chooseFiles
+                    false, // chooseFolders
+                    false, // chooseJars
+                    false, // chooseJarsAsFiles
+                    false, // chooseJarContents
+                    false  // chooseMultiple
+                );
+                descriptor.setTitle("Import Agents");
+                descriptor.setDescription("Select a JSON file containing exported agents");
+                descriptor.withFileFilter(file -> file.getExtension() != null && file.getExtension().equalsIgnoreCase("json"));
+
+                // Set initial directory to project base path
+                VirtualFile initialDir = null;
+                String projectPath = context.getProject().getBasePath();
+                if (projectPath != null) {
+                    initialDir = LocalFileSystem.getInstance().findFileByPath(projectPath);
+                }
+
+                // Show file chooser
+                VirtualFile[] selectedFiles = FileChooser.chooseFiles(descriptor, context.getProject(), initialDir);
+
+                if (selectedFiles.length > 0) {
+                    VirtualFile selectedFile = selectedFiles[0];
+                    File fileToImport = new File(selectedFile.getPath());
+
+                    if (!fileToImport.exists() || !fileToImport.canRead()) {
+                        throw new Exception("File not found or cannot be read: " + fileToImport.getAbsolutePath());
+                    }
+
+                    long fileSize = fileToImport.length();
+                    if (fileSize > 5 * 1024 * 1024) {
+                        throw new Exception("File too large (> 5MB). Please reduce the number of items.");
+                    }
+
+                    String content = new String(Files.readAllBytes(fileToImport.toPath()));
+                    JsonObject importData = gson.fromJson(content, JsonObject.class);
+
+                    if (!importData.has("format") || !importData.get("format").getAsString().equals("claude-code-agents-export-v1")) {
+                        throw new Exception("Invalid file format. Expected claude-code-agents-export-v1");
+                    }
+
+                    if (!importData.has("agents")) {
+                        throw new Exception("Invalid file: missing 'agents' field");
+                    }
+
+                    JsonArray agentsArray = importData.getAsJsonArray("agents");
+                    List<JsonObject> agentsToImport = new java.util.ArrayList<>();
+                    for (int i = 0; i < agentsArray.size(); i++) {
+                        agentsToImport.add(agentsArray.get(i).getAsJsonObject());
+                    }
+
+                    java.util.Set<String> conflicts = settingsService.getAgentManager().detectConflicts(agentsToImport);
+
+                    JsonObject previewResult = new JsonObject();
+                    JsonArray previewItems = new JsonArray();
+
+                    for (JsonObject agent : agentsToImport) {
+                        JsonObject previewItem = new JsonObject();
+                        previewItem.add("data", agent);
+
+                        String id = agent.has("id") ? agent.get("id").getAsString() : "";
+                        boolean hasConflict = conflicts.contains(id);
+                        previewItem.addProperty("status", hasConflict ? "update" : "new");
+                        previewItem.addProperty("conflict", hasConflict);
+
+                        previewItems.add(previewItem);
+                    }
+
+                    previewResult.add("items", previewItems);
+                    JsonObject summary = new JsonObject();
+                    summary.addProperty("total", agentsToImport.size());
+                    summary.addProperty("newCount", agentsToImport.size() - conflicts.size());
+                    summary.addProperty("updateCount", conflicts.size());
+                    previewResult.add("summary", summary);
+
+                    String resultJson = gson.toJson(previewResult);
+                    callJavaScript("window.agentImportPreviewResult", escapeJs(resultJson));
+                } else {
+                    LOG.info("[AgentHandler] Import cancelled by user");
+                }
+            } catch (Exception e) {
+                LOG.error("[AgentHandler] Failed to import agents file: " + e.getMessage(), e);
+                com.github.claudecodegui.notifications.ClaudeNotifier.showError(
+                        context.getProject(),
+                        "Failed to load import file: " + e.getMessage()
+                );
+            }
+        });
+    }
+
+    /**
+     * Save imported agents with conflict resolution.
+     */
+    private void handleSaveImportedAgents(String content) {
+        try {
+            JsonObject data = gson.fromJson(content, JsonObject.class);
+
+            if (!data.has("agents") || !data.has("strategy")) {
+                throw new Exception("Missing required fields: agents or strategy");
+            }
+
+            JsonArray agentsArray = data.getAsJsonArray("agents");
+            String strategyValue = data.get("strategy").getAsString();
+            ConflictStrategy strategy = ConflictStrategy.fromValue(strategyValue);
+
+            List<JsonObject> agentsToImport = new java.util.ArrayList<>();
+            for (int i = 0; i < agentsArray.size(); i++) {
+                agentsToImport.add(agentsArray.get(i).getAsJsonObject());
+            }
+
+            Map<String, Object> result = settingsService.getAgentManager().batchImportAgents(agentsToImport, strategy);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                handleGetAgents();
+
+                int imported = (int) result.get("imported");
+                int updated = (int) result.get("updated");
+                int skipped = (int) result.get("skipped");
+
+                String message = String.format("Imported %d agents (%d new, %d updated, %d skipped)",
+                        imported + updated, imported, updated, skipped);
+
+                com.github.claudecodegui.notifications.ClaudeNotifier.showSuccess(
+                        context.getProject(),
+                        message
+                );
+
+                JsonObject importResult = new JsonObject();
+                importResult.addProperty("success", (boolean) result.get("success"));
+                importResult.addProperty("imported", imported);
+                importResult.addProperty("updated", updated);
+                importResult.addProperty("skipped", skipped);
+
+                callJavaScript("window.agentImportResult", escapeJs(gson.toJson(importResult)));
+            });
+        } catch (Exception e) {
+            LOG.error("[AgentHandler] Failed to save imported agents: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                com.github.claudecodegui.notifications.ClaudeNotifier.showError(
+                        context.getProject(),
+                        "Failed to import agents: " + e.getMessage()
+                );
+
+                JsonObject errorResult = new JsonObject();
+                errorResult.addProperty("success", false);
+                errorResult.addProperty("error", e.getMessage());
+                callJavaScript("window.agentImportResult", escapeJs(gson.toJson(errorResult)));
             });
         }
     }

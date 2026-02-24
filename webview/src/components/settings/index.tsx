@@ -12,6 +12,10 @@ import ProviderDialog from '../ProviderDialog';
 import CodexProviderDialog from '../CodexProviderDialog';
 import AgentDialog from '../AgentDialog';
 import PromptDialog from '../PromptDialog';
+import AgentImportConfirmDialog from './AgentSection/AgentImportConfirmDialog';
+import AgentExportDialog from './AgentSection/AgentExportDialog';
+import PromptImportConfirmDialog from './PromptSection/PromptImportConfirmDialog';
+import PromptExportDialog from './PromptSection/PromptExportDialog';
 
 // Import split-out components
 import SettingsHeader from './SettingsHeader';
@@ -157,6 +161,8 @@ const SettingsView = ({
     agentsLoading,
     agentDialog,
     deleteAgentConfirm,
+    importPreviewDialog: agentImportPreviewDialog,
+    exportDialog: agentExportDialog,
     loadAgents,
     updateAgents,
     cleanupAgentsTimeout,
@@ -168,6 +174,14 @@ const SettingsView = ({
     confirmDeleteAgent,
     cancelDeleteAgent,
     handleAgentOperationResult,
+    handleExportAgents,
+    handleCloseExportDialog: handleCloseAgentExportDialog,
+    handleConfirmExport: handleConfirmAgentExport,
+    handleImportAgentsFile,
+    handleAgentImportPreviewResult,
+    handleCloseImportPreview: handleCloseAgentImportPreview,
+    handleSaveImportedAgents,
+    handleAgentImportResult,
   } = useAgentManagement({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
@@ -178,6 +192,8 @@ const SettingsView = ({
     promptsLoading,
     promptDialog,
     deletePromptConfirm,
+    importPreviewDialog: promptImportPreviewDialog,
+    exportDialog: promptExportDialog,
     loadPrompts,
     updatePrompts,
     cleanupPromptsTimeout,
@@ -189,6 +205,14 @@ const SettingsView = ({
     confirmDeletePrompt,
     cancelDeletePrompt,
     handlePromptOperationResult,
+    handleExportPrompts,
+    handleCloseExportDialog: handleClosePromptExportDialog,
+    handleConfirmExport: handleConfirmPromptExport,
+    handleImportPromptsFile,
+    handlePromptImportPreviewResult,
+    handleCloseImportPreview: handleClosePromptImportPreview,
+    handleSaveImportedPrompts,
+    handlePromptImportResult,
   } = usePromptManagement({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
@@ -495,6 +519,24 @@ const SettingsView = ({
       }
     };
 
+    window.agentImportPreviewResult = (jsonStr: string) => {
+      try {
+        const previewData = JSON.parse(jsonStr);
+        handleAgentImportPreviewResult(previewData);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse agent import preview result:', error);
+      }
+    };
+
+    window.agentImportResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        handleAgentImportResult(result);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse agent import result:', error);
+      }
+    };
+
     // Prompt library callback - using update functions provided by hooks
     const previousUpdatePrompts = window.updatePrompts;
     window.updatePrompts = (jsonStr: string) => {
@@ -513,6 +555,24 @@ const SettingsView = ({
         handlePromptOperationResult(result);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt operation result:', error);
+      }
+    };
+
+    window.promptImportPreviewResult = (jsonStr: string) => {
+      try {
+        const previewData = JSON.parse(jsonStr);
+        handlePromptImportPreviewResult(previewData);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse prompt import preview result:', error);
+      }
+    };
+
+    window.promptImportResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        handlePromptImportResult(result);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse prompt import result:', error);
       }
     };
 
@@ -597,9 +657,13 @@ const SettingsView = ({
       window.updateCommitPrompt = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
+      window.agentImportPreviewResult = undefined;
+      window.agentImportResult = undefined;
       // Cleanup Prompt callbacks
       window.updatePrompts = previousUpdatePrompts;
       window.promptOperationResult = undefined;
+      window.promptImportPreviewResult = undefined;
+      window.promptImportResult = undefined;
       // Cleanup Codex callbacks
       window.updateCodexProviders = undefined;
       window.updateActiveCodexProvider = undefined;
@@ -966,6 +1030,8 @@ const SettingsView = ({
               onAdd={handleAddAgent}
               onEdit={handleEditAgent}
               onDelete={handleDeleteAgent}
+              onExport={handleExportAgents}
+              onImport={handleImportAgentsFile}
             />
           </div>
 
@@ -977,6 +1043,8 @@ const SettingsView = ({
               onAdd={handleAddPrompt}
               onEdit={handleEditPrompt}
               onDelete={handleDeletePrompt}
+              onExport={handleExportPrompts}
+              onImport={handleImportPromptsFile}
             />
           </div>
 
@@ -1093,6 +1161,42 @@ const SettingsView = ({
         onConfirm={confirmDeleteCodexProvider}
         onCancel={cancelDeleteCodexProvider}
       />
+
+      {/* Agent export dialog */}
+      {agentExportDialog.isOpen && (
+        <AgentExportDialog
+          agents={agents}
+          onConfirm={handleConfirmAgentExport}
+          onCancel={handleCloseAgentExportDialog}
+        />
+      )}
+
+      {/* Agent import confirmation dialog */}
+      {agentImportPreviewDialog.isOpen && agentImportPreviewDialog.previewData && (
+        <AgentImportConfirmDialog
+          previewData={agentImportPreviewDialog.previewData}
+          onConfirm={handleSaveImportedAgents}
+          onCancel={handleCloseAgentImportPreview}
+        />
+      )}
+
+      {/* Prompt export dialog */}
+      {promptExportDialog.isOpen && (
+        <PromptExportDialog
+          prompts={prompts}
+          onConfirm={handleConfirmPromptExport}
+          onCancel={handleClosePromptExportDialog}
+        />
+      )}
+
+      {/* Prompt import confirmation dialog */}
+      {promptImportPreviewDialog.isOpen && promptImportPreviewDialog.previewData && (
+        <PromptImportConfirmDialog
+          previewData={promptImportPreviewDialog.previewData}
+          onConfirm={handleSaveImportedPrompts}
+          onCancel={handleClosePromptImportPreview}
+        />
+      )}
 
       {/* Toast notifications */}
       <ToastContainer messages={toasts} onDismiss={dismissToast} />

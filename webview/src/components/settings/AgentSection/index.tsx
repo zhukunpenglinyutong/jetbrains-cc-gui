@@ -9,6 +9,8 @@ interface AgentSectionProps {
   onAdd: () => void;
   onEdit: (agent: AgentConfig) => void;
   onDelete: (agent: AgentConfig) => void;
+  onExport: () => void;
+  onImport: () => void;
 }
 
 export default function AgentSection({
@@ -17,6 +19,8 @@ export default function AgentSection({
   onAdd,
   onEdit,
   onDelete,
+  onExport,
+  onImport,
 }: AgentSectionProps) {
   const { t } = useTranslation();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -56,10 +60,20 @@ export default function AgentSection({
         <div className={styles.titleWrapper}>
           <h3 className={styles.title}>{t('settings.agent.title')}</h3>
         </div>
-        <button className={styles.addButton} onClick={onAdd}>
-          <span className="codicon codicon-add" />
-          {t('settings.agent.create')}
-        </button>
+        <div className={styles.headerActions}>
+          <button className={styles.exportButton} onClick={onExport}>
+            <span className="codicon codicon-export" />
+            {t('settings.agent.export')}
+          </button>
+          <button className={styles.importButton} onClick={onImport}>
+            <span className="codicon codicon-cloud-download" />
+            {t('settings.agent.import')}
+          </button>
+          <button className={styles.addButton} onClick={onAdd}>
+            <span className="codicon codicon-add" />
+            {t('settings.agent.create')}
+          </button>
+        </div>
       </div>
 
       <div className={styles.section}>
