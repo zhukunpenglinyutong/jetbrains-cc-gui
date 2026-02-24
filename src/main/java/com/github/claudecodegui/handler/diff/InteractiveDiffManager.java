@@ -191,7 +191,7 @@ public class InteractiveDiffManager {
         List<AnAction> actions = new ArrayList<>();
         actions.add(rejectAction);
         if (isPermissionReview) {
-            actions.add(createApplyAlwaysAction(actionApplied, resultFuture, finalProposedContent, proposedFile, connection));
+            actions.add(createApplyAlwaysAction(actionApplied, resultFuture, finalProposedContent, proposedFile, connection, rejectFutureRef, project, diffRequestChain));
         }
         actions.add(applyAction);
         diffRequest.putUserData(DiffUserDataKeysEx.CONTEXT_ACTIONS, actions);
@@ -348,7 +348,10 @@ public class InteractiveDiffManager {
             CompletableFuture<DiffResult> resultFuture,
             DocumentContent proposedContent,
             LightVirtualFile proposedFile,
-            MessageBusConnection connection
+            MessageBusConnection connection,
+            AtomicReference<ScheduledFuture<?>> rejectFutureRef,
+            Project project,
+            SimpleDiffRequestChain diffRequestChain
     ) {
         return new AnAction(ClaudeCodeGuiBundle.message("diff.applyAlways"), ClaudeCodeGuiBundle.message("diff.applyAlways.description"), AllIcons.Actions.Checked_selected) {
             @Override
@@ -356,8 +359,10 @@ public class InteractiveDiffManager {
             public void actionPerformed(@NotNull AnActionEvent e) {
                 if (actionApplied.compareAndSet(false, true)) {
                     connection.disconnect();
+                    cancelPendingRejectTask(rejectFutureRef);
                     String content = getEditedContent(proposedContent, proposedFile);
                     resultFuture.complete(DiffResult.applyAlways(content));
+                    closeDiffView(project, diffRequestChain);
                 }
             }
 
