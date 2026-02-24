@@ -584,6 +584,138 @@
   margin-bottom: 24px;
 }
 
+/* 提示音选择区域 */
+.customSoundSection {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+/* 提示音下拉 + 试听按钮行 */
+.soundSelectRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 400px;
+
+  .languageSelect {
+    flex: 1;
+    max-width: none;
+  }
+}
+
+/* 试听图标按钮（紧凑） */
+.soundTestBtn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: rgba(0, 120, 212, 0.06);
+  }
+}
+
+/* 自定义音频文件路径区域 */
+.customSoundFileSection {
+  margin-top: 12px;
+}
+
+/* 向上弹出的自定义下拉选择器 */
+.upwardSelect {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.upwardSelectTrigger {
+  width: 100%;
+  padding: 8px 32px 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  appearance: none;
+  position: relative;
+
+  &:hover {
+    border-color: var(--border-hover);
+  }
+
+  &.open {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+  }
+
+  /* 下拉箭头 */
+  &::after {
+    content: '';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid var(--text-tertiary);
+    pointer-events: none;
+  }
+
+  &.open::after {
+    border-bottom: none;
+    border-top: 4px solid var(--accent-primary);
+  }
+}
+
+.upwardSelectDropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.upwardSelectOption {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: var(--bg-tertiary);
+  }
+
+  &.selected {
+    background: rgba(0, 120, 212, 0.08);
+    color: var(--accent-primary);
+    font-weight: 500;
+  }
+}
+
 /* 响应式适配 */
 @media (max-width: 480px) {
   .sectionTitle {

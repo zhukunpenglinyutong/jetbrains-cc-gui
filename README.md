@@ -57,32 +57,7 @@ A powerful IntelliJ IDEA plugin that provides a visual interface for **Claude Co
 
 ## Project Status
 
-Current version: **v0.1.5** (Updated on January 18, 2026)
-
-This is the biggest version update so far: 113 files changed, 30 commits, 13.6k lines added, 4.7k lines deleted
-
-Changes in this version:
-
-- [x] P0 (feat) Claude Plan Mode is now available
-- [x] P0 (fix) Fixed AskUserQuestion popup issues
-- [x] P0 (perf) Optimized input lag and send delay when history records are too many
-- [x] P0 (fix) Completely resolved the Codex write issue on Windows
-- [x] P0 (feat) Added Codex MCP support
-- [x] P0 (feat) Added Codex AGENTS.md instruction set support
-- [x] P1 (feat) Added auto-injection of current active file content for Codex
-- [x] P1 (feat) Filter Codex session history by current project path (previously showed all)
-- [x] P1 (feat) Implemented new TodoList UI interaction
-- [x] P1 (feat) Implemented new batch write and batch read interactions
-- [x] P1 (feat) Auto-expand latest thinking block during streaming output
-- [x] P1 (refactor) Split and refactored input box and conversation code for better maintainability
-- [x] P2 (chore) Reserved OpenCode support
-- [x] P2 (style) Improved other interaction details
-
-Next up: v0.1.6 development
-
-v0.1.6 will bring more features, better performance, and the highly anticipated VSCode extension and standalone client.
-
-The project is under active development with continuous updates. For more iteration progress, please read [CHANGELOG.md](CHANGELOG.md)
+The project is under active development with continuous updates. For version history and iteration progress, please read [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
@@ -251,6 +226,18 @@ Thanks to all contributors who help make IDEA-Claude-Code-GUI better!
     <td align="center">
       <a href="https://github.com/dsudomoin">
         <img src="https://avatars.githubusercontent.com/u/155488585?size=100" width="100" height="100" alt="dsudomoin" style="border-radius: 50%;" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/serega0005">
+        <img src="https://avatars.githubusercontent.com/u/39858725?size=100" width="100" height="100" alt="serega0005" style="border-radius: 50%;" />
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/jhaan83">
+        <img src="https://avatars.githubusercontent.com/u/45828854?size=100" width="100" height="100" alt="jhaan83" style="border-radius: 50%;" />
       </a>
     </td>
   </tr>

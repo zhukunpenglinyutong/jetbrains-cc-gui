@@ -87,7 +87,8 @@
     "attachmentFile": "[添付ファイル: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
-    "streamingConnected": "Claudeに接続しました、質問を理解しています"
+    "streamingConnected": "Claudeに接続しました、質問を理解しています",
+    "showEarlierMessages": "以前の{{count}}件のメッセージを表示"
   },
   "settings": {
     "title": "設定",
@@ -170,6 +171,12 @@
         "custom": "カスタム",
         "reset": "デフォルトに戻す",
         "hint": "チャットエリアの背景色をカスタマイズします。空欄の場合はテーマのデフォルト色に従います。"
+      },
+      "userMsgColor": {
+        "label": "ユーザーメッセージの色",
+        "custom": "カスタム",
+        "reset": "デフォルトに戻す",
+        "hint": "メッセージの背景色をカスタマイズします。空欄の場合はテーマのデフォルト色に従います。"
       }
     },
     "providers": "プロバイダー管理",

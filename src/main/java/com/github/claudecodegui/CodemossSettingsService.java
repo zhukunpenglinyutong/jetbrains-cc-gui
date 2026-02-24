@@ -603,6 +603,10 @@ public class CodemossSettingsService {
         agentManager.setSelectedAgentId(agentId);
     }
 
+    public AgentManager getAgentManager() {
+        return agentManager;
+    }
+
     // ==================== Prompts Management ====================
 
     public List<JsonObject> getPrompts() throws IOException {
@@ -623,6 +627,134 @@ public class CodemossSettingsService {
 
     public JsonObject getPrompt(String id) throws IOException {
         return promptManager.getPrompt(id);
+    }
+
+    public PromptManager getPromptManager() {
+        return promptManager;
+    }
+
+    // ==================== Sound Notification Management ====================
+
+    /**
+     * Get whether sound notification is enabled.
+     * @return whether sound notification is enabled, default is false
+     */
+    public boolean getSoundNotificationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return false;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("enabled")) {
+            return soundConfig.get("enabled").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set whether sound notification is enabled.
+     * @param enabled whether to enable
+     */
+    public void setSoundNotificationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("enabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set sound notification enabled: " + enabled);
+    }
+
+    /**
+     * Get custom sound file path.
+     * @return custom sound path, null means use default sound
+     */
+    public String getCustomSoundPath() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return null;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("customSoundPath") && !soundConfig.get("customSoundPath").isJsonNull()) {
+            return soundConfig.get("customSoundPath").getAsString();
+        }
+
+        return null;
+    }
+
+    /**
+     * Set custom sound file path.
+     * @param path file path, null means use default sound
+     */
+    public void setCustomSoundPath(String path) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        if (path == null || path.isEmpty()) {
+            soundConfig.remove("customSoundPath");
+        } else {
+            soundConfig.addProperty("customSoundPath", path);
+        }
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set custom sound path: " + path);
+    }
+
+    /**
+     * Get selected sound ID.
+     * @return sound ID (e.g. "default", "chime", "bell", "ding", "success", "custom"), defaults to "default"
+     */
+    public String getSelectedSound() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return "default";
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("selectedSound") && !soundConfig.get("selectedSound").isJsonNull()) {
+            return soundConfig.get("selectedSound").getAsString();
+        }
+
+        return "default";
+    }
+
+    /**
+     * Set selected sound ID.
+     * @param soundId sound ID, null or empty means "default"
+     */
+    public void setSelectedSound(String soundId) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("selectedSound", (soundId == null || soundId.isEmpty()) ? "default" : soundId);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set selected sound: " + soundId);
     }
 
     // ==================== Codex Provider Management ====================

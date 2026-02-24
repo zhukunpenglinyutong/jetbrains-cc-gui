@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
+import MarkdownBlock from './MarkdownBlock';
+import { useDialogResize } from '../hooks/useDialogResize';
 import './PlanApprovalDialog.css';
 
 // Timeout configuration (kept in sync with backend PermissionHandler.java)
@@ -15,6 +17,7 @@ export interface AllowedPrompt {
 export interface PlanApprovalRequest {
   requestId: string;
   toolName: string;
+  plan?: string;
   allowedPrompts?: AllowedPrompt[];
   timestamp?: string;
 }
@@ -53,6 +56,9 @@ const PlanApprovalDialog = ({
   // Timer reference
   const timerRef = useRef<number | null>(null);
 
+  // Resize state: user can drag the top edge to make the dialog taller
+  const { dialogRef, dialogHeight, setDialogHeight, handleResizeStart } = useDialogResize({ minHeight: 200 });
+
   const handleApprove = useCallback(() => {
     if (!request) return;
     onApprove(request.requestId, selectedMode);
@@ -71,6 +77,7 @@ const PlanApprovalDialog = ({
       setIsCollapsed(false);
       // Reset countdown
       setRemainingSeconds(TIMEOUT_SECONDS);
+      setDialogHeight(null);
     }
   }, [isOpen, request?.requestId]);
 
@@ -168,7 +175,13 @@ const PlanApprovalDialog = ({
 
   return (
     <div className={`permission-dialog-overlay ${isTimeWarning ? 'warning-mode' : ''}`}>
-      <div className="plan-approval-dialog">
+      <div
+        ref={dialogRef}
+        className="plan-approval-dialog"
+        style={dialogHeight ? { height: dialogHeight, maxHeight: '90vh' } : undefined}
+      >
+        {/* Resize handle at the top edge */}
+        <div className="plan-approval-resize-handle" onPointerDown={handleResizeStart} />
         {/* Timeout warning notice */}
         {isTimeWarning && (
           <div className="timeout-warning-banner">
@@ -203,6 +216,13 @@ const PlanApprovalDialog = ({
             </button>
           </div>
         </div>
+
+        {/* Plan content (markdown) */}
+        {request.plan && (
+          <div className="plan-approval-content">
+            <MarkdownBlock content={request.plan} isStreaming={false} />
+          </div>
+        )}
 
         {/* Execution Mode Selection */}
         <div className="plan-approval-mode-section">

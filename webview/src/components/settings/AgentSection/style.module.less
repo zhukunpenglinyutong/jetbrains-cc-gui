@@ -24,6 +24,39 @@
   color: var(--text-primary);
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.exportButton,
+.importButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  white-space: nowrap;
+
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-hover, var(--border-secondary));
+  }
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
 .addButton {
   display: flex;
   align-items: center;

@@ -1,0 +1,242 @@
+/* ============================================================
+   Context Display Bar (Top Control Bar)
+   ============================================================ */
+.context-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--context-bar-bg);
+  min-height: 32px;
+}
+
+/* Ensure the first visible child element (usually ContextBar or AttachmentList) has rounded corners */
+/* ResizeHandles are absolutely positioned :first-child, so select the next visible element after them */
+.chat-input-box > .resize-handle + * {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.context-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.context-token-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.context-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  font-size: 14px;
+  /* Reset button styles */
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  outline: none;
+}
+
+.context-tool-btn:hover:not(:disabled) {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+.context-tool-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.context-tool-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--input-border);
+  margin: 0 4px;
+}
+
+/* Right side tools container */
+.context-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* StatusPanel toggle button */
+.status-panel-toggle {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.status-panel-toggle .codicon {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.status-panel-toggle.expanded .codicon {
+  transform: rotate(0deg);
+}
+
+.status-panel-toggle.collapsed .codicon {
+  transform: rotate(0deg);
+}
+
+.status-panel-toggle:hover .codicon {
+  color: var(--text-primary);
+}
+
+.context-item {
+  display: flex;
+  align-items: center;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  max-width: 200px;
+}
+
+/* Tooltip styles - for ContextBar item (CSS implementation) */
+.context-item.has-tooltip {
+  position: relative;
+}
+
+.context-item.has-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 300px;
+  width: max-content;
+
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+.context-item.has-tooltip:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: -2px;
+  border: 6px solid transparent;
+  border-top-color: var(--dropdown-border);
+  z-index: 1000;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s forwards;
+}
+
+/* Tooltip Popup (JS implementation, used to break out of overflow constraints in InputBox) */
+.tooltip-popup {
+  position: fixed;
+  /* Remove translateY from transform, use margin-top for fine-tuning instead to avoid animation conflicts */
+  transform: translateX(-50%);
+  
+  background: var(--dropdown-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 300px;
+  width: max-content;
+  
+  /* Ensure z-index is high enough */
+  z-index: 99999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  
+  /* Use CSS variable to control horizontal offset, defaults to -50% (centered) */
+  --tooltip-tx: -50%;
+  transform: translate(var(--tooltip-tx), -100%);
+}
+
+.tooltip-popup::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  /* Use CSS variable to control arrow position, defaults to 50% (centered) */
+  left: var(--arrow-left, 50%);
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--dropdown-border);
+}
+
+@keyframes tooltip-fade-in {
+  from { opacity: 0; transform: translate(var(--tooltip-tx), -80%); }
+  to { opacity: 1; transform: translate(var(--tooltip-tx), -100%); }
+}
+
+.tooltip-bar {
+  max-width: none;
+  border-radius: 6px 6px 0 0;
+  border-bottom: none;
+  /* Slightly adjust background color to differentiate */
+  background: var(--dropdown-bg);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  /* Override transform */
+  transform: translate(0, -100%);
+  animation: tooltip-bar-fade-in 0.2s forwards;
+}
+
+.tooltip-bar::before {
+  display: none;
+}
+
+@keyframes tooltip-bar-fade-in {
+  from { opacity: 0; transform: translate(0, -90%); }
+  to { opacity: 1; transform: translate(0, -100%); }
+}
+
+.context-text {
+  margin: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.context-close {
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+.context-close:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+

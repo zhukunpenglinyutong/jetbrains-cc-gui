@@ -4,8 +4,25 @@
     min-height: 0; /* Fix flex child scroll issue */
     overflow-y: auto;
     overflow-x: hidden; /* 防止横向滚动 */
+    overscroll-behavior-y: contain;
     padding: 0;
     background: var(--bg-chat);
+}
+
+/* Collapsed messages indicator */
+.collapsed-messages-indicator {
+    padding: 8px 20px;
+    text-align: center;
+    color: var(--text-secondary, #888);
+    font-size: 13px;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.15s;
+
+    &:hover {
+        opacity: 1;
+        text-decoration: underline;
+    }
 }
 
 /* Message Styles - Agent Style */
@@ -17,6 +34,7 @@
     border-bottom: 1px solid var(--color-message-divider);
     min-width: 0; /* 允许内容缩小 */
     max-width: 100%; /* 防止超出容器 */
+    contain: layout style; /* Isolate layout — prevents cross-message recalculation during scroll */
 }
 
 .message:last-child {
@@ -39,7 +57,7 @@
     padding: 10px 14px;
     border-radius: 12px 12px 2px 12px;
     max-width: 85%;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    border: 1px solid rgba(255,255,255,0.06);
     word-wrap: break-word;
     word-break: break-word;
     overflow-wrap: break-word;
@@ -92,7 +110,7 @@
     align-items: center;
     justify-content: center;
     color: var(--text-secondary);
-    transition: all 0.2s ease;
+    transition: opacity 0.2s ease, visibility 0.2s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     z-index: 10;
     opacity: 0;
     visibility: hidden;
@@ -122,7 +140,7 @@
         font-size: 12px;
         opacity: 0;
         visibility: hidden;
-        transition: all 0.2s;
+        transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
         pointer-events: none;
         white-space: nowrap;
         z-index: 20;
@@ -345,7 +363,7 @@
     align-items: center;
     justify-content: center;
     color: var(--text-secondary);
-    transition: all 0.2s;
+    transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     z-index: 10;
     opacity: 0.7;
 
@@ -376,7 +394,7 @@
     font-size: 12px;
     opacity: 0;
     visibility: hidden;
-    transition: all 0.2s;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
     pointer-events: none;
     white-space: nowrap;
     z-index: 20;

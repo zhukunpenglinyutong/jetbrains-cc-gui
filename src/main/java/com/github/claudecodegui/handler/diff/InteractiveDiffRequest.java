@@ -12,6 +12,7 @@ public class InteractiveDiffRequest {
     private final String newFileContents;
     private final String tabName;
     private final boolean isNewFile;
+    private final boolean readOnly;
 
     /**
      * Creates a new InteractiveDiffRequest.
@@ -21,19 +22,22 @@ public class InteractiveDiffRequest {
      * @param newFileContents The proposed new content for the file (after modifications)
      * @param tabName         The name to display in the diff tab
      * @param isNewFile       Whether this is a new file
+     * @param readOnly        Whether the diff view should be read-only
      */
     public InteractiveDiffRequest(
             @NotNull String filePath,
             @Nullable String originalContent,
             @NotNull String newFileContents,
             @NotNull String tabName,
-            boolean isNewFile
+            boolean isNewFile,
+            boolean readOnly
     ) {
         this.filePath = filePath;
         this.originalContent = originalContent;
         this.newFileContents = newFileContents;
         this.tabName = tabName;
         this.isNewFile = isNewFile;
+        this.readOnly = readOnly;
     }
 
     /**
@@ -50,7 +54,7 @@ public class InteractiveDiffRequest {
             @NotNull String newFileContents,
             @NotNull String tabName
     ) {
-        return new InteractiveDiffRequest(filePath, originalContent, newFileContents, tabName, false);
+        return new InteractiveDiffRequest(filePath, originalContent, newFileContents, tabName, false, false);
     }
 
     /**
@@ -65,7 +69,7 @@ public class InteractiveDiffRequest {
             @NotNull String newFileContents,
             @NotNull String tabName
     ) {
-        return new InteractiveDiffRequest(filePath, "", newFileContents, tabName, true);
+        return new InteractiveDiffRequest(filePath, "", newFileContents, tabName, true, false);
     }
 
     @NotNull
@@ -102,6 +106,37 @@ public class InteractiveDiffRequest {
         return isNewFile;
     }
 
+    /**
+     * Returns true if the diff view should be read-only (no user edits allowed).
+     * When read-only, the user can only accept or reject the proposed changes.
+     */
+    public boolean isReadOnly() {
+        return readOnly;
+    }
+
+    /**
+     * Creates a request for a modified file with read-only mode.
+     */
+    public static InteractiveDiffRequest forReadOnlyModifiedFile(
+            @NotNull String filePath,
+            @NotNull String originalContent,
+            @NotNull String newFileContents,
+            @NotNull String tabName
+    ) {
+        return new InteractiveDiffRequest(filePath, originalContent, newFileContents, tabName, false, true);
+    }
+
+    /**
+     * Creates a request for a new file with read-only mode.
+     */
+    public static InteractiveDiffRequest forReadOnlyNewFile(
+            @NotNull String filePath,
+            @NotNull String newFileContents,
+            @NotNull String tabName
+    ) {
+        return new InteractiveDiffRequest(filePath, "", newFileContents, tabName, true, true);
+    }
+
     @Override
     public String toString() {
         return "InteractiveDiffRequest{" +
@@ -110,6 +145,7 @@ public class InteractiveDiffRequest {
                 ", isNewFile=" + isNewFile +
                 ", originalContentLength=" + getOriginalContent().length() +
                 ", newContentLength=" + newFileContents.length() +
+                ", readOnly=" + readOnly +
                 '}';
     }
 }

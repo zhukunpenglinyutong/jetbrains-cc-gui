@@ -87,7 +87,8 @@
     "attachmentFile": "[Pièce jointe: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[Pièces jointes téléchargées]",
-    "streamingConnected": "Claude connecté, en train de comprendre votre question"
+    "streamingConnected": "Claude connecté, en train de comprendre votre question",
+    "showEarlierMessages": "Afficher {{count}} messages précédents"
   },
   "settings": {
     "title": "Paramètres",
@@ -170,6 +171,12 @@
         "custom": "Personnalisé",
         "reset": "Réinitialiser",
         "hint": "Personnaliser la couleur de fond de la zone de chat. Laisser vide pour suivre le thème par défaut."
+      },
+      "userMsgColor": {
+        "label": "Couleur des messages",
+        "custom": "Personnalisé",
+        "reset": "Réinitialiser",
+        "hint": "Personnaliser la couleur de fond de vos messages. Laisser vide pour suivre le thème par défaut."
       }
     },
     "providers": "Gestion des fournisseurs",

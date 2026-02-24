@@ -1,0 +1,118 @@
+/* ============================================================
+   Dropdown Menu
+   ============================================================ */
+.completion-dropdown {
+  position: fixed;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+  max-height: 300px;
+  overflow-y: auto;
+  min-width: 280px;
+}
+
+/* Scrollbar styles */
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.dropdown-item:hover,
+.dropdown-item.active {
+  background: var(--dropdown-hover);
+}
+
+.dropdown-item.selected {
+  background: var(--dropdown-selected);
+}
+
+/* Disabled state (directory) */
+.dropdown-item.disabled {
+  cursor: default;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.dropdown-item.disabled:hover,
+.dropdown-item.disabled.active {
+  background: transparent;
+}
+
+.dropdown-item-icon {
+  font-size: 16px;
+  color: var(--text-secondary);
+  width: 20px;
+  height: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Inline SVG icon styles */
+.dropdown-item-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.dropdown-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.dropdown-item-label {
+  color: var(--text-primary);
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dropdown-item-description {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  margin-left: 8px;
+  text-align: right;
+  flex: 1;
+  direction: rtl;
+  text-overflow: ellipsis;
+}
+
+/* Portal tooltip animation */
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.dropdown-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.dropdown-loading {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+

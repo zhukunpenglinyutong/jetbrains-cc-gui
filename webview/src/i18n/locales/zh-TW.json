@@ -87,7 +87,8 @@
     "attachmentFile": "[附件: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[已上傳附件]",
-    "streamingConnected": "Claude 已成功連接，正在理解問題"
+    "streamingConnected": "Claude 已成功連接，正在理解問題",
+    "showEarlierMessages": "顯示之前的 {{count}} 則訊息"
   },
   "settings": {
     "title": "設定",
@@ -170,6 +171,12 @@
         "custom": "自訂",
         "reset": "恢復預設",
         "hint": "自訂聊天區域的背景顏色，留空則跟隨主題預設顏色"
+      },
+      "userMsgColor": {
+        "label": "使用者訊息顏色",
+        "custom": "自訂",
+        "reset": "恢復預設",
+        "hint": "自訂您的訊息背景顏色，留空則跟隨主題預設顏色"
       }
     },
     "providers": "供應商管理",

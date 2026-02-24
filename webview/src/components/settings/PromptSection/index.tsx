@@ -9,6 +9,8 @@ interface PromptSectionProps {
   onAdd: () => void;
   onEdit: (prompt: PromptConfig) => void;
   onDelete: (prompt: PromptConfig) => void;
+  onExport: () => void;
+  onImport: () => void;
 }
 
 export default function PromptSection({
@@ -17,6 +19,8 @@ export default function PromptSection({
   onAdd,
   onEdit,
   onDelete,
+  onExport,
+  onImport,
 }: PromptSectionProps) {
   const { t } = useTranslation();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -55,10 +59,20 @@ export default function PromptSection({
         <div className={styles.titleWrapper}>
           <h3 className={styles.title}>{t('settings.prompt.title')}</h3>
         </div>
-        <button className={styles.addButton} onClick={onAdd}>
-          <span className="codicon codicon-add" />
-          {t('settings.prompt.create')}
-        </button>
+        <div className={styles.headerActions}>
+          <button className={styles.exportButton} onClick={onExport}>
+            <span className="codicon codicon-export" />
+            {t('settings.prompt.export')}
+          </button>
+          <button className={styles.importButton} onClick={onImport}>
+            <span className="codicon codicon-cloud-download" />
+            {t('settings.prompt.import')}
+          </button>
+          <button className={styles.addButton} onClick={onAdd}>
+            <span className="codicon codicon-add" />
+            {t('settings.prompt.create')}
+          </button>
+        </div>
       </div>
 
       <div className={styles.description}>

@@ -1,0 +1,85 @@
+/* ============================================================
+   Attachment List Area
+   ============================================================ */
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--input-border);
+}
+
+.attachment-list:empty {
+  display: none;
+}
+
+.attachment-item {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--attachment-bg);
+  border: 1px solid var(--attachment-border);
+  cursor: pointer;
+}
+
+.attachment-item:hover .attachment-remove {
+  opacity: 1;
+}
+
+.attachment-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+}
+
+.attachment-file-icon {
+  font-size: 20px;
+  color: var(--text-secondary);
+}
+
+.attachment-file-name {
+  font-size: 8px;
+  color: var(--text-muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  margin-top: 2px;
+}
+
+.attachment-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 10px;
+}
+
+.attachment-remove:hover {
+  background: var(--error-color);
+}
+

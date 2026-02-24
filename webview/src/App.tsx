@@ -96,6 +96,13 @@ const AddModelDialogWrapper = ({
   );
 };
 
+const getCustomModels = (key: string): { id: string }[] => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
 const App = () => {
   const { t } = useTranslation();
 
@@ -150,6 +157,7 @@ const App = () => {
     return null;
   });
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [customSessionTitle, setCustomSessionTitle] = useState<string | null>(null);
 
   // Scroll behavior management
   const {
@@ -157,6 +165,7 @@ const App = () => {
     messagesEndRef,
     inputAreaRef,
     isUserAtBottomRef,
+    userPausedRef,
   } = useScrollBehavior({
     currentView,
     messages,
@@ -166,6 +175,8 @@ const App = () => {
 
   // Message anchor node registry for anchor rail navigation
   const messageNodeMapRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Track how many messages are collapsed (hidden) by MessageList
+  const [anchorCollapsedCount, setAnchorCollapsedCount] = useState(0);
   const handleMessageNodeRef = useCallback((id: string, node: HTMLDivElement | null) => {
     if (node) {
       messageNodeMapRef.current.set(id, node);
@@ -265,6 +276,12 @@ const App = () => {
     currentSessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
 
+  // B-011: Ref to access customSessionTitle in window callbacks (avoids stale closure)
+  const customSessionTitleRef = useRef(customSessionTitle);
+  useEffect(() => {
+    customSessionTitleRef.current = customSessionTitle;
+  }, [customSessionTitle]);
+
   // Context state (active file and selection) - retained for ContextBar display
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
 
@@ -358,6 +375,14 @@ const App = () => {
       }
     };
 
+    // Register permission mode sync callback from Java
+    window.onModeReceived = (mode: string) => {
+      if (mode === 'default' || mode === 'plan' || mode === 'acceptEdits' || mode === 'bypassPermissions') {
+        setPermissionMode(mode);
+        setClaudePermissionMode(mode);
+      }
+    };
+
     // Initialize font scaling
     const savedLevel = localStorage.getItem('fontSizeLevel');
     const level = savedLevel ? parseInt(savedLevel, 10) : 2; // Default level 2 (90%)
@@ -376,9 +401,16 @@ const App = () => {
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
     // Initialize chat background color (validate hex format before applying)
+    const isValidHexColor = (c: string) => /^#[0-9a-fA-F]{6}$/.test(c);
     const savedChatBgColor = localStorage.getItem('chatBgColor');
-    if (savedChatBgColor && /^#[0-9a-fA-F]{6}$/.test(savedChatBgColor)) {
+    if (savedChatBgColor && isValidHexColor(savedChatBgColor)) {
       document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
+    }
+
+    // Initialize user message bubble color
+    const savedUserMsgColor = localStorage.getItem('userMsgColor');
+    if (savedUserMsgColor && isValidHexColor(savedUserMsgColor)) {
+      document.documentElement.style.setProperty('--color-message-user-bg', savedUserMsgColor);
     }
 
     // Apply the user's explicit theme choice (light/dark) first; Follow IDE mode is handled after ideTheme updates
@@ -449,14 +481,22 @@ const App = () => {
           }
         }
 
-        // Validate and restore Claude model
-        if (CLAUDE_MODELS.find(m => m.id === state.claudeModel)) {
+        // Validate and restore Claude model (check both built-in and custom models)
+        const savedClaudeCustomModels = getCustomModels('claude-custom-models');
+        if (
+          CLAUDE_MODELS.find(m => m.id === state.claudeModel) ||
+          savedClaudeCustomModels.find((m: { id: string }) => m.id === state.claudeModel)
+        ) {
           restoredClaudeModel = state.claudeModel;
           setSelectedClaudeModel(state.claudeModel);
         }
 
-        // Validate and restore Codex model
-        if (CODEX_MODELS.find(m => m.id === state.codexModel)) {
+        // Validate and restore Codex model (check both built-in and custom models)
+        const savedCodexCustomModels = getCustomModels('codex-custom-models');
+        if (
+          CODEX_MODELS.find(m => m.id === state.codexModel) ||
+          savedCodexCustomModels.find((m: { id: string }) => m.id === state.codexModel)
+        ) {
           restoredCodexModel = state.codexModel;
           setSelectedCodexModel(state.codexModel);
         }
@@ -569,6 +609,7 @@ const App = () => {
     setMessages,
     setCurrentView,
     setCurrentSessionId,
+    setCustomSessionTitle,
     setUsagePercentage,
     setUsageUsedTokens,
     addToast,
@@ -616,6 +657,7 @@ const App = () => {
     currentProviderRef,
     messagesContainerRef,
     isUserAtBottomRef,
+    userPausedRef,
     suppressNextStatusToastRef,
     streamingContentRef,
     isStreamingRef,
@@ -639,6 +681,9 @@ const App = () => {
     openPermissionDialog,
     openAskUserQuestionDialog,
     openPlanApprovalDialog,
+    customSessionTitleRef,
+    currentSessionIdRef,
+    updateHistoryTitle,
   });
 
   /**
@@ -824,7 +869,8 @@ const App = () => {
     setLoading(true);
     setLoadingStartTime(Date.now());
 
-    // Scroll to bottom
+    // Scroll to bottom — user sent a message, so clear any scroll-pause
+    userPausedRef.current = false;
     isUserAtBottomRef.current = true;
     requestAnimationFrame(() => {
       if (messagesContainerRef.current) {
@@ -1512,6 +1558,9 @@ const App = () => {
   const statusPanelExpanded = hasStatusPanelContent && !userCollapsedRef.current;
 
   const sessionTitle = useMemo(() => {
+    if (customSessionTitle) {
+      return customSessionTitle;
+    }
     if (messages.length === 0) {
       return t('common.newSession');
     }
@@ -1521,7 +1570,7 @@ const App = () => {
     }
     const text = getMessageText(firstUserMessage);
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;
-  }, [messages, t, getMessageText]);
+  }, [customSessionTitle, messages, t, getMessageText]);
 
   return (
     <>
@@ -1537,6 +1586,13 @@ const App = () => {
         onSettings={() => {
           setSettingsInitialTab(undefined);
           setCurrentView('settings');
+        }}
+        titleEditable
+        onTitleChange={(newTitle) => {
+          setCustomSessionTitle(newTitle);
+          if (currentSessionId) {
+            updateHistoryTitle(currentSessionId, newTitle);
+          }
         }}
       />
 
@@ -1557,6 +1613,7 @@ const App = () => {
           <div className="messages-shell">
             <MessageAnchorRail
               messages={mergedMessages}
+              collapsedCount={anchorCollapsedCount}
               containerRef={messagesContainerRef}
               messageNodeMap={messageNodeMapRef}
             />
@@ -1583,6 +1640,7 @@ const App = () => {
                 extractMarkdownContent={extractMarkdownContent}
                 messagesEndRef={messagesEndRef}
                 onMessageNodeRef={handleMessageNodeRef}
+                onCollapsedCountChange={setAnchorCollapsedCount}
               />
             </div>
           </div>
