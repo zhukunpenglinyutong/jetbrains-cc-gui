@@ -64,7 +64,7 @@ interface SettingsDialogsProps {
   promptDialog: PromptDialogState;
   deletePromptConfirm: DeletePromptConfirmState;
   onClosePromptDialog: () => void;
-  onSavePrompt: (data: any) => void;
+  onSavePrompt: (data: { name: string; content: string }) => void;
   onConfirmDeletePrompt: () => void;
   onCancelDeletePrompt: () => void;
 

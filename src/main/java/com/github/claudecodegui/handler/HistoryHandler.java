@@ -743,7 +743,7 @@ public class HistoryHandler extends BaseMessageHandler {
     private String enhanceHistoryWithTitles(String historyJson) {
         try {
             // Load title data
-            String titlesJson = nodeJsServiceCaller.callNodeJsTitlesService("loadTitles", "", "");
+            String titlesJson = nodeJsServiceCaller.callNodeJsTitlesService("loadTitles");
 
             // Parse history data and title data
             com.google.gson.JsonObject history = new com.google.gson.Gson().fromJson(historyJson, com.google.gson.JsonObject.class);

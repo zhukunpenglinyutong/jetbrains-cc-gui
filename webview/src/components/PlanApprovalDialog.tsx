@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
 import MarkdownBlock from './MarkdownBlock';
+import { useDialogResize } from '../hooks/useDialogResize';
 import './PlanApprovalDialog.css';
 
 // Timeout configuration (kept in sync with backend PermissionHandler.java)
@@ -56,11 +57,7 @@ const PlanApprovalDialog = ({
   const timerRef = useRef<number | null>(null);
 
   // Resize state: user can drag the top edge to make the dialog taller
-  const [dialogHeight, setDialogHeight] = useState<number | null>(null);
-  const isDraggingRef = useRef(false);
-  const dragStartYRef = useRef(0);
-  const dragStartHeightRef = useRef(0);
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const { dialogRef, dialogHeight, setDialogHeight, handleResizeStart } = useDialogResize({ minHeight: 200 });
 
   const handleApprove = useCallback(() => {
     if (!request) return;
@@ -71,44 +68,6 @@ const PlanApprovalDialog = ({
     if (!request) return;
     onReject(request.requestId);
   }, [request, onReject]);
-
-  // Resize handlers: drag the top edge to make the dialog taller/shorter
-  const handleResizeStart = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    isDraggingRef.current = true;
-    dragStartYRef.current = e.clientY;
-    dragStartHeightRef.current = dialogRef.current?.offsetHeight ?? 0;
-    document.body.style.cursor = 'ns-resize';
-    document.body.style.userSelect = 'none';
-  }, []);
-
-  useEffect(() => {
-    const handleResizeMove = (e: PointerEvent) => {
-      if (!isDraggingRef.current) return;
-      const delta = dragStartYRef.current - e.clientY;
-      const newHeight = Math.max(200, Math.min(window.innerHeight * 0.9, dragStartHeightRef.current + delta));
-      setDialogHeight(newHeight);
-    };
-    const handleResizeEnd = () => {
-      if (!isDraggingRef.current) return;
-      isDraggingRef.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    window.addEventListener('pointermove', handleResizeMove);
-    window.addEventListener('pointerup', handleResizeEnd);
-    return () => {
-      window.removeEventListener('pointermove', handleResizeMove);
-      window.removeEventListener('pointerup', handleResizeEnd);
-      // Ensure body styles are cleaned up if dialog closes mid-drag
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      }
-    };
-  }, []);
 
   // Reset state
   useEffect(() => {

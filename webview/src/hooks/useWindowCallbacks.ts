@@ -425,7 +425,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       // FIX: Ignore loading=false during streaming — onStreamEnd handles it uniformly.
       // This check must happen before dispatching events to keep backend and frontend state consistent.
       if (!isLoading && isStreamingRef.current) {
-        console.log('[Frontend] Ignoring showLoading(false) during streaming');
         return;
       }
 
@@ -491,7 +490,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Streaming Callbacks ==========
     window.onStreamStart = () => {
-      console.log('[Frontend] Stream started');
       streamingContentRef.current = '';
       isStreamingRef.current = true;
       useBackendStreamingRenderRef.current = false;
@@ -641,8 +639,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     };
 
     window.onStreamEnd = () => {
-      console.log('[Frontend] Stream ended');
-
       // Notify backend about stream completion for tab status indicator
       sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'completed' }));
 
@@ -768,7 +764,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     // ========== Session Callbacks ==========
     window.setSessionId = (sessionId: string) => {
       const oldId = currentSessionIdRef.current;
-      console.log('[Frontend] setSessionId:', sessionId);
       setCurrentSessionId(sessionId);
 
       // B-011 + B-014: Persist custom title under the real SDK session ID.
@@ -777,7 +772,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       //   2. oldId differs (B-011): provisional ID replaced by SDK — also clean up orphan
       const title = customSessionTitleRef.current;
       if (title) {
-        console.log('[Frontend] B-011: persisting custom title under', sessionId, '(oldId:', oldId, ')');
         updateHistoryTitle(sessionId, title);
         if (oldId && oldId !== sessionId) {
           sendBridgeEvent('delete_title', oldId);
@@ -820,7 +814,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     window.updateDependencyStatus = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
-        console.log('[Frontend] updateDependencyStatus:', data);
         setSdkStatus(data);
         setSdkStatusLoaded(true);
       } catch (error) {
@@ -885,7 +878,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     window.onModelChanged = (modelId) => {
       const provider = currentProviderRef.current;
-      console.log('[Frontend] onModelChanged:', { modelId, provider });
       if (provider === 'claude') {
         setSelectedClaudeModel(modelId);
       } else if (provider === 'codex') {
@@ -894,7 +886,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     };
 
     window.onModelConfirmed = (modelId, provider) => {
-      console.log('[Frontend] onModelConfirmed:', { modelId, provider });
       if (provider === 'claude') {
         setSelectedClaudeModel(modelId);
       } else if (provider === 'codex') {
@@ -1079,7 +1070,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Selection Context Callbacks ==========
     window.addSelectionInfo = (selectionInfo) => {
-      console.log('[Frontend] addSelectionInfo (auto) called:', selectionInfo);
       if (selectionInfo) {
         const match = selectionInfo.match(/^@([^#]+)(?:#L(\d+)(?:-(\d+))?)?$/);
         if (match) {
@@ -1092,26 +1082,22 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
             endLine,
             raw: selectionInfo
           });
-          console.log('[Frontend] Updated ContextBar (auto):', { file, startLine, endLine });
         }
       }
     };
 
     window.addCodeSnippet = (selectionInfo) => {
-      console.log('[Frontend] addCodeSnippet (manual) called:', selectionInfo);
       if (selectionInfo && window.insertCodeSnippetAtCursor) {
         window.insertCodeSnippetAtCursor(selectionInfo);
       }
     };
 
     window.clearSelectionInfo = () => {
-      console.log('[Frontend] clearSelectionInfo called');
       setContextInfo(null);
     };
 
     // ========== Agent Callbacks ==========
     window.onSelectedAgentReceived = (json) => {
-      console.log('[Frontend] onSelectedAgentReceived:', json);
       try {
         if (!json || json === 'null' || json === '{}') {
           setSelectedAgent(null);
@@ -1139,7 +1125,6 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     };
 
     window.onSelectedAgentChanged = (json) => {
-      console.log('[Frontend] onSelectedAgentChanged:', json);
       try {
         if (!json || json === 'null' || json === '{}') {
           setSelectedAgent(null);

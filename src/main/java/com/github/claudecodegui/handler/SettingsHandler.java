@@ -44,6 +44,9 @@ public class SettingsHandler extends BaseMessageHandler {
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
     private static final String SEND_SHORTCUT_PROPERTY_KEY = "claude.code.send.shortcut";
 
+    private final CodemossSettingsService settingsService = new CodemossSettingsService();
+    private final Gson gson = new Gson();
+
     private static final String[] SUPPORTED_TYPES = {
         "get_mode",
         "set_mode",
@@ -1517,7 +1520,6 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleGetSoundNotificationConfig() {
         try {
-            CodemossSettingsService settingsService = new CodemossSettingsService();
             boolean enabled = settingsService.getSoundNotificationEnabled();
             String selectedSound = settingsService.getSelectedSound();
             String customPath = settingsService.getCustomSoundPath();
@@ -1527,7 +1529,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 response.addProperty("enabled", enabled);
                 response.addProperty("selectedSound", selectedSound);
                 response.addProperty("customSoundPath", customPath != null ? customPath : "");
-                callJavaScript("window.updateSoundNotificationConfig", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateSoundNotificationConfig", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get sound notification config: " + e.getMessage(), e);
@@ -1536,7 +1538,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 response.addProperty("enabled", false);
                 response.addProperty("selectedSound", "default");
                 response.addProperty("customSoundPath", "");
-                callJavaScript("window.updateSoundNotificationConfig", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateSoundNotificationConfig", escapeJs(gson.toJson(response)));
             });
         }
     }
@@ -1546,11 +1548,9 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleSetSoundNotificationEnabled(String content) {
         try {
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             boolean enabled = json != null && json.has("enabled") && json.get("enabled").getAsBoolean();
 
-            CodemossSettingsService settingsService = new CodemossSettingsService();
             settingsService.setSoundNotificationEnabled(enabled);
 
             // Read config values before entering invokeLater to avoid disk IO on EDT
@@ -1588,7 +1588,6 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleSetCustomSoundPath(String content) {
         try {
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String path = json != null && json.has("path") && !json.get("path").isJsonNull()
                 ? json.get("path").getAsString() : null;
@@ -1607,7 +1606,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
             }
 
-            CodemossSettingsService settingsService = new CodemossSettingsService();
             settingsService.setCustomSoundPath(path);
 
             // Read config values before entering invokeLater to avoid disk IO on EDT
@@ -1646,12 +1644,10 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleSetSelectedSound(String content) {
         try {
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String soundId = json != null && json.has("soundId") && !json.get("soundId").isJsonNull()
                 ? json.get("soundId").getAsString() : "default";
 
-            CodemossSettingsService settingsService = new CodemossSettingsService();
             settingsService.setSelectedSound(soundId);
 
             boolean enabled;
@@ -1686,7 +1682,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String soundId = "default";
             String path = null;
             if (content != null && !content.isEmpty()) {
-                Gson gson = new Gson();
                 JsonObject json = gson.fromJson(content, JsonObject.class);
                 if (json != null && json.has("soundId") && !json.get("soundId").isJsonNull()) {
                     soundId = json.get("soundId").getAsString();
@@ -1735,7 +1730,6 @@ public class SettingsHandler extends BaseMessageHandler {
                             // Auto-save the selected path and set selectedSound to "custom"
                             boolean enabled = false;
                             try {
-                                CodemossSettingsService settingsService = new CodemossSettingsService();
                                 enabled = settingsService.getSoundNotificationEnabled();
                                 settingsService.setCustomSoundPath(path);
                                 settingsService.setSelectedSound("custom");
@@ -1748,7 +1742,7 @@ public class SettingsHandler extends BaseMessageHandler {
                             response.addProperty("selectedSound", "custom");
                             response.addProperty("customSoundPath", path);
                             callJavaScript("window.updateSoundNotificationConfig",
-                                escapeJs(new Gson().toJson(response)));
+                                escapeJs(gson.toJson(response)));
                             callJavaScript("window.showSuccessI18n",
                                 escapeJs("settings.basic.soundNotification.customSoundSaved"));
                         }

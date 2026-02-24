@@ -289,16 +289,14 @@ public class PromptManager {
     /**
      * Generate a unique ID based on a base ID by appending a suffix.
      * @param baseId The base ID to use
+     * @param existingItems The existing prompts JsonObject to check against
      * @return A unique ID that doesn't conflict with existing prompts
      */
-    public String generateUniqueId(String baseId) throws IOException {
-        JsonObject config = readPromptConfig();
-        JsonObject prompts = config.getAsJsonObject("prompts");
-
+    public String generateUniqueId(String baseId, JsonObject existingItems) {
         String uniqueId = baseId;
         int suffix = 1;
 
-        while (prompts.has(uniqueId)) {
+        while (existingItems.has(uniqueId)) {
             uniqueId = baseId + "-" + suffix;
             suffix++;
         }
@@ -350,14 +348,15 @@ public class PromptManager {
                             break;
 
                         case DUPLICATE:
-                            String newId = generateUniqueId(id);
+                            String newId = generateUniqueId(id, prompts);
                             LOG.debug("[PromptManager] Creating duplicate with new ID: " + newId);
-                            prompt.addProperty("id", newId);
-                            if (!prompt.has("createdAt")) {
-                                prompt.addProperty("createdAt", System.currentTimeMillis());
+                            JsonObject duplicatedPrompt = prompt.deepCopy();
+                            duplicatedPrompt.addProperty("id", newId);
+                            if (!duplicatedPrompt.has("createdAt")) {
+                                duplicatedPrompt.addProperty("createdAt", System.currentTimeMillis());
                             }
-                            prompt.addProperty("updatedAt", System.currentTimeMillis());
-                            prompts.add(newId, prompt);
+                            duplicatedPrompt.addProperty("updatedAt", System.currentTimeMillis());
+                            prompts.add(newId, duplicatedPrompt);
                             imported++;
                             break;
                     }

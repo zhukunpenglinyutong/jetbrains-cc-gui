@@ -285,16 +285,14 @@ public class AgentManager {
     /**
      * Generate a unique ID based on a base ID by appending a suffix.
      * @param baseId The base ID to use
+     * @param existingItems The existing agents JsonObject to check against
      * @return A unique ID that doesn't conflict with existing agents
      */
-    public String generateUniqueId(String baseId) throws IOException {
-        JsonObject config = readAgentConfig();
-        JsonObject agents = config.getAsJsonObject("agents");
-
+    public String generateUniqueId(String baseId, JsonObject existingItems) {
         String uniqueId = baseId;
         int suffix = 1;
 
-        while (agents.has(uniqueId)) {
+        while (existingItems.has(uniqueId)) {
             uniqueId = baseId + "-" + suffix;
             suffix++;
         }
@@ -345,13 +343,14 @@ public class AgentManager {
                             break;
 
                         case DUPLICATE:
-                            String newId = generateUniqueId(id);
+                            String newId = generateUniqueId(id, agents);
                             LOG.info("[AgentManager] Creating duplicate with new ID: " + newId);
-                            agent.addProperty("id", newId);
-                            if (!agent.has("createdAt")) {
-                                agent.addProperty("createdAt", System.currentTimeMillis());
+                            JsonObject duplicatedAgent = agent.deepCopy();
+                            duplicatedAgent.addProperty("id", newId);
+                            if (!duplicatedAgent.has("createdAt")) {
+                                duplicatedAgent.addProperty("createdAt", System.currentTimeMillis());
                             }
-                            agents.add(newId, agent);
+                            agents.add(newId, duplicatedAgent);
                             imported++;
                             break;
                     }

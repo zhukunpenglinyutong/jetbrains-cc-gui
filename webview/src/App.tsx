@@ -377,9 +377,9 @@ const App = () => {
 
     // Register permission mode sync callback from Java
     window.onModeReceived = (mode: string) => {
-      if (mode) {
-        setPermissionMode(mode as PermissionMode);
-        setClaudePermissionMode(mode as PermissionMode);
+      if (mode === 'default' || mode === 'plan' || mode === 'acceptEdits' || mode === 'bypassPermissions') {
+        setPermissionMode(mode);
+        setClaudePermissionMode(mode);
       }
     };
 
@@ -401,14 +401,15 @@ const App = () => {
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
     // Initialize chat background color (validate hex format before applying)
+    const isValidHexColor = (c: string) => /^#[0-9a-fA-F]{6}$/.test(c);
     const savedChatBgColor = localStorage.getItem('chatBgColor');
-    if (savedChatBgColor && /^#[0-9a-fA-F]{6}$/.test(savedChatBgColor)) {
+    if (savedChatBgColor && isValidHexColor(savedChatBgColor)) {
       document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
     }
 
     // Initialize user message bubble color
     const savedUserMsgColor = localStorage.getItem('userMsgColor');
-    if (savedUserMsgColor && /^#[0-9a-fA-F]{6}$/.test(savedUserMsgColor)) {
+    if (savedUserMsgColor && isValidHexColor(savedUserMsgColor)) {
       document.documentElement.style.setProperty('--color-message-user-bg', savedUserMsgColor);
     }
 

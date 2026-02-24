@@ -223,11 +223,20 @@ export async function requestPlanApproval(input) {
     const requestFile = join(PERMISSION_DIR, `plan-approval-${SESSION_ID}-${requestId}.json`);
     const responseFile = join(PERMISSION_DIR, `plan-approval-response-${SESSION_ID}-${requestId}.json`);
 
+    // Validate and sanitize plan field
+    const plan = typeof input?.plan === 'string' ? input.plan.substring(0, 100000) : '';
+
+    // Validate allowedPrompts: must be an array of { tool: string, prompt: string }
+    const rawPrompts = Array.isArray(input?.allowedPrompts) ? input.allowedPrompts : [];
+    const allowedPrompts = rawPrompts
+      .filter(p => p && typeof p.tool === 'string' && typeof p.prompt === 'string')
+      .map(p => ({ tool: String(p.tool), prompt: String(p.prompt) }));
+
     const requestData = {
       requestId,
       toolName: 'ExitPlanMode',
-      plan: input?.plan || '',
-      allowedPrompts: input?.allowedPrompts || [],
+      plan,
+      allowedPrompts,
       timestamp: new Date().toISOString(),
       cwd: process.cwd()  // Add working directory for project matching in multi-IDEA scenarios
     };

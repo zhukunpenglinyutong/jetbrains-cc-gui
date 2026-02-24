@@ -144,9 +144,28 @@ public class SoundNotificationService {
     }
 
     /**
+     * Check if the file path is safe (no path traversal, under user home).
+     */
+    private boolean isPathSafe(String filePath) {
+        try {
+            File file = new File(filePath);
+            String canonical = file.getCanonicalPath();
+            String userHome = System.getProperty("user.home");
+            return !filePath.contains("..") && (canonical.startsWith(userHome) || canonical.equals(file.getAbsolutePath()));
+        } catch (java.io.IOException e) {
+            return false;
+        }
+    }
+
+    /**
      * 从文件播放音频
      */
     private void playFromFile(File file) throws Exception {
+        if (!isPathSafe(file.getPath())) {
+            LOG.warn("[SoundNotification] Blocked unsafe file path: " + file.getPath());
+            return;
+        }
+
         if (!file.exists() || !file.canRead()) {
             LOG.warn("[SoundNotification] Sound file not found or not readable: " + file.getAbsolutePath());
             return;
@@ -257,6 +276,10 @@ public class SoundNotificationService {
     public ValidationResult validateSoundFile(String filePath) {
         if (filePath == null || filePath.isEmpty()) {
             return new ValidationResult(true, null); // 空路径表示使用默认声音
+        }
+
+        if (!isPathSafe(filePath)) {
+            return new ValidationResult(false, "Invalid file path");
         }
 
         File file = new File(filePath);

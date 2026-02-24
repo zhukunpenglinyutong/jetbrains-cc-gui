@@ -1,5 +1,5 @@
 // hooks/useSettingsWindowCallbacks.ts
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig, CodexProviderConfig } from '../../../types/provider';
 import type { AgentConfig } from '../../../types/agent';
@@ -77,15 +77,21 @@ export interface SettingsWindowCallbacksDeps {
 export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
   const { t } = useTranslation();
 
+  // Use ref to avoid stale closures - callbacks always read latest deps
+  const depsRef = useRef(deps);
+  depsRef.current = deps;
+
   useEffect(() => {
+    const d = () => depsRef.current;
+
     // Provider callbacks
     window.updateProviders = (jsonStr: string) => {
       try {
         const providersList: ProviderConfig[] = JSON.parse(jsonStr);
-        deps.updateProviders(providersList);
+        d().updateProviders(providersList);
       } catch (error) {
         console.error('[SettingsView] Failed to parse providers:', error);
-        deps.setLoading(false);
+        d().setLoading(false);
       }
     };
 
@@ -93,7 +99,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       try {
         const activeProvider: ProviderConfig = JSON.parse(jsonStr);
         if (activeProvider) {
-          deps.updateActiveProvider(activeProvider);
+          d().updateActiveProvider(activeProvider);
         }
       } catch (error) {
         console.error('[SettingsView] Failed to parse active provider:', error);
@@ -104,72 +110,67 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updateCurrentClaudeConfig = (jsonStr: string) => {
       try {
         const config: ClaudeConfig = JSON.parse(jsonStr);
-        deps.setClaudeConfig(config);
-        deps.setClaudeConfigLoading(false);
+        d().setClaudeConfig(config);
+        d().setClaudeConfigLoading(false);
       } catch (error) {
         console.error('[SettingsView] Failed to parse claude config:', error);
-        deps.setClaudeConfigLoading(false);
+        d().setClaudeConfigLoading(false);
       }
     };
 
     window.showError = (message: string) => {
-      console.log('[SettingsView] window.showError called:', message);
-      deps.showAlert('error', t('toast.operationFailed'), message);
-      deps.setLoading(false);
-      deps.setSavingNodePath(false);
-      deps.setSavingWorkingDirectory(false);
-      deps.setSavingCommitPrompt(false);
+      d().showAlert('error', t('toast.operationFailed'), message);
+      d().setLoading(false);
+      d().setSavingNodePath(false);
+      d().setSavingWorkingDirectory(false);
+      d().setSavingCommitPrompt(false);
     };
 
     window.showSwitchSuccess = (message: string) => {
-      console.log('[SettingsView] window.showSwitchSuccess called:', message);
-      deps.showAlert('success', t('toast.switchSuccess'), message);
+      d().showAlert('success', t('toast.switchSuccess'), message);
     };
 
     window.updateNodePath = (jsonStr: string) => {
-      console.log('[SettingsView] window.updateNodePath called:', jsonStr);
       try {
         const data = JSON.parse(jsonStr);
-        deps.setNodePath(data.path || '');
-        deps.setNodeVersion(data.version || null);
+        d().setNodePath(data.path || '');
+        d().setNodeVersion(data.version || null);
         if (data.minVersion) {
-          deps.setMinNodeVersion(data.minVersion);
+          d().setMinNodeVersion(data.minVersion);
         }
       } catch (e) {
         console.warn('[SettingsView] Failed to parse updateNodePath JSON, fallback to legacy format:', e);
-        deps.setNodePath(jsonStr || '');
+        d().setNodePath(jsonStr || '');
       }
-      deps.setSavingNodePath(false);
+      d().setSavingNodePath(false);
     };
 
     window.updateWorkingDirectory = (jsonStr: string) => {
-      console.log('[SettingsView] window.updateWorkingDirectory called:', jsonStr);
       try {
         const data = JSON.parse(jsonStr);
-        deps.setWorkingDirectory(data.customWorkingDir || '');
-        deps.setSavingWorkingDirectory(false);
+        d().setWorkingDirectory(data.customWorkingDir || '');
+        d().setSavingWorkingDirectory(false);
       } catch (error) {
         console.error('[SettingsView] Failed to parse working directory:', error);
-        deps.setSavingWorkingDirectory(false);
+        d().setSavingWorkingDirectory(false);
       }
     };
 
     window.showSuccess = (message: string) => {
-      console.log('[SettingsView] window.showSuccess called:', message);
-      deps.showAlert('success', t('toast.operationSuccess'), message);
-      deps.setSavingNodePath(false);
-      deps.setSavingWorkingDirectory(false);
+      d().showAlert('success', t('toast.operationSuccess'), message);
+      d().setSavingNodePath(false);
+      d().setSavingWorkingDirectory(false);
     };
 
     window.showSuccessI18n = (i18nKey: string) => {
       const message = t(i18nKey);
-      deps.addToast(message, 'success');
+      d().addToast(message, 'success');
     };
 
     window.onEditorFontConfigReceived = (jsonStr: string) => {
       try {
         const config = JSON.parse(jsonStr);
-        deps.setEditorFontConfig(config);
+        d().setEditorFontConfig(config);
       } catch (error) {
         console.error('[SettingsView] Failed to parse editor font config:', error);
       }
@@ -181,8 +182,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       try {
         const themeData = JSON.parse(jsonStr);
         const theme = themeData.isDark ? 'dark' : 'light';
-        deps.setIdeTheme(theme);
-        console.log('[SettingsView] IDE theme received:', themeData, 'resolved to:', theme);
+        d().setIdeTheme(theme);
         previousOnIdeThemeReceived?.(jsonStr);
       } catch (error) {
         console.error('[SettingsView] Failed to parse IDE theme:', error);
@@ -191,11 +191,11 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
 
     // Streaming configuration callback
     const previousUpdateStreamingEnabled = window.updateStreamingEnabled;
-    if (!deps.onStreamingEnabledChangeProp) {
+    if (!d().onStreamingEnabledChangeProp) {
       window.updateStreamingEnabled = (jsonStr: string) => {
         try {
           const data = JSON.parse(jsonStr);
-          deps.setLocalStreamingEnabled(data.streamingEnabled ?? true);
+          d().setLocalStreamingEnabled(data.streamingEnabled ?? true);
         } catch (error) {
           console.error('[SettingsView] Failed to parse streaming config:', error);
         }
@@ -204,11 +204,11 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
 
     // Send shortcut configuration callback
     const previousUpdateSendShortcut = window.updateSendShortcut;
-    if (!deps.onSendShortcutChangeProp) {
+    if (!d().onSendShortcutChangeProp) {
       window.updateSendShortcut = (jsonStr: string) => {
         try {
           const data = JSON.parse(jsonStr);
-          deps.setLocalSendShortcut(data.sendShortcut ?? 'enter');
+          d().setLocalSendShortcut(data.sendShortcut ?? 'enter');
         } catch (error) {
           console.error('[SettingsView] Failed to parse send shortcut config:', error);
         }
@@ -219,15 +219,15 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updateCommitPrompt = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
-        deps.setCommitPrompt(data.commitPrompt || '');
-        deps.setSavingCommitPrompt(false);
+        d().setCommitPrompt(data.commitPrompt || '');
+        d().setSavingCommitPrompt(false);
         if (data.saved) {
-          deps.addToast(t('toast.saveSuccess'), 'success');
+          d().addToast(t('toast.saveSuccess'), 'success');
         }
       } catch (error) {
         console.error('[SettingsView] Failed to parse commit prompt:', error);
-        deps.setSavingCommitPrompt(false);
-        deps.addToast(t('toast.saveFailed'), 'error');
+        d().setSavingCommitPrompt(false);
+        d().addToast(t('toast.saveFailed'), 'error');
       }
     };
 
@@ -235,14 +235,14 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updateSoundNotificationConfig = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
-        if (data.enabled !== undefined && deps.setSoundNotificationEnabled) {
-          deps.setSoundNotificationEnabled(data.enabled);
+        if (data.enabled !== undefined) {
+          d().setSoundNotificationEnabled?.(data.enabled);
         }
-        if (data.selectedSound !== undefined && deps.setSelectedSound) {
-          deps.setSelectedSound(data.selectedSound);
+        if (data.selectedSound !== undefined) {
+          d().setSelectedSound?.(data.selectedSound);
         }
-        if (data.customSoundPath !== undefined && deps.setCustomSoundPath) {
-          deps.setCustomSoundPath(data.customSoundPath);
+        if (data.customSoundPath !== undefined) {
+          d().setCustomSoundPath?.(data.customSoundPath);
         }
       } catch (error) {
         console.error('[SettingsView] Failed to parse sound notification config:', error);
@@ -254,7 +254,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updateAgents = (jsonStr: string) => {
       try {
         const agentsList: AgentConfig[] = JSON.parse(jsonStr);
-        deps.updateAgents(agentsList);
+        d().updateAgents(agentsList);
       } catch (error) {
         console.error('[SettingsView] Failed to parse agents:', error);
       }
@@ -264,7 +264,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.agentOperationResult = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
-        deps.handleAgentOperationResult(result);
+        d().handleAgentOperationResult(result);
       } catch (error) {
         console.error('[SettingsView] Failed to parse agent operation result:', error);
       }
@@ -273,7 +273,11 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.agentImportPreviewResult = (jsonStr: string) => {
       try {
         const previewData = JSON.parse(jsonStr);
-        deps.handleAgentImportPreviewResult(previewData);
+        if (!Array.isArray(previewData?.items) || typeof previewData?.summary !== 'object') {
+          console.error('[SettingsView] Invalid agent import preview data structure');
+          return;
+        }
+        d().handleAgentImportPreviewResult(previewData);
       } catch (error) {
         console.error('[SettingsView] Failed to parse agent import preview result:', error);
       }
@@ -282,7 +286,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.agentImportResult = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
-        deps.handleAgentImportResult(result);
+        d().handleAgentImportResult(result);
       } catch (error) {
         console.error('[SettingsView] Failed to parse agent import result:', error);
       }
@@ -293,7 +297,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updatePrompts = (jsonStr: string) => {
       try {
         const promptsList: PromptConfig[] = JSON.parse(jsonStr);
-        deps.updatePrompts(promptsList);
+        d().updatePrompts(promptsList);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompts:', error);
       }
@@ -303,7 +307,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.promptOperationResult = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
-        deps.handlePromptOperationResult(result);
+        d().handlePromptOperationResult(result);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt operation result:', error);
       }
@@ -312,7 +316,11 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.promptImportPreviewResult = (jsonStr: string) => {
       try {
         const previewData = JSON.parse(jsonStr);
-        deps.handlePromptImportPreviewResult(previewData);
+        if (!Array.isArray(previewData?.items) || typeof previewData?.summary !== 'object') {
+          console.error('[SettingsView] Invalid prompt import preview data structure');
+          return;
+        }
+        d().handlePromptImportPreviewResult(previewData);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt import preview result:', error);
       }
@@ -321,7 +329,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.promptImportResult = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
-        deps.handlePromptImportResult(result);
+        d().handlePromptImportResult(result);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt import result:', error);
       }
@@ -331,10 +339,10 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updateCodexProviders = (jsonStr: string) => {
       try {
         const providersList: CodexProviderConfig[] = JSON.parse(jsonStr);
-        deps.updateCodexProviders(providersList);
+        d().updateCodexProviders(providersList);
       } catch (error) {
         console.error('[SettingsView] Failed to parse Codex providers:', error);
-        deps.setCodexLoading(false);
+        d().setCodexLoading(false);
       }
     };
 
@@ -342,7 +350,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       try {
         const activeProvider: CodexProviderConfig = JSON.parse(jsonStr);
         if (activeProvider) {
-          deps.updateActiveCodexProvider(activeProvider);
+          d().updateActiveCodexProvider(activeProvider);
         }
       } catch (error) {
         console.error('[SettingsView] Failed to parse active Codex provider:', error);
@@ -352,19 +360,19 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updateCurrentCodexConfig = (jsonStr: string) => {
       try {
         const config = JSON.parse(jsonStr);
-        deps.updateCurrentCodexConfig(config);
+        d().updateCurrentCodexConfig(config);
       } catch (error) {
         console.error('[SettingsView] Failed to parse Codex config:', error);
-        deps.setCodexConfigLoading(false);
+        d().setCodexConfigLoading(false);
       }
     };
 
     // Initial data loading
-    deps.loadProviders();
-    deps.loadCodexProviders();
-    deps.loadAgents();
-    deps.loadPrompts();
-    deps.setClaudeConfigLoading(true);
+    d().loadProviders();
+    d().loadCodexProviders();
+    d().loadAgents();
+    d().loadPrompts();
+    d().setClaudeConfigLoading(true);
     sendToJava('get_current_claude_config:');
     sendToJava('get_node_path:');
     sendToJava('get_working_directory:');
@@ -374,8 +382,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_sound_notification_config:');
 
     return () => {
-      deps.cleanupAgentsTimeout();
-      deps.cleanupPromptsTimeout();
+      d().cleanupAgentsTimeout();
+      d().cleanupPromptsTimeout();
 
       window.updateProviders = undefined;
       window.updateActiveProvider = undefined;
@@ -388,10 +396,10 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.showSuccessI18n = undefined;
       window.onEditorFontConfigReceived = undefined;
       window.onIdeThemeReceived = previousOnIdeThemeReceived;
-      if (!deps.onStreamingEnabledChangeProp) {
+      if (!d().onStreamingEnabledChangeProp) {
         window.updateStreamingEnabled = previousUpdateStreamingEnabled;
       }
-      if (!deps.onSendShortcutChangeProp) {
+      if (!d().onSendShortcutChangeProp) {
         window.updateSendShortcut = previousUpdateSendShortcut;
       }
       window.updateCommitPrompt = undefined;
@@ -408,5 +416,6 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateActiveCodexProvider = undefined;
       window.updateCurrentCodexConfig = undefined;
     };
-  }, [t, deps.onStreamingEnabledChangeProp, deps.onSendShortcutChangeProp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t]);
 }

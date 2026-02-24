@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownBlock from './MarkdownBlock';
+import { useDialogResize } from '../hooks/useDialogResize';
 
 export interface PermissionRequest {
   channelId: string;
@@ -29,48 +30,7 @@ const PermissionDialog = ({
   const { t } = useTranslation();
 
   // Resize state
-  const [dialogHeight, setDialogHeight] = useState<number | null>(null);
-  const isDraggingRef = useRef(false);
-  const dragStartYRef = useRef(0);
-  const dragStartHeightRef = useRef(0);
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  const handleResizeStart = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    isDraggingRef.current = true;
-    dragStartYRef.current = e.clientY;
-    dragStartHeightRef.current = dialogRef.current?.offsetHeight ?? 0;
-    document.body.style.cursor = 'ns-resize';
-    document.body.style.userSelect = 'none';
-  }, []);
-
-  useEffect(() => {
-    const handleResizeMove = (e: PointerEvent) => {
-      if (!isDraggingRef.current) return;
-      const delta = dragStartYRef.current - e.clientY;
-      const newHeight = Math.max(150, Math.min(window.innerHeight * 0.9, dragStartHeightRef.current + delta));
-      setDialogHeight(newHeight);
-    };
-    const handleResizeEnd = () => {
-      if (!isDraggingRef.current) return;
-      isDraggingRef.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    window.addEventListener('pointermove', handleResizeMove);
-    window.addEventListener('pointerup', handleResizeEnd);
-    return () => {
-      window.removeEventListener('pointermove', handleResizeMove);
-      window.removeEventListener('pointerup', handleResizeEnd);
-      // Ensure body styles are cleaned up if dialog closes mid-drag
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      }
-    };
-  }, []);
+  const { dialogRef, dialogHeight, setDialogHeight, handleResizeStart } = useDialogResize({ minHeight: 150 });
 
   const handleApprove = () => {
     if (!request) return;

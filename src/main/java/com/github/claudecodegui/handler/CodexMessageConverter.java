@@ -1,5 +1,10 @@
 package com.github.claudecodegui.handler;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 /**
  * Codex message format conversion utilities.
  * <p>
@@ -19,8 +24,8 @@ public class CodexMessageConverter {
      * Codex: [{type: "input_text", text: "..."}, {type: "text", text: "..."}]
      * Claude: [{type: "text", text: "..."}]
      */
-    public static com.google.gson.JsonArray convertToClaudeContentBlocks(com.google.gson.JsonElement contentElem) {
-        com.google.gson.JsonArray claudeBlocks = new com.google.gson.JsonArray();
+    public static JsonArray convertToClaudeContentBlocks(JsonElement contentElem) {
+        JsonArray claudeBlocks = new JsonArray();
 
         if (contentElem == null) {
             return claudeBlocks;
@@ -28,7 +33,7 @@ public class CodexMessageConverter {
 
         // Handle string type - convert to a single text block
         if (contentElem.isJsonPrimitive()) {
-            com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
+            JsonObject textBlock = new JsonObject();
             textBlock.addProperty("type", "text");
             textBlock.addProperty("text", contentElem.getAsString());
             claudeBlocks.add(textBlock);
@@ -37,15 +42,15 @@ public class CodexMessageConverter {
 
         // Handle array type
         if (contentElem.isJsonArray()) {
-            com.google.gson.JsonArray contentArray = contentElem.getAsJsonArray();
+            JsonArray contentArray = contentElem.getAsJsonArray();
 
-            for (com.google.gson.JsonElement item : contentArray) {
+            for (JsonElement item : contentArray) {
                 if (item.isJsonObject()) {
-                    com.google.gson.JsonObject itemObj = item.getAsJsonObject();
+                    JsonObject itemObj = item.getAsJsonObject();
                     String type = itemObj.has("type") ? itemObj.get("type").getAsString() : null;
 
                     if (type != null) {
-                        com.google.gson.JsonObject claudeBlock = new com.google.gson.JsonObject();
+                        JsonObject claudeBlock = new JsonObject();
 
                         // Convert Codex "input_text" and "output_text" to Claude "text"
                         if ("input_text".equals(type) || "output_text".equals(type) || "text".equals(type)) {
@@ -132,7 +137,7 @@ public class CodexMessageConverter {
      * Extract text content from a Codex content field.
      * Codex content can be in string, object, or array format.
      */
-    public static String extractContentAsString(com.google.gson.JsonElement contentElem) {
+    public static String extractContentAsString(JsonElement contentElem) {
         if (contentElem == null) {
             return null;
         }
@@ -144,12 +149,12 @@ public class CodexMessageConverter {
 
         // Handle array type
         if (contentElem.isJsonArray()) {
-            com.google.gson.JsonArray contentArray = contentElem.getAsJsonArray();
+            JsonArray contentArray = contentElem.getAsJsonArray();
             StringBuilder sb = new StringBuilder();
 
-            for (com.google.gson.JsonElement item : contentArray) {
+            for (JsonElement item : contentArray) {
                 if (item.isJsonObject()) {
-                    com.google.gson.JsonObject itemObj = item.getAsJsonObject();
+                    JsonObject itemObj = item.getAsJsonObject();
 
                     // Extract text type
                     if (itemObj.has("type") && "text".equals(itemObj.get("type").getAsString())) {
@@ -186,7 +191,7 @@ public class CodexMessageConverter {
 
         // Handle object type
         if (contentElem.isJsonObject()) {
-            com.google.gson.JsonObject contentObj = contentElem.getAsJsonObject();
+            JsonObject contentObj = contentElem.getAsJsonObject();
             if (contentObj.has("text")) {
                 return contentObj.get("text").getAsString();
             }
@@ -198,7 +203,7 @@ public class CodexMessageConverter {
     /**
      * Convert Codex regular message to frontend format.
      */
-    public static com.google.gson.JsonObject convertCodexMessageToFrontend(com.google.gson.JsonObject payload, String timestamp) {
+    public static JsonObject convertCodexMessageToFrontend(JsonObject payload, String timestamp) {
         String contentStr = extractContentAsString(payload.get("content"));
 
         // Filter out system messages
@@ -206,7 +211,7 @@ public class CodexMessageConverter {
             return null;
         }
 
-        com.google.gson.JsonObject frontendMsg = new com.google.gson.JsonObject();
+        JsonObject frontendMsg = new JsonObject();
         String role = payload.has("role") ? payload.get("role").getAsString() : "user";
         frontendMsg.addProperty("type", role);
 
@@ -215,8 +220,8 @@ public class CodexMessageConverter {
                 frontendMsg.addProperty("content", contentStr);
             }
 
-            com.google.gson.JsonArray claudeContentBlocks = convertToClaudeContentBlocks(payload.get("content"));
-            com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
+            JsonArray claudeContentBlocks = convertToClaudeContentBlocks(payload.get("content"));
+            JsonObject rawObj = new JsonObject();
             rawObj.add("content", claudeContentBlocks);
             rawObj.addProperty("role", role);
             frontendMsg.add("raw", rawObj);
@@ -244,19 +249,19 @@ public class CodexMessageConverter {
     /**
      * Convert Codex function_call to Claude tool_use format.
      */
-    public static com.google.gson.JsonObject convertFunctionCallToToolUse(com.google.gson.JsonObject payload, String timestamp) {
-        com.google.gson.JsonObject frontendMsg = new com.google.gson.JsonObject();
+    public static JsonObject convertFunctionCallToToolUse(JsonObject payload, String timestamp) {
+        JsonObject frontendMsg = new JsonObject();
         frontendMsg.addProperty("type", "assistant");
 
         String toolName = payload.has("name") ? payload.get("name").getAsString() : "unknown";
-        com.google.gson.JsonElement toolInput = parseToolArguments(payload);
+        JsonElement toolInput = parseToolArguments(payload);
 
         // Smart tool name conversion
         toolName = convertToolName(toolName, toolInput);
         toolInput = convertToolInput(toolName, toolInput);
 
         // Build tool_use format
-        com.google.gson.JsonObject toolUse = new com.google.gson.JsonObject();
+        JsonObject toolUse = new JsonObject();
         toolUse.addProperty("type", "tool_use");
         toolUse.addProperty("id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
         toolUse.addProperty("name", toolName);
@@ -265,12 +270,12 @@ public class CodexMessageConverter {
             toolUse.add("input", toolInput);
         }
 
-        com.google.gson.JsonArray content = new com.google.gson.JsonArray();
+        JsonArray content = new JsonArray();
         content.add(toolUse);
 
         frontendMsg.addProperty("content", "Tool: " + toolName);
 
-        com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
+        JsonObject rawObj = new JsonObject();
         rawObj.add("content", content);
         rawObj.addProperty("role", "assistant");
         frontendMsg.add("raw", rawObj);
@@ -285,23 +290,23 @@ public class CodexMessageConverter {
     /**
      * Parse tool call arguments.
      */
-    public static com.google.gson.JsonElement parseToolArguments(com.google.gson.JsonObject payload) {
+    public static JsonElement parseToolArguments(JsonObject payload) {
         if (!payload.has("arguments")) {
             return null;
         }
         try {
-            return com.google.gson.JsonParser.parseString(payload.get("arguments").getAsString());
+            return JsonParser.parseString(payload.get("arguments").getAsString());
         } catch (Exception e) {
-            return new com.google.gson.JsonObject();
+            return new JsonObject();
         }
     }
 
     /**
      * Smart tool name conversion (shell_command -> read/glob, update_plan -> todowrite).
      */
-    public static String convertToolName(String toolName, com.google.gson.JsonElement toolInput) {
+    public static String convertToolName(String toolName, JsonElement toolInput) {
         if ("shell_command".equals(toolName) && toolInput != null && toolInput.isJsonObject()) {
-            com.google.gson.JsonObject inputObj = toolInput.getAsJsonObject();
+            JsonObject inputObj = toolInput.getAsJsonObject();
             if (inputObj.has("command")) {
                 String command = inputObj.get("command").getAsString().trim();
                 if (command.matches("^(ls|pwd|find|cat|head|tail|file|stat|tree)\\b.*")) {
@@ -312,7 +317,7 @@ public class CodexMessageConverter {
             }
         }
         if ("update_plan".equals(toolName) && toolInput != null && toolInput.isJsonObject()) {
-            com.google.gson.JsonObject inputObj = toolInput.getAsJsonObject();
+            JsonObject inputObj = toolInput.getAsJsonObject();
             if (inputObj.has("plan") && inputObj.get("plan").isJsonArray()) {
                 return "todowrite";
             }
@@ -323,23 +328,23 @@ public class CodexMessageConverter {
     /**
      * Convert tool input (update_plan -> todowrite format conversion).
      */
-    public static com.google.gson.JsonElement convertToolInput(String toolName, com.google.gson.JsonElement toolInput) {
+    public static JsonElement convertToolInput(String toolName, JsonElement toolInput) {
         if (!"todowrite".equals(toolName) || toolInput == null || !toolInput.isJsonObject()) {
             return toolInput;
         }
 
-        com.google.gson.JsonObject inputObj = toolInput.getAsJsonObject();
+        JsonObject inputObj = toolInput.getAsJsonObject();
         if (!inputObj.has("plan") || !inputObj.get("plan").isJsonArray()) {
             return toolInput;
         }
 
-        com.google.gson.JsonArray planArray = inputObj.getAsJsonArray("plan");
-        com.google.gson.JsonArray todosArray = new com.google.gson.JsonArray();
+        JsonArray planArray = inputObj.getAsJsonArray("plan");
+        JsonArray todosArray = new JsonArray();
 
         for (int j = 0; j < planArray.size(); j++) {
             if (planArray.get(j).isJsonObject()) {
-                com.google.gson.JsonObject planItem = planArray.get(j).getAsJsonObject();
-                com.google.gson.JsonObject todoItem = new com.google.gson.JsonObject();
+                JsonObject planItem = planArray.get(j).getAsJsonObject();
+                JsonObject todoItem = new JsonObject();
 
                 if (planItem.has("step")) {
                     todoItem.addProperty("content", planItem.get("step").getAsString());
@@ -352,7 +357,7 @@ public class CodexMessageConverter {
             }
         }
 
-        com.google.gson.JsonObject newInput = new com.google.gson.JsonObject();
+        JsonObject newInput = new JsonObject();
         newInput.add("todos", todosArray);
         return newInput;
     }
@@ -360,23 +365,23 @@ public class CodexMessageConverter {
     /**
      * Convert Codex function_call_output to Claude tool_result format.
      */
-    public static com.google.gson.JsonObject convertFunctionCallOutputToToolResult(com.google.gson.JsonObject payload, String timestamp) {
-        com.google.gson.JsonObject frontendMsg = new com.google.gson.JsonObject();
+    public static JsonObject convertFunctionCallOutputToToolResult(JsonObject payload, String timestamp) {
+        JsonObject frontendMsg = new JsonObject();
         frontendMsg.addProperty("type", "user");
 
-        com.google.gson.JsonObject toolResult = new com.google.gson.JsonObject();
+        JsonObject toolResult = new JsonObject();
         toolResult.addProperty("type", "tool_result");
         toolResult.addProperty("tool_use_id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
 
         String output = payload.has("output") ? payload.get("output").getAsString() : "";
         toolResult.addProperty("content", output);
 
-        com.google.gson.JsonArray content = new com.google.gson.JsonArray();
+        JsonArray content = new JsonArray();
         content.add(toolResult);
 
         frontendMsg.addProperty("content", "[tool_result]");
 
-        com.google.gson.JsonObject rawObj = new com.google.gson.JsonObject();
+        JsonObject rawObj = new JsonObject();
         rawObj.add("content", content);
         rawObj.addProperty("role", "user");
         frontendMsg.add("raw", rawObj);
