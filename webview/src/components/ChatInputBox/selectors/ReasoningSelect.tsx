@@ -9,9 +9,9 @@ interface ReasoningSelectProps {
 }
 
 /**
- * ReasoningSelect - Codex Reasoning Effort Selector
- * Controls the depth of reasoning for Codex models
- * Options: Minimal, Low, Medium (default), High
+ * ReasoningSelect - Reasoning Effort Selector
+ * Controls the depth of reasoning for AI models
+ * Options: Low, Medium, High (default), Max
  */
 export const ReasoningSelect = ({ value, onChange, disabled }: ReasoningSelectProps) => {
   const { t } = useTranslation();
@@ -19,7 +19,7 @@ export const ReasoningSelect = ({ value, onChange, disabled }: ReasoningSelectPr
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentLevel = REASONING_LEVELS.find(l => l.id === value) || REASONING_LEVELS[2]; // default to 'medium'
+  const currentLevel = REASONING_LEVELS.find(l => l.id === value) || REASONING_LEVELS[2]; // default to 'high'
 
   /**
    * Get translated text for reasoning level

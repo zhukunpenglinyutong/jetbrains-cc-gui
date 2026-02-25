@@ -221,8 +221,8 @@ const App = () => {
   const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
   const [claudePermissionMode, setClaudePermissionMode] = useState<PermissionMode>('bypassPermissions');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
-  // Codex reasoning effort (thinking depth)
-  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
+  // Reasoning effort (thinking depth)
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
@@ -1003,7 +1003,7 @@ const App = () => {
   }, [claudePermissionMode, selectedCodexModel, selectedClaudeModel]);
 
   /**
-   * Handle reasoning effort selection (Codex only)
+   * Handle reasoning effort selection
    */
   const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
     setReasoningEffort(effort);

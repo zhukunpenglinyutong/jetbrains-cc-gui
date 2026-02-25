@@ -533,7 +533,7 @@ function truncateToolResultBlock(block) {
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  * @param {boolean} disableThinking - Whether to disable thinking mode (optional, defaults to false)
- * @param {string} reasoningEffort - Reasoning effort level: low/medium/high/xhigh (optional)
+ * @param {string} reasoningEffort - Reasoning effort level: low/medium/high/max (optional)
  */
 export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null) {
   console.log('[DIAG] ========== sendMessage() START ==========');
@@ -654,7 +654,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	        'low': 1024,
 	        'medium': 10000,
 	        'high': 32000,
-	        'xhigh': 100000
+	        'max': 100000
 	      };
 	      const mappedTokens = EFFORT_TO_TOKENS[reasoningEffort];
 	      if (mappedTokens !== undefined) {
@@ -1403,7 +1403,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
         'low': 1024,
         'medium': 10000,
         'high': 32000,
-        'xhigh': 100000
+        'max': 100000
       };
       const mappedTokens = EFFORT_TO_TOKENS[reasoningEffort];
       if (mappedTokens !== undefined) {

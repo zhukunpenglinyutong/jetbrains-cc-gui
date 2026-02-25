@@ -59,7 +59,7 @@ public class SessionState {
     private volatile String permissionMode = "bypassPermissions";
     private volatile String model = "claude-sonnet-4-6";
     private volatile String provider = "claude";
-    // Codex reasoning effort (thinking depth)
+    // Reasoning effort (thinking depth)
     private volatile String reasoningEffort = "medium";
 
     // Slash commands

@@ -24,6 +24,8 @@ export async function handleCodexCommand(command, args, stdinData) {
           reasoningEffort,
           attachments  // Image attachments (local_image format)
         } = stdinData;
+        // Codex API uses 'xhigh' while UI sends 'max' — map accordingly
+        const codexEffort = reasoningEffort === 'max' ? 'xhigh' : (reasoningEffort || 'medium');
         await codexSendMessage(
           message,
           threadId || '',
@@ -32,7 +34,7 @@ export async function handleCodexCommand(command, args, stdinData) {
           model || '',
           baseUrl || '',
           apiKey || '',
-          reasoningEffort || 'medium',
+          codexEffort,
           attachments || []  // Pass attachments to message service
         );
       } else {

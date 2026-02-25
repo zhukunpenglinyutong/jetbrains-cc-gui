@@ -338,11 +338,12 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
 ];
 
 /**
- * Codex Reasoning Effort (thinking depth)
- * Controls the depth of reasoning for Codex models
- * Valid values: low, medium, high, xhigh
+ * Reasoning Effort (thinking depth)
+ * Controls the depth of reasoning for AI models
+ * Claude API values: low, medium, high, max
+ * Codex API values: low, medium, high, xhigh
  */
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'max';
 
 /**
  * Reasoning level information
@@ -355,7 +356,7 @@ export interface ReasoningInfo {
 }
 
 /**
- * Available reasoning levels for Codex
+ * Available reasoning levels
  */
 export const REASONING_LEVELS: ReasoningInfo[] = [
   {
@@ -368,16 +369,16 @@ export const REASONING_LEVELS: ReasoningInfo[] = [
     id: 'medium',
     label: 'Medium',
     icon: 'codicon-circle-filled',
-    description: 'Balanced thinking (default)',
+    description: 'Balanced thinking with moderate token savings',
   },
   {
     id: 'high',
     label: 'High',
     icon: 'codicon-circle-large-filled',
-    description: 'Deep reasoning for complex tasks',
+    description: 'Deep reasoning for complex tasks (default)',
   },
   {
-    id: 'xhigh',
+    id: 'max',
     label: 'Max',
     icon: 'codicon-flame',
     description: 'Maximum reasoning depth',

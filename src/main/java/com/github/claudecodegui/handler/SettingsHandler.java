@@ -593,7 +593,7 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
-     * Handle set reasoning effort request (Codex only).
+     * Handle set reasoning effort request.
      */
     private void handleSetReasoningEffort(String content) {
         try {
