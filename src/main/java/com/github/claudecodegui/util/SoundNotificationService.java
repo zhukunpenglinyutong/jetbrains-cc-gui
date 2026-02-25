@@ -3,13 +3,18 @@ package com.github.claudecodegui.util;
 import com.github.claudecodegui.CodemossSettingsService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import javazoom.jl.decoder.JavaLayerException;
+import javazoom.jl.player.Player;
 
 import javax.sound.sampled.*;
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -80,9 +85,10 @@ public class SoundNotificationService {
      */
     private void playBySelection(String soundId, String customPath) throws Exception {
         if ("custom".equals(soundId)) {
-            if (customPath != null && !customPath.isEmpty()) {
-                LOG.debug("[SoundNotification] Playing custom sound");
-                playFromFile(new File(customPath));
+            String normalizedCustomPath = normalizeSoundPath(customPath);
+            if (normalizedCustomPath != null && !normalizedCustomPath.isEmpty()) {
+                LOG.debug("[SoundNotification] Playing custom sound: " + normalizedCustomPath);
+                playFromFile(normalizedCustomPath);
             } else {
                 LOG.debug("[SoundNotification] Custom selected but no path, falling back to default");
                 playFromResource(SOUND_RESOURCES.get("default"));
@@ -119,8 +125,7 @@ public class SoundNotificationService {
     private void playFromResource(String resourcePath) throws Exception {
         try (InputStream rawStream = getClass().getResourceAsStream(resourcePath)) {
             if (rawStream == null) {
-                LOG.info("[SoundNotification] Sound resource not found, using system beep as fallback");
-                playSystemBeep();
+                LOG.warn("[SoundNotification] Sound resource not found: " + resourcePath);
                 return;
             }
 
@@ -133,25 +138,71 @@ public class SoundNotificationService {
     }
 
     /**
-     * 播放系统默认提示音（作为回退方案）
+     * Normalize user provided sound path (supports file:// URI).
      */
-    private void playSystemBeep() {
-        try {
-            java.awt.Toolkit.getDefaultToolkit().beep();
-        } catch (Exception e) {
-            LOG.debug("[SoundNotification] System beep failed: " + e.getMessage());
+    private String normalizeSoundPath(String filePath) {
+        if (filePath == null) {
+            return null;
         }
+
+        String normalized = filePath.trim();
+        if (normalized.isEmpty()) {
+            return normalized;
+        }
+
+        // Remove wrapping quotes to avoid lookup failures on Windows.
+        if (normalized.length() >= 2 && normalized.startsWith("\"") && normalized.endsWith("\"")) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+
+        if (normalized.startsWith("file:/")) {
+            try {
+                normalized = new File(URI.create(normalized)).getPath();
+            } catch (Exception e) {
+                LOG.debug("[SoundNotification] Failed to parse file URI path: " + normalized);
+            }
+        }
+
+        return normalized;
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win");
+    }
+
+    private boolean pathEquals(String a, String b) {
+        if (isWindows()) {
+            return a.equalsIgnoreCase(b);
+        }
+        return a.equals(b);
+    }
+
+    private boolean pathStartsWith(String path, String prefix) {
+        if (isWindows()) {
+            return path.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT));
+        }
+        return path.startsWith(prefix);
     }
 
     /**
-     * Check if the file path is safe (no path traversal, under user home).
+     * Check if the file path is safe (no path traversal, under user home or exact absolute path).
      */
     private boolean isPathSafe(String filePath) {
         try {
-            File file = new File(filePath);
+            String normalizedPath = normalizeSoundPath(filePath);
+            if (normalizedPath == null || normalizedPath.isEmpty()) {
+                return false;
+            }
+            if (normalizedPath.contains("..")) {
+                return false;
+            }
+
+            File file = new File(normalizedPath);
             String canonical = file.getCanonicalPath();
-            String userHome = System.getProperty("user.home");
-            return !filePath.contains("..") && (canonical.startsWith(userHome) || canonical.equals(file.getAbsolutePath()));
+            String absolute = file.getAbsolutePath();
+            String userHome = new File(System.getProperty("user.home")).getCanonicalPath();
+
+            return pathStartsWith(canonical, userHome) || pathEquals(canonical, absolute);
         } catch (java.io.IOException e) {
             return false;
         }
@@ -160,22 +211,29 @@ public class SoundNotificationService {
     /**
      * 从文件播放音频
      */
-    private void playFromFile(File file) throws Exception {
-        if (!isPathSafe(file.getPath())) {
-            LOG.warn("[SoundNotification] Blocked unsafe file path: " + file.getPath());
+    private void playFromFile(String rawPath) throws Exception {
+        String normalizedPath = normalizeSoundPath(rawPath);
+        if (normalizedPath == null || normalizedPath.isEmpty()) {
+            LOG.warn("[SoundNotification] Custom sound path is empty");
             return;
         }
 
+        if (!isPathSafe(normalizedPath)) {
+            LOG.warn("[SoundNotification] Blocked unsafe file path: " + normalizedPath);
+            return;
+        }
+
+        File file = new File(normalizedPath);
         if (!file.exists() || !file.canRead()) {
             LOG.warn("[SoundNotification] Sound file not found or not readable: " + file.getAbsolutePath());
             return;
         }
 
-        String fileName = file.getName().toLowerCase();
+        String fileName = file.getName().toLowerCase(Locale.ROOT);
 
-        // MP3 格式使用系统命令播放
+        // MP3 格式使用 JLayer 在后台线程解码播放
         if (fileName.endsWith(".mp3")) {
-            playWithSystemCommand(file);
+            playMp3(file);
             return;
         }
 
@@ -186,62 +244,19 @@ public class SoundNotificationService {
     }
 
     /**
-     * Play audio file using system command (for MP3 support).
+     * 使用 JLayer 播放 MP3（后台线程调用，阻塞直到当前音频播放结束）。
      */
-    private void playWithSystemCommand(File file) {
-        try {
-            String os = System.getProperty("os.name").toLowerCase();
-            String filePath = file.getAbsolutePath();
-            ProcessBuilder pb;
-
-            if (os.contains("mac")) {
-                pb = new ProcessBuilder("afplay", filePath);
-            } else if (os.contains("win")) {
-                // Use PowerShell Add-Type to avoid string injection via file path.
-                // Pass file path as a separate -FilePath argument to the script block.
-                pb = new ProcessBuilder("powershell", "-NoProfile", "-Command",
-                    "Add-Type -AssemblyName PresentationCore; " +
-                    "$p = New-Object System.Windows.Media.MediaPlayer; " +
-                    "$p.Open([Uri]::new($args[0])); " +
-                    "$p.Play(); Start-Sleep -Seconds 5; $p.Close()",
-                    filePath);
-            } else {
-                // Linux: try ffplay (most MP3-compatible), then paplay, then aplay
-                if (isCommandAvailable("ffplay")) {
-                    pb = new ProcessBuilder("ffplay", "-nodisp", "-autoexit", filePath);
-                } else if (isCommandAvailable("mpv")) {
-                    pb = new ProcessBuilder("mpv", "--no-video", filePath);
-                } else {
-                    pb = new ProcessBuilder("aplay", filePath);
-                }
+    private void playMp3(File file) throws Exception {
+        Player player = null;
+        try (BufferedInputStream bufferedStream = new BufferedInputStream(new FileInputStream(file))) {
+            player = new Player(bufferedStream);
+            player.play();
+        } catch (JavaLayerException e) {
+            throw new Exception("Failed to decode MP3: " + e.getMessage(), e);
+        } finally {
+            if (player != null) {
+                player.close();
             }
-
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-
-            boolean finished = process.waitFor(30, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                LOG.warn("[SoundNotification] Sound playback timed out");
-            }
-        } catch (Exception e) {
-            LOG.warn("[SoundNotification] Failed to play with system command: " + e.getMessage());
-            playSystemBeep();
-        }
-    }
-
-    /**
-     * Check if a command is available on the system PATH.
-     */
-    private boolean isCommandAvailable(String command) {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("which", command);
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-            boolean finished = process.waitFor(3, TimeUnit.SECONDS);
-            return finished && process.exitValue() == 0;
-        } catch (Exception e) {
-            return false;
         }
     }
 
@@ -274,15 +289,16 @@ public class SoundNotificationService {
      * @return 验证结果，包含成功状态和错误信息
      */
     public ValidationResult validateSoundFile(String filePath) {
-        if (filePath == null || filePath.isEmpty()) {
+        String normalizedPath = normalizeSoundPath(filePath);
+        if (normalizedPath == null || normalizedPath.isEmpty()) {
             return new ValidationResult(true, null); // 空路径表示使用默认声音
         }
 
-        if (!isPathSafe(filePath)) {
+        if (!isPathSafe(normalizedPath)) {
             return new ValidationResult(false, "Invalid file path");
         }
 
-        File file = new File(filePath);
+        File file = new File(normalizedPath);
 
         if (!file.exists()) {
             return new ValidationResult(false, "File not found");
@@ -292,12 +308,12 @@ public class SoundNotificationService {
             return new ValidationResult(false, "File is not readable");
         }
 
-        String lowerPath = filePath.toLowerCase();
+        String lowerPath = normalizedPath.toLowerCase(Locale.ROOT);
         if (!lowerPath.endsWith(".wav") && !lowerPath.endsWith(".mp3") && !lowerPath.endsWith(".aiff")) {
             return new ValidationResult(false, "Only WAV, MP3, AIFF formats are supported");
         }
 
-        // MP3 uses system command playback, skip AudioSystem validation
+        // MP3 使用 JLayer 播放，跳过 AudioSystem 格式校验
         if (lowerPath.endsWith(".mp3")) {
             return new ValidationResult(true, null);
         }
