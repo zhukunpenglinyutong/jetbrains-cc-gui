@@ -666,7 +666,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, cwd, attachments, null, null, null, null, null, false, null, callback);
     }
 
     /**
@@ -684,7 +684,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String agentPrompt,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, null, false, callback);
+        return sendMessage(channelId, message, sessionId, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, null, false, null, callback);
     }
 
     /**
@@ -703,11 +703,11 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, streaming, false, callback);
+        return sendMessage(channelId, message, sessionId, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, streaming, false, null, callback);
     }
 
     /**
-     * Send message in existing channel (streaming response, with all options including streaming flag and disableThinking).
+     * Send message in existing channel (streaming response, with all options including streaming flag, disableThinking and reasoningEffort).
      */
     public CompletableFuture<SDKResult> sendMessage(
             String channelId,
@@ -721,6 +721,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String agentPrompt,
             Boolean streaming,
             Boolean disableThinking,
+            String reasoningEffort,
             MessageCallback callback
     ) {
         // Try daemon mode first (avoids per-request Node.js process spawning)
@@ -804,6 +805,11 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 if (disableThinking != null && disableThinking) {
                     stdinInput.addProperty("disableThinking", true);
                     LOG.info("[Thinking] ✓ Disabling thinking mode for this request");
+                }
+                // Reasoning effort configuration
+                if (reasoningEffort != null && !reasoningEffort.isEmpty()) {
+                    stdinInput.addProperty("reasoningEffort", reasoningEffort);
+                    LOG.info("[Reasoning] ✓ Adding reasoningEffort to stdinInput: " + reasoningEffort);
                 }
                 String stdinJson = gson.toJson(stdinInput);
 

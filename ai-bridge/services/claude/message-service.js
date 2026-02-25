@@ -532,8 +532,10 @@ function truncateToolResultBlock(block) {
  * @param {object} openedFiles - List of opened files (optional)
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
+ * @param {boolean} disableThinking - Whether to disable thinking mode (optional, defaults to false)
+ * @param {string} reasoningEffort - Reasoning effort level: low/medium/high/xhigh (optional)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] message length:', message ? message.length : 0);
   console.log('[DIAG] resumeSessionId:', resumeSessionId || '(new session)');
@@ -643,10 +645,27 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    // Decide whether to enable Extended Thinking based on configuration
 	    // - If alwaysThinkingEnabled is true, use the configured maxThinkingTokens value
 	    // - If alwaysThinkingEnabled is false, don't set maxThinkingTokens (let SDK use default behavior)
-	    const maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+	    let maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+
+	    // Map reasoning effort level to maxThinkingTokens budget
+	    // When reasoningEffort is set, it overrides the default maxThinkingTokens value
+	    if (reasoningEffort) {
+	      const EFFORT_TO_TOKENS = {
+	        'low': 1024,
+	        'medium': 10000,
+	        'high': 32000,
+	        'xhigh': 100000
+	      };
+	      const mappedTokens = EFFORT_TO_TOKENS[reasoningEffort];
+	      if (mappedTokens !== undefined) {
+	        maxThinkingTokens = mappedTokens;
+	        console.log('[REASONING] Mapped effort', reasoningEffort, '-> maxThinkingTokens:', mappedTokens);
+	      }
+	    }
 
 	    console.log('[THINKING_DEBUG] alwaysThinkingEnabled:', alwaysThinkingEnabled);
 	    console.log('[THINKING_DEBUG] maxThinkingTokens:', maxThinkingTokens);
+	    console.log('[THINKING_DEBUG] reasoningEffort:', reasoningEffort);
 
 	    const options = {
 	      cwd: workingDirectory,
@@ -1301,7 +1320,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     // Extract opened files list and agent prompt (from stdinData)
     const openedFiles = stdinData?.openedFiles || null;
     const agentPrompt = stdinData?.agentPrompt || null;
+    const reasoningEffort = stdinData?.reasoningEffort || null;
     console.log('[Agent] message-service.sendMessageWithAttachments received agentPrompt:', agentPrompt ? `✓ (${agentPrompt.length} chars)` : '✗ null');
+    console.log('[REASONING] sendMessageWithAttachments received reasoningEffort:', reasoningEffort);
 
     // Build systemPrompt.append content (for adding opened files context and agent prompt)
     // Use the unified prompt management module to build IDE context prompt (including agent prompt)
@@ -1374,10 +1395,26 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     // Decide whether to enable Extended Thinking based on configuration
     // - If alwaysThinkingEnabled is true, use the configured maxThinkingTokens value
     // - If alwaysThinkingEnabled is false, don't set maxThinkingTokens (let SDK use default behavior)
-    const maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+    let maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+
+    // Map reasoning effort level to maxThinkingTokens budget (same as sendMessage)
+    if (reasoningEffort) {
+      const EFFORT_TO_TOKENS = {
+        'low': 1024,
+        'medium': 10000,
+        'high': 32000,
+        'xhigh': 100000
+      };
+      const mappedTokens = EFFORT_TO_TOKENS[reasoningEffort];
+      if (mappedTokens !== undefined) {
+        maxThinkingTokens = mappedTokens;
+        console.log('[REASONING] (withAttachments) Mapped effort', reasoningEffort, '-> maxThinkingTokens:', mappedTokens);
+      }
+    }
 
     console.log('[THINKING_DEBUG] (withAttachments) alwaysThinkingEnabled:', alwaysThinkingEnabled);
     console.log('[THINKING_DEBUG] (withAttachments) maxThinkingTokens:', maxThinkingTokens);
+    console.log('[THINKING_DEBUG] (withAttachments) reasoningEffort:', reasoningEffort);
 
     const options = {
       cwd: workingDirectory,

@@ -363,10 +363,11 @@ Footer 包含：
             // Simple callback handler
             StringBuilder result = new StringBuilder();
 
-            // Use the 12-parameter sendMessage overload:
+            // Use the 13-parameter sendMessage overload:
             // - model: COMMIT_MESSAGE_MODEL (Sonnet model)
             // - streaming: false (non-streaming, returns complete result at once)
             // - disableThinking: true (disable thinking mode to avoid verbose reasoning output)
+            // - reasoningEffort: null (use default for commit messages)
             bridge.sendMessage(
                 "git-commit-message",      // channelId
                 prompt,                     // message
@@ -379,6 +380,7 @@ Footer 包含：
                 null,                       // agentPrompt
                 false,                      // streaming (non-streaming mode)
                 true,                       // disableThinking (disable thinking mode)
+                null,                       // reasoningEffort (use default)
                 new MessageCallback() {
                     @Override
                     public void onMessage(String type, String content) {
