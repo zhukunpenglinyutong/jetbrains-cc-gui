@@ -643,25 +643,9 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[STREAMING_DEBUG] streamingEnabled (final):', streamingEnabled);
 
 	    // Decide whether to enable Extended Thinking based on configuration
-	    // - If alwaysThinkingEnabled is true, use the configured maxThinkingTokens value
-	    // - If alwaysThinkingEnabled is false, don't set maxThinkingTokens (let SDK use default behavior)
-	    let maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
-
-	    // Map reasoning effort level to maxThinkingTokens budget
-	    // When reasoningEffort is set, it overrides the default maxThinkingTokens value
-	    if (reasoningEffort) {
-	      const EFFORT_TO_TOKENS = {
-	        'low': 1024,
-	        'medium': 10000,
-	        'high': 32000,
-	        'max': 100000
-	      };
-	      const mappedTokens = EFFORT_TO_TOKENS[reasoningEffort];
-	      if (mappedTokens !== undefined) {
-	        maxThinkingTokens = mappedTokens;
-	        console.log('[REASONING] Mapped effort', reasoningEffort, '-> maxThinkingTokens:', mappedTokens);
-	      }
-	    }
+	    // - If alwaysThinkingEnabled is true AND no reasoningEffort is set, use the configured maxThinkingTokens value
+	    // - If reasoningEffort is set, effort is passed via CLAUDE_CODE_EFFORT_LEVEL env var (native SDK mechanism)
+	    let maxThinkingTokens = (alwaysThinkingEnabled && !reasoningEffort) ? configuredMaxThinkingTokens : undefined;
 
 	    console.log('[THINKING_DEBUG] alwaysThinkingEnabled:', alwaysThinkingEnabled);
 	    console.log('[THINKING_DEBUG] maxThinkingTokens:', maxThinkingTokens);
@@ -677,6 +661,9 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      // Extended Thinking config (controlled by alwaysThinkingEnabled in settings.json)
 	      // Thinking content is output via the [THINKING] tag for frontend display
 	      ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
+	      // Reasoning effort: pass via CLAUDE_CODE_EFFORT_LEVEL env var (native SDK mechanism via A31())
+	      // The SDK reads this env var and sets output_config.effort in the actual API call
+	      ...(reasoningEffort && { env: { ...process.env, CLAUDE_CODE_EFFORT_LEVEL: reasoningEffort } }),
 	      // Streaming config: enable includePartialMessages to receive incremental content
 	      // When streamingEnabled is true, the SDK returns partial messages with incremental content
 	      ...(streamingEnabled && { includePartialMessages: true }),
@@ -1393,24 +1380,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     console.log('[STREAMING_DEBUG] (withAttachments) streamingEnabled (final):', streamingEnabled);
 
     // Decide whether to enable Extended Thinking based on configuration
-    // - If alwaysThinkingEnabled is true, use the configured maxThinkingTokens value
-    // - If alwaysThinkingEnabled is false, don't set maxThinkingTokens (let SDK use default behavior)
-    let maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
-
-    // Map reasoning effort level to maxThinkingTokens budget (same as sendMessage)
-    if (reasoningEffort) {
-      const EFFORT_TO_TOKENS = {
-        'low': 1024,
-        'medium': 10000,
-        'high': 32000,
-        'max': 100000
-      };
-      const mappedTokens = EFFORT_TO_TOKENS[reasoningEffort];
-      if (mappedTokens !== undefined) {
-        maxThinkingTokens = mappedTokens;
-        console.log('[REASONING] (withAttachments) Mapped effort', reasoningEffort, '-> maxThinkingTokens:', mappedTokens);
-      }
-    }
+    // - If alwaysThinkingEnabled is true AND no reasoningEffort is set, use the configured maxThinkingTokens value
+    // - If reasoningEffort is set, effort is passed via CLAUDE_CODE_EFFORT_LEVEL env var (native SDK mechanism)
+    let maxThinkingTokens = (alwaysThinkingEnabled && !reasoningEffort) ? configuredMaxThinkingTokens : undefined;
 
     console.log('[THINKING_DEBUG] (withAttachments) alwaysThinkingEnabled:', alwaysThinkingEnabled);
     console.log('[THINKING_DEBUG] (withAttachments) maxThinkingTokens:', maxThinkingTokens);
@@ -1426,6 +1398,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       // Extended Thinking config (controlled by alwaysThinkingEnabled in settings.json)
       // Thinking content is output via the [THINKING] tag for frontend display
       ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
+      // Reasoning effort: pass via CLAUDE_CODE_EFFORT_LEVEL env var (native SDK mechanism via A31())
+      // The SDK reads this env var and sets output_config.effort in the actual API call
+      ...(reasoningEffort && { env: { ...process.env, CLAUDE_CODE_EFFORT_LEVEL: reasoningEffort } }),
       // Streaming config: enable includePartialMessages to receive incremental content
       ...(streamingEnabled && { includePartialMessages: true }),
       additionalDirectories: Array.from(
