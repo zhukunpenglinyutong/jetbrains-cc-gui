@@ -1,25 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { REASONING_LEVELS, type ReasoningEffort } from '../types';
+import { REASONING_LEVELS, EFFORT_SUPPORTED_CLAUDE_MODELS, MAX_EFFORT_CLAUDE_MODELS, type ReasoningEffort } from '../types';
 
 interface ReasoningSelectProps {
   value: ReasoningEffort;
   onChange: (effort: ReasoningEffort) => void;
   disabled?: boolean;
+  selectedModel?: string;
+  currentProvider?: string;
 }
 
 /**
  * ReasoningSelect - Reasoning Effort Selector
- * Controls the depth of reasoning for AI models
- * Options: Low, Medium, High (default), Max
+ * Controls the depth of reasoning for AI models.
+ * Visibility and available levels depend on the selected model:
+ * - Codex: all levels (low/medium/high/max)
+ * - Claude Opus 4.6: all levels (low/medium/high/max)
+ * - Claude Sonnet 4.6: low/medium/high (max causes API error on Sonnet)
+ * - Claude Haiku 4.5 and legacy models: hidden (no adaptive thinking support)
  */
-export const ReasoningSelect = ({ value, onChange, disabled }: ReasoningSelectProps) => {
+export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, currentProvider }: ReasoningSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentLevel = REASONING_LEVELS.find(l => l.id === value) || REASONING_LEVELS[2]; // default to 'high'
+  // Determine visibility: for Claude, hide if model doesn't support adaptive thinking
+  const isVisible = currentProvider !== 'claude' || !selectedModel || EFFORT_SUPPORTED_CLAUDE_MODELS.has(selectedModel);
+
+  // Build the list of available levels for the current model
+  const availableLevels = REASONING_LEVELS.filter(level => {
+    if (level.id !== 'max') return true;
+    // 'max' is only available for Codex or Opus 4.6; Sonnet 4.6 returns API error for 'max'
+    if (currentProvider !== 'claude') return true;
+    return !selectedModel || MAX_EFFORT_CLAUDE_MODELS.has(selectedModel);
+  });
+
+  const currentLevel = availableLevels.find(l => l.id === value) || availableLevels[availableLevels.length - 2] || availableLevels[0];
 
   /**
    * Get translated text for reasoning level
@@ -74,6 +91,8 @@ export const ReasoningSelect = ({ value, onChange, disabled }: ReasoningSelectPr
     };
   }, [isOpen]);
 
+  if (!isVisible) return null;
+
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
       <button
@@ -100,7 +119,7 @@ export const ReasoningSelect = ({ value, onChange, disabled }: ReasoningSelectPr
             zIndex: 10000,
           }}
         >
-          {REASONING_LEVELS.map((level) => (
+          {availableLevels.map((level) => (
             <div
               key={level.id}
               className={`selector-option ${level.id === value ? 'selected' : ''}`}

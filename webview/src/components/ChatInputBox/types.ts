@@ -277,6 +277,25 @@ export const CLAUDE_MODELS: ModelInfo[] = [
 ];
 
 /**
+ * Claude models that support adaptive thinking with effort parameter (low/medium/high).
+ * Based on: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
+ */
+export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
+  'claude-opus-4-6',
+  'claude-opus-4-6[1m]',
+  'claude-sonnet-4-6',
+]);
+
+/**
+ * Claude models that additionally support the 'max' effort level.
+ * Only Opus 4.6 — using 'max' on other models returns an API error.
+ */
+export const MAX_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-opus-4-6',
+  'claude-opus-4-6[1m]',
+]);
+
+/**
  * Codex model list
  */
 export const CODEX_MODELS: ModelInfo[] = [
