@@ -13,6 +13,54 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.2.3',
+    date: '2026-02-27',
+    content: {
+      en: `✨ Features
+- Add daemon mode to eliminate per-request Node.js process spawning: persistent daemon with NDJSON protocol, heartbeat monitoring, auto-restart, and three-phase prewarm strategy for low-latency first messages
+- Add abort/cancel support for daemon mode: interrupt active SDK query immediately instead of waiting for completion
+- Split BasicConfigSection into tabbed layout (Appearance/Behavior/Environment) for improved settings navigation
+
+🐛 Fixes
+- Fix Windows sound notification not playing after AI task completion, switch to native Java audio playback for cross-platform stability #z231485
+- Fix sound notification delay, trigger immediately after stream ends #z231485
+- Fix sound notification reliability: add 30s MP3 playback timeout, prevent duplicate success+error notifications
+- Fix: only show Windows path constraints on Windows platform #hpstream
+- Fix: support filenames with spaces in file tag matching with smart longest-match path resolution #hpstream
+- Fix: resolve model name from settings.json for third-party API proxy compatibility
+- Fix: inject proxy env vars from settings.json for IDE desktop launcher (#429)
+- Fix model mapping fallback: only apply sonnet mapping when model ID contains 'sonnet'
+- Complete autoOpenFile i18n translations for es/fr/hi/ja/zh-TW
+
+🔧 Improvements
+- Optimize file tag matching performance and add unit tests
+- Extract shared Windows path constraint into prompt-utils utility
+- Deduplicate loadClaudeSettings() calls in sendMessage methods
+- Simplify streamEndCallback from Consumer<Boolean> to Runnable`,
+      zh: `✨ Features
+- 新增 Daemon 常驻进程模式：消除每次请求的 Node.js 启动开销（5-10 秒），NDJSON 协议通信，心跳监控、自动重启、三阶段预热
+- 新增 Daemon 模式请求中断支持：立即停止活跃的 SDK 查询
+- 重构基础设置页面为选项卡布局（外观/行为/环境），改善设置导航
+
+🐛 Fixes
+- 修复 Windows 下 AI 任务完成后提示音不播放，改用原生 Java 音频库 #z231485
+- 修复提示音延迟，改为流结束后立即触发 #z231485
+- 提升提示音可靠性：30 秒播放超时，防止成功+错误通知冲突
+- 修复 Windows 路径约束提示仅在 Windows 平台显示 #hpstream
+- 修复文件标签匹配支持带空格的文件名 #hpstream
+- 修复第三方 API 代理兼容性：从 settings.json 读取模型映射名称
+- 修复 IDE 桌面启动器代理环境变量注入 (#429)
+- 修复模型映射回退：仅 sonnet 模型应用映射
+- 补充 autoOpenFile 多语言翻译（es/fr/hi/ja/zh-TW）
+
+🔧 Improvements
+- 优化文件标签匹配性能，新增单元测试
+- 提取 Windows 路径约束到共享工具函数，消除重复
+- 合并重复的 loadClaudeSettings() 调用
+- 简化 streamEndCallback 类型`,
+    },
+  },
+  {
     version: '0.2.2',
     date: '2026-02-25',
     content: {

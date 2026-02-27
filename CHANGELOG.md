@@ -1,3 +1,65 @@
+##### **2026年2月27日（v0.2.3）**
+
+English:
+
+✨ Features
+- Add daemon mode to eliminate per-request Node.js process spawning: persistent daemon with NDJSON protocol, heartbeat monitoring (15s interval, 45s timeout), auto-restart (max 3), and three-phase prewarm strategy for low-latency first messages
+- Add abort/cancel support for daemon mode: interrupt active SDK query immediately instead of waiting for completion
+- Split BasicConfigSection into tabbed layout (Appearance/Behavior/Environment) for improved settings navigation
+
+🐛 Fixes
+- Fix Windows sound notification not playing after AI task completion, switch to native Java audio playback for cross-platform stability #z231485
+- Fix sound notification delay, trigger immediately after stream ends instead of waiting #z231485
+- Fix sound notification reliability: add 30s MP3 playback timeout, prevent duplicate success+error notifications on stream end
+- Fix: only show Windows path constraints on Windows platform #hpstream
+- Fix: support filenames with spaces in file tag matching with smart longest-match path resolution #hpstream
+- Fix: resolve model name from settings.json for third-party API proxy compatibility (prevents 400 errors on proxies that don't recognize internal model IDs)
+- Fix: inject proxy env vars (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) from settings.json for IDE desktop launcher (#429)
+- Fix model mapping fallback: only apply sonnet mapping when model ID contains 'sonnet', preventing non-Anthropic models from being incorrectly remapped
+- Restrict isPathSafe to user home directory only, removing overly permissive path check
+- Strengthen sound path URI parsing: require file:// prefix, use new URI() constructor
+- Complete autoOpenFile i18n translations for es/fr/hi/ja/zh-TW
+
+🔧 Improvements
+- Optimize file tag matching performance: replace inner-loop substring() with startsWith(), extend boundary check to include tab and carriage return
+- Add unit tests for file tag matching (filenames with spaces, longest-match selection, multiple mixed tags)
+- Extract shared Windows path constraint into prompt-utils utility to eliminate duplication
+- Deduplicate loadClaudeSettings() calls in sendMessage and sendMessageWithAttachments
+- Simplify streamEndCallback from Consumer<Boolean> to Runnable
+- Update autoOpenFile hint text to clarify that only file paths are sent to AI
+- Extract BASIC_TABS to module-level constant
+- Add process.env mutation note to setModelEnvironmentVariables
+
+中文：
+
+✨ Features
+- 新增 Daemon 常驻进程模式：消除每次请求时 Node.js 进程启动开销（5-10 秒 SDK 加载），使用 NDJSON 协议通信，支持心跳监控（15 秒间隔/45 秒超时）、自动重启（最多 3 次）、三阶段预热策略
+- 新增 Daemon 模式请求中断支持：中断通道时立即停止活跃的 SDK 查询，而非等待完成
+- 重构基础设置页面为选项卡布局（外观/行为/环境），改善设置导航体验
+
+🐛 Fixes
+- 修复 Windows 下 AI 任务完成后提示音不播放的问题，改用原生 Java 音频库播放，保证跨平台稳定性 #z231485
+- 修复提示音延迟问题，改为流结束后立即触发 #z231485
+- 提升提示音可靠性：MP3 播放添加 30 秒超时防止线程阻塞，修复流结束时成功+错误通知冲突
+- 修复 Windows 路径约束提示仅在 Windows 平台显示 #hpstream
+- 修复文件标签匹配支持带空格的文件名，使用智能最长路径匹配算法 #hpstream
+- 修复第三方 API 代理兼容性：从 settings.json 读取用户配置的模型映射名称发送给 API，防止代理不识别内部模型 ID 导致 400 错误
+- 修复 IDE 桌面启动器不继承 Shell 代理配置的问题：从 settings.json 注入 HTTP_PROXY/HTTPS_PROXY/NO_PROXY 环境变量 (#429)
+- 修复模型映射回退逻辑：仅当模型 ID 包含 'sonnet' 时才应用映射，防止非 Anthropic 模型被错误重映射
+- 收紧 isPathSafe 安全检查：限制为仅用户主目录
+- 加固提示音路径 URI 解析：要求 file:// 前缀，使用 new URI() 构造器
+- 补充 autoOpenFile 功能的 es/fr/hi/ja/zh-TW 国际化翻译
+
+🔧 Improvements
+- 优化文件标签匹配性能：用 startsWith() 替代内层循环 substring()，边界检查扩展到 tab 和回车符
+- 新增文件标签匹配单元测试（带空格文件名、最长匹配选择、多种混合标签）
+- 提取 Windows 路径约束提示到共享工具函数 prompt-utils，消除重复代码
+- 合并 sendMessage 和 sendMessageWithAttachments 中的重复 loadClaudeSettings() 调用
+- 简化 streamEndCallback 类型：从 Consumer<Boolean> 改为 Runnable
+- 更新 autoOpenFile 提示文案，明确仅发送文件路径给 AI
+- 提取 BASIC_TABS 为模块级常量
+- 为 setModelEnvironmentVariables 添加 process.env 修改说明注释
+
 ##### **2026年2月25日（v0.2.2）**
 
 English:
