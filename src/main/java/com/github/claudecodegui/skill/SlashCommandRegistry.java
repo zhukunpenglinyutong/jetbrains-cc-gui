@@ -1,16 +1,16 @@
 package com.github.claudecodegui.skill;
 
+import com.github.claudecodegui.CodexSkillService;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
+import org.snakeyaml.engine.v2.api.Load;
+import org.snakeyaml.engine.v2.api.LoadSettings;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Merges built-in slash commands with skill-derived commands per provider.
@@ -198,10 +198,10 @@ public final class SlashCommandRegistry {
         }
 
         try {
-            org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(
-                    new org.yaml.snakeyaml.constructor.SafeConstructor(
-                            new org.yaml.snakeyaml.LoaderOptions()));
-            Object parsed = yaml.load(yamlText);
+            LoadSettings settings = LoadSettings.builder().build();
+            Load load = new Load(settings);
+            Object parsed = load.loadFromString(yamlText);
+
             if (parsed instanceof Map) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> map = (Map<String, Object>) parsed;
@@ -211,7 +211,7 @@ public final class SlashCommandRegistry {
         } catch (Exception e) {
             LOG.debug("Failed to parse command frontmatter: " + mdPath);
         }
-        return null;
+        return null; // Ensure we always return a value if not found
     }
 
     /**
@@ -297,4 +297,40 @@ public final class SlashCommandRegistry {
         }
         return new Gson().toJson(array);
     }
+
+    /**
+     * Gets Codex skills as $-prefixed commands for autocomplete.
+     * Derives from CodexSkillService.getAllSkills() to ensure consistent data
+     * with the Skills settings page. Only includes enabled, user-invocable skills.
+     */
+    public static List<SlashCommand> getCodexSkills(String cwd) {
+        JsonObject allSkills = CodexSkillService.getAllSkills(cwd);
+
+        Map<String, SlashCommand> merged = new LinkedHashMap<>();
+        for (String scope : new String[]{"user", "repo"}) {
+            JsonObject scopeSkills = allSkills.getAsJsonObject(scope);
+            if (scopeSkills == null) continue;
+
+            for (String key : scopeSkills.keySet()) {
+                JsonObject skill = scopeSkills.getAsJsonObject(key);
+
+                // Skip disabled skills
+                if (skill.has("enabled") && !skill.get("enabled").getAsBoolean()) {
+                    continue;
+                }
+                // Skip non-user-invocable skills
+                if (skill.has("userInvocable") && !skill.get("userInvocable").getAsBoolean()) {
+                    continue;
+                }
+
+                String name = skill.has("name") ? skill.get("name").getAsString() : "";
+                String desc = skill.has("description") ? skill.get("description").getAsString() : "";
+                if (!name.isEmpty()) {
+                    merged.put("$" + name, new SlashCommand("$" + name, desc));
+                }
+            }
+        }
+        return new ArrayList<>(merged.values());
+    }
+
 }

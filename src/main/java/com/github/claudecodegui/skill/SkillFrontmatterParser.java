@@ -1,9 +1,8 @@
 package com.github.claudecodegui.skill;
 
 import com.intellij.openapi.diagnostic.Logger;
-import org.yaml.snakeyaml.LoaderOptions;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.SafeConstructor;
+import org.snakeyaml.engine.v2.api.Load;
+import org.snakeyaml.engine.v2.api.LoadSettings;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -134,8 +133,9 @@ public final class SkillFrontmatterParser {
         // Step 3: Parse YAML
         Map<String, Object> yamlMap;
         try {
-            Yaml yaml = new Yaml(new SafeConstructor(new LoaderOptions()));
-            Object parsed = yaml.load(yamlText);
+            LoadSettings settings = LoadSettings.builder().build();
+            Load load = new Load(settings);
+            Object parsed = load.loadFromString(yamlText);
             if (!(parsed instanceof Map)) {
                 LOG.warn("Frontmatter is not a YAML mapping: " + skillMd);
                 return null;

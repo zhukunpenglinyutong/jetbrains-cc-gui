@@ -10,7 +10,7 @@ import type { PlanApprovalRequest } from '../components/PlanApprovalDialog';
 import type { RewindRequest } from '../components/RewindDialog';
 import { THROTTLE_INTERVAL } from './useStreamingMessages';
 import { sendBridgeEvent } from '../utils/bridge';
-import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState } from '../components/ChatInputBox/providers';
+import { setupSlashCommandsCallback, resetSlashCommandsState, resetFileReferenceState, setupDollarCommandsCallback, resetDollarCommandsState } from '../components/ChatInputBox/providers';
 import { downloadJSON } from '../utils/exportMarkdown';
 
 // Performance optimization constants
@@ -1154,8 +1154,10 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
     // ========== Slash Commands Setup ==========
     resetSlashCommandsState();
+    resetDollarCommandsState();
     resetFileReferenceState();
     setupSlashCommandsCallback();
+    setupDollarCommandsCallback();
 
     // ========== Request Initial States ==========
     let retryCount = 0;

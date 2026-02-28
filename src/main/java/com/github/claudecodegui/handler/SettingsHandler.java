@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
@@ -481,16 +482,33 @@ public class SettingsHandler extends BaseMessageHandler {
             cwd = context.getProject().getBasePath();
         }
 
-        var commands = SlashCommandRegistry.getCommands(provider, cwd);
-        String json = SlashCommandRegistry.toJson(commands);
+        final String finalCwd = cwd;
+        CompletableFuture.runAsync(() -> {
+            var commands = SlashCommandRegistry.getCommands(provider, finalCwd);
+            String json = SlashCommandRegistry.toJson(commands);
 
-        ApplicationManager.getApplication().invokeLater(() -> {
-            try {
-                callJavaScript("updateSlashCommands", escapeJs(json));
-            } catch (Exception e) {
-                LOG.warn("[SettingsHandler] Failed to refresh slash commands: " + e.getMessage());
+            final String codexJson;
+            if ("codex".equalsIgnoreCase(provider)) {
+                var codexSkills = SlashCommandRegistry.getCodexSkills(finalCwd);
+                codexJson = SlashCommandRegistry.toJson(codexSkills);
+                LOG.info("[SettingsHandler] Codex skills refreshed: " + codexSkills.size() + " skills");
+            } else {
+                codexJson = null;
             }
-        });
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                try {
+                    callJavaScript("updateSlashCommands", escapeJs(json));
+
+                    // Push Codex $ skills when switching to codex provider
+                    if (codexJson != null) {
+                        callJavaScript("window.updateDollarCommands", escapeJs(codexJson));
+                    }
+                } catch (Exception e) {
+                    LOG.warn("[SettingsHandler] Failed to refresh slash commands: " + e.getMessage());
+                }
+            });
+        }, AppExecutorUtil.getAppExecutorService());
     }
 
     private void refreshContextBar() {

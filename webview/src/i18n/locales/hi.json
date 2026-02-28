@@ -920,6 +920,10 @@
     "importSkill": "Import Skill",
     "importGlobalSkill": "Import Global Skill",
     "importLocalSkill": "Import Local Skill",
+    "importUserSkill": "उपयोगकर्ता Skill आयात करें",
+    "importRepoSkill": "रिपॉजिटरी Skill आयात करें",
+    "user": "उपयोगकर्ता",
+    "repo": "रिपॉजिटरी",
     "description": "Description",
     "noDescription": "No description",
     "noSkills": "No Skills",
@@ -929,6 +933,8 @@
     "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
     "deleteMessageGlobal": "global",
     "deleteMessageLocal": "local",
+    "deleteMessageUser": "उपयोगकर्ता",
+    "deleteMessageRepo": "रिपॉजिटरी",
     "importSuccess": "Successfully imported {{count}} Skills",
     "importSuccessOne": "Successfully imported 1 Skill",
     "importPartialSuccess": "Successfully imported {{count}}/{{total}} Skills, some failed",
@@ -989,6 +995,53 @@
         "link1": "Skills क्या हैं?",
         "link2": "कस्टम Skills बनाना",
         "link3": "Anthropic Skills उदाहरण रिपॉजिटरी"
+      },
+      "codex": {
+        "title": "Codex Skills क्या हैं?",
+        "overview": {
+          "title": "अवलोकन",
+          "description": "Codex Skills .agents/skills/ डायरेक्टरी में संग्रहीत निर्देश सेट हैं जो विशिष्ट कार्यों के लिए Codex के प्रदर्शन को बढ़ाते हैं। चैट में $ प्रीफ़िक्स का उपयोग करके उन्हें कॉल करें।"
+        },
+        "structure": {
+          "title": "Skill संरचना",
+          "description": "Codex Skill एक फ़ोल्डर है जिसमें SKILL.md फ़ाइल होती है:",
+          "example": ".agents/skills/\n└── my-skill/\n    ├── SKILL.md          # Required: skill definition file\n    ├── templates/        # Optional: template files\n    └── references/       # Optional: reference materials"
+        },
+        "format": {
+          "title": "SKILL.md प्रारूप",
+          "description": "SKILL.md फ़ाइलें YAML फ्रंटमैटर + Markdown प्रारूप का उपयोग करती हैं:",
+          "example": "---\nname: my-skill-name\ndescription: Skill description and when to use\n---\n\n# Skill Instructions\n\nDetailed instruction content...",
+          "hint": "name और description आवश्यक फ़ील्ड हैं"
+        },
+        "configuration": {
+          "title": "कॉन्फ़िगरेशन",
+          "description": "Codex Skills कहाँ संग्रहीत होती हैं:",
+          "userPath": {
+            "label": "उपयोगकर्ता डायरेक्टरी",
+            "description": "~/.agents/skills/, सभी प्रोजेक्ट्स में साझा"
+          },
+          "repoPath": {
+            "label": "रिपॉजिटरी डायरेक्टरी",
+            "description": "{project-root}/.agents/skills/, केवल वर्तमान प्रोजेक्ट में उपलब्ध"
+          },
+          "configToml": {
+            "label": "सक्षम/अक्षम",
+            "description": "~/.codex/config.toml में [[skills.config]] प्रविष्टियों द्वारा नियंत्रित"
+          }
+        },
+        "tips": {
+          "title": "उपयोग युक्तियाँ",
+          "item1": "सुनिश्चित करें कि Skill डायरेक्टरी में एक वैध SKILL.md फ़ाइल है",
+          "item2": "Skill नामों में लोअरकेस अक्षर, संख्याएँ और हाइफ़न का उपयोग करें",
+          "item3": "Skill ऑटोकम्प्लीट ट्रिगर करने के लिए चैट में $ प्रीफ़िक्स टाइप करें",
+          "item4": "सक्षम/अक्षम टॉगल से प्रत्येक Skill की स्थिति नियंत्रित करें",
+          "item5": "अक्षम Skills ~/.codex/config.toml में दर्ज होती हैं"
+        },
+        "learnMore": {
+          "title": "अधिक जानें",
+          "description": "Codex Skills के बारे में अधिक जानकारी:",
+          "link1": "Codex Skills दस्तावेज़ीकरण"
+        }
       }
     }
   },

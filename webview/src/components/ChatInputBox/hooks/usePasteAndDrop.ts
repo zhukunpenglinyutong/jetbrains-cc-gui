@@ -19,8 +19,7 @@ interface UsePasteAndDropOptions {
   setHasContent: (hasContent: boolean) => void;
   setInternalAttachments: React.Dispatch<React.SetStateAction<Attachment[]>>;
   onInput?: (content: string) => void;
-  fileCompletion: { close: () => void };
-  commandCompletion: { close: () => void };
+  closeAllCompletions: () => void;
   handleInput: (isComposingFromEvent?: boolean) => void;
   /** Immediately flush pending debounced onInput to sync parent state */
   flushInput: () => void;
@@ -53,8 +52,7 @@ export function usePasteAndDrop({
   setHasContent,
   setInternalAttachments,
   onInput,
-  fileCompletion,
-  commandCompletion,
+  closeAllCompletions,
   handleInput,
   flushInput,
 }: UsePasteAndDropOptions): UsePasteAndDropReturn {
@@ -300,9 +298,8 @@ export function usePasteAndDrop({
           }
         }
 
-        // Close completion menus
-        fileCompletion.close();
-        commandCompletion.close();
+        // Close all completion menus
+        closeAllCompletions();
 
         // Directly trigger state update, don't call handleInput (avoid re-detecting completion)
         const newText = getTextContent();
@@ -325,8 +322,7 @@ export function usePasteAndDrop({
       setHasContent,
       setInternalAttachments,
       onInput,
-      fileCompletion,
-      commandCompletion,
+      closeAllCompletions,
     ]
   );
 

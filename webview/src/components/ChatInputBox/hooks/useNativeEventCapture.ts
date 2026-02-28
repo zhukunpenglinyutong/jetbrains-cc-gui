@@ -14,6 +14,7 @@ export interface UseNativeEventCaptureOptions {
   commandCompletion: CompletionOpenLike;
   agentCompletion: CompletionOpenLike;
   promptCompletion: CompletionOpenLike;
+  dollarCommandCompletion: CompletionOpenLike;
   completionSelectedRef: MutableRefObject<boolean>;
   submittedOnEnterRef: MutableRefObject<boolean>;
   handleSubmit: () => void;
@@ -37,6 +38,7 @@ export function useNativeEventCapture({
   commandCompletion,
   agentCompletion,
   promptCompletion,
+  dollarCommandCompletion,
   completionSelectedRef,
   submittedOnEnterRef,
   handleSubmit,
@@ -52,6 +54,7 @@ export function useNativeEventCapture({
     commandCompletion,
     agentCompletion,
     promptCompletion,
+    dollarCommandCompletion,
     completionSelectedRef,
     submittedOnEnterRef,
     handleSubmit,
@@ -66,6 +69,7 @@ export function useNativeEventCapture({
     commandCompletion,
     agentCompletion,
     promptCompletion,
+    dollarCommandCompletion,
     completionSelectedRef,
     submittedOnEnterRef,
     handleSubmit,
@@ -110,7 +114,7 @@ export function useNativeEventCapture({
         ((ev.key === 'e' || ev.key === 'E') && ev.ctrlKey && !ev.metaKey);
       if (isCursorMovementKey) return;
 
-      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen || latest.promptCompletion.isOpen) {
+      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen || latest.promptCompletion.isOpen || latest.dollarCommandCompletion.isOpen) {
         return;
       }
 
@@ -164,7 +168,7 @@ export function useNativeEventCapture({
         latest.completionSelectedRef.current = false;
         return;
       }
-      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen || latest.promptCompletion.isOpen) {
+      if (latest.fileCompletion.isOpen || latest.commandCompletion.isOpen || latest.agentCompletion.isOpen || latest.promptCompletion.isOpen || latest.dollarCommandCompletion.isOpen) {
         return;
       }
       latest.handleSubmit();

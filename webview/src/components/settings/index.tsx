@@ -71,10 +71,10 @@ const SettingsView = ({
 }: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
-  // Codex mode: allow providers, usage, and mcp tabs, disable other features
-  // Note: 'mcp' is now enabled for Codex as it supports MCP via ~/.codex/config.toml
+  // Codex mode: allow providers, usage, mcp, and skills tabs, disable other features
+  // Note: 'skills' is now enabled for Codex as it supports .agents/skills/ directories
   const disabledTabs = useMemo<SettingsTab[]>(
-    () => (isCodexMode ? ['permissions', 'agents', 'skills'] : []),
+    () => (isCodexMode ? ['permissions', 'agents'] : []),
     [isCodexMode]
   );
   const [currentTab, setCurrentTab] = useState<SettingsTab>(() => {
@@ -820,7 +820,7 @@ const SettingsView = ({
 
           {/* Skills */}
           <div style={{ display: currentTab === 'skills' ? 'block' : 'none' }}>
-            <SkillsSettingsSection />
+            <SkillsSettingsSection currentProvider={currentProvider} />
           </div>
 
           {/* Other settings */}

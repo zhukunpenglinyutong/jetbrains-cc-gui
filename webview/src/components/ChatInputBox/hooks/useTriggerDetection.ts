@@ -394,8 +394,31 @@ function detectExclamationTrigger(text: string, cursorPosition: number): Trigger
 }
 
 /**
+ * Detect $ Codex skill trigger
+ * Requires $ to be at line start or preceded by whitespace
+ */
+function detectDollarTrigger(text: string, cursorPosition: number): TriggerQuery | null {
+  let start = cursorPosition - 1;
+  while (start >= 0) {
+    const char = text[start];
+    if (char === '\n') return null;
+    if (isWhitespace(char)) return null;
+    if (char === '$') {
+      const isValidPosition = start === 0 || text[start - 1] === '\n' || isWhitespace(text[start - 1]);
+      if (isValidPosition) {
+        const query = text.slice(start + 1, cursorPosition);
+        return { trigger: '$', query, start, end: cursorPosition };
+      }
+      return null;
+    }
+    start--;
+  }
+  return null;
+}
+
+/**
  * useTriggerDetection - Trigger detection hook
- * Detects @, /, # or ! trigger symbols in the input box
+ * Detects @, /, #, ! or $ trigger symbols in the input box
  */
 export function useTriggerDetection() {
   /**
@@ -421,6 +444,10 @@ export function useTriggerDetection() {
     // Detect ! (prompt trigger)
     const exclamationTrigger = detectExclamationTrigger(text, cursorPosition);
     if (exclamationTrigger) return exclamationTrigger;
+
+    // Detect $ (Codex skill trigger)
+    const dollarTrigger = detectDollarTrigger(text, cursorPosition);
+    if (dollarTrigger) return dollarTrigger;
 
     return null;
   }, []);

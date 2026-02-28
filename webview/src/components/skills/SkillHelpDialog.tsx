@@ -3,13 +3,15 @@ import { copyToClipboard } from '../../utils/copyUtils';
 
 interface SkillHelpDialogProps {
   onClose: () => void;
+  currentProvider?: string;
 }
 
 /**
  * Skills Help Dialog
  * Explains what Skills are and how to use them
+ * Shows provider-specific content for Claude vs Codex
  */
-export function SkillHelpDialog({ onClose }: SkillHelpDialogProps) {
+export function SkillHelpDialog({ onClose, currentProvider = 'claude' }: SkillHelpDialogProps) {
   const { t } = useTranslation();
   // Prevent event bubbling
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -27,12 +29,16 @@ export function SkillHelpDialog({ onClose }: SkillHelpDialogProps) {
     }
   };
 
+  const isCodex = currentProvider === 'codex';
+  // Use provider-specific i18n key prefix
+  const hp = isCodex ? 'skills.help.codex' : 'skills.help';
+
   return (
     <div className="skill-dialog-backdrop" onClick={handleBackdropClick}>
       <div className="skill-dialog help-dialog">
         {/* Header */}
         <div className="dialog-header">
-          <h3>{t('skills.help.title')}</h3>
+          <h3>{t(`${hp}.title`)}</h3>
           <button className="close-btn" onClick={onClose}>
             <span className="codicon codicon-close"></span>
           </button>
@@ -43,103 +49,128 @@ export function SkillHelpDialog({ onClose }: SkillHelpDialogProps) {
           <section className="help-section">
             <h4>
               <span className="codicon codicon-extensions"></span>
-              {t('skills.help.overview.title')}
+              {t(`${hp}.overview.title`)}
             </h4>
-            <p>
-              {t('skills.help.overview.description')}
-            </p>
+            <p>{t(`${hp}.overview.description`)}</p>
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-folder"></span>
-              {t('skills.help.structure.title')}
+              {t(`${hp}.structure.title`)}
             </h4>
-            <p>{t('skills.help.structure.description')}</p>
+            <p>{t(`${hp}.structure.description`)}</p>
             <pre className="code-block">
-{t('skills.help.structure.example')}
+{t(`${hp}.structure.example`)}
             </pre>
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-file-code"></span>
-              {t('skills.help.format.title')}
+              {t(`${hp}.format.title`)}
             </h4>
-            <p>{t('skills.help.format.description')}</p>
+            <p>{t(`${hp}.format.description`)}</p>
             <pre className="code-block">
-{t('skills.help.format.example')}
+{t(`${hp}.format.example`)}
             </pre>
             <p className="hint-text">
-              {t('skills.help.format.hint')}
+              {t(`${hp}.format.hint`)}
             </p>
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-gear"></span>
-              {t('skills.help.configuration.title')}
+              {t(`${hp}.configuration.title`)}
             </h4>
-            <p>{t('skills.help.configuration.description')}</p>
-            <ul>
-              <li>
-                <strong>{t('skills.help.configuration.localPath.label')}</strong>：{t('skills.help.configuration.localPath.description')}
-              </li>
-              <li>
-                <strong>{t('skills.help.configuration.relativePath.label')}</strong>：{t('skills.help.configuration.relativePath.description')}
-              </li>
-              <li>
-                <strong>{t('skills.help.configuration.absolutePath.label')}</strong>：{t('skills.help.configuration.absolutePath.description')}
-              </li>
-            </ul>
+            <p>{t(`${hp}.configuration.description`)}</p>
+            {isCodex ? (
+              <ul>
+                <li>
+                  <strong>{t(`${hp}.configuration.userPath.label`)}</strong>：{t(`${hp}.configuration.userPath.description`)}
+                </li>
+                <li>
+                  <strong>{t(`${hp}.configuration.repoPath.label`)}</strong>：{t(`${hp}.configuration.repoPath.description`)}
+                </li>
+                <li>
+                  <strong>{t(`${hp}.configuration.configToml.label`)}</strong>：{t(`${hp}.configuration.configToml.description`)}
+                </li>
+              </ul>
+            ) : (
+              <ul>
+                <li>
+                  <strong>{t(`${hp}.configuration.localPath.label`)}</strong>：{t(`${hp}.configuration.localPath.description`)}
+                </li>
+                <li>
+                  <strong>{t(`${hp}.configuration.relativePath.label`)}</strong>：{t(`${hp}.configuration.relativePath.description`)}
+                </li>
+                <li>
+                  <strong>{t(`${hp}.configuration.absolutePath.label`)}</strong>：{t(`${hp}.configuration.absolutePath.description`)}
+                </li>
+              </ul>
+            )}
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-lightbulb"></span>
-              {t('skills.help.tips.title')}
+              {t(`${hp}.tips.title`)}
             </h4>
             <ul>
-              <li>{t('skills.help.tips.item1')}</li>
-              <li>{t('skills.help.tips.item2')}</li>
-              <li>{t('skills.help.tips.item3')}</li>
-              <li>{t('skills.help.tips.item4')}</li>
-              <li>{t('skills.help.tips.item5')}</li>
+              <li>{t(`${hp}.tips.item1`)}</li>
+              <li>{t(`${hp}.tips.item2`)}</li>
+              <li>{t(`${hp}.tips.item3`)}</li>
+              <li>{t(`${hp}.tips.item4`)}</li>
+              <li>{t(`${hp}.tips.item5`)}</li>
             </ul>
           </section>
 
           <section className="help-section">
             <h4>
               <span className="codicon codicon-link-external"></span>
-              {t('skills.help.learnMore.title')}
+              {t(`${hp}.learnMore.title`)}
             </h4>
-            <p>{t('skills.help.learnMore.description')}</p>
-            <ul>
-              <li>
-                <a
-                  href="https://support.claude.com/en/articles/12512176-what-are-skills"
-                  onClick={(e) => handleLinkClick(e, 'https://support.claude.com/en/articles/12512176-what-are-skills')}
-                >
-                  {t('skills.help.learnMore.link1')}
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://support.claude.com/en/articles/12512198-creating-custom-skills"
-                  onClick={(e) => handleLinkClick(e, 'https://support.claude.com/en/articles/12512198-creating-custom-skills')}
-                >
-                  {t('skills.help.learnMore.link2')}
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://github.com/anthropics/skills"
-                  onClick={(e) => handleLinkClick(e, 'https://github.com/anthropics/skills')}
-                >
-                  {t('skills.help.learnMore.link3')}
-                </a>
-              </li>
-            </ul>
+            <p>{t(`${hp}.learnMore.description`)}</p>
+            {isCodex ? (
+              <ul>
+                <li>
+                  <a
+                    href="https://codex.openai.com/docs/skills"
+                    onClick={(e) => handleLinkClick(e, 'https://codex.openai.com/docs/skills')}
+                  >
+                    {t(`${hp}.learnMore.link1`)}
+                  </a>
+                </li>
+              </ul>
+            ) : (
+              <ul>
+                <li>
+                  <a
+                    href="https://support.claude.com/en/articles/12512176-what-are-skills"
+                    onClick={(e) => handleLinkClick(e, 'https://support.claude.com/en/articles/12512176-what-are-skills')}
+                  >
+                    {t(`${hp}.learnMore.link1`)}
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://support.claude.com/en/articles/12512198-creating-custom-skills"
+                    onClick={(e) => handleLinkClick(e, 'https://support.claude.com/en/articles/12512198-creating-custom-skills')}
+                  >
+                    {t(`${hp}.learnMore.link2`)}
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://github.com/anthropics/skills"
+                    onClick={(e) => handleLinkClick(e, 'https://github.com/anthropics/skills')}
+                  >
+                    {t(`${hp}.learnMore.link3`)}
+                  </a>
+                </li>
+              </ul>
+            )}
           </section>
         </div>
 

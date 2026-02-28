@@ -18,6 +18,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
 
 import java.io.File;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -238,9 +239,26 @@ public class SessionLifecycleManager {
         host.setSlashCommandsFetched(true);
         LOG.info("Slash commands resolved locally: " + commands.size() + " commands");
 
+        // Pre-compute Codex skills outside EDT to avoid file I/O on UI thread
+        final List<SlashCommandRegistry.SlashCommand> codexSkills;
+        final String codexSkillsJson;
+        if ("codex".equalsIgnoreCase(provider)) {
+            codexSkills = SlashCommandRegistry.getCodexSkills(cwd);
+            codexSkillsJson = SlashCommandRegistry.toJson(codexSkills);
+            LOG.info("Codex skills resolved: " + codexSkills.size() + " skills");
+        } else {
+            codexSkills = null;
+            codexSkillsJson = null;
+        }
+
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 host.callJavaScript("updateSlashCommands", JsUtils.escapeJs(commandsJson));
+
+                // Push Codex skills as separate channel for $ autocomplete
+                if (codexSkillsJson != null) {
+                    host.callJavaScript("window.updateDollarCommands", JsUtils.escapeJs(codexSkillsJson));
+                }
             } catch (Exception e) {
                 LOG.warn("Failed to send slash commands to frontend: " + e.getMessage(), e);
             }

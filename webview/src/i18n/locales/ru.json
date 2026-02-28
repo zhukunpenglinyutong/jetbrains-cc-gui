@@ -946,6 +946,10 @@
     "importSkill": "Импорт навыка",
     "importGlobalSkill": "Импорт глобального навыка",
     "importLocalSkill": "Импорт локального навыка",
+    "importUserSkill": "Импортировать навык пользователя",
+    "importRepoSkill": "Импортировать навык репозитория",
+    "user": "Пользователь",
+    "repo": "Репозиторий",
     "description": "Описание",
     "noDescription": "Без описания",
     "noSkills": "Нет навыков",
@@ -955,6 +959,8 @@
     "deleteMessage": "Вы уверены, что хотите удалить {{scope}} навык «{{name}}»?\n\nЭто действие необратимо.",
     "deleteMessageGlobal": "глобальный",
     "deleteMessageLocal": "локальный",
+    "deleteMessageUser": "пользовательский",
+    "deleteMessageRepo": "репозитория",
     "importSuccess": "Успешно импортировано {{count}} навыков",
     "importSuccessOne": "Успешно импортирован 1 навык",
     "importPartialSuccess": "Успешно импортировано {{count}}/{{total}} навыков, часть не удалась",
@@ -1015,6 +1021,53 @@
         "link1": "Что такое навыки?",
         "link2": "Создание пользовательских навыков",
         "link3": "Репозиторий примеров навыков Anthropic"
+      },
+      "codex": {
+        "title": "Что такое навыки Codex?",
+        "overview": {
+          "title": "Обзор",
+          "description": "Навыки Codex — это наборы инструкций, хранящиеся в каталогах .agents/skills/, которые улучшают производительность Codex для конкретных задач. Вызывайте их в чате с помощью префикса $."
+        },
+        "structure": {
+          "title": "Структура навыка",
+          "description": "Навык Codex — это папка, содержащая файл SKILL.md:",
+          "example": ".agents/skills/\n└── my-skill/\n    ├── SKILL.md          # Required: skill definition file\n    ├── templates/        # Optional: template files\n    └── references/       # Optional: reference materials"
+        },
+        "format": {
+          "title": "Формат SKILL.md",
+          "description": "Файлы SKILL.md используют формат YAML frontmatter + Markdown:",
+          "example": "---\nname: my-skill-name\ndescription: Skill description and when to use\n---\n\n# Skill Instructions\n\nDetailed instruction content...",
+          "hint": "name и description — обязательные поля"
+        },
+        "configuration": {
+          "title": "Конфигурация",
+          "description": "Где хранятся навыки Codex:",
+          "userPath": {
+            "label": "Пользовательский каталог",
+            "description": "~/.agents/skills/, общий для всех проектов"
+          },
+          "repoPath": {
+            "label": "Каталог репозитория",
+            "description": "{project-root}/.agents/skills/, доступен только в текущем проекте"
+          },
+          "configToml": {
+            "label": "Включить/Отключить",
+            "description": "Управляется через записи [[skills.config]] в ~/.codex/config.toml"
+          }
+        },
+        "tips": {
+          "title": "Советы по использованию",
+          "item1": "Убедитесь, что каталог навыка содержит валидный файл SKILL.md",
+          "item2": "Имена навыков должны содержать строчные буквы, цифры и дефисы",
+          "item3": "Введите префикс $ в чате для вызова автодополнения навыков",
+          "item4": "Управляйте статусом каждого навыка с помощью переключателей включения/отключения",
+          "item5": "Отключённые навыки записываются в ~/.codex/config.toml"
+        },
+        "learnMore": {
+          "title": "Узнать больше",
+          "description": "Дополнительная информация о навыках Codex:",
+          "link1": "Документация навыков Codex"
+        }
       }
     }
   },

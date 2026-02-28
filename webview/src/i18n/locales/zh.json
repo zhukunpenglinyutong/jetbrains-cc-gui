@@ -1022,6 +1022,10 @@
     "importSkill": "导入 Skill",
     "importGlobalSkill": "导入全局 Skill",
     "importLocalSkill": "导入本项目 Skill",
+    "importUserSkill": "导入用户 Skill",
+    "importRepoSkill": "导入仓库 Skill",
+    "user": "用户",
+    "repo": "仓库",
     "description": "描述",
     "noDescription": "暂无描述",
     "noSkills": "暂无 Skills",
@@ -1031,6 +1035,8 @@
     "deleteMessage": "确定要删除{{scope}} Skill \"{{name}}\" 吗？\n\n此操作无法撤销。",
     "deleteMessageGlobal": "全局",
     "deleteMessageLocal": "本项目",
+    "deleteMessageUser": "用户",
+    "deleteMessageRepo": "仓库",
     "importSuccess": "已成功导入 {{count}} 个 Skills",
     "importSuccessOne": "已成功导入 1 个 Skill",
     "importPartialSuccess": "成功导入 {{count}}/{{total}} 个 Skills，部分失败",
@@ -1053,12 +1059,12 @@
       "structure": {
         "title": "Skill 结构",
         "description": "一个 Skill 是包含 SKILL.md 文件的文件夹：",
-        "example": "my-skill/\n├── SKILL.md          # 必须：技能定义文件\n├── templates/        # 可选：模板文件\n└── references/       # 可选：参考资料"
+        "example": "my-skill/\n├── SKILL.md          # Required: skill definition file\n├── templates/        # Optional: template files\n└── references/       # Optional: reference materials"
       },
       "format": {
         "title": "SKILL.md 格式",
         "description": "SKILL.md 文件使用 YAML frontmatter + Markdown 格式：",
-        "example": "---\nname: my-skill-name\ndescription: 技能描述和使用时机\n---\n\n# 技能指令\n\n详细的指令内容...",
+        "example": "---\nname: my-skill-name\ndescription: Skill description and when to use\n---\n\n# Skill Instructions\n\nDetailed instruction content...",
         "hint": "name 和 description 是必填字段，可选字段包括 license、allowed-tools、metadata"
       },
       "configuration": {
@@ -1091,6 +1097,53 @@
         "link1": "什么是 Skills?",
         "link2": "如何创建自定义 Skills",
         "link3": "Anthropic Skills 示例仓库"
+      },
+      "codex": {
+        "title": "什么是 Codex Skills?",
+        "overview": {
+          "title": "概述",
+          "description": "Codex Skills 是存放在 .agents/skills/ 目录中的指令集，用于增强 Codex 在特定任务上的表现。通过 $ 前缀在聊天中调用。"
+        },
+        "structure": {
+          "title": "Skill 结构",
+          "description": "一个 Codex Skill 是包含 SKILL.md 文件的文件夹：",
+          "example": ".agents/skills/\n└── my-skill/\n    ├── SKILL.md          # Required: skill definition file\n    ├── templates/        # Optional: template files\n    └── references/       # Optional: reference materials"
+        },
+        "format": {
+          "title": "SKILL.md 格式",
+          "description": "SKILL.md 文件使用 YAML frontmatter + Markdown 格式：",
+          "example": "---\nname: my-skill-name\ndescription: Skill description and when to use\n---\n\n# Skill Instructions\n\nDetailed instruction content...",
+          "hint": "name 和 description 是必填字段"
+        },
+        "configuration": {
+          "title": "配置方式",
+          "description": "Codex Skills 的存放位置：",
+          "userPath": {
+            "label": "用户目录",
+            "description": "~/.agents/skills/，所有项目共享"
+          },
+          "repoPath": {
+            "label": "仓库目录",
+            "description": "{项目根}/.agents/skills/，仅当前项目可用"
+          },
+          "configToml": {
+            "label": "启用/禁用",
+            "description": "通过 ~/.codex/config.toml 中的 [[skills.config]] 条目控制"
+          }
+        },
+        "tips": {
+          "title": "使用提示",
+          "item1": "确保 Skill 目录包含有效的 SKILL.md 文件",
+          "item2": "Skill 名称必须使用小写字母、数字和连字符",
+          "item3": "在聊天中输入 $ 前缀触发 Skill 自动补全",
+          "item4": "可以通过启用/禁用开关控制单个 Skill 的状态",
+          "item5": "禁用的 Skill 会记录在 ~/.codex/config.toml 中"
+        },
+        "learnMore": {
+          "title": "了解更多",
+          "description": "更多关于 Codex Skills 的信息：",
+          "link1": "Codex Skills 文档"
+        }
       }
     }
   },
