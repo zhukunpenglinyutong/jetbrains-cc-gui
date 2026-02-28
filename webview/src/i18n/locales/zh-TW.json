@@ -926,6 +926,10 @@
     "importSkill": "Import Skill",
     "importGlobalSkill": "Import Global Skill",
     "importLocalSkill": "Import Local Skill",
+    "importUserSkill": "匯入使用者 Skill",
+    "importRepoSkill": "匯入儲存庫 Skill",
+    "user": "使用者",
+    "repo": "儲存庫",
     "description": "描述",
     "noDescription": "暫無描述",
     "noSkills": "No Skills",
@@ -935,6 +939,8 @@
     "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
     "deleteMessageGlobal": "global",
     "deleteMessageLocal": "local",
+    "deleteMessageUser": "使用者",
+    "deleteMessageRepo": "儲存庫",
     "importSuccess": "Successfully imported {{count}} Skills",
     "importSuccessOne": "Successfully imported 1 Skill",
     "importPartialSuccess": "Successfully imported {{count}}/{{total}} Skills, some failed",
@@ -995,6 +1001,53 @@
         "link1": "什麼是 Skills?",
         "link2": "如何建立自訂 Skills",
         "link3": "Anthropic Skills 示例倉庫"
+      },
+      "codex": {
+        "title": "什麼是 Codex Skills？",
+        "overview": {
+          "title": "概述",
+          "description": "Codex Skills 是儲存在 .agents/skills/ 目錄中的指令集，用於增強 Codex 在特定任務中的表現。在聊天中使用 $ 前綴來呼叫。"
+        },
+        "structure": {
+          "title": "Skill 結構",
+          "description": "Codex Skill 是一個包含 SKILL.md 檔案的資料夾：",
+          "example": ".agents/skills/\n└── my-skill/\n    ├── SKILL.md          # Required: skill definition file\n    ├── templates/        # Optional: template files\n    └── references/       # Optional: reference materials"
+        },
+        "format": {
+          "title": "SKILL.md 格式",
+          "description": "SKILL.md 檔案使用 YAML frontmatter + Markdown 格式：",
+          "example": "---\nname: my-skill-name\ndescription: Skill description and when to use\n---\n\n# Skill Instructions\n\nDetailed instruction content...",
+          "hint": "name 和 description 是必填欄位"
+        },
+        "configuration": {
+          "title": "設定",
+          "description": "Codex Skills 的儲存位置：",
+          "userPath": {
+            "label": "使用者目錄",
+            "description": "~/.agents/skills/，所有專案共用"
+          },
+          "repoPath": {
+            "label": "儲存庫目錄",
+            "description": "{project-root}/.agents/skills/，僅在當前專案中可用"
+          },
+          "configToml": {
+            "label": "啟用/停用",
+            "description": "透過 ~/.codex/config.toml 中的 [[skills.config]] 項目控制"
+          }
+        },
+        "tips": {
+          "title": "使用提示",
+          "item1": "確保 Skill 目錄包含有效的 SKILL.md 檔案",
+          "item2": "Skill 名稱必須使用小寫字母、數字和連字號",
+          "item3": "在聊天中輸入 $ 前綴以觸發 Skill 自動完成",
+          "item4": "使用啟用/停用切換來控制各個 Skill 的狀態",
+          "item5": "停用的 Skills 會記錄在 ~/.codex/config.toml 中"
+        },
+        "learnMore": {
+          "title": "瞭解更多",
+          "description": "更多關於 Codex Skills 的資訊：",
+          "link1": "Codex Skills 文件"
+        }
       }
     }
   },

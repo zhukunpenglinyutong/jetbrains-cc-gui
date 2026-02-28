@@ -26,11 +26,14 @@ interface UseCompletionTriggerDetectionParams {
   commandCompletion: CompletionDropdownState;
   agentCompletion: CompletionDropdownState;
   promptCompletion: CompletionDropdownState;
+  dollarCommandCompletion: CompletionDropdownState;
+  /** Only enable $ trigger detection when provider is codex */
+  isDollarTriggerEnabled?: boolean;
 }
 
 /**
  * useCompletionTriggerDetection - Completion trigger detection hook
- * Handles detection and triggering of @ / / # / ! completion menus
+ * Handles detection and triggering of @ / / # / ! / $ completion menus
  */
 export function useCompletionTriggerDetection({
   editableRef,
@@ -41,6 +44,8 @@ export function useCompletionTriggerDetection({
   commandCompletion,
   agentCompletion,
   promptCompletion,
+  dollarCommandCompletion,
+  isDollarTriggerEnabled = false,
 }: UseCompletionTriggerDetectionParams) {
   const { detectTrigger, getTriggerPosition, getCursorPosition } = useTriggerDetection();
 
@@ -66,6 +71,7 @@ export function useCompletionTriggerDetection({
       commandCompletion.close();
       agentCompletion.close();
       promptCompletion.close();
+      dollarCommandCompletion.close();
       return;
     }
 
@@ -79,6 +85,7 @@ export function useCompletionTriggerDetection({
       commandCompletion.close();
       agentCompletion.close();
       promptCompletion.close();
+      dollarCommandCompletion.close();
       timer.mark('skip-large-text');
       timer.end();
       return;
@@ -89,12 +96,14 @@ export function useCompletionTriggerDetection({
     const hasSlashSymbol = text.includes('/');
     const hasHashSymbol = text.includes('#');
     const hasExclamationSymbol = text.includes('!');
+    const hasDollarSymbol = isDollarTriggerEnabled && text.includes('$');
 
-    if (!hasAtSymbol && !hasSlashSymbol && !hasHashSymbol && !hasExclamationSymbol) {
+    if (!hasAtSymbol && !hasSlashSymbol && !hasHashSymbol && !hasExclamationSymbol && !hasDollarSymbol) {
       fileCompletion.close();
       commandCompletion.close();
       agentCompletion.close();
       promptCompletion.close();
+      dollarCommandCompletion.close();
       timer.end();
       return;
     }
@@ -113,6 +122,7 @@ export function useCompletionTriggerDetection({
       commandCompletion.close();
       agentCompletion.close();
       promptCompletion.close();
+      dollarCommandCompletion.close();
       timer.end();
       return;
     }
@@ -129,6 +139,7 @@ export function useCompletionTriggerDetection({
       commandCompletion.close();
       agentCompletion.close();
       promptCompletion.close();
+      dollarCommandCompletion.close();
       if (!fileCompletion.isOpen) {
         fileCompletion.open(position, trigger);
         fileCompletion.updateQuery(trigger);
@@ -139,6 +150,7 @@ export function useCompletionTriggerDetection({
       fileCompletion.close();
       agentCompletion.close();
       promptCompletion.close();
+      dollarCommandCompletion.close();
       if (!commandCompletion.isOpen) {
         commandCompletion.open(position, trigger);
         commandCompletion.updateQuery(trigger);
@@ -149,6 +161,7 @@ export function useCompletionTriggerDetection({
       fileCompletion.close();
       commandCompletion.close();
       promptCompletion.close();
+      dollarCommandCompletion.close();
       if (!agentCompletion.isOpen) {
         agentCompletion.open(position, trigger);
         agentCompletion.updateQuery(trigger);
@@ -159,11 +172,33 @@ export function useCompletionTriggerDetection({
       fileCompletion.close();
       commandCompletion.close();
       agentCompletion.close();
+      dollarCommandCompletion.close();
       if (!promptCompletion.isOpen) {
         promptCompletion.open(position, trigger);
         promptCompletion.updateQuery(trigger);
       } else {
         promptCompletion.updateQuery(trigger);
+      }
+    } else if (trigger.trigger === '$') {
+      if (!isDollarTriggerEnabled) {
+        // Ignore $ trigger when not in Codex provider mode
+        fileCompletion.close();
+        commandCompletion.close();
+        agentCompletion.close();
+        promptCompletion.close();
+        dollarCommandCompletion.close();
+        timer.end();
+        return;
+      }
+      fileCompletion.close();
+      commandCompletion.close();
+      agentCompletion.close();
+      promptCompletion.close();
+      if (!dollarCommandCompletion.isOpen) {
+        dollarCommandCompletion.open(position, trigger);
+        dollarCommandCompletion.updateQuery(trigger);
+      } else {
+        dollarCommandCompletion.updateQuery(trigger);
       }
     }
 
@@ -180,6 +215,8 @@ export function useCompletionTriggerDetection({
     commandCompletion,
     agentCompletion,
     promptCompletion,
+    dollarCommandCompletion,
+    isDollarTriggerEnabled,
   ]);
 
   // Create debounced version of detectAndTriggerCompletion

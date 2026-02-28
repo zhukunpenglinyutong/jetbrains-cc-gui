@@ -14,9 +14,11 @@
 export type SkillType = 'file' | 'directory';
 
 /**
- * Skill scope: global or local
+ * Skill scope:
+ * - Claude: global (user-level) or local (project-level)
+ * - Codex: user (~/.agents/skills/) or repo ({cwd}/.agents/skills/)
  */
-export type SkillScope = 'global' | 'local';
+export type SkillScope = 'global' | 'local' | 'user' | 'repo';
 
 /**
  * Skill configuration
@@ -36,6 +38,8 @@ export interface Skill {
   enabled: boolean;
   /** Description (extracted from skill.md frontmatter) */
   description?: string;
+  /** Skill path for Codex config.toml operations */
+  skillPath?: string;
   /** Creation time */
   createdAt?: string;
   /** Modification time */
@@ -49,18 +53,23 @@ export type SkillsMap = Record<string, Skill>;
 
 /**
  * Skills configuration structure
+ * Claude uses global/local, Codex uses user/repo
  */
 export interface SkillsConfig {
-  /** Global skills */
+  /** Global skills (Claude only) */
   global: SkillsMap;
-  /** Local skills */
+  /** Local skills (Claude only) */
   local: SkillsMap;
+  /** User-level skills (Codex only) */
+  user?: SkillsMap;
+  /** Repository-level skills (Codex only) */
+  repo?: SkillsMap;
 }
 
 /**
  * Skills filter
  */
-export type SkillFilter = 'all' | 'global' | 'local';
+export type SkillFilter = 'all' | 'global' | 'local' | 'user' | 'repo';
 
 /**
  * Skills enabled status filter

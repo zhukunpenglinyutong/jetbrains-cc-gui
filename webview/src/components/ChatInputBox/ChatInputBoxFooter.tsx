@@ -45,6 +45,7 @@ export function ChatInputBoxFooter({
   commandCompletion,
   agentCompletion,
   promptCompletion,
+  dollarCommandCompletion,
   tooltip,
   promptEnhancer,
   t,
@@ -77,6 +78,7 @@ export function ChatInputBoxFooter({
   commandCompletion: CompletionController;
   agentCompletion: CompletionController;
   promptCompletion: CompletionController;
+  dollarCommandCompletion?: CompletionController;
   tooltip: TooltipState | null;
   promptEnhancer: {
     isOpen: boolean;
@@ -173,6 +175,22 @@ export function ChatInputBoxFooter({
         onSelect={(_, index) => promptCompletion.selectIndex(index)}
         onMouseEnter={promptCompletion.handleMouseEnter}
       />
+
+      {/* $ command dropdown menu */}
+      {dollarCommandCompletion && (
+        <CompletionDropdown
+          isVisible={dollarCommandCompletion.isOpen}
+          position={dollarCommandCompletion.position}
+          width={400}
+          items={dollarCommandCompletion.items}
+          selectedIndex={dollarCommandCompletion.activeIndex}
+          loading={dollarCommandCompletion.loading}
+          emptyText={t('chat.noMatchingCommands')}
+          onClose={dollarCommandCompletion.close}
+          onSelect={(_, index) => dollarCommandCompletion.selectIndex(index)}
+          onMouseEnter={dollarCommandCompletion.handleMouseEnter}
+        />
+      )}
 
       {/* Floating Tooltip (uses Portal or Fixed positioning to break overflow limit) */}
       {tooltip && tooltip.visible && (

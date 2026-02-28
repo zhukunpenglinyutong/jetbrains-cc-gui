@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.CodexSkillService;
 import com.github.claudecodegui.SkillService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -23,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 public class SkillHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(SkillHandler.class);
+    private static final Gson GSON = new Gson();
 
     private static final String[] SUPPORTED_TYPES = {
         "get_all_skills",
@@ -68,39 +70,54 @@ public class SkillHandler extends BaseMessageHandler {
     }
 
     /**
-     * Get all skills (global + local).
+     * Get all skills (dispatches to Claude or Codex service based on provider).
      */
     private void handleGetAllSkills() {
+        boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
         try {
             String workspaceRoot = context.getProject().getBasePath();
-            JsonObject skills = SkillService.getAllSkills(workspaceRoot);
-            Gson gson = new Gson();
-            String skillsJson = gson.toJson(skills);
+
+            JsonObject skills;
+            if (isCodex) {
+                skills = CodexSkillService.getAllSkills(workspaceRoot);
+            } else {
+                skills = SkillService.getAllSkills(workspaceRoot);
+            }
+
+            String skillsJson = GSON.toJson(skills);
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateSkills", escapeJs(skillsJson));
             });
         } catch (Exception e) {
             LOG.error("[SkillHandler] Failed to get all skills: " + e.getMessage(), e);
+            String fallbackJson = isCodex ? "{\"user\":{},\"repo\":{}}" : "{\"global\":{},\"local\":{}}";
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.updateSkills", escapeJs("{\"global\":{},\"local\":{}}"));
+                callJavaScript("window.updateSkills", escapeJs(fallbackJson));
             });
         }
     }
 
     /**
      * Import a skill (show file chooser dialog).
+     * Dispatches to CodexSkillService or SkillService based on provider.
      */
     private void handleImportSkill(String content) {
         try {
-            Gson gson = new Gson();
-            JsonObject json = gson.fromJson(content, JsonObject.class);
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
+            boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 JFileChooser chooser = new JFileChooser();
-                chooser.setDialogTitle("选择 Skill 文件或文件夹");
-                chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+                if (isCodex) {
+                    // Codex skills must be directories containing SKILL.md
+                    chooser.setDialogTitle("选择 Codex Skill 文件夹");
+                    chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+                } else {
+                    chooser.setDialogTitle("选择 Skill 文件或文件夹");
+                    chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+                }
                 chooser.setMultiSelectionEnabled(true);
 
                 int result = chooser.showOpenDialog(mainPanel);
@@ -114,8 +131,13 @@ public class SkillHandler extends BaseMessageHandler {
                     CompletableFuture.runAsync(() -> {
                         try {
                             String workspaceRoot = context.getProject().getBasePath();
-                            JsonObject importResult = SkillService.importSkills(paths, scope, workspaceRoot);
-                            String resultJson = new Gson().toJson(importResult);
+                            JsonObject importResult;
+                            if (isCodex) {
+                                importResult = CodexSkillService.importSkill(paths, scope, workspaceRoot);
+                            } else {
+                                importResult = SkillService.importSkills(paths, scope, workspaceRoot);
+                            }
+                            String resultJson = GSON.toJson(importResult);
 
                             ApplicationManager.getApplication().invokeLater(() -> {
                                 callJavaScript("window.skillImportResult", escapeJs(resultJson));
@@ -126,10 +148,10 @@ public class SkillHandler extends BaseMessageHandler {
                             errorResult.addProperty("success", false);
                             errorResult.addProperty("error", e.getMessage());
                             ApplicationManager.getApplication().invokeLater(() -> {
-                                callJavaScript("window.skillImportResult", escapeJs(new Gson().toJson(errorResult)));
+                                callJavaScript("window.skillImportResult", escapeJs(GSON.toJson(errorResult)));
                             });
                         }
-                    });
+                    }, AppExecutorUtil.getAppExecutorService());
                 }
             });
         } catch (Exception e) {
@@ -138,59 +160,101 @@ public class SkillHandler extends BaseMessageHandler {
     }
 
     /**
-     * Delete a skill.
+     * Delete a skill. Dispatches to CodexSkillService or SkillService based on provider.
      */
     private void handleDeleteSkill(String content) {
         try {
-            Gson gson = new Gson();
-            JsonObject json = gson.fromJson(content, JsonObject.class);
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
             String skillName = json.get("name").getAsString();
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
             boolean enabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
             String workspaceRoot = context.getProject().getBasePath();
+            boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
 
-            JsonObject result = SkillService.deleteSkill(skillName, scope, enabled, workspaceRoot);
-            String resultJson = gson.toJson(result);
+            CompletableFuture.runAsync(() -> {
+                try {
+                    JsonObject result;
+                    if (isCodex) {
+                        String skillPath = json.has("skillPath") ? json.get("skillPath").getAsString() : null;
+                        result = CodexSkillService.deleteSkill(skillName, scope, skillPath, workspaceRoot);
+                    } else {
+                        result = SkillService.deleteSkill(skillName, scope, enabled, workspaceRoot);
+                    }
+                    String resultJson = GSON.toJson(result);
 
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.skillDeleteResult", escapeJs(resultJson));
-            });
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillDeleteResult", escapeJs(resultJson));
+                    });
+                } catch (Exception e) {
+                    LOG.error("[SkillHandler] Delete skill failed: " + e.getMessage(), e);
+                    JsonObject errorResult = new JsonObject();
+                    errorResult.addProperty("success", false);
+                    errorResult.addProperty("error", e.getMessage());
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillDeleteResult", escapeJs(GSON.toJson(errorResult)));
+                    });
+                }
+            }, AppExecutorUtil.getAppExecutorService());
         } catch (Exception e) {
             LOG.error("[SkillHandler] Failed to delete skill: " + e.getMessage(), e);
             JsonObject errorResult = new JsonObject();
             errorResult.addProperty("success", false);
             errorResult.addProperty("error", e.getMessage());
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.skillDeleteResult", escapeJs(new Gson().toJson(errorResult)));
+                callJavaScript("window.skillDeleteResult", escapeJs(GSON.toJson(errorResult)));
             });
         }
     }
 
     /**
-     * Enable/disable a skill.
+     * Enable/disable a skill. Dispatches to CodexSkillService or SkillService based on provider.
      */
     private void handleToggleSkill(String content) {
         try {
-            Gson gson = new Gson();
-            JsonObject json = gson.fromJson(content, JsonObject.class);
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
             String skillName = json.get("name").getAsString();
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
             boolean currentEnabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
             String workspaceRoot = context.getProject().getBasePath();
+            boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
 
-            JsonObject result = SkillService.toggleSkill(skillName, scope, currentEnabled, workspaceRoot);
-            String resultJson = gson.toJson(result);
+            CompletableFuture.runAsync(() -> {
+                try {
+                    JsonObject result;
+                    if (isCodex) {
+                        String skillPath = json.has("skillPath") ? json.get("skillPath").getAsString() : null;
+                        if (skillPath == null || skillPath.isEmpty()) {
+                            result = new JsonObject();
+                            result.addProperty("success", false);
+                            result.addProperty("error", "skillPath is required for Codex skill toggle");
+                        } else {
+                            result = CodexSkillService.toggleSkill(skillPath, currentEnabled, workspaceRoot);
+                        }
+                    } else {
+                        result = SkillService.toggleSkill(skillName, scope, currentEnabled, workspaceRoot);
+                    }
+                    String resultJson = GSON.toJson(result);
 
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.skillToggleResult", escapeJs(resultJson));
-            });
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillToggleResult", escapeJs(resultJson));
+                    });
+                } catch (Exception e) {
+                    LOG.error("[SkillHandler] Toggle skill failed: " + e.getMessage(), e);
+                    JsonObject errorResult = new JsonObject();
+                    errorResult.addProperty("success", false);
+                    errorResult.addProperty("error", e.getMessage());
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillToggleResult", escapeJs(GSON.toJson(errorResult)));
+                    });
+                }
+            }, AppExecutorUtil.getAppExecutorService());
         } catch (Exception e) {
             LOG.error("[SkillHandler] Failed to toggle skill: " + e.getMessage(), e);
             JsonObject errorResult = new JsonObject();
             errorResult.addProperty("success", false);
             errorResult.addProperty("error", e.getMessage());
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.skillToggleResult", escapeJs(new Gson().toJson(errorResult)));
+                callJavaScript("window.skillToggleResult", escapeJs(GSON.toJson(errorResult)));
             });
         }
     }
@@ -200,8 +264,7 @@ public class SkillHandler extends BaseMessageHandler {
      */
     private void handleOpenSkill(String content) {
         try {
-            Gson gson = new Gson();
-            JsonObject json = gson.fromJson(content, JsonObject.class);
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
             String skillPath = json.get("path").getAsString();
 
             File skillFile = new File(skillPath);

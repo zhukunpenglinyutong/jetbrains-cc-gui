@@ -51,6 +51,8 @@ import {
   promptProvider,
   promptToDropdownItem,
   preloadSlashCommands,
+  dollarCommandProvider,
+  dollarCommandToDropdownItem,
   type AgentItem,
   type PromptItem,
 } from './providers/index.js';
@@ -160,6 +162,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       commandCompletion.close();
       agentCompletion.close();
       promptCompletion.close();
+      dollarCommandCompletion.close();
     }, []);
 
     // File tags hook
@@ -330,6 +333,27 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       },
     });
 
+    // $ command completion hook ($ trigger, only active when provider is codex)
+    const dollarCommandCompletion = useCompletionDropdown<CommandItem>({
+      trigger: '$',
+      provider: dollarCommandProvider,
+      toDropdownItem: dollarCommandToDropdownItem,
+      onSelect: (skill, query) => {
+        if (!editableRef.current || !query) return;
+
+        const text = getTextContent();
+        const replacement = `${skill.label} `;
+        const newText = dollarCommandCompletion.replaceText(text, replacement, query);
+
+        editableRef.current.innerText = newText;
+
+        const cursorPos = query.start + replacement.length;
+        setCursorOffset(editableRef.current, cursorPos);
+
+        handleInput();
+      },
+    });
+
     // Inline history completion hook (simple tab-complete style)
     const inlineCompletion = useInlineHistoryCompletion({
       debounceMs: 100,
@@ -384,6 +408,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       commandCompletion,
       agentCompletion,
       promptCompletion,
+      dollarCommandCompletion,
+      isDollarTriggerEnabled: currentProvider === 'codex',
     });
 
     // Performance optimization: Debounced onInput callback
@@ -459,7 +485,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         // Only if no other completion menu is open
         // Note: Access isOpen directly from the completion objects at call time
         // to avoid unnecessary re-renders when isOpen changes
-        const isOtherCompletionOpen = fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen || promptCompletion.isOpen;
+        const isOtherCompletionOpen = fileCompletion.isOpen || commandCompletion.isOpen || agentCompletion.isOpen || promptCompletion.isOpen || dollarCommandCompletion.isOpen;
         if (!isOtherCompletionOpen) {
           inlineCompletion.updateQuery(text);
         } else {
@@ -484,6 +510,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         commandCompletion,
         agentCompletion,
         promptCompletion,
+        dollarCommandCompletion,
         inlineCompletion,
       ]
     );
@@ -578,6 +605,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       commandCompletion,
       agentCompletion,
       promptCompletion,
+      dollarCommandCompletion,
       recordInputHistory,
       onSubmit,
       onInstallSdk,
@@ -613,6 +641,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       commandCompletion,
       agentCompletion,
       promptCompletion,
+      dollarCommandCompletion,
       handleMacCursorMovement,
       handleHistoryKeyDown,
       // Inline completion: Tab key applies suggestion
@@ -644,6 +673,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       commandCompletion,
       agentCompletion,
       promptCompletion,
+      dollarCommandCompletion,
       completionSelectedRef,
       submittedOnEnterRef,
       handleSubmit,
@@ -660,8 +690,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       setHasContent,
       setInternalAttachments,
       onInput,
-      fileCompletion,
-      commandCompletion,
+      closeAllCompletions,
       handleInput,
       flushInput: () => {
         debouncedOnInput.flush();
@@ -725,8 +754,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       renderFileTags,
       setHasContent,
       onInput,
-      fileCompletion,
-      commandCompletion,
+      closeAllCompletions,
       focusInput,
     });
 
@@ -826,7 +854,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
                   fileCompletion.isOpen ||
                   commandCompletion.isOpen ||
                   agentCompletion.isOpen ||
-                  promptCompletion.isOpen
+                  promptCompletion.isOpen ||
+                  dollarCommandCompletion.isOpen
                 ) {
                   return;
                 }
@@ -876,6 +905,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           commandCompletion={commandCompletion}
           agentCompletion={agentCompletion}
           promptCompletion={promptCompletion}
+          dollarCommandCompletion={dollarCommandCompletion}
           tooltip={tooltip}
           promptEnhancer={{
             isOpen: showEnhancerDialog,

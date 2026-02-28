@@ -1016,6 +1016,10 @@
     "importSkill": "Import Skill",
     "importGlobalSkill": "Import Global Skill",
     "importLocalSkill": "Import Local Skill",
+    "importUserSkill": "Import User Skill",
+    "importRepoSkill": "Import Repo Skill",
+    "user": "User",
+    "repo": "Repo",
     "description": "Description",
     "noDescription": "No description",
     "noSkills": "No Skills",
@@ -1025,6 +1029,8 @@
     "deleteMessage": "Are you sure you want to delete {{scope}} Skill \"{{name}}\"?\n\nThis action cannot be undone.",
     "deleteMessageGlobal": "global",
     "deleteMessageLocal": "local",
+    "deleteMessageUser": "user",
+    "deleteMessageRepo": "repo",
     "importSuccess": "Successfully imported {{count}} Skills",
     "importSuccessOne": "Successfully imported 1 Skill",
     "importPartialSuccess": "Successfully imported {{count}}/{{total}} Skills, some failed",
@@ -1085,6 +1091,53 @@
         "link1": "What are Skills?",
         "link2": "Creating Custom Skills",
         "link3": "Anthropic Skills Example Repository"
+      },
+      "codex": {
+        "title": "What are Codex Skills?",
+        "overview": {
+          "title": "Overview",
+          "description": "Codex Skills are instruction sets stored in .agents/skills/ directories that enhance Codex's performance for specific tasks. Invoke them in chat using the $ prefix."
+        },
+        "structure": {
+          "title": "Skill Structure",
+          "description": "A Codex Skill is a folder containing a SKILL.md file:",
+          "example": ".agents/skills/\n└── my-skill/\n    ├── SKILL.md          # Required: skill definition file\n    ├── templates/        # Optional: template files\n    └── references/       # Optional: reference materials"
+        },
+        "format": {
+          "title": "SKILL.md Format",
+          "description": "SKILL.md files use YAML frontmatter + Markdown format:",
+          "example": "---\nname: my-skill-name\ndescription: Skill description and when to use\n---\n\n# Skill Instructions\n\nDetailed instruction content...",
+          "hint": "name and description are required fields"
+        },
+        "configuration": {
+          "title": "Configuration",
+          "description": "Where Codex Skills are stored:",
+          "userPath": {
+            "label": "User Directory",
+            "description": "~/.agents/skills/, shared across all projects"
+          },
+          "repoPath": {
+            "label": "Repo Directory",
+            "description": "{project-root}/.agents/skills/, available only in current project"
+          },
+          "configToml": {
+            "label": "Enable/Disable",
+            "description": "Controlled via [[skills.config]] entries in ~/.codex/config.toml"
+          }
+        },
+        "tips": {
+          "title": "Usage Tips",
+          "item1": "Ensure Skill directory contains a valid SKILL.md file",
+          "item2": "Skill names must use lowercase letters, numbers, and hyphens",
+          "item3": "Type $ prefix in chat to trigger Skill autocomplete",
+          "item4": "Control individual Skill status with enable/disable toggles",
+          "item5": "Disabled Skills are recorded in ~/.codex/config.toml"
+        },
+        "learnMore": {
+          "title": "Learn More",
+          "description": "More information about Codex Skills:",
+          "link1": "Codex Skills Documentation"
+        }
       }
     }
   },

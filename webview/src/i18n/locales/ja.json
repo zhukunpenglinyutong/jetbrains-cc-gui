@@ -926,6 +926,10 @@
     "importSkill": "スキルをインポート",
     "importGlobalSkill": "グローバルスキルをインポート",
     "importLocalSkill": "ローカルスキルをインポート",
+    "importUserSkill": "ユーザー Skill をインポート",
+    "importRepoSkill": "リポジトリ Skill をインポート",
+    "user": "ユーザー",
+    "repo": "リポジトリ",
     "description": "説明",
     "noDescription": "説明なし",
     "noSkills": "スキルなし",
@@ -935,6 +939,8 @@
     "deleteMessage": "{{scope}}スキル\"{{name}}\"を削除してもよろしいですか?\n\nこの操作は元に戻せません。",
     "deleteMessageGlobal": "グローバル",
     "deleteMessageLocal": "ローカル",
+    "deleteMessageUser": "ユーザー",
+    "deleteMessageRepo": "リポジトリ",
     "importSuccess": "{{count}}個のスキルが正常にインポートされました",
     "importSuccessOne": "1個のスキルが正常にインポートされました",
     "importPartialSuccess": "{{count}}/{{total}}個のスキルが正常にインポートされました。一部失敗しました",
@@ -995,6 +1001,53 @@
         "link1": "Skills とは？",
         "link2": "カスタム Skills の作成",
         "link3": "Anthropic Skills サンプルリポジトリ"
+      },
+      "codex": {
+        "title": "Codex Skillsとは？",
+        "overview": {
+          "title": "概要",
+          "description": "Codex Skillsは、.agents/skills/ディレクトリに保存された命令セットで、特定のタスクにおけるCodexのパフォーマンスを向上させます。チャットで$プレフィックスを使用して呼び出します。"
+        },
+        "structure": {
+          "title": "Skillの構造",
+          "description": "Codex Skillは、SKILL.mdファイルを含むフォルダです：",
+          "example": ".agents/skills/\n└── my-skill/\n    ├── SKILL.md          # Required: skill definition file\n    ├── templates/        # Optional: template files\n    └── references/       # Optional: reference materials"
+        },
+        "format": {
+          "title": "SKILL.mdの形式",
+          "description": "SKILL.mdファイルはYAMLフロントマター + Markdown形式を使用します：",
+          "example": "---\nname: my-skill-name\ndescription: Skill description and when to use\n---\n\n# Skill Instructions\n\nDetailed instruction content...",
+          "hint": "nameとdescriptionは必須フィールドです"
+        },
+        "configuration": {
+          "title": "設定",
+          "description": "Codex Skillsの保存場所：",
+          "userPath": {
+            "label": "ユーザーディレクトリ",
+            "description": "~/.agents/skills/、すべてのプロジェクトで共有"
+          },
+          "repoPath": {
+            "label": "リポジトリディレクトリ",
+            "description": "{project-root}/.agents/skills/、現在のプロジェクトでのみ利用可能"
+          },
+          "configToml": {
+            "label": "有効/無効",
+            "description": "~/.codex/config.tomlの[[skills.config]]エントリで制御"
+          }
+        },
+        "tips": {
+          "title": "使用のヒント",
+          "item1": "Skillディレクトリに有効なSKILL.mdファイルが含まれていることを確認してください",
+          "item2": "Skill名には小文字、数字、ハイフンを使用してください",
+          "item3": "チャットで$プレフィックスを入力してSkillのオートコンプリートを呼び出します",
+          "item4": "有効/無効の切り替えで個々のSkillの状態を制御します",
+          "item5": "無効化されたSkillsは~/.codex/config.tomlに記録されます"
+        },
+        "learnMore": {
+          "title": "詳細情報",
+          "description": "Codex Skillsの詳細情報：",
+          "link1": "Codex Skillsドキュメント"
+        }
       }
     }
   },

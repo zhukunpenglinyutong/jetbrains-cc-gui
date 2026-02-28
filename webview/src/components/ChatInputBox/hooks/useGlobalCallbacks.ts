@@ -9,8 +9,7 @@ interface UseGlobalCallbacksOptions {
   renderFileTags: () => void;
   setHasContent: (hasContent: boolean) => void;
   onInput?: (content: string) => void;
-  fileCompletion: { close: () => void };
-  commandCompletion: { close: () => void };
+  closeAllCompletions: () => void;
   focusInput: () => void;
 }
 
@@ -29,8 +28,7 @@ export function useGlobalCallbacks({
   renderFileTags,
   setHasContent,
   onInput,
-  fileCompletion,
-  commandCompletion,
+  closeAllCompletions,
   focusInput,
 }: UseGlobalCallbacksOptions): void {
   // Register global function to receive file path from Java
@@ -114,9 +112,8 @@ export function useGlobalCallbacks({
         }
       }
 
-      // Close completion menus
-      fileCompletion.close();
-      commandCompletion.close();
+      // Close all completion menus
+      closeAllCompletions();
 
       // Directly trigger state update, don't call handleInput (avoid re-detecting completion)
       const newText = getTextContent();
@@ -150,8 +147,7 @@ export function useGlobalCallbacks({
     renderFileTags,
     setHasContent,
     onInput,
-    fileCompletion,
-    commandCompletion,
+    closeAllCompletions,
     focusInput,
   ]);
 

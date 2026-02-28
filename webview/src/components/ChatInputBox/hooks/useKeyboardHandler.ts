@@ -20,6 +20,7 @@ export interface UseKeyboardHandlerOptions {
   commandCompletion: CompletionWithKeyDown;
   agentCompletion: CompletionWithKeyDown;
   promptCompletion: CompletionWithKeyDown;
+  dollarCommandCompletion: CompletionWithKeyDown;
   handleMacCursorMovement: (e: ReactKeyboardEvent<HTMLDivElement>) => boolean;
   handleHistoryKeyDown: (e: {
     key: string;
@@ -56,6 +57,7 @@ export function useKeyboardHandler({
   commandCompletion,
   agentCompletion,
   promptCompletion,
+  dollarCommandCompletion,
   handleMacCursorMovement,
   handleHistoryKeyDown,
   inlineCompletion,
@@ -119,6 +121,16 @@ export function useKeyboardHandler({
         }
       }
 
+      if (dollarCommandCompletion.isOpen) {
+        const handled = dollarCommandCompletion.handleKeyDown(e.nativeEvent);
+        if (handled) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.key === 'Enter') completionSelectedRef.current = true;
+          return;
+        }
+      }
+
       // Handle inline history completion (Tab key)
       if (e.key === 'Tab' && inlineCompletion) {
         const applied = inlineCompletion.applySuggestion();
@@ -152,6 +164,7 @@ export function useKeyboardHandler({
       commandCompletion,
       agentCompletion,
       promptCompletion,
+      dollarCommandCompletion,
       handleHistoryKeyDown,
       inlineCompletion,
       lastCompositionEndTimeRef,
