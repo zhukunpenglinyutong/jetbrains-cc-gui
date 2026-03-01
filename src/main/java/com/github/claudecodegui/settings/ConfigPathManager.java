@@ -68,6 +68,13 @@ public class ConfigPathManager {
     }
 
     /**
+     * Get local provider snapshot file path (~/.codemoss/local-provider-snapshot.json).
+     */
+    public Path getLocalProviderSnapshotPath() {
+        return getConfigDir().resolve("local-provider-snapshot.json");
+    }
+
+    /**
      * Get the Claude settings.json path.
      */
     public Path getClaudeSettingsPath() {
