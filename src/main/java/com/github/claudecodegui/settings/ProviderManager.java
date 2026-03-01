@@ -761,4 +761,29 @@ public class ProviderManager {
             return info;
         }
     }
+
+    /**
+     * Get local provider snapshot content.
+     * @return snapshot file content as formatted JSON string
+     */
+    public String getLocalProviderSnapshotContent() throws IOException {
+        Path snapshotPath = pathManager.getLocalProviderSnapshotPath();
+
+        // Check if snapshot file exists
+        if (!Files.exists(snapshotPath)) {
+            throw new IOException("Snapshot file does not exist");
+        }
+
+        try {
+            // Read the entire file content as string
+            String content = Files.readString(snapshotPath);
+
+            // Parse and re-format to ensure valid JSON with pretty printing
+            JsonObject snapshot = JsonParser.parseString(content).getAsJsonObject();
+            return gson.toJson(snapshot);
+        } catch (Exception e) {
+            LOG.error("[ProviderManager] Failed to read snapshot content: " + e.getMessage(), e);
+            throw new IOException("Failed to read snapshot content: " + e.getMessage(), e);
+        }
+    }
 }

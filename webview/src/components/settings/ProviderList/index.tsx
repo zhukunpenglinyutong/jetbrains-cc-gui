@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../../types/provider';
+import type { SnapshotInfo } from '../hooks/useProviderManagement';
 import { sendToJava } from '../../../utils/bridge';
 import ImportConfirmDialog from './ImportConfirmDialog';
 import styles from './style.module.less';
@@ -13,6 +14,10 @@ interface ProviderListProps {
   onSwitch: (id: string) => void;
   addToast: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   emptyState?: React.ReactNode;
+  snapshotInfo?: SnapshotInfo;
+  snapshotLoading?: boolean;
+  onSaveSnapshot?: () => void;
+  onRestoreSnapshot?: () => void;
 }
 
 export default function ProviderList({
@@ -23,6 +28,10 @@ export default function ProviderList({
   onSwitch,
   addToast,
   emptyState,
+  snapshotInfo,
+  snapshotLoading = false,
+  onSaveSnapshot,
+  onRestoreSnapshot,
 }: ProviderListProps) {
   const { t } = useTranslation();
   const LOCAL_PROVIDER_ID = '__local_settings_json__';
@@ -32,6 +41,9 @@ export default function ProviderList({
   const [editingCcSwitchProvider, setEditingCcSwitchProvider] = useState<ProviderConfig | null>(null);
   const [convertingProvider, setConvertingProvider] = useState<ProviderConfig | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [showSnapshotPreview, setShowSnapshotPreview] = useState(false);
+  const [snapshotContent, setSnapshotContent] = useState<string>('');
+  const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const importMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -168,6 +180,37 @@ export default function ProviderList({
     sendToJava('open_file_chooser_for_cc_switch');
   };
 
+  const handlePreviewSnapshot = () => {
+    setShowSnapshotPreview(true);
+    setLoadingSnapshot(true);
+    sendToJava('get_snapshot_content:');
+  };
+
+  useEffect(() => {
+    // Register window callback for snapshot content
+    (window as any).onSnapshotContentReceived = (jsonStr: string) => {
+      try {
+        const response = JSON.parse(jsonStr);
+        if (response.success && response.content) {
+          setSnapshotContent(response.content);
+        } else {
+          addToast(t('settings.provider.snapshotLoadFailed'), 'error');
+          setShowSnapshotPreview(false);
+        }
+      } catch (error) {
+        console.error('[ProviderList] Failed to parse snapshot content:', error);
+        addToast(t('settings.provider.snapshotLoadFailed'), 'error');
+        setShowSnapshotPreview(false);
+      } finally {
+        setLoadingSnapshot(false);
+      }
+    };
+
+    return () => {
+      delete (window as any).onSnapshotContentReceived;
+    };
+  }, [addToast, t]);
+
   return (
     <div className={styles.container}>
       {/* Import dialog */}
@@ -181,6 +224,51 @@ export default function ProviderList({
           }}
           onCancel={() => setShowImportDialog(false)}
         />
+      )}
+
+      {/* Snapshot preview dialog */}
+      {showSnapshotPreview && (
+        <div className={styles.warningOverlay}>
+          <div className={styles.snapshotPreviewDialog}>
+            <div className={styles.previewHeader}>
+              <div className={styles.previewTitle}>
+                <span className="codicon codicon-file-code" />
+                {t('settings.provider.snapshotPreviewTitle')}
+              </div>
+              <button
+                className={styles.closeButton}
+                onClick={() => setShowSnapshotPreview(false)}
+              >
+                <span className="codicon codicon-close" />
+              </button>
+            </div>
+            <div className={styles.previewContent}>
+              {loadingSnapshot ? (
+                <div className={styles.previewLoading}>
+                  <span className="codicon codicon-loading codicon-modifier-spin" />
+                  <span>{t('settings.provider.loadingSnapshot')}</span>
+                </div>
+              ) : (
+                <pre className={styles.codeBlock}>{snapshotContent}</pre>
+              )}
+            </div>
+            <div className={styles.previewFooter}>
+              <div className={styles.previewInfo}>
+                {snapshotInfo?.timestamp && (
+                  <span>
+                    {t('settings.provider.snapshotTimestamp')}: {new Date(snapshotInfo.timestamp).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <button
+                className={styles.btnPrimary}
+                onClick={() => setShowSnapshotPreview(false)}
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Import loading */}
@@ -348,27 +436,48 @@ export default function ProviderList({
               <div className={styles.name}>
                 <span className="codicon codicon-file" style={{ marginRight: '8px' }} />
                 {t('settings.provider.localProviderName')}
+                {providers.some(p => p.id === LOCAL_PROVIDER_ID && p.isActive) && (
+                  <div className={styles.activeBadge} style={{ marginLeft: '12px' }}>
+                    <span className="codicon codicon-check" />
+                    {t('settings.provider.inUse')}
+                  </div>
+                )}
               </div>
-              <div className={styles.website} title={t('settings.provider.localProviderDescription')}>
-                {t('settings.provider.localProviderDescription')}
+              <div className={styles.snapshotHint}>
+                {t('settings.provider.snapshotHint')}
               </div>
+              {snapshotInfo?.exists && (
+                <div className={styles.snapshotTimestamp}>
+                  {t('settings.provider.snapshotTimestamp')}: {new Date(snapshotInfo.timestamp).toLocaleString()}
+                </div>
+              )}
             </div>
 
             <div className={styles.cardActions}>
-              {providers.some(p => p.id === LOCAL_PROVIDER_ID && p.isActive) ? (
-                <div className={styles.activeBadge}>
-                  <span className="codicon codicon-check" />
-                  {t('settings.provider.inUse')}
-                </div>
-              ) : (
-                <button
-                  className={styles.useButton}
-                  onClick={() => onSwitch(LOCAL_PROVIDER_ID)}
-                >
-                  <span className="codicon codicon-play" />
-                  {t('settings.provider.enable')}
-                </button>
-              )}
+              <button
+                className={styles.snapshotButton}
+                onClick={onSaveSnapshot}
+                disabled={snapshotLoading}
+              >
+                <span className="codicon codicon-save" />
+                {t('settings.provider.saveSnapshot')}
+              </button>
+              <button
+                className={styles.snapshotButton}
+                onClick={onRestoreSnapshot}
+                disabled={snapshotLoading || !snapshotInfo?.exists}
+              >
+                <span className="codicon codicon-history" />
+                {t('settings.provider.restoreSnapshot')}
+              </button>
+              <button
+                className={styles.snapshotButton}
+                onClick={handlePreviewSnapshot}
+                disabled={!snapshotInfo?.exists}
+              >
+                <span className="codicon codicon-eye" />
+                {t('settings.provider.previewSnapshot')}
+              </button>
             </div>
           </div>
 

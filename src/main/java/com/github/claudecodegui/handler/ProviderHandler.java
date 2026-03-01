@@ -44,6 +44,11 @@ public class ProviderHandler extends BaseMessageHandler {
         "preview_cc_switch_import",
         "open_file_chooser_for_cc_switch",
         "save_imported_providers",
+        // Local provider snapshot operations
+        "save_local_snapshot",
+        "restore_local_snapshot",
+        "get_snapshot_info",
+        "get_snapshot_content",
         // Codex provider operations
         "get_codex_providers",
         "get_current_codex_config",
@@ -102,6 +107,19 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "save_imported_providers":
                 handleSaveImportedProviders(content);
+                return true;
+            // Local provider snapshot operations
+            case "save_local_snapshot":
+                handleSaveLocalSnapshot();
+                return true;
+            case "restore_local_snapshot":
+                handleRestoreLocalSnapshot();
+                return true;
+            case "get_snapshot_info":
+                handleGetSnapshotInfo();
+                return true;
+            case "get_snapshot_content":
+                handleGetSnapshotContent();
                 return true;
             // Codex provider operations
             case "get_codex_providers":
@@ -817,5 +835,152 @@ public class ProviderHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to get active Codex provider: " + e.getMessage(), e);
         }
+    }
+
+    // ==================== Local Provider Snapshot Handlers ====================
+
+    /**
+     * Save local provider snapshot
+     */
+    private void handleSaveLocalSnapshot() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String timestamp = context.getSettingsService().saveLocalProviderSnapshot();
+
+                JsonObject response = new JsonObject();
+                response.addProperty("success", true);
+                response.addProperty("timestamp", timestamp);
+
+                Gson gson = new Gson();
+                String jsonStr = gson.toJson(response);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onSnapshotSaved", escapeJs(jsonStr));
+                });
+
+                LOG.info("[ProviderHandler] Local snapshot saved successfully at: " + timestamp);
+            } catch (Exception e) {
+                LOG.error("[ProviderHandler] Failed to save local snapshot: " + e.getMessage(), e);
+
+                JsonObject response = new JsonObject();
+                response.addProperty("success", false);
+                response.addProperty("error", e.getMessage());
+
+                Gson gson = new Gson();
+                String jsonStr = gson.toJson(response);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onSnapshotSaved", escapeJs(jsonStr));
+                });
+            }
+        });
+    }
+
+    /**
+     * Restore local provider snapshot
+     */
+    private void handleRestoreLocalSnapshot() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                boolean success = context.getSettingsService().restoreLocalProviderSnapshot();
+
+                JsonObject response = new JsonObject();
+                response.addProperty("success", success);
+
+                Gson gson = new Gson();
+                String jsonStr = gson.toJson(response);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onSnapshotRestored", escapeJs(jsonStr));
+                    if (success) {
+                        // Refresh current config after restore
+                        handleGetCurrentClaudeConfig();
+                    }
+                });
+
+                LOG.info("[ProviderHandler] Local snapshot restore " + (success ? "succeeded" : "failed (no snapshot found)"));
+            } catch (Exception e) {
+                LOG.error("[ProviderHandler] Failed to restore local snapshot: " + e.getMessage(), e);
+
+                JsonObject response = new JsonObject();
+                response.addProperty("success", false);
+                response.addProperty("error", e.getMessage());
+
+                Gson gson = new Gson();
+                String jsonStr = gson.toJson(response);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onSnapshotRestored", escapeJs(jsonStr));
+                });
+            }
+        });
+    }
+
+    /**
+     * Get local provider snapshot info
+     */
+    private void handleGetSnapshotInfo() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                JsonObject info = context.getSettingsService().getLocalProviderSnapshotInfo();
+
+                Gson gson = new Gson();
+                String jsonStr = gson.toJson(info);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.updateSnapshotInfo", escapeJs(jsonStr));
+                });
+            } catch (Exception e) {
+                LOG.error("[ProviderHandler] Failed to get snapshot info: " + e.getMessage(), e);
+
+                JsonObject info = new JsonObject();
+                info.addProperty("exists", false);
+                info.addProperty("timestamp", "");
+
+                Gson gson = new Gson();
+                String jsonStr = gson.toJson(info);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.updateSnapshotInfo", escapeJs(jsonStr));
+                });
+            }
+        });
+    }
+
+    /**
+     * Get local provider snapshot content
+     */
+    private void handleGetSnapshotContent() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String content = context.getSettingsService().getLocalProviderSnapshotContent();
+
+                JsonObject response = new JsonObject();
+                response.addProperty("success", true);
+                response.addProperty("content", content);
+
+                Gson gson = new Gson();
+                String jsonStr = gson.toJson(response);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onSnapshotContentReceived", escapeJs(jsonStr));
+                });
+
+                LOG.info("[ProviderHandler] Snapshot content retrieved successfully");
+            } catch (Exception e) {
+                LOG.error("[ProviderHandler] Failed to get snapshot content: " + e.getMessage(), e);
+
+                JsonObject response = new JsonObject();
+                response.addProperty("success", false);
+                response.addProperty("error", e.getMessage());
+
+                Gson gson = new Gson();
+                String jsonStr = gson.toJson(response);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onSnapshotContentReceived", escapeJs(jsonStr));
+                });
+            }
+        });
     }
 }

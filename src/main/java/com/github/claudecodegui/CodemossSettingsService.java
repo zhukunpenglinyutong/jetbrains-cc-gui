@@ -503,6 +503,38 @@ public class CodemossSettingsService {
         return providerManager.isLocalProviderActive();
     }
 
+    /**
+     * Save local provider snapshot.
+     * @return snapshot timestamp
+     */
+    public String saveLocalProviderSnapshot() throws IOException {
+        return providerManager.saveLocalProviderSnapshot();
+    }
+
+    /**
+     * Restore local provider snapshot.
+     * @return true if restore succeeded
+     */
+    public boolean restoreLocalProviderSnapshot() throws IOException {
+        return providerManager.restoreLocalProviderSnapshot();
+    }
+
+    /**
+     * Get local provider snapshot info.
+     * @return JsonObject with 'exists' and 'timestamp' fields
+     */
+    public JsonObject getLocalProviderSnapshotInfo() throws IOException {
+        return providerManager.getLocalProviderSnapshotInfo();
+    }
+
+    /**
+     * Get local provider snapshot content.
+     * @return snapshot file content as formatted JSON string
+     */
+    public String getLocalProviderSnapshotContent() throws IOException {
+        return providerManager.getLocalProviderSnapshotContent();
+    }
+
     // ==================== MCP Server Management ====================
 
     public List<JsonObject> getMcpServers() throws IOException {

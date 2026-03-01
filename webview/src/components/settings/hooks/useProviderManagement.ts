@@ -19,6 +19,11 @@ export interface DeleteConfirmState {
   provider: ProviderConfig | null;
 }
 
+export interface SnapshotInfo {
+  exists: boolean;
+  timestamp: string;
+}
+
 export interface UseProviderManagementOptions {
   onError?: (message: string) => void;
   onSuccess?: (message: string) => void;
@@ -31,6 +36,13 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
   // Provider list state
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Snapshot state
+  const [snapshotInfo, setSnapshotInfo] = useState<SnapshotInfo>({
+    exists: false,
+    timestamp: '',
+  });
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
 
   // Provider dialog state
   const [providerDialog, setProviderDialog] = useState<ProviderDialogState>({
@@ -228,12 +240,65 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     setDeleteConfirm({ isOpen: false, provider: null });
   }, []);
 
+  // Load snapshot info
+  const loadSnapshotInfo = useCallback(() => {
+    sendToJava('get_snapshot_info:');
+  }, []);
+
+  // Update snapshot info (used by window callback)
+  const updateSnapshotInfo = useCallback((info: SnapshotInfo) => {
+    setSnapshotInfo(info);
+  }, []);
+
+  // Save snapshot
+  const handleSaveSnapshot = useCallback(() => {
+    setSnapshotLoading(true);
+    sendToJava('save_local_snapshot:');
+  }, []);
+
+  // Restore snapshot
+  const handleRestoreSnapshot = useCallback(() => {
+    setSnapshotLoading(true);
+    sendToJava('restore_local_snapshot:');
+  }, []);
+
+  // Snapshot saved callback
+  const onSnapshotSaved = useCallback(
+    (response: { success: boolean; timestamp?: string; error?: string }) => {
+      setSnapshotLoading(false);
+      if (response.success) {
+        onSuccess?.(t('toast.snapshotSaved'));
+        loadSnapshotInfo();
+      } else {
+        onError?.(t('toast.snapshotSaveFailed') + (response.error ? `: ${response.error}` : ''));
+      }
+    },
+    [onSuccess, onError, t, loadSnapshotInfo]
+  );
+
+  // Snapshot restored callback
+  const onSnapshotRestored = useCallback(
+    (response: { success: boolean; error?: string }) => {
+      setSnapshotLoading(false);
+      if (response.success) {
+        onSuccess?.(t('toast.snapshotRestored'));
+      } else if (response.error) {
+        onError?.(t('toast.snapshotRestoreFailed') + `: ${response.error}`);
+      } else {
+        onError?.(t('toast.snapshotNotFound'));
+      }
+    },
+    [onSuccess, onError, t]
+  );
+
   return {
     // State
     providers,
     loading,
     providerDialog,
     deleteConfirm,
+    snapshotInfo,
+    snapshotLoading,
 
     // Methods
     loadProviders,
@@ -248,6 +313,12 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     confirmDeleteProvider,
     cancelDeleteProvider,
     syncActiveProviderModelMapping,
+    loadSnapshotInfo,
+    updateSnapshotInfo,
+    handleSaveSnapshot,
+    handleRestoreSnapshot,
+    onSnapshotSaved,
+    onSnapshotRestored,
 
     // Setter (for external loading state control)
     setLoading,

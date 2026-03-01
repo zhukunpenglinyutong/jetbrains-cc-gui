@@ -60,6 +60,11 @@ export interface SettingsWindowCallbacksDeps {
   updateCurrentCodexConfig: (config: any) => void;
   cleanupAgentsTimeout: () => void;
   cleanupPromptsTimeout: () => void;
+  // Snapshot functions
+  loadSnapshotInfo?: () => void;
+  updateSnapshotInfo?: (info: { exists: boolean; timestamp: string }) => void;
+  onSnapshotSaved?: (response: { success: boolean; timestamp?: string; error?: string }) => void;
+  onSnapshotRestored?: (response: { success: boolean; error?: string }) => void;
 
   // Callbacks
   showAlert: (type: AlertType, title: string, message: string) => void;
@@ -367,11 +372,40 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // Snapshot callbacks
+    window.updateSnapshotInfo = (jsonStr: string) => {
+      try {
+        const info = JSON.parse(jsonStr);
+        d().updateSnapshotInfo?.(info);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse snapshot info:', error);
+      }
+    };
+
+    window.onSnapshotSaved = (jsonStr: string) => {
+      try {
+        const response = JSON.parse(jsonStr);
+        d().onSnapshotSaved?.(response);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse snapshot saved response:', error);
+      }
+    };
+
+    window.onSnapshotRestored = (jsonStr: string) => {
+      try {
+        const response = JSON.parse(jsonStr);
+        d().onSnapshotRestored?.(response);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse snapshot restored response:', error);
+      }
+    };
+
     // Initial data loading
     d().loadProviders();
     d().loadCodexProviders();
     d().loadAgents();
     d().loadPrompts();
+    d().loadSnapshotInfo?.();
     d().setClaudeConfigLoading(true);
     sendToJava('get_current_claude_config:');
     sendToJava('get_node_path:');
@@ -415,6 +449,9 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateCodexProviders = undefined;
       window.updateActiveCodexProvider = undefined;
       window.updateCurrentCodexConfig = undefined;
+      window.updateSnapshotInfo = undefined;
+      window.onSnapshotSaved = undefined;
+      window.onSnapshotRestored = undefined;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);

@@ -20,6 +20,11 @@ interface ProviderTabSectionProps {
   onEditProvider: (provider: ProviderConfig) => void;
   onDeleteProvider: (provider: ProviderConfig) => void;
   onSwitchProvider: (id: string) => void;
+  // Snapshot props
+  snapshotInfo?: { exists: boolean; timestamp: string };
+  snapshotLoading?: boolean;
+  onSaveSnapshot?: () => void;
+  onRestoreSnapshot?: () => void;
   // Codex provider props
   codexProviders: CodexProviderConfig[];
   codexLoading: boolean;
@@ -41,6 +46,10 @@ const ProviderTabSection = ({
   onEditProvider,
   onDeleteProvider,
   onSwitchProvider,
+  snapshotInfo,
+  snapshotLoading,
+  onSaveSnapshot,
+  onRestoreSnapshot,
   codexProviders,
   codexLoading,
   onAddCodexProvider,
@@ -139,6 +148,10 @@ const ProviderTabSection = ({
           onEditProvider={onEditProvider}
           onDeleteProvider={onDeleteProvider}
           onSwitchProvider={onSwitchProvider}
+          snapshotInfo={snapshotInfo}
+          snapshotLoading={snapshotLoading}
+          onSaveSnapshot={onSaveSnapshot}
+          onRestoreSnapshot={onRestoreSnapshot}
           addToast={addToast}
           showHeader={false}
         />
