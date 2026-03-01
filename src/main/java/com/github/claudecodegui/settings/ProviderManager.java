@@ -729,4 +729,36 @@ public class ProviderManager {
             throw new IOException("Failed to restore snapshot", e);
         }
     }
+
+    /**
+     * Get local provider snapshot info.
+     * @return JsonObject with 'exists' and 'timestamp' fields
+     */
+    public JsonObject getLocalProviderSnapshotInfo() throws IOException {
+        JsonObject info = new JsonObject();
+        Path snapshotPath = pathManager.getLocalProviderSnapshotPath();
+
+        // Check if snapshot file exists
+        if (!Files.exists(snapshotPath)) {
+            info.addProperty("exists", false);
+            info.addProperty("timestamp", "");
+            return info;
+        }
+
+        try (FileReader reader = new FileReader(snapshotPath.toFile())) {
+            JsonObject snapshot = JsonParser.parseReader(reader).getAsJsonObject();
+
+            info.addProperty("exists", true);
+            String timestamp = snapshot.has("timestamp") ? snapshot.get("timestamp").getAsString() : "";
+            info.addProperty("timestamp", timestamp);
+
+            return info;
+        } catch (Exception e) {
+            LOG.error("[ProviderManager] Failed to read snapshot info: " + e.getMessage(), e);
+            // Return not exists if file is corrupted
+            info.addProperty("exists", false);
+            info.addProperty("timestamp", "");
+            return info;
+        }
+    }
 }
