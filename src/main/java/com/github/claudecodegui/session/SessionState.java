@@ -29,11 +29,13 @@ public class SessionState {
 
     // Configuration
     // Default to bypassPermissions to match frontend behavior and ensure write access in Codex mode
-    private String permissionMode = "bypassPermissions";
-    private String model = "claude-sonnet-4-6";
-    private String provider = "claude";
+    // Volatile ensures visibility across async handler threads
+    // (e.g. set_mode followed immediately by send_message).
+    private volatile String permissionMode = "bypassPermissions";
+    private volatile String model = "claude-sonnet-4-6";
+    private volatile String provider = "claude";
     // Codex reasoning effort (thinking depth)
-    private String reasoningEffort = "medium";
+    private volatile String reasoningEffort = "medium";
 
     // Slash commands
     private List<String> slashCommands = new ArrayList<>();

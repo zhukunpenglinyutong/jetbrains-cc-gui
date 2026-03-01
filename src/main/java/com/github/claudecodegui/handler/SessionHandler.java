@@ -88,6 +88,7 @@ public class SessionHandler extends BaseMessageHandler {
         String prompt;
         String agentPrompt = null;
         java.util.List<String> fileTagPaths = null;
+        String requestedPermissionMode = null;
         try {
             Gson gson = new Gson();
             JsonObject payload = gson.fromJson(content, JsonObject.class);
@@ -119,6 +120,16 @@ public class SessionHandler extends BaseMessageHandler {
                     LOG.info("[SessionHandler] Extracted " + fileTagPaths.size() + " file tags for context injection");
                 }
             }
+
+            // Extract requested permission mode from payload (optional, backward compatible)
+            if (payload != null && payload.has("permissionMode") && !payload.get("permissionMode").isJsonNull()) {
+                String mode = payload.get("permissionMode").getAsString();
+                if (isValidPermissionMode(mode)) {
+                    requestedPermissionMode = mode;
+                } else {
+                    LOG.warn("[SessionHandler] Ignoring invalid permissionMode from payload: " + mode);
+                }
+            }
         } catch (Exception e) {
             // If parsing fails, treat content as plain text (backward compatibility)
             LOG.debug("[SessionHandler] Message is plain text, not JSON: " + e.getMessage());
@@ -128,6 +139,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalPrompt = prompt;
         final String finalAgentPrompt = agentPrompt;
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
+        final String finalRequestedPermissionMode = requestedPermissionMode;
 
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
@@ -145,7 +157,7 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths)
+            context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
                     // Codex has no stream_end event, keep success trigger at completion.
@@ -198,6 +210,7 @@ public class SessionHandler extends BaseMessageHandler {
 
             // [FIX] Extract agent prompt from the payload for per-tab agent selection
             String agentPrompt = null;
+            String requestedPermissionMode = null;
             if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
                 JsonObject agent = payload.getAsJsonObject("agent");
                 if (agent.has("prompt") && !agent.get("prompt").isJsonNull()) {
@@ -223,7 +236,16 @@ public class SessionHandler extends BaseMessageHandler {
                 }
             }
 
-            sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths);
+            if (payload != null && payload.has("permissionMode") && !payload.get("permissionMode").isJsonNull()) {
+                String mode = payload.get("permissionMode").getAsString();
+                if (isValidPermissionMode(mode)) {
+                    requestedPermissionMode = mode;
+                } else {
+                    LOG.warn("[SessionHandler] Ignoring invalid permissionMode from attachment payload: " + mode);
+                }
+            }
+
+            sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths, requestedPermissionMode);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
@@ -234,7 +256,13 @@ public class SessionHandler extends BaseMessageHandler {
      * Send message with attachments to Claude
      * [FIX] Now accepts agent prompt and file tags parameters
      */
-    private void sendMessageWithAttachments(String prompt, List<ClaudeSession.Attachment> attachments, String agentPrompt, java.util.List<String> fileTagPaths) {
+    private void sendMessageWithAttachments(
+        String prompt,
+        List<ClaudeSession.Attachment> attachments,
+        String agentPrompt,
+        java.util.List<String> fileTagPaths,
+        String requestedPermissionMode
+    ) {
         // Version check (consistent with handleSendMessage)
         String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
         if (nodeVersion == null) {
@@ -254,6 +282,7 @@ public class SessionHandler extends BaseMessageHandler {
 
         final String finalAgentPrompt = agentPrompt;
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
+        final String finalRequestedPermissionMode = requestedPermissionMode;
 
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
@@ -270,7 +299,7 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths)
+            context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
                     // Codex has no stream_end event, keep success trigger at completion.
@@ -312,6 +341,13 @@ public class SessionHandler extends BaseMessageHandler {
         context.getSession().restart().thenRun(() -> {
             ApplicationManager.getApplication().invokeLater(() -> {});
         });
+    }
+
+    private boolean isValidPermissionMode(String mode) {
+        return "default".equals(mode)
+            || "plan".equals(mode)
+            || "acceptEdits".equals(mode)
+            || "bypassPermissions".equals(mode);
     }
 
     /**

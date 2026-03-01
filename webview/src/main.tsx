@@ -359,6 +359,15 @@ if (typeof window !== 'undefined' && !window.updateUsageStatistics) {
   };
 }
 
+// Pre-register onModeReceived to avoid losing early backend push before React callbacks are ready.
+if (typeof window !== 'undefined' && !window.onModeReceived) {
+  console.log('[Main] Pre-registering onModeReceived placeholder');
+  window.onModeReceived = (mode: string) => {
+    console.log('[Main] Storing pending mode:', mode);
+    (window as unknown as Record<string, unknown>).__pendingModeReceived = mode;
+  };
+}
+
 if (typeof window !== 'undefined' && !window.showPermissionDialog) {
   console.log('[Main] Pre-registering showPermissionDialog placeholder');
   window.showPermissionDialog = (json: string) => {
