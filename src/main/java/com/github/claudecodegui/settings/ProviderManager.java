@@ -692,4 +692,41 @@ public class ProviderManager {
 
         return timestamp;
     }
+
+    /**
+     * Restore local provider snapshot.
+     * @return true if restore succeeded
+     */
+    public boolean restoreLocalProviderSnapshot() throws IOException {
+        Path snapshotPath = pathManager.getLocalProviderSnapshotPath();
+
+        // Check if snapshot file exists
+        if (!Files.exists(snapshotPath)) {
+            LOG.warn("[ProviderManager] Snapshot file does not exist: " + snapshotPath);
+            return false;
+        }
+
+        try (FileReader reader = new FileReader(snapshotPath.toFile())) {
+            JsonObject snapshot = JsonParser.parseReader(reader).getAsJsonObject();
+
+            // Validate snapshot structure
+            if (!snapshot.has("settings") || snapshot.get("settings").isJsonNull()) {
+                LOG.error("[ProviderManager] Invalid snapshot: missing settings field");
+                return false;
+            }
+
+            // Extract settings and deep copy to avoid reference
+            JsonObject settings = snapshot.getAsJsonObject("settings").deepCopy();
+
+            // Write to settings.json
+            claudeSettingsManager.writeClaudeSettings(settings);
+
+            String timestamp = snapshot.has("timestamp") ? snapshot.get("timestamp").getAsString() : "unknown";
+            LOG.info("[ProviderManager] Restored local provider snapshot from: " + timestamp);
+            return true;
+        } catch (Exception e) {
+            LOG.error("[ProviderManager] Failed to restore snapshot: " + e.getMessage(), e);
+            throw new IOException("Failed to restore snapshot", e);
+        }
+    }
 }
