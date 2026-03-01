@@ -81,6 +81,7 @@ public class ChatWindowDelegate {
         void callJavaScript(String fn, String... args);
         Content getParentContent();
         String getOriginalTabName();
+        void setOriginalTabName(String name);
         String getSessionId();
         HandlerContext getHandlerContext();
         void setHandlerContext(HandlerContext ctx);
@@ -351,6 +352,17 @@ public class ChatWindowDelegate {
         }
 
         ApplicationManager.getApplication().invokeLater(() -> {
+            // Detect external renames: if current name doesn't start with originalTabName,
+            // someone renamed the tab (e.g. RenameTabAction) — adopt the new name
+            String currentDisplayName = parentContent.getDisplayName();
+            if (currentDisplayName != null && !currentDisplayName.startsWith(originalTabName)) {
+                originalTabName = currentDisplayName.endsWith("...")
+                    ? currentDisplayName.substring(0, currentDisplayName.length() - 3)
+                    : currentDisplayName;
+                host.setOriginalTabName(originalTabName);
+                LOG.debug("[TabStatus] Detected external rename, updated originalTabName to: " + originalTabName);
+            }
+
             String displayName;
             switch (status) {
                 case ANSWERING:

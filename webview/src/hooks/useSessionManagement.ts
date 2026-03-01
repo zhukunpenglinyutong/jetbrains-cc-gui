@@ -150,6 +150,11 @@ export function useSessionManagement({
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
     setCustomSessionTitle(session?.title ?? null);
 
+    // Update IDE tab title to match the history session title
+    if (session?.title) {
+      sendBridgeEvent('rename_tab', JSON.stringify({ title: session.title, force: true }));
+    }
+
     setCurrentView('chat');
   }, [loading, setCurrentSessionId, setCustomSessionTitle, setCurrentView]);
 

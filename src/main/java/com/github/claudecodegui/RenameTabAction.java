@@ -87,6 +87,12 @@ public class RenameTabAction extends AnAction implements DumbAware {
         // Update the tab name
         selectedContent.setDisplayName(newName);
 
+        // Update originalTabName so status indicators won't revert to the old name
+        ClaudeChatWindow chatWindow = ClaudeSDKToolWindow.getChatWindowForContent(selectedContent);
+        if (chatWindow != null) {
+            chatWindow.setOriginalTabName(newName);
+        }
+
         // Get tab index and save to persistent storage
         int tabIndex = contentManager.getIndexOfContent(selectedContent);
         if (tabIndex >= 0) {

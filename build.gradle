@@ -230,6 +230,12 @@ tasks.named('runIde') {
     // Configure log output to console
     systemProperty 'idea.log.debug.categories', '#com.github.claudecodegui'
 
+    // Point bridge resolver to pre-extracted ai-bridge with node_modules (dev only)
+    def stableBridge = layout.buildDirectory.dir("stable-ai-bridge").get().asFile
+    if (stableBridge.exists()) {
+        systemProperty 'claude.bridge.path', stableBridge.absolutePath
+    }
+
     // Redirect standard output
     standardOutput = System.out
     errorOutput = System.err
