@@ -370,6 +370,19 @@ public class WebviewInitializer {
         }
     }
 
+    /**
+     * Replace the main panel's CENTER content, then force a layout refresh.
+     * All show*Panel helpers must go through this to avoid stale loading/error panels
+     * lingering when called from async callbacks (invokeLater).
+     */
+    private void replaceMainContent(JPanel newPanel) {
+        JPanel mainPanel = host.getMainPanel();
+        mainPanel.removeAll();
+        mainPanel.add(newPanel, BorderLayout.CENTER);
+        mainPanel.revalidate();
+        mainPanel.repaint();
+    }
+
     public void showErrorPanel() {
         ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
         String message = ClaudeCodeGuiBundle.message(
@@ -381,7 +394,7 @@ public class WebviewInitializer {
             claudeSDKBridge.getNodeExecutable(),
             this::handleNodePathSave
         );
-        host.getMainPanel().add(errorPanel, BorderLayout.CENTER);
+        replaceMainContent(errorPanel);
     }
 
     private void showVersionErrorPanel(String currentVersion) {
@@ -397,7 +410,7 @@ public class WebviewInitializer {
             claudeSDKBridge.getNodeExecutable(),
             this::handleNodePathSave
         );
-        host.getMainPanel().add(errorPanel, BorderLayout.CENTER);
+        replaceMainContent(errorPanel);
     }
 
     private void showInvalidNodePathPanel(String path, String errMsg) {
@@ -411,7 +424,7 @@ public class WebviewInitializer {
             path,
             this::handleNodePathSave
         );
-        host.getMainPanel().add(errorPanel, BorderLayout.CENTER);
+        replaceMainContent(errorPanel);
     }
 
     private void showJcefNotSupportedPanel() {
@@ -420,7 +433,7 @@ public class WebviewInitializer {
             ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalled"),
             ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalledSolution")
         );
-        host.getMainPanel().add(panel, BorderLayout.CENTER);
+        replaceMainContent(panel);
     }
 
     private void showJcefRemoteModeErrorPanel() {
@@ -429,7 +442,7 @@ public class WebviewInitializer {
             ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteError"),
             ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteSolution")
         );
-        host.getMainPanel().add(panel, BorderLayout.CENTER);
+        replaceMainContent(panel);
     }
 
     private void showLoadingPanel() {
@@ -438,7 +451,7 @@ public class WebviewInitializer {
             ClaudeCodeGuiBundle.message("toolwindow.extractingTitle"),
             ClaudeCodeGuiBundle.message("toolwindow.extractingDesc")
         );
-        host.getMainPanel().add(panel, BorderLayout.CENTER);
+        replaceMainContent(panel);
         LOG.info("[ClaudeSDKToolWindow] Showing loading panel while bridge extracts...");
     }
 

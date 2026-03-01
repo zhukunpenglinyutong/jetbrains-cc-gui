@@ -192,7 +192,7 @@ public abstract class BaseSDKBridge {
             LOG.info("Environment check passed for " + getProviderName());
             return true;
         } catch (Exception e) {
-            LOG.error("Environment check failed: " + e.getMessage());
+            LOG.warn("Environment check failed: " + e.getMessage());
             return false;
         }
     }
