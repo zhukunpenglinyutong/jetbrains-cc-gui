@@ -19,7 +19,6 @@ import {
   useWindowCallbacks,
   useRewindHandlers,
   useHistoryLoader,
-  useUsageStats,
   useFileChanges,
   useSubagents,
   useMessageQueue,
@@ -611,8 +610,6 @@ const App = () => {
   // History data loading
   useHistoryLoader({ currentView, currentProvider });
 
-  // Usage statistics polling
-  useUsageStats();
 
   // Window callbacks (bridge communication)
   useWindowCallbacks({
