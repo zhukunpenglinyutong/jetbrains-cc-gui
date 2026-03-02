@@ -879,12 +879,6 @@ const App = () => {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    // Auto-rename tab title from first message (if no custom title set)
-    // Truncation is handled by TabHandler.java (MAX_TAB_TITLE_LENGTH)
-    if (!customSessionTitleRef.current && messagesRef.current.length === 0 && text) {
-      sendBridgeEvent('rename_tab', JSON.stringify({ title: text }));
-    }
-
     // Set loading state
     setLoading(true);
     setLoadingStartTime(Date.now());
