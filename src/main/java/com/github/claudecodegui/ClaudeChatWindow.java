@@ -178,8 +178,10 @@ public class ClaudeChatWindow {
     }
 
     public void setOriginalTabName(String name) {
-        this.originalTabName = name;
-        LOG.debug("[TabLoading] Set original tab name: " + name);
+        this.originalTabName = (name != null && name.endsWith("..."))
+            ? name.substring(0, name.length() - 3)
+            : name;
+        LOG.debug("[TabLoading] Set original tab name: " + this.originalTabName);
     }
 
     public boolean isDisposed() { return disposed; }
@@ -481,6 +483,7 @@ public class ClaudeChatWindow {
             @Override public boolean isDisposed() { return disposed; }                       // Check if window has been disposed
             @Override public Content getParentContent() { return parentContent; }            // Tab content this window belongs to
             @Override public String getOriginalTabName() { return originalTabName; }         // Original tab name before any rename
+            @Override public void setOriginalTabName(String name) { ClaudeChatWindow.this.setOriginalTabName(name); }
             @Override public String getSessionId() { return sessionId; }                     // Unique session identifier
 
             // --- Handler context & wiring (initialized during startup) ---

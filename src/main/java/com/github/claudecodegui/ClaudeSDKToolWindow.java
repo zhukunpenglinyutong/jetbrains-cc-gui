@@ -103,6 +103,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         contentToWindowMap.remove(content);
     }
 
+    /**
+     * Get the ClaudeChatWindow associated with the given Content tab.
+     */
+    public static ClaudeChatWindow getChatWindowForContent(Content content) {
+        return content != null ? contentToWindowMap.get(content) : null;
+    }
+
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         // Register JVM Shutdown Hook (only once)
