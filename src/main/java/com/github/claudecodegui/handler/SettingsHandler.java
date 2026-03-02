@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.CodemossSettingsService;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
@@ -275,7 +276,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String mode = content;
             if (content != null && !content.isEmpty()) {
                 try {
-                    Gson gson = new Gson();
                     JsonObject json = gson.fromJson(content, JsonObject.class);
                     if (json.has("mode")) {
                         mode = json.get("mode").getAsString();
@@ -325,7 +325,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String model = content;
             if (content != null && !content.isEmpty()) {
                 try {
-                    Gson gson = new Gson();
                     JsonObject json = gson.fromJson(content, JsonObject.class);
                     if (json.has("model")) {
                         model = json.get("model").getAsString();
@@ -422,7 +421,7 @@ public class SettingsHandler extends BaseMessageHandler {
         usageUpdate.addProperty("usedTokens", usedTokens);
         usageUpdate.addProperty("maxTokens", maxTokens);
 
-        String usageJson = new Gson().toJson(usageUpdate);
+        String usageJson = gson.toJson(usageUpdate);
 
         // Push to frontend (must be executed on the EDT thread)
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -447,7 +446,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String provider = content;
             if (content != null && !content.isEmpty()) {
                 try {
-                    Gson gson = new Gson();
                     JsonObject json = gson.fromJson(content, JsonObject.class);
                     if (json.has("provider")) {
                         provider = json.get("provider").getAsString();
@@ -608,7 +606,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String effort = content;
             if (content != null && !content.isEmpty()) {
                 try {
-                    Gson gson = new Gson();
                     JsonObject json = gson.fromJson(content, JsonObject.class);
                     if (json.has("reasoningEffort")) {
                         effort = json.get("reasoningEffort").getAsString();
@@ -796,7 +793,6 @@ public class SettingsHandler extends BaseMessageHandler {
 
                 if (content != null && !content.isEmpty() && !content.equals("{}")) {
                     try {
-                        Gson gson = new Gson();
                         JsonObject json = gson.fromJson(content, JsonObject.class);
 
                         // Parse scope
@@ -834,7 +830,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
 
                 // Use corresponding reader based on provider
-                Gson gson = new Gson();
                 String json;
                 if ("codex".equals(provider)) {
                     CodexHistoryReader reader = new CodexHistoryReader();
@@ -886,7 +881,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 new com.github.claudecodegui.CodemossSettingsService();
             String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
 
-            Gson gson = new Gson();
             JsonObject response = new JsonObject();
             response.addProperty("projectPath", projectPath);
             response.addProperty("customWorkingDir", customWorkingDir != null ? customWorkingDir : "");
@@ -916,7 +910,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return;
             }
 
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String customWorkingDir = null;
 
@@ -983,7 +976,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     JsonObject response = new JsonObject();
                     response.addProperty("streamingEnabled", true);
-                    callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+                    callJavaScript("window.updateStreamingEnabled", escapeJs(gson.toJson(response)));
                 });
                 return;
             }
@@ -995,14 +988,14 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("streamingEnabled", streamingEnabled);
-                callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateStreamingEnabled", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get streaming enabled: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("streamingEnabled", true);
-                callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateStreamingEnabled", escapeJs(gson.toJson(response)));
             });
         }
     }
@@ -1020,7 +1013,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return;
             }
 
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             boolean streamingEnabled = true;
 
@@ -1059,7 +1051,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     JsonObject response = new JsonObject();
                     response.addProperty("autoOpenFileEnabled", true);
-                    callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+                    callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(gson.toJson(response)));
                 });
                 return;
             }
@@ -1071,14 +1063,14 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("autoOpenFileEnabled", autoOpenFileEnabled);
-                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get auto open file enabled: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("autoOpenFileEnabled", true);
-                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(gson.toJson(response)));
             });
         }
     }
@@ -1096,7 +1088,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return;
             }
 
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             boolean autoOpenFileEnabled = true;
 
@@ -1256,7 +1247,7 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("sendShortcut", sendShortcut);
-                callJavaScript("window.updateSendShortcut", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateSendShortcut", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get send shortcut: " + e.getMessage(), e);
@@ -1268,7 +1259,6 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleSetSendShortcut(String content) {
         try {
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String sendShortcut = "enter";
 
@@ -1283,6 +1273,9 @@ public class SettingsHandler extends BaseMessageHandler {
 
             PropertiesComponent props = PropertiesComponent.getInstance();
             props.setValue(SEND_SHORTCUT_PROPERTY_KEY, sendShortcut);
+
+            // Sync IDEA keymap for ChatSendAction
+            SendShortcutSync.sync(sendShortcut);
 
             LOG.info("[SettingsHandler] Set send shortcut: " + sendShortcut);
 
@@ -1312,7 +1305,7 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("commitPrompt", commitPrompt);
-                callJavaScript("window.updateCommitPrompt", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateCommitPrompt", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get commit prompt: " + e.getMessage(), e);
@@ -1324,7 +1317,6 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleSetCommitPrompt(String content) {
         try {
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
 
             if (json == null || !json.has("prompt")) {

@@ -61,6 +61,8 @@ import { debounce } from './utils/debounce.js';
 import { setCursorOffset } from './utils/selectionUtils.js';
 import { perfTimer } from '../../utils/debug.js';
 import { DEBOUNCE_TIMING } from '../../constants/performance.js';
+import { ContextMenu } from '../ContextMenu';
+import { useContextMenu, copySelection, cutSelection, pasteAtCursor, insertNewline } from '../../hooks/useContextMenu.js';
 import './styles.css';
 
 /**
@@ -370,6 +372,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
     // Tooltip hook
     const { tooltip, handleMouseOver, handleMouseLeave } = useTooltip();
+
+    // Context menu hook
+    const ctxMenu = useContextMenu();
 
     /**
      * Clear input box
@@ -689,6 +694,17 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       handleEnhancePrompt,
     });
 
+    // Listen for IDEA shortcut send event (dispatched by window.execContextAction)
+    useEffect(() => {
+      const handler = () => {
+        if (!isLoading && !isComposingRef.current) {
+          handleSubmit();
+        }
+      };
+      document.addEventListener('ideaSend', handler);
+      return () => document.removeEventListener('ideaSend', handler);
+    }, [handleSubmit, isLoading]);
+
     // Paste and drop hook
     const { handlePaste, handleDragOver, handleDrop } = usePasteAndDrop({
       editableRef,
@@ -881,8 +897,23 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             onPaste={handlePaste}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
+            onContextMenu={ctxMenu.open}
             suppressContentEditableWarning
           />
+          {ctxMenu.visible && (
+            <ContextMenu
+              x={ctxMenu.x}
+              y={ctxMenu.y}
+              onClose={ctxMenu.close}
+              items={[
+                { label: t('contextMenu.copy', 'Copy'), action: () => copySelection(ctxMenu.savedRange, ctxMenu.selectedText), disabled: !ctxMenu.hasSelection },
+                { label: t('contextMenu.cut', 'Cut'), action: () => { if (editableRef.current) { cutSelection(ctxMenu.savedRange, ctxMenu.selectedText, editableRef.current); handleInput(); } }, disabled: !ctxMenu.hasSelection },
+                { label: t('contextMenu.paste', 'Paste'), action: () => { if (editableRef.current) { pasteAtCursor(ctxMenu.savedRange, editableRef.current, handleInput); } } },
+                { separator: true },
+                { label: t('contextMenu.newline', 'Insert Newline'), action: () => { if (editableRef.current) { insertNewline(ctxMenu.savedRange, editableRef.current); handleInput(); } } },
+              ]}
+            />
+          )}
         </div>
 
         <ChatInputBoxFooter

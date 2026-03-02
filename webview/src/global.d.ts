@@ -498,11 +498,6 @@ interface Window {
   __sessionTransitioning?: boolean;
 
   /**
-   * Update streaming enabled configuration - receives streaming config
-   */
-  updateStreamingEnabled?: (json: string) => void;
-
-  /**
    * Rewind result callback - returns the result of a rewind operation
    */
   onRewindResult?: (json: string) => void;
@@ -612,4 +607,14 @@ interface Window {
    * Pending loading state before showLoading is registered (for Quick Fix feature)
    */
   __pendingLoadingState?: boolean;
+
+  /**
+   * Execute context action from IDEA shortcut (copy/cut/send)
+   */
+  execContextAction?: (action: string) => void;
+
+  /**
+   * Clipboard read callback for paste from IDEA shortcut
+   */
+  onClipboardRead?: (text: string) => void;
 }

@@ -1497,6 +1497,60 @@ const App = () => {
     };
   }, []);
 
+  // Register IDEA shortcut action handler (copy/cut/send/newline from Java-registered Actions)
+  useEffect(() => {
+    window.execContextAction = (action: string) => {
+      switch (action) {
+        case 'copy': {
+          const sel = window.getSelection();
+          const text = sel?.toString() ?? '';
+          if (text) {
+            sendBridgeEvent('write_clipboard', text);
+          }
+          break;
+        }
+        case 'cut': {
+          const sel = window.getSelection();
+          const text = sel?.toString() ?? '';
+          if (text) {
+            sendBridgeEvent('write_clipboard', text);
+            document.execCommand('delete');
+          }
+          break;
+        }
+        case 'send': {
+          document.dispatchEvent(new CustomEvent('ideaSend'));
+          break;
+        }
+        case 'newline': {
+          // Insert newline at cursor in the active contenteditable element
+          const activeEl = document.activeElement;
+          if (activeEl && activeEl.getAttribute('contenteditable') === 'true') {
+            if (!document.execCommand('insertLineBreak')) {
+              // Fallback: manually insert <br> and reposition cursor
+              const sel = window.getSelection();
+              if (sel && sel.rangeCount > 0) {
+                const range = sel.getRangeAt(0);
+                range.deleteContents();
+                const br = document.createElement('br');
+                range.insertNode(br);
+                range.setStartAfter(br);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+            }
+          }
+          break;
+        }
+      }
+    };
+
+    return () => {
+      delete window.execContextAction;
+    };
+  }, []);
+
   // Restore/reset state on session switch, preventing state from being cleared during history loading
   useEffect(() => {
     // Reset processed files for new session (will be restored from localStorage below)

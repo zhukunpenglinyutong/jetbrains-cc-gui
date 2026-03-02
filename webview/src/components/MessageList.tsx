@@ -1,9 +1,11 @@
-import { memo, useState, useEffect, useRef, useMemo } from 'react';
+import { memo, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
 import { getMessageKey } from '../utils/messageUtils';
 import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
+import { ContextMenu } from './ContextMenu';
+import { useContextMenu, copySelection } from '../hooks/useContextMenu.js';
 
 /** Always render at least this many recent messages. Earlier messages are collapsed. */
 const VISIBLE_MESSAGE_WINDOW = 15;
@@ -42,6 +44,15 @@ export const MessageList = memo(function MessageList({
 }: MessageListProps) {
   const [showAll, setShowAll] = useState(false);
 
+  // Context menu for message list (copy only, when text selected)
+  const ctxMenu = useContextMenu();
+  const handleMessageContextMenu = useCallback((e: React.MouseEvent) => {
+    const sel = window.getSelection();
+    if (sel && sel.toString().trim().length > 0) {
+      ctxMenu.open(e);
+    }
+  }, [ctxMenu.open]);
+
   // Reset showAll when a new session starts (first message ID changes)
   const firstMsgIdRef = useRef(messages[0]?.id);
   useEffect(() => {
@@ -65,7 +76,17 @@ export const MessageList = memo(function MessageList({
   );
 
   return (
-    <>
+    <div onContextMenu={handleMessageContextMenu}>
+      {ctxMenu.visible && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={ctxMenu.close}
+          items={[
+            { label: t('contextMenu.copy', 'Copy'), action: () => copySelection(ctxMenu.savedRange, ctxMenu.selectedText) },
+          ]}
+        />
+      )}
       {shouldCollapse && (
         <div
           className="collapsed-messages-indicator"
@@ -101,6 +122,6 @@ export const MessageList = memo(function MessageList({
       {/* Loading indicator */}
       {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
       <div ref={messagesEndRef} />
-    </>
+    </div>
   );
 });

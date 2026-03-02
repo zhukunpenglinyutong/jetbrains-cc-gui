@@ -261,6 +261,7 @@ public class ClaudeSession {
      * Send a message using global agent settings.
      * @deprecated Use {@link #send(String, String)} with explicit agent prompt instead.
      */
+    @Deprecated
     public CompletableFuture<Void> send(String input) {
         return send(input, (List<Attachment>) null, null);
     }
@@ -293,6 +294,7 @@ public class ClaudeSession {
      * Send a message with attachments using global agent settings.
      * @deprecated Use {@link #send(String, List, String)} with explicit agent prompt instead.
      */
+    @Deprecated
     public CompletableFuture<Void> send(String input, List<Attachment> attachments) {
         return send(input, attachments, null, null, null);
     }

@@ -1,5 +1,6 @@
 package com.github.claudecodegui;
 
+import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.handler.HandlerContext;
 import com.github.claudecodegui.handler.HistoryHandler;
 import com.github.claudecodegui.handler.MessageDispatcher;
@@ -154,6 +155,9 @@ public class ClaudeChatWindow {
             registerInstance();
         }
         chatWindowDelegate.initializeStatusBar();
+
+        // Sync IDEA keymap for ChatSendAction based on current sendShortcut setting
+        SendShortcutSync.syncFromSettings();
 
         this.initialized = true;
         LOG.info("Window instance fully initialized, project: " + project.getName());
