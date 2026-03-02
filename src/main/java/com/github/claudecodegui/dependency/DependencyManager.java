@@ -44,7 +44,8 @@ public class DependencyManager {
 
     public DependencyManager() {
         this.gson = new GsonBuilder().setPrettyPrinting().create();
-        this.nodeDetector = new NodeDetector();
+        // Use shared NodeDetector instance (singleton pattern)
+        this.nodeDetector = NodeDetector.getInstance();
         this.envConfigurator = new EnvironmentConfigurator();
     }
 

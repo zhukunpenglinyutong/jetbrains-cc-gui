@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Node.js detector.
- * Responsible for locating and verifying the Node.js executable across various platforms.
+ * Responsible for locating and verifying Node.js executable across various platforms.
+ * Implemented as a singleton to share cache across ClaudeSDKBridge and CodexSDKBridge.
  */
 public class NodeDetector {
 
@@ -40,28 +41,82 @@ public class NodeDetector {
             "%LOCALAPPDATA%\\Programs\\nodejs\\node.exe"
     };
 
-    private String cachedNodeExecutable = null;
-    private NodeDetectionResult cachedDetectionResult = null;
+    // ============================================================================
+    // Singleton Implementation
+    // ============================================================================
+
+    private static volatile NodeDetector instance;
+    private static final Object lock = new Object();
+
+    /** Private constructor to enforce singleton pattern. */
+    private NodeDetector() {
+    }
 
     /**
-     * Finds the Node.js executable path.
+     * Get the singleton instance of NodeDetector.
+     * This ensures that ClaudeSDKBridge and CodexSDKBridge share the same cache.
+     *
+     * @return shared NodeDetector instance
+     */
+    public static NodeDetector getInstance() {
+        if (instance == null) {
+            synchronized (lock) {
+                if (instance == null) {
+                    instance = new NodeDetector();
+                }
+            }
+        }
+        return instance;
+    }
+
+    /**
+     * Reset the singleton instance.
+     * This method is primarily intended for testing purposes to reset
+     * the shared state between test cases.
+     *
+     * <p>WARNING: Calling this in production code will clear the cached
+     * Node.js path and may cause performance degradation.</p>
+     */
+    public static void resetInstance() {
+        synchronized (lock) {
+            instance = null;
+        }
+    }
+
+    // ============================================================================
+    // Instance Fields
+    // ============================================================================
+
+    // Cache fields - volatile to ensure visibility across threads in this singleton
+    private volatile String cachedNodeExecutable = null;
+    private volatile NodeDetectionResult cachedDetectionResult = null;
+    // Lock for cache operations to ensure thread safety
+    private final Object cacheLock = new Object();
+
+    /**
+     * Finds Node.js executable path.
      */
     public String findNodeExecutable() {
+        // First check without locking for performance
         if (cachedNodeExecutable != null) {
             return cachedNodeExecutable;
         }
-
-        NodeDetectionResult result = detectNodeWithDetails();
-        if (result.isFound()) {
-            cachedNodeExecutable = result.getNodePath();
+        // Double-checked locking: prevents redundant detection when multiple threads enter concurrently
+        synchronized (cacheLock) {
+            if (cachedNodeExecutable != null) {
+                return cachedNodeExecutable;
+            }
+            NodeDetectionResult result = detectNodeWithDetails();
+            if (result.isFound()) {
+                cachedNodeExecutable = result.getNodePath();
+                return cachedNodeExecutable;
+            }
+            // Last resort fallback if nothing was found
+            LOG.warn("⚠️ 无法自动检测 Node.js 路径，使用默认值 'node'");
+            LOG.warn(result.getUserFriendlyMessage());
+            cachedNodeExecutable = "node";
             return cachedNodeExecutable;
         }
-
-        // Last resort fallback if nothing was found
-        LOG.warn("⚠️ 无法自动检测 Node.js 路径，使用默认值 'node'");
-        LOG.warn(result.getUserFriendlyMessage());
-        cachedNodeExecutable = "node";
-        return cachedNodeExecutable;
     }
 
     /**
@@ -88,7 +143,7 @@ public class NodeDetector {
             return knownPathResult;
         }
 
-        // 3. Try the PATH environment variable
+        // 3. Try PATH environment variable
         NodeDetectionResult pathResult = detectNodeViaPath(triedPaths);
         if (pathResult != null && pathResult.isFound()) {
             return pathResult;
@@ -120,7 +175,7 @@ public class NodeDetector {
     }
 
     /**
-     * Windows: detects Node.js using the "where" command.
+     * Windows: detects Node.js using "where" command.
      */
     private NodeDetectionResult detectNodeViaWindowsWhere(List<String> triedPaths) {
         try {
@@ -162,12 +217,12 @@ public class NodeDetector {
     /**
      * Unix/macOS: detects Node.js through a specified shell.
      *
-     * @param shellPath  path to the shell executable (e.g. /bin/zsh or /bin/bash)
+     * @param shellPath  path to shell executable (e.g. /bin/zsh or /bin/bash)
      * @param shellName  shell name for logging
      * @param triedPaths list of paths already attempted
      */
     private NodeDetectionResult detectNodeViaShell(String shellPath, String shellName, List<String> triedPaths) {
-        // Check if the shell exists
+        // Check if shell exists
         if (!new File(shellPath).exists()) {
             LOG.debug("  跳过 " + shellName + "（不存在）");
             return null;
@@ -178,7 +233,7 @@ public class NodeDetector {
 
         // Use -l (login shell) and -i (interactive) to ensure user configuration is loaded.
         // This picks up paths configured by version managers like nvm and fnm.
-        // fnm requires an interactive shell to run the eval "$(fnm env)" initialization in .zshrc.
+        // fnm requires an interactive shell to run eval "$(fnm env)" initialization in .zshrc.
         List<String> command = new ArrayList<>();
         command.add(shellPath);
         command.add("-l"); // Login shell
@@ -341,7 +396,7 @@ public class NodeDetector {
     }
 
     /**
-     * Detects Node.js by scanning the PATH environment variable.
+     * Detects Node.js by scanning PATH environment variable.
      */
     private NodeDetectionResult detectNodeViaPath(List<String> triedPaths) {
         LOG.info("  正在检查 PATH 环境变量...");
@@ -419,8 +474,8 @@ public class NodeDetector {
     /**
      * Verifies whether a Node.js path is usable.
      *
-     * @param path the Node.js executable path
-     * @return the version string if usable, otherwise null
+     * @param path Node.js executable path
+     * @return version string if usable, otherwise null
      */
     public String verifyNodePath(String path) {
         try {
@@ -497,14 +552,16 @@ public class NodeDetector {
      * Also clears the cached detection result so it will be re-verified on next use.
      */
     public void setNodeExecutable(String path) {
-        this.cachedNodeExecutable = path;
-        // Clear detection result cache to keep cache state consistent.
-        // The new path will be re-verified and cached on the next call to verifyAndCacheNodePath.
-        this.cachedDetectionResult = null;
+        synchronized (cacheLock) {
+            this.cachedNodeExecutable = path;
+            // Clear detection result cache to keep cache state consistent.
+            // The new path will be re-verified and cached on next call to verifyAndCacheNodePath.
+            this.cachedDetectionResult = null;
+        }
     }
 
     /**
-     * Gets the currently used Node.js path.
+     * Get current Node.js executable path.
      */
     public String getNodeExecutable() {
         if (cachedNodeExecutable == null) {
@@ -515,30 +572,59 @@ public class NodeDetector {
 
     /**
      * Clears the cached Node.js path and detection result.
+     * Since NodeDetector is a singleton, this affects all callers.
      */
     public void clearCache() {
-        this.cachedNodeExecutable = null;
-        this.cachedDetectionResult = null;
+        synchronized (cacheLock) {
+            this.cachedNodeExecutable = null;
+            this.cachedDetectionResult = null;
+        }
     }
 
     /**
-     * Gets the cached detection result.
+     * Gets cached detection result.
+     * Synchronized to ensure consistent read with other cache operations.
      */
     public NodeDetectionResult getCachedDetectionResult() {
-        return cachedDetectionResult;
-    }
-
-    public String getCachedNodePath() {
-        if (cachedDetectionResult != null && cachedDetectionResult.getNodePath() != null) {
-            return cachedDetectionResult.getNodePath();
+        synchronized (cacheLock) {
+            return cachedDetectionResult;
         }
-        return cachedNodeExecutable;
     }
 
+    /**
+     * Gets the cached Node.js executable path from the detection result, falling back to the cached executable.
+     * Synchronized to ensure atomic read of both cache fields.
+     *
+     * @return cached Node.js path, or null if not yet detected
+     */
+    public String getCachedNodePath() {
+        synchronized (cacheLock) {
+            if (cachedDetectionResult != null && cachedDetectionResult.getNodePath() != null) {
+                return cachedDetectionResult.getNodePath();
+            }
+            return cachedNodeExecutable;
+        }
+    }
+
+    /**
+     * Gets the cached Node.js version string.
+     * Synchronized to ensure consistent read with other cache operations.
+     *
+     * @return cached version string (e.g. "v20.10.0"), or null if not yet detected
+     */
     public String getCachedNodeVersion() {
-        return cachedDetectionResult != null ? cachedDetectionResult.getNodeVersion() : null;
+        synchronized (cacheLock) {
+            return cachedDetectionResult != null ? cachedDetectionResult.getNodeVersion() : null;
+        }
     }
 
+    /**
+     * Verify and cache a Node.js path.
+     * Returns the detection result and updates the shared cache.
+     *
+     * @param path Node.js executable path to verify
+     * @return NodeDetectionResult with verification details
+     */
     public NodeDetectionResult verifyAndCacheNodePath(String path) {
         if (path == null || path.isEmpty()) {
             clearCache();
@@ -555,10 +641,15 @@ public class NodeDetector {
         return result;
     }
 
+    /**
+     * Cache a detection result.
+     */
     private void cacheDetection(NodeDetectionResult result) {
-        this.cachedDetectionResult = result;
-        if (result != null && result.isFound() && result.getNodePath() != null) {
-            this.cachedNodeExecutable = result.getNodePath();
+        synchronized (cacheLock) {
+            this.cachedDetectionResult = result;
+            if (result != null && result.isFound() && result.getNodePath() != null) {
+                this.cachedNodeExecutable = result.getNodePath();
+            }
         }
     }
 
@@ -568,10 +659,10 @@ public class NodeDetector {
     public static final int MIN_NODE_MAJOR_VERSION = 18;
 
     /**
-     * Parses the major version number from a version string.
+     * Parses major version number from a version string.
      *
-     * @param version the version string, e.g. "v20.10.0" or "20.10.0"
-     * @return the major version number, or 0 if parsing fails
+     * @param version version string, e.g. "v20.10.0" or "20.10.0"
+     * @return major version number, or 0 if parsing fails
      */
     public static int parseMajorVersion(String version) {
         if (version == null || version.isEmpty()) {
@@ -590,10 +681,10 @@ public class NodeDetector {
     }
 
     /**
-     * Checks whether the Node.js version meets the minimum requirement.
+     * Checks whether Node.js version meets the minimum requirement.
      *
-     * @param version the version string
-     * @return true if the version is >= 18, false otherwise
+     * @param version version string
+     * @return true if version is >= 18, false otherwise
      */
     public static boolean isVersionSupported(String version) {
         int major = parseMajorVersion(version);

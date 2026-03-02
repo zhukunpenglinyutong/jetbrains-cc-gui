@@ -29,7 +29,12 @@ public abstract class BaseSDKBridge {
 
     protected final Logger LOG;
     protected final Gson gson = new Gson();
-    protected final NodeDetector nodeDetector = new NodeDetector();
+    /**
+     * Shared NodeDetector instance (singleton pattern).
+     * This ensures that ClaudeSDKBridge and CodexSDKBridge share the same cache,
+     * avoiding redundant Node.js path detections across modes.
+     */
+    protected final NodeDetector nodeDetector = NodeDetector.getInstance();
     protected final ProcessManager processManager = new ProcessManager();
     protected final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
 

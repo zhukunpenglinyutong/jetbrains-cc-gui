@@ -35,8 +35,8 @@ public class DependencyHandler extends BaseMessageHandler {
 
     public DependencyHandler(HandlerContext context) {
         super(context);
-        // Create NodeDetector and try using the configured Node.js path
-        NodeDetector nodeDetector = new NodeDetector();
+        // Use shared NodeDetector instance to leverage cached Node.js path
+        NodeDetector nodeDetector = NodeDetector.getInstance();
         String configuredNodePath = getConfiguredNodePath();
         if (configuredNodePath != null && !configuredNodePath.isEmpty()) {
             String version = nodeDetector.verifyNodePath(configuredNodePath);
@@ -255,8 +255,8 @@ public class DependencyHandler extends BaseMessageHandler {
             String detectedVersion = null;
 
             if (configuredPath != null && !configuredPath.isEmpty()) {
-                // Use configured path
-                NodeDetector nodeDetector = new NodeDetector();
+                // Use configured path with shared NodeDetector instance
+                NodeDetector nodeDetector = NodeDetector.getInstance();
                 String version = nodeDetector.verifyNodePath(configuredPath);
                 if (version != null) {
                     available = true;
