@@ -81,4 +81,35 @@ html {
     font-family: 'codicon' !important;
 }
 
+/* Notice Box - shared info/warning notice */
+.notice-box {
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .codicon {
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+}
+
+.notice-box--info {
+    background: var(--vscode-inputValidation-infoBackground, #063b49);
+    border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
+    color: var(--vscode-inputValidation-infoForeground, #ccc);
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.notice-box--warning {
+    background: var(--vscode-inputValidation-warningBackground, #352a05);
+    border: 1px solid var(--vscode-inputValidation-warningBorder, #e0a000);
+    color: var(--vscode-inputValidation-warningForeground, #ccc);
+    padding: 6px 10px;
+    margin-bottom: 10px;
+}
+
 /* vConsole 调试工具 - 初始位置由 main.tsx 设置，支持拖动 */

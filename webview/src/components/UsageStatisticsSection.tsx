@@ -237,6 +237,12 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
 
   return (
     <div className="usage-statistics-section">
+      {/* Estimate notice */}
+      <div className="notice-box notice-box--warning">
+        <span className="codicon codicon-warning" />
+        {t('usage.estimateNotice')}
+      </div>
+
       {/* Controls bar */}
       <div className="usage-controls">
         <div className="controls-left">

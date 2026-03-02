@@ -314,6 +314,11 @@ export default function ProviderDialog({
             {isAdding ? t('settings.provider.dialog.addDescription') : t('settings.provider.dialog.editDescription')}
           </p>
 
+          <div className="notice-box notice-box--info">
+            <span className="codicon codicon-shield" />
+            {t('settings.provider.dialog.securityNotice')}
+          </div>
+
           {/* Preset configuration button group */}
           <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.presetGroup')}>
             {PROVIDER_PRESETS.map((preset) => (
