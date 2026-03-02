@@ -758,6 +758,7 @@ public class SettingsHandler extends BaseMessageHandler {
             try {
                 String projectPath = "all";
                 String provider = "claude"; // Default to Claude
+                long cutoffTime = 0; // 0 means no cutoff (all time)
 
                 if (content != null && !content.isEmpty() && !content.equals("{}")) {
                     try {
@@ -778,6 +779,17 @@ public class SettingsHandler extends BaseMessageHandler {
                         if (json.has("provider")) {
                             provider = json.get("provider").getAsString();
                         }
+
+                        // Parse dateRange and convert to cutoff timestamp
+                        if (json.has("dateRange")) {
+                            String dateRange = json.get("dateRange").getAsString();
+                            long now = System.currentTimeMillis();
+                            if ("7d".equals(dateRange)) {
+                                cutoffTime = now - 7L * 24 * 60 * 60 * 1000;
+                            } else if ("30d".equals(dateRange)) {
+                                cutoffTime = now - 30L * 24 * 60 * 60 * 1000;
+                            }
+                        }
                     } catch (Exception e) {
                         if ("current".equals(content)) {
                             projectPath = context.getProject().getBasePath();
@@ -788,10 +800,11 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
 
                 // Use corresponding reader based on provider
+                Gson gson = new Gson();
                 String json;
                 if ("codex".equals(provider)) {
                     CodexHistoryReader reader = new CodexHistoryReader();
-                    CodexHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath);
+                    CodexHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath, cutoffTime);
 
                     // Debug logging for Codex statistics
                     LOG.info("[SettingsHandler] Codex statistics - sessions: " + stats.totalSessions +
@@ -801,12 +814,10 @@ public class SettingsHandler extends BaseMessageHandler {
                              ", cache read tokens: " + stats.totalUsage.cacheReadTokens +
                              ", total tokens: " + stats.totalUsage.totalTokens);
 
-                    Gson gson = new Gson();
                     json = gson.toJson(stats);
                 } else {
                     ClaudeHistoryReader reader = new ClaudeHistoryReader();
-                    ClaudeHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath);
-                    Gson gson = new Gson();
+                    ClaudeHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath, cutoffTime);
                     json = gson.toJson(stats);
                 }
 

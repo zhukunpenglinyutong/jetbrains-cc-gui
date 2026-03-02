@@ -932,8 +932,11 @@ public class ClaudeHistoryReader {
 
     /**
      * Get project usage statistics.
+     *
+     * @param projectPath project path or "all" for all projects
+     * @param cutoffTime  earliest timestamp (ms) to include; 0 means no cutoff (all time)
      */
-    public ProjectStatistics getProjectStatistics(String projectPath) {
+    public ProjectStatistics getProjectStatistics(String projectPath, long cutoffTime) {
         ProjectStatistics stats = new ProjectStatistics();
         stats.projectPath = projectPath;
         stats.projectName = projectPath.equals("all") ? "All Projects" : Paths.get(projectPath).getFileName().toString();
@@ -973,9 +976,16 @@ public class ClaudeHistoryReader {
                 }
             }
 
-            stats.totalSessions = allSessions.size();
+            // Filter sessions by date range when cutoffTime is specified
+            List<SessionSummary> filteredSessions = (cutoffTime > 0)
+                    ? allSessions.stream()
+                        .filter(s -> s.timestamp >= cutoffTime)
+                        .collect(Collectors.toList())
+                    : allSessions;
 
-            processSessions(allSessions, stats);
+            stats.totalSessions = filteredSessions.size();
+
+            processSessions(filteredSessions, stats);
 
             return stats;
 

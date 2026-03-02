@@ -726,8 +726,11 @@ public class CodexHistoryReader {
     /**
      * Get project statistics for usage tracking.
      * Note: Codex sessions don't store project path, so we return all sessions.
+     *
+     * @param projectPath project path (Codex ignores this and returns all sessions)
+     * @param cutoffTime  earliest timestamp (ms) to include; 0 means no cutoff (all time)
      */
-    public ProjectStatistics getProjectStatistics(String projectPath) {
+    public ProjectStatistics getProjectStatistics(String projectPath, long cutoffTime) {
         ProjectStatistics stats = new ProjectStatistics();
         stats.projectPath = projectPath;
         stats.projectName = projectPath.equals("all") ? "All Projects" : Paths.get(projectPath).getFileName().toString();
@@ -754,9 +757,18 @@ public class CodexHistoryReader {
                 // Don't filter Codex sessions by project - show all
             }
 
-            stats.totalSessions = allSessions.size();
-            LOG.info("[CodexHistoryReader] Final sessions count: " + stats.totalSessions);
-            processSessions(allSessions, stats);
+            LOG.info("[CodexHistoryReader] Total sessions before date filtering: " + allSessions.size());
+
+            // Filter sessions by date range when cutoffTime is specified
+            List<SessionSummary> filteredSessions = (cutoffTime > 0)
+                    ? allSessions.stream()
+                        .filter(s -> s.timestamp >= cutoffTime)
+                        .collect(Collectors.toList())
+                    : allSessions;
+
+            stats.totalSessions = filteredSessions.size();
+            LOG.info("[CodexHistoryReader] Filtered sessions count (cutoffTime=" + cutoffTime + "): " + stats.totalSessions);
+            processSessions(filteredSessions, stats);
 
             return stats;
         } catch (Exception e) {
