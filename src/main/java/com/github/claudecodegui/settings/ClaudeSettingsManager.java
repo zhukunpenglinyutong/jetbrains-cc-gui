@@ -1,12 +1,12 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonArray;
 import com.intellij.openapi.diagnostic.Logger;
-
-import com.google.gson.JsonElement;
 
 import java.io.File;
 import java.io.FileReader;
@@ -29,11 +29,11 @@ public class ClaudeSettingsManager {
      * and are always preserved from the existing configuration.
      */
     private static final Set<String> PROTECTED_SYSTEM_FIELDS = Set.of(
-        "mcpServers",           // MCP server configuration
-        "disabledMcpServers",   // Disabled MCP servers
-        "plugins",              // Skills/Plugins configuration
-        "trustedDirectories",   // Trusted directories
-        "trustedFiles"          // Trusted files
+            "mcpServers",           // MCP server configuration
+            "disabledMcpServers",   // Disabled MCP servers
+            "plugins",              // Skills/Plugins configuration
+            "trustedDirectories",   // Trusted directories
+            "trustedFiles"          // Trusted files
     );
 
     /**
@@ -41,15 +41,15 @@ public class ClaudeSettingsManager {
      * All other user-customized fields are preserved.
      */
     private static final Set<String> PROVIDER_MANAGED_FIELDS = Set.of(
-        "env",                      // Environment variables
-        "model",                    // Model selection
-        "alwaysThinkingEnabled",    // Thinking mode
-        "codemossProviderId",       // Codemoss provider identifier
-        "ccSwitchProviderId",       // CC-Switch provider identifier
-        "maxContextLengthTokens",   // Maximum context length
-        "temperature",              // Temperature parameter
-        "topP",                     // Top-P parameter
-        "topK"                      // Top-K parameter
+            "env",                      // Environment variables
+            "model",                    // Model selection
+            "alwaysThinkingEnabled",    // Thinking mode
+            "codemossProviderId",       // Codemoss provider identifier
+            "ccSwitchProviderId",       // CC-Switch provider identifier
+            "maxContextLengthTokens",   // Maximum context length
+            "temperature",              // Temperature parameter
+            "topP",                     // Top-P parameter
+            "topK"                      // Top-K parameter
     );
 
     private final Gson gson;
@@ -118,7 +118,7 @@ public class ClaudeSettingsManager {
      */
     public void syncMcpToClaudeSettings() throws IOException {
         try {
-            String homeDir = System.getProperty("user.home");
+            String homeDir = PlatformUtils.getHomeDirectory();
 
             // Read ~/.claude.json
             Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
@@ -158,7 +158,7 @@ public class ClaudeSettingsManager {
                 settings.add("disabledMcpServers", claudeJson.get("disabledMcpServers"));
                 JsonArray disabledServers = claudeJson.getAsJsonArray("disabledMcpServers");
                 LOG.info("[ClaudeSettingsManager] Synced " + disabledServers.size()
-                    + " disabled MCP servers to settings.json");
+                                 + " disabled MCP servers to settings.json");
             }
 
             // Write back to settings.json

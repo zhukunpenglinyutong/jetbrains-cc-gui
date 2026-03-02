@@ -4,11 +4,10 @@ import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
-import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
-import javax.swing.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -20,14 +19,14 @@ public class HistoryHandler extends BaseMessageHandler {
     private static final Logger LOG = Logger.getInstance(HistoryHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
-        "load_history_data",
-        "load_session",
-        "delete_session",  // Delete session
-        "export_session",  // Export session
-        "toggle_favorite", // Toggle favorite status
-        "update_title",    // Update session title
-        "delete_title",    // Delete orphaned custom title (B-011)
-        "deep_search_history" // Deep search (clear cache and reload)
+            "load_history_data",
+            "load_session",
+            "delete_session",  // Delete session
+            "export_session",  // Export session
+            "toggle_favorite", // Toggle favorite status
+            "update_title",    // Update session title
+            "delete_title",    // Delete orphaned custom title (B-011)
+            "deep_search_history" // Deep search (clear cache and reload)
     };
 
     // Session load callback interface
@@ -95,6 +94,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
     /**
      * Load and inject history data into the frontend (including favorite info).
+     *
      * @param provider the provider identifier ("claude" or "codex")
      */
     private void handleLoadHistoryData(String provider) {
@@ -138,27 +138,27 @@ public class HistoryHandler extends BaseMessageHandler {
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "console.log('[Backend->Frontend] Starting to inject history data');" +
-                        "if (window.setHistoryData) { " +
-                        "  try { " +
-                        "    var base64Str = '" + base64Json + "'; " +
-                        "    console.log('[Backend->Frontend] Base64 length:', base64Str.length); " +
-                        // Use TextDecoder to properly decode UTF-8 Base64 strings (avoid garbled non-ASCII characters)
-                        "    var binaryStr = atob(base64Str); " +
-                        "    var bytes = new Uint8Array(binaryStr.length); " +
-                        "    for (var i = 0; i < binaryStr.length; i++) { bytes[i] = binaryStr.charCodeAt(i); } " +
-                        "    var jsonStr = new TextDecoder('utf-8').decode(bytes); " +
-                        "    console.log('[Backend->Frontend] Decoded JSON length:', jsonStr.length); " +
-                        "    var data = JSON.parse(jsonStr); " +
-                        "    console.log('[Backend->Frontend] Parsed data, sessions:', data.sessions ? data.sessions.length : 0); " +
-                        "    window.setHistoryData(data); " +
-                        "    console.log('[Backend->Frontend] setHistoryData called successfully'); " +
-                        "  } catch(e) { " +
-                        "    console.error('[Backend->Frontend] Failed to parse/set history data:', e); " +
-                        "    window.setHistoryData({ success: false, error: '解析历史数据失败: ' + e.message }); " +
-                        "  } " +
-                        "} else { " +
-                        "  console.error('[Backend->Frontend] setHistoryData not available!'); " +
-                        "}";
+                                            "if (window.setHistoryData) { " +
+                                            "  try { " +
+                                            "    var base64Str = '" + base64Json + "'; " +
+                                            "    console.log('[Backend->Frontend] Base64 length:', base64Str.length); " +
+                                            // Use TextDecoder to properly decode UTF-8 Base64 strings (avoid garbled non-ASCII characters)
+                                            "    var binaryStr = atob(base64Str); " +
+                                            "    var bytes = new Uint8Array(binaryStr.length); " +
+                                            "    for (var i = 0; i < binaryStr.length; i++) { bytes[i] = binaryStr.charCodeAt(i); } " +
+                                            "    var jsonStr = new TextDecoder('utf-8').decode(bytes); " +
+                                            "    console.log('[Backend->Frontend] Decoded JSON length:', jsonStr.length); " +
+                                            "    var data = JSON.parse(jsonStr); " +
+                                            "    console.log('[Backend->Frontend] Parsed data, sessions:', data.sessions ? data.sessions.length : 0); " +
+                                            "    window.setHistoryData(data); " +
+                                            "    console.log('[Backend->Frontend] setHistoryData called successfully'); " +
+                                            "  } catch(e) { " +
+                                            "    console.error('[Backend->Frontend] Failed to parse/set history data:', e); " +
+                                            "    window.setHistoryData({ success: false, error: '解析历史数据失败: ' + e.message }); " +
+                                            "  } " +
+                                            "} else { " +
+                                            "  console.error('[Backend->Frontend] setHistoryData not available!'); " +
+                                            "}";
 
                     context.executeJavaScriptOnEDT(jsCode);
                     LOG.info("[HistoryHandler] JavaScript 代码已注入");
@@ -170,8 +170,8 @@ public class HistoryHandler extends BaseMessageHandler {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
                     String jsCode = "if (window.setHistoryData) { " +
-                        "  window.setHistoryData({ success: false, error: '" + errorMsg + "' }); " +
-                        "}";
+                                            "  window.setHistoryData({ success: false, error: '" + errorMsg + "' }); " +
+                                            "}";
                     context.executeJavaScriptOnEDT(jsCode);
                 });
             }
@@ -181,6 +181,7 @@ public class HistoryHandler extends BaseMessageHandler {
     /**
      * Deep search history records.
      * Clears cache and reloads complete history from the file system.
+     *
      * @param provider the provider identifier ("claude" or "codex")
      */
     private void handleDeepSearchHistory(String provider) {
@@ -274,12 +275,12 @@ public class HistoryHandler extends BaseMessageHandler {
                 // Notify frontend that history messages have finished loading, trigger Markdown re-rendering
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "if (window.historyLoadComplete) { " +
-                        "  try { " +
-                        "    window.historyLoadComplete(); " +
-                        "  } catch(e) { " +
-                        "    console.error('[HistoryHandler] historyLoadComplete callback failed:', e); " +
-                        "  } " +
-                        "}";
+                                            "  try { " +
+                                            "    window.historyLoadComplete(); " +
+                                            "  } catch(e) { " +
+                                            "    console.error('[HistoryHandler] historyLoadComplete callback failed:', e); " +
+                                            "  } " +
+                                            "}";
                     context.executeJavaScriptOnEDT(jsCode);
                 });
 
@@ -291,8 +292,8 @@ public class HistoryHandler extends BaseMessageHandler {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String errorMsg = escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
                     String jsCode = "if (window.addErrorMessage) { " +
-                        "  window.addErrorMessage('加载 Codex 会话失败: " + errorMsg + "'); " +
-                        "}";
+                                            "  window.addErrorMessage('加载 Codex 会话失败: " + errorMsg + "'); " +
+                                            "}";
                     context.executeJavaScriptOnEDT(jsCode);
                 });
             }
@@ -301,6 +302,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
     /**
      * Extract Codex session metadata (threadId and cwd).
+     *
      * @return String[2]: [0]=actualThreadId, [1]=cwd
      */
     private String[] extractSessionMeta(com.google.gson.JsonArray messages) {
@@ -365,16 +367,16 @@ public class HistoryHandler extends BaseMessageHandler {
 
         ApplicationManager.getApplication().invokeLater(() -> {
             String jsCode = "if (window.addHistoryMessage) { " +
-                "  try { " +
-                "    var msgStr = '" + escapedJson + "'; " +
-                "    var msg = JSON.parse(msgStr); " +
-                "    window.addHistoryMessage(msg); " +
-                "  } catch(e) { " +
-                "    console.error('[HistoryHandler] Failed to parse/add message:', e); " +
-                "  } " +
-                "} else { " +
-                "  console.warn('[HistoryHandler] addHistoryMessage not available'); " +
-                "}";
+                                    "  try { " +
+                                    "    var msgStr = '" + escapedJson + "'; " +
+                                    "    var msg = JSON.parse(msgStr); " +
+                                    "    window.addHistoryMessage(msg); " +
+                                    "  } catch(e) { " +
+                                    "    console.error('[HistoryHandler] Failed to parse/add message:', e); " +
+                                    "  } " +
+                                    "} else { " +
+                                    "  console.warn('[HistoryHandler] addHistoryMessage not available'); " +
+                                    "}";
             context.executeJavaScriptOnEDT(jsCode);
         });
     }
@@ -390,7 +392,7 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] SessionId: " + sessionId);
                 LOG.info("[HistoryHandler] CurrentProvider: " + currentProvider);
 
-                String homeDir = System.getProperty("user.home");
+                String homeDir = PlatformUtils.getHomeDirectory();
                 java.nio.file.Path sessionDir;
                 boolean mainDeleted = false;
                 int agentFilesDeleted = 0;
@@ -409,10 +411,10 @@ public class HistoryHandler extends BaseMessageHandler {
                     // Find and delete Codex session files (may be in subdirectories)
                     try (java.util.stream.Stream<java.nio.file.Path> paths = java.nio.file.Files.walk(sessionDir)) {
                         java.util.List<java.nio.file.Path> sessionFiles = paths
-                            .filter(java.nio.file.Files::isRegularFile)
-                            .filter(path -> path.getFileName().toString().startsWith(sessionId))
-                            .filter(path -> path.toString().endsWith(".jsonl"))
-                            .collect(java.util.stream.Collectors.toList());
+                                                                                  .filter(java.nio.file.Files::isRegularFile)
+                                                                                  .filter(path -> path.getFileName().toString().startsWith(sessionId))
+                                                                                  .filter(path -> path.toString().endsWith(".jsonl"))
+                                                                                  .collect(java.util.stream.Collectors.toList());
 
                         for (java.nio.file.Path sessionFile : sessionFiles) {
                             try {
@@ -460,18 +462,18 @@ public class HistoryHandler extends BaseMessageHandler {
                     // Agent files are typically named agent-<uuid>.jsonl
                     try (java.util.stream.Stream<java.nio.file.Path> stream = java.nio.file.Files.list(sessionDir)) {
                         java.util.List<java.nio.file.Path> agentFiles = stream
-                            .filter(path -> {
-                                String filename = path.getFileName().toString();
-                                // Match agent-*.jsonl files that belong to the current session
-                                if (!filename.startsWith("agent-") || !filename.endsWith(".jsonl")) {
-                                    return false;
-                                }
+                                                                                .filter(path -> {
+                                                                                    String filename = path.getFileName().toString();
+                                                                                    // Match agent-*.jsonl files that belong to the current session
+                                                                                    if (!filename.startsWith("agent-") || !filename.endsWith(".jsonl")) {
+                                                                                        return false;
+                                                                                    }
 
-                                // Check if the agent file belongs to the current session
-                                // by reading file content to find sessionId references
-                                return isAgentFileRelatedToSession(path, sessionId);
-                            })
-                            .collect(java.util.stream.Collectors.toList());
+                                                                                    // Check if the agent file belongs to the current session
+                                                                                    // by reading file content to find sessionId references
+                                                                                    return isAgentFileRelatedToSession(path, sessionId);
+                                                                                })
+                                                                                .collect(java.util.stream.Collectors.toList());
 
                         for (java.nio.file.Path agentFile : agentFiles) {
                             try {
@@ -584,17 +586,17 @@ public class HistoryHandler extends BaseMessageHandler {
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "console.log('[Backend->Frontend] Starting to inject export data');" +
-                        "if (window.onExportSessionData) { " +
-                        "  try { " +
-                        "    var jsonStr = '" + escapedJson + "'; " +
-                        "    window.onExportSessionData(jsonStr); " +
-                        "    console.log('[Backend->Frontend] Export data injected successfully'); " +
-                        "  } catch(e) { " +
-                        "    console.error('[Backend->Frontend] Failed to inject export data:', e); " +
-                        "  } " +
-                        "} else { " +
-                        "  console.error('[Backend->Frontend] onExportSessionData not available!'); " +
-                        "}";
+                                            "if (window.onExportSessionData) { " +
+                                            "  try { " +
+                                            "    var jsonStr = '" + escapedJson + "'; " +
+                                            "    window.onExportSessionData(jsonStr); " +
+                                            "    console.log('[Backend->Frontend] Export data injected successfully'); " +
+                                            "  } catch(e) { " +
+                                            "    console.error('[Backend->Frontend] Failed to inject export data:', e); " +
+                                            "  } " +
+                                            "} else { " +
+                                            "  console.error('[Backend->Frontend] onExportSessionData not available!'); " +
+                                            "}";
 
                     context.executeJavaScriptOnEDT(jsCode);
                 });
@@ -606,8 +608,8 @@ public class HistoryHandler extends BaseMessageHandler {
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "if (window.addToast) { " +
-                        "  window.addToast('导出失败: " + escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误") + "', 'error'); " +
-                        "}";
+                                            "  window.addToast('导出失败: " + escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误") + "', 'error'); " +
+                                            "}";
                     context.executeJavaScriptOnEDT(jsCode);
                 });
             }
@@ -661,8 +663,8 @@ public class HistoryHandler extends BaseMessageHandler {
                     String error = resultObj.get("error").getAsString();
                     ApplicationManager.getApplication().invokeLater(() -> {
                         String jsCode = "if (window.addToast) { " +
-                            "  window.addToast('更新标题失败: " + escapeJs(error) + "', 'error'); " +
-                            "}";
+                                                "  window.addToast('更新标题失败: " + escapeJs(error) + "', 'error'); " +
+                                                "}";
                         context.executeJavaScriptOnEDT(jsCode);
                     });
                 }
@@ -671,8 +673,8 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.error("[HistoryHandler] 更新标题失败: " + e.getMessage(), e);
                 ApplicationManager.getApplication().invokeLater(() -> {
                     String jsCode = "if (window.addToast) { " +
-                        "  window.addToast('更新标题失败: " + escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误") + "', 'error'); " +
-                        "}";
+                                            "  window.addToast('更新标题失败: " + escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误") + "', 'error'); " +
+                                            "}";
                     context.executeJavaScriptOnEDT(jsCode);
                 });
             }
@@ -788,7 +790,7 @@ public class HistoryHandler extends BaseMessageHandler {
             while ((line = reader.readLine()) != null && lineCount < 20) {
                 // Check if this line contains the sessionId
                 if (line.contains("\"sessionId\":\"" + sessionId + "\"") ||
-                    line.contains("\"parentSessionId\":\"" + sessionId + "\"")) {
+                            line.contains("\"parentSessionId\":\"" + sessionId + "\"")) {
                     LOG.debug("[HistoryHandler] Agent文件 " + agentFilePath.getFileName() + " 属于会话 " + sessionId);
                     return true;
                 }

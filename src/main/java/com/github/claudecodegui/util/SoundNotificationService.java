@@ -6,7 +6,11 @@ import com.intellij.openapi.diagnostic.Logger;
 import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.Player;
 
-import javax.sound.sampled.*;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.LineEvent;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -32,12 +36,13 @@ public class SoundNotificationService {
      * Insertion order preserved for UI display.
      */
     public static final Map<String, String> SOUND_RESOURCES;
+
     static {
         Map<String, String> map = new LinkedHashMap<>();
         map.put("default", "/sounds/success.wav");
-        map.put("chime",   "/sounds/chime.wav");
-        map.put("bell",    "/sounds/bell.wav");
-        map.put("ding",    "/sounds/ding.wav");
+        map.put("chime", "/sounds/chime.wav");
+        map.put("bell", "/sounds/bell.wav");
+        map.put("ding", "/sounds/ding.wav");
         map.put("success", "/sounds/task-complete.wav");
         SOUND_RESOURCES = Collections.unmodifiableMap(map);
     }
@@ -103,15 +108,15 @@ public class SoundNotificationService {
     /**
      * Test play a sound (for settings preview).
      *
-     * @param soundId  sound ID ("default", "chime", "bell", "ding", "success", "custom")
+     * @param soundId    sound ID ("default", "chime", "bell", "ding", "success", "custom")
      * @param customPath custom file path (only used when soundId is "custom")
      */
     public void testPlaySound(String soundId, String customPath) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
                 playBySelection(
-                    soundId != null ? soundId : "default",
-                    customPath
+                        soundId != null ? soundId : "default",
+                        customPath
                 );
             } catch (Exception e) {
                 LOG.warn("[SoundNotification] Failed to play test sound: " + e.getMessage(), e);
@@ -131,7 +136,7 @@ public class SoundNotificationService {
 
             // 使用 BufferedInputStream 包装，因为 AudioSystem 需要 mark/reset 支持
             try (BufferedInputStream bufferedStream = new BufferedInputStream(rawStream);
-                 AudioInputStream audioIn = AudioSystem.getAudioInputStream(bufferedStream)) {
+                    AudioInputStream audioIn = AudioSystem.getAudioInputStream(bufferedStream)) {
                 playAudioStream(audioIn);
             }
         }
@@ -199,7 +204,7 @@ public class SoundNotificationService {
 
             File file = new File(normalizedPath);
             String canonical = file.getCanonicalPath();
-            String userHome = new File(System.getProperty("user.home")).getCanonicalPath();
+            String userHome = new File(PlatformUtils.getHomeDirectory()).getCanonicalPath();
 
             // Only allow files under user home directory to prevent arbitrary file access
             return pathStartsWith(canonical, userHome);
@@ -350,21 +355,6 @@ public class SoundNotificationService {
     /**
      * 验证结果
      */
-    public static class ValidationResult {
-        private final boolean valid;
-        private final String errorMessage;
-
-        public ValidationResult(boolean valid, String errorMessage) {
-            this.valid = valid;
-            this.errorMessage = errorMessage;
-        }
-
-        public boolean isValid() {
-            return valid;
-        }
-
-        public String getErrorMessage() {
-            return errorMessage;
-        }
+    public record ValidationResult(boolean valid, String errorMessage) {
     }
 }

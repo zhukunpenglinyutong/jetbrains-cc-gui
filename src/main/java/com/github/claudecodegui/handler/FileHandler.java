@@ -2,10 +2,11 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.model.FileSortItem;
 import com.github.claudecodegui.service.RunConfigMonitorService;
-import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
+import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.IgnoreRuleMatcher;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.BrowserUtil;
@@ -124,7 +125,7 @@ public class FileHandler extends BaseMessageHandler {
 
                 // Priority 0: Active Terminals
                 collectActiveTerminals(files, request);
-                
+
                 // Priority 0: Active Services
                 collectActiveServices(files, request);
 
@@ -278,7 +279,7 @@ public class FileHandler extends BaseMessageHandler {
                 for (RunConfigMonitorService.RunConfigInfo config : configs) {
                     String displayName = config.getDisplayName();
                     String title = "Service: " + displayName;
-                    
+
                     // Create safe name for the path (replace spaces with _, remove special chars)
                     String safeName = displayName.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
                     String path = "service://" + safeName;
@@ -310,17 +311,17 @@ public class FileHandler extends BaseMessageHandler {
             try {
                 List<Object> widgets = TerminalMonitorService.getWidgets(project);
                 Map<String, Integer> nameCounts = new HashMap<>();
-                
+
                 for (Object widget : widgets) {
                     String baseTitle = TerminalMonitorService.getWidgetTitle(widget);
                     int count = nameCounts.getOrDefault(baseTitle, 0) + 1;
                     nameCounts.put(baseTitle, count);
-                    
+
                     String titleText = baseTitle;
                     if (count > 1) {
                         titleText = baseTitle + " (" + count + ")";
                     }
-                    
+
                     String title = "Terminal: " + titleText;
                     String safeName = titleText.replace(" ", "_").replaceAll("[^a-zA-Z0-9_]", "");
                     String path = "terminal://" + safeName;
@@ -381,7 +382,7 @@ public class FileHandler extends BaseMessageHandler {
             }
         }
 
-        String userHome = System.getProperty("user.home");
+        String userHome = PlatformUtils.getHomeDirectory();
         if (userHome != null && !userHome.isEmpty()) {
             LOG.debug("[FileHandler] Using user.home as base path: " + userHome);
             return userHome;
@@ -470,8 +471,8 @@ public class FileHandler extends BaseMessageHandler {
             String name = cmd.name();
             String description = cmd.description();
             if (finalQuery.isEmpty()
-                    || name.toLowerCase().contains(finalQuery)
-                    || description.toLowerCase().contains(finalQuery)) {
+                        || name.toLowerCase().contains(finalQuery)
+                        || description.toLowerCase().contains(finalQuery)) {
                 JsonObject cmdObj = new JsonObject();
                 cmdObj.addProperty("label", name);
                 cmdObj.addProperty("description", description);
@@ -485,7 +486,7 @@ public class FileHandler extends BaseMessageHandler {
 
         ApplicationManager.getApplication().invokeLater(() -> {
             String js = "if (window.onCommandListResult) { window.onCommandListResult('"
-                    + escapeJs(resultJson) + "'); }";
+                                + escapeJs(resultJson) + "'); }";
             context.executeJavaScriptOnEDT(js);
         });
     }
@@ -704,8 +705,8 @@ public class FileHandler extends BaseMessageHandler {
 
         // Check if cache is valid
         boolean cacheValid = cachedIgnoreMatcher != null
-                && basePath.equals(cachedIgnoreMatcherBasePath)
-                && currentLastModified == cachedGitignoreLastModified;
+                                     && basePath.equals(cachedIgnoreMatcherBasePath)
+                                     && currentLastModified == cachedGitignoreLastModified;
 
         if (cacheValid) {
             return cachedIgnoreMatcher;

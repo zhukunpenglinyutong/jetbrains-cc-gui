@@ -1,12 +1,14 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -34,7 +36,7 @@ public class CodexSettingsManager {
 
     public CodexSettingsManager(Gson gson) {
         this.gson = gson;
-        String userHome = System.getProperty("user.home");
+        String userHome = PlatformUtils.getHomeDirectory();
         this.codexDir = Paths.get(userHome, ".codex");
     }
 
@@ -133,6 +135,7 @@ public class CodexSettingsManager {
 
     /**
      * Apply provider configuration to ~/.codex files
+     *
      * @param provider The provider configuration containing config and auth data
      */
     public void applyProviderToCodexSettings(JsonObject provider) throws IOException {
@@ -178,7 +181,7 @@ public class CodexSettingsManager {
             return;
         }
 
-        String prefix = target.getFileName() != null ? target.getFileName().toString() + "-" : "codex-";
+        String prefix = target.getFileName() != null ? target.getFileName() + "-" : "codex-";
         Path tmp = Files.createTempFile(parent, prefix, ".tmp");
         try {
             Files.writeString(tmp, content, StandardCharsets.UTF_8);
@@ -356,7 +359,7 @@ public class CodexSettingsManager {
 
         // String (quoted)
         if ((valueStr.startsWith("\"") && valueStr.endsWith("\"")) ||
-            (valueStr.startsWith("'") && valueStr.endsWith("'"))) {
+                    (valueStr.startsWith("'") && valueStr.endsWith("'"))) {
             return unescapeTomlString(valueStr.substring(1, valueStr.length() - 1));
         }
 
@@ -417,7 +420,7 @@ public class CodexSettingsManager {
                 String valueStr = pair.substring(eqIndex + 1).trim();
                 // Remove quotes from key if present
                 if ((key.startsWith("\"") && key.endsWith("\"")) ||
-                    (key.startsWith("'") && key.endsWith("'"))) {
+                            (key.startsWith("'") && key.endsWith("'"))) {
                     key = key.substring(1, key.length() - 1);
                 }
                 result.put(key, parseTomlValue(valueStr));
@@ -497,13 +500,27 @@ public class CodexSettingsManager {
             char c = str.charAt(i);
             if (escaped) {
                 switch (c) {
-                    case 'n': result.append('\n'); break;
-                    case 't': result.append('\t'); break;
-                    case 'r': result.append('\r'); break;
-                    case '\\': result.append('\\'); break;
-                    case '"': result.append('"'); break;
-                    case '\'': result.append('\''); break;
-                    default: result.append('\\').append(c); break;
+                    case 'n':
+                        result.append('\n');
+                        break;
+                    case 't':
+                        result.append('\t');
+                        break;
+                    case 'r':
+                        result.append('\r');
+                        break;
+                    case '\\':
+                        result.append('\\');
+                        break;
+                    case '"':
+                        result.append('"');
+                        break;
+                    case '\'':
+                        result.append('\'');
+                        break;
+                    default:
+                        result.append('\\').append(c);
+                        break;
                 }
                 escaped = false;
             } else if (c == '\\') {
@@ -584,8 +601,8 @@ public class CodexSettingsManager {
         // A "simple value" is anything that is NOT a nested Map, NOT an array of tables (List<Map>),
         // and NOT an empty list (which would be an empty array of tables with no TOML representation).
         boolean hasSimpleValues = section.values().stream()
-                .anyMatch(v -> !(v instanceof Map) && !isArrayOfTables(v)
-                        && !(v instanceof List && ((List<?>) v).isEmpty()));
+                                          .anyMatch(v -> !(v instanceof Map) && !isArrayOfTables(v)
+                                                                 && !(v instanceof List && ((List<?>) v).isEmpty()));
 
         // Write section header and simple values
         if (hasSimpleValues) {
@@ -594,7 +611,7 @@ public class CodexSettingsManager {
                 Object val = entry.getValue();
                 // Skip Maps, array of tables, and empty lists
                 if (val instanceof Map || isArrayOfTables(val)
-                        || (val instanceof List && ((List<?>) val).isEmpty())) {
+                            || (val instanceof List && ((List<?>) val).isEmpty())) {
                     continue;
                 }
                 if (!isValidTomlKey(entry.getKey())) {
@@ -660,10 +677,9 @@ public class CodexSettingsManager {
      * Checks if a value is an array of tables (List where elements are Maps).
      */
     private boolean isArrayOfTables(Object value) {
-        if (!(value instanceof List)) {
+        if (!(value instanceof List<?> list)) {
             return false;
         }
-        List<?> list = (List<?>) value;
         if (list.isEmpty()) {
             return false;
         }
@@ -725,10 +741,10 @@ public class CodexSettingsManager {
      */
     private String escapeTomlString(String str) {
         return str.replace("\\", "\\\\")
-                  .replace("\"", "\\\"")
-                  .replace("\n", "\\n")
-                  .replace("\t", "\\t")
-                  .replace("\r", "\\r");
+                       .replace("\"", "\\\"")
+                       .replace("\n", "\\n")
+                       .replace("\t", "\\t")
+                       .replace("\r", "\\r");
     }
 
 

@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.model.DeleteResult;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -12,7 +13,6 @@ import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.vfs.VirtualFile;
 
-import javax.swing.*;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,27 +31,27 @@ public class ProviderHandler extends BaseMessageHandler {
     private static final Logger LOG = Logger.getInstance(ProviderHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
-        // Claude provider operations
-        "get_providers",
-        "get_current_claude_config",
-        "get_thinking_enabled",
-        "set_thinking_enabled",
-        "add_provider",
-        "update_provider",
-        "delete_provider",
-        "switch_provider",
-        "get_active_provider",
-        "preview_cc_switch_import",
-        "open_file_chooser_for_cc_switch",
-        "save_imported_providers",
-        // Codex provider operations
-        "get_codex_providers",
-        "get_current_codex_config",
-        "add_codex_provider",
-        "update_codex_provider",
-        "delete_codex_provider",
-        "switch_codex_provider",
-        "get_active_codex_provider"
+            // Claude provider operations
+            "get_providers",
+            "get_current_claude_config",
+            "get_thinking_enabled",
+            "set_thinking_enabled",
+            "add_provider",
+            "update_provider",
+            "delete_provider",
+            "switch_provider",
+            "get_active_provider",
+            "preview_cc_switch_import",
+            "open_file_chooser_for_cc_switch",
+            "save_imported_providers",
+            // Codex provider operations
+            "get_codex_providers",
+            "get_current_codex_config",
+            "add_codex_provider",
+            "update_codex_provider",
+            "delete_codex_provider",
+            "switch_codex_provider",
+            "get_active_codex_provider"
     };
 
     public ProviderHandler(HandlerContext context) {
@@ -256,8 +256,8 @@ public class ProviderHandler extends BaseMessageHandler {
             boolean syncedActiveProvider = false;
             JsonObject activeProvider = context.getSettingsService().getActiveClaudeProvider();
             if (activeProvider != null &&
-                activeProvider.has("id") &&
-                id.equals(activeProvider.get("id").getAsString())) {
+                        activeProvider.has("id") &&
+                        id.equals(activeProvider.get("id").getAsString())) {
                 context.getSettingsService().applyProviderToClaudeSettings(activeProvider);
                 syncedActiveProvider = true;
             }
@@ -339,12 +339,12 @@ public class ProviderHandler extends BaseMessageHandler {
 
             if ("__local_settings_json__".equals(id)) {
                 // Validate settings.json exists
-                Path settingsPath = Paths.get(System.getProperty("user.home"), ".claude", "settings.json");
+                Path settingsPath = Paths.get(PlatformUtils.getHomeDirectory(), ".claude", "settings.json");
                 if (!Files.exists(settingsPath)) {
                     LOG.warn("[ProviderHandler] Local settings.json does not exist at: " + settingsPath);
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("window.showError",
-                            escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.localProviderSettingsNotFound")));
+                                escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.localProviderSettingsNotFound")));
                     });
                     return;
                 }
@@ -357,7 +357,7 @@ public class ProviderHandler extends BaseMessageHandler {
                     LOG.error("[ProviderHandler] Invalid JSON in settings.json: " + e.getMessage(), e);
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("window.showError",
-                            escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.localProviderInvalidJson", e.getMessage())));
+                                escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.localProviderInvalidJson", e.getMessage())));
                     });
                     return;
                 }
@@ -376,7 +376,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     callJavaScript("window.showSwitchSuccess",
-                        escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.localProviderSwitchSuccess")));
+                            escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.localProviderSwitchSuccess")));
                     handleGetProviders();
                     handleGetCurrentClaudeConfig();
                     handleGetActiveProvider();
@@ -423,7 +423,7 @@ public class ProviderHandler extends BaseMessageHandler {
      */
     private void handlePreviewCcSwitchImport() {
         com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(() -> {
-            String userHome = System.getProperty("user.home");
+            String userHome = PlatformUtils.getHomeDirectory();
             String osName = System.getProperty("os.name").toLowerCase();
 
             File ccSwitchDir = new File(userHome, ".cc-switch");
@@ -482,12 +482,12 @@ public class ProviderHandler extends BaseMessageHandler {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 FileChooserDescriptor descriptor = new FileChooserDescriptor(
-                    true,   // chooseFiles
-                    false,  // chooseFolders
-                    false,  // chooseJars
-                    false,  // chooseJarsAsFiles
-                    false,  // chooseJarContents
-                    false   // chooseMultiple
+                        true,   // chooseFiles
+                        false,  // chooseFolders
+                        false,  // chooseJars
+                        false,  // chooseJarsAsFiles
+                        false,  // chooseJarContents
+                        false   // chooseMultiple
                 );
 
                 descriptor.setTitle(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.selectTitle"));
@@ -498,22 +498,22 @@ public class ProviderHandler extends BaseMessageHandler {
                 });
 
                 // Set default path to .cc-switch under user home directory
-                String userHome = System.getProperty("user.home");
+                String userHome = PlatformUtils.getHomeDirectory();
                 File defaultDir = new File(userHome, ".cc-switch");
                 VirtualFile defaultVirtualFile = null;
                 if (defaultDir.exists()) {
                     defaultVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-                        .findFileByPath(defaultDir.getAbsolutePath());
+                                                 .findFileByPath(defaultDir.getAbsolutePath());
                 }
 
                 LOG.info("[ProviderHandler] 打开文件选择器，默认目录: " +
-                    (defaultVirtualFile != null ? defaultVirtualFile.getPath() : "用户主目录"));
+                                 (defaultVirtualFile != null ? defaultVirtualFile.getPath() : "用户主目录"));
 
                 // Open file chooser
                 VirtualFile[] selectedFiles = FileChooser.chooseFiles(
-                    descriptor,
-                    context.getProject(),
-                    defaultVirtualFile
+                        descriptor,
+                        context.getProject(),
+                        defaultVirtualFile
                 );
 
                 if (selectedFiles.length == 0) {
@@ -538,8 +538,8 @@ public class ProviderHandler extends BaseMessageHandler {
 
                 if (!dbFile.canRead()) {
                     String errorMsg = com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.cannotReadFile") + "\n" +
-                                     dbFile.getAbsolutePath() + "\n" +
-                                     com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.checkFilePermissions");
+                                              dbFile.getAbsolutePath() + "\n" +
+                                              com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.checkFilePermissions");
                     LOG.error("[ProviderHandler] " + errorMsg);
                     sendErrorToFrontend(com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.permissionErrorTitle"), errorMsg);
                     return;
@@ -707,8 +707,8 @@ public class ProviderHandler extends BaseMessageHandler {
             boolean syncedActiveProvider = false;
             JsonObject activeProvider = context.getSettingsService().getActiveCodexProvider();
             if (activeProvider != null &&
-                activeProvider.has("id") &&
-                id.equals(activeProvider.get("id").getAsString())) {
+                        activeProvider.has("id") &&
+                        id.equals(activeProvider.get("id").getAsString())) {
                 context.getSettingsService().applyActiveProviderToCodexSettings();
                 syncedActiveProvider = true;
             }

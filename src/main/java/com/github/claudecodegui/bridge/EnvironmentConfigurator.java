@@ -1,8 +1,8 @@
 package com.github.claudecodegui.bridge;
 
-import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ShellExecutor;
+import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -46,8 +46,8 @@ public class EnvironmentConfigurator {
 
         // Use PlatformUtils to get the PATH variable (case-insensitive)
         String path = PlatformUtils.isWindows() ?
-            PlatformUtils.getEnvIgnoreCase("PATH") :
-            env.get("PATH");
+                              PlatformUtils.getEnvIgnoreCase("PATH") :
+                              env.get("PATH");
 
         if (path == null) {
             path = "";
@@ -69,9 +69,9 @@ public class EnvironmentConfigurator {
         if (PlatformUtils.isWindows()) {
             // Common Windows paths
             String[] windowsPaths = {
-                System.getenv("ProgramFiles") + "\\nodejs",
-                System.getenv("APPDATA") + "\\npm",
-                System.getenv("LOCALAPPDATA") + "\\Programs\\nodejs"
+                    System.getenv("ProgramFiles") + "\\nodejs",
+                    System.getenv("APPDATA") + "\\npm",
+                    System.getenv("LOCALAPPDATA") + "\\Programs\\nodejs"
             };
             for (String p : windowsPaths) {
                 if (p != null && !p.contains("null") && !pathContains(path, p)) {
@@ -80,19 +80,19 @@ public class EnvironmentConfigurator {
             }
         } else {
             // Common macOS/Linux paths
-            String userHome = System.getProperty("user.home");
+            String userHome = PlatformUtils.getHomeDirectory();
             String[] unixPaths = {
-                "/usr/local/bin",
-                "/opt/homebrew/bin",
-                "/usr/bin",
-                "/bin",
-                "/usr/sbin",
-                "/sbin",
-                userHome + "/.nvm/current/bin",
-                // Python / uv / pip tool installation directory (uvx, uv, etc.)
-                userHome + "/.local/bin",
-                // Rust / cargo tool installation directory
-                userHome + "/.cargo/bin",
+                    "/usr/local/bin",
+                    "/opt/homebrew/bin",
+                    "/usr/bin",
+                    "/bin",
+                    "/usr/sbin",
+                    "/sbin",
+                    userHome + "/.nvm/current/bin",
+                    // Python / uv / pip tool installation directory (uvx, uv, etc.)
+                    userHome + "/.local/bin",
+                    // Rust / cargo tool installation directory
+                    userHome + "/.cargo/bin",
             };
             for (String p : unixPaths) {
                 if (!pathContains(path, p)) {
@@ -120,7 +120,7 @@ public class EnvironmentConfigurator {
         // The SDK needs HOME to locate the ~/.claude/commands/ directory
         String home = env.get("HOME");
         if (home == null || home.isEmpty()) {
-            home = System.getProperty("user.home");
+            home = PlatformUtils.getHomeDirectory();
             if (home != null && !home.isEmpty()) {
                 env.put("HOME", home);
             }
@@ -130,7 +130,7 @@ public class EnvironmentConfigurator {
         // Environment variables may be missing when launched from macOS GUI; relying on implicit defaults causes unstable feature detection (e.g. skills tool appearing intermittently)
         String codexHome = env.get(CODEX_HOME_ENV);
         if (codexHome == null || codexHome.trim().isEmpty()) {
-            String userHome = System.getProperty("user.home");
+            String userHome = PlatformUtils.getHomeDirectory();
             if (userHome != null && !userHome.isEmpty()) {
                 env.put(CODEX_HOME_ENV, Paths.get(userHome, ".codex").toString());
             }
@@ -158,6 +158,7 @@ public class EnvironmentConfigurator {
 
     /**
      * Get or generate session ID for this instance.
+     *
      * @return Session ID
      */
     public String getSessionId() {
@@ -252,7 +253,7 @@ public class EnvironmentConfigurator {
      * Configure Codex-specific environment variables.
      * Reads ~/.codex/config.toml to find custom env_key settings and loads those
      * environment variables from the system shell environment.
-     *
+     * <p>
      * This is necessary because IDE processes often don't inherit shell environment
      * variables set in ~/.zshrc or ~/.bash_profile when launched from Dock/launcher.
      *
@@ -288,7 +289,7 @@ public class EnvironmentConfigurator {
                     LOG.info("[Codex] Set env var from shell: " + envKeyName + " (length: " + value.length() + ")");
                 } else {
                     LOG.warn("[Codex] Could not resolve env var: " + envKeyName +
-                            ". Please ensure it's set in your shell environment.");
+                                     ". Please ensure it's set in your shell environment.");
                 }
             }
         } catch (Exception e) {
@@ -303,7 +304,7 @@ public class EnvironmentConfigurator {
      */
     private Set<String> parseCodexConfigEnvKeys() {
         Set<String> envKeys = new HashSet<>();
-        String home = System.getProperty("user.home");
+        String home = PlatformUtils.getHomeDirectory();
         if (home == null || home.isEmpty()) {
             return envKeys;
         }
@@ -463,7 +464,7 @@ public class EnvironmentConfigurator {
 
                 // Windows returns "%VARNAME%" if not set
                 if (line != null && !line.trim().isEmpty() &&
-                        !line.trim().equals("%" + envName + "%")) {
+                            !line.trim().equals("%" + envName + "%")) {
                     LOG.debug("[Codex] Env var found via Windows shell: " + envName);
                     return line.trim();
                 }
@@ -482,7 +483,7 @@ public class EnvironmentConfigurator {
      * @return Value or null
      */
     private String parseEnvFromShellConfigs(String envName) {
-        String home = System.getProperty("user.home");
+        String home = PlatformUtils.getHomeDirectory();
         if (home == null || home.isEmpty()) {
             return null;
         }

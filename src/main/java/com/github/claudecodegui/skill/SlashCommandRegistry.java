@@ -1,6 +1,7 @@
 package com.github.claudecodegui.skill;
 
 import com.github.claudecodegui.CodexSkillService;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -10,7 +11,10 @@ import org.snakeyaml.engine.v2.api.LoadSettings;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Merges built-in slash commands with skill-derived commands per provider.
@@ -125,7 +129,7 @@ public final class SlashCommandRegistry {
 
                 for (File subEntry : subEntries) {
                     if (subEntry.isFile() && subEntry.getName().endsWith(".md")
-                            && !subEntry.getName().startsWith(".")) {
+                                && !subEntry.getName().startsWith(".")) {
                         SlashCommand cmd = parseCommandFile(subEntry, namespace);
                         if (cmd != null) {
                             commands.add(cmd);
@@ -158,7 +162,7 @@ public final class SlashCommandRegistry {
         List<SlashCommand> commands = new ArrayList<>();
         for (File entry : entries) {
             if (!entry.isFile() || !entry.getName().endsWith(".md")
-                    || entry.getName().startsWith(".")) {
+                        || entry.getName().startsWith(".")) {
                 continue;
             }
             String baseName = entry.getName().replaceFirst("\\.md$", "");
@@ -176,8 +180,8 @@ public final class SlashCommandRegistry {
     private static SlashCommand parseCommandFile(File mdFile, String namespace) {
         String baseName = mdFile.getName().replaceFirst("\\.md$", "");
         String commandName = namespace != null
-                ? "/" + namespace + ":" + baseName
-                : "/" + baseName;
+                                     ? "/" + namespace + ":" + baseName
+                                     : "/" + baseName;
 
         // Try to extract description from YAML frontmatter
         String description = extractCommandDescription(mdFile.toPath());
@@ -219,6 +223,7 @@ public final class SlashCommandRegistry {
      * Claude merge order: built-in → project commands → project skills → personal commands → personal skills.
      * Codex merge order: built-in → prompts.
      * Later entries override earlier ones with the same name (personal > project per Claude docs).
+     *
      * @param provider "claude" or "codex"
      * @param cwd      current working directory (for local skills/commands lookup)
      * @return deduplicated list of slash commands
@@ -229,7 +234,7 @@ public final class SlashCommandRegistry {
         // Step 1: Select built-in commands by provider
         List<SlashCommand> builtins = isCodex ? CODEX_BUILTIN : CLAUDE_BUILTIN;
 
-        String userHome = System.getProperty("user.home");
+        String userHome = PlatformUtils.getHomeDirectory();
 
         List<SlashCommand> globalCmdCommands;
         List<SlashCommand> globalSkillCommands;

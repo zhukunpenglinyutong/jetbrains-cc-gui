@@ -9,6 +9,7 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
@@ -35,18 +36,31 @@ public class SessionLifecycleManager {
      */
     public interface SessionHost {
         Project getProject();
+
         ClaudeSDKBridge getClaudeSDKBridge();
+
         CodexSDKBridge getCodexSDKBridge();
+
         ClaudeSession getSession();
+
         void setSession(ClaudeSession session);
+
         HandlerContext getHandlerContext();
+
         StreamMessageCoalescer getStreamCoalescer();
+
         void clearPendingPermissionRequests();
+
         void callJavaScript(String functionName, String... args);
+
         boolean isDisposed();
+
         JBCefBrowser getBrowser();
+
         void setupSessionCallbacks();
+
         void setSlashCommandsFetched(boolean fetched);
+
         void setFetchedSlashCommandsCount(int count);
     }
 
@@ -67,13 +81,13 @@ public class SessionLifecycleManager {
         String previousProvider = (oldSession != null) ? oldSession.getProvider() : "claude";
         String previousModel = (oldSession != null) ? oldSession.getModel() : "claude-sonnet-4-6";
         LOG.info("Preserving session state: mode=" + previousPermissionMode
-            + ", provider=" + previousProvider + ", model=" + previousModel);
+                         + ", provider=" + previousProvider + ", model=" + previousModel);
 
         host.callJavaScript("clearMessages");
 
         CompletableFuture<Void> interruptFuture = oldSession != null
-            ? oldSession.interrupt()
-            : CompletableFuture.completedFuture(null);
+                                                          ? oldSession.interrupt()
+                                                          : CompletableFuture.completedFuture(null);
 
         interruptFuture.thenRun(() -> {
             LOG.info("Old session interrupted, creating new session");
@@ -87,12 +101,12 @@ public class SessionLifecycleManager {
             host.clearPendingPermissionRequests();
 
             ClaudeSession newSession = new ClaudeSession(
-                host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+                    host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
             newSession.setPermissionMode(previousPermissionMode);
             newSession.setProvider(previousProvider);
             newSession.setModel(previousModel);
             LOG.info("Restored session state to new session: mode=" + previousPermissionMode
-                + ", provider=" + previousProvider + ", model=" + previousModel);
+                             + ", provider=" + previousProvider + ", model=" + previousModel);
 
             host.setSession(newSession);
             host.getHandlerContext().setSession(newSession);
@@ -108,14 +122,14 @@ public class SessionLifecycleManager {
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 host.callJavaScript("updateStatus",
-                    JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
+                        JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
                 resetTokenUsage();
             });
         }).exceptionally(ex -> {
             LOG.error("Failed to create new session: " + ex.getMessage(), ex);
             ApplicationManager.getApplication().invokeLater(() -> {
                 host.callJavaScript("updateStatus",
-                    JsUtils.escapeJs("Failed to create new session: " + ex.getMessage()));
+                        JsUtils.escapeJs("Failed to create new session: " + ex.getMessage()));
             });
             return null;
         });
@@ -140,38 +154,38 @@ public class SessionLifecycleManager {
             PropertiesComponent props = PropertiesComponent.getInstance();
             String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
             previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty())
-                ? savedMode.trim() : "bypassPermissions";
+                                             ? savedMode.trim() : "bypassPermissions";
             previousProvider = "claude";
             previousModel = "claude-sonnet-4-6";
         }
         LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode
-            + ", provider=" + previousProvider + ", model=" + previousModel);
+                         + ", provider=" + previousProvider + ", model=" + previousModel);
 
         host.callJavaScript("clearMessages");
         host.clearPendingPermissionRequests();
 
         ClaudeSession newSession = new ClaudeSession(
-            host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+                host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
         newSession.setPermissionMode(previousPermissionMode);
         newSession.setProvider(previousProvider);
         newSession.setModel(previousModel);
         LOG.info("Restored session state to loaded session: mode=" + previousPermissionMode
-            + ", provider=" + previousProvider + ", model=" + previousModel);
+                         + ", provider=" + previousProvider + ", model=" + previousModel);
 
         host.setSession(newSession);
         host.getHandlerContext().setSession(newSession);
         host.setupSessionCallbacks();
 
         String workingDir = (projectPath != null && new File(projectPath).exists())
-            ? projectPath : determineWorkingDirectory();
+                                    ? projectPath : determineWorkingDirectory();
         newSession.setSessionInfo(sessionId, workingDir);
 
         newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
             host.callJavaScript("historyLoadComplete");
         })).exceptionally(ex -> {
             ApplicationManager.getApplication().invokeLater(() ->
-                host.callJavaScript("addErrorMessage",
-                    JsUtils.escapeJs("Failed to load session: " + ex.getMessage())));
+                                                                    host.callJavaScript("addErrorMessage",
+                                                                            JsUtils.escapeJs("Failed to load session: " + ex.getMessage())));
             return null;
         });
     }
@@ -183,7 +197,7 @@ public class SessionLifecycleManager {
         String projectPath = host.getProject().getBasePath();
 
         if (projectPath == null || !new File(projectPath).exists()) {
-            String userHome = System.getProperty("user.home");
+            String userHome = PlatformUtils.getHomeDirectory();
             LOG.warn("Using user home directory as fallback: " + userHome);
             return userHome;
         }
@@ -203,7 +217,7 @@ public class SessionLifecycleManager {
                     return resolvedPath;
                 } else {
                     LOG.warn("Custom working directory does not exist: "
-                        + workingDirFile.getAbsolutePath() + ", falling back to project root");
+                                     + workingDirFile.getAbsolutePath() + ", falling back to project root");
                 }
             }
         } catch (Exception e) {
@@ -309,13 +323,13 @@ public class SessionLifecycleManager {
         JBCefBrowser browser = host.getBrowser();
         if (browser != null && !host.isDisposed()) {
             String js = "(function() {" +
-                    "  if (typeof window.onUsageUpdate === 'function') {" +
-                    "    window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "');" +
-                    "    console.log('[Backend->Frontend] Usage reset for new session');" +
-                    "  } else {" +
-                    "    console.warn('[Backend->Frontend] window.onUsageUpdate not found');" +
-                    "  }" +
-                    "})();";
+                                "  if (typeof window.onUsageUpdate === 'function') {" +
+                                "    window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "');" +
+                                "    console.log('[Backend->Frontend] Usage reset for new session');" +
+                                "  } else {" +
+                                "    console.warn('[Backend->Frontend] window.onUsageUpdate not found');" +
+                                "  }" +
+                                "})();";
             browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
         }
     }

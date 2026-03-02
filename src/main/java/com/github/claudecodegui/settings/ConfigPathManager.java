@@ -1,11 +1,12 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.util.PlatformUtils;
+import com.intellij.openapi.diagnostic.Logger;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
-import com.intellij.openapi.diagnostic.Logger;
 
 /**
  * Configuration Path Manager.
@@ -26,7 +27,7 @@ public class ConfigPathManager {
      * Get the configuration file path (~/.codemoss/config.json).
      */
     public String getConfigPath() {
-        String homeDir = System.getProperty("user.home");
+        String homeDir = PlatformUtils.getHomeDirectory();
         return Paths.get(homeDir, CONFIG_DIR_NAME, CONFIG_FILE_NAME).toString();
     }
 
@@ -34,7 +35,7 @@ public class ConfigPathManager {
      * Get the backup file path.
      */
     public String getBackupPath() {
-        String homeDir = System.getProperty("user.home");
+        String homeDir = PlatformUtils.getHomeDirectory();
         return Paths.get(homeDir, CONFIG_DIR_NAME, BACKUP_FILE_NAME).toString();
     }
 
@@ -42,7 +43,7 @@ public class ConfigPathManager {
      * Get the configuration directory as a Path object.
      */
     public Path getConfigDir() {
-        String homeDir = System.getProperty("user.home");
+        String homeDir = PlatformUtils.getHomeDirectory();
         return Paths.get(homeDir, CONFIG_DIR_NAME);
     }
 
@@ -71,7 +72,7 @@ public class ConfigPathManager {
      * Get the Claude settings.json path.
      */
     public Path getClaudeSettingsPath() {
-        String homeDir = System.getProperty("user.home");
+        String homeDir = PlatformUtils.getHomeDirectory();
         return Paths.get(homeDir, CLAUDE_DIR_NAME, CLAUDE_SETTINGS_FILE_NAME);
     }
 

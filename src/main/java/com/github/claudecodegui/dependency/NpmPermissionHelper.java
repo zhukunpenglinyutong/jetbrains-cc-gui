@@ -22,14 +22,14 @@ public class NpmPermissionHelper {
 
     // Permission error keywords
     private static final Pattern PERMISSION_ERROR_PATTERN = Pattern.compile(
-        "EACCES|EPERM|permission denied|access denied|ENOTEMPTY.*_cacache",
-        Pattern.CASE_INSENSITIVE
+            "EACCES|EPERM|permission denied|access denied|ENOTEMPTY.*_cacache",
+            Pattern.CASE_INSENSITIVE
     );
 
     // Cache conflict keywords
     private static final Pattern CACHE_ERROR_PATTERN = Pattern.compile(
-        "File exists.*_cacache|EEXIST.*_cacache|Invalid response body",
-        Pattern.CASE_INSENSITIVE
+            "File exists.*_cacache|EEXIST.*_cacache|Invalid response body",
+            Pattern.CASE_INSENSITIVE
     );
 
     // Special characters that need escaping in the Windows shell
@@ -59,7 +59,7 @@ public class NpmPermissionHelper {
      * Returns the npm cache directory.
      */
     public static Path getNpmCacheDir() {
-        String userHome = System.getProperty("user.home");
+        String userHome = PlatformUtils.getHomeDirectory();
         return Paths.get(userHome, ".npm", "_cacache");
     }
 
@@ -91,6 +91,7 @@ public class NpmPermissionHelper {
 
     /**
      * Cleans the npm cache (strategy 1).
+     *
      * @param npmPath path to the npm executable
      * @return true if the cleanup succeeded
      */
@@ -135,6 +136,7 @@ public class NpmPermissionHelper {
 
     /**
      * Forcefully deletes the npm cache directory (strategy 2 - more aggressive).
+     *
      * @return true if the deletion succeeded
      */
     public static boolean forceDeleteCache() {
@@ -174,6 +176,7 @@ public class NpmPermissionHelper {
 
     /**
      * Fixes cache directory ownership (Unix only).
+     *
      * @return true if the fix succeeded or was not needed
      */
     public static boolean fixCacheOwnership() {

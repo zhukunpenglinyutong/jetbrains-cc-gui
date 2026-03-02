@@ -1,7 +1,7 @@
 package com.github.claudecodegui.dependency;
 
-import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -9,7 +9,12 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,7 +58,7 @@ public class DependencyManager {
      * Returns the root dependencies directory path (~/.codemoss/dependencies/).
      */
     public Path getDependenciesDir() {
-        String home = System.getProperty("user.home");
+        String home = PlatformUtils.getHomeDirectory();
         return Paths.get(home, ".codemoss", DEPS_DIR_NAME);
     }
 
@@ -164,7 +169,7 @@ public class DependencyManager {
             String npmPath = getNpmPath(nodePath);
 
             ProcessBuilder pb = new ProcessBuilder(
-                npmPath, "view", sdk.getNpmPackage(), "version"
+                    npmPath, "view", sdk.getNpmPackage(), "version"
             );
             configureProcessEnvironment(pb);
 
@@ -172,7 +177,7 @@ public class DependencyManager {
             StringBuilder output = new StringBuilder();
 
             try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output.append(line.trim());
@@ -258,8 +263,8 @@ public class DependencyManager {
                 String version = nodeDetector.verifyNodePath("node");
                 if (version == null) {
                     return InstallResult.failure(sdkId,
-                        "Node.js not found. Please configure Node.js path in Settings > Basic.",
-                        logs.toString());
+                            "Node.js not found. Please configure Node.js path in Settings > Basic.",
+                            logs.toString());
                 }
             }
             log.accept("Using Node.js: " + nodePath);
@@ -275,8 +280,8 @@ public class DependencyManager {
             Path normalizedDepsDir = getDependenciesDir().normalize().toAbsolutePath();
             if (!normalizedSdkDir.startsWith(normalizedDepsDir)) {
                 return InstallResult.failure(sdkId,
-                    "Security error: SDK directory path is outside dependencies directory",
-                    logs.toString());
+                        "Security error: SDK directory path is outside dependencies directory",
+                        logs.toString());
             }
 
             Files.createDirectories(sdkDir);
@@ -313,7 +318,7 @@ public class DependencyManager {
 
                 log.accept("Running npm install...");
                 List<String> command = NpmPermissionHelper.buildInstallCommandWithFallback(
-                    npmPath, normalizedSdkDir, packages, attempt
+                        npmPath, normalizedSdkDir, packages, attempt
                 );
                 log.accept("Command: " + String.join(" ", command));
 
@@ -339,7 +344,7 @@ public class DependencyManager {
                 if (!finished) {
                     process.destroyForcibly();
                     lastResult = InstallResult.failure(sdkId,
-                        "Installation timed out (3 minutes)", logs.toString());
+                            "Installation timed out (3 minutes)", logs.toString());
                     continue; // Retry
                 }
 
@@ -352,21 +357,21 @@ public class DependencyManager {
                 // Installation failed, record the result
                 String logsStr = logs.toString();
                 lastResult = InstallResult.failure(sdkId,
-                    "npm install failed with exit code: " + exitCode, logsStr);
+                        "npm install failed with exit code: " + exitCode, logsStr);
 
                 // If this is the last attempt, do not retry
                 if (attempt == maxRetries) {
                     // Append troubleshooting suggestions
                     String solution = NpmPermissionHelper.generateErrorSolution(logsStr);
                     return InstallResult.failure(sdkId,
-                        lastResult.getErrorMessage() + solution,
-                        lastResult.getLogs());
+                            lastResult.getErrorMessage() + solution,
+                            lastResult.getLogs());
                 }
 
                 // Detect error type and attempt to fix
                 boolean fixed = false;
                 if (NpmPermissionHelper.hasPermissionError(logsStr) ||
-                    NpmPermissionHelper.hasCacheError(logsStr)) {
+                            NpmPermissionHelper.hasCacheError(logsStr)) {
 
                     log.accept("⚠️ Detected npm cache/permission error, attempting to fix...");
 
@@ -424,6 +429,7 @@ public class DependencyManager {
 
     /**
      * Uninstalls an SDK.
+     *
      * @return true if the uninstallation completed fully, false if some files failed to delete
      */
     public boolean uninstallSdk(String sdkId) {
@@ -445,7 +451,7 @@ public class DependencyManager {
             } else {
                 // Some files failed to delete; log a warning but still return success (manifest is already updated)
                 LOG.warn("[DependencyManager] Uninstalled SDK with " + failedPaths.size() +
-                    " files failed to delete: " + sdkId);
+                                 " files failed to delete: " + sdkId);
                 return true; // Still return true because the SDK is functionally uninstalled
             }
         } catch (Exception e) {
@@ -619,6 +625,7 @@ public class DependencyManager {
 
     /**
      * Recursively deletes a directory.
+     *
      * @return a list of paths that failed to delete (empty list means complete success)
      */
     private List<Path> deleteDirectory(Path dir) throws IOException {
@@ -630,15 +637,15 @@ public class DependencyManager {
 
         // Collect all paths that failed to delete instead of silently ignoring them
         Files.walk(dir)
-            .sorted((a, b) -> b.compareTo(a)) // Reverse sort to delete children first
-            .forEach(path -> {
-                try {
-                    Files.delete(path);
-                } catch (IOException e) {
-                    LOG.warn("[DependencyManager] Failed to delete: " + path + " - " + e.getMessage());
-                    failedPaths.add(path);
-                }
-            });
+                .sorted((a, b) -> b.compareTo(a)) // Reverse sort to delete children first
+                .forEach(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        LOG.warn("[DependencyManager] Failed to delete: " + path + " - " + e.getMessage());
+                        failedPaths.add(path);
+                    }
+                });
 
         if (!failedPaths.isEmpty()) {
             LOG.warn("[DependencyManager] " + failedPaths.size() + " files/directories failed to delete");
@@ -649,6 +656,7 @@ public class DependencyManager {
 
     /**
      * Compares two version strings.
+     *
      * @return negative if v1 < v2, 0 if equal, positive if v1 > v2
      */
     private int compareVersions(String v1, String v2) {

@@ -2,6 +2,7 @@ package com.github.claudecodegui;
 
 import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.skill.SkillFrontmatterParser;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -9,16 +10,28 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
  * Codex Skills service.
- *
+ * <p>
  * Manages Codex skill scanning, import, deletion, enabling, and disabling.
- *
+ * <p>
  * Codex skills use a different mechanism from Claude:
  * - Directory structure: .agents/skills/ (multi-level upward scanning)
  * - Invocation prefix: $ (not /)
@@ -77,6 +90,7 @@ public class CodexSkillService {
 
     /**
      * Finds the repository root by walking up from cwd looking for a .git directory.
+     *
      * @return the repo root path, or null if not in a git repository
      */
     public static String findRepoRoot(String cwd) {
@@ -118,7 +132,7 @@ public class CodexSkillService {
                 if (Files.isDirectory(Path.of(candidate)) && seen.add(normalizedCandidate)) {
                     dirs.add(new SkillScanDir(candidate, "repo"));
                 }
-                if (repoRoot != null && current.toString().equals(repoRoot)) {
+                if (current.toString().equals(repoRoot)) {
                     break;
                 }
                 current = current.getParent();
@@ -136,7 +150,7 @@ public class CodexSkillService {
         }
 
         // User-level directories
-        String userHome = System.getProperty("user.home");
+        String userHome = PlatformUtils.getHomeDirectory();
 
         // ~/.agents/skills/ (Codex community skills)
         String agentsDir = Paths.get(userHome, ".agents", "skills").toString();
@@ -232,6 +246,7 @@ public class CodexSkillService {
 
     /**
      * Reads disabled skill paths from ~/.codex/config.toml [[skills.config]] entries.
+     *
      * @return set of SKILL.md paths that are disabled
      */
     @SuppressWarnings("unchecked")
@@ -273,6 +288,7 @@ public class CodexSkillService {
 
     /**
      * Gets all Codex skills (user + repo scopes), with enabled state from config.toml.
+     *
      * @return JsonObject with "user" and "repo" keys
      */
     public static JsonObject getAllSkills(String cwd) {
@@ -403,7 +419,7 @@ public class CodexSkillService {
 
         String targetDir;
         if ("user".equals(scope)) {
-            targetDir = Paths.get(System.getProperty("user.home"), ".agents", "skills").toString();
+            targetDir = Paths.get(PlatformUtils.getHomeDirectory(), ".agents", "skills").toString();
         } else {
             if (cwd == null || cwd.isEmpty()) {
                 result.addProperty("success", false);
@@ -526,7 +542,7 @@ public class CodexSkillService {
             }
             String baseDir;
             if ("user".equals(scope)) {
-                baseDir = Paths.get(System.getProperty("user.home"), ".agents", "skills").toString();
+                baseDir = Paths.get(PlatformUtils.getHomeDirectory(), ".agents", "skills").toString();
             } else {
                 if (cwd == null || cwd.isEmpty()) {
                     result.addProperty("success", false);
@@ -547,7 +563,7 @@ public class CodexSkillService {
         // Security: verify the skill directory is inside a legitimate skills directory
         // Collect all valid skills base directories
         List<Path> validBaseDirs = new ArrayList<>();
-        String userHome = System.getProperty("user.home");
+        String userHome = PlatformUtils.getHomeDirectory();
         validBaseDirs.add(Paths.get(userHome, ".agents", "skills"));
         validBaseDirs.add(Paths.get(userHome, ".codex", "skills"));
         validBaseDirs.add(Paths.get(userHome, ".codex", "skills", ".system"));
@@ -559,7 +575,7 @@ public class CodexSkillService {
             int level = 0;
             while (level < MAX_SCAN_LEVELS && current != null && !current.equals(fsRoot)) {
                 validBaseDirs.add(current.resolve(".agents").resolve("skills"));
-                if (repoRoot != null && current.toString().equals(repoRoot)) {
+                if (current.toString().equals(repoRoot)) {
                     break;
                 }
                 current = current.getParent();
@@ -573,7 +589,7 @@ public class CodexSkillService {
 
         Path normalizedSkillDir = skillDir.toPath().toAbsolutePath().normalize();
         boolean isInsideValidDir = validBaseDirs.stream()
-                .anyMatch(base -> isPathSafe(normalizedSkillDir, base));
+                                           .anyMatch(base -> isPathSafe(normalizedSkillDir, base));
         if (!isInsideValidDir) {
             result.addProperty("success", false);
             result.addProperty("error", "Skill directory is not inside a valid skills directory");

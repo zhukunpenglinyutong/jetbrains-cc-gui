@@ -1,5 +1,7 @@
 package com.github.claudecodegui;
 
+import com.github.claudecodegui.skill.SkillFrontmatterParser;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -7,21 +9,24 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 
-import com.github.claudecodegui.skill.SkillFrontmatterParser;
-
 /**
  * Skills service.
- *
+ * <p>
  * Manages skill import, deletion, enabling, and disabling.
- *
+ * <p>
  * Active skills storage locations:
  * - Global: ~/.claude/skills
  * - Local: {workspace}/.claude/skills
- *
+ * <p>
  * Management directories (disabled skills):
  * - Global: ~/.codemoss/skills/global
  * - Local: ~/.codemoss/skills/{project-path-hash}
@@ -41,7 +46,7 @@ public class SkillService {
      * Gets the global active skills directory (~/.claude/skills).
      */
     public static String getGlobalSkillsDir() {
-        String homeDir = System.getProperty("user.home");
+        String homeDir = PlatformUtils.getHomeDirectory();
         return Paths.get(homeDir, ".claude", "skills").toString();
     }
 
@@ -61,7 +66,7 @@ public class SkillService {
      * Gets the management directory root path (~/.codemoss/skills).
      */
     private static String getManagementRootDir() {
-        String homeDir = System.getProperty("user.home");
+        String homeDir = PlatformUtils.getHomeDirectory();
         return Paths.get(homeDir, CONFIG_DIR_NAME, SKILLS_DIR_NAME).toString();
     }
 
@@ -156,8 +161,9 @@ public class SkillService {
 
     /**
      * Scans a directory to discover skills.
+     *
      * @param dirPath directory path
-     * @param scope scope (global/local)
+     * @param scope   scope (global/local)
      * @param enabled whether these skills are in the enabled state
      */
     private static JsonObject scanSkillsDirectory(String dirPath, String scope, boolean enabled) {
@@ -235,8 +241,9 @@ public class SkillService {
 
     /**
      * Imports skills (copies files/directories to the skills directory).
-     * @param sourcePaths list of source file/directory paths
-     * @param scope scope (global/local)
+     *
+     * @param sourcePaths   list of source file/directory paths
+     * @param scope         scope (global/local)
      * @param workspaceRoot workspace root directory
      * @return import result
      */
@@ -333,9 +340,10 @@ public class SkillService {
 
     /**
      * Deletes a skill (supports deleting both enabled and disabled skills).
-     * @param name skill name
-     * @param scope scope (global/local)
-     * @param enabled whether the skill is currently enabled
+     *
+     * @param name          skill name
+     * @param scope         scope (global/local)
+     * @param enabled       whether the skill is currently enabled
      * @param workspaceRoot workspace root directory
      */
     public static JsonObject deleteSkill(String name, String scope, boolean enabled, String workspaceRoot) {
@@ -396,8 +404,9 @@ public class SkillService {
 
     /**
      * Enables a skill (moves it from the management directory to the active directory).
-     * @param name skill name
-     * @param scope scope (global/local)
+     *
+     * @param name          skill name
+     * @param scope         scope (global/local)
      * @param workspaceRoot workspace root directory
      */
     public static JsonObject enableSkill(String name, String scope, String workspaceRoot) {
@@ -476,8 +485,9 @@ public class SkillService {
 
     /**
      * Disables a skill (moves it from the active directory to the management directory).
-     * @param name skill name
-     * @param scope scope (global/local)
+     *
+     * @param name          skill name
+     * @param scope         scope (global/local)
      * @param workspaceRoot workspace root directory
      */
     public static JsonObject disableSkill(String name, String scope, String workspaceRoot) {
@@ -556,10 +566,11 @@ public class SkillService {
 
     /**
      * Toggles the enabled state of a skill.
-     * @param name skill name
-     * @param scope scope (global/local)
+     *
+     * @param name           skill name
+     * @param scope          scope (global/local)
      * @param currentEnabled current enabled state
-     * @param workspaceRoot workspace root directory
+     * @param workspaceRoot  workspace root directory
      */
     public static JsonObject toggleSkill(String name, String scope, boolean currentEnabled, String workspaceRoot) {
         if (currentEnabled) {

@@ -1643,8 +1643,8 @@ public class SettingsHandler extends BaseMessageHandler {
                 SoundNotificationService.ValidationResult validation =
                     SoundNotificationService.getInstance().validateSoundFile(path);
 
-                if (!validation.isValid()) {
-                    final String errorMsg = validation.getErrorMessage();
+                if (!validation.valid()) {
+                    final String errorMsg = validation.errorMessage();
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("window.showError", escapeJs("Invalid audio file: " + errorMsg));
                     });

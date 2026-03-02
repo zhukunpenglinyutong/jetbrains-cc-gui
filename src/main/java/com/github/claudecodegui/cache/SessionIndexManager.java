@@ -1,17 +1,23 @@
 package com.github.claudecodegui.cache;
 
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.*;
-import java.lang.reflect.Type;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -23,7 +29,7 @@ public class SessionIndexManager {
 
     private static final Logger LOG = Logger.getInstance(SessionIndexManager.class);
 
-    private static final String HOME_DIR = System.getProperty("user.home");
+    private static final String HOME_DIR = PlatformUtils.getHomeDirectory();
     private static final Path CODEMOSS_CACHE_DIR = Paths.get(HOME_DIR, ".codemoss", "cache");
     private static final String CLAUDE_INDEX_FILE = "claude-session-index.json";
     private static final String CODEX_INDEX_FILE = "codex-session-index.json";
@@ -198,8 +204,9 @@ public class SessionIndexManager {
 
     /**
      * Checks whether the project index needs to be updated.
+     *
      * @param projectIndex the project index
-     * @param projectDir the project directory
+     * @param projectDir   the project directory
      * @return true if an update is needed
      */
     public boolean needsUpdate(ProjectIndex projectIndex, Path projectDir) {
@@ -208,8 +215,9 @@ public class SessionIndexManager {
 
     /**
      * Determines the type of update required.
+     *
      * @param projectIndex the project index
-     * @param projectDir the project directory
+     * @param projectDir   the project directory
      * @return the update type
      */
     public UpdateType getUpdateType(ProjectIndex projectIndex, Path projectDir) {

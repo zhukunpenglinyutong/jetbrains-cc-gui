@@ -1,5 +1,6 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -48,7 +49,7 @@ public class McpServerManager {
      * Get all MCP servers.
      * Reads from ~/.claude.json first (the standard Claude CLI location),
      * falling back to ~/.codemoss/config.json.
-     *
+     * <p>
      * Note: Claude CLI merges global and project-level disabledMcpServers.
      */
     public List<JsonObject> getMcpServers() throws IOException {
@@ -58,6 +59,7 @@ public class McpServerManager {
     /**
      * Get all MCP servers (with project path support).
      * Merges global and project-level mcpServers; project-level servers override global ones with the same name.
+     *
      * @param projectPath the project path, used to read project-level MCP configuration
      */
     public List<JsonObject> getMcpServersWithProjectPath(String projectPath) throws IOException {
@@ -65,7 +67,7 @@ public class McpServerManager {
 
         // 1. Try to read from ~/.claude.json (standard Claude CLI location)
         try {
-            String homeDir = System.getProperty("user.home");
+            String homeDir = PlatformUtils.getHomeDirectory();
             Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
             File claudeJsonFile = claudeJsonPath.toFile();
 
@@ -87,7 +89,7 @@ public class McpServerManager {
                             if (projects.has(projectPath)) {
                                 JsonObject projectConfig = projects.getAsJsonObject(projectPath);
                                 if (projectConfig.has("mcpServers")
-                                        && projectConfig.get("mcpServers").isJsonObject()) {
+                                            && projectConfig.get("mcpServers").isJsonObject()) {
                                     JsonObject projectMcpServers = projectConfig.getAsJsonObject("mcpServers");
                                     for (String key : projectMcpServers.keySet()) {
                                         mergedServers.add(key, projectMcpServers.get(key));
@@ -114,7 +116,7 @@ public class McpServerManager {
                             if (projects.has(projectPath)) {
                                 JsonObject projectConfig = projects.getAsJsonObject(projectPath);
                                 if (projectConfig.has("disabledMcpServers")
-                                        && projectConfig.get("disabledMcpServers").isJsonArray()) {
+                                            && projectConfig.get("disabledMcpServers").isJsonArray()) {
                                     JsonArray projectDisabledArray = projectConfig.getAsJsonArray("disabledMcpServers");
                                     for (JsonElement elem : projectDisabledArray) {
                                         if (elem.isJsonPrimitive()) {
@@ -170,7 +172,7 @@ public class McpServerManager {
                         }
 
                         LOG.info("[McpServerManager] Loaded " + result.size()
-                            + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
+                                         + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
                         return result;
                     }
                 } catch (Exception e) {
@@ -207,6 +209,7 @@ public class McpServerManager {
 
     /**
      * Upsert (update or insert) an MCP server (with project path support).
+     *
      * @param projectPath the project path, used to update project-level disabledMcpServers (Claude CLI merges global and project-level disabled lists)
      */
     public void upsertMcpServer(JsonObject server, String projectPath) throws IOException {
@@ -219,7 +222,7 @@ public class McpServerManager {
 
         // 1. Try to update ~/.claude.json
         try {
-            String homeDir = System.getProperty("user.home");
+            String homeDir = PlatformUtils.getHomeDirectory();
             Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
             File claudeJsonFile = claudeJsonPath.toFile();
 
@@ -314,7 +317,7 @@ public class McpServerManager {
                     }
 
                     LOG.info("[McpServerManager] Upserted MCP server in ~/.claude.json: " + serverId
-                        + " (enabled: " + isEnabled + ", projectPath: " + (projectPath != null ? projectPath : "(global)") + ")");
+                                     + " (enabled: " + isEnabled + ", projectPath: " + (projectPath != null ? projectPath : "(global)") + ")");
 
                     // Sync to settings.json (after file write is complete)
                     try {
@@ -372,7 +375,7 @@ public class McpServerManager {
 
         // 1. Try to delete from ~/.claude.json
         try {
-            String homeDir = System.getProperty("user.home");
+            String homeDir = PlatformUtils.getHomeDirectory();
             Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
             File claudeJsonFile = claudeJsonPath.toFile();
 

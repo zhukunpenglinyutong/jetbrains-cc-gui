@@ -1,9 +1,9 @@
 package com.github.claudecodegui.bridge;
 
-import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ShellExecutor;
+import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -22,22 +22,22 @@ public class NodeDetector {
     private static final Logger LOG = Logger.getInstance(NodeDetector.class);
     // Common Node.js installation paths on Windows
     private static final String[] WINDOWS_NODE_PATHS = {
-        // Official installer defaults
-        "C:\\Program Files\\nodejs\\node.exe",
-        "C:\\Program Files (x86)\\nodejs\\node.exe",
-        // Chocolatey
-        "C:\\ProgramData\\chocolatey\\bin\\node.exe",
-        // Scoop
-        "%USERPROFILE%\\scoop\\apps\\nodejs\\current\\node.exe",
-        "%USERPROFILE%\\scoop\\apps\\nodejs-lts\\current\\node.exe",
-        // nvm-windows
-        "%APPDATA%\\nvm\\current\\node.exe",
-        // fnm
-        "%USERPROFILE%\\.fnm\\node-versions\\default\\installation\\node.exe",
-        // volta
-        "%USERPROFILE%\\.volta\\bin\\node.exe",
-        // Custom user installation
-        "%LOCALAPPDATA%\\Programs\\nodejs\\node.exe"
+            // Official installer defaults
+            "C:\\Program Files\\nodejs\\node.exe",
+            "C:\\Program Files (x86)\\nodejs\\node.exe",
+            // Chocolatey
+            "C:\\ProgramData\\chocolatey\\bin\\node.exe",
+            // Scoop
+            "%USERPROFILE%\\scoop\\apps\\nodejs\\current\\node.exe",
+            "%USERPROFILE%\\scoop\\apps\\nodejs-lts\\current\\node.exe",
+            // nvm-windows
+            "%APPDATA%\\nvm\\current\\node.exe",
+            // fnm
+            "%USERPROFILE%\\.fnm\\node-versions\\default\\installation\\node.exe",
+            // volta
+            "%USERPROFILE%\\.volta\\bin\\node.exe",
+            // Custom user installation
+            "%LOCALAPPDATA%\\Programs\\nodejs\\node.exe"
     };
 
     private String cachedNodeExecutable = null;
@@ -66,6 +66,7 @@ public class NodeDetector {
 
     /**
      * Detects Node.js and returns a detailed result.
+     *
      * @return NodeDetectionResult containing detection details
      */
     public NodeDetectionResult detectNodeWithDetails() {
@@ -73,7 +74,7 @@ public class NodeDetector {
         LOG.info("正在查找 Node.js...");
         LOG.info("  操作系统: " + System.getProperty("os.name"));
         LOG.info("  平台类型: " + (PlatformUtils.isWindows() ? "Windows" :
-            (PlatformUtils.isMac() ? "macOS" : "Linux/Unix")));
+                                           (PlatformUtils.isMac() ? "macOS" : "Linux/Unix")));
 
         // 1. Try locating via system commands (where/which)
         NodeDetectionResult cmdResult = detectNodeViaSystemCommand(triedPaths);
@@ -130,7 +131,7 @@ public class NodeDetector {
             Process process = pb.start();
 
             try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String path = reader.readLine();
                 if (path != null && !path.isEmpty()) {
                     path = path.trim();
@@ -140,9 +141,9 @@ public class NodeDetector {
                     if (version != null) {
                         LOG.info("✓ 通过 " + methodDesc + " 找到 Node.js: " + path + " (" + version + ")");
                         return NodeDetectionResult.success(
-                            path, version,
-                            NodeDetectionResult.DetectionMethod.WHERE_COMMAND,
-                            triedPaths
+                                path, version,
+                                NodeDetectionResult.DetectionMethod.WHERE_COMMAND,
+                                triedPaths
                         );
                     }
                 }
@@ -160,8 +161,9 @@ public class NodeDetector {
 
     /**
      * Unix/macOS: detects Node.js through a specified shell.
-     * @param shellPath path to the shell executable (e.g. /bin/zsh or /bin/bash)
-     * @param shellName shell name for logging
+     *
+     * @param shellPath  path to the shell executable (e.g. /bin/zsh or /bin/bash)
+     * @param shellName  shell name for logging
      * @param triedPaths list of paths already attempted
      */
     private NodeDetectionResult detectNodeViaShell(String shellPath, String shellName, List<String> triedPaths) {
@@ -214,7 +216,7 @@ public class NodeDetector {
      * Detects Node.js by checking known installation paths.
      */
     private NodeDetectionResult detectNodeViaKnownPaths(List<String> triedPaths) {
-        String userHome = System.getProperty("user.home");
+        String userHome = PlatformUtils.getHomeDirectory();
         List<String> pathsToCheck = new ArrayList<>();
 
         if (PlatformUtils.isWindows()) {
@@ -272,7 +274,7 @@ public class NodeDetector {
                 File optFile = new File(optDir);
                 if (optFile.exists() && optFile.isDirectory()) {
                     File[] nodeDirs = optFile.listFiles((dir, name) ->
-                        name.equals("node") || name.startsWith("node@"));
+                                                                name.equals("node") || name.startsWith("node@"));
                     if (nodeDirs != null) {
                         // Sort by version number descending, prefer newer versions
                         java.util.Arrays.sort(nodeDirs, (a, b) -> {
@@ -280,9 +282,9 @@ public class NodeDetector {
                             String aName = a.getName();
                             String bName = b.getName();
                             int aVersion = aName.equals("node") ? 0 :
-                                parseNodeVersion(aName.substring(5));
+                                                   parseNodeVersion(aName.substring(5));
                             int bVersion = bName.equals("node") ? 0 :
-                                parseNodeVersion(bName.substring(5));
+                                                   parseNodeVersion(bName.substring(5));
                             return Integer.compare(bVersion, aVersion);
                         });
                         for (File nodeDir : nodeDirs) {
@@ -331,7 +333,7 @@ public class NodeDetector {
             if (version != null) {
                 LOG.info("✓ 在已知路径找到 Node.js: " + path + " (" + version + ")");
                 return NodeDetectionResult.success(path, version,
-                    NodeDetectionResult.DetectionMethod.KNOWN_PATH, triedPaths);
+                        NodeDetectionResult.DetectionMethod.KNOWN_PATH, triedPaths);
             }
         }
 
@@ -346,8 +348,8 @@ public class NodeDetector {
 
         // Get PATH using platform-compatible approach
         String pathEnv = PlatformUtils.isWindows() ?
-            PlatformUtils.getEnvIgnoreCase("PATH") :
-            System.getenv("PATH");
+                                 PlatformUtils.getEnvIgnoreCase("PATH") :
+                                 System.getenv("PATH");
 
         if (pathEnv == null || pathEnv.isEmpty()) {
             LOG.debug("  PATH 环境变量为空");
@@ -370,7 +372,7 @@ public class NodeDetector {
             if (version != null) {
                 LOG.info("✓ 在 PATH 中找到 Node.js: " + nodePath + " (" + version + ")");
                 return NodeDetectionResult.success(nodePath, version,
-                    NodeDetectionResult.DetectionMethod.PATH_VARIABLE, triedPaths);
+                        NodeDetectionResult.DetectionMethod.PATH_VARIABLE, triedPaths);
             }
         }
 
@@ -390,7 +392,7 @@ public class NodeDetector {
 
             String version = null;
             try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 version = reader.readLine();
             }
 
@@ -405,7 +407,7 @@ public class NodeDetector {
                 version = version.trim();
                 LOG.info("✓ 直接调用 node 成功 (" + version + ")");
                 return NodeDetectionResult.success("node", version,
-                    NodeDetectionResult.DetectionMethod.FALLBACK, triedPaths);
+                        NodeDetectionResult.DetectionMethod.FALLBACK, triedPaths);
             }
         } catch (Exception e) {
             LOG.debug("  直接调用 'node' 失败: " + e.getMessage());
@@ -416,6 +418,7 @@ public class NodeDetector {
 
     /**
      * Verifies whether a Node.js path is usable.
+     *
      * @param path the Node.js executable path
      * @return the version string if usable, otherwise null
      */
@@ -426,7 +429,7 @@ public class NodeDetector {
 
             String version = null;
             try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 version = reader.readLine();
             }
 
@@ -456,15 +459,15 @@ public class NodeDetector {
         String result = path;
 
         // Expand common environment variables
-        result = result.replace("%USERPROFILE%", System.getProperty("user.home", ""));
+        result = result.replace("%USERPROFILE%", PlatformUtils.getHomeDirectory());
         result = result.replace("%APPDATA%", System.getenv("APPDATA") != null ?
-            System.getenv("APPDATA") : "");
+                                                     System.getenv("APPDATA") : "");
         result = result.replace("%LOCALAPPDATA%", System.getenv("LOCALAPPDATA") != null ?
-            System.getenv("LOCALAPPDATA") : "");
+                                                          System.getenv("LOCALAPPDATA") : "");
         result = result.replace("%ProgramFiles%", System.getenv("ProgramFiles") != null ?
-            System.getenv("ProgramFiles") : "C:\\Program Files");
+                                                          System.getenv("ProgramFiles") : "C:\\Program Files");
         result = result.replace("%ProgramFiles(x86)%", System.getenv("ProgramFiles(x86)") != null ?
-            System.getenv("ProgramFiles(x86)") : "C:\\Program Files (x86)");
+                                                               System.getenv("ProgramFiles(x86)") : "C:\\Program Files (x86)");
 
         return result;
     }
@@ -566,6 +569,7 @@ public class NodeDetector {
 
     /**
      * Parses the major version number from a version string.
+     *
      * @param version the version string, e.g. "v20.10.0" or "20.10.0"
      * @return the major version number, or 0 if parsing fails
      */
@@ -587,6 +591,7 @@ public class NodeDetector {
 
     /**
      * Checks whether the Node.js version meets the minimum requirement.
+     *
      * @param version the version string
      * @return true if the version is >= 18, false otherwise
      */

@@ -11,14 +11,26 @@
         <!-- Prohibit use of System.out, System.err, and e.printStackTrace -->
         <module name="RegexpSinglelineJava">
             <property name="format" value="System\.(out|err)\.print|e\.printStackTrace"/>
-            <property name="message" value="禁止使用 System.out/err，请使用 com.intellij.openapi.diagnostic.Logger"/>
+            <property name="message" value="Do not use System.out/err, use com.intellij.openapi.diagnostic.Logger instead"/>
             <property name="ignoreComments" value="true"/>
         </module>
         <!-- Require ApplicationManager.getApplication().invokeLater instead of SwingUtilities.invokeLater for EDT operations -->
         <module name="RegexpSinglelineJava">
             <property name="format" value="SwingUtilities\.invokeLater"/>
-            <property name="message" value="请使用 ApplicationManager.getApplication().invokeLater 替代 SwingUtilities.invokeLater"/>
+            <property name="message" value="Use ApplicationManager.getApplication().invokeLater instead of SwingUtilities.invokeLater"/>
             <property name="ignoreComments" value="true"/>
+        </module>
+        <!-- Prohibit System.getProperty("user.home") - use PlatformUtils.getHomeDirectory() instead -->
+        <module name="RegexpSinglelineJava">
+            <property name="id" value="NoUserHomeProperty"/>
+            <property name="format" value="System\.getProperty\(\s*&quot;user\.home&quot;"/>
+            <property name="message" value="Do not use System.getProperty(&quot;user.home&quot;), use PlatformUtils.getHomeDirectory() instead (IDEA may override user.home)"/>
+            <property name="ignoreComments" value="true"/>
+        </module>
+        <!-- Allow PlatformUtils.java to use System.getProperty("user.home") as fallback -->
+        <module name="SuppressionXpathSingleFilter">
+            <property name="id" value="NoUserHomeProperty"/>
+            <property name="files" value="PlatformUtils\.java"/>
         </module>
     </module>
 </module>

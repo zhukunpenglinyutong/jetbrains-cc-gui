@@ -1,19 +1,28 @@
 package com.github.claudecodegui.provider.claude;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonParser;
-
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.util.PathUtils;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.TagExtractor;
+import com.google.gson.Gson;
+import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -25,7 +34,7 @@ public class ClaudeHistoryReader {
 
     private static final Logger LOG = Logger.getInstance(ClaudeHistoryReader.class);
 
-    private static final String HOME_DIR = System.getProperty("user.home");
+    private static final String HOME_DIR = PlatformUtils.getHomeDirectory();
     private static final Path CLAUDE_DIR = Paths.get(HOME_DIR, ".claude");
     private static final Path HISTORY_FILE = CLAUDE_DIR.resolve("history.jsonl");
     private static final Path PROJECTS_DIR = CLAUDE_DIR.resolve("projects");
@@ -246,29 +255,29 @@ public class ClaudeHistoryReader {
         // Scan new files
         List<SessionInfo> newSessions = new ArrayList<>();
         Files.list(projectDir)
-            .filter(path -> path.toString().endsWith(".jsonl"))
-            .filter(path -> {
-                String fileName = path.getFileName().toString();
-                String sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
-                return !indexedIds.contains(sessionId);
-            })
-            .filter(path -> {
-                try {
-                    return Files.size(path) > 0;
-                } catch (IOException e) {
-                    return false;
-                }
-            })
-            .forEach(path -> {
-                try {
-                    SessionInfo session = scanSingleSession(path);
-                    if (session != null) {
-                        newSessions.add(session);
+                .filter(path -> path.toString().endsWith(".jsonl"))
+                .filter(path -> {
+                    String fileName = path.getFileName().toString();
+                    String sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
+                    return !indexedIds.contains(sessionId);
+                })
+                .filter(path -> {
+                    try {
+                        return Files.size(path) > 0;
+                    } catch (IOException e) {
+                        return false;
                     }
-                } catch (Exception e) {
-                    LOG.error("[ClaudeHistoryReader] Failed to scan new session file: " + e.getMessage());
-                }
-            });
+                })
+                .forEach(path -> {
+                    try {
+                        SessionInfo session = scanSingleSession(path);
+                        if (session != null) {
+                            newSessions.add(session);
+                        }
+                    } catch (Exception e) {
+                        LOG.error("[ClaudeHistoryReader] Failed to scan new session file: " + e.getMessage());
+                    }
+                });
 
         LOG.info("[ClaudeHistoryReader] Incremental scan found " + newSessions.size() + " new sessions");
 
@@ -399,43 +408,43 @@ public class ClaudeHistoryReader {
         Map<String, List<ConversationMessage>> sessionMessagesMap = new HashMap<>();
 
         Files.list(projectDir)
-            .filter(path -> path.toString().endsWith(".jsonl"))
-            .filter(path -> {
-                try {
-                    return Files.size(path) > 0;
-                } catch (IOException e) {
-                    return false;
-                }
-            })
-            .forEach(path -> {
-                try (BufferedReader reader = Files.newBufferedReader(path, java.nio.charset.StandardCharsets.UTF_8)) {
-                    String fileName = path.getFileName().toString();
-                    String sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
+                .filter(path -> path.toString().endsWith(".jsonl"))
+                .filter(path -> {
+                    try {
+                        return Files.size(path) > 0;
+                    } catch (IOException e) {
+                        return false;
+                    }
+                })
+                .forEach(path -> {
+                    try (BufferedReader reader = Files.newBufferedReader(path, java.nio.charset.StandardCharsets.UTF_8)) {
+                        String fileName = path.getFileName().toString();
+                        String sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
 
-                    List<ConversationMessage> messages = new ArrayList<>();
-                    String line;
+                        List<ConversationMessage> messages = new ArrayList<>();
+                        String line;
 
-                    while ((line = reader.readLine()) != null) {
-                        if (line.trim().isEmpty()) continue;
+                        while ((line = reader.readLine()) != null) {
+                            if (line.trim().isEmpty()) continue;
 
-                        try {
-                            ConversationMessage msg = gson.fromJson(line, ConversationMessage.class);
-                            if (msg != null) {
-                                messages.add(msg);
+                            try {
+                                ConversationMessage msg = gson.fromJson(line, ConversationMessage.class);
+                                if (msg != null) {
+                                    messages.add(msg);
+                                }
+                            } catch (Exception e) {
+                                LOG.error("[ClaudeHistoryReader] Failed to parse message line: " + e.getMessage());
                             }
-                        } catch (Exception e) {
-                            LOG.error("[ClaudeHistoryReader] Failed to parse message line: " + e.getMessage());
                         }
-                    }
 
-                    if (!messages.isEmpty()) {
-                        sessionMessagesMap.put(sessionId, messages);
-                    }
+                        if (!messages.isEmpty()) {
+                            sessionMessagesMap.put(sessionId, messages);
+                        }
 
-                } catch (Exception e) {
-                    LOG.error("[ClaudeHistoryReader] Failed to read session file: " + e.getMessage());
-                }
-            });
+                    } catch (Exception e) {
+                        LOG.error("[ClaudeHistoryReader] Failed to read session file: " + e.getMessage());
+                    }
+                });
 
         for (Map.Entry<String, List<ConversationMessage>> entry : sessionMessagesMap.entrySet()) {
             String sessionId = entry.getKey();
@@ -481,9 +490,9 @@ public class ClaudeHistoryReader {
     private String generateSummary(List<ConversationMessage> messages) {
         for (ConversationMessage msg : messages) {
             if ("user".equals(msg.type) &&
-                (msg.isMeta == null || !msg.isMeta) &&
-                msg.message != null &&
-                msg.message.content != null) {
+                        (msg.isMeta == null || !msg.isMeta) &&
+                        msg.message != null &&
+                        msg.message.content != null) {
 
                 String text = extractTextFromContent(msg.message.content);
                 if (text != null && !text.isEmpty()) {
@@ -510,17 +519,13 @@ public class ClaudeHistoryReader {
 
         String lowerSummary = summary.toLowerCase();
         if (lowerSummary.equals("warmup") ||
-            lowerSummary.equals("no prompt") ||
-            lowerSummary.startsWith("warmup") ||
-            lowerSummary.startsWith("no prompt")) {
+                    lowerSummary.equals("no prompt") ||
+                    lowerSummary.startsWith("warmup") ||
+                    lowerSummary.startsWith("no prompt")) {
             return false;
         }
 
-        if (messageCount < 2) {
-            return false;
-        }
-
-        return true;
+        return messageCount >= 2;
     }
 
     private String extractTextFromContent(Object content) {
@@ -549,8 +554,7 @@ public class ClaudeHistoryReader {
 
             String result = sb.toString().trim();
             return result.isEmpty() ? null : result;
-        } else if (content instanceof com.google.gson.JsonArray) {
-            com.google.gson.JsonArray contentArray = (com.google.gson.JsonArray) content;
+        } else if (content instanceof com.google.gson.JsonArray contentArray) {
             StringBuilder sb = new StringBuilder();
 
             for (int i = 0; i < contentArray.size(); i++) {
@@ -559,8 +563,8 @@ public class ClaudeHistoryReader {
                     com.google.gson.JsonObject item = element.getAsJsonObject();
 
                     String type = item.has("type") && !item.get("type").isJsonNull()
-                        ? item.get("type").getAsString()
-                        : null;
+                                          ? item.get("type").getAsString()
+                                          : null;
 
                     if ("text".equals(type) && item.has("text") && !item.get("text").isJsonNull()) {
                         if (sb.length() > 0) {
@@ -678,8 +682,8 @@ public class ClaudeHistoryReader {
         for (HistoryEntry entry : history) {
             if (entry.project != null) {
                 ProjectInfo project = projectsMap.computeIfAbsent(
-                    entry.project,
-                    ProjectInfo::new
+                        entry.project,
+                        ProjectInfo::new
                 );
                 project.count++;
                 project.messages.add(entry);
@@ -690,8 +694,8 @@ public class ClaudeHistoryReader {
         }
 
         return projectsMap.values().stream()
-            .sorted((a, b) -> Long.compare(b.lastAccess, a.lastAccess))
-            .collect(Collectors.toList());
+                       .sorted((a, b) -> Long.compare(b.lastAccess, a.lastAccess))
+                       .collect(Collectors.toList());
     }
 
     /**
@@ -708,9 +712,9 @@ public class ClaudeHistoryReader {
             stats.lastMessage = sorted.get(sorted.size() - 1);
 
             Set<String> projects = history.stream()
-                .map(e -> e.project)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+                                           .map(e -> e.project)
+                                           .filter(Objects::nonNull)
+                                           .collect(Collectors.toSet());
             stats.totalProjects = projects.size();
 
             for (HistoryEntry entry : history) {
@@ -735,12 +739,12 @@ public class ClaudeHistoryReader {
 
         String lowerQuery = query.toLowerCase();
         return history.stream()
-            .filter(entry -> {
-                String display = entry.display != null ? entry.display.toLowerCase() : "";
-                return display.contains(lowerQuery);
-            })
-            .limit(100)
-            .collect(Collectors.toList());
+                       .filter(entry -> {
+                           String display = entry.display != null ? entry.display.toLowerCase() : "";
+                           return display.contains(lowerQuery);
+                       })
+                       .limit(100)
+                       .collect(Collectors.toList());
     }
 
     /**
@@ -766,22 +770,22 @@ public class ClaudeHistoryReader {
                 List<Map<String, Object>> conversations = new ArrayList<>();
 
                 Files.list(projectDir)
-                    .filter(Files::isDirectory)
-                    .forEach(subDir -> {
-                        Path convFile = subDir.resolve("conversation.json");
-                        if (Files.exists(convFile)) {
-                            try {
-                                String content = new String(Files.readAllBytes(convFile));
-                                Map<String, Object> convData = new HashMap<>();
-                                convData.put("id", subDir.getFileName().toString());
-                                convData.put("data", JsonParser.parseString(content));
-                                convData.put("timestamp", Files.getLastModifiedTime(convFile).toMillis());
-                                conversations.add(convData);
-                            } catch (Exception e) {
-                                // Skip read failures
+                        .filter(Files::isDirectory)
+                        .forEach(subDir -> {
+                            Path convFile = subDir.resolve("conversation.json");
+                            if (Files.exists(convFile)) {
+                                try {
+                                    String content = new String(Files.readAllBytes(convFile));
+                                    Map<String, Object> convData = new HashMap<>();
+                                    convData.put("id", subDir.getFileName().toString());
+                                    convData.put("data", JsonParser.parseString(content));
+                                    convData.put("timestamp", Files.getLastModifiedTime(convFile).toMillis());
+                                    conversations.add(convData);
+                                } catch (Exception e) {
+                                    // Skip read failures
+                                }
                             }
-                        }
-                    });
+                        });
 
                 details.put("conversations", conversations);
             } catch (IOException e) {
@@ -800,8 +804,8 @@ public class ClaudeHistoryReader {
             List<SessionInfo> sessions = readProjectSessions(projectPath);
 
             int totalMessages = sessions.stream()
-                .mapToInt(s -> s.messageCount)
-                .sum();
+                                        .mapToInt(s -> s.messageCount)
+                                        .sum();
 
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
@@ -887,6 +891,7 @@ public class ClaudeHistoryReader {
     // ==================== Statistics related code ====================
 
     private static final Map<String, Map<String, Double>> MODEL_PRICING = new HashMap<>();
+
     static {
         Map<String, Double> opus = new HashMap<>();
         opus.put("input", 15.0);
@@ -945,14 +950,14 @@ public class ClaudeHistoryReader {
             if ("all".equals(projectPath)) {
                 if (Files.exists(PROJECTS_DIR)) {
                     Files.list(PROJECTS_DIR)
-                        .filter(Files::isDirectory)
-                        .forEach(dir -> {
-                            try {
-                                allSessions.addAll(readSessionsFromDir(dir));
-                            } catch (Exception e) {
-                                // Skip read failures
-                            }
-                        });
+                            .filter(Files::isDirectory)
+                            .forEach(dir -> {
+                                try {
+                                    allSessions.addAll(readSessionsFromDir(dir));
+                                } catch (Exception e) {
+                                    // Skip read failures
+                                }
+                            });
                 }
             } else {
                 String folderName1 = projectPath.replaceAll("[^a-zA-Z0-9]", "-");
@@ -985,13 +990,13 @@ public class ClaudeHistoryReader {
 
         try {
             Files.list(projectDir)
-                .filter(p -> p.toString().endsWith(".jsonl"))
-                .forEach(p -> {
-                    SessionSummary session = parseSessionFile(p, processedHashes);
-                    if (session != null) {
-                        sessions.add(session);
-                    }
-                });
+                    .filter(p -> p.toString().endsWith(".jsonl"))
+                    .forEach(p -> {
+                        SessionSummary session = parseSessionFile(p, processedHashes);
+                        if (session != null) {
+                            sessions.add(session);
+                        }
+                    });
         } catch (IOException e) {
             // Ignore read failures
         }
@@ -1029,27 +1034,27 @@ public class ClaudeHistoryReader {
                         ConversationMessage.Usage u = msg.message.usage;
 
                         if (u.input_tokens > 0 || u.output_tokens > 0 || u.cache_creation_input_tokens > 0 || u.cache_read_input_tokens > 0) {
-                             usage.inputTokens += u.input_tokens;
-                             usage.outputTokens += u.output_tokens;
-                             usage.cacheWriteTokens += u.cache_creation_input_tokens;
-                             usage.cacheReadTokens += u.cache_read_input_tokens;
+                            usage.inputTokens += u.input_tokens;
+                            usage.outputTokens += u.output_tokens;
+                            usage.cacheWriteTokens += u.cache_creation_input_tokens;
+                            usage.cacheReadTokens += u.cache_read_input_tokens;
 
-                             if (msg.message.role != null && model.equals("unknown")) {
-                                 Map<String, Object> rawMap = gson.fromJson(line, Map.class);
-                                 if (rawMap.containsKey("message")) {
-                                     Map m = (Map) rawMap.get("message");
-                                     if (m.containsKey("model")) {
-                                         model = (String) m.get("model");
-                                     }
-                                 }
-                             }
+                            if (msg.message.role != null && model.equals("unknown")) {
+                                Map<String, Object> rawMap = gson.fromJson(line, Map.class);
+                                if (rawMap.containsKey("message")) {
+                                    Map m = (Map) rawMap.get("message");
+                                    if (m.containsKey("model")) {
+                                        model = (String) m.get("model");
+                                    }
+                                }
+                            }
 
-                             Map<String, Double> pricing = getModelPricing(model);
-                             double cost = (u.input_tokens * pricing.get("input") +
-                                          u.output_tokens * pricing.get("output") +
-                                          u.cache_creation_input_tokens * pricing.get("cacheWrite") +
-                                          u.cache_read_input_tokens * pricing.get("cacheRead")) / 1_000_000.0;
-                             totalCost += cost;
+                            Map<String, Double> pricing = getModelPricing(model);
+                            double cost = (u.input_tokens * pricing.get("input") +
+                                                   u.output_tokens * pricing.get("output") +
+                                                   u.cache_creation_input_tokens * pricing.get("cacheWrite") +
+                                                   u.cache_read_input_tokens * pricing.get("cacheRead")) / 1_000_000.0;
+                            totalCost += cost;
                         }
                     }
                 } catch (Exception e) {
