@@ -13,6 +13,68 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.2.4',
+    date: '2026-03-02',
+    content: {
+      en: `✨ Features
+- Replace remote SDK slash command fetching with fully local registry: parse SKILL.md frontmatter via SnakeYAML, scan personal and project skill directories, push commands on session creation and provider switch #gadfly3173
+- Add Codex skills support with multi-level directory scanning, $ prefix invocation, config.toml enable/disable integration, and dual-mode UI #gadfly3173
+- Improve process lifecycle and resource cleanup: tab disposal handler for daemon shutdown, forceful kill of unresponsive daemons, proper bridge cleanup in all paths
+- Add Qwen and OpenRouter as new provider presets with i18n translations for 8 languages
+- Highlight auto mode selector in orange as visual permission warning cue
+- Add security notice to provider dialog and estimate disclaimer to usage statistics
+
+🐛 Fixes
+- Resolve real OS home directory to bypass IDEA's user.home override: read USERPROFILE/HOME env vars, replace all 35 direct calls across 22 files, add checkstyle enforcement #gadfly3173
+- Prevent stale loading panel blocking error UI on Node.js detection failure #gadfly3173
+- Resolve permission mode state desync between frontend and backend: unified push/pull flow with priority rule (payload > session > default) #gadfly3173
+- Apply date range filter on server side for usage statistics (#534) #gadfly3173
+- Fix tab title management: prevent manual rename overwrite by AI status, fix double ellipsis #Olexandr1904
+- Sync permission mode state in reused daemon runtime hooks
+- Decouple status panel expanded state from content presence
+- Remove model ID format regex restriction for third-party providers
+- Allow symbolic links in Codex skill directory scanning
+- Harden input validation: path traversal prevention, directory whitelist, permission mode whitelist, config dropdown scroll
+
+🔧 Improvements
+- Extract token usage utilities into dedicated TokenUsageUtils class #gadfly3173
+- Unify permission mode validation across frontend and backend with shared constants
+- Replace alert dialogs with toast notifications and inline feedback
+- Remove useUsageStats hook (no-op after polling removal) #gadfly3173
+- Harden Codex skills security: YAML parser DoS limits, path traversal checks, LoadingState tracking
+- Redesign app icon to simplified stroke-based SVG
+- Move payment QR codes from README to SPONSORS.md`,
+      zh: `✨ Features
+- 用本地注册表替代远程 SDK 斜杠命令获取：SnakeYAML 解析 SKILL.md frontmatter，扫描个人和项目 skill 目录，会话创建和供应商切换时主动推送 #gadfly3173
+- 新增 Codex Skills 支持：多层级目录扫描、$ 前缀调用、config.toml 启用/禁用集成、双模式 UI #gadfly3173
+- 改进进程生命周期和资源清理：标签页关闭时销毁 daemon、强制终止无响应 daemon、所有路径正确清理 bridge 资源
+- 新增通义千问（Qwen）和 OpenRouter 供应商预设，支持 8 种语言国际化
+- Auto 模式选择器以橙色高亮，作为权限放开的视觉警示
+- 供应商对话框添加安全提示，使用统计添加估算免责声明
+
+🐛 Fixes
+- 修复 IDEA 覆盖 user.home 导致主目录解析错误：读取 USERPROFILE/HOME 环境变量，替换全部 35 处调用（22 个文件），新增 checkstyle 强制约束 #gadfly3173
+- 修复 Node.js 检测失败时加载面板阻塞错误 UI #gadfly3173
+- 修复前后端权限模式状态不同步：统一推/拉流程，优先级规则 payload > session > default #gadfly3173
+- 修复使用统计日期范围过滤：服务端聚合前过滤会话 (#534) #gadfly3173
+- 修复标签页标题管理：手动重命名不再被 AI 状态覆盖，修复双省略号 #Olexandr1904
+- 修复复用 daemon 运行时 hooks 权限模式状态过期问题
+- 解耦状态面板展开状态与内容存在性，由用户偏好控制
+- 移除模型 ID 格式正则限制，支持第三方供应商格式
+- 允许 Codex skill 目录扫描识别符号链接
+- 加固输入验证：路径遍历防护、目录白名单、权限模式白名单、下拉框滚动溢出
+
+🔧 Improvements
+- 提取 Token 使用工具到独立 TokenUsageUtils 类，支持多供应商复用 #gadfly3173
+- 统一前后端权限模式验证，提取共享常量和类型守卫
+- 用 toast 通知和内联反馈替代 alert 弹窗
+- 移除 useUsageStats hook（后台轮询移除后已成空操作） #gadfly3173
+- 加固 Codex Skills 安全性：YAML 解析器 DoS 限制、路径遍历检查、加载状态追踪
+- 重新设计应用图标为简化描边风格 SVG
+- 将支付二维码从 README 移至 SPONSORS.md`,
+    },
+  },
+  {
     version: '0.2.3',
     date: '2026-02-27',
     content: {

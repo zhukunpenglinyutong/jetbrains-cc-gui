@@ -1,3 +1,71 @@
+##### **2026年3月2日（v0.2.4）**
+
+English:
+
+✨ Features
+- Replace remote SDK slash command fetching with fully local registry: parse SKILL.md frontmatter via SnakeYAML, scan personal and project skill directories, push commands on session creation and provider switch #gadfly3173
+- Add Codex skills support with multi-level directory scanning, $ prefix invocation, config.toml enable/disable integration, and dual-mode SkillsSettingsSection UI #gadfly3173
+- Improve process lifecycle and resource cleanup: tab disposal handler for daemon shutdown, forceful kill of unresponsive daemons, proper bridge cleanup in all callback and exception paths
+- Add Qwen and OpenRouter as new provider presets with i18n translations for 8 languages
+- Highlight auto mode selector in orange as visual permission warning cue
+- Add security notice to provider dialog and estimate disclaimer to usage statistics section
+
+🐛 Fixes
+- Resolve real OS home directory to bypass IDEA's user.home override: read USERPROFILE/HOME env vars, replace all 35 direct System.getProperty calls across 22 files, add checkstyle enforcement #gadfly3173
+- Prevent stale loading panel blocking error UI on Node.js detection failure: route all panel transitions through replaceMainContent() helper #gadfly3173
+- Resolve permission mode state desync between frontend and backend: unified push/pull flow with priority rule (payload > session > default), volatile fields for cross-thread visibility #gadfly3173
+- Apply date range filter on server side for usage statistics: filter sessions before aggregation for accurate Overview totals and Models tab (#534) #gadfly3173
+- Fix tab title management: prevent manual rename from being overwritten by AI status indicators, fix double ellipsis on truncated titles #Olexandr1904
+- Sync permission mode state in reused daemon runtime hooks via shared mutable state object
+- Decouple status panel expanded state from content presence: expand/collapse now driven solely by user preference
+- Remove model ID format regex restriction to support third-party provider formats
+- Allow symbolic links in Codex skill directory scanning
+- Remove changelog.ts auto-generation from build pipeline
+- Harden input validation: skill name validation for path traversal prevention, directory whitelist checks, permission mode whitelist, thread interrupt handling, config dropdown scroll overflow
+
+🔧 Improvements
+- Extract token usage utilities from ClaudeMessageHandler into dedicated TokenUsageUtils class for provider-agnostic reuse #gadfly3173
+- Unify permission mode validation across frontend and backend with shared constants and type guards
+- Replace alert dialogs with toast notifications and inline feedback for better UX
+- Remove useUsageStats hook (no-op after background polling removal) #gadfly3173
+- Harden Codex skills security: YAML parser limits against billion laughs DoS, path traversal checks, LoadingState tracking for dollarCommandProvider
+- Redesign app icon to simplified stroke-based SVG
+- Move payment QR codes from README to SPONSORS.md
+- Add shared notice-box styles (info/warning variants) with i18n translations
+
+中文：
+
+✨ Features
+- 用本地注册表替代远程 SDK 斜杠命令获取：通过 SnakeYAML 解析 SKILL.md frontmatter，扫描个人和项目 skill 目录，在会话创建和供应商切换时主动推送命令 #gadfly3173
+- 新增 Codex Skills 支持：多层级目录扫描、$ 前缀调用、config.toml 启用/禁用集成、SkillsSettingsSection 双模式 UI #gadfly3173
+- 改进进程生命周期和资源清理：标签页关闭时销毁 daemon、强制终止无响应的 daemon 进程、所有回调和异常路径中正确清理 bridge 资源
+- 新增通义千问（Qwen）和 OpenRouter 供应商预设，支持 8 种语言国际化翻译
+- Auto 模式选择器以橙色高亮显示，作为权限放开的视觉警示
+- 在供应商对话框中添加安全提示，在使用统计中添加估算免责声明
+
+🐛 Fixes
+- 修复 IDEA 覆盖 user.home 导致的主目录解析错误：读取 USERPROFILE/HOME 环境变量，替换全部 35 处直接调用（涉及 22 个 Java 文件），新增 checkstyle 规则强制约束 #gadfly3173
+- 修复 Node.js 检测失败时加载面板阻塞错误 UI 的问题：所有面板切换统一通过 replaceMainContent() 辅助方法 #gadfly3173
+- 修复前后端权限模式状态不同步：统一推/拉流程，明确优先级规则（payload > session > default），volatile 字段保证跨线程可见性 #gadfly3173
+- 修复使用统计的日期范围过滤：在服务端聚合前过滤会话，确保概览总计和模型标签页数据准确 (#534) #gadfly3173
+- 修复标签页标题管理：手动重命名不再被 AI 状态指示器覆盖，修复截断标题的双省略号问题 #Olexandr1904
+- 修复复用的 daemon 运行时 hooks 中权限模式状态过期问题，使用共享可变状态对象
+- 解耦状态面板展开状态与内容存在性：展开/折叠完全由用户偏好控制
+- 移除模型 ID 格式正则限制，支持第三方供应商的模型 ID 格式
+- 允许 Codex skill 目录扫描识别符号链接
+- 移除构建流水线中 changelog.ts 的自动生成
+- 加固输入验证：skill 名称校验防止路径遍历、目录白名单检查、权限模式白名单、线程中断处理、配置下拉框滚动溢出
+
+🔧 Improvements
+- 从 ClaudeMessageHandler 提取 Token 使用工具到独立的 TokenUsageUtils 类，支持多供应商复用 #gadfly3173
+- 统一前后端权限模式验证，提取共享常量和类型守卫
+- 用 toast 通知和内联反馈替代 alert 弹窗，改善用户体验
+- 移除 useUsageStats hook（后台轮询移除后已成空操作） #gadfly3173
+- 加固 Codex Skills 安全性：YAML 解析器限制防止十亿笑声 DoS 攻击、路径遍历检查、dollarCommandProvider 加载状态追踪
+- 重新设计应用图标为简化的描边风格 SVG
+- 将支付二维码从 README 移至 SPONSORS.md
+- 新增共享 notice-box 样式（信息/警告变体），支持 8 种语言国际化翻译
+
 ##### **2026年2月27日（v0.2.3）**
 
 English:
