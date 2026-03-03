@@ -462,32 +462,58 @@ public class DependencyManager {
 
     /**
      * Returns the status of all SDKs.
+     * For claude-sdk, checks the ACP binary first; falls back to npm package check.
      */
     public JsonObject getAllSdkStatus() {
         JsonObject result = new JsonObject();
 
         for (SdkDefinition sdk : SdkDefinition.values()) {
             JsonObject status = new JsonObject();
-            boolean installed = isInstalled(sdk.getId());
+            boolean installed;
 
-            status.addProperty("id", sdk.getId());
-            status.addProperty("name", sdk.getDisplayName());
-            status.addProperty("description", sdk.getDescription());
-            status.addProperty("npmPackage", sdk.getNpmPackage());
-            status.addProperty("installed", installed);
-            // Add the status field for frontend consumption
-            status.addProperty("status", installed ? "installed" : "not_installed");
+            if ("claude-sdk".equals(sdk.getId()) && isAcpBinaryAvailable()) {
+                installed = true;
+                status.addProperty("id", sdk.getId());
+                status.addProperty("name", "Claude Code (ACP)");
+                status.addProperty("description", "Using ACP agent binary at ~/.devbox/ai/claude/claude-code-acp");
+                status.addProperty("npmPackage", sdk.getNpmPackage());
+                status.addProperty("installed", true);
+                status.addProperty("status", "installed");
+                status.addProperty("installedVersion", "acp");
+                status.addProperty("version", "acp");
+            } else {
+                installed = isInstalled(sdk.getId());
+                status.addProperty("id", sdk.getId());
+                status.addProperty("name", sdk.getDisplayName());
+                status.addProperty("description", sdk.getDescription());
+                status.addProperty("npmPackage", sdk.getNpmPackage());
+                status.addProperty("installed", installed);
+                status.addProperty("status", installed ? "installed" : "not_installed");
 
-            if (installed) {
-                String version = getInstalledVersion(sdk.getId());
-                status.addProperty("installedVersion", version);
-                status.addProperty("version", version); // Also add the version field
+                if (installed) {
+                    String version = getInstalledVersion(sdk.getId());
+                    status.addProperty("installedVersion", version);
+                    status.addProperty("version", version);
+                }
             }
 
             result.add(sdk.getId(), status);
         }
 
         return result;
+    }
+
+    /**
+     * Checks whether the ACP binary for Claude is available.
+     */
+    public boolean isAcpBinaryAvailable() {
+        try {
+            String home = System.getProperty("user.home");
+            Path acpPath = Paths.get(home, ".devbox", "ai", "claude", "claude-code-acp");
+            return java.nio.file.Files.isExecutable(acpPath);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**

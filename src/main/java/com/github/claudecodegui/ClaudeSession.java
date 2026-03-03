@@ -9,6 +9,7 @@ import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.provider.claude.ACPBridge;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeMessageHandler;
@@ -63,6 +64,7 @@ public class ClaudeSession {
     // SDK bridges
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final ACPBridge acpBridge;
 
     // Permission manager
     private final PermissionManager permissionManager = new PermissionManager();
@@ -113,6 +115,7 @@ public class ClaudeSession {
         this.project = project;
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
+        this.acpBridge = new ACPBridge();
 
         // Initialize managers
         this.state = new com.github.claudecodegui.session.SessionState();
@@ -879,8 +882,27 @@ public class ClaudeSession {
         return "";
     }
 
-    /** Send message via Claude SDK. */
+    /** Send message via ACP bridge (preferred) or Claude SDK (fallback). */
     private CompletableFuture<Void> sendToClaude(
+        String channelId,
+        String input,
+        List<Attachment> attachments,
+        JsonObject openedFilesJson,
+        String agentPrompt,
+        String effectivePermissionMode
+    ) {
+        // Prefer ACP bridge if available
+        if (acpBridge.isAvailable()) {
+            LOG.info("[ACPBridge] Using ACP bridge for Claude communication");
+            return sendToClaudeViaACP(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
+        }
+
+        LOG.info("[ClaudeSDKBridge] ACP bridge not available, falling back to Node.js SDK bridge");
+        return sendToClaudeViaSdkBridge(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
+    }
+
+    /** Send message via ACP (Agent Client Protocol). */
+    private CompletableFuture<Void> sendToClaudeViaACP(
         String channelId,
         String input,
         List<Attachment> attachments,
@@ -897,7 +919,57 @@ public class ClaudeSession {
             gson
         );
 
-        // Read streaming configuration
+        Boolean streaming = null;
+        try {
+            String projectPath = project.getBasePath();
+            if (projectPath != null) {
+                CodemossSettingsService settingsService = new CodemossSettingsService();
+                streaming = settingsService.getStreamingEnabled(projectPath);
+            }
+        } catch (Exception e) {
+            LOG.warn("[Streaming] Failed to read streaming config: " + e.getMessage());
+        }
+
+        return acpBridge.sendMessage(
+            channelId,
+            input,
+            state.getSessionId(),
+            state.getCwd(),
+            attachments,
+            effectivePermissionMode,
+            state.getModel(),
+            openedFilesJson,
+            agentPrompt,
+            streaming,
+            handler
+        ).thenApply(result -> {
+            String acpSessionId = acpBridge.getSessionId();
+            if (acpSessionId != null && !acpSessionId.isEmpty()) {
+                state.setSessionId(acpSessionId);
+                callbackHandler.notifySessionIdReceived(acpSessionId);
+            }
+            return null;
+        });
+    }
+
+    /** Send message via Node.js SDK bridge (legacy fallback). */
+    private CompletableFuture<Void> sendToClaudeViaSdkBridge(
+        String channelId,
+        String input,
+        List<Attachment> attachments,
+        JsonObject openedFilesJson,
+        String agentPrompt,
+        String effectivePermissionMode
+    ) {
+        ClaudeMessageHandler handler = new ClaudeMessageHandler(
+            project,
+            state,
+            callbackHandler,
+            messageParser,
+            messageMerger,
+            gson
+        );
+
         Boolean streaming = null;
         try {
             String projectPath = project.getBasePath();
@@ -926,11 +998,9 @@ public class ClaudeSession {
             handler
         ).thenApply(result -> null)
         .thenCompose(v -> {
-            // Add a small delay to ensure JSONL file is written and flushed
-            // Non-streaming responses return very fast, and filesystem I/O may not be complete yet
             return CompletableFuture.runAsync(() -> {
                 try {
-                    Thread.sleep(100); // 100ms delay to allow file system flush
+                    Thread.sleep(100);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -940,10 +1010,6 @@ public class ClaudeSession {
             if (throwable == null
                     && (previousSessionId == null || previousSessionId.isEmpty())
                     && state.getSessionId() != null && !state.getSessionId().isEmpty()) {
-                // Refill anonymous warm runtime after first turn captures a session ID,
-                // so the next new chat can also hit a pre-warmed path.
-                // NOTE: Idle anonymous runtimes are cleaned up by persistent-query-service's
-                // cleanupStaleAnonymousRuntimes() (ANONYMOUS_RUNTIME_MAX_IDLE_MS = 10min).
                 claudeSDKBridge.prewarmDaemonAsync(state.getCwd());
             }
         });
@@ -1147,6 +1213,8 @@ public class ClaudeSession {
                 String currentChannelId = state.getChannelId();
                 if ("codex".equals(currentProvider)) {
                     codexSDKBridge.interruptChannel(currentChannelId);
+                } else if (acpBridge.isConnected()) {
+                    acpBridge.interruptChannel(currentChannelId);
                 } else {
                     claudeSDKBridge.interruptChannel(currentChannelId);
                 }

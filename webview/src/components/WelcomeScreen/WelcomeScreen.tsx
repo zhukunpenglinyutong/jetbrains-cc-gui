@@ -44,7 +44,7 @@ export const WelcomeScreen = memo(function WelcomeScreen({
         </span>
       </div>
       <div>
-        <AnimatedText text={t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Claude Code' })} />
+        <AnimatedText text={t('chat.sendMessage', { provider: currentProvider === 'codex' ? 'Codex Cli' : 'Piyush' })} />
       </div>
     </div>
   );
