@@ -5,6 +5,7 @@ import styles from './style.module.less';
 
 interface DependencySectionProps {
   addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+  isActive: boolean;
 }
 
 const sendToJava = (message: string) => {
@@ -30,7 +31,7 @@ const SDK_DEFINITIONS = [
   },
 ];
 
-const DependencySection = ({ addToast }: DependencySectionProps) => {
+const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
   const { t } = useTranslation();
   const [sdkStatus, setSdkStatus] = useState<Record<SdkId, SdkStatus>>({} as Record<SdkId, SdkStatus>);
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,7 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
   const [showLogs, setShowLogs] = useState(false);
   const [nodeAvailable, setNodeAvailable] = useState<boolean | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const isNodePathReadyRef = useRef(false);
 
   // Use refs to store the latest callback and t function to avoid useEffect re-runs
   const addToastRef = useRef(addToast);
@@ -71,6 +73,8 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
     const savedDependencyInstallResult = window.dependencyInstallResult;
     const savedDependencyUninstallResult = window.dependencyUninstallResult;
     const savedNodeEnvironmentStatus = window.nodeEnvironmentStatus;
+    const savedCheckNodeEnvironment = window.checkNodeEnvironment;
+    const savedRunNodeEnvironmentStressTest = window.runNodeEnvironmentStressTest;
 
     // Create wrapped callback functions
     window.updateDependencyStatus = (jsonStr: string) => {
@@ -179,10 +183,26 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         }
       }
     };
+    window.checkNodeEnvironment = () => {
+      sendToJava('check_node_environment:');
+      savedCheckNodeEnvironment?.();
+    };
+    if (import.meta.env.DEV) {
+      window.runNodeEnvironmentStressTest = (count: number = 10) => {
+        for (let i = 0; i < count; i += 1) {
+          sendToJava('check_node_environment:');
+        }
+        savedRunNodeEnvironmentStressTest?.(count);
+      };
+    }
 
-    // Load initial status - only once on mount
-    sendToJava('get_dependency_status:');
-    sendToJava('check_node_environment:');
+    const handleNodePathReady = () => {
+      isNodePathReadyRef.current = true;
+      if (isActive) {
+        sendToJava('check_node_environment:');
+      }
+    };
+    window.addEventListener('nodePathReady', handleNodePathReady);
 
     return () => {
       // Restore previously saved callbacks on cleanup to avoid losing other components' callbacks
@@ -191,8 +211,21 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       window.dependencyInstallResult = savedDependencyInstallResult;
       window.dependencyUninstallResult = savedDependencyUninstallResult;
       window.nodeEnvironmentStatus = savedNodeEnvironmentStatus;
+      window.checkNodeEnvironment = savedCheckNodeEnvironment;
+      window.runNodeEnvironmentStressTest = savedRunNodeEnvironmentStressTest;
+      window.removeEventListener('nodePathReady', handleNodePathReady);
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [isActive]);
+
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+    sendToJava('get_dependency_status:');
+    if (isNodePathReadyRef.current) {
+      sendToJava('check_node_environment:');
+    }
+  }, [isActive]);
 
   const handleInstall = (sdkId: SdkId) => {
     if (nodeAvailable === false) {

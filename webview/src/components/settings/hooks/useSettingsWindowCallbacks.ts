@@ -143,6 +143,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         d().setNodePath(jsonStr || '');
       }
       d().setSavingNodePath(false);
+      window.dispatchEvent(new CustomEvent('nodePathReady'));
     };
 
     window.updateWorkingDirectory = (jsonStr: string) => {

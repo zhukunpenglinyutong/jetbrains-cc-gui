@@ -563,6 +563,16 @@ interface Window {
   nodeEnvironmentStatus?: (json: string) => void;
 
   /**
+   * Trigger Node environment re-check.
+   */
+  checkNodeEnvironment?: () => void;
+
+  /**
+   * Trigger concurrent Node environment checks for diagnostics.
+   */
+  runNodeEnvironmentStressTest?: (count?: number) => void;
+
+  /**
    * Dependency update available callback
    */
   dependencyUpdateAvailable?: (json: string) => void;

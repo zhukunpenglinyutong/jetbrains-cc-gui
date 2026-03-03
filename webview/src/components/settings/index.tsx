@@ -764,7 +764,7 @@ const SettingsView = ({
 
           {/* SDK dependency management */}
           <div style={{ display: currentTab === 'dependencies' ? 'block' : 'none' }}>
-            <DependencySection addToast={addToast} />
+            <DependencySection addToast={addToast} isActive={currentTab === 'dependencies'} />
           </div>
 
           {/* Usage statistics */}

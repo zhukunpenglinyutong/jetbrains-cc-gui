@@ -11,6 +11,11 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -90,32 +95,70 @@ public class NodeDetector {
     // Cache fields - volatile to ensure visibility across threads in this singleton
     private volatile String cachedNodeExecutable = null;
     private volatile NodeDetectionResult cachedDetectionResult = null;
+    private volatile CompletableFuture<NodeDetectionResult> inFlightDetection = null;
     // Lock for cache operations to ensure thread safety
     private final Object cacheLock = new Object();
+    // Executor for in-flight detection. Defaults to ForkJoinPool.commonPool().
+    private volatile Executor detectionExecutor = ForkJoinPool.commonPool();
 
     /**
      * Finds Node.js executable path.
      */
     public String findNodeExecutable() {
-        // First check without locking for performance
-        if (cachedNodeExecutable != null) {
-            return cachedNodeExecutable;
+        long startTime = System.currentTimeMillis();
+        if (this.cachedNodeExecutable != null) {
+            return this.cachedNodeExecutable;
         }
-        // Double-checked locking: prevents redundant detection when multiple threads enter concurrently
-        synchronized (cacheLock) {
-            if (cachedNodeExecutable != null) {
-                return cachedNodeExecutable;
+
+        try {
+            CompletableFuture<NodeDetectionResult> detectionFuture;
+            synchronized (this.cacheLock) {
+                if (this.cachedNodeExecutable != null) {
+                    return this.cachedNodeExecutable;
+                }
+                if (this.inFlightDetection == null) {
+                    this.inFlightDetection = CompletableFuture.supplyAsync(
+                        this::detectNodeWithDetails, this.detectionExecutor
+                    );
+                }
+                detectionFuture = this.inFlightDetection;
             }
-            NodeDetectionResult result = detectNodeWithDetails();
-            if (result.isFound()) {
-                cachedNodeExecutable = result.getNodePath();
-                return cachedNodeExecutable;
+
+            NodeDetectionResult result;
+            try {
+                result = detectionFuture.join();
+            } catch (CancellationException e) {
+                LOG.info("[NodeDetector] In-flight detection was cancelled, retrying once.");
+                result = this.detectNodeWithDetails();
+            } catch (CompletionException e) {
+                LOG.warn("[NodeDetector] Node detection failed: " + e.getMessage(), e);
+                result = NodeDetectionResult.failure("Node.js 检测异常: " + e.getMessage());
             }
-            // Last resort fallback if nothing was found
-            LOG.warn("⚠️ 无法自动检测 Node.js 路径，使用默认值 'node'");
-            LOG.warn(result.getUserFriendlyMessage());
-            cachedNodeExecutable = "node";
-            return cachedNodeExecutable;
+
+            synchronized (this.cacheLock) {
+                if (this.inFlightDetection == detectionFuture) {
+                    this.inFlightDetection = null;
+                }
+                if (this.cachedNodeExecutable != null) {
+                    return this.cachedNodeExecutable;
+                }
+                if (result != null && result.isFound()) {
+                    this.cachedDetectionResult = result;
+                    this.cachedNodeExecutable = result.getNodePath();
+                    return this.cachedNodeExecutable;
+                }
+                LOG.warn("⚠️ 无法自动检测 Node.js 路径，使用默认值 'node'");
+                if (result != null) {
+                    LOG.warn(result.getUserFriendlyMessage());
+                    this.cachedDetectionResult = result;
+                }
+                this.cachedNodeExecutable = "node";
+                return this.cachedNodeExecutable;
+            }
+        } finally {
+            long elapsed = System.currentTimeMillis() - startTime;
+            LOG.info("[NodeDetector] findNodeExecutable completed in " + elapsed +
+                     "ms on thread " + Thread.currentThread().getName());
         }
     }
 
@@ -125,37 +168,44 @@ public class NodeDetector {
      * @return NodeDetectionResult containing detection details
      */
     public NodeDetectionResult detectNodeWithDetails() {
-        List<String> triedPaths = new ArrayList<>();
-        LOG.info("正在查找 Node.js...");
-        LOG.info("  操作系统: " + System.getProperty("os.name"));
-        LOG.info("  平台类型: " + (PlatformUtils.isWindows() ? "Windows" :
-                                           (PlatformUtils.isMac() ? "macOS" : "Linux/Unix")));
+        long startTime = System.currentTimeMillis();
+        try {
+            List<String> triedPaths = new ArrayList<>();
+            LOG.info("正在查找 Node.js...");
+            LOG.info("  操作系统: " + System.getProperty("os.name"));
+            LOG.info("  平台类型: " + (PlatformUtils.isWindows() ? "Windows" :
+                                               (PlatformUtils.isMac() ? "macOS" : "Linux/Unix")));
 
-        // 1. Try locating via system commands (where/which)
-        NodeDetectionResult cmdResult = detectNodeViaSystemCommand(triedPaths);
-        if (cmdResult != null && cmdResult.isFound()) {
-            return cmdResult;
+            // 1. Try locating via system commands (where/which)
+            NodeDetectionResult cmdResult = detectNodeViaSystemCommand(triedPaths);
+            if (cmdResult != null && cmdResult.isFound()) {
+                return cmdResult;
+            }
+
+            // 2. Try known installation paths
+            NodeDetectionResult knownPathResult = detectNodeViaKnownPaths(triedPaths);
+            if (knownPathResult != null && knownPathResult.isFound()) {
+                return knownPathResult;
+            }
+
+            // 3. Try PATH environment variable
+            NodeDetectionResult pathResult = detectNodeViaPath(triedPaths);
+            if (pathResult != null && pathResult.isFound()) {
+                return pathResult;
+            }
+
+            // 4. Final fallback: try invoking "node" directly
+            NodeDetectionResult fallbackResult = detectNodeViaFallback(triedPaths);
+            if (fallbackResult != null && fallbackResult.isFound()) {
+                return fallbackResult;
+            }
+
+            return NodeDetectionResult.failure("在所有已知路径中均未找到 Node.js", triedPaths);
+        } finally {
+            long elapsed = System.currentTimeMillis() - startTime;
+            LOG.info("[NodeDetector] detectNodeWithDetails completed in " + elapsed +
+                     "ms on thread " + Thread.currentThread().getName());
         }
-
-        // 2. Try known installation paths
-        NodeDetectionResult knownPathResult = detectNodeViaKnownPaths(triedPaths);
-        if (knownPathResult != null && knownPathResult.isFound()) {
-            return knownPathResult;
-        }
-
-        // 3. Try PATH environment variable
-        NodeDetectionResult pathResult = detectNodeViaPath(triedPaths);
-        if (pathResult != null && pathResult.isFound()) {
-            return pathResult;
-        }
-
-        // 4. Final fallback: try invoking "node" directly
-        NodeDetectionResult fallbackResult = detectNodeViaFallback(triedPaths);
-        if (fallbackResult != null && fallbackResult.isFound()) {
-            return fallbackResult;
-        }
-
-        return NodeDetectionResult.failure("在所有已知路径中均未找到 Node.js", triedPaths);
     }
 
     /**
@@ -552,7 +602,8 @@ public class NodeDetector {
      * Also clears the cached detection result so it will be re-verified on next use.
      */
     public void setNodeExecutable(String path) {
-        synchronized (cacheLock) {
+        synchronized (this.cacheLock) {
+            this.clearInFlightLocked();
             this.cachedNodeExecutable = path;
             // Clear detection result cache to keep cache state consistent.
             // The new path will be re-verified and cached on next call to verifyAndCacheNodePath.
@@ -564,10 +615,10 @@ public class NodeDetector {
      * Get current Node.js executable path.
      */
     public String getNodeExecutable() {
-        if (cachedNodeExecutable == null) {
+        if (this.cachedNodeExecutable == null) {
             return findNodeExecutable();
         }
-        return cachedNodeExecutable;
+        return this.cachedNodeExecutable;
     }
 
     /**
@@ -575,10 +626,28 @@ public class NodeDetector {
      * Since NodeDetector is a singleton, this affects all callers.
      */
     public void clearCache() {
-        synchronized (cacheLock) {
+        synchronized (this.cacheLock) {
+            this.clearInFlightLocked();
             this.cachedNodeExecutable = null;
             this.cachedDetectionResult = null;
         }
+    }
+
+    /**
+     * Clears the in-flight detection request.
+     */
+    public void clearInFlight() {
+        synchronized (this.cacheLock) {
+            this.clearInFlightLocked();
+        }
+    }
+
+    /**
+     * Sets the executor used for in-flight Node detection tasks.
+     * Call this early (e.g. during plugin init) to replace the default ForkJoinPool.
+     */
+    public void setDetectionExecutor(Executor executor) {
+        this.detectionExecutor = executor;
     }
 
     /**
@@ -586,8 +655,8 @@ public class NodeDetector {
      * Synchronized to ensure consistent read with other cache operations.
      */
     public NodeDetectionResult getCachedDetectionResult() {
-        synchronized (cacheLock) {
-            return cachedDetectionResult;
+        synchronized (this.cacheLock) {
+            return this.cachedDetectionResult;
         }
     }
 
@@ -598,11 +667,11 @@ public class NodeDetector {
      * @return cached Node.js path, or null if not yet detected
      */
     public String getCachedNodePath() {
-        synchronized (cacheLock) {
-            if (cachedDetectionResult != null && cachedDetectionResult.getNodePath() != null) {
-                return cachedDetectionResult.getNodePath();
+        synchronized (this.cacheLock) {
+            if (this.cachedDetectionResult != null && this.cachedDetectionResult.getNodePath() != null) {
+                return this.cachedDetectionResult.getNodePath();
             }
-            return cachedNodeExecutable;
+            return this.cachedNodeExecutable;
         }
     }
 
@@ -613,8 +682,8 @@ public class NodeDetector {
      * @return cached version string (e.g. "v20.10.0"), or null if not yet detected
      */
     public String getCachedNodeVersion() {
-        synchronized (cacheLock) {
-            return cachedDetectionResult != null ? cachedDetectionResult.getNodeVersion() : null;
+        synchronized (this.cacheLock) {
+            return this.cachedDetectionResult != null ? this.cachedDetectionResult.getNodeVersion() : null;
         }
     }
 
@@ -645,11 +714,24 @@ public class NodeDetector {
      * Cache a detection result.
      */
     private void cacheDetection(NodeDetectionResult result) {
-        synchronized (cacheLock) {
+        synchronized (this.cacheLock) {
+            this.clearInFlightLocked();
             this.cachedDetectionResult = result;
             if (result != null && result.isFound() && result.getNodePath() != null) {
                 this.cachedNodeExecutable = result.getNodePath();
             }
+        }
+    }
+
+    /**
+     * Clears the in-flight detection future under cache lock.
+     */
+    private void clearInFlightLocked() {
+        if (this.inFlightDetection != null) {
+            // CompletableFuture.cancel() ignores the mayInterruptIfRunning parameter,
+            // but we cancel to signal CancellationException to any waiting callers.
+            this.inFlightDetection.cancel(false);
+            this.inFlightDetection = null;
         }
     }
 

@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.dependency.DependencyManager;
+import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.dependency.InstallResult;
 import com.github.claudecodegui.dependency.SdkDefinition;
 import com.github.claudecodegui.dependency.UpdateInfo;
@@ -10,6 +11,7 @@ import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -32,23 +34,17 @@ public class DependencyHandler extends BaseMessageHandler {
 
     private final DependencyManager dependencyManager;
     private final Gson gson;
+    private final NodeDetector nodeDetector;
+    private volatile boolean lazyInitialized;
+    private final Object initLock;
 
     public DependencyHandler(HandlerContext context) {
         super(context);
-        // Use shared NodeDetector instance to leverage cached Node.js path
-        NodeDetector nodeDetector = NodeDetector.getInstance();
-        String configuredNodePath = getConfiguredNodePath();
-        if (configuredNodePath != null && !configuredNodePath.isEmpty()) {
-            String version = nodeDetector.verifyNodePath(configuredNodePath);
-            if (version != null) {
-                nodeDetector.setNodeExecutable(configuredNodePath);
-                LOG.info("[DependencyHandler] Using configured Node.js path: " + configuredNodePath + " (" + version + ")");
-            } else {
-                LOG.warn("[DependencyHandler] Configured Node.js path is invalid: " + configuredNodePath);
-            }
-        }
-        this.dependencyManager = new DependencyManager(nodeDetector);
+        this.nodeDetector = NodeDetector.getInstance();
+        this.dependencyManager = new DependencyManager(this.nodeDetector);
         this.gson = new Gson();
+        this.lazyInitialized = false;
+        this.initLock = new Object();
     }
 
     /**
@@ -74,21 +70,23 @@ public class DependencyHandler extends BaseMessageHandler {
 
     @Override
     public boolean handle(String type, String content) {
+        this.ensureInitializedAsync();
+
         switch (type) {
             case "get_dependency_status":
-                handleGetStatus();
+                this.handleGetStatus();
                 return true;
             case "install_dependency":
-                handleInstall(content);
+                this.handleInstall(content);
                 return true;
             case "uninstall_dependency":
-                handleUninstall(content);
+                this.handleUninstall(content);
                 return true;
             case "check_dependency_updates":
-                handleCheckUpdates(content);
+                this.handleCheckUpdates(content);
                 return true;
             case "check_node_environment":
-                handleCheckNodeEnvironment();
+                this.handleCheckNodeEnvironment();
                 return true;
             default:
                 return false;
@@ -96,20 +94,64 @@ public class DependencyHandler extends BaseMessageHandler {
     }
 
     /**
+     * Performs deferred Node.js cache warm-up for configured path.
+     */
+    private void ensureInitializedAsync() {
+        if (this.lazyInitialized) {
+            return;
+        }
+
+        synchronized (this.initLock) {
+            if (this.lazyInitialized) {
+                return;
+            }
+            this.lazyInitialized = true;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                String configuredNodePath = this.getConfiguredNodePath();
+                if (configuredNodePath == null || configuredNodePath.isEmpty()) {
+                    return;
+                }
+
+                String version = this.nodeDetector.verifyNodePath(configuredNodePath);
+                if (version != null) {
+                    this.nodeDetector.setNodeExecutable(configuredNodePath);
+                    LOG.info("[DependencyHandler] Using configured Node.js path: " +
+                             configuredNodePath + " (" + version + ")");
+                } else {
+                    LOG.warn("[DependencyHandler] Configured Node.js path is invalid: " + configuredNodePath);
+                }
+            } catch (Exception e) {
+                LOG.warn("[DependencyHandler] Lazy initialization failed: " + e.getMessage(), e);
+            }
+        }, AppExecutorUtil.getAppExecutorService());
+    }
+
+    /**
      * Get installation status of all SDKs.
      */
     private void handleGetStatus() {
-        try {
-            JsonObject status = dependencyManager.getAllSdkStatus();
-            String statusJson = gson.toJson(status);
+        long startTime = System.currentTimeMillis();
+        CompletableFuture.runAsync(() -> {
+            try {
+                JsonObject status = this.dependencyManager.getAllSdkStatus();
+                String statusJson = this.gson.toJson(status);
 
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.updateDependencyStatus", escapeJs(statusJson));
-            });
-        } catch (Exception e) {
-            LOG.error("[DependencyHandler] Failed to get dependency status: " + e.getMessage(), e);
-            sendErrorResult("updateDependencyStatus", e.getMessage());
-        }
+                ApplicationManager.getApplication().invokeLater(() ->
+                    this.callJavaScript("window.updateDependencyStatus", this.escapeJs(statusJson))
+                );
+            } catch (Exception e) {
+                LOG.error("[DependencyHandler] Failed to get dependency status: " + e.getMessage(), e);
+                this.sendErrorResult("updateDependencyStatus", e.getMessage());
+                this.sendShowError("获取依赖状态失败: " + e.getMessage());
+            } finally {
+                long elapsed = System.currentTimeMillis() - startTime;
+                LOG.info("[DependencyHandler] handleGetStatus completed in " + elapsed +
+                         "ms on thread " + Thread.currentThread().getName());
+            }
+        }, AppExecutorUtil.getAppExecutorService());
     }
 
     /**
@@ -117,53 +159,70 @@ public class DependencyHandler extends BaseMessageHandler {
      */
     private void handleInstall(String content) {
         try {
-            JsonObject json = gson.fromJson(content, JsonObject.class);
+            JsonObject json = this.gson.fromJson(content, JsonObject.class);
             String sdkId = json.get("id").getAsString();
 
             SdkDefinition sdk = SdkDefinition.fromId(sdkId);
             if (sdk == null) {
-                sendInstallResult(InstallResult.failure(sdkId, "Unknown SDK: " + sdkId, ""));
+                this.sendInstallResult(InstallResult.failure(sdkId, "Unknown SDK: " + sdkId, ""));
                 return;
             }
 
-            // Check Node.js environment
-            if (!dependencyManager.checkNodeEnvironment()) {
-                JsonObject errorResult = new JsonObject();
-                errorResult.addProperty("success", false);
-                errorResult.addProperty("sdkId", sdkId);
-                errorResult.addProperty("error", "node_not_configured");
-                errorResult.addProperty("message", "Node.js not configured. Please set Node.js path in Settings > Basic.");
-
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("window.dependencyInstallResult", escapeJs(gson.toJson(errorResult)));
-                });
-                return;
-            }
-
-            // Asynchronous installation
+            // Move the entire install flow (including Node env check) to background thread
+            // to avoid blocking the CEF IO thread if the cache is cold.
             CompletableFuture.runAsync(() -> {
-                InstallResult result = dependencyManager.installSdkSync(sdkId, (logLine) -> {
-                    // Send installation progress log
-                    JsonObject progress = new JsonObject();
-                    progress.addProperty("sdkId", sdkId);
-                    progress.addProperty("log", logLine);
+                try {
+                    // Check Node.js environment (may involve process I/O on cache miss)
+                    if (!this.dependencyManager.checkNodeEnvironment()) {
+                        JsonObject errorResult = new JsonObject();
+                        errorResult.addProperty("success", false);
+                        errorResult.addProperty("sdkId", sdkId);
+                        errorResult.addProperty("error", "node_not_configured");
+                        errorResult.addProperty(
+                            "message",
+                            "Node.js not configured. Please set Node.js path in Settings > Basic."
+                        );
 
-                    ApplicationManager.getApplication().invokeLater(() -> {
-                        callJavaScript("window.dependencyInstallProgress", escapeJs(gson.toJson(progress)));
+                        ApplicationManager.getApplication().invokeLater(() ->
+                            this.callJavaScript(
+                                "window.dependencyInstallResult",
+                                this.escapeJs(this.gson.toJson(errorResult))
+                            )
+                        );
+                        return;
+                    }
+
+                    InstallResult result = this.dependencyManager.installSdkSync(sdkId, (logLine) -> {
+                        // Send installation progress log
+                        JsonObject progress = new JsonObject();
+                        progress.addProperty("sdkId", sdkId);
+                        progress.addProperty("log", logLine);
+
+                        ApplicationManager.getApplication().invokeLater(
+                            () -> this.callJavaScript(
+                                "window.dependencyInstallProgress",
+                                this.escapeJs(this.gson.toJson(progress))
+                            )
+                        );
                     });
-                });
 
-                sendInstallResult(result);
+                    this.sendInstallResult(result);
 
-                // Refresh status after installation completes
-                if (result.isSuccess()) {
-                    handleGetStatus();
+                    // Refresh status after installation completes
+                    if (result.isSuccess()) {
+                        this.handleGetStatus();
+                    }
+                } catch (Exception e) {
+                    LOG.error("[DependencyHandler] Failed during dependency installation: " + e.getMessage(), e);
+                    this.sendErrorResult("dependencyInstallResult", e.getMessage());
+                    this.sendShowError("依赖安装失败: " + e.getMessage());
                 }
-            });
+            }, AppExecutorUtil.getAppExecutorService());
 
         } catch (Exception e) {
             LOG.error("[DependencyHandler] Failed to install dependency: " + e.getMessage(), e);
-            sendErrorResult("dependencyInstallResult", e.getMessage());
+            this.sendErrorResult("dependencyInstallResult", e.getMessage());
+            this.sendShowError("依赖安装失败: " + e.getMessage());
         }
     }
 
@@ -172,30 +231,37 @@ public class DependencyHandler extends BaseMessageHandler {
      */
     private void handleUninstall(String content) {
         try {
-            JsonObject json = gson.fromJson(content, JsonObject.class);
+            JsonObject json = this.gson.fromJson(content, JsonObject.class);
             String sdkId = json.get("id").getAsString();
 
             CompletableFuture.runAsync(() -> {
-                boolean success = dependencyManager.uninstallSdk(sdkId);
+                try {
+                    boolean success = this.dependencyManager.uninstallSdk(sdkId);
 
-                JsonObject result = new JsonObject();
-                result.addProperty("success", success);
-                result.addProperty("sdkId", sdkId);
-                if (!success) {
-                    result.addProperty("error", "Failed to uninstall SDK");
+                    JsonObject result = new JsonObject();
+                    result.addProperty("success", success);
+                    result.addProperty("sdkId", sdkId);
+                    if (!success) {
+                        result.addProperty("error", "Failed to uninstall SDK");
+                    }
+
+                    ApplicationManager.getApplication().invokeLater(() ->
+                        this.callJavaScript("window.dependencyUninstallResult", this.escapeJs(this.gson.toJson(result)))
+                    );
+
+                    // Refresh status after uninstall completes
+                    this.handleGetStatus();
+                } catch (Exception e) {
+                    LOG.error("[DependencyHandler] Failed during dependency uninstall: " + e.getMessage(), e);
+                    this.sendErrorResult("dependencyUninstallResult", e.getMessage());
+                    this.sendShowError("依赖卸载失败: " + e.getMessage());
                 }
-
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("window.dependencyUninstallResult", escapeJs(gson.toJson(result)));
-                });
-
-                // Refresh status after uninstall completes
-                handleGetStatus();
-            });
+            }, AppExecutorUtil.getAppExecutorService());
 
         } catch (Exception e) {
             LOG.error("[DependencyHandler] Failed to uninstall dependency: " + e.getMessage(), e);
-            sendErrorResult("dependencyUninstallResult", e.getMessage());
+            this.sendErrorResult("dependencyUninstallResult", e.getMessage());
+            this.sendShowError("依赖卸载失败: " + e.getMessage());
         }
     }
 
@@ -206,7 +272,7 @@ public class DependencyHandler extends BaseMessageHandler {
         try {
             String sdkId = null;
             if (content != null && !content.isEmpty()) {
-                JsonObject json = gson.fromJson(content, JsonObject.class);
+                JsonObject json = this.gson.fromJson(content, JsonObject.class);
                 if (json.has("id")) {
                     sdkId = json.get("id").getAsString();
                 }
@@ -215,30 +281,40 @@ public class DependencyHandler extends BaseMessageHandler {
             final String targetSdkId = sdkId;
 
             CompletableFuture.runAsync(() -> {
-                JsonObject updates = new JsonObject();
+                try {
+                    JsonObject updates = new JsonObject();
 
-                if (targetSdkId != null) {
-                    // Check specified SDK
-                    UpdateInfo info = dependencyManager.checkForUpdates(targetSdkId);
-                    updates.add(targetSdkId, toJson(info));
-                } else {
-                    // Check all installed SDKs
-                    for (SdkDefinition sdk : SdkDefinition.values()) {
-                        if (dependencyManager.isInstalled(sdk.getId())) {
-                            UpdateInfo info = dependencyManager.checkForUpdates(sdk.getId());
-                            updates.add(sdk.getId(), toJson(info));
+                    if (targetSdkId != null) {
+                        // Check specified SDK
+                        UpdateInfo info = this.dependencyManager.checkForUpdates(targetSdkId);
+                        updates.add(targetSdkId, this.toJson(info));
+                    } else {
+                        // Check all installed SDKs
+                        for (SdkDefinition sdk : SdkDefinition.values()) {
+                            if (this.dependencyManager.isInstalled(sdk.getId())) {
+                                UpdateInfo info = this.dependencyManager.checkForUpdates(sdk.getId());
+                                updates.add(sdk.getId(), this.toJson(info));
+                            }
                         }
                     }
-                }
 
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("window.dependencyUpdateAvailable", escapeJs(gson.toJson(updates)));
-                });
-            });
+                    ApplicationManager.getApplication().invokeLater(
+                        () -> this.callJavaScript(
+                            "window.dependencyUpdateAvailable",
+                            this.escapeJs(this.gson.toJson(updates))
+                        )
+                    );
+                } catch (Exception e) {
+                    LOG.error("[DependencyHandler] Failed during update check: " + e.getMessage(), e);
+                    this.sendErrorResult("dependencyUpdateAvailable", e.getMessage());
+                    this.sendShowError("检查依赖更新失败: " + e.getMessage());
+                }
+            }, AppExecutorUtil.getAppExecutorService());
 
         } catch (Exception e) {
             LOG.error("[DependencyHandler] Failed to check updates: " + e.getMessage(), e);
-            sendErrorResult("dependencyUpdateAvailable", e.getMessage());
+            this.sendErrorResult("dependencyUpdateAvailable", e.getMessage());
+            this.sendShowError("检查依赖更新失败: " + e.getMessage());
         }
     }
 
@@ -247,58 +323,81 @@ public class DependencyHandler extends BaseMessageHandler {
      * Prefers the configured Node.js path; falls back to auto-detection if not configured.
      */
     private void handleCheckNodeEnvironment() {
-        try {
-            // First check if there is a configured Node.js path
-            String configuredPath = getConfiguredNodePath();
-            boolean available = false;
-            String detectedPath = null;
-            String detectedVersion = null;
+        long startTime = System.currentTimeMillis();
+        CompletableFuture.runAsync(() -> {
+            try {
+                boolean available = false;
+                String detectedPath = null;
+                String detectedVersion = null;
 
-            if (configuredPath != null && !configuredPath.isEmpty()) {
-                // Use configured path with shared NodeDetector instance
-                NodeDetector nodeDetector = NodeDetector.getInstance();
-                String version = nodeDetector.verifyNodePath(configuredPath);
-                if (version != null) {
+                // Fast-path: use cached shared detection result with no process/file I/O.
+                String cachedPath = this.nodeDetector.getCachedNodePath();
+                String cachedVersion = this.nodeDetector.getCachedNodeVersion();
+                if (cachedPath != null && cachedVersion != null) {
                     available = true;
-                    detectedPath = configuredPath;
-                    detectedVersion = version;
-                    LOG.info("[DependencyHandler] Node.js found at configured path: " + configuredPath + " (" + version + ")");
-                } else {
-                    LOG.warn("[DependencyHandler] Configured Node.js path is invalid: " + configuredPath);
+                    detectedPath = cachedPath;
+                    detectedVersion = cachedVersion;
                 }
+
+                // If cache miss, first check if there is a configured Node.js path.
+                if (!available) {
+                    String configuredPath = this.getConfiguredNodePath();
+                    if (configuredPath != null && !configuredPath.isEmpty()) {
+                        NodeDetectionResult verifyResult =
+                            this.nodeDetector.verifyAndCacheNodePath(configuredPath);
+                        if (verifyResult.isFound()) {
+                            available = true;
+                            detectedPath = verifyResult.getNodePath();
+                            detectedVersion = verifyResult.getNodeVersion();
+                            LOG.info("[DependencyHandler] Node.js found at configured path: " +
+                                     configuredPath + " (" + detectedVersion + ")");
+                        } else {
+                            LOG.warn("[DependencyHandler] Configured Node.js path is invalid: " + configuredPath);
+                        }
+                    }
+                }
+
+                // If the configured path is invalid, try auto-detection
+                if (!available) {
+                    available = this.dependencyManager.checkNodeEnvironment();
+                    if (available) {
+                        detectedPath = this.nodeDetector.getCachedNodePath();
+                        detectedVersion = this.nodeDetector.getCachedNodeVersion();
+                    }
+                }
+
+                JsonObject result = new JsonObject();
+                result.addProperty("available", available);
+                if (detectedPath != null) {
+                    result.addProperty("path", detectedPath);
+                }
+                if (detectedVersion != null) {
+                    result.addProperty("version", detectedVersion);
+                }
+
+                this.sendNodeEnvironmentStatus(result);
+            } catch (Exception e) {
+                LOG.error("[DependencyHandler] Failed to check Node environment: " + e.getMessage(), e);
+                JsonObject result = new JsonObject();
+                result.addProperty("available", false);
+                result.addProperty("error", e.getMessage());
+                this.sendNodeEnvironmentStatus(result);
+                this.sendShowError("检查 Node.js 环境失败: " + e.getMessage());
+            } finally {
+                long elapsed = System.currentTimeMillis() - startTime;
+                LOG.info("[DependencyHandler] handleCheckNodeEnvironment completed in " + elapsed +
+                         "ms on thread " + Thread.currentThread().getName());
             }
-
-            // If the configured path is invalid, try auto-detection
-            if (!available) {
-                available = dependencyManager.checkNodeEnvironment();
-            }
-
-            JsonObject result = new JsonObject();
-            result.addProperty("available", available);
-            if (detectedPath != null) {
-                result.addProperty("path", detectedPath);
-            }
-            if (detectedVersion != null) {
-                result.addProperty("version", detectedVersion);
-            }
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.nodeEnvironmentStatus", escapeJs(gson.toJson(result)));
-            });
-
-        } catch (Exception e) {
-            LOG.error("[DependencyHandler] Failed to check Node environment: " + e.getMessage(), e);
-            JsonObject result = new JsonObject();
-            result.addProperty("available", false);
-            result.addProperty("error", e.getMessage());
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.nodeEnvironmentStatus", escapeJs(gson.toJson(result)));
-            });
-        }
+        }, AppExecutorUtil.getAppExecutorService());
     }
 
     // ==================== Helper Methods ====================
+
+    private void sendNodeEnvironmentStatus(JsonObject result) {
+        ApplicationManager.getApplication().invokeLater(() ->
+            this.callJavaScript("window.nodeEnvironmentStatus", this.escapeJs(this.gson.toJson(result)))
+        );
+    }
 
     private void sendInstallResult(InstallResult result) {
         JsonObject json = new JsonObject();
@@ -312,9 +411,9 @@ public class DependencyHandler extends BaseMessageHandler {
         }
         json.addProperty("logs", result.getLogs());
 
-        ApplicationManager.getApplication().invokeLater(() -> {
-            callJavaScript("window.dependencyInstallResult", escapeJs(gson.toJson(json)));
-        });
+        ApplicationManager.getApplication().invokeLater(() ->
+            this.callJavaScript("window.dependencyInstallResult", this.escapeJs(this.gson.toJson(json)))
+        );
     }
 
     private JsonObject toJson(UpdateInfo info) {
@@ -332,13 +431,19 @@ public class DependencyHandler extends BaseMessageHandler {
         return json;
     }
 
+    private void sendShowError(String message) {
+        ApplicationManager.getApplication().invokeLater(() ->
+            this.callJavaScript("window.showError", this.escapeJs(message))
+        );
+    }
+
     private void sendErrorResult(String callback, String errorMessage) {
         JsonObject error = new JsonObject();
         error.addProperty("success", false);
         error.addProperty("error", errorMessage);
 
-        ApplicationManager.getApplication().invokeLater(() -> {
-            callJavaScript("window." + callback, escapeJs(gson.toJson(error)));
-        });
+        ApplicationManager.getApplication().invokeLater(() ->
+            this.callJavaScript("window." + callback, this.escapeJs(this.gson.toJson(error)))
+        );
     }
 }
