@@ -152,11 +152,6 @@ interface Window {
   onFileListResult?: (json: string) => void;
 
   /**
-   * Command list result callback (for slash command provider)
-   */
-  onCommandListResult?: (json: string) => void;
-
-  /**
    * Update MCP servers list
    */
   updateMcpServers?: (json: string) => void;

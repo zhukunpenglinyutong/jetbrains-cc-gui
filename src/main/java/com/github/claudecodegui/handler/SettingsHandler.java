@@ -16,11 +16,13 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.HashMap;
@@ -484,7 +486,8 @@ public class SettingsHandler extends BaseMessageHandler {
 
         final String finalCwd = cwd;
         CompletableFuture.runAsync(() -> {
-            var commands = SlashCommandRegistry.getCommands(provider, finalCwd);
+            String currentFilePath = getCurrentEditorFilePath();
+            var commands = SlashCommandRegistry.getCommands(provider, finalCwd, currentFilePath);
             String json = SlashCommandRegistry.toJson(commands);
 
             final String codexJson;
@@ -512,6 +515,30 @@ public class SettingsHandler extends BaseMessageHandler {
             LOG.error("[SettingsHandler] Failed to refresh slash commands asynchronously: " + ex.getMessage(), ex);
             return null;
         });
+    }
+
+    /**
+     * Gets currently selected editor file path for conditional skill filtering.
+     *
+     * @return selected file path, or null if no active file
+     */
+    private String getCurrentEditorFilePath() {
+        try {
+            Project project = this.context.getProject();
+            if (project == null || project.isDisposed()) {
+                return null;
+            }
+            return ReadAction.compute(() -> {
+                VirtualFile[] files = FileEditorManager.getInstance(project).getSelectedFiles();
+                if (files.length == 0 || files[0] == null) {
+                    return null;
+                }
+                return files[0].getPath();
+            });
+        } catch (Exception e) {
+            LOG.debug("[SettingsHandler] Failed to resolve current file path", e);
+        }
+        return null;
     }
 
     private void refreshContextBar() {

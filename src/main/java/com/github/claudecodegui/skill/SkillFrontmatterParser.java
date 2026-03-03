@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -39,7 +41,8 @@ public final class SkillFrontmatterParser {
             String license,
             String compatibility,
             String allowedTools,
-            boolean userInvocable
+            boolean userInvocable,
+            List<String> paths
     ) {
     }
 
@@ -192,7 +195,43 @@ public final class SkillFrontmatterParser {
             userInvocable = Boolean.parseBoolean(String.valueOf(uiObj).trim());
         }
 
-        return new SkillMetadata(name, description, license, compatibility, allowedTools, userInvocable);
+        // Step 8: Extract paths (conditional skills - glob patterns for file matching)
+        List<String> paths = extractPathsList(yamlMap);
+
+        return new SkillMetadata(name, description, license, compatibility, allowedTools, userInvocable, paths);
+    }
+
+    /**
+     * Extracts the paths list from YAML frontmatter.
+     * Used for conditional skills that activate based on file patterns.
+     */
+    @SuppressWarnings("unchecked")
+    private static List<String> extractPathsList(Map<String, Object> yamlMap) {
+        Object pathsObj = yamlMap.get("paths");
+        if (pathsObj == null) {
+            return List.of();
+        }
+
+        if (pathsObj instanceof List) {
+            List<String> paths = new ArrayList<>();
+            for (Object item : (List<?>) pathsObj) {
+                if (item != null) {
+                    String path = String.valueOf(item).trim();
+                    if (!path.isEmpty()) {
+                        paths.add(path);
+                    }
+                }
+            }
+            return paths;
+        }
+
+        // Handle single string path
+        String singlePath = String.valueOf(pathsObj).trim();
+        if (!singlePath.isEmpty()) {
+            return List.of(singlePath);
+        }
+
+        return List.of();
     }
 
     /**
