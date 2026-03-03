@@ -46,6 +46,11 @@ bin/
 ### Mac OS ###
 .DS_Store
 
+### Environment secrets ###
+.env
+.env.*
+!.env.example
+
 .npm-cache
 
 # Webview frontend artifacts

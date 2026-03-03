@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 /**
  * ACP (Agent Client Protocol) bridge for Claude.
@@ -33,8 +34,18 @@ public class ACPBridge {
     private static final int INIT_TIMEOUT_SECONDS = 30;
     private static final int SESSION_TIMEOUT_SECONDS = 30;
 
+    private static final Pattern SENSITIVE_DATA_PATTERN = Pattern.compile(
+            "(api[_-]?key|token|access[_-]?token|refresh[_-]?token|password|passwd|secret|client[_-]?secret|" +
+            "authorization|bearer|credential|credentials|private[_-]?key|access[_-]?key)" +
+            "[\"']?\\s*[:=]\\s*[\"']?[^\"'\\s,}]{8,}",
+            Pattern.CASE_INSENSITIVE
+    );
+
     private final String acpBinaryPath;
     private final AtomicInteger requestIdCounter = new AtomicInteger(0);
+
+    /** Canonical root directory for the session; filesystem operations are restricted to this tree. */
+    private volatile Path sessionRoot;
 
     private volatile Process acpProcess;
     private volatile BufferedWriter stdinWriter;
@@ -80,6 +91,9 @@ public class ACPBridge {
                 ProcessBuilder pb = new ProcessBuilder(acpBinaryPath);
                 if (cwd != null && !cwd.isEmpty()) {
                     pb.directory(new File(cwd));
+                    sessionRoot = Path.of(cwd).toRealPath();
+                } else {
+                    sessionRoot = Path.of(System.getProperty("user.dir")).toRealPath();
                 }
                 pb.redirectErrorStream(false);
 
@@ -118,6 +132,7 @@ public class ACPBridge {
         synchronized (processLock) {
             initialized = false;
             currentSessionId = null;
+            sessionRoot = null;
 
             if (readerThread != null) {
                 readerThread.interrupt();
@@ -375,7 +390,7 @@ public class ACPBridge {
             writer.newLine();
             writer.flush();
         }
-        LOG.debug("[ACPBridge] >> " + truncate(json, 200));
+        LOG.debug("[ACPBridge] >> " + sanitize(truncate(json, 200)));
     }
 
     // ========================================================================
@@ -422,7 +437,7 @@ public class ACPBridge {
 
     private void processIncomingMessage(String line) {
         if (line == null || line.isBlank()) return;
-        LOG.debug("[ACPBridge] << " + truncate(line, 300));
+        LOG.debug("[ACPBridge] << " + sanitize(truncate(line, 300)));
 
         try {
             JsonObject msg = GSON.fromJson(line, JsonObject.class);
@@ -546,12 +561,17 @@ public class ACPBridge {
         if (!msg.has("id")) return;
         int id = msg.get("id").getAsInt();
 
-        JsonObject result = new JsonObject();
         JsonArray permissions = params.has("permissions") ? params.getAsJsonArray("permissions") : new JsonArray();
+        String description = params.has("description") ? params.get("description").getAsString() : "(none)";
+        LOG.info("[ACPBridge] Permission request: " + description + " | options=" + permissions.size());
+
+        JsonObject result = new JsonObject();
         if (permissions.size() > 0) {
             JsonObject firstOption = permissions.get(0).getAsJsonObject();
             if (firstOption.has("optionId")) {
-                result.addProperty("optionId", firstOption.get("optionId").getAsString());
+                String optionId = firstOption.get("optionId").getAsString();
+                LOG.info("[ACPBridge] Auto-approving permission option: " + optionId);
+                result.addProperty("optionId", optionId);
             }
         }
 
@@ -565,6 +585,12 @@ public class ACPBridge {
         String path = params.has("path") ? params.get("path").getAsString() : null;
         if (path == null) {
             sendErrorResponse(id, -32602, "Missing path parameter");
+            return;
+        }
+
+        if (!isPathAllowed(path)) {
+            LOG.warn("[ACPBridge] Blocked read outside session root: " + path);
+            sendErrorResponse(id, -32600, "Access denied: path is outside the project directory");
             return;
         }
 
@@ -599,6 +625,12 @@ public class ACPBridge {
 
         if (path == null || fileContent == null) {
             sendErrorResponse(id, -32602, "Missing path or content parameter");
+            return;
+        }
+
+        if (!isPathAllowed(path)) {
+            LOG.warn("[ACPBridge] Blocked write outside session root: " + path);
+            sendErrorResponse(id, -32600, "Access denied: path is outside the project directory");
             return;
         }
 
@@ -707,6 +739,32 @@ public class ACPBridge {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * Check whether the given path is inside the session root directory.
+     * Resolves symlinks and normalizes before comparison to prevent traversal attacks.
+     */
+    private boolean isPathAllowed(String pathStr) {
+        if (pathStr == null || pathStr.isEmpty()) return false;
+        Path root = sessionRoot;
+        if (root == null) return false;
+
+        try {
+            Path target = Path.of(pathStr).toAbsolutePath().normalize();
+            if (Files.exists(target)) {
+                target = target.toRealPath();
+            }
+            return target.startsWith(root);
+        } catch (Exception e) {
+            LOG.warn("[ACPBridge] Path validation failed for: " + pathStr + " - " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static String sanitize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return SENSITIVE_DATA_PATTERN.matcher(s).replaceAll("$1: [REDACTED]");
     }
 
     private static String truncate(String s, int maxLen) {
