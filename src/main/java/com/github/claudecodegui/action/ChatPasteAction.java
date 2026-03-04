@@ -13,7 +13,8 @@ import java.awt.datatransfer.DataFlavor;
 
 /**
  * IDEA Action for Ctrl+V in the Claude chat tool window.
- * Reads system clipboard and inserts text at cursor in the focused contenteditable element.
+ * Reads system clipboard and inserts text at the cursor in the focused element,
+ * supporting contenteditable divs, input fields, and textareas.
  */
 public class ChatPasteAction extends ChatToolWindowAction {
 
@@ -39,6 +40,10 @@ public class ChatPasteAction extends ChatToolWindowAction {
                 "  var el=document.activeElement;" +
                 "  if(el&&el.getAttribute('contenteditable')==='true'){" +
                 "    document.execCommand('insertText',false,txt);" +
+                "  } else if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA')){" +
+                "    var s=el.selectionStart,e=el.selectionEnd;" +
+                "    el.setRangeText(txt,s,e,'end');" +
+                "    el.dispatchEvent(new Event('input',{bubbles:true}));" +
                 "  } else if(window.onClipboardRead){" +
                 "    var cb=window.onClipboardRead;" +
                 "    window.onClipboardRead=undefined;" +
