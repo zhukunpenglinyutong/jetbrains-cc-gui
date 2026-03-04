@@ -634,30 +634,18 @@ public class NodeDetector {
 
     /**
      * Manually sets the Node.js executable path.
-     * When setting a non-null path, verifies it and caches the detection result
-     * to ensure getCachedNodeVersion() returns a valid value.
-     * When setting null, clears both caches.
+     * Clears the cached detection result when the path changes,
+     * but preserves it when the same path is set again to avoid losing version info.
      */
     public void setNodeExecutable(String path) {
         synchronized (this.cacheLock) {
             this.clearInFlightLocked();
             this.cachedNodeExecutable = path;
-            if (path == null || path.isEmpty()) {
+            // Preserve detection result if the path is unchanged (e.g. re-set on new window init).
+            // Only clear when the path actually differs or is null, to avoid discarding version info.
+            if (path == null || this.cachedDetectionResult == null
+                    || !path.equals(this.cachedDetectionResult.getNodePath())) {
                 this.cachedDetectionResult = null;
-            } else if (this.cachedDetectionResult == null
-                       || !path.equals(this.cachedDetectionResult.getNodePath())) {
-                // Path changed or no cached result — verify and cache synchronously.
-                // This runs outside the lock via verifyNodePath (which only reads).
-                // We temporarily release nothing here because verifyNodePath is safe to call under lock
-                // (it spawns a child process but doesn't re-acquire cacheLock).
-                String version = verifyNodePath(path);
-                if (version != null) {
-                    this.cachedDetectionResult = NodeDetectionResult.success(
-                            path, version, NodeDetectionResult.DetectionMethod.KNOWN_PATH);
-                }
-                // If verification fails, preserve existing cachedDetectionResult
-                // rather than clearing it — this avoids the race condition where
-                // SessionHandler.getCachedNodeVersion() returns null.
             }
         }
     }

@@ -119,7 +119,7 @@ public class DependencyHandler extends BaseMessageHandler {
                 }
 
                 NodeDetectionResult result = this.nodeDetector.verifyAndCacheNodePath(configuredNodePath);
-                if (result != null && result.isFound()) {
+                if (result.isFound()) {
                     LOG.info("[DependencyHandler] Using configured Node.js path: " +
                              configuredNodePath + " (" + result.getNodeVersion() + ")");
                 } else {

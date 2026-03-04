@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -65,11 +66,36 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
+     * Resolves the cached Node.js version, attempting recovery when the cache is stale.
+     * If the version is absent but a cached path exists, re-verifies the path to restore
+     * the detection result (e.g. after a new window resets the cache via setNodeExecutable).
+     *
+     * @return the Node.js version string, or null if detection fails entirely
+     */
+    private String resolveNodeVersion() {
+        String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
+        if (nodeVersion != null) {
+            return nodeVersion;
+        }
+        // Version absent — try to recover using the cached path (path may still be valid).
+        String cachedPath = context.getClaudeSDKBridge().getCachedNodePath();
+        if (cachedPath == null || cachedPath.isEmpty()) {
+            return null;
+        }
+        LOG.info("[SessionHandler] Node version cache miss, re-verifying path: " + cachedPath);
+        NodeDetectionResult recovery = context.getClaudeSDKBridge().verifyAndCacheNodePath(cachedPath);
+        if (recovery != null && recovery.isFound()) {
+            return recovery.getNodeVersion();
+        }
+        return null;
+    }
+
+    /**
      * Send message to Claude
      * [FIX] Now parses JSON format to extract text, agent info and file tags
      */
     private void handleSendMessage(String content) {
-        String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
+        String nodeVersion = this.resolveNodeVersion();
         if (nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
@@ -265,7 +291,7 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedPermissionMode
     ) {
         // Version check (consistent with handleSendMessage)
-        String nodeVersion = context.getClaudeSDKBridge().getCachedNodeVersion();
+        String nodeVersion = this.resolveNodeVersion();
         if (nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
