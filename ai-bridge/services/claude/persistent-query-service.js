@@ -14,6 +14,7 @@ import { canUseTool, requestPlanApproval } from '../../permission-handler.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
+import { mergeUsage, emitAccumulatedUsage } from '../../utils/usage-utils.js';
 import { registerActiveQueryResult, removeSession } from './message-service.js';
 
 const runtimesBySessionId = new Map();
@@ -590,6 +591,18 @@ function processStreamEvent(msg, turnState) {
   const event = msg.event;
   if (!event) return;
 
+  // Handle message_start: accumulate input_tokens, cache_*_tokens
+  if (event.type === 'message_start' && event.message?.usage) {
+    turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.message.usage);
+  }
+
+  // Handle message_delta: accumulate output_tokens and emit [USAGE] tag
+  if (event.type === 'message_delta' && event.usage) {
+    turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.usage);
+    emitAccumulatedUsage(turnState.accumulatedUsage);
+  }
+
+  // Handle content_block_delta: text and thinking deltas
   if (event.type === 'content_block_delta' && event.delta) {
     if (event.delta.type === 'text_delta' && event.delta.text) {
       process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(event.delta.text)}\n`);
@@ -692,7 +705,8 @@ async function executeTurn(runtime, requestContext, turnMeta) {
     hasStreamEvents: false,
     lastAssistantContent: '',
     lastThinkingContent: '',
-    finalSessionId: requestContext.requestedSessionId || runtime.sessionId || ''
+    finalSessionId: requestContext.requestedSessionId || runtime.sessionId || '',
+    accumulatedUsage: null
   };
   if (turnMeta) {
     turnMeta.state = turnState;

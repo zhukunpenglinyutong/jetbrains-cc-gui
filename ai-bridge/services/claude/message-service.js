@@ -67,6 +67,7 @@ import { persistJsonlMessage, loadSessionHistory } from './session-service.js';
 import { loadAttachments, buildContentBlocks } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
+import { mergeUsage, emitAccumulatedUsage } from '../../utils/usage-utils.js';
 
 // Store active query results for rewind operations
 // Key: sessionId, Value: query result object
@@ -739,6 +740,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       let hasStreamEvents = false;
       let lastAssistantContent = '';
       let lastThinkingContent = '';
+      let accumulatedUsage = null;
 
       // Only log retry attempts (not the first attempt)
       if (retryAttempt > 0) {
@@ -805,6 +807,17 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
         const event = msg.event;
 
         if (event) {
+          // message_start: accumulate input_tokens, cache_*_tokens
+          if (event.type === 'message_start' && event.message?.usage) {
+            accumulatedUsage = mergeUsage(accumulatedUsage, event.message.usage);
+          }
+
+          // message_delta: accumulate output_tokens and emit [USAGE] tag
+          if (event.type === 'message_delta' && event.usage) {
+            accumulatedUsage = mergeUsage(accumulatedUsage, event.usage);
+            emitAccumulatedUsage(accumulatedUsage);
+          }
+
           // content_block_delta: text or JSON incremental update
           if (event.type === 'content_block_delta' && event.delta) {
             if (event.delta.type === 'text_delta' && event.delta.text) {
@@ -1464,6 +1477,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       let hasStreamEvents = false;
       let lastAssistantContent = '';
       let lastThinkingContent = '';
+      let accumulatedUsage = null;
 
       // Only log retry attempts (not the first attempt)
       if (retryAttempt > 0) {
@@ -1529,6 +1543,17 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 		        const event = msg.event;
 
 		        if (event) {
+		          // message_start: accumulate input_tokens, cache_*_tokens
+		          if (event.type === 'message_start' && event.message?.usage) {
+		            accumulatedUsage = mergeUsage(accumulatedUsage, event.message.usage);
+		          }
+
+		          // message_delta: accumulate output_tokens and emit [USAGE] tag
+		          if (event.type === 'message_delta' && event.usage) {
+		            accumulatedUsage = mergeUsage(accumulatedUsage, event.usage);
+		            emitAccumulatedUsage(accumulatedUsage);
+		          }
+
 		          // content_block_delta: text or JSON incremental update
 		          if (event.type === 'content_block_delta' && event.delta) {
 		            if (event.delta.type === 'text_delta' && event.delta.text) {
