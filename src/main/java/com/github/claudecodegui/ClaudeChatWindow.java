@@ -162,6 +162,12 @@ public class ClaudeChatWindow {
     // ==================== Public API ====================
 
     public void setParentContent(Content content) {
+        // Unregister old mapping when changing or clearing parent content
+        if (this.parentContent != null && this.parentContent != content) {
+            ClaudeSDKToolWindow.unregisterContentMapping(this.parentContent);
+            LOG.debug("[MultiTab] Unregistered old Content -> ClaudeChatWindow mapping");
+        }
+
         this.parentContent = content;
         if (content != null) {
             ClaudeSDKToolWindow.registerContentMapping(content, this);
@@ -190,6 +196,7 @@ public class ClaudeChatWindow {
     public JPanel getContent() { return mainPanel; }
     public ClaudeSDKBridge getClaudeSDKBridge() { return claudeSDKBridge; }
     public CodexSDKBridge getCodexSDKBridge() { return codexSDKBridge; }
+    public String getSessionId() { return sessionId; }
 
     public void addCodeSnippetFromExternal(String selectionInfo) {
         addCodeSnippet(selectionInfo);
