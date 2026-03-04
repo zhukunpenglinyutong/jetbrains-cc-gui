@@ -33,6 +33,21 @@ function injectProxyEnvVars(settings) {
 }
 
 /**
+ * Inject all remaining environment variables from settings.json into process.env.
+ * Covers AWS credentials, Bedrock flags, and any other custom vars that the IDE
+ * wouldn't inherit when launched from a desktop launcher.
+ */
+function injectSettingsEnvVars(settings) {
+  if (!settings?.env || typeof settings.env !== 'object') return;
+  for (const [varName, value] of Object.entries(settings.env)) {
+    if (value != null && value !== '' && !process.env[varName]) {
+      process.env[varName] = String(value);
+      debugLog(`[DEBUG] Set ${varName} from settings.json`);
+    }
+  }
+}
+
+/**
  * Read Claude Code configuration.
  */
 export function loadClaudeSettings() {
@@ -161,6 +176,7 @@ export function setupApiKey() {
 
   // Inject proxy env vars early, before any auth logic or network operations
   injectProxyEnvVars(settings);
+  injectSettingsEnvVars(settings);
 
   let apiKey;
   let baseUrl;

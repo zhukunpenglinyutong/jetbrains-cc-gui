@@ -59,6 +59,7 @@ import { join } from 'path';
 import { getMcpServersStatus, loadMcpServersConfig, getMcpServerTools as getMcpServerToolsImpl } from './mcp-status/index.js';
 
 import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
+import { isAwsTokenExpiredError, runAwsTokenRefresh } from '../../utils/aws-auth.js';
 import { selectWorkingDirectory, getRealHomeDir, getClaudeDir } from '../../utils/path-utils.js';
 import { mapModelIdToSdkName, setModelEnvironmentVariables, resolveModelFromSettings } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
@@ -1146,11 +1147,28 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 
     console.log('[DEBUG] Calling messages.create() with non-streaming API...');
 
-    const response = await client.messages.create({
-      model: modelId,
-      max_tokens: 8192,
-      messages: messagesForApi
-    });
+    let response;
+    try {
+      response = await client.messages.create({
+        model: modelId,
+        max_tokens: 8192,
+        messages: messagesForApi
+      });
+    } catch (apiError) {
+      if (authType === 'aws_bedrock' && isAwsTokenExpiredError(apiError) && runAwsTokenRefresh()) {
+        console.log('[AWS_REFRESH] Retrying with refreshed credentials...');
+        const bedrockModule = await ensureBedrockSdk();
+        const AnthropicBedrock = bedrockModule.AnthropicBedrock || bedrockModule.default || bedrockModule;
+        client = new AnthropicBedrock();
+        response = await client.messages.create({
+          model: modelId,
+          max_tokens: 8192,
+          messages: messagesForApi
+        });
+      } else {
+        throw apiError;
+      }
+    }
 
     console.log('[DEBUG] API response received');
 
