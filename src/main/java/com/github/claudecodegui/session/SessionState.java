@@ -60,7 +60,7 @@ public class SessionState {
     private volatile String model = "claude-sonnet-4-6";
     private volatile String provider = "claude";
     // Reasoning effort (thinking depth)
-    private volatile String reasoningEffort = "medium";
+    private volatile String reasoningEffort = "high";
 
     // Slash commands
     private List<String> slashCommands = new ArrayList<>();
