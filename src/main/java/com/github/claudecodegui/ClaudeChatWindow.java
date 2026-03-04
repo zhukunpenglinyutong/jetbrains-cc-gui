@@ -149,8 +149,19 @@ public class ClaudeChatWindow {
         setupSessionCallbacks();
         initializeSessionInfo();
         webviewInitializer.overrideBridgePathIfAvailable();
-        webviewInitializer.createUIComponents();
-        registerSessionLoadListener();
+
+        // Delay JCEF browser creation to avoid service initialization conflicts
+        // during JBCefApp$Holder class init (ProxyMigrationService dependency).
+        // Operations that depend on browser readiness are also deferred.
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (!disposed) {
+                webviewInitializer.createUIComponents();
+                registerSessionLoadListener();
+                this.initialized = true;
+                LOG.info("Window instance fully initialized, project: " + project.getName());
+            }
+        });
+
         if (!skipRegister) {
             registerInstance();
         }
@@ -158,9 +169,6 @@ public class ClaudeChatWindow {
 
         // Sync IDEA keymap for ChatSendAction based on current sendShortcut setting
         SendShortcutSync.syncFromSettings();
-
-        this.initialized = true;
-        LOG.info("Window instance fully initialized, project: " + project.getName());
     }
 
     // ==================== Public API ====================
