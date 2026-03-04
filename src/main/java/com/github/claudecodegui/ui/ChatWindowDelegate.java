@@ -56,6 +56,7 @@ public class ChatWindowDelegate {
     private static final Logger LOG = Logger.getInstance(ChatWindowDelegate.class);
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
+    private static final String DEFAULT_PERMISSION_MODE_PROPERTY_KEY = "claude.code.default.permission.mode";
     private static final int STATUS_RESET_DELAY_SECONDS = 5;
 
     /**
@@ -156,29 +157,49 @@ public class ChatWindowDelegate {
 
     public void loadPermissionModeFromSettings() {
         try {
-            PropertiesComponent props = PropertiesComponent.getInstance();
-            String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
-            if (savedMode != null && !savedMode.trim().isEmpty()) {
-                String mode = savedMode.trim();
+            Project project = host.getProject();
+            // 优先级：项目级 last-used > 全局默认 > bypassPermissions
+            String mode = null;
+            if (null != project) {
+                String savedMode = PropertiesComponent.getInstance(project).getValue(PERMISSION_MODE_PROPERTY_KEY);
+                if (null != savedMode && savedMode.trim().isEmpty() == false) {
+                    mode = savedMode.trim();
+                }
+            }
+            if (null == mode) {
+                String defaultMode = PropertiesComponent.getInstance().getValue(DEFAULT_PERMISSION_MODE_PROPERTY_KEY);
+                if (null != defaultMode && defaultMode.trim().isEmpty() == false) {
+                    mode = defaultMode.trim();
+                }
+            }
+
+            if (null != mode) {
                 ClaudeSession session = host.getSession();
-                if (session != null) {
+                if (null != session) {
                     session.setPermissionMode(mode);
-                    LOG.info("Loaded permission mode from settings: " + mode);
-                    com.github.claudecodegui.notifications.ClaudeNotifier.setMode(host.getProject(), mode);
+                    LOG.info("loaded permission mode from settings: " + mode);
+                    com.github.claudecodegui.notifications.ClaudeNotifier.setMode(project, mode);
+                    // 锁定到项目级，确保后续打开此项目时沿用此模式
+                    if (null != project) {
+                        PropertiesComponent.getInstance(project).setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
+                    }
                 }
             }
         } catch (Exception e) {
-            LOG.warn("Failed to load permission mode: " + e.getMessage());
+            LOG.warn("load permission mode fail: " + e.getMessage());
         }
     }
 
     public void savePermissionModeToSettings(String mode) {
         try {
-            PropertiesComponent props = PropertiesComponent.getInstance();
-            props.setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
-            LOG.info("Saved permission mode to settings: " + mode);
+            // 保存到项目级持久化（每个项目独立记忆）
+            Project project = host.getProject();
+            if (null != project) {
+                PropertiesComponent.getInstance(project).setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
+            }
+            LOG.info("saved permission mode to project settings: " + mode);
         } catch (Exception e) {
-            LOG.warn("Failed to save permission mode: " + e.getMessage());
+            LOG.warn("save permission mode fail: " + e.getMessage());
         }
     }
 

@@ -4,6 +4,7 @@ import type { CodexProviderConfig } from '../../types/provider';
 import { type ClaudeConfig } from './ConfigInfoDisplay';
 import type { AlertType } from '../AlertDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
+import type { PermissionMode } from '../ChatInputBox/types';
 
 // Import split-out components
 import SettingsHeader from './SettingsHeader';
@@ -45,6 +46,9 @@ interface SettingsViewProps {
   // Auto open file configuration (passed from App.tsx for state sync)
   autoOpenFileEnabled?: boolean;
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
+  // Default permission mode configuration (passed from App.tsx for state sync)
+  defaultMode?: PermissionMode;
+  onDefaultModeChange?: (mode: PermissionMode) => void;
 }
 
 const sendToJava = (message: string) => {
@@ -67,7 +71,9 @@ const SettingsView = ({
   sendShortcut: sendShortcutProp,
   onSendShortcutChange: onSendShortcutChangeProp,
   autoOpenFileEnabled: autoOpenFileEnabledProp,
-  onAutoOpenFileEnabledChange: onAutoOpenFileEnabledChangeProp
+  onAutoOpenFileEnabledChange: onAutoOpenFileEnabledChangeProp,
+  defaultMode: defaultModeProp,
+  onDefaultModeChange: onDefaultModeChangeProp
 }: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
@@ -389,6 +395,7 @@ const SettingsView = ({
     setSoundNotificationEnabled,
     setSelectedSound,
     setCustomSoundPath,
+    setDefaultMode: onDefaultModeChangeProp,
   });
 
   // Listen for window resize events
@@ -737,6 +744,8 @@ const SettingsView = ({
               onSaveCustomSoundPath={handleSaveCustomSoundPath}
               onTestSound={handleTestSound}
               onBrowseSound={handleBrowseSound}
+              defaultMode={defaultModeProp}
+              onDefaultModeChange={onDefaultModeChangeProp}
             />
           </div>
 

@@ -202,6 +202,10 @@
         "custom": "Custom",
         "reset": "Reset",
         "hint": "Customize the background color of your messages. Leave empty to follow the theme default."
+      },
+      "defaultMode": {
+        "label": "Default Mode",
+        "hint": "Set the default permission mode when the plugin starts. After switching modes at runtime, the next startup will use the last used mode."
       }
     },
     "providers": "Provider Management",

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
+import { AVAILABLE_MODES, type PermissionMode } from '../../ChatInputBox/types';
 
 /** Upward-opening custom select for sound selection (avoids JCEF clipping) */
 const SoundSelectUpward = ({
@@ -90,6 +91,9 @@ export interface BehaviorTabProps {
   onSaveCustomSoundPath?: () => void;
   onTestSound?: () => void;
   onBrowseSound?: () => void;
+  // Default permission mode configuration
+  defaultMode?: PermissionMode;
+  onDefaultModeChange?: (mode: PermissionMode) => void;
 }
 
 const BehaviorTab = ({
@@ -110,6 +114,8 @@ const BehaviorTab = ({
   onSaveCustomSoundPath = () => {},
   onTestSound = () => {},
   onBrowseSound = () => {},
+  defaultMode = 'bypassPermissions',
+  onDefaultModeChange = () => {},
 }: BehaviorTabProps) => {
   const { t } = useTranslation();
 
@@ -312,6 +318,38 @@ const BehaviorTab = ({
             )}
           </div>
         )}
+      </div>
+
+      {/* Default permission mode */}
+      <div className={styles.sendShortcutSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-shield" />
+          <span className={styles.fieldLabel}>{t('settings.basic.defaultMode.label')}</span>
+        </div>
+        <div className={styles.themeGrid}>
+          {AVAILABLE_MODES.map((mode) => (
+            <div
+              key={mode.id}
+              className={`${styles.themeCard} ${defaultMode === mode.id ? styles.active : ''}`}
+              onClick={() => onDefaultModeChange(mode.id)}
+            >
+              {defaultMode === mode.id && (
+                <div className={styles.checkBadge}>
+                  <span className="codicon codicon-check" />
+                </div>
+              )}
+              <div className={styles.themeCardTitle}>
+                <span className={`codicon ${mode.icon}`} style={{ marginRight: '6px' }} />
+                {t(`modes.${mode.id}.label`)}
+              </div>
+              <div className={styles.themeCardDesc}>{t(`modes.${mode.id}.description`)}</div>
+            </div>
+          ))}
+        </div>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.defaultMode.hint')}</span>
+        </small>
       </div>
     </div>
   );

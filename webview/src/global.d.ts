@@ -231,6 +231,11 @@ interface Window {
   updateCommitPrompt?: (json: string) => void;
 
   /**
+   * Update default permission mode from backend
+   */
+  updateDefaultPermissionMode?: (json: string) => void;
+
+  /**
    * Update sound notification configuration
    */
   updateSoundNotificationConfig?: (json: string) => void;

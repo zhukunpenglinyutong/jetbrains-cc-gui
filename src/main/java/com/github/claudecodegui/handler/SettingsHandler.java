@@ -20,6 +20,7 @@ import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -48,6 +49,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
+    private static final String DEFAULT_PERMISSION_MODE_PROPERTY_KEY = "claude.code.default.permission.mode";
     private static final String SEND_SHORTCUT_PROPERTY_KEY = "claude.code.send.shortcut";
 
     private final CodemossSettingsService settingsService = new CodemossSettingsService();
@@ -84,7 +86,10 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_selected_sound",
         "set_custom_sound_path",
         "test_sound",
-        "browse_sound_file"
+        "browse_sound_file",
+        // 默认权限模式配置
+        "get_default_permission_mode",
+        "set_default_permission_mode"
     };
 
     private static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
@@ -228,6 +233,13 @@ public class SettingsHandler extends BaseMessageHandler {
             case "browse_sound_file":
                 handleBrowseSoundFile();
                 return true;
+            // 默认权限模式配置
+            case "get_default_permission_mode":
+                handleGetDefaultPermissionMode();
+                return true;
+            case "set_default_permission_mode":
+                handleSetDefaultPermissionMode(content);
+                return true;
             default:
                 return false;
         }
@@ -238,20 +250,27 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleGetMode() {
         try {
-            String currentMode = "bypassPermissions";  // Default value
+            String currentMode = "bypassPermissions";
 
-            // Prefer getting from session first
-            if (context.getSession() != null) {
+            // 优先从 session 获取
+            if (null != context.getSession()) {
                 String sessionMode = context.getSession().getPermissionMode();
-                if (sessionMode != null && !sessionMode.trim().isEmpty()) {
+                if (null != sessionMode && sessionMode.trim().isEmpty() == false) {
                     currentMode = sessionMode;
                 }
             } else {
-                // If session does not exist, load from persistent storage
-                PropertiesComponent props = PropertiesComponent.getInstance();
-                String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
-                if (savedMode != null && !savedMode.trim().isEmpty()) {
-                    currentMode = savedMode.trim();
+                // session 不存在时，从持久化加载：项目级 last-used > 全局默认 > fallback
+                Project project = context.getProject();
+                if (null != project) {
+                    String savedMode = PropertiesComponent.getInstance(project).getValue(PERMISSION_MODE_PROPERTY_KEY);
+                    if (null != savedMode && savedMode.trim().isEmpty() == false) {
+                        currentMode = savedMode.trim();
+                    } else {
+                        String defaultMode = PropertiesComponent.getInstance().getValue(DEFAULT_PERMISSION_MODE_PROPERTY_KEY);
+                        if (null != defaultMode && defaultMode.trim().isEmpty() == false) {
+                            currentMode = defaultMode.trim();
+                        }
+                    }
                 }
             }
 
@@ -261,7 +280,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 callJavaScript("window.onModeReceived", escapeJs(modeToSend));
             });
         } catch (Exception e) {
-            LOG.error("[SettingsHandler] Failed to get mode: " + e.getMessage(), e);
+            LOG.error("get mode fail:", e);
         }
     }
 
@@ -288,27 +307,76 @@ public class SettingsHandler extends BaseMessageHandler {
 
             // LOG.info("[SettingsHandler] Parsed permission mode: " + mode);
 
-            // Check if session exists
-            if (context.getSession() != null) {
-                // LOG.info("[SettingsHandler] Session exists, setting permission mode...");
+            if (null != context.getSession()) {
                 context.getSession().setPermissionMode(mode);
 
-                // Save permission mode to persistent storage
-                PropertiesComponent props = PropertiesComponent.getInstance();
-                props.setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
-                LOG.info("Saved permission mode to settings: " + mode);
+                // 保存到项目级持久化（每个项目独立记忆）
+                Project project = context.getProject();
+                if (null != project) {
+                    PropertiesComponent.getInstance(project).setValue(PERMISSION_MODE_PROPERTY_KEY, mode);
+                }
+                LOG.info("saved permission mode to project settings: " + mode);
                 com.github.claudecodegui.notifications.ClaudeNotifier.setMode(context.getProject(), mode);
-
-                // Verify that the setting was applied successfully
-                // String currentMode = context.getSession().getPermissionMode();
-                // LOG.info("[SettingsHandler] Session permission mode confirmed: " + currentMode);
-                // LOG.info("[SettingsHandler] Mode update " + (mode.equals(currentMode) ? "SUCCESS" : "FAILED"));
             } else {
-                LOG.warn("[SettingsHandler] WARNING: Session is null! Cannot set permission mode");
+                LOG.warn("session is null, cannot set permission mode");
             }
-            // LOG.info("[SettingsHandler] =============================================");
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set mode: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * @author: Ares
+     * @description: 获取全局默认权限模式，从应用级持久化读取并推送到前端
+     * @time: 2026-03-02 16:00:00
+     */
+    private void handleGetDefaultPermissionMode() {
+        try {
+            String defaultMode = PropertiesComponent.getInstance().getValue(DEFAULT_PERMISSION_MODE_PROPERTY_KEY);
+            String mode = (null != defaultMode && defaultMode.trim().isEmpty() == false)
+                    ? defaultMode.trim() : "bypassPermissions";
+
+            final String modeToSend = mode;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("defaultMode", modeToSend);
+                callJavaScript("window.updateDefaultPermissionMode", escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("get default permission mode fail:", e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("defaultMode", "bypassPermissions");
+                callJavaScript("window.updateDefaultPermissionMode", escapeJs(gson.toJson(response)));
+            });
+        }
+    }
+
+    /**
+     * @author: Ares
+     * @description: 处理设置默认权限模式请求，存储到应用级持久化（全局配置，只影响新项目）
+     * @time: 2026-03-02 15:30:00
+     * @params: [content] 模式字符串或 JSON
+     */
+    private void handleSetDefaultPermissionMode(String content) {
+        try {
+            String mode = content;
+            if (null != content && content.isEmpty() == false) {
+                try {
+                    JsonObject json = gson.fromJson(content, JsonObject.class);
+                    if (json.has("mode")) {
+                        mode = json.get("mode").getAsString();
+                    }
+                } catch (Exception e) {
+                    // content itself is the mode
+                }
+            }
+
+            // 存储到应用级（全局共享），不影响各项目已有的 last-used 模式
+            PropertiesComponent.getInstance().setValue(DEFAULT_PERMISSION_MODE_PROPERTY_KEY, mode);
+            LOG.info("saved default permission mode: " + mode);
+        } catch (Exception e) {
+            LOG.error("set default permission mode fail:", e);
         }
     }
 

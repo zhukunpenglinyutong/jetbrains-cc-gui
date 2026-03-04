@@ -7,6 +7,7 @@ import type { PromptConfig } from '../../../types/prompt';
 import type { ClaudeConfig } from '../ConfigInfoDisplay';
 import type { AlertType } from '../../AlertDialog';
 import type { ToastMessage } from '../../Toast';
+import type { PermissionMode } from '../../ChatInputBox/types';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -35,6 +36,8 @@ export interface SettingsWindowCallbacksDeps {
   setLoading: (loading: boolean) => void;
   setCodexLoading: (loading: boolean) => void;
   setCodexConfigLoading: (loading: boolean) => void;
+  // Default permission mode setter
+  setDefaultMode?: (mode: PermissionMode) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
   setSelectedSound?: (soundId: string) => void;
@@ -232,6 +235,21 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // Default permission mode callback
+    const validModes: PermissionMode[] = ['default', 'plan', 'acceptEdits', 'bypassPermissions'];
+    window.updateDefaultPermissionMode = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        const mode = data.defaultMode;
+        if (mode && validModes.includes(mode)) {
+          d().setDefaultMode?.(mode as PermissionMode);
+          localStorage.setItem('default-permission-mode', mode);
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse default permission mode:', error);
+      }
+    };
+
     // Sound notification config callback
     window.updateSoundNotificationConfig = (jsonStr: string) => {
       try {
@@ -381,6 +399,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_streaming_enabled:');
     sendToJava('get_commit_prompt:');
     sendToJava('get_sound_notification_config:');
+    sendToJava('get_default_permission_mode:');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -404,6 +423,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         window.updateSendShortcut = previousUpdateSendShortcut;
       }
       window.updateCommitPrompt = undefined;
+      window.updateDefaultPermissionMode = undefined;
       window.updateSoundNotificationConfig = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;

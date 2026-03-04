@@ -182,6 +182,10 @@
         "custom": "Personalizado",
         "reset": "Restablecer",
         "hint": "Personalizar el color de fondo de sus mensajes. Dejar vacío para seguir el tema predeterminado."
+      },
+      "defaultMode": {
+        "label": "Modo predeterminado",
+        "hint": "Establecer el modo de permisos predeterminado al iniciar el plugin. Después de cambiar de modo durante la ejecución, el próximo inicio usará el último modo utilizado."
       }
     },
     "providers": "Gestión de proveedores",

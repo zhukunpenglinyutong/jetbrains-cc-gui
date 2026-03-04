@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import AppearanceTab from './AppearanceTab';
 import BehaviorTab from './BehaviorTab';
 import EnvironmentTab from './EnvironmentTab';
+import type { PermissionMode } from '../../ChatInputBox/types';
 
 type BasicTab = 'appearance' | 'behavior' | 'environment';
 
@@ -61,6 +62,9 @@ interface BasicConfigSectionProps {
   onSaveCustomSoundPath?: () => void;
   onTestSound?: () => void;
   onBrowseSound?: () => void;
+  // Default permission mode configuration
+  defaultMode?: PermissionMode;
+  onDefaultModeChange?: (mode: PermissionMode) => void;
 }
 
 const BasicConfigSection = (props: BasicConfigSectionProps) => {
@@ -120,6 +124,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onSaveCustomSoundPath={props.onSaveCustomSoundPath}
           onTestSound={props.onTestSound}
           onBrowseSound={props.onBrowseSound}
+          defaultMode={props.defaultMode}
+          onDefaultModeChange={props.onDefaultModeChange}
         />
       )}
 

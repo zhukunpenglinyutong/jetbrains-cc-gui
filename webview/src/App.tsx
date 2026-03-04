@@ -237,6 +237,14 @@ const App = () => {
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
   // Auto-open file setting
   const [autoOpenFileEnabled, setAutoOpenFileEnabled] = useState(true);
+  // Default permission mode setting (from settings page)
+  const [defaultMode, setDefaultMode] = useState<PermissionMode>(() => {
+    const saved = localStorage.getItem('default-permission-mode');
+    if (saved === 'default' || saved === 'plan' || saved === 'acceptEdits' || saved === 'bypassPermissions') {
+      return saved;
+    }
+    return 'bypassPermissions';
+  });
   // StatusPanel: track whether user manually collapsed; use state to trigger re-render on toggle
   const userCollapsedRef = useRef(false);
   const [, forceStatusUpdate] = useState(0);
@@ -459,7 +467,16 @@ const App = () => {
       let restoredProvider = 'claude';
       let restoredClaudeModel = CLAUDE_MODELS[0].id;
       let restoredCodexModel = CODEX_MODELS[0].id;
+      // Resolve initial permission mode: lastUsed > default > fallback
       let initialPermissionMode: PermissionMode = 'bypassPermissions';
+      const validModes: PermissionMode[] = ['default', 'plan', 'acceptEdits', 'bypassPermissions'];
+      const lastUsedMode = localStorage.getItem('last-used-permission-mode');
+      const defaultPermMode = localStorage.getItem('default-permission-mode');
+      if (lastUsedMode && validModes.includes(lastUsedMode as PermissionMode)) {
+        initialPermissionMode = lastUsedMode as PermissionMode;
+      } else if (defaultPermMode && validModes.includes(defaultPermMode as PermissionMode)) {
+        initialPermissionMode = defaultPermMode as PermissionMode;
+      }
 
       if (saved) {
         const state = JSON.parse(saved);
@@ -495,6 +512,7 @@ const App = () => {
       }
 
       setPermissionMode(initialPermissionMode);
+      setClaudePermissionMode(initialPermissionMode);
 
       // Sync model state to backend on initialization to ensure frontend-backend consistency
       let syncRetryCount = 0;
@@ -502,12 +520,12 @@ const App = () => {
 
       const syncToBackend = () => {
         if (window.sendToJava) {
-          // Sync provider first
+          // Sync provider and model (mode is managed by Java backend per-project)
           sendBridgeEvent('set_provider', restoredProvider);
-          // Then sync the corresponding model
           const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
           sendBridgeEvent('set_model', modelToSync);
-          sendBridgeEvent('set_mode', initialPermissionMode);
+          // Fetch the correct permission mode from backend (resolves: session > project last-used > global default)
+          sendBridgeEvent('get_mode');
         } else {
           // If sendToJava is not ready yet, retry later
           syncRetryCount++;
@@ -971,6 +989,7 @@ const App = () => {
     setPermissionMode(mode);
     setClaudePermissionMode(mode);
     sendBridgeEvent('set_mode', mode);
+    localStorage.setItem('last-used-permission-mode', mode);
   }, []);
 
   /**
@@ -1088,6 +1107,16 @@ const App = () => {
     sendBridgeEvent('set_auto_open_file_enabled', JSON.stringify(payload));
     addToast(enabled ? t('settings.basic.autoOpenFile.enabled') : t('settings.basic.autoOpenFile.disabled'), 'success');
   }, [t, addToast]);
+
+  /**
+   * Handle default permission mode change (from settings page)
+   */
+  const handleDefaultModeChange = useCallback((mode: PermissionMode) => {
+    setDefaultMode(mode);
+    localStorage.setItem('default-permission-mode', mode);
+    // 同步到 Java 后端持久化（全局配置，所有项目共享）
+    sendBridgeEvent('set_default_permission_mode', mode);
+  }, []);
 
   const interruptSession = useCallback(() => {
     // FIX: Reset frontend state immediately without waiting for backend callback
@@ -1675,6 +1704,8 @@ const App = () => {
           onSendShortcutChange={handleSendShortcutChange}
           autoOpenFileEnabled={autoOpenFileEnabled}
           onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+          defaultMode={defaultMode}
+          onDefaultModeChange={handleDefaultModeChange}
         />
       ) : currentView === 'chat' ? (
         <>
