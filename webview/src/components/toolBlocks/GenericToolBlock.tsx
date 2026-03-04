@@ -185,19 +185,24 @@ const extractFilePathFromCommand = (command: string | undefined, workdir?: strin
 };
 
 const pickFilePath = (input: ToolInput, name?: string) => {
-  // First try standard file path fields
-  const standardPath = (input.file_path as string | undefined) ??
-    (input.path as string | undefined) ??
-    (input.target_file as string | undefined) ??
-    (input.notebook_path as string | undefined);
+  // First try standard file path fields (ensure they are strings, not objects)
+  const pathValue = input.path;
+  const filePathValue = input.file_path;
+  const targetFileValue = input.target_file;
+  const notebookPathValue = input.notebook_path;
+
+  const standardPath = (typeof filePathValue === 'string' ? filePathValue : undefined) ??
+    (typeof pathValue === 'string' ? pathValue : undefined) ??
+    (typeof targetFileValue === 'string' ? targetFileValue : undefined) ??
+    (typeof notebookPathValue === 'string' ? notebookPathValue : undefined);
 
   if (standardPath) return standardPath;
 
   // For Codex read or shell_command commands, extract from command string
   const lowerName = (name ?? '').toLowerCase();
-  if ((lowerName === 'read' || lowerName === 'shell_command') && input.command) {
-    const workdir = (input.workdir as string | undefined) ?? undefined;
-    return extractFilePathFromCommand(input.command as string, workdir);
+  if ((lowerName === 'read' || lowerName === 'shell_command') && typeof input.command === 'string') {
+    const workdir = typeof input.workdir === 'string' ? input.workdir : undefined;
+    return extractFilePathFromCommand(input.command, workdir);
   }
 
   return undefined;

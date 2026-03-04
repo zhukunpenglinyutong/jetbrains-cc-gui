@@ -19,8 +19,8 @@ const BashToolBlock = ({ input, result, toolId }: BashToolBlockProps) => {
     return null;
   }
 
-  const command = (input.command as string | undefined) ?? '';
-  const description = (input.description as string | undefined) ?? '';
+  const command = typeof input.command === 'string' ? input.command : '';
+  const description = typeof input.description === 'string' ? input.description : '';
 
   const isDenied = useIsToolDenied(toolId);
 

@@ -124,15 +124,22 @@ function computeLcsDiff(
 
 /**
  * Extract file path from tool input (handles various naming conventions)
+ * Ensures the returned value is a string, not an object (e.g., MCP tool path can be an object)
  */
 function extractFilePath(input: Record<string, unknown>): string | null {
+  const pathValue = input.path;
+  const filePathValue = input.file_path;
+  const targetFileValue = input.target_file;
+  const targetFileValue2 = input.targetFile;
+  const notebookPathValue = input.notebook_path;
+
   return (
-    (input.file_path as string | undefined) ??
-    (input.filePath as string | undefined) ??
-    (input.path as string | undefined) ??
-    (input.target_file as string | undefined) ??
-    (input.targetFile as string | undefined) ??
-    (input.notebook_path as string | undefined) ??
+    (typeof input.filePath === 'string' ? input.filePath : undefined) ??
+    (typeof filePathValue === 'string' ? filePathValue : undefined) ??
+    (typeof pathValue === 'string' ? pathValue : undefined) ??
+    (typeof targetFileValue === 'string' ? targetFileValue : undefined) ??
+    (typeof targetFileValue2 === 'string' ? targetFileValue2 : undefined) ??
+    (typeof notebookPathValue === 'string' ? notebookPathValue : undefined) ??
     null
   );
 }
@@ -142,15 +149,15 @@ function extractFilePath(input: Record<string, unknown>): string | null {
  */
 function extractStrings(input: Record<string, unknown>): { oldString: string; newString: string; replaceAll?: boolean } {
   const oldString =
-    (input.old_string as string | undefined) ??
-    (input.oldString as string | undefined) ??
+    (typeof input.old_string === 'string' ? input.old_string : undefined) ??
+    (typeof input.oldString === 'string' ? input.oldString : undefined) ??
     '';
   const newString =
-    (input.new_string as string | undefined) ??
-    (input.newString as string | undefined) ??
-    (input.content as string | undefined) ?? // Write tool uses 'content'
+    (typeof input.new_string === 'string' ? input.new_string : undefined) ??
+    (typeof input.newString === 'string' ? input.newString : undefined) ??
+    (typeof input.content === 'string' ? input.content : undefined) ?? // Write tool uses 'content'
     '';
-  const replaceAll = input.replace_all as boolean | undefined ?? input.replaceAll as boolean | undefined;
+  const replaceAll = typeof input.replace_all === 'boolean' ? input.replace_all : (typeof input.replaceAll === 'boolean' ? input.replaceAll : undefined);
 
   return { oldString, newString, replaceAll };
 }

@@ -1,5 +1,5 @@
 export const getFileName = (filePath?: string | null) => {
-  if (!filePath) {
+  if (!filePath || typeof filePath !== 'string') {
     return '';
   }
   const segments = filePath.split(/[\\/]/);
@@ -14,8 +14,8 @@ export const formatParamValue = (value: unknown) => {
 };
 
 export const truncate = (text: string, maxLength = 60) => {
-  if (text.length <= maxLength) {
-    return text;
+  if (typeof text !== 'string' || text.length <= maxLength) {
+    return text || '';
   }
   return `${text.substring(0, maxLength)}...`;
 };
