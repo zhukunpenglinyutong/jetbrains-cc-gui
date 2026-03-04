@@ -932,6 +932,41 @@ const App = () => {
     onExecute: executeMessage,
   });
 
+  // Session compact via context menu
+  const handleCompactSession = useCallback(() => {
+    if (!currentSessionId) {
+      addToast(t('session.compactNoSession', 'No active session to compact'), 'warning');
+      return;
+    }
+    sendBridgeEvent('compact_session', JSON.stringify({ sessionId: currentSessionId }));
+    addToast(t('session.compactStarted', 'Compacting session...'), 'info');
+  }, [currentSessionId, addToast, t]);
+
+  // Register compact result callback
+  useEffect(() => {
+    window.onCompactSessionResult = (json: string) => {
+      try {
+        const result = JSON.parse(json);
+        if (result.success) {
+          const savedKB = Math.round((result.originalSize - result.compactedSize) / 1024);
+          addToast(
+            t('session.compactSuccess', 'Session compacted: {{dropped}} entries removed, {{saved}} KB saved', {
+              dropped: result.messagesDropped,
+              saved: savedKB,
+            }),
+            'success'
+          );
+        } else {
+          addToast(
+            t('session.compactFailed', 'Compact failed: {{error}}', { error: result.error }),
+            'error'
+          );
+        }
+      } catch { /* ignore */ }
+    };
+    return () => { delete window.onCompactSessionResult; };
+  }, [addToast, t]);
+
   /**
    * Handle message submission (from ChatInputBox)
    */
@@ -1603,6 +1638,7 @@ const App = () => {
             updateHistoryTitle(currentSessionId, newTitle);
           }
         }}
+        onCompactSession={handleCompactSession}
       />
 
       {currentView === 'settings' ? (

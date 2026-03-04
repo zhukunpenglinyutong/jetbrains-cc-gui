@@ -2,12 +2,14 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.diagnostics.SessionCompactor;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -27,7 +29,8 @@ public class SessionHandler extends BaseMessageHandler {
             "send_message",
             "send_message_with_attachments",
             "interrupt_session",
-            "restart_session"
+            "restart_session",
+            "compact_session"
             // Note: create_new_session should not be handled here; it should be handled by ClaudeSDKToolWindow.createNewSession()
     };
 
@@ -58,6 +61,9 @@ public class SessionHandler extends BaseMessageHandler {
             case "restart_session":
                 LOG.debug("[SessionHandler] 处理: restart_session");
                 handleRestartSession();
+                return true;
+            case "compact_session":
+                handleCompactSession(content);
                 return true;
             default:
                 return false;
@@ -385,5 +391,61 @@ public class SessionHandler extends BaseMessageHandler {
 
         // Default to the project root path
         return projectPath;
+    }
+
+    // =====================================================================
+    // Session compact
+    // =====================================================================
+
+    /**
+     * Manual session compact via context menu.
+     * Shuts down daemon FIRST (Windows file lock!), then compacts, then sends result.
+     */
+    private void handleCompactSession(String content) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                JsonObject json = JsonParser.parseString(content).getAsJsonObject();
+                String sessionId = json.has("sessionId") ? json.get("sessionId").getAsString() : null;
+
+                if (sessionId == null || sessionId.isEmpty()) {
+                    sendCompactResult(null);
+                    return;
+                }
+
+                String cwd = null;
+                var session = context.getSession();
+                if (session != null) {
+                    cwd = session.getCwd();
+                }
+                if (cwd == null || cwd.isEmpty()) {
+                    sendCompactResult(SessionCompactor.CompactResult.error("No working directory available"));
+                    return;
+                }
+
+                // 1. Shutdown daemon FIRST (Windows file lock!)
+                LOG.info("[SessionHandler] Compact: shutting down daemon before compact");
+                context.getClaudeSDKBridge().shutdownDaemon();
+
+                // 2. Wait for daemon cleanup
+                try { Thread.sleep(200); } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                // 3. Compact
+                SessionCompactor.CompactResult result = SessionCompactor.compact(sessionId, cwd);
+
+                // 4. Send result to webview
+                sendCompactResult(result);
+
+            } catch (Exception e) {
+                LOG.error("[SessionHandler] Compact session failed: " + e.getMessage(), e);
+                sendCompactResult(SessionCompactor.CompactResult.error(e.getMessage()));
+            }
+        });
+    }
+
+    private void sendCompactResult(SessionCompactor.CompactResult result) {
+        String json = result != null ? result.toJson() : "{\"success\":false,\"error\":\"No sessionId provided\"}";
+        callJavaScript("window.onCompactSessionResult", escapeJs(json));
     }
 }

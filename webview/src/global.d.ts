@@ -607,4 +607,7 @@ interface Window {
    * Pending loading state before showLoading is registered (for Quick Fix feature)
    */
   __pendingLoadingState?: boolean;
+
+  // Session compact result callback
+  onCompactSessionResult?: (json: string) => void;
 }

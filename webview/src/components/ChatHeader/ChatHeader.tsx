@@ -14,6 +14,8 @@ export interface ChatHeaderProps {
   onSettings: () => void;
   onTitleChange?: (newTitle: string) => void;
   titleEditable?: boolean;
+  onCompactSession?: () => void;
+  isStreaming?: boolean;
 }
 
 export function ChatHeader({
@@ -27,10 +29,14 @@ export function ChatHeader({
   onSettings,
   onTitleChange,
   titleEditable = false,
+  onCompactSession,
+  isStreaming = false,
 }: ChatHeaderProps): React.ReactElement | null {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!titleEditable) {
@@ -82,6 +88,31 @@ export function ChatHeader({
     commitEdit();
   }, [commitEdit]);
 
+  // Context menu on session title (for compact session)
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!onCompactSession) return;
+    e.preventDefault();
+    setContextMenuPos({ x: e.clientX, y: e.clientY });
+  }, [onCompactSession]);
+
+  const handleCompactClick = useCallback(() => {
+    if (isStreaming) return;
+    setContextMenuPos(null);
+    onCompactSession?.();
+  }, [onCompactSession, isStreaming]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!contextMenuPos) return;
+    const handleClick = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenuPos(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [contextMenuPos]);
+
   if (currentView === 'settings') {
     return null;
   }
@@ -115,7 +146,7 @@ export function ChatHeader({
             </button>
           </div>
         ) : (
-          <div className="session-title-wrapper">
+          <div className="session-title-wrapper" onContextMenu={handleContextMenu}>
             <div className="session-title">
               {sessionTitle}
             </div>
@@ -123,6 +154,20 @@ export function ChatHeader({
               <button className="session-title-edit-btn" onClick={startEditing} aria-label="Edit session title">
                 <span className="codicon codicon-edit" />
               </button>
+            )}
+            {contextMenuPos && (
+              <div
+                ref={contextMenuRef}
+                className="session-context-menu"
+                style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
+              >
+                <div className={`session-context-menu-item${isStreaming ? ' disabled' : ''}`} onClick={handleCompactClick}>
+                  <span className="codicon codicon-fold" />
+                  {isStreaming
+                    ? t('session.compactSession', 'Compact Session') + ' (streaming\u2026)'
+                    : t('session.compactSession', 'Compact Session')}
+                </div>
+              </div>
             )}
           </div>
         )}

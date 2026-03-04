@@ -9,6 +9,7 @@ import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.diagnostics.SessionCompactor;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeMessageHandler;
@@ -66,6 +67,28 @@ public class ClaudeSession {
 
     // Permission manager
     private final PermissionManager permissionManager = new PermissionManager();
+
+    // Auto-compact state
+    private volatile boolean autoCompactInProgress = false;
+    private volatile SendParams lastSendParams;
+
+    /** Captures the parameters of the last send() call for auto-compact retry. */
+    private static class SendParams {
+        final String input;
+        final List<Attachment> attachments;
+        final String agentPrompt;
+        final List<String> fileTagPaths;
+        final String requestedPermissionMode;
+
+        SendParams(String input, List<Attachment> attachments, String agentPrompt,
+                   List<String> fileTagPaths, String requestedPermissionMode) {
+            this.input = input;
+            this.attachments = attachments;
+            this.agentPrompt = agentPrompt;
+            this.fileTagPaths = fileTagPaths;
+            this.requestedPermissionMode = requestedPermissionMode;
+        }
+    }
 
     /** Represents a single message in the conversation. */
     public static class Message {
@@ -332,6 +355,9 @@ public class ClaudeSession {
         List<String> fileTagPaths,
         String requestedPermissionMode
     ) {
+        // Save params for auto-compact retry
+        this.lastSendParams = new SendParams(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode);
+
         // Prepare user message
         String normalizedInput = (input != null) ? input.trim() : "";
         Message userMessage = buildUserMessage(normalizedInput, attachments);
@@ -888,13 +914,16 @@ public class ClaudeSession {
         String agentPrompt,
         String effectivePermissionMode
     ) {
+        // Pass auto-compact callback only if not already in progress (prevents infinite loop)
+        Runnable autoCompactCallback = autoCompactInProgress ? null : () -> handleAutoCompact();
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
             project,
             state,
             callbackHandler,
             messageParser,
             messageMerger,
-            gson
+            gson,
+            autoCompactCallback
         );
 
         // Read streaming configuration
@@ -945,6 +974,98 @@ public class ClaudeSession {
                 // NOTE: Idle anonymous runtimes are cleaned up by persistent-query-service's
                 // cleanupStaleAnonymousRuntimes() (ANONYMOUS_RUNTIME_MAX_IDLE_MS = 10min).
                 claudeSDKBridge.prewarmDaemonAsync(state.getCwd());
+            }
+        });
+    }
+
+    /**
+     * Auto-compact session when "Prompt is too long" error is detected.
+     * Compacts the JSONL, restarts the daemon, shows a system message, and retries.
+     */
+    private void handleAutoCompact() {
+        if (autoCompactInProgress) {
+            LOG.warn("[AutoCompact] Already in progress — skipping");
+            return;
+        }
+        autoCompactInProgress = true;
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                String sessionId = state.getSessionId();
+                String cwd = state.getCwd();
+
+                if (sessionId == null || cwd == null) {
+                    LOG.warn("[AutoCompact] No sessionId or cwd — cannot compact");
+                    autoCompactInProgress = false;
+                    return;
+                }
+
+                LOG.info("[AutoCompact] Starting compact for session " + sessionId);
+
+                // 1. Shutdown daemon (clears cached session, releases file lock on Windows)
+                claudeSDKBridge.shutdownDaemon();
+
+                // 2. Wait for daemon cleanup
+                try { Thread.sleep(300); } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                // 3. Compact the JSONL
+                SessionCompactor.CompactResult result = SessionCompactor.compact(sessionId, cwd);
+
+                if (!result.success) {
+                    LOG.warn("[AutoCompact] Compact failed: " + result.error);
+                    state.setBusy(false);
+                    state.setLoading(false);
+                    Message errorMsg = new Message(Message.Type.ERROR,
+                            "Prompt is too long (auto-compact failed: " + result.error + ")");
+                    state.addMessage(errorMsg);
+                    callbackHandler.notifyMessageUpdate(state.getMessages());
+                    callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+                    autoCompactInProgress = false;
+                    return;
+                }
+
+                // 4. Show system message about compaction
+                long savedKB = (result.originalSize - result.compactedSize) / 1024;
+                String compactMsg = "Session compacted: " + result.messagesDropped
+                        + " entries removed, " + savedKB + " KB saved. Retrying...";
+                Message systemMessage = new Message(Message.Type.SYSTEM, compactMsg);
+                state.addMessage(systemMessage);
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+
+                LOG.info("[AutoCompact] " + compactMsg);
+
+                // 5. Small delay for daemon cleanup
+                try { Thread.sleep(200); } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                // 6. Retry with saved params (autoCompactInProgress stays true → retry gets null callback)
+                SendParams params = lastSendParams;
+                if (params != null) {
+                    LOG.info("[AutoCompact] Retrying send...");
+                    send(params.input, params.attachments, params.agentPrompt,
+                            params.fileTagPaths, params.requestedPermissionMode)
+                        .whenComplete((v, ex) -> {
+                            autoCompactInProgress = false;
+                            if (ex != null) {
+                                LOG.warn("[AutoCompact] Retry failed: " + ex.getMessage());
+                            }
+                        });
+                } else {
+                    LOG.warn("[AutoCompact] No saved params for retry");
+                    state.setBusy(false);
+                    state.setLoading(false);
+                    callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+                    autoCompactInProgress = false;
+                }
+            } catch (Exception e) {
+                LOG.error("[AutoCompact] Unexpected error", e);
+                autoCompactInProgress = false;
+                state.setBusy(false);
+                state.setLoading(false);
+                callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             }
         });
     }

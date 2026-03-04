@@ -31,6 +31,9 @@ public class ClaudeMessageHandler implements MessageCallback {
     private final MessageMerger messageMerger;
     private final Gson gson;
 
+    // Auto-compact callback (nullable — null disables interception)
+    private final Runnable onAutoCompactNeeded;
+
     // Content accumulator for the current assistant message
     private final StringBuilder assistantContent = new StringBuilder();
 
@@ -60,12 +63,29 @@ public class ClaudeMessageHandler implements MessageCallback {
         MessageMerger messageMerger,
         Gson gson
     ) {
+        this(project, state, callbackHandler, messageParser, messageMerger, gson, null);
+    }
+
+    /**
+     * Constructor with auto-compact callback.
+     * @param onAutoCompactNeeded called when "Prompt is too long" is detected; null disables interception
+     */
+    public ClaudeMessageHandler(
+        Project project,
+        SessionState state,
+        CallbackHandler callbackHandler,
+        MessageParser messageParser,
+        MessageMerger messageMerger,
+        Gson gson,
+        Runnable onAutoCompactNeeded
+    ) {
         this.project = project;
         this.state = state;
         this.callbackHandler = callbackHandler;
         this.messageParser = messageParser;
         this.messageMerger = messageMerger;
         this.gson = gson;
+        this.onAutoCompactNeeded = onAutoCompactNeeded;
     }
 
     /**
@@ -133,10 +153,31 @@ public class ClaudeMessageHandler implements MessageCallback {
 
     /**
      * Handle an error from the SDK.
+     * If "Prompt is too long" and auto-compact callback is set,
+     * intercept the error and trigger compaction instead of showing it.
      */
     @Override
     public void onError(String error) {
         streamEndedThisTurn = false;
+
+        // Intercept "Prompt is too long" for auto-compact
+        if (onAutoCompactNeeded != null
+                && error != null
+                && error.toLowerCase().contains("prompt is too long")) {
+            LOG.info("[ClaudeMessageHandler] Intercepted 'Prompt is too long' — triggering auto-compact");
+            try {
+                onAutoCompactNeeded.run();
+            } catch (Exception e) {
+                LOG.warn("[ClaudeMessageHandler] Auto-compact callback failed", e);
+                showError(error);
+            }
+            return;
+        }
+
+        showError(error);
+    }
+
+    private void showError(String error) {
         state.setError(error);
         state.setBusy(false);
         state.setLoading(false);
