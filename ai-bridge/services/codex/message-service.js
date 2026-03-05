@@ -19,6 +19,8 @@ import { CodexPermissionMapper } from '../../utils/permission-mapper.js';
 import { randomUUID } from 'crypto';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { join, dirname } from 'path';
+import { spawn } from 'child_process';
+import { createInterface } from 'readline';
 import { getRealHomeDir } from '../../utils/path-utils.js';
 
 // SDK cache
@@ -46,6 +48,93 @@ const logWarn = (tag, ...args) => debugLog(2, tag, ...args);
 const logInfo = (tag, ...args) => debugLog(3, tag, ...args);
 const logDebug = (tag, ...args) => debugLog(4, tag, ...args);
 const logVerbose = (tag, ...args) => debugLog(5, tag, ...args);
+
+// Codex channel mode:
+// - "cli" (default): use local codex executable
+// - "sdk": use @openai/codex-sdk path
+const CODEX_CHANNEL_MODE = (process.env.CLAUDE_CODE_GUI_CODEX_MODE || 'cli')
+  .toLowerCase()
+  .trim();
+
+function shouldUseCodexCli() {
+  return CODEX_CHANNEL_MODE !== 'sdk';
+}
+
+function resolveCodexCliExecutable() {
+  const configuredPath =
+    process.env.CLAUDE_CODE_GUI_CODEX_CLI_PATH || process.env.CODEX_CLI_PATH;
+  const candidates = [];
+
+  if (configuredPath && configuredPath.trim()) {
+    candidates.push(configuredPath.trim());
+  }
+
+  const homeDir = getRealHomeDir();
+  if (homeDir && homeDir.trim()) {
+    candidates.push(join(homeDir, '.local', 'bin', 'codex'));
+  }
+
+  candidates.push('/opt/homebrew/bin/codex', '/usr/local/bin/codex', '/usr/bin/codex', 'codex');
+
+  for (const candidate of candidates) {
+    if (candidate === 'codex') return candidate;
+    if (existsSync(candidate)) return candidate;
+  }
+
+  return 'codex';
+}
+
+function loadCodexProxyEnvFromZshrc() {
+  const proxy = {};
+  const zshrcPath = join(getRealHomeDir(), '.zshrc');
+  if (!existsSync(zshrcPath)) return proxy;
+
+  try {
+    const content = readFileSync(zshrcPath, 'utf8');
+    const blockMatch = content.match(/codex\(\)\s*\{([\s\S]*?)\n\}/m);
+    if (!blockMatch) return proxy;
+
+    const block = blockMatch[1];
+    const vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'];
+    for (const varName of vars) {
+      const reg = new RegExp(`${varName}\\s*=\\s*["']([^"']+)["']`);
+      const m = block.match(reg);
+      if (m?.[1]) {
+        proxy[varName] = m[1].trim();
+      }
+    }
+  } catch (error) {
+    logWarn('CODEX_PROXY_ZSHRC', 'Failed to parse ~/.zshrc codex() proxy block:', error?.message || error);
+  }
+
+  return proxy;
+}
+
+function loadProxyEnvFromClaudeSettings() {
+  const proxy = {};
+  const settingsPath = join(getRealHomeDir(), '.claude', 'settings.json');
+  if (!existsSync(settingsPath)) return proxy;
+
+  try {
+    const content = readFileSync(settingsPath, 'utf8');
+    const parsed = JSON.parse(content);
+    const env = parsed?.env || {};
+    const vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'];
+    for (const varName of vars) {
+      if (typeof env[varName] === 'string' && env[varName].trim()) {
+        proxy[varName] = env[varName].trim();
+      }
+      const lower = varName.toLowerCase();
+      if (typeof env[lower] === 'string' && env[lower].trim()) {
+        proxy[varName] = env[lower].trim();
+      }
+    }
+  } catch (error) {
+    logWarn('CODEX_PROXY_SETTINGS', 'Failed to parse ~/.claude/settings.json proxy env:', error?.message || error);
+  }
+
+  return proxy;
+}
 
 const isReconnectNotice = (message) =>
   typeof message === 'string' && /Reconnecting\.\.\./i.test(message);
@@ -231,6 +320,364 @@ function collectAgentsInstructions(cwd) {
   return instructions.join('\n\n---\n\n');
 }
 
+function buildNoResponseMessage() {
+  return [
+    '\n⚠️ Codex completed tool executions but did not generate a text response.',
+    'This may happen when:',
+    '- The task was purely about gathering information',
+    '- Codex reached maxTurns limit (100 turns)',
+    '- The query required only command execution',
+    '\nPlease try:',
+    '- Asking a more specific question',
+    '- Requesting explicit analysis or explanation',
+    '- Checking the command outputs above for your answer'
+  ].join('\n');
+}
+
+function extractCodexTurnError(event) {
+  if (!event || typeof event !== 'object') return '';
+  if (event.type === 'turn.failed') return event?.error?.message || '';
+  if (event.type === 'error') return event?.message || '';
+  return '';
+}
+
+async function sendMessageViaCodexCli(
+  message,
+  threadId = null,
+  cwd = null,
+  permissionMode = null,
+  model = null,
+  baseUrl = null,
+  apiKey = null,
+  reasoningEffort = 'medium',
+  attachments = []
+) {
+  const normalizedMessage = typeof message === 'string' ? message : String(message ?? '');
+  const emitMessage = (msg) => {
+    console.log('[MESSAGE]', JSON.stringify(msg));
+  };
+
+  const permissionConfig = CodexPermissionMapper.toProvider(permissionMode || 'default');
+  const isResumingThread = !!(threadId && threadId.trim() !== '');
+  let currentThreadId = isResumingThread ? threadId.trim() : '';
+
+  const workingDirectory =
+    cwd && cwd.trim() && existsSync(cwd.trim()) ? cwd.trim() : process.cwd();
+
+  let finalMessage = normalizedMessage;
+  if (!isResumingThread && workingDirectory) {
+    const agentsInstructions = collectAgentsInstructions(workingDirectory);
+    if (agentsInstructions) {
+      finalMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${normalizedMessage}`;
+    }
+  }
+
+  const args = ['exec'];
+  if (isResumingThread) {
+    args.push('resume');
+  }
+
+  if (permissionConfig.skipGitRepoCheck) {
+    args.push('--skip-git-repo-check');
+  }
+  if (!isResumingThread && permissionConfig.sandbox) {
+    args.push('--sandbox', permissionConfig.sandbox);
+  }
+  if (model && model.trim()) {
+    args.push('--model', model.trim());
+  }
+  if (reasoningEffort && reasoningEffort.trim()) {
+    args.push('-c', `model_reasoning_effort="${reasoningEffort.trim()}"`);
+  }
+
+  args.push('--json');
+
+  if (attachments && Array.isArray(attachments)) {
+    for (const attachment of attachments) {
+      if (attachment?.type === 'local_image' && attachment?.path && existsSync(attachment.path)) {
+        args.push('-i', attachment.path);
+      }
+    }
+  }
+
+  if (isResumingThread) {
+    args.push(currentThreadId);
+  }
+  args.push(finalMessage);
+
+  const childEnv = { ...process.env };
+  if (baseUrl && baseUrl.trim()) {
+    childEnv.OPENAI_BASE_URL = baseUrl.trim();
+  }
+  if (apiKey && apiKey.trim()) {
+    childEnv.OPENAI_API_KEY = apiKey.trim();
+  }
+  // Preserve non-interactive behavior via env vars (compatible across codex exec variants).
+  if (!isResumingThread && permissionConfig.sandbox) {
+    childEnv.SANDBOX_MODE = permissionConfig.sandbox;
+  }
+  if (permissionConfig.approvalPolicy) {
+    const approvalPolicyMap = {
+      never: 'never',
+      untrusted: 'untrusted',
+      'on-request': 'on-request',
+      'on-failure': 'on-failure',
+      'auto-edit': 'on-request'
+    };
+    childEnv.APPROVAL_POLICY =
+      approvalPolicyMap[(permissionConfig.approvalPolicy || '').toString().trim()] || 'on-request';
+  }
+
+  const proxyEnvFromSettings = loadProxyEnvFromClaudeSettings();
+  const codexProxyFromZshrc = loadCodexProxyEnvFromZshrc();
+  // Preserve existing process env first; fill missing keys from settings/zshrc.
+  for (const source of [proxyEnvFromSettings, codexProxyFromZshrc]) {
+    for (const [key, value] of Object.entries(source)) {
+      if (!childEnv[key] && !childEnv[key.toLowerCase()]) {
+        childEnv[key] = value;
+        childEnv[key.toLowerCase()] = value;
+      }
+    }
+  }
+
+  console.log('[DEBUG] Codex CLI args:', args);
+  console.log('[DEBUG] Codex CLI cwd:', workingDirectory);
+  console.log('[DEBUG] Codex CLI env:', {
+    hasOpenAIBaseUrl: !!childEnv.OPENAI_BASE_URL,
+    hasOpenAIApiKey: !!childEnv.OPENAI_API_KEY,
+    hasProxy:
+      !!(childEnv.HTTPS_PROXY || childEnv.https_proxy || childEnv.HTTP_PROXY || childEnv.http_proxy || childEnv.ALL_PROXY || childEnv.all_proxy),
+    proxyFromSettings: Object.keys(proxyEnvFromSettings).length > 0,
+    proxyFromZshrc: Object.keys(codexProxyFromZshrc).length > 0
+  });
+  const codexExecutable = resolveCodexCliExecutable();
+  console.log('[DEBUG] Codex CLI executable:', codexExecutable);
+
+  console.log('[MESSAGE_START]');
+
+  const child = spawn(codexExecutable, args, {
+    cwd: workingDirectory,
+    env: childEnv,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  let assistantText = '';
+  let finalResponse = '';
+  let firstError = '';
+  const stderrLines = [];
+  const emittedToolUseIds = new Set();
+
+  const rlOut = child.stdout
+    ? createInterface({ input: child.stdout, crlfDelay: Infinity })
+    : null;
+  const rlErr = child.stderr
+    ? createInterface({ input: child.stderr, crlfDelay: Infinity })
+    : null;
+
+  rlErr?.on('line', (line) => {
+    if (!line) return;
+    stderrLines.push(line);
+    if (stderrLines.length > 40) stderrLines.shift();
+    console.log('[DEBUG][codex-cli][stderr]', line);
+  });
+
+  rlOut?.on('line', (line) => {
+    const trimmed = (line || '').trim();
+    if (!trimmed) return;
+
+    let event;
+    try {
+      event = JSON.parse(trimmed);
+    } catch (_e) {
+      logDebug('CODEX_CLI_JSON', 'Non-JSON stdout line:', trimmed);
+      return;
+    }
+
+    if (event.type === 'thread.started' && event.thread_id) {
+      currentThreadId = event.thread_id;
+      console.log('[THREAD_ID]', currentThreadId);
+      return;
+    }
+
+    if (event.type === 'item.started' && event.item?.type === 'command_execution') {
+      const toolUseId = event.item.id || randomUUID();
+      const command = event.item.command || '';
+      emitMessage({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: toolUseId,
+              name: 'bash',
+              input: {
+                command,
+                description: 'Codex CLI command execution'
+              }
+            }
+          ]
+        }
+      });
+      emittedToolUseIds.add(toolUseId);
+      return;
+    }
+
+    if (event.type === 'item.completed') {
+      const item = event.item || {};
+
+      if (item.type === 'agent_message') {
+        const text = (item.text || '').toString();
+        if (text.trim()) {
+          assistantText += text;
+          finalResponse = text;
+          emitMessage({
+            type: 'assistant',
+            message: {
+              role: 'assistant',
+              content: [{ type: 'text', text }]
+            }
+          });
+        }
+        return;
+      }
+
+      if (item.type === 'command_execution') {
+        const toolUseId = item.id || randomUUID();
+        if (!emittedToolUseIds.has(toolUseId)) {
+          emitMessage({
+            type: 'assistant',
+            message: {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'tool_use',
+                  id: toolUseId,
+                  name: 'bash',
+                  input: {
+                    command: item.command || '',
+                    description: 'Codex CLI command execution'
+                  }
+                }
+              ]
+            }
+          });
+        }
+
+        const output =
+          item.aggregated_output ??
+          item.output ??
+          item.stdout ??
+          item.result ??
+          '(no output)';
+        const isError =
+          (typeof item.exit_code === 'number' && item.exit_code !== 0) || item.is_error === true;
+
+        emitMessage({
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: toolUseId,
+                is_error: isError,
+                content: typeof output === 'string' ? output : JSON.stringify(output)
+              }
+            ]
+          }
+        });
+        return;
+      }
+
+      if (item.type === 'error' && item.message && !firstError) {
+        firstError = item.message;
+      }
+      return;
+    }
+
+    if (event.type === 'turn.completed' && event.usage) {
+      const claudeUsage = {
+        input_tokens: event.usage.input_tokens || 0,
+        output_tokens: event.usage.output_tokens || 0,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: event.usage.cached_input_tokens || 0
+      };
+
+      emitMessage({
+        type: 'result',
+        subtype: 'usage',
+        is_error: false,
+        usage: claudeUsage,
+        session_id: currentThreadId || null,
+        uuid: randomUUID()
+      });
+      return;
+    }
+
+    const eventError = extractCodexTurnError(event);
+    if (eventError) {
+      if (isReconnectNotice(eventError)) {
+        emitStatusMessage(emitMessage, eventError);
+      } else if (!firstError) {
+        firstError = eventError;
+      }
+    }
+  });
+
+  let exitCode = -1;
+  try {
+    exitCode = await new Promise((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', resolve);
+    });
+  } catch (spawnError) {
+    if (spawnError?.code === 'ENOENT') {
+      firstError = `Cannot find codex executable (${codexExecutable}). Set CLAUDE_CODE_GUI_CODEX_CLI_PATH to your codex binary path.`;
+    } else if (!firstError) {
+      firstError = spawnError?.message || String(spawnError);
+    }
+  }
+
+  rlOut?.close();
+  rlErr?.close();
+
+  if (!firstError && exitCode !== 0) {
+    const stderrTail = stderrLines.slice(-8).join('\n').trim();
+    firstError = stderrTail || `codex process exited with code ${exitCode}`;
+  }
+
+  if (firstError) {
+    const payload = buildErrorPayload(new Error(firstError));
+    if (stderrLines.length > 0) {
+      payload.details = payload.details || {};
+      payload.details.cliStderr = stderrLines.slice(-10).join('\n');
+    }
+    console.error('[SEND_ERROR]', JSON.stringify(payload));
+    console.log(JSON.stringify(payload));
+    return;
+  }
+
+  if (assistantText.length === 0) {
+    const noResponseMsg = buildNoResponseMessage();
+    emitMessage({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: noResponseMsg }]
+      }
+    });
+    finalResponse = noResponseMsg;
+  }
+
+  console.log('[MESSAGE_END]');
+  console.log(JSON.stringify({
+    success: true,
+    threadId: currentThreadId || null,
+    result: finalResponse
+  }));
+}
+
 /**
  * Send message to Codex (with optional thread resumption)
  *
@@ -256,6 +703,20 @@ export async function sendMessage(
   attachments = []
 ) {
   try {
+    if (shouldUseCodexCli()) {
+      return await sendMessageViaCodexCli(
+        message,
+        threadId,
+        cwd,
+        permissionMode,
+        model,
+        baseUrl,
+        apiKey,
+        reasoningEffort,
+        attachments
+      );
+    }
+
     console.log('[DEBUG] Codex sendMessage called with params:', {
       threadId,
       cwd,
