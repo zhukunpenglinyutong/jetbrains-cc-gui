@@ -92,9 +92,8 @@ const PLAN_MODE_ALLOWED_TOOLS = new Set([
   // Planning tools
   'TodoWrite', 'Skill', 'TaskOutput',
   'Task', // Allow Task for exploration agents
-  'Write', // Allow Write for writing plan files
-  'Edit', // Allow Edit in plan mode (still gated by permission prompt)
-  'Bash', // Allow Bash in plan mode (still gated by permission prompt)
+  // Note: Write, Edit, Bash are NOT in this set - they are handled separately
+  // in the PreToolUse hook with explicit canUseTool() permission checks
   'AskUserQuestion', // Allow AskUserQuestion for asking user during planning
   'EnterPlanMode', // Allow EnterPlanMode
   'ExitPlanMode', // Allow ExitPlanMode to exit plan mode
@@ -216,8 +215,8 @@ function createPreToolUseHook(permissionMode) {
         return { decision: 'approve' };
       }
 
-      // Edit / Bash: allow in plan mode but still ask user permission (same as default mode behavior)
-      if (toolName === 'Edit' || toolName === 'Bash') {
+      // Edit / Write / Bash: allow in plan mode but still ask user permission (same as default mode behavior)
+      if (toolName === 'Edit' || toolName === 'Write' || toolName === 'Bash') {
         console.log(`[PERM_DEBUG] ${toolName} called in plan mode, requesting permission...`);
         try {
           const result = await canUseTool(toolName, input?.tool_input);

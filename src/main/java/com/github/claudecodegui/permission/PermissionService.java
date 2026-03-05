@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectManager;
 
 import javax.swing.*;
 import java.io.*;
@@ -622,6 +623,52 @@ public class PermissionService {
         }
         // Replace Windows-style backslashes with forward slashes
         return path.replace('\\', '/');
+    }
+
+    /**
+     * Safely normalize a file path by resolving symbolic links and relative components.
+     * Falls back to simple normalization if real path resolution fails.
+     *
+     * @param path the original path
+     * @return the normalized path, or null if the input is null
+     */
+    private String normalizePathSafely(String path) {
+        if (path == null) {
+            return null;
+        }
+        try {
+            return Paths.get(path).toRealPath().toString().replace('\\', '/');
+        } catch (IOException e) {
+            // Fallback: normalize without resolving symlinks
+            try {
+                return Paths.get(path).toAbsolutePath().normalize().toString().replace('\\', '/');
+            } catch (Exception ex) {
+                return normalizePath(path);
+            }
+        }
+    }
+
+    /**
+     * Check if a cwd path is under a project base path.
+     * Uses platform-aware comparison (case-insensitive on Windows).
+     *
+     * @param cwdPath the working directory path (normalized)
+     * @param projectBasePath the project base path (normalized)
+     * @return true if the cwd is under the project
+     */
+    private boolean pathMatches(String cwdPath, String projectBasePath) {
+        if (cwdPath == null || projectBasePath == null) {
+            return false;
+        }
+        boolean isWindows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        String cwd = isWindows ? cwdPath.toLowerCase(Locale.ROOT) : cwdPath;
+        String base = isWindows ? projectBasePath.toLowerCase(Locale.ROOT) : projectBasePath;
+
+        if (cwd.equals(base)) {
+            return true;
+        }
+        String baseWithSep = base.endsWith("/") ? base : base + "/";
+        return cwd.startsWith(baseWithSep);
     }
 
     /**
@@ -1431,18 +1478,38 @@ public class PermissionService {
      */
     private boolean tryDiffReview(JsonObject request, Path requestFile, String fileName,
                                   String requestId, String toolName, JsonObject inputs) {
-        debugLog("DIFF_REVIEW", "File-modifying tool detected: " + toolName + ", attempting diff review");
+        LOG.info("[DIFF_REVIEW] File-modifying tool detected: " + toolName
+                + ", dialogShowers.size=" + this.dialogShowers.size()
+                + ", attempting diff review");
 
         Project matchedProject = findProjectByCwd(request);
+
+        // Retry once if dialogShowers is empty (timing issue: registration may not be complete yet)
+        if (matchedProject == null && this.dialogShowers.isEmpty()) {
+            LOG.info("[DIFF_REVIEW] dialogShowers empty, retrying after 100ms...");
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            matchedProject = findProjectByCwd(request);
+            LOG.info("[DIFF_REVIEW] Retry result: " + (matchedProject != null ? matchedProject.getName() : "null"));
+        }
+
         if (matchedProject == null) {
-            debugLog("DIFF_REVIEW", "No matched project found, falling back to standard dialog");
+            String cwd = request.has("cwd") && !request.get("cwd").isJsonNull()
+                    ? request.get("cwd").getAsString() : "N/A";
+            LOG.info("[DIFF_REVIEW] No matched project found for cwd=" + cwd
+                    + ", dialogShowers.size=" + this.dialogShowers.size()
+                    + ", falling back to standard dialog");
             return false;
         }
 
         CompletableFuture<DiffReviewResult> reviewFuture =
                 DiffReviewService.reviewFileChange(matchedProject, toolName, inputs);
         if (reviewFuture == null) {
-            debugLog("DIFF_REVIEW", "Diff review not available, falling back to standard dialog");
+            LOG.info("[DIFF_REVIEW] Diff review not available for " + toolName
+                    + " on project " + matchedProject.getName() + ", falling back to standard dialog");
             return false;
         }
 
@@ -1496,14 +1563,68 @@ public class PermissionService {
     private Project findProjectByCwd(JsonObject request) {
         PermissionDialogShower shower = findDialogShowerByCwd(request, dialogShowers, "DIFF_REVIEW_MATCH");
         if (shower == null) {
-            return null;
+            // Fallback: try direct project scan
+            return findProjectByPath(request);
         }
         for (Map.Entry<Project, PermissionDialogShower> entry : dialogShowers.entrySet()) {
             if (entry.getValue() == shower) {
                 return entry.getKey();
             }
         }
-        return null;
+        // Fallback: try direct project scan
+        return findProjectByPath(request);
+    }
+
+    /**
+     * Find a Project by scanning all open projects and matching the cwd path.
+     * This is a fallback when dialogShowers-based lookup fails.
+     *
+     * @param request the request data (containing a cwd field)
+     * @return the matched Project, or null if none found
+     */
+    private Project findProjectByPath(JsonObject request) {
+        String cwd = null;
+        if (request.has("cwd") && !request.get("cwd").isJsonNull()) {
+            cwd = request.get("cwd").getAsString();
+        }
+
+        if (cwd == null || cwd.isEmpty()) {
+            LOG.info("[FIND_PROJECT_FALLBACK] No cwd in request, cannot scan projects");
+            return null;
+        }
+
+        String normalizedCwd = normalizePathSafely(cwd);
+        LOG.info("[FIND_PROJECT_FALLBACK] Scanning open projects for cwd: " + normalizedCwd
+                + ", dialogShowers.size=" + this.dialogShowers.size());
+
+        Project[] openProjects = ProjectManager.getInstance().getOpenProjects();
+        Project bestMatch = null;
+        int longestMatchLength = 0;
+
+        for (Project project : openProjects) {
+            if (project.isDisposed()) {
+                continue;
+            }
+            String basePath = project.getBasePath();
+            if (basePath == null) {
+                continue;
+            }
+            String normalizedBasePath = normalizePathSafely(basePath);
+            if (pathMatches(normalizedCwd, normalizedBasePath)) {
+                if (normalizedBasePath.length() > longestMatchLength) {
+                    longestMatchLength = normalizedBasePath.length();
+                    bestMatch = project;
+                }
+            }
+        }
+
+        if (bestMatch != null) {
+            LOG.info("[FIND_PROJECT_FALLBACK] Found project via direct scan: " + bestMatch.getName());
+        } else {
+            LOG.info("[FIND_PROJECT_FALLBACK] No project matched cwd: " + normalizedCwd
+                    + ", openProjects=" + openProjects.length);
+        }
+        return bestMatch;
     }
 
     /**
