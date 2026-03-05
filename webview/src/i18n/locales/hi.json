@@ -206,6 +206,8 @@
       "claudeSdkDescription": "Claude AI सुविधाओं के लिए आवश्यक। Claude Code SDK और संबंधित निर्भरताएं शामिल हैं।",
       "codexSdkName": "Codex SDK",
       "codexSdkDescription": "Codex AI सुविधाओं के लिए आवश्यक। OpenAI Codex SDK शामिल है।",
+      "codexCliName": "Codex CLI",
+      "codexCliDescription": "Codex AI सुविधाओं के लिए वैकल्पिक। स्थानीय codex CLI (@openai/codex) इंस्टॉल करता है।",
       "loading": "निर्भरता स्थिति लोड हो रही है...",
       "install": "इंस्टॉल करें",
       "installing": "इंस्टॉल हो रहा है...",

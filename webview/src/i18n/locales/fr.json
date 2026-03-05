@@ -206,6 +206,8 @@
       "claudeSdkDescription": "Requis pour les fonctionnalités Claude AI. Inclut Claude Code SDK et les dépendances associées.",
       "codexSdkName": "Codex SDK",
       "codexSdkDescription": "Requis pour les fonctionnalités Codex AI. Inclut OpenAI Codex SDK.",
+      "codexCliName": "Codex CLI",
+      "codexCliDescription": "Optionnel pour les fonctionnalités Codex AI. Installe le codex CLI local (@openai/codex).",
       "loading": "Chargement de l'état des dépendances...",
       "install": "Installer",
       "installing": "Installation...",

@@ -4,6 +4,7 @@
  * SDK dependency installation path: ~/.codemoss/dependencies/
  * - claude-sdk: Claude SDK (@anthropic-ai/claude-agent-sdk and its dependencies)
  * - codex-sdk: Codex SDK (@openai/codex-sdk)
+ * - codex-cli: Codex CLI (@openai/codex)
  *
  * Supported operations:
  * - Install/uninstall SDKs
@@ -14,7 +15,7 @@
 /**
  * SDK ID type
  */
-export type SdkId = 'claude-sdk' | 'codex-sdk';
+export type SdkId = 'claude-sdk' | 'codex-sdk' | 'codex-cli';
 
 /**
  * SDK installation status
@@ -155,6 +156,12 @@ export const SDK_DEFINITIONS: SdkDefinition[] = [
     id: 'codex-sdk',
     name: 'Codex SDK',
     description: 'Codex AI 提供商所需。包含 @openai/codex-sdk。',
+    relatedProviders: ['openai'],
+  },
+  {
+    id: 'codex-cli',
+    name: 'Codex CLI',
+    description: 'Codex AI 提供商可选。用于安装本地 codex CLI（@openai/codex）。',
     relatedProviders: ['openai'],
   },
 ];

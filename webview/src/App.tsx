@@ -291,14 +291,16 @@ const App = () => {
   // Determine whether the SDK for the current provider is installed
   const currentSdkInstalled = useMemo(() => {
     if (!sdkStatusLoaded) return false;
-    const providerToSdk: Record<string, string> = {
-      claude: 'claude-sdk',
-      anthropic: 'claude-sdk',
-      bedrock: 'claude-sdk',
-      codex: 'codex-sdk',
-      openai: 'codex-sdk',
-    };
-    const sdkId = providerToSdk[currentProvider] || 'claude-sdk';
+    if (currentProvider === 'codex' || currentProvider === 'openai') {
+      // Codex provider accepts either SDK or CLI backend.
+      const codexSdk = sdkStatus['codex-sdk'];
+      const codexCli = sdkStatus['codex-cli'];
+      const codexSdkInstalled = codexSdk?.status === 'installed' || codexSdk?.installed === true;
+      const codexCliInstalled = codexCli?.status === 'installed' || codexCli?.installed === true;
+      return codexSdkInstalled || codexCliInstalled;
+    }
+
+    const sdkId = 'claude-sdk';
     const status = sdkStatus[sdkId];
     return status?.status === 'installed' || status?.installed === true;
   }, [sdkStatusLoaded, currentProvider, sdkStatus]);

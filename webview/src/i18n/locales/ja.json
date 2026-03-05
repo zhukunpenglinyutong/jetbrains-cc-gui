@@ -206,6 +206,8 @@
       "claudeSdkDescription": "Claude AI機能に必要です。Claude Code SDKと関連依存関係が含まれます。",
       "codexSdkName": "Codex SDK",
       "codexSdkDescription": "Codex AI機能に必要です。OpenAI Codex SDKが含まれます。",
+      "codexCliName": "Codex CLI",
+      "codexCliDescription": "Codex AI機能で任意利用。ローカルの codex CLI（@openai/codex）をインストールします。",
       "loading": "依存関係の状態を読み込み中...",
       "install": "インストール",
       "installing": "インストール中...",

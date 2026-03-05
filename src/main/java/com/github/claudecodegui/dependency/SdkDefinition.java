@@ -26,6 +26,15 @@ public enum SdkDefinition {
         "latest",
         Collections.emptyList(),
         "Codex AI 提供商所需。"
+    ),
+
+    CODEX_CLI(
+        "codex-cli",
+        "Codex CLI",
+        "@openai/codex",
+        "latest",
+        Collections.emptyList(),
+        "Codex AI 提供商可选。用于安装本地 codex CLI。"
     );
 
     private final String id;

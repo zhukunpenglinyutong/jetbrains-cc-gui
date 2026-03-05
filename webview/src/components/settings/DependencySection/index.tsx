@@ -29,6 +29,12 @@ const SDK_DEFINITIONS = [
     description: 'settings.dependency.codexSdkDescription',
     relatedProviders: ['openai'],
   },
+  {
+    id: 'codex-cli' as SdkId,
+    nameKey: 'settings.dependency.codexCliName',
+    description: 'settings.dependency.codexCliDescription',
+    relatedProviders: ['openai'],
+  },
 ];
 
 const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {

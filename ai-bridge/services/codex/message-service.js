@@ -72,6 +72,9 @@ function resolveCodexCliExecutable() {
   const homeDir = getRealHomeDir();
   if (homeDir && homeDir.trim()) {
     candidates.push(join(homeDir, '.local', 'bin', 'codex'));
+    // Dependency manager install location (~/.codemoss/dependencies/codex-cli)
+    candidates.push(join(homeDir, '.codemoss', 'dependencies', 'codex-cli', 'node_modules', '.bin', 'codex'));
+    candidates.push(join(homeDir, '.codemoss', 'dependencies', 'codex-cli', 'node_modules', '.bin', 'codex.cmd'));
   }
 
   candidates.push('/opt/homebrew/bin/codex', '/usr/local/bin/codex', '/usr/bin/codex', 'codex');

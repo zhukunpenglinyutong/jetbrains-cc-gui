@@ -226,6 +226,8 @@
       "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相关依赖。",
       "codexSdkName": "Codex SDK",
       "codexSdkDescription": "Codex AI 功能所需。包含 OpenAI Codex SDK。",
+      "codexCliName": "Codex CLI",
+      "codexCliDescription": "Codex AI 功能可选。用于安装本地 codex CLI（@openai/codex）。",
       "loading": "正在加载依赖状态...",
       "install": "安装",
       "installing": "安装中...",
