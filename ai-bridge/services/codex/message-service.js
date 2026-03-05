@@ -17,7 +17,7 @@
 import { loadCodexSdk, isCodexSdkAvailable } from '../../utils/sdk-loader.js';
 import { CodexPermissionMapper } from '../../utils/permission-mapper.js';
 import { randomUUID } from 'crypto';
-import { existsSync, readFileSync, statSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { getRealHomeDir } from '../../utils/path-utils.js';
 import { getMcpServerTools as getMcpServerToolsImpl } from '../claude/mcp-status/index.js';
@@ -103,6 +103,260 @@ const MAX_AGENTS_MD_BYTES = 32 * 1024;
 
 // AGENTS.md filename search order
 const AGENTS_FILE_NAMES = ['AGENTS.override.md', 'AGENTS.md', 'CLAUDE.md'];
+const SESSION_PATCH_SCAN_MAX_LINES = 2000;
+const SESSION_PATCH_SCAN_MAX_FILES = 5000;
+
+/**
+ * 从 exec_command 参数里提取 apply_patch 文本。
+ */
+function extractPatchFromExecCommand(cmd) {
+  if (typeof cmd !== 'string' || !cmd) {
+    return '';
+  }
+  const begin = cmd.indexOf('*** Begin Patch');
+  const end = cmd.lastIndexOf('*** End Patch');
+  if (begin < 0 || end < begin) {
+    return '';
+  }
+  return cmd.slice(begin, end + '*** End Patch'.length);
+}
+
+/**
+ * 从 response_item payload 里提取 patch 文本。
+ * 支持 function_call(exec_command/apply_patch) 与 custom_tool_call(apply_patch)。
+ */
+function extractPatchFromResponseItemPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const payloadType = payload.type;
+  const name = payload.name;
+
+  if (payloadType === 'custom_tool_call' && name === 'apply_patch') {
+    if (typeof payload.input === 'string') {
+      return payload.input;
+    }
+    if (payload.input && typeof payload.input === 'object') {
+      const patch = payload.input.patch ?? payload.input.input;
+      return typeof patch === 'string' ? patch : '';
+    }
+    return '';
+  }
+
+  if (payloadType !== 'function_call') {
+    return '';
+  }
+
+  if (name === 'apply_patch') {
+    if (typeof payload.arguments === 'string') {
+      try {
+        const args = JSON.parse(payload.arguments);
+        const patch = args?.patch ?? args?.input;
+        return typeof patch === 'string' ? patch : '';
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  }
+
+  if (name !== 'exec_command' || typeof payload.arguments !== 'string') {
+    return '';
+  }
+
+  try {
+    const args = JSON.parse(payload.arguments);
+    return extractPatchFromExecCommand(args?.cmd);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 解析 apply_patch 文本为可复用的编辑操作。
+ */
+function parseApplyPatchToOperations(patchText) {
+  if (typeof patchText !== 'string' || !patchText.trim()) {
+    return [];
+  }
+
+  const lines = patchText.split('\n');
+  const operations = [];
+
+  let currentPath = null;
+  let currentKind = null; // add | update | delete
+  let oldLines = [];
+  let newLines = [];
+  let addFileLines = [];
+
+  const flushUpdate = () => {
+    if (!currentPath || currentKind !== 'update') return;
+    const oldString = oldLines.join('\n');
+    const newString = newLines.join('\n');
+    if (oldString === newString) return;
+    operations.push({
+      filePath: currentPath,
+      kind: currentKind,
+      oldString,
+      newString,
+      toolName: 'edit'
+    });
+  };
+
+  const flushAdd = () => {
+    if (!currentPath || currentKind !== 'add') return;
+    operations.push({
+      filePath: currentPath,
+      kind: currentKind,
+      oldString: '',
+      newString: addFileLines.join('\n'),
+      toolName: 'write'
+    });
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine ?? '';
+
+    if (line.startsWith('*** Update File: ')) {
+      flushUpdate();
+      flushAdd();
+      currentPath = line.slice('*** Update File: '.length).trim();
+      currentKind = 'update';
+      oldLines = [];
+      newLines = [];
+      addFileLines = [];
+      continue;
+    }
+
+    if (line.startsWith('*** Add File: ')) {
+      flushUpdate();
+      flushAdd();
+      currentPath = line.slice('*** Add File: '.length).trim();
+      currentKind = 'add';
+      oldLines = [];
+      newLines = [];
+      addFileLines = [];
+      continue;
+    }
+
+    if (line.startsWith('*** Delete File: ')) {
+      flushUpdate();
+      flushAdd();
+      currentPath = line.slice('*** Delete File: '.length).trim();
+      currentKind = 'delete';
+      oldLines = [];
+      newLines = [];
+      addFileLines = [];
+      continue;
+    }
+
+    if (line.startsWith('*** Move to: ')) {
+      const movedPath = line.slice('*** Move to: '.length).trim();
+      if (movedPath) {
+        currentPath = movedPath;
+      }
+      continue;
+    }
+
+    if (line.startsWith('*** End Patch')) {
+      flushUpdate();
+      flushAdd();
+      currentPath = null;
+      currentKind = null;
+      oldLines = [];
+      newLines = [];
+      addFileLines = [];
+      continue;
+    }
+
+    if (!currentPath || !currentKind) {
+      continue;
+    }
+
+    if (currentKind === 'delete') {
+      continue;
+    }
+
+    if (currentKind === 'add') {
+      if (line.startsWith('+')) {
+        addFileLines.push(line.slice(1));
+      }
+      continue;
+    }
+
+    // update
+    if (line.startsWith('@@')) {
+      flushUpdate();
+      oldLines = [];
+      newLines = [];
+      continue;
+    }
+
+    if (line === '\\ No newline at end of file') {
+      continue;
+    }
+
+    if (line.startsWith('+')) {
+      newLines.push(line.slice(1));
+    } else if (line.startsWith('-')) {
+      oldLines.push(line.slice(1));
+    } else if (line.startsWith(' ')) {
+      const content = line.slice(1);
+      oldLines.push(content);
+      newLines.push(content);
+    }
+  }
+
+  flushUpdate();
+  flushAdd();
+
+  return operations;
+}
+
+/**
+ * 在 ~/.codex/sessions 中查找包含 threadId 的会话文件。
+ */
+function findSessionFileByThreadId(threadId) {
+  if (!threadId || typeof threadId !== 'string') {
+    return null;
+  }
+
+  const sessionsRoot = join(getRealHomeDir(), '.codex', 'sessions');
+  if (!existsSync(sessionsRoot)) {
+    return null;
+  }
+
+  const stack = [sessionsRoot];
+  let visited = 0;
+
+  while (stack.length > 0 && visited < SESSION_PATCH_SCAN_MAX_FILES) {
+    const current = stack.pop();
+    if (!current) continue;
+    visited += 1;
+
+    let entries = [];
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (entry.name.endsWith('.jsonl') && entry.name.includes(threadId)) {
+        return fullPath;
+      }
+    }
+  }
+
+  return null;
+}
 
 /**
  * Find the Git repository root directory.
@@ -446,6 +700,9 @@ export async function sendMessage(
     let assistantText = '';
     const pendingToolUseIdsByCommand = new Map();
     const emittedToolUseIds = new Set();
+    const processedPatchCallIds = new Set();
+    let currentSessionFilePath = null;
+    let sessionLineCursor = 0;
     const reasoningTextCache = new Map();
     let reasoningObserved = false;
 
@@ -510,6 +767,162 @@ export async function sendMessage(
       const id = randomUUID();
       rememberPendingToolUseId(command, id);
       return id;
+    };
+
+    const resolveFilePath = (filePath) => {
+      if (typeof filePath !== 'string' || !filePath.trim()) {
+        return '';
+      }
+      if (filePath.startsWith('/')) {
+        return filePath;
+      }
+      if (cwd && typeof cwd === 'string' && cwd.trim()) {
+        return join(cwd, filePath);
+      }
+      return filePath;
+    };
+
+    const ensureSessionFilePath = () => {
+      if (currentSessionFilePath && existsSync(currentSessionFilePath)) {
+        return currentSessionFilePath;
+      }
+      if (!currentThreadId) {
+        return null;
+      }
+      currentSessionFilePath = findSessionFileByThreadId(currentThreadId);
+      return currentSessionFilePath;
+    };
+
+    const collectPatchOperationsFromSession = () => {
+      const sessionPath = ensureSessionFilePath();
+      if (!sessionPath) {
+        return [];
+      }
+
+      let content = '';
+      try {
+        content = readFileSync(sessionPath, 'utf8');
+      } catch (error) {
+        console.warn('[DEBUG] Failed to read session file:', sessionPath, error?.message || error);
+        return [];
+      }
+
+      if (!content.trim()) {
+        return [];
+      }
+
+      const lines = content.split('\n');
+      const startIndex = sessionLineCursor > 0
+        ? sessionLineCursor
+        : Math.max(0, lines.length - SESSION_PATCH_SCAN_MAX_LINES);
+      const batches = [];
+
+      for (let i = startIndex; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line || !line.trim()) {
+          continue;
+        }
+
+        let parsed;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          continue;
+        }
+
+        if (parsed?.type !== 'response_item' || !parsed.payload) {
+          continue;
+        }
+
+        const payload = parsed.payload;
+        const rawCallId = payload.call_id ?? payload.id ?? `line_${i}`;
+        const callId = String(rawCallId);
+        if (processedPatchCallIds.has(callId)) {
+          continue;
+        }
+
+        const patchText = extractPatchFromResponseItemPayload(payload);
+        if (!patchText) {
+          continue;
+        }
+
+        const operations = parseApplyPatchToOperations(patchText)
+          .map((op) => ({
+            ...op,
+            filePath: resolveFilePath(op.filePath)
+          }))
+          .filter((op) => op.filePath && (op.oldString !== '' || op.newString !== ''));
+
+        processedPatchCallIds.add(callId);
+
+        if (operations.length === 0) {
+          continue;
+        }
+
+        batches.push({ callId, operations });
+      }
+
+      sessionLineCursor = lines.length;
+      return batches;
+    };
+
+    const emitSyntheticPatchOperations = (patchBatches, isError) => {
+      if (!Array.isArray(patchBatches) || patchBatches.length === 0) {
+        return 0;
+      }
+
+      let emittedCount = 0;
+      for (const batch of patchBatches) {
+        if (!batch || !Array.isArray(batch.operations)) {
+          continue;
+        }
+
+        batch.operations.forEach((op, index) => {
+          const toolUseId = `codex_patch_${batch.callId}_${index}`;
+          const toolName = op.toolName === 'write' ? 'write' : 'edit';
+          if (!emittedToolUseIds.has(toolUseId)) {
+            emitMessage({
+              type: 'assistant',
+              message: {
+                role: 'assistant',
+                content: [
+                  {
+                    type: 'tool_use',
+                    id: toolUseId,
+                    name: toolName,
+                    input: {
+                      file_path: op.filePath,
+                      old_string: op.oldString,
+                      new_string: op.newString,
+                      replace_all: false,
+                      source: 'codex_session_patch'
+                    }
+                  }
+                ]
+              }
+            });
+            emittedToolUseIds.add(toolUseId);
+          }
+
+          emitMessage({
+            type: 'user',
+            message: {
+              role: 'user',
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: toolUseId,
+                  is_error: !!isError,
+                  content: isError ? 'Patch apply failed' : 'Patch applied'
+                }
+              ]
+            }
+          });
+          emittedCount += 1;
+        });
+      }
+
+      return emittedCount;
     };
 
     /**
@@ -660,6 +1073,9 @@ export async function sendMessage(
       switch (event.type) {
         case 'thread.started': {
           currentThreadId = event.thread_id;
+          currentSessionFilePath = null;
+          sessionLineCursor = 0;
+          processedPatchCallIds.clear();
           console.log('[THREAD_ID]', currentThreadId);
           break;
         }
@@ -815,6 +1231,26 @@ export async function sendMessage(
                 ]
               }
             });
+          }
+          else if (event.item.type === 'file_change') {
+            const status = event.item.status || 'completed';
+            const isError = status !== 'completed';
+
+            // 打印完整结构，便于后续定位字段差异
+            try {
+              console.log('[DEBUG] file_change raw item:', JSON.stringify(event.item));
+            } catch (error) {
+              console.log('[DEBUG] file_change raw item stringify failed:', error?.message || error);
+            }
+
+            const patchBatches = collectPatchOperationsFromSession();
+            const emitted = emitSyntheticPatchOperations(patchBatches, isError);
+
+            if (emitted > 0) {
+              console.log('[DEBUG] file_change synthesized operations:', emitted);
+            } else {
+              console.log('[DEBUG] file_change: no patch operations found in session log');
+            }
           }
           // Handle MCP tool call completed
           else if (event.item.type === 'mcp_tool_call') {
