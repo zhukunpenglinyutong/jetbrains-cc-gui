@@ -283,32 +283,47 @@ export const CODEX_MODELS: ModelInfo[] = [
   {
     id: 'gpt-5.3-codex',
     label: 'gpt-5.3-codex',
-    description: 'Latest frontier agentic coding model with enhanced capabilities.',
+    description: 'Most capable agentic coding model for Codex.',
   },
   {
-    id: 'gpt-5.3',
-    label: 'gpt-5.3',
-    description: 'Latest frontier model with significant improvements.',
+    id: 'gpt-5-codex',
+    label: 'gpt-5-codex',
+    description: 'GPT-5 variant optimized for agentic coding in Codex.',
   },
   {
     id: 'gpt-5.2-codex',
     label: 'gpt-5.2-codex',
-    description: 'Latest frontier agentic coding model.',
+    description: 'Long-horizon coding model optimized for Codex tasks.',
   },
   {
-    id: 'gpt-5.2',
-    label: 'gpt-5.2',
-    description: 'Latest frontier model with improvements across knowledge.',
+    id: 'gpt-5.1-codex',
+    label: 'gpt-5.1-codex',
+    description: 'GPT-5.1 variant optimized for Codex.',
   },
   {
     id: 'gpt-5.1-codex-max',
     label: 'gpt-5.1-codex-max',
-    description: 'Codex-optimized flagship for deep and fast reasoning.',
+    description: 'Optimized for long-running coding tasks.',
   },
   {
     id: 'gpt-5.1-codex-mini',
     label: 'gpt-5.1-codex-mini',
-    description: 'Optimized for codex. Cheaper, faster, but less capable.',
+    description: 'Smaller Codex model with lower cost and latency.',
+  },
+  {
+    id: 'gpt-5.2',
+    label: 'gpt-5.2',
+    description: 'General GPT-5.2 model for coding and agentic tasks.',
+  },
+  {
+    id: 'gpt-5.1',
+    label: 'gpt-5.1',
+    description: 'General GPT-5.1 reasoning model.',
+  },
+  {
+    id: 'gpt-5',
+    label: 'gpt-5',
+    description: 'Previous GPT-5 model available for coding and reasoning tasks.',
   },
 ];
 

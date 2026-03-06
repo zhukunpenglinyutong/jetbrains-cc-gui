@@ -437,6 +437,10 @@
         "editTitle": "Edit Provider: {{name}}",
         "addDescription": "Configure new Codex provider, will be written to ~/.codex/ directory",
         "editDescription": "Changes will be applied immediately to ~/.codex/ directory",
+        "providerSectionTitle": "Provider",
+        "configSectionTitle": "Config",
+        "authSectionTitle": "Auth",
+        "modelsSectionTitle": "Models",
         "providerName": "Provider Name",
         "providerNamePlaceholder": "e.g., Codex Official",
         "configJson": "Config",
@@ -464,7 +468,11 @@
         "httpsProxy": "e.g., http://127.0.0.1:7890",
         "allProxy": "e.g., socks5://127.0.0.1:7890",
         "noProxy": "e.g., localhost,127.0.0.1,.internal",
-        "proxyHint": "These proxy variables are used only when this plugin launches codex-cli."
+        "proxyHint": "These proxy variables are used only when this plugin launches codex-cli.",
+        "syncLatestModels": "Sync Latest Models",
+        "syncLatestModelsHint": "Update the plugin-level Codex model selector with the latest built-in official model set.",
+        "syncLatestModelsSuccess": "Synced {{count}} latest Codex models",
+        "syncLatestModelsUnavailable": "Model sync is unavailable in the current environment"
       }
     },
     "agent": {

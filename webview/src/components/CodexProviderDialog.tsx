@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CodexProviderConfig } from '../types/provider';
+import { CODEX_MODELS } from './ChatInputBox/types';
+import type { CodexProviderConfig, CodexCustomModel } from '../types/provider';
+import { STORAGE_KEYS, validateCodexCustomModels } from '../types/provider';
 
 interface CodexProviderDialogProps {
   isOpen: boolean;
@@ -19,6 +22,18 @@ export default function CodexProviderDialog({
 }: CodexProviderDialogProps) {
   const { t } = useTranslation();
   const isAdding = !provider;
+  const sectionStyle: CSSProperties = {
+    border: '1px solid var(--idea-border-color, rgba(127,127,127,0.28))',
+    borderRadius: '10px',
+    padding: '14px',
+    marginBottom: '14px',
+    background: 'var(--idea-secondary-bg, rgba(127,127,127,0.06))',
+  };
+  const sectionTitleStyle: CSSProperties = {
+    margin: '0 0 10px 0',
+    fontSize: '13px',
+    fontWeight: 600,
+  };
 
   const [providerName, setProviderName] = useState('');
   const [configTomlJson, setConfigTomlJson] = useState('');
@@ -81,6 +96,38 @@ wire_api = "responses"`);
       setAuthJson(JSON.stringify(parsed, null, 2));
       addToast(t('settings.codexProvider.dialog.formatSuccess'), 'success');
     } catch (e) {
+      addToast(t('settings.codexProvider.dialog.formatError'), 'error');
+    }
+  };
+
+  const handleSyncLatestModels = () => {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) {
+        addToast(t('settings.codexProvider.dialog.syncLatestModelsUnavailable'), 'error');
+        return;
+      }
+      const officialModels: CodexCustomModel[] = CODEX_MODELS.map((model) => ({
+        id: model.id,
+        label: model.label || model.id,
+        description: model.description,
+      }));
+      const stored = window.localStorage.getItem(STORAGE_KEYS.CODEX_CUSTOM_MODELS);
+      const existing = stored ? validateCodexCustomModels(JSON.parse(stored)) : [];
+      const merged = [...officialModels];
+      const knownIds = new Set(officialModels.map((model) => model.id));
+
+      for (const model of existing) {
+        if (!knownIds.has(model.id)) {
+          merged.push(model);
+        }
+      }
+
+      window.localStorage.setItem(STORAGE_KEYS.CODEX_CUSTOM_MODELS, JSON.stringify(merged));
+      window.dispatchEvent(new CustomEvent('localStorageChange', {
+        detail: { key: STORAGE_KEYS.CODEX_CUSTOM_MODELS },
+      }));
+      addToast(t('settings.codexProvider.dialog.syncLatestModelsSuccess', { count: officialModels.length }), 'success');
+    } catch (_error) {
       addToast(t('settings.codexProvider.dialog.formatError'), 'error');
     }
   };
@@ -162,138 +209,155 @@ wire_api = "responses"`);
               : t('settings.codexProvider.dialog.editDescription')}
           </p>
 
-          {/* Provider Name */}
-          <div className="form-group">
-            <label htmlFor="providerName">
-              {t('settings.codexProvider.dialog.providerName')}
-              <span className="required">{t('settings.provider.dialog.required')}</span>
-            </label>
-            <input
-              id="providerName"
-              type="text"
-              className="form-input"
-              placeholder={t('settings.codexProvider.dialog.providerNamePlaceholder')}
-              value={providerName}
-              onChange={(e) => setProviderName(e.target.value)}
-            />
-          </div>
-
-          {/* config.toml JSON */}
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label htmlFor="configTomlJson">
-                config.toml {t('settings.codexProvider.dialog.configJson')}
+          <div style={sectionStyle}>
+            <h4 style={sectionTitleStyle}>{t('settings.codexProvider.dialog.providerSectionTitle')}</h4>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label htmlFor="providerName">
+                {t('settings.codexProvider.dialog.providerName')}
                 <span className="required">{t('settings.provider.dialog.required')}</span>
               </label>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleFormatConfigJson}
-                style={{ padding: '4px 8px', fontSize: '12px' }}
-              >
-                <span className="codicon codicon-symbol-namespace" />
-                {t('settings.codexProvider.dialog.formatJson')}
-              </button>
+              <input
+                id="providerName"
+                type="text"
+                className="form-input"
+                placeholder={t('settings.codexProvider.dialog.providerNamePlaceholder')}
+                value={providerName}
+                onChange={(e) => setProviderName(e.target.value)}
+              />
             </div>
-            <textarea
-              id="configTomlJson"
-              className="form-input code-input"
-              value={configTomlJson}
-              onChange={(e) => setConfigTomlJson(e.target.value)}
-              rows={15}
-              style={{
-                fontFamily: 'var(--idea-editor-font-family, monospace)',
-                fontSize: '12px',
-                lineHeight: '1.5'
-              }}
-            />
-            <small className="form-hint">{t('settings.codexProvider.dialog.configJsonHint')}</small>
           </div>
 
-          {/* auth.json */}
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label htmlFor="authJson">
-                auth.json {t('settings.codexProvider.dialog.authJsonLabel')}
-              </label>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleFormatAuthJson}
-                style={{ padding: '4px 8px', fontSize: '12px' }}
-              >
-                <span className="codicon codicon-symbol-namespace" />
-                {t('settings.codexProvider.dialog.formatJson')}
-              </button>
+          <div style={sectionStyle}>
+            <h4 style={sectionTitleStyle}>{t('settings.codexProvider.dialog.configSectionTitle')}</h4>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label htmlFor="configTomlJson">
+                  config.toml {t('settings.codexProvider.dialog.configJson')}
+                  <span className="required">{t('settings.provider.dialog.required')}</span>
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleFormatConfigJson}
+                  style={{ padding: '4px 8px', fontSize: '12px' }}
+                >
+                  <span className="codicon codicon-symbol-namespace" />
+                  {t('settings.codexProvider.dialog.formatJson')}
+                </button>
+              </div>
+              <textarea
+                id="configTomlJson"
+                className="form-input code-input"
+                value={configTomlJson}
+                onChange={(e) => setConfigTomlJson(e.target.value)}
+                rows={15}
+                style={{
+                  fontFamily: 'var(--idea-editor-font-family, monospace)',
+                  fontSize: '12px',
+                  lineHeight: '1.5'
+                }}
+              />
+              <small className="form-hint">{t('settings.codexProvider.dialog.configJsonHint')}</small>
             </div>
-            <textarea
-              id="authJson"
-              className="form-input code-input"
-              value={authJson}
-              onChange={(e) => setAuthJson(e.target.value)}
-              rows={6}
-              style={{
-                fontFamily: 'var(--idea-editor-font-family, monospace)',
-                fontSize: '12px',
-                lineHeight: '1.5'
-              }}
-            />
-            <small className="form-hint">{t('settings.codexProvider.dialog.authJsonHint')}</small>
           </div>
 
-          {/* Proxy */}
-          <div className="form-group">
-            <label>{t('settings.codexProvider.dialog.proxyTitle')}</label>
+          <div style={sectionStyle}>
+            <h4 style={sectionTitleStyle}>{t('settings.codexProvider.dialog.authSectionTitle')}</h4>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label htmlFor="authJson">
+                  auth.json {t('settings.codexProvider.dialog.authJsonLabel')}
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleFormatAuthJson}
+                  style={{ padding: '4px 8px', fontSize: '12px' }}
+                >
+                  <span className="codicon codicon-symbol-namespace" />
+                  {t('settings.codexProvider.dialog.formatJson')}
+                </button>
+              </div>
+              <textarea
+                id="authJson"
+                className="form-input code-input"
+                value={authJson}
+                onChange={(e) => setAuthJson(e.target.value)}
+                rows={6}
+                style={{
+                  fontFamily: 'var(--idea-editor-font-family, monospace)',
+                  fontSize: '12px',
+                  lineHeight: '1.5'
+                }}
+              />
+              <small className="form-hint">{t('settings.codexProvider.dialog.authJsonHint')}</small>
+            </div>
+          </div>
 
-            <label htmlFor="httpProxy" style={{ marginTop: '8px' }}>
-              HTTP_PROXY
-            </label>
-            <input
-              id="httpProxy"
-              type="text"
-              className="form-input"
-              placeholder={t('settings.codexProvider.dialog.httpProxy')}
-              value={httpProxy}
-              onChange={(e) => setHttpProxy(e.target.value)}
-            />
+          <div style={sectionStyle}>
+            <h4 style={sectionTitleStyle}>{t('settings.codexProvider.dialog.proxyTitle')}</h4>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label htmlFor="httpProxy">HTTP_PROXY</label>
+              <input
+                id="httpProxy"
+                type="text"
+                className="form-input"
+                placeholder={t('settings.codexProvider.dialog.httpProxy')}
+                value={httpProxy}
+                onChange={(e) => setHttpProxy(e.target.value)}
+              />
 
-            <label htmlFor="httpsProxy" style={{ marginTop: '8px' }}>
-              HTTPS_PROXY
-            </label>
-            <input
-              id="httpsProxy"
-              type="text"
-              className="form-input"
-              placeholder={t('settings.codexProvider.dialog.httpsProxy')}
-              value={httpsProxy}
-              onChange={(e) => setHttpsProxy(e.target.value)}
-            />
+              <label htmlFor="httpsProxy" style={{ marginTop: '8px' }}>HTTPS_PROXY</label>
+              <input
+                id="httpsProxy"
+                type="text"
+                className="form-input"
+                placeholder={t('settings.codexProvider.dialog.httpsProxy')}
+                value={httpsProxy}
+                onChange={(e) => setHttpsProxy(e.target.value)}
+              />
 
-            <label htmlFor="allProxy" style={{ marginTop: '8px' }}>
-              ALL_PROXY
-            </label>
-            <input
-              id="allProxy"
-              type="text"
-              className="form-input"
-              placeholder={t('settings.codexProvider.dialog.allProxy')}
-              value={allProxy}
-              onChange={(e) => setAllProxy(e.target.value)}
-            />
+              <label htmlFor="allProxy" style={{ marginTop: '8px' }}>ALL_PROXY</label>
+              <input
+                id="allProxy"
+                type="text"
+                className="form-input"
+                placeholder={t('settings.codexProvider.dialog.allProxy')}
+                value={allProxy}
+                onChange={(e) => setAllProxy(e.target.value)}
+              />
 
-            <label htmlFor="noProxy" style={{ marginTop: '8px' }}>
-              NO_PROXY
-            </label>
-            <input
-              id="noProxy"
-              type="text"
-              className="form-input"
-              placeholder={t('settings.codexProvider.dialog.noProxy')}
-              value={noProxy}
-              onChange={(e) => setNoProxy(e.target.value)}
-            />
+              <label htmlFor="noProxy" style={{ marginTop: '8px' }}>NO_PROXY</label>
+              <input
+                id="noProxy"
+                type="text"
+                className="form-input"
+                placeholder={t('settings.codexProvider.dialog.noProxy')}
+                value={noProxy}
+                onChange={(e) => setNoProxy(e.target.value)}
+              />
 
-            <small className="form-hint">{t('settings.codexProvider.dialog.proxyHint')}</small>
+              <small className="form-hint">{t('settings.codexProvider.dialog.proxyHint')}</small>
+            </div>
+          </div>
+
+          <div style={sectionStyle}>
+            <h4 style={sectionTitleStyle}>{t('settings.codexProvider.dialog.modelsSectionTitle')}</h4>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                <small className="form-hint" style={{ margin: 0 }}>
+                  {t('settings.codexProvider.dialog.syncLatestModelsHint')}
+                </small>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleSyncLatestModels}
+                >
+                  <span className="codicon codicon-sync" />
+                  {t('settings.codexProvider.dialog.syncLatestModels')}
+                </button>
+              </div>
+            </div>
           </div>
 
         </div>

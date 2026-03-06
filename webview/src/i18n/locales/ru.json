@@ -444,6 +444,10 @@
         "editTitle": "Редактировать провайдер: {{name}}",
         "addDescription": "Настройте нового провайдера Codex, данные записываются в ~/.codex/",
         "editDescription": "Изменения будут немедленно применены к ~/.codex/",
+        "providerSectionTitle": "Провайдер",
+        "configSectionTitle": "Конфигурация",
+        "authSectionTitle": "Авторизация",
+        "modelsSectionTitle": "Модели",
         "providerName": "Имя провайдера",
         "providerNamePlaceholder": "например, Codex Official",
         "configJson": "Конфигурация",
@@ -471,7 +475,11 @@
         "httpsProxy": "e.g., http://127.0.0.1:7890",
         "allProxy": "e.g., socks5://127.0.0.1:7890",
         "noProxy": "e.g., localhost,127.0.0.1,.internal",
-        "proxyHint": "These proxy variables are used only when this plugin launches codex-cli."
+        "proxyHint": "These proxy variables are used only when this plugin launches codex-cli.",
+        "syncLatestModels": "Синхронизировать последние модели",
+        "syncLatestModelsHint": "Обновить список выбора моделей Codex в плагине до актуального встроенного официального набора.",
+        "syncLatestModelsSuccess": "Синхронизировано {{count}} последних моделей Codex",
+        "syncLatestModelsUnavailable": "Синхронизация моделей недоступна в текущем окружении"
       }
     },
     "agent": {

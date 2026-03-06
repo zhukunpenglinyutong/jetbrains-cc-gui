@@ -459,6 +459,10 @@
         "editTitle": "编辑供应商: {{name}}",
         "addDescription": "配置新的 Codex 供应商信息，将写入 ~/.codex/ 目录",
         "editDescription": "更新配置后将立即应用到 ~/.codex/ 目录",
+        "providerSectionTitle": "供应商",
+        "configSectionTitle": "配置",
+        "authSectionTitle": "认证",
+        "modelsSectionTitle": "模型",
         "providerName": "供应商名称",
         "providerNamePlaceholder": "例如：Codex 官方",
         "configJson": "配置",
@@ -486,7 +490,11 @@
         "httpsProxy": "例如：http://127.0.0.1:7890",
         "allProxy": "例如：socks5://127.0.0.1:7890",
         "noProxy": "例如：localhost,127.0.0.1,.internal",
-        "proxyHint": "这些代理变量仅在插件启动 codex-cli 时生效。"
+        "proxyHint": "这些代理变量仅在插件启动 codex-cli 时生效。",
+        "syncLatestModels": "同步最新模型",
+        "syncLatestModelsHint": "把插件里的 Codex 模型选择列表同步为当前内置的官方最新模型集合。",
+        "syncLatestModelsSuccess": "已同步 {{count}} 个最新 Codex 模型",
+        "syncLatestModelsUnavailable": "当前环境无法同步模型"
       }
     },
     "agent": {
