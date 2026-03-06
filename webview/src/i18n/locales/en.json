@@ -370,6 +370,14 @@
       "localProviderName": "Local settings.json",
       "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
       "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
+      "snapshotHint": "Switching providers will modify ~/.claude/settings.json. Recommend to 'Save Snapshot' before switching, then you can 'Use Snapshot' anytime to recover your configuration",
+      "saveSnapshot": "Save Snapshot",
+      "restoreSnapshot": "Use Snapshot",
+      "previewSnapshot": "Preview Snapshot",
+      "snapshotTimestamp": "Snapshot Time",
+      "snapshotPreviewTitle": "Snapshot Content Preview",
+      "loadingSnapshot": "Loading snapshot...",
+      "snapshotLoadFailed": "Failed to load snapshot",
       "importDialog": {
         "title": "Import cc-switch Configuration",
         "summary": "Found {{total}} configurations, including",
@@ -722,7 +730,13 @@
     "invalidJsonConfig": "Invalid JSON config format",
     "providerAdded": "Provider added",
     "providerUpdated": "Provider updated",
-    "providerDeleted": "Provider deleted"
+    "providerDeleted": "Provider deleted",
+    "snapshotSaved": "Snapshot saved successfully",
+    "snapshotSaveFailed": "Failed to save snapshot",
+    "snapshotRestored": "Snapshot restored successfully",
+    "snapshotRestoreFailed": "Failed to restore snapshot",
+    "snapshotNotFound": "Snapshot not found",
+    "localProviderSwitchSuccess": "Switched to local settings.json\n\nConfiguration will be read directly from ~/.claude/settings.json and won't be overwritten."
   },
   "config": {
     "clickToCopy": "Click to copy",

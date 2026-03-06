@@ -453,6 +453,25 @@ interface Window {
    */
   updateCurrentCodexConfig?: (json: string) => void;
 
+  // ============================================================================
+  // Provider Snapshot Callbacks
+  // ============================================================================
+
+  /**
+   * Update snapshot info callback - receives snapshot existence and timestamp
+   */
+  updateSnapshotInfo?: (json: string) => void;
+
+  /**
+   * Snapshot saved callback - receives save result with success status and timestamp
+   */
+  onSnapshotSaved?: (json: string) => void;
+
+  /**
+   * Snapshot restored callback - receives restore result with success status
+   */
+  onSnapshotRestored?: (json: string) => void;
+
 // ============================================================================
   // Streaming Callbacks
   // ============================================================================

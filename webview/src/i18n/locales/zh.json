@@ -375,6 +375,14 @@
       "localProviderName": "本地 settings.json",
       "localProviderDescription": "直接使用 ~/.claude/settings.json 配置",
       "localProviderHelp": "使用本地供应商模式时：\n• 插件不会修改您的 ~/.claude/settings.json 文件\n• 您需要手动管理配置\n• 确保文件存在且包含有效的 JSON\n• 适合喜欢手动控制的高级用户",
+      "snapshotHint": "切换供应商会修改 ~/.claude/settings.json，切换前建议先'保存快照'备份配置，之后可随时'使用快照'还原配置",
+      "saveSnapshot": "保存快照",
+      "restoreSnapshot": "使用快照",
+      "previewSnapshot": "预览快照",
+      "snapshotTimestamp": "快照时间",
+      "snapshotPreviewTitle": "快照内容预览",
+      "loadingSnapshot": "加载快照中...",
+      "snapshotLoadFailed": "加载快照失败",
       "importDialog": {
         "title": "导入 cc-switch 配置",
         "summary": "共识别到 {{total}} 个配置，其中",
@@ -727,7 +735,13 @@
     "invalidJsonConfig": "配置 JSON 格式错误，请修正后再保存",
     "providerAdded": "供应商添加成功",
     "providerUpdated": "供应商更新成功",
-    "providerDeleted": "供应商删除成功"
+    "providerDeleted": "供应商删除成功",
+    "snapshotSaved": "快照保存成功",
+    "snapshotSaveFailed": "快照保存失败",
+    "snapshotRestored": "快照恢复成功",
+    "snapshotRestoreFailed": "快照恢复失败",
+    "snapshotNotFound": "快照不存在",
+    "localProviderSwitchSuccess": "已切换到本地 settings.json\n\n配置将直接读取自 ~/.claude/settings.json，不会被覆盖。"
   },
   "config": {
     "clickToCopy": "点击复制",

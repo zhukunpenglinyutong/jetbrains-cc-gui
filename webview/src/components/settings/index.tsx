@@ -104,6 +104,8 @@ const SettingsView = ({
     loading,
     providerDialog,
     deleteConfirm,
+    snapshotInfo,
+    snapshotLoading,
     loadProviders,
     updateProviders,
     updateActiveProvider,
@@ -115,6 +117,12 @@ const SettingsView = ({
     confirmDeleteProvider,
     cancelDeleteProvider,
     syncActiveProviderModelMapping,
+    loadSnapshotInfo,
+    updateSnapshotInfo,
+    handleSaveSnapshot,
+    handleRestoreSnapshot,
+    onSnapshotSaved,
+    onSnapshotRestored,
     setLoading,
   } = useProviderManagement({
     onError: (msg) => showAlert('error', t('common.error'), msg),
@@ -382,6 +390,10 @@ const SettingsView = ({
     updateCurrentCodexConfig,
     cleanupAgentsTimeout,
     cleanupPromptsTimeout,
+    loadSnapshotInfo,
+    updateSnapshotInfo,
+    onSnapshotSaved,
+    onSnapshotRestored,
     showAlert,
     addToast,
     onStreamingEnabledChangeProp,
@@ -752,6 +764,10 @@ const SettingsView = ({
               onEditProvider={handleEditProvider}
               onDeleteProvider={handleDeleteProvider}
               onSwitchProvider={handleSwitchProvider}
+              snapshotInfo={snapshotInfo}
+              snapshotLoading={snapshotLoading}
+              onSaveSnapshot={handleSaveSnapshot}
+              onRestoreSnapshot={handleRestoreSnapshot}
               codexProviders={codexProviders}
               codexLoading={codexLoading}
               onAddCodexProvider={handleAddCodexProvider}

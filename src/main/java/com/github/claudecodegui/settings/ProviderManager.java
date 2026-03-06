@@ -7,15 +7,19 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
@@ -659,5 +663,127 @@ public class ProviderManager {
             return false;
         }
         return LOCAL_SETTINGS_PROVIDER_ID.equals(claude.get("current").getAsString());
+    }
+
+    /**
+     * Save local provider snapshot.
+     * @return snapshot timestamp
+     */
+    public String saveLocalProviderSnapshot() throws IOException {
+        // Read current settings.json
+        JsonObject settings = claudeSettingsManager.readClaudeSettings();
+
+        // Create snapshot object with timestamp
+        JsonObject snapshot = new JsonObject();
+        String timestamp = Instant.now().toString();
+        snapshot.addProperty("timestamp", timestamp);
+        snapshot.add("settings", settings.deepCopy()); // Deep copy to avoid reference
+
+        // Write to snapshot file
+        Path snapshotPath = pathManager.getLocalProviderSnapshotPath();
+        if (!Files.exists(snapshotPath.getParent())) {
+            Files.createDirectories(snapshotPath.getParent());
+        }
+
+        try (FileWriter writer = new FileWriter(snapshotPath.toFile())) {
+            gson.toJson(snapshot, writer);
+            LOG.info("[ProviderManager] Saved local provider snapshot at: " + timestamp);
+        }
+
+        return timestamp;
+    }
+
+    /**
+     * Restore local provider snapshot.
+     * @return true if restore succeeded
+     */
+    public boolean restoreLocalProviderSnapshot() throws IOException {
+        Path snapshotPath = pathManager.getLocalProviderSnapshotPath();
+
+        // Check if snapshot file exists
+        if (!Files.exists(snapshotPath)) {
+            LOG.warn("[ProviderManager] Snapshot file does not exist: " + snapshotPath);
+            return false;
+        }
+
+        try (FileReader reader = new FileReader(snapshotPath.toFile())) {
+            JsonObject snapshot = JsonParser.parseReader(reader).getAsJsonObject();
+
+            // Validate snapshot structure
+            if (!snapshot.has("settings") || snapshot.get("settings").isJsonNull()) {
+                LOG.error("[ProviderManager] Invalid snapshot: missing settings field");
+                return false;
+            }
+
+            // Extract settings and deep copy to avoid reference
+            JsonObject settings = snapshot.getAsJsonObject("settings").deepCopy();
+
+            // Write to settings.json
+            claudeSettingsManager.writeClaudeSettings(settings);
+
+            String timestamp = snapshot.has("timestamp") ? snapshot.get("timestamp").getAsString() : "unknown";
+            LOG.info("[ProviderManager] Restored local provider snapshot from: " + timestamp);
+            return true;
+        } catch (Exception e) {
+            LOG.error("[ProviderManager] Failed to restore snapshot: " + e.getMessage(), e);
+            throw new IOException("Failed to restore snapshot", e);
+        }
+    }
+
+    /**
+     * Get local provider snapshot info.
+     * @return JsonObject with 'exists' and 'timestamp' fields
+     */
+    public JsonObject getLocalProviderSnapshotInfo() throws IOException {
+        JsonObject info = new JsonObject();
+        Path snapshotPath = pathManager.getLocalProviderSnapshotPath();
+
+        // Check if snapshot file exists
+        if (!Files.exists(snapshotPath)) {
+            info.addProperty("exists", false);
+            info.addProperty("timestamp", "");
+            return info;
+        }
+
+        try (FileReader reader = new FileReader(snapshotPath.toFile())) {
+            JsonObject snapshot = JsonParser.parseReader(reader).getAsJsonObject();
+
+            info.addProperty("exists", true);
+            String timestamp = snapshot.has("timestamp") ? snapshot.get("timestamp").getAsString() : "";
+            info.addProperty("timestamp", timestamp);
+
+            return info;
+        } catch (Exception e) {
+            LOG.error("[ProviderManager] Failed to read snapshot info: " + e.getMessage(), e);
+            // Return not exists if file is corrupted
+            info.addProperty("exists", false);
+            info.addProperty("timestamp", "");
+            return info;
+        }
+    }
+
+    /**
+     * Get local provider snapshot content.
+     * @return snapshot file content as formatted JSON string
+     */
+    public String getLocalProviderSnapshotContent() throws IOException {
+        Path snapshotPath = pathManager.getLocalProviderSnapshotPath();
+
+        // Check if snapshot file exists
+        if (!Files.exists(snapshotPath)) {
+            throw new IOException("Snapshot file does not exist");
+        }
+
+        try {
+            // Read the entire file content as string
+            String content = Files.readString(snapshotPath);
+
+            // Parse and re-format to ensure valid JSON with pretty printing
+            JsonObject snapshot = JsonParser.parseString(content).getAsJsonObject();
+            return gson.toJson(snapshot);
+        } catch (Exception e) {
+            LOG.error("[ProviderManager] Failed to read snapshot content: " + e.getMessage(), e);
+            throw new IOException("Failed to read snapshot content: " + e.getMessage(), e);
+        }
     }
 }

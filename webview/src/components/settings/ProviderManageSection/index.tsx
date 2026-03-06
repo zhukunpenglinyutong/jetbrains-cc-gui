@@ -13,6 +13,10 @@ interface ProviderManageSectionProps {
   onEditProvider: (provider: ProviderConfig) => void;
   onDeleteProvider: (provider: ProviderConfig) => void;
   onSwitchProvider: (id: string) => void;
+  snapshotInfo?: { exists: boolean; timestamp: string };
+  snapshotLoading?: boolean;
+  onSaveSnapshot?: () => void;
+  onRestoreSnapshot?: () => void;
   addToast: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   showHeader?: boolean;
 }
@@ -26,6 +30,10 @@ const ProviderManageSection = ({
   onEditProvider,
   onDeleteProvider,
   onSwitchProvider,
+  snapshotInfo,
+  snapshotLoading,
+  onSaveSnapshot,
+  onRestoreSnapshot,
   addToast,
   showHeader = true,
 }: ProviderManageSectionProps) => {
@@ -65,6 +73,10 @@ const ProviderManageSection = ({
           onEdit={onEditProvider}
           onDelete={onDeleteProvider}
           onSwitch={onSwitchProvider}
+          snapshotInfo={snapshotInfo}
+          snapshotLoading={snapshotLoading}
+          onSaveSnapshot={onSaveSnapshot}
+          onRestoreSnapshot={onRestoreSnapshot}
           addToast={addToast}
           emptyState={
             <>
