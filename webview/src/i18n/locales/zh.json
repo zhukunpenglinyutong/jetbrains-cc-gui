@@ -480,7 +480,13 @@
         "modelDescPlaceholder": "模型描述（可选）",
         "modelIdRequired": "请输入模型 ID",
         "modelIdInvalid": "模型 ID 格式无效（仅允许字母、数字、点、连字符、下划线、斜杠和冒号）",
-        "modelIdDuplicate": "模型 ID 已存在"
+        "modelIdDuplicate": "模型 ID 已存在",
+        "proxyTitle": "CLI 代理（可选）",
+        "httpProxy": "例如：http://127.0.0.1:7890",
+        "httpsProxy": "例如：http://127.0.0.1:7890",
+        "allProxy": "例如：socks5://127.0.0.1:7890",
+        "noProxy": "例如：localhost,127.0.0.1,.internal",
+        "proxyHint": "这些代理变量仅在插件启动 codex-cli 时生效。"
       }
     },
     "agent": {

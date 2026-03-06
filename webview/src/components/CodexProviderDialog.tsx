@@ -23,6 +23,10 @@ export default function CodexProviderDialog({
   const [providerName, setProviderName] = useState('');
   const [configTomlJson, setConfigTomlJson] = useState('');
   const [authJson, setAuthJson] = useState('');
+  const [httpProxy, setHttpProxy] = useState('');
+  const [httpsProxy, setHttpsProxy] = useState('');
+  const [allProxy, setAllProxy] = useState('');
+  const [noProxy, setNoProxy] = useState('');
 
   // Initialize form
   useEffect(() => {
@@ -32,6 +36,10 @@ export default function CodexProviderDialog({
         setProviderName(provider.name || '');
         setConfigTomlJson(provider.configToml || '');
         setAuthJson(provider.authJson || '');
+        setHttpProxy(provider.proxy?.HTTP_PROXY || '');
+        setHttpsProxy(provider.proxy?.HTTPS_PROXY || '');
+        setAllProxy(provider.proxy?.ALL_PROXY || '');
+        setNoProxy(provider.proxy?.NO_PROXY || '');
       } else {
         // Add mode - reset with default template
         setProviderName('');
@@ -48,6 +56,10 @@ wire_api = "responses"`);
         setAuthJson(`{
   "OPENAI_API_KEY": ""
 }`);
+        setHttpProxy('');
+        setHttpsProxy('');
+        setAllProxy('');
+        setNoProxy('');
       }
     }
   }, [isOpen, provider]);
@@ -109,6 +121,17 @@ wire_api = "responses"`);
       configToml: configTomlJson.trim(),
       authJson: authJson.trim(),
     };
+
+    const proxyConfig = {
+      HTTP_PROXY: httpProxy.trim(),
+      HTTPS_PROXY: httpsProxy.trim(),
+      ALL_PROXY: allProxy.trim(),
+      NO_PROXY: noProxy.trim(),
+    };
+    const hasProxyConfig = Object.values(proxyConfig).some((v) => v.length > 0);
+    if (hasProxyConfig) {
+      providerData.proxy = proxyConfig;
+    }
 
     onSave(providerData);
     onClose();
@@ -216,6 +239,61 @@ wire_api = "responses"`);
               }}
             />
             <small className="form-hint">{t('settings.codexProvider.dialog.authJsonHint')}</small>
+          </div>
+
+          {/* Proxy */}
+          <div className="form-group">
+            <label>{t('settings.codexProvider.dialog.proxyTitle')}</label>
+
+            <label htmlFor="httpProxy" style={{ marginTop: '8px' }}>
+              HTTP_PROXY
+            </label>
+            <input
+              id="httpProxy"
+              type="text"
+              className="form-input"
+              placeholder={t('settings.codexProvider.dialog.httpProxy')}
+              value={httpProxy}
+              onChange={(e) => setHttpProxy(e.target.value)}
+            />
+
+            <label htmlFor="httpsProxy" style={{ marginTop: '8px' }}>
+              HTTPS_PROXY
+            </label>
+            <input
+              id="httpsProxy"
+              type="text"
+              className="form-input"
+              placeholder={t('settings.codexProvider.dialog.httpsProxy')}
+              value={httpsProxy}
+              onChange={(e) => setHttpsProxy(e.target.value)}
+            />
+
+            <label htmlFor="allProxy" style={{ marginTop: '8px' }}>
+              ALL_PROXY
+            </label>
+            <input
+              id="allProxy"
+              type="text"
+              className="form-input"
+              placeholder={t('settings.codexProvider.dialog.allProxy')}
+              value={allProxy}
+              onChange={(e) => setAllProxy(e.target.value)}
+            />
+
+            <label htmlFor="noProxy" style={{ marginTop: '8px' }}>
+              NO_PROXY
+            </label>
+            <input
+              id="noProxy"
+              type="text"
+              className="form-input"
+              placeholder={t('settings.codexProvider.dialog.noProxy')}
+              value={noProxy}
+              onChange={(e) => setNoProxy(e.target.value)}
+            />
+
+            <small className="form-hint">{t('settings.codexProvider.dialog.proxyHint')}</small>
           </div>
 
         </div>

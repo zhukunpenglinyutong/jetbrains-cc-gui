@@ -453,7 +453,13 @@
         "modelDescPlaceholder": "Model description (optional)",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "proxyTitle": "CLI Proxy (Optional)",
+        "httpProxy": "e.g., http://127.0.0.1:7890",
+        "httpsProxy": "e.g., http://127.0.0.1:7890",
+        "allProxy": "e.g., socks5://127.0.0.1:7890",
+        "noProxy": "e.g., localhost,127.0.0.1,.internal",
+        "proxyHint": "These proxy variables are used only when this plugin launches codex-cli."
       }
     },
     "agent": {

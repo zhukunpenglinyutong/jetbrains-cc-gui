@@ -65,6 +65,13 @@ public class CodexSettingsManager {
     }
 
     /**
+     * Get path to plugin-managed proxy config.
+     */
+    public Path getProxyJsonPath() {
+        return codexDir.resolve("ccg-proxy.json");
+    }
+
+    /**
      * Read config.toml as a map structure
      * Returns null if file doesn't exist
      */
@@ -163,8 +170,66 @@ public class CodexSettingsManager {
             }
         }
 
+        // Sync optional proxy configuration used by plugin-launched codex-cli
+        applyProxyConfig(extractProxyConfig(provider));
+
         String providerId = provider.has("id") ? provider.get("id").getAsString() : "unknown";
         LOG.info("[CodexSettingsManager] Applied provider to ~/.codex: " + providerId);
+    }
+
+    /**
+     * Extract proxy env values from provider JSON.
+     */
+    private JsonObject extractProxyConfig(JsonObject provider) {
+        JsonObject normalized = new JsonObject();
+        if (provider == null || !provider.has("proxy") || !provider.get("proxy").isJsonObject()) {
+            return normalized;
+        }
+
+        JsonObject proxy = provider.getAsJsonObject("proxy");
+        copyProxyValue(proxy, normalized, "HTTP_PROXY");
+        copyProxyValue(proxy, normalized, "HTTPS_PROXY");
+        copyProxyValue(proxy, normalized, "ALL_PROXY");
+        copyProxyValue(proxy, normalized, "NO_PROXY");
+        return normalized;
+    }
+
+    private void copyProxyValue(JsonObject source, JsonObject target, String key) {
+        if (source == null || target == null || key == null) {
+            return;
+        }
+
+        String value = null;
+        if (source.has(key) && source.get(key).isJsonPrimitive()) {
+            value = source.get(key).getAsString();
+        } else {
+            String lower = key.toLowerCase();
+            if (source.has(lower) && source.get(lower).isJsonPrimitive()) {
+                value = source.get(lower).getAsString();
+            }
+        }
+
+        if (value != null) {
+            String trimmed = value.trim();
+            if (!trimmed.isEmpty()) {
+                target.addProperty(key, trimmed);
+            }
+        }
+    }
+
+    /**
+     * Write or remove ~/.codex/ccg-proxy.json based on provider proxy settings.
+     */
+    private void applyProxyConfig(JsonObject proxyConfig) throws IOException {
+        Path proxyPath = getProxyJsonPath();
+        if (proxyConfig == null || proxyConfig.size() == 0) {
+            Files.deleteIfExists(proxyPath);
+            LOG.info("[CodexSettingsManager] Cleared proxy config: " + proxyPath);
+            return;
+        }
+
+        writeStringAtomically(proxyPath, gson.toJson(proxyConfig));
+        LOG.info("[CodexSettingsManager] Wrote proxy config to: " + proxyPath);
     }
 
     /**

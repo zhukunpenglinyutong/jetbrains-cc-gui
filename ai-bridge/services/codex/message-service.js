@@ -139,6 +139,31 @@ function loadProxyEnvFromClaudeSettings() {
   return proxy;
 }
 
+function loadProxyEnvFromCodexConfig() {
+  const proxy = {};
+  const proxyPath = join(getRealHomeDir(), '.codex', 'ccg-proxy.json');
+  if (!existsSync(proxyPath)) return proxy;
+
+  try {
+    const content = readFileSync(proxyPath, 'utf8');
+    const parsed = JSON.parse(content);
+    const vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'];
+    for (const varName of vars) {
+      if (typeof parsed?.[varName] === 'string' && parsed[varName].trim()) {
+        proxy[varName] = parsed[varName].trim();
+      }
+      const lower = varName.toLowerCase();
+      if (typeof parsed?.[lower] === 'string' && parsed[lower].trim()) {
+        proxy[varName] = parsed[lower].trim();
+      }
+    }
+  } catch (error) {
+    logWarn('CODEX_PROXY_CCG', 'Failed to parse ~/.codex/ccg-proxy.json proxy env:', error?.message || error);
+  }
+
+  return proxy;
+}
+
 const isReconnectNotice = (message) =>
   typeof message === 'string' && /Reconnecting\.\.\./i.test(message);
 
@@ -431,10 +456,11 @@ async function sendMessageViaCodexCli(
       approvalPolicyMap[(permissionConfig.approvalPolicy || '').toString().trim()] || 'on-request';
   }
 
+  const proxyEnvFromCodexConfig = loadProxyEnvFromCodexConfig();
   const proxyEnvFromSettings = loadProxyEnvFromClaudeSettings();
   const codexProxyFromZshrc = loadCodexProxyEnvFromZshrc();
   // Preserve existing process env first; fill missing keys from settings/zshrc.
-  for (const source of [proxyEnvFromSettings, codexProxyFromZshrc]) {
+  for (const source of [proxyEnvFromCodexConfig, proxyEnvFromSettings, codexProxyFromZshrc]) {
     for (const [key, value] of Object.entries(source)) {
       if (!childEnv[key] && !childEnv[key.toLowerCase()]) {
         childEnv[key] = value;
@@ -450,6 +476,7 @@ async function sendMessageViaCodexCli(
     hasOpenAIApiKey: !!childEnv.OPENAI_API_KEY,
     hasProxy:
       !!(childEnv.HTTPS_PROXY || childEnv.https_proxy || childEnv.HTTP_PROXY || childEnv.http_proxy || childEnv.ALL_PROXY || childEnv.all_proxy),
+    proxyFromCodexConfig: Object.keys(proxyEnvFromCodexConfig).length > 0,
     proxyFromSettings: Object.keys(proxyEnvFromSettings).length > 0,
     proxyFromZshrc: Object.keys(codexProxyFromZshrc).length > 0
   });

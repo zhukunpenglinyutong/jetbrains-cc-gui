@@ -108,6 +108,7 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
             remark: providerData.remark,
             configToml: providerData.configToml,
             authJson: providerData.authJson,
+            proxy: providerData.proxy,
             customModels: providerData.customModels,
           },
         };
