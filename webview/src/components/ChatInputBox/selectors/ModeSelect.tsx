@@ -18,18 +18,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const modeOptions = useMemo(() => {
-    if (provider === 'codex') {
-      // Codex only has three modes: default, agent, auto (filter out plan mode)
-      return AVAILABLE_MODES.filter((mode) => mode.id !== 'plan').map((mode) => {
-        if (mode.id === 'default' || mode.id === 'acceptEdits') {
-          return { ...mode, disabled: true };
-        }
-        return mode;
-      });
-    }
-    return AVAILABLE_MODES;
-  }, [provider]);
+  const modeOptions = useMemo(() => AVAILABLE_MODES, []);
 
   const currentMode = modeOptions.find(m => m.id === value) || modeOptions[0];
 
@@ -55,8 +44,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   /**
    * Select mode
    */
-  const handleSelect = useCallback((mode: PermissionMode, disabled?: boolean) => {
-    if (disabled) return; // Disabled options cannot be selected
+  const handleSelect = useCallback((mode: PermissionMode) => {
     onChange(mode);
     setIsOpen(false);
   }, [onChange]);
@@ -117,13 +105,9 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
           {modeOptions.map((mode) => (
             <div
               key={mode.id}
-              className={`selector-option ${mode.id === value ? 'selected' : ''} ${mode.disabled ? 'disabled' : ''}`}
-              onClick={() => handleSelect(mode.id, mode.disabled)}
+              className={`selector-option ${mode.id === value ? 'selected' : ''}`}
+              onClick={() => handleSelect(mode.id)}
               title={getModeText(mode.id, 'tooltip')}
-              style={{
-                opacity: mode.disabled ? 0.5 : 1,
-                cursor: mode.disabled ? 'not-allowed' : 'pointer',
-              }}
             >
               <span className={`codicon ${mode.icon}`} />
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
