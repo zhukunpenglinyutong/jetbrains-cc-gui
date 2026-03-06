@@ -21,7 +21,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -38,6 +40,8 @@ public class DependencyManager {
     private static final String DEPS_DIR_NAME = "dependencies";
     private static final String MANIFEST_FILE = "manifest.json";
     private static final String INSTALLED_MARKER = ".installed";
+    private static final String CODEX_CLI_ID = "codex-cli";
+    private static final Pattern SEMVER_PATTERN = Pattern.compile("v?(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)");
 
     private final Gson gson;
     private final NodeDetector nodeDetector;
@@ -87,6 +91,31 @@ public class DependencyManager {
             return false;
         }
 
+        if (CODEX_CLI_ID.equals(sdkId)) {
+            if (isManagedInstalled(sdkId, sdk)) {
+                return true;
+            }
+            return probeLocalCodexCli().found;
+        }
+
+        return isManagedInstalled(sdkId, sdk);
+    }
+
+    /**
+     * Checks whether an SDK is installed in the plugin-managed dependencies directory.
+     */
+    private boolean isManagedInstalled(String sdkId) {
+        SdkDefinition sdk = SdkDefinition.fromId(sdkId);
+        if (sdk == null) {
+            return false;
+        }
+        return isManagedInstalled(sdkId, sdk);
+    }
+
+    /**
+     * Checks whether an SDK is installed in the plugin-managed dependencies directory.
+     */
+    private boolean isManagedInstalled(String sdkId, SdkDefinition sdk) {
         // Check if the main package exists in node_modules
         Path packageDir = getPackageDir(sdkId, sdk.getNpmPackage());
         if (!Files.exists(packageDir)) {
@@ -150,7 +179,19 @@ public class DependencyManager {
      */
     public String getInstalledVersion(String sdkId) {
         SdkDefinition sdk = SdkDefinition.fromId(sdkId);
-        if (sdk == null || !isInstalled(sdkId)) {
+        if (sdk == null) {
+            return null;
+        }
+
+        if (CODEX_CLI_ID.equals(sdkId)) {
+            if (isManagedInstalled(sdkId, sdk)) {
+                return getInstalledVersionFromPackage(sdkId, sdk.getNpmPackage());
+            }
+            CodexCliProbeResult probe = probeLocalCodexCli();
+            return probe.found ? probe.version : null;
+        }
+
+        if (!isManagedInstalled(sdkId, sdk)) {
             return null;
         }
 
@@ -467,12 +508,36 @@ public class DependencyManager {
      */
     public JsonObject getAllSdkStatus() {
         JsonObject result = new JsonObject();
+        CodexCliProbeResult localCodexCli = null;
 
         for (SdkDefinition sdk : SdkDefinition.values()) {
             JsonObject status = new JsonObject();
-            boolean installed = isInstalled(sdk.getId());
+            String sdkId = sdk.getId();
+            boolean managedInstalled = isManagedInstalled(sdkId, sdk);
+            boolean installed = managedInstalled;
+            String installedVersion = null;
 
-            status.addProperty("id", sdk.getId());
+            if (CODEX_CLI_ID.equals(sdkId)) {
+                if (!managedInstalled) {
+                    if (localCodexCli == null) {
+                        localCodexCli = probeLocalCodexCli();
+                    }
+                    installed = localCodexCli.found;
+                    installedVersion = localCodexCli.version;
+                    if (localCodexCli.found && localCodexCli.executablePath != null) {
+                        status.addProperty("installPath", localCodexCli.executablePath);
+                    }
+                } else {
+                    installedVersion = getInstalledVersionFromPackage(sdkId, sdk.getNpmPackage());
+                    status.addProperty("installPath", getSdkDir(sdkId).toString());
+                }
+                status.addProperty("managedByPlugin", managedInstalled);
+            } else if (managedInstalled) {
+                installedVersion = getInstalledVersionFromPackage(sdkId, sdk.getNpmPackage());
+                status.addProperty("installPath", getSdkDir(sdkId).toString());
+            }
+
+            status.addProperty("id", sdkId);
             status.addProperty("name", sdk.getDisplayName());
             status.addProperty("description", sdk.getDescription());
             status.addProperty("npmPackage", sdk.getNpmPackage());
@@ -480,16 +545,201 @@ public class DependencyManager {
             // Add the status field for frontend consumption
             status.addProperty("status", installed ? "installed" : "not_installed");
 
-            if (installed) {
-                String version = getInstalledVersion(sdk.getId());
-                status.addProperty("installedVersion", version);
-                status.addProperty("version", version); // Also add the version field
+            if (installed && installedVersion != null && !installedVersion.isEmpty()) {
+                status.addProperty("installedVersion", installedVersion);
+                status.addProperty("version", installedVersion); // Also add the version field
             }
 
-            result.add(sdk.getId(), status);
+            result.add(sdkId, status);
         }
 
         return result;
+    }
+
+    /**
+     * Probe local codex executable from configured/common paths and PATH lookup.
+     */
+    private CodexCliProbeResult probeLocalCodexCli() {
+        Set<String> candidates = new LinkedHashSet<>();
+
+        // Highest priority: explicit environment configuration
+        addCliCandidate(candidates, System.getenv("CLAUDE_CODE_GUI_CODEX_CLI_PATH"));
+        addCliCandidate(candidates, System.getenv("CODEX_CLI_PATH"));
+
+        String home = PlatformUtils.getHomeDirectory();
+        if (home != null && !home.isBlank()) {
+            addCliCandidate(candidates, Paths.get(home, ".local", "bin", "codex").toString());
+            addCliCandidate(candidates, Paths.get(home, ".codemoss", "dependencies", CODEX_CLI_ID, "node_modules", ".bin", "codex").toString());
+            addCliCandidate(candidates, Paths.get(home, ".codemoss", "dependencies", CODEX_CLI_ID, "node_modules", ".bin", "codex.cmd").toString());
+            if (PlatformUtils.isWindows()) {
+                addCliCandidate(candidates, Paths.get(home, "AppData", "Roaming", "npm", "codex.cmd").toString());
+            }
+        }
+
+        if (!PlatformUtils.isWindows()) {
+            addCliCandidate(candidates, "/opt/homebrew/bin/codex");
+            addCliCandidate(candidates, "/usr/local/bin/codex");
+            addCliCandidate(candidates, "/usr/bin/codex");
+        }
+
+        addCliCandidate(candidates, resolveCodexFromPath());
+        addCliCandidate(candidates, PlatformUtils.isWindows() ? "codex.cmd" : "codex");
+        addCliCandidate(candidates, "codex");
+
+        for (String rawCandidate : candidates) {
+            String candidate = expandHomePath(rawCandidate);
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+
+            boolean bareCommand = isBareCommand(candidate);
+            if (!bareCommand) {
+                File f = new File(candidate);
+                if (!f.exists() || f.isDirectory()) {
+                    continue;
+                }
+                if (!PlatformUtils.isWindows() && !Files.isExecutable(f.toPath())) {
+                    continue;
+                }
+            }
+
+            String version = detectCliVersion(candidate);
+            if (version != null) {
+                return CodexCliProbeResult.found(candidate, version);
+            }
+
+            if (!bareCommand) {
+                // Executable exists but version detection failed; still treat it as installed.
+                return CodexCliProbeResult.found(candidate, null);
+            }
+        }
+
+        return CodexCliProbeResult.notFound();
+    }
+
+    private void addCliCandidate(Set<String> candidates, String value) {
+        if (value != null && !value.isBlank()) {
+            candidates.add(value.trim());
+        }
+    }
+
+    private String expandHomePath(String path) {
+        if (path == null || path.isBlank()) {
+            return path;
+        }
+        if ("~".equals(path) || path.startsWith("~/") || path.startsWith("~\\")) {
+            String home = PlatformUtils.getHomeDirectory();
+            if (home != null && !home.isBlank()) {
+                if ("~".equals(path)) {
+                    return home;
+                }
+                return home + path.substring(1);
+            }
+        }
+        return path;
+    }
+
+    private boolean isBareCommand(String command) {
+        return !command.contains("/") && !command.contains("\\");
+    }
+
+    private String resolveCodexFromPath() {
+        List<String> command = new ArrayList<>();
+        if (PlatformUtils.isWindows()) {
+            command.add("where");
+            command.add("codex");
+        } else {
+            command.add("which");
+            command.add("codex");
+        }
+
+        String output = runCommand(command, 3);
+        if (output == null || output.isBlank()) {
+            return null;
+        }
+
+        String[] lines = output.split("\\R");
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (!trimmed.isEmpty()) {
+                return trimmed;
+            }
+        }
+
+        return null;
+    }
+
+    private String detectCliVersion(String executable) {
+        List<String> command = new ArrayList<>();
+        command.add(executable);
+        command.add("--version");
+
+        String output = runCommand(command, 5);
+        if (output == null || output.isBlank()) {
+            return null;
+        }
+
+        Matcher matcher = SEMVER_PATTERN.matcher(output);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
+    }
+
+    private String runCommand(List<String> command, int timeoutSeconds) {
+        Process process = null;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            process = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append('\n');
+                }
+            }
+
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return null;
+            }
+
+            if (process.exitValue() != 0) {
+                return null;
+            }
+
+            return output.toString().trim();
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+    }
+
+    private static final class CodexCliProbeResult {
+        private final boolean found;
+        private final String executablePath;
+        private final String version;
+
+        private CodexCliProbeResult(boolean found, String executablePath, String version) {
+            this.found = found;
+            this.executablePath = executablePath;
+            this.version = version;
+        }
+
+        private static CodexCliProbeResult found(String executablePath, String version) {
+            return new CodexCliProbeResult(true, executablePath, version);
+        }
+
+        private static CodexCliProbeResult notFound() {
+            return new CodexCliProbeResult(false, null, null);
+        }
     }
 
     /**
