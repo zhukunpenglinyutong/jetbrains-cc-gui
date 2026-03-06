@@ -1119,6 +1119,10 @@
       "gpt52": {
         "label": "gpt-5.2",
         "description": "ज्ञान में सुधार के साथ नवीनतम फ्रंटियर मॉडल।"
+      },
+      "gpt54": {
+        "label": "gpt-5.4",
+        "description": "Latest GPT-5.4 model available in Codex."
       }
     },
     "syncLatest": "Sync Latest Models",

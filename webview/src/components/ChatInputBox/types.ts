@@ -281,6 +281,11 @@ export const CLAUDE_MODELS: ModelInfo[] = [
  */
 export const CODEX_MODELS: ModelInfo[] = [
   {
+    id: 'gpt-5.4',
+    label: 'gpt-5.4',
+    description: 'Latest GPT-5.4 model available in Codex.',
+  },
+  {
     id: 'gpt-5.3-codex',
     label: 'gpt-5.3-codex',
     description: 'Most capable agentic coding model for Codex.',

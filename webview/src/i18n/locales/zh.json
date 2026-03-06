@@ -1221,6 +1221,10 @@
       "gpt52": {
         "label": "gpt-5.2",
         "description": "最新前沿模型，知识储备全面提升"
+      },
+      "gpt54": {
+        "label": "gpt-5.4",
+        "description": "Codex 中可用的最新 GPT-5.4 模型。"
       }
     },
     "syncLatest": "同步最新模型",

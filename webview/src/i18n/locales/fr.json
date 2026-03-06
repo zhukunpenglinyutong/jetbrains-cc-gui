@@ -1120,6 +1120,10 @@
       "gpt52": {
         "label": "gpt-5.2",
         "description": "Dernier modèle de pointe avec des améliorations en connaissances."
+      },
+      "gpt54": {
+        "label": "gpt-5.4",
+        "description": "Latest GPT-5.4 model available in Codex."
       }
     },
     "syncLatest": "Sync Latest Models",

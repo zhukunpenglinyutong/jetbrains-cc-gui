@@ -258,7 +258,9 @@ export const ButtonArea = ({
           onAgentSelect={onAgentSelect}
           onOpenAgentSettings={onOpenAgentSettings}
         />
-        <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
+        {currentProvider === 'claude' && (
+          <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
+        )}
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} onAddModel={onAddModel} />
         {currentProvider === 'codex' && (
           <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} />
