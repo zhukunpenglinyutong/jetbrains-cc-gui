@@ -47,11 +47,13 @@ public class ProviderHandler extends BaseMessageHandler {
             // Codex provider operations
             "get_codex_providers",
             "get_current_codex_config",
+            "get_codex_proxy_config",
             "add_codex_provider",
             "update_codex_provider",
             "delete_codex_provider",
             "switch_codex_provider",
-            "get_active_codex_provider"
+            "get_active_codex_provider",
+            "save_codex_proxy_config"
     };
 
     public ProviderHandler(HandlerContext context) {
@@ -110,6 +112,9 @@ public class ProviderHandler extends BaseMessageHandler {
             case "get_current_codex_config":
                 handleGetCurrentCodexConfig();
                 return true;
+            case "get_codex_proxy_config":
+                handleGetCodexProxyConfig();
+                return true;
             case "add_codex_provider":
                 handleAddCodexProvider(content);
                 return true;
@@ -124,6 +129,9 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "get_active_codex_provider":
                 handleGetActiveCodexProvider();
+                return true;
+            case "save_codex_proxy_config":
+                handleSaveCodexProxyConfig(content);
                 return true;
             default:
                 return false;
@@ -673,6 +681,23 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
+     * Get plugin-managed Codex proxy configuration.
+     */
+    private void handleGetCodexProxyConfig() {
+        try {
+            JsonObject proxy = context.getSettingsService().getCodexProxyConfig();
+            Gson gson = new Gson();
+            String proxyJson = gson.toJson(proxy);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateCodexProxyConfig", escapeJs(proxyJson));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to get Codex proxy config: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Add Codex provider
      */
     private void handleAddCodexProvider(String content) {
@@ -816,6 +841,31 @@ public class ProviderHandler extends BaseMessageHandler {
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to get active Codex provider: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Save plugin-managed Codex proxy configuration.
+     */
+    private void handleSaveCodexProxyConfig(String content) {
+        try {
+            Gson gson = new Gson();
+            JsonObject proxy = (content == null || content.trim().isEmpty())
+                    ? new JsonObject()
+                    : gson.fromJson(content, JsonObject.class);
+
+            context.getSettingsService().saveCodexProxyConfig(proxy);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                handleGetCodexProxyConfig();
+                callJavaScript("window.showSuccessI18n", escapeJs("settings.codexProvider.proxy.saved"));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to save Codex proxy config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                handleGetCodexProxyConfig();
+                callJavaScript("window.showError", escapeJs("Failed to save Codex proxy config: " + e.getMessage()));
+            });
         }
     }
 }

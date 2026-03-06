@@ -795,6 +795,32 @@ public class CodemossSettingsService {
         return codexProviderManager.getCurrentCodexConfig();
     }
 
+    public JsonObject getCodexProxyConfig() throws IOException {
+        JsonObject savedProxy = codexSettingsManager.readProxyConfig();
+        if (savedProxy != null && savedProxy.size() > 0) {
+            JsonObject result = savedProxy.deepCopy();
+            result.addProperty("source", "global");
+            return result;
+        }
+
+        JsonObject activeProvider = codexProviderManager.getActiveCodexProvider();
+        if (activeProvider != null && activeProvider.has("proxy") && activeProvider.get("proxy").isJsonObject()) {
+            JsonObject legacyProxy = codexSettingsManager.normalizeProxyConfig(activeProvider.getAsJsonObject("proxy"));
+            if (legacyProxy.size() > 0) {
+                legacyProxy.addProperty("source", "legacy-provider");
+                return legacyProxy;
+            }
+        }
+
+        JsonObject empty = new JsonObject();
+        empty.addProperty("source", "global");
+        return empty;
+    }
+
+    public void saveCodexProxyConfig(JsonObject proxyConfig) throws IOException {
+        codexSettingsManager.writeProxyConfig(proxyConfig);
+    }
+
     public int saveCodexProviders(List<JsonObject> providers) throws IOException {
         return codexProviderManager.saveProviders(providers);
     }

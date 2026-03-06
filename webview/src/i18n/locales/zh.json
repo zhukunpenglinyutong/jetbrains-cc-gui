@@ -495,6 +495,15 @@
         "syncLatestModelsHint": "把插件里的 Codex 模型选择列表同步为当前内置的官方最新模型集合。",
         "syncLatestModelsSuccess": "已同步 {{count}} 个最新 Codex 模型",
         "syncLatestModelsUnavailable": "当前环境无法同步模型"
+      },
+      "proxy": {
+        "title": "CLI 代理",
+        "description": "单独配置仅用于插件启动 codex-cli 时的代理变量，不再依赖创建供应商。",
+        "save": "保存代理",
+        "clear": "清空",
+        "saved": "Codex 代理设置已保存",
+        "legacySource": "旧版供应商代理",
+        "legacyHint": "这些值来自当前启用供应商里的旧版代理字段。点击“保存代理”后会迁移到独立的 Codex 代理配置。"
       }
     },
     "agent": {
@@ -956,7 +965,7 @@
     "runCommand": "运行命令",
     "contextEngine": "上下文引擎",
     "task": "任务",
-    "promptLabel": "提示词 (Prompt)",
+    "promptLabel": "提示词",
     "readFile": "读取文件",
     "editFile": "编辑文件",
     "writeFile": "写入文件",
@@ -992,7 +1001,6 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
-    "promptLabel": "提示词",
     "updatePlan": "更新计划"
   },
   "todo": {
@@ -1214,7 +1222,10 @@
         "label": "gpt-5.2",
         "description": "最新前沿模型，知识储备全面提升"
       }
-    }
+    },
+    "syncLatest": "同步最新模型",
+    "syncLatestSuccess": "已同步 {{count}} 个最新 Codex 模型",
+    "syncLatestUnavailable": "当前环境无法同步模型"
   },
   "modes": {
     "default": {

@@ -468,6 +468,15 @@
         "syncLatestModelsHint": "Update the plugin-level Codex model selector with the latest built-in official model set.",
         "syncLatestModelsSuccess": "Synced {{count}} latest Codex models",
         "syncLatestModelsUnavailable": "Model sync is unavailable in the current environment"
+      },
+      "proxy": {
+        "title": "CLI Proxy",
+        "description": "Configure proxy variables used only when this plugin launches codex-cli.",
+        "save": "Save Proxy",
+        "clear": "Clear",
+        "saved": "Codex proxy settings saved",
+        "legacySource": "Legacy Provider Proxy",
+        "legacyHint": "These values were loaded from the active provider's legacy proxy fields. Click Save Proxy to migrate them into the standalone Codex proxy config."
       }
     },
     "agent": {
@@ -890,8 +899,7 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed",
-    "promptLabel": "प्रॉम्प्ट"
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "{{completed}}/{{total}} कार्य प्रगति में",
@@ -1112,7 +1120,10 @@
         "label": "gpt-5.2",
         "description": "ज्ञान में सुधार के साथ नवीनतम फ्रंटियर मॉडल।"
       }
-    }
+    },
+    "syncLatest": "Sync Latest Models",
+    "syncLatestSuccess": "Synced {{count}} latest Codex models",
+    "syncLatestUnavailable": "Model sync is unavailable in the current environment"
   },
   "modes": {
     "default": {

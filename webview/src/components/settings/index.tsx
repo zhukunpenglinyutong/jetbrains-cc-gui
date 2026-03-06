@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CodexProviderConfig } from '../../types/provider';
+import type { CodexProviderConfig, CodexProxyConfig } from '../../types/provider';
 import { type ClaudeConfig } from './ConfigInfoDisplay';
 import type { AlertType } from '../AlertDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
@@ -210,6 +210,10 @@ const SettingsView = ({
   // Current Claude CLI configuration (from ~/.claude/settings.json)
   const [claudeConfig, setClaudeConfig] = useState<ClaudeConfig | null>(null);
   const [claudeConfigLoading, setClaudeConfigLoading] = useState(false);
+  const [codexProxyConfig, setCodexProxyConfig] = useState<CodexProxyConfig>({});
+  const [codexProxyLoading, setCodexProxyLoading] = useState(true);
+  const [codexProxySaving, setCodexProxySaving] = useState(false);
+  const [codexProxySource, setCodexProxySource] = useState<'global' | 'legacy-provider'>('global');
 
   // Sidebar responsive state
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -363,6 +367,9 @@ const SettingsView = ({
     setLoading,
     setCodexLoading,
     setCodexConfigLoading,
+    setCodexProxyConfig,
+    setCodexProxyLoading,
+    setCodexProxySource,
     updateProviders,
     updateActiveProvider,
     loadProviders,
@@ -390,6 +397,23 @@ const SettingsView = ({
     setSelectedSound,
     setCustomSoundPath,
   });
+
+  useEffect(() => {
+    if (!codexProxyLoading) {
+      setCodexProxySaving(false);
+    }
+  }, [codexProxyLoading]);
+
+  const handleSaveCodexProxyConfig = useCallback((config: CodexProxyConfig) => {
+    setCodexProxySaving(true);
+    setCodexProxyLoading(true);
+    sendToJava(`save_codex_proxy_config:${JSON.stringify({
+      HTTP_PROXY: config.HTTP_PROXY?.trim() || '',
+      HTTPS_PROXY: config.HTTPS_PROXY?.trim() || '',
+      ALL_PROXY: config.ALL_PROXY?.trim() || '',
+      NO_PROXY: config.NO_PROXY?.trim() || '',
+    })}`);
+  }, []);
 
   // Listen for window resize events
   useEffect(() => {
@@ -754,10 +778,15 @@ const SettingsView = ({
               onSwitchProvider={handleSwitchProvider}
               codexProviders={codexProviders}
               codexLoading={codexLoading}
+              codexProxyConfig={codexProxyConfig}
+              codexProxyLoading={codexProxyLoading}
+              codexProxySaving={codexProxySaving}
+              codexProxySource={codexProxySource}
               onAddCodexProvider={handleAddCodexProvider}
               onEditCodexProvider={handleEditCodexProvider}
               onDeleteCodexProvider={handleDeleteCodexProvider}
               onSwitchCodexProvider={handleSwitchCodexProvider}
+              onSaveCodexProxyConfig={handleSaveCodexProxyConfig}
               addToast={addToast}
             />
           </div>

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProviderConfig, CodexProviderConfig } from '../../../types/provider';
+import type { ProviderConfig, CodexProviderConfig, CodexProxyConfig } from '../../../types/provider';
 import { STORAGE_KEYS } from '../../../types/provider';
 import type { ClaudeConfig } from '../ConfigInfoDisplay';
 import ProviderManageSection from '../ProviderManageSection';
@@ -23,10 +23,15 @@ interface ProviderTabSectionProps {
   // Codex provider props
   codexProviders: CodexProviderConfig[];
   codexLoading: boolean;
+  codexProxyConfig: CodexProxyConfig;
+  codexProxyLoading: boolean;
+  codexProxySaving: boolean;
+  codexProxySource: 'global' | 'legacy-provider';
   onAddCodexProvider: () => void;
   onEditCodexProvider: (provider: CodexProviderConfig) => void;
   onDeleteCodexProvider: (provider: CodexProviderConfig) => void;
   onSwitchCodexProvider: (id: string) => void;
+  onSaveCodexProxyConfig: (config: CodexProxyConfig) => void;
   // Shared
   addToast: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
@@ -43,10 +48,15 @@ const ProviderTabSection = ({
   onSwitchProvider,
   codexProviders,
   codexLoading,
+  codexProxyConfig,
+  codexProxyLoading,
+  codexProxySaving,
+  codexProxySource,
   onAddCodexProvider,
   onEditCodexProvider,
   onDeleteCodexProvider,
   onSwitchCodexProvider,
+  onSaveCodexProxyConfig,
   addToast,
 }: ProviderTabSectionProps) => {
   const { t } = useTranslation();
@@ -170,10 +180,15 @@ const ProviderTabSection = ({
         <CodexProviderSection
           codexProviders={codexProviders}
           codexLoading={codexLoading}
+          codexProxyConfig={codexProxyConfig}
+          codexProxyLoading={codexProxyLoading}
+          codexProxySaving={codexProxySaving}
+          codexProxySource={codexProxySource}
           onAddCodexProvider={onAddCodexProvider}
           onEditCodexProvider={onEditCodexProvider}
           onDeleteCodexProvider={onDeleteCodexProvider}
           onSwitchCodexProvider={onSwitchCodexProvider}
+          onSaveCodexProxyConfig={onSaveCodexProxyConfig}
           showHeader={false}
         />
       </div>

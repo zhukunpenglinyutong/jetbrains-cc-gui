@@ -480,6 +480,15 @@
         "syncLatestModelsHint": "Обновить список выбора моделей Codex в плагине до актуального встроенного официального набора.",
         "syncLatestModelsSuccess": "Синхронизировано {{count}} последних моделей Codex",
         "syncLatestModelsUnavailable": "Синхронизация моделей недоступна в текущем окружении"
+      },
+      "proxy": {
+        "title": "CLI Proxy",
+        "description": "Configure proxy variables used only when this plugin launches codex-cli.",
+        "save": "Save Proxy",
+        "clear": "Clear",
+        "saved": "Codex proxy settings saved",
+        "legacySource": "Legacy Provider Proxy",
+        "legacyHint": "These values were loaded from the active provider's legacy proxy fields. Click Save Proxy to migrate them into the standalone Codex proxy config."
       }
     },
     "agent": {
@@ -1138,7 +1147,10 @@
         "label": "gpt-5.2",
         "description": "Новейшая модель с улучшениями знаний."
       }
-    }
+    },
+    "syncLatest": "Sync Latest Models",
+    "syncLatestSuccess": "Synced {{count}} latest Codex models",
+    "syncLatestUnavailable": "Model sync is unavailable in the current environment"
   },
   "modes": {
     "default": {

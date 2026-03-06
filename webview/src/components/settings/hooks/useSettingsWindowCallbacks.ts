@@ -1,7 +1,7 @@
 // hooks/useSettingsWindowCallbacks.ts
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProviderConfig, CodexProviderConfig } from '../../../types/provider';
+import type { ProviderConfig, CodexProviderConfig, CodexProxyConfig } from '../../../types/provider';
 import type { AgentConfig } from '../../../types/agent';
 import type { PromptConfig } from '../../../types/prompt';
 import type { ClaudeConfig } from '../ConfigInfoDisplay';
@@ -35,6 +35,9 @@ export interface SettingsWindowCallbacksDeps {
   setLoading: (loading: boolean) => void;
   setCodexLoading: (loading: boolean) => void;
   setCodexConfigLoading: (loading: boolean) => void;
+  setCodexProxyConfig: (config: CodexProxyConfig) => void;
+  setCodexProxyLoading: (loading: boolean) => void;
+  setCodexProxySource: (source: 'global' | 'legacy-provider') => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
   setSelectedSound?: (soundId: string) => void;
@@ -368,6 +371,23 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    window.updateCodexProxyConfig = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setCodexProxyConfig({
+          HTTP_PROXY: data.HTTP_PROXY || '',
+          HTTPS_PROXY: data.HTTPS_PROXY || '',
+          ALL_PROXY: data.ALL_PROXY || '',
+          NO_PROXY: data.NO_PROXY || '',
+        });
+        d().setCodexProxySource(data.source === 'legacy-provider' ? 'legacy-provider' : 'global');
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse Codex proxy config:', error);
+      } finally {
+        d().setCodexProxyLoading(false);
+      }
+    };
+
     // Initial data loading
     d().loadProviders();
     d().loadCodexProviders();
@@ -381,6 +401,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_streaming_enabled:');
     sendToJava('get_commit_prompt:');
     sendToJava('get_sound_notification_config:');
+    sendToJava('get_codex_proxy_config:');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -416,6 +437,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateCodexProviders = undefined;
       window.updateActiveCodexProvider = undefined;
       window.updateCurrentCodexConfig = undefined;
+      window.updateCodexProxyConfig = undefined;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);

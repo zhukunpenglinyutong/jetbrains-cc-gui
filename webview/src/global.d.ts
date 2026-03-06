@@ -241,6 +241,11 @@ interface Window {
   updateCurrentClaudeConfig?: (json: string) => void;
 
   /**
+   * Update Codex proxy config
+   */
+  updateCodexProxyConfig?: (json: string) => void;
+
+  /**
    * Show error message
    */
   showError?: (message: string) => void;

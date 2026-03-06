@@ -133,7 +133,8 @@ export interface CodexCustomModel {
 }
 
 /**
- * Codex CLI proxy configuration (optional).
+ * Codex CLI proxy configuration.
+ * Stored as standalone plugin-managed settings for codex-cli launches.
  */
 export interface CodexProxyConfig {
   HTTP_PROXY?: string;
@@ -160,7 +161,7 @@ export interface CodexProviderConfig {
   configToml?: string;
   /** auth.json content (raw string) */
   authJson?: string;
-  /** Optional proxy settings used when launching codex-cli */
+  /** Legacy per-provider proxy settings kept for backward compatibility and migration */
   proxy?: CodexProxyConfig;
   /** Custom model list */
   customModels?: CodexCustomModel[];

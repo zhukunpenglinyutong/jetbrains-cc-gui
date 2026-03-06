@@ -4,6 +4,7 @@ import { Claude, OpenAI, Gemini } from '@lobehub/icons';
 import { AVAILABLE_MODELS } from '../types';
 import type { ModelInfo } from '../types';
 import { STORAGE_KEYS } from '../../../types/provider';
+import { syncLatestCodexModels } from '../../../utils/codexModelSync';
 
 interface ModelSelectProps {
   value: string;
@@ -157,6 +158,19 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
     setIsOpen(false);
   }, [onChange]);
 
+  const handleSyncLatestModels = useCallback(() => {
+    try {
+      const result = syncLatestCodexModels();
+      if (result.ok) {
+        window.addToast?.(t('models.syncLatestSuccess', { count: result.count }), 'success');
+      } else {
+        window.addToast?.(t('models.syncLatestUnavailable'), 'error');
+      }
+    } catch {
+      window.addToast?.(t('models.syncLatestUnavailable'), 'error');
+    }
+  }, [t]);
+
   /**
    * Close on outside click
    */
@@ -228,16 +242,27 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
               )}
             </div>
           ))}
-          {onAddModel && (
+          {(currentProvider === 'codex' || onAddModel) && (
             <>
               <div className="selector-divider" />
-              <div
-                className="selector-option selector-option-add"
-                onClick={() => { onAddModel(); setIsOpen(false); }}
-              >
-                <span className="codicon codicon-add selector-add-icon" />
-                <span>{t('models.addModel')}</span>
-              </div>
+              {currentProvider === 'codex' && (
+                <div
+                  className="selector-option selector-option-add"
+                  onClick={handleSyncLatestModels}
+                >
+                  <span className="codicon codicon-sync selector-add-icon" />
+                  <span>{t('models.syncLatest')}</span>
+                </div>
+              )}
+              {onAddModel && (
+                <div
+                  className="selector-option selector-option-add"
+                  onClick={() => { onAddModel(); setIsOpen(false); }}
+                >
+                  <span className="codicon codicon-add selector-add-icon" />
+                  <span>{t('models.addModel')}</span>
+                </div>
+              )}
             </>
           )}
         </div>

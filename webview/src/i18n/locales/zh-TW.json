@@ -473,6 +473,15 @@
         "syncLatestModelsHint": "Update the plugin-level Codex model selector with the latest built-in official model set.",
         "syncLatestModelsSuccess": "Synced {{count}} latest Codex models",
         "syncLatestModelsUnavailable": "Model sync is unavailable in the current environment"
+      },
+      "proxy": {
+        "title": "CLI Proxy",
+        "description": "Configure proxy variables used only when this plugin launches codex-cli.",
+        "save": "Save Proxy",
+        "clear": "Clear",
+        "saved": "Codex proxy settings saved",
+        "legacySource": "Legacy Provider Proxy",
+        "legacyHint": "These values were loaded from the active provider's legacy proxy fields. Click Save Proxy to migrate them into the standalone Codex proxy config."
       }
     },
     "agent": {
@@ -860,7 +869,7 @@
     "runCommand": "運行命令",
     "contextEngine": "上下文引擎",
     "task": "任務",
-    "promptLabel": "提示詞 (Prompt)",
+    "promptLabel": "提示詞",
     "readFile": "讀取文件",
     "editFile": "編輯文件",
     "writeFile": "寫入文件",
@@ -895,8 +904,7 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed",
-    "promptLabel": "提示詞"
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "進行中 {{completed}}/{{total}} 個任務",
@@ -1118,7 +1126,10 @@
         "label": "gpt-5.2",
         "description": "最新前沿模型，知識儲備全面提升"
       }
-    }
+    },
+    "syncLatest": "Sync Latest Models",
+    "syncLatestSuccess": "Synced {{count}} latest Codex models",
+    "syncLatestUnavailable": "Model sync is unavailable in the current environment"
   },
   "modes": {
     "default": {

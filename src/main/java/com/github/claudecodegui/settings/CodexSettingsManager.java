@@ -72,6 +72,57 @@ public class CodexSettingsManager {
     }
 
     /**
+     * Read plugin-managed proxy config.
+     */
+    public JsonObject readProxyConfig() throws IOException {
+        Path proxyPath = getProxyJsonPath();
+        if (!Files.exists(proxyPath)) {
+            LOG.info("[CodexSettingsManager] proxy config not found at: " + proxyPath);
+            return null;
+        }
+
+        try (Reader reader = Files.newBufferedReader(proxyPath, StandardCharsets.UTF_8)) {
+            JsonObject parsed = JsonParser.parseReader(reader).getAsJsonObject();
+            return normalizeProxyConfig(parsed);
+        } catch (Exception e) {
+            LOG.warn("[CodexSettingsManager] Failed to read proxy config: " + e.getMessage());
+            throw new IOException("Failed to read proxy config: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Write or remove plugin-managed proxy config.
+     */
+    public void writeProxyConfig(JsonObject proxyConfig) throws IOException {
+        Path proxyPath = getProxyJsonPath();
+        JsonObject normalized = normalizeProxyConfig(proxyConfig);
+        if (normalized.size() == 0) {
+            Files.deleteIfExists(proxyPath);
+            LOG.info("[CodexSettingsManager] Cleared proxy config: " + proxyPath);
+            return;
+        }
+
+        writeStringAtomically(proxyPath, gson.toJson(normalized));
+        LOG.info("[CodexSettingsManager] Wrote proxy config to: " + proxyPath);
+    }
+
+    /**
+     * Normalize proxy env values to uppercase keys.
+     */
+    public JsonObject normalizeProxyConfig(JsonObject source) {
+        JsonObject normalized = new JsonObject();
+        if (source == null) {
+            return normalized;
+        }
+
+        copyProxyValue(source, normalized, "HTTP_PROXY");
+        copyProxyValue(source, normalized, "HTTPS_PROXY");
+        copyProxyValue(source, normalized, "ALL_PROXY");
+        copyProxyValue(source, normalized, "NO_PROXY");
+        return normalized;
+    }
+
+    /**
      * Read config.toml as a map structure
      * Returns null if file doesn't exist
      */
@@ -170,28 +221,8 @@ public class CodexSettingsManager {
             }
         }
 
-        // Sync optional proxy configuration used by plugin-launched codex-cli
-        applyProxyConfig(extractProxyConfig(provider));
-
         String providerId = provider.has("id") ? provider.get("id").getAsString() : "unknown";
         LOG.info("[CodexSettingsManager] Applied provider to ~/.codex: " + providerId);
-    }
-
-    /**
-     * Extract proxy env values from provider JSON.
-     */
-    private JsonObject extractProxyConfig(JsonObject provider) {
-        JsonObject normalized = new JsonObject();
-        if (provider == null || !provider.has("proxy") || !provider.get("proxy").isJsonObject()) {
-            return normalized;
-        }
-
-        JsonObject proxy = provider.getAsJsonObject("proxy");
-        copyProxyValue(proxy, normalized, "HTTP_PROXY");
-        copyProxyValue(proxy, normalized, "HTTPS_PROXY");
-        copyProxyValue(proxy, normalized, "ALL_PROXY");
-        copyProxyValue(proxy, normalized, "NO_PROXY");
-        return normalized;
     }
 
     private void copyProxyValue(JsonObject source, JsonObject target, String key) {
@@ -215,21 +246,6 @@ public class CodexSettingsManager {
                 target.addProperty(key, trimmed);
             }
         }
-    }
-
-    /**
-     * Write or remove ~/.codex/ccg-proxy.json based on provider proxy settings.
-     */
-    private void applyProxyConfig(JsonObject proxyConfig) throws IOException {
-        Path proxyPath = getProxyJsonPath();
-        if (proxyConfig == null || proxyConfig.size() == 0) {
-            Files.deleteIfExists(proxyPath);
-            LOG.info("[CodexSettingsManager] Cleared proxy config: " + proxyPath);
-            return;
-        }
-
-        writeStringAtomically(proxyPath, gson.toJson(proxyConfig));
-        LOG.info("[CodexSettingsManager] Wrote proxy config to: " + proxyPath);
     }
 
     /**
