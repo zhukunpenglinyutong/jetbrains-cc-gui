@@ -277,6 +277,25 @@ export const CLAUDE_MODELS: ModelInfo[] = [
 ];
 
 /**
+ * Claude models that support adaptive thinking with effort parameter (low/medium/high).
+ * Based on: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
+ */
+export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
+  'claude-opus-4-6',
+  'claude-opus-4-6[1m]',
+  'claude-sonnet-4-6',
+]);
+
+/**
+ * Claude models that additionally support the 'max' effort level.
+ * Only Opus 4.6 — using 'max' on other models returns an API error.
+ */
+export const MAX_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-opus-4-6',
+  'claude-opus-4-6[1m]',
+]);
+
+/**
  * Codex model list
  */
 export const CODEX_MODELS: ModelInfo[] = [
@@ -338,11 +357,12 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
 ];
 
 /**
- * Codex Reasoning Effort (thinking depth)
- * Controls the depth of reasoning for Codex models
- * Valid values: low, medium, high, xhigh
+ * Reasoning Effort (thinking depth)
+ * Controls the depth of reasoning for AI models
+ * Claude API values: low, medium, high, max
+ * Codex API values: low, medium, high, xhigh
  */
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'max';
 
 /**
  * Reasoning level information
@@ -355,7 +375,7 @@ export interface ReasoningInfo {
 }
 
 /**
- * Available reasoning levels for Codex
+ * Available reasoning levels
  */
 export const REASONING_LEVELS: ReasoningInfo[] = [
   {
@@ -368,16 +388,16 @@ export const REASONING_LEVELS: ReasoningInfo[] = [
     id: 'medium',
     label: 'Medium',
     icon: 'codicon-circle-filled',
-    description: 'Balanced thinking (default)',
+    description: 'Balanced thinking with moderate token savings',
   },
   {
     id: 'high',
     label: 'High',
     icon: 'codicon-circle-large-filled',
-    description: 'Deep reasoning for complex tasks',
+    description: 'Deep reasoning for complex tasks (default)',
   },
   {
-    id: 'xhigh',
+    id: 'max',
     label: 'Max',
     icon: 'codicon-flame',
     description: 'Maximum reasoning depth',

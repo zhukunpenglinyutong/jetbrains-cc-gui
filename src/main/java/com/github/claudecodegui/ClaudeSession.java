@@ -925,6 +925,8 @@ public class ClaudeSession {
             openedFilesJson,
             agentPrompt,
             streaming,
+            false,                          // disableThinking
+            state.getReasoningEffort(),     // reasoningEffort
             handler
         ).thenApply(result -> null)
         .thenCompose(v -> {

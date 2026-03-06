@@ -533,8 +533,10 @@ function truncateToolResultBlock(block) {
  * @param {object} openedFiles - List of opened files (optional)
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
+ * @param {boolean} disableThinking - Whether to disable thinking mode (optional, defaults to false)
+ * @param {string} reasoningEffort - Reasoning effort level: low/medium/high/max (optional)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] message length:', message ? message.length : 0);
   console.log('[DIAG] resumeSessionId:', resumeSessionId || '(new session)');
@@ -642,12 +644,13 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[STREAMING_DEBUG] streamingEnabled (final):', streamingEnabled);
 
 	    // Decide whether to enable Extended Thinking based on configuration
-	    // - If alwaysThinkingEnabled is true, use the configured maxThinkingTokens value
-	    // - If alwaysThinkingEnabled is false, don't set maxThinkingTokens (let SDK use default behavior)
-	    const maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+	    // - If alwaysThinkingEnabled is true AND no reasoningEffort is set, use the configured maxThinkingTokens value
+	    // - If reasoningEffort is set, effort is passed via CLAUDE_CODE_EFFORT_LEVEL env var (native SDK mechanism)
+	    let maxThinkingTokens = (alwaysThinkingEnabled && !reasoningEffort) ? configuredMaxThinkingTokens : undefined;
 
 	    console.log('[THINKING_DEBUG] alwaysThinkingEnabled:', alwaysThinkingEnabled);
 	    console.log('[THINKING_DEBUG] maxThinkingTokens:', maxThinkingTokens);
+	    console.log('[THINKING_DEBUG] reasoningEffort:', reasoningEffort);
 
 	    const options = {
 	      cwd: workingDirectory,
@@ -659,6 +662,9 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	      // Extended Thinking config (controlled by alwaysThinkingEnabled in settings.json)
 	      // Thinking content is output via the [THINKING] tag for frontend display
 	      ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
+	      // Reasoning effort: pass via CLAUDE_CODE_EFFORT_LEVEL env var (native SDK mechanism via A31())
+	      // The SDK reads this env var and sets output_config.effort in the actual API call
+	      ...(reasoningEffort && { env: { ...process.env, CLAUDE_CODE_EFFORT_LEVEL: reasoningEffort } }),
 	      // Streaming config: enable includePartialMessages to receive incremental content
 	      // When streamingEnabled is true, the SDK returns partial messages with incremental content
 	      ...(streamingEnabled && { includePartialMessages: true }),
@@ -1314,7 +1320,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     // Extract opened files list and agent prompt (from stdinData)
     const openedFiles = stdinData?.openedFiles || null;
     const agentPrompt = stdinData?.agentPrompt || null;
+    const reasoningEffort = stdinData?.reasoningEffort || null;
     console.log('[Agent] message-service.sendMessageWithAttachments received agentPrompt:', agentPrompt ? `✓ (${agentPrompt.length} chars)` : '✗ null');
+    console.log('[REASONING] sendMessageWithAttachments received reasoningEffort:', reasoningEffort);
 
     // Build systemPrompt.append content (for adding opened files context and agent prompt)
     // Use the unified prompt management module to build IDE context prompt (including agent prompt)
@@ -1385,12 +1393,13 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     console.log('[STREAMING_DEBUG] (withAttachments) streamingEnabled (final):', streamingEnabled);
 
     // Decide whether to enable Extended Thinking based on configuration
-    // - If alwaysThinkingEnabled is true, use the configured maxThinkingTokens value
-    // - If alwaysThinkingEnabled is false, don't set maxThinkingTokens (let SDK use default behavior)
-    const maxThinkingTokens = alwaysThinkingEnabled ? configuredMaxThinkingTokens : undefined;
+    // - If alwaysThinkingEnabled is true AND no reasoningEffort is set, use the configured maxThinkingTokens value
+    // - If reasoningEffort is set, effort is passed via CLAUDE_CODE_EFFORT_LEVEL env var (native SDK mechanism)
+    let maxThinkingTokens = (alwaysThinkingEnabled && !reasoningEffort) ? configuredMaxThinkingTokens : undefined;
 
     console.log('[THINKING_DEBUG] (withAttachments) alwaysThinkingEnabled:', alwaysThinkingEnabled);
     console.log('[THINKING_DEBUG] (withAttachments) maxThinkingTokens:', maxThinkingTokens);
+    console.log('[THINKING_DEBUG] (withAttachments) reasoningEffort:', reasoningEffort);
 
     const options = {
       cwd: workingDirectory,
@@ -1402,6 +1411,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       // Extended Thinking config (controlled by alwaysThinkingEnabled in settings.json)
       // Thinking content is output via the [THINKING] tag for frontend display
       ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
+      // Reasoning effort: pass via CLAUDE_CODE_EFFORT_LEVEL env var (native SDK mechanism via A31())
+      // The SDK reads this env var and sets output_config.effort in the actual API call
+      ...(reasoningEffort && { env: { ...process.env, CLAUDE_CODE_EFFORT_LEVEL: reasoningEffort } }),
       // Streaming config: enable includePartialMessages to receive incremental content
       ...(streamingEnabled && { includePartialMessages: true }),
       additionalDirectories: Array.from(
