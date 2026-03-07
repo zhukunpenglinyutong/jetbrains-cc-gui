@@ -64,6 +64,15 @@ export default function PromptSection({
 
   // Setup window callbacks
   useEffect(() => {
+    // Save original callbacks to restore on unmount
+    const originalUpdateGlobalPrompts = window.updateGlobalPrompts;
+    const originalUpdateProjectPrompts = window.updateProjectPrompts;
+    const originalUpdateProjectInfo = window.updateProjectInfo;
+    const originalHandlePromptOperationResult = window.handlePromptOperationResult;
+    const originalHandlePromptImportPreviewResult = window.handlePromptImportPreviewResult;
+    const originalHandlePromptImportResult = window.handlePromptImportResult;
+
+    // Chain our handlers with existing ones
     window.updateGlobalPrompts = (json: string) => {
       try {
         const promptsList = JSON.parse(json);
@@ -71,6 +80,8 @@ export default function PromptSection({
       } catch (error) {
         console.error('[PromptSection] Failed to parse global prompts:', error);
       }
+      // Call original handler if exists
+      originalUpdateGlobalPrompts?.(json);
     };
 
     window.updateProjectPrompts = (json: string) => {
@@ -80,6 +91,8 @@ export default function PromptSection({
       } catch (error) {
         console.error('[PromptSection] Failed to parse project prompts:', error);
       }
+      // Call original handler if exists
+      originalUpdateProjectPrompts?.(json);
     };
 
     window.updateProjectInfo = (json: string) => {
@@ -89,6 +102,8 @@ export default function PromptSection({
       } catch (error) {
         console.error('[PromptSection] Failed to parse project info:', error);
       }
+      // Call original handler if exists
+      originalUpdateProjectInfo?.(json);
     };
 
     window.handlePromptOperationResult = (json: string) => {
@@ -98,6 +113,8 @@ export default function PromptSection({
       } catch (error) {
         console.error('[PromptSection] Failed to parse prompt operation result:', error);
       }
+      // Call original handler if exists
+      originalHandlePromptOperationResult?.(json);
     };
 
     window.handlePromptImportPreviewResult = (json: string) => {
@@ -107,6 +124,8 @@ export default function PromptSection({
       } catch (error) {
         console.error('[PromptSection] Failed to parse prompt import preview result:', error);
       }
+      // Call original handler if exists
+      originalHandlePromptImportPreviewResult?.(json);
     };
 
     window.handlePromptImportResult = (json: string) => {
@@ -116,15 +135,19 @@ export default function PromptSection({
       } catch (error) {
         console.error('[PromptSection] Failed to parse prompt import result:', error);
       }
+      // Call original handler if exists
+      originalHandlePromptImportResult?.(json);
     };
 
     return () => {
-      delete window.updateGlobalPrompts;
-      delete window.updateProjectPrompts;
-      delete window.updateProjectInfo;
-      delete window.handlePromptOperationResult;
-      delete window.handlePromptImportPreviewResult;
-      delete window.handlePromptImportResult;
+      // Restore original callbacks instead of deleting them
+      // This ensures other components (like promptProvider) continue to receive updates
+      window.updateGlobalPrompts = originalUpdateGlobalPrompts;
+      window.updateProjectPrompts = originalUpdateProjectPrompts;
+      window.updateProjectInfo = originalUpdateProjectInfo;
+      window.handlePromptOperationResult = originalHandlePromptOperationResult;
+      window.handlePromptImportPreviewResult = originalHandlePromptImportPreviewResult;
+      window.handlePromptImportResult = originalHandlePromptImportResult;
     };
   }, [
     updateGlobalPrompts,

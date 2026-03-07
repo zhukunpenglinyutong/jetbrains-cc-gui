@@ -135,8 +135,6 @@ public class PromptHandler extends BaseMessageHandler {
                 ? "window.updateGlobalPrompts"
                 : "window.updateProjectPrompts";
 
-            LOG.info("[PromptHandler] Sending " + prompts.size() + " prompts for scope=" + scope.getValue() + " via callback=" + callbackName);
-
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript(callbackName, escapeJs(promptsJson));
             });
