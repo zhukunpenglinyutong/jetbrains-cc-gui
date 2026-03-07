@@ -414,9 +414,29 @@ interface Window {
   updatePrompts?: (json: string) => void;
 
   /**
+   * Update global prompts list
+   */
+  updateGlobalPrompts?: (json: string) => void;
+
+  /**
+   * Update project prompts list
+   */
+  updateProjectPrompts?: (json: string) => void;
+
+  /**
+   * Update project info
+   */
+  updateProjectInfo?: (json: string) => void;
+
+  /**
    * Prompt operation result callback
    */
   promptOperationResult?: (json: string) => void;
+
+  /**
+   * Handle prompt operation result (scope-aware)
+   */
+  handlePromptOperationResult?: (json: string) => void;
 
   /**
    * Prompt import preview result callback
@@ -424,9 +444,19 @@ interface Window {
   promptImportPreviewResult?: (json: string) => void;
 
   /**
+   * Handle prompt import preview result (scope-aware)
+   */
+  handlePromptImportPreviewResult?: (json: string) => void;
+
+  /**
    * Prompt import result callback
    */
   promptImportResult?: (json: string) => void;
+
+  /**
+   * Handle prompt import result (scope-aware)
+   */
+  handlePromptImportResult?: (json: string) => void;
 
   /**
    * Selected agent received callback - receives the currently selected agent during initialization

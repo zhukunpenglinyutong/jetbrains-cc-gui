@@ -26,7 +26,6 @@ import {
   useProviderManagement,
   useCodexProviderManagement,
   useAgentManagement,
-  usePromptManagement,
   useSettingsWindowCallbacks,
 } from './hooks';
 
@@ -176,36 +175,8 @@ const SettingsView = ({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
 
-  // Use prompt management hook
-  const {
-    prompts,
-    promptsLoading,
-    promptDialog,
-    deletePromptConfirm,
-    importPreviewDialog: promptImportPreviewDialog,
-    exportDialog: promptExportDialog,
-    loadPrompts,
-    updatePrompts,
-    cleanupPromptsTimeout,
-    handleAddPrompt,
-    handleEditPrompt,
-    handleClosePromptDialog,
-    handleDeletePrompt,
-    handleSavePrompt,
-    confirmDeletePrompt,
-    cancelDeletePrompt,
-    handlePromptOperationResult,
-    handleExportPrompts,
-    handleCloseExportDialog: handleClosePromptExportDialog,
-    handleConfirmExport: handleConfirmPromptExport,
-    handleImportPromptsFile,
-    handlePromptImportPreviewResult,
-    handleCloseImportPreview: handleClosePromptImportPreview,
-    handleSaveImportedPrompts,
-    handlePromptImportResult,
-  } = usePromptManagement({
-    onSuccess: (msg) => addToast(msg, 'success'),
-  });
+  // Note: Prompt management is now handled internally by PromptSection component
+  // No need to use usePromptManagement hook here anymore
 
   // Current Claude CLI configuration (from ~/.claude/settings.json)
   const [claudeConfig, setClaudeConfig] = useState<ClaudeConfig | null>(null);
@@ -369,20 +340,15 @@ const SettingsView = ({
     loadProviders,
     loadCodexProviders,
     loadAgents,
-    loadPrompts,
     updateAgents,
     handleAgentOperationResult,
     handleAgentImportPreviewResult,
     handleAgentImportResult,
-    updatePrompts,
-    handlePromptOperationResult,
-    handlePromptImportPreviewResult,
-    handlePromptImportResult,
+    // Note: Prompt-related callbacks are now handled in PromptSection component
     updateCodexProviders,
     updateActiveCodexProvider,
     updateCurrentCodexConfig,
     cleanupAgentsTimeout,
-    cleanupPromptsTimeout,
     showAlert,
     addToast,
     onStreamingEnabledChangeProp,
@@ -819,13 +785,7 @@ const SettingsView = ({
           {/* Prompts */}
           <div style={{ display: currentTab === 'prompts' ? 'block' : 'none' }}>
             <PromptSection
-              prompts={prompts}
-              loading={promptsLoading}
-              onAdd={handleAddPrompt}
-              onEdit={handleEditPrompt}
-              onDelete={handleDeletePrompt}
-              onExport={handleExportPrompts}
-              onImport={handleImportPromptsFile}
+              onSuccess={(msg) => addToast(msg, 'success')}
             />
           </div>
 
@@ -884,19 +844,6 @@ const SettingsView = ({
         onConfirmAgentExport={handleConfirmAgentExport}
         onCloseAgentImportPreview={handleCloseAgentImportPreview}
         onSaveImportedAgents={handleSaveImportedAgents}
-        promptDialog={promptDialog}
-        deletePromptConfirm={deletePromptConfirm}
-        onClosePromptDialog={handleClosePromptDialog}
-        onSavePrompt={handleSavePrompt}
-        onConfirmDeletePrompt={confirmDeletePrompt}
-        onCancelDeletePrompt={cancelDeletePrompt}
-        promptExportDialog={promptExportDialog}
-        promptImportPreviewDialog={promptImportPreviewDialog}
-        prompts={prompts}
-        onClosePromptExportDialog={handleClosePromptExportDialog}
-        onConfirmPromptExport={handleConfirmPromptExport}
-        onClosePromptImportPreview={handleClosePromptImportPreview}
-        onSaveImportedPrompts={handleSaveImportedPrompts}
         addToast={addToast}
       />
 

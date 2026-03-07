@@ -47,20 +47,22 @@ export interface SettingsWindowCallbacksDeps {
   loadProviders: () => void;
   loadCodexProviders: () => void;
   loadAgents: () => void;
-  loadPrompts: () => void;
   updateAgents: (agents: AgentConfig[]) => void;
   handleAgentOperationResult: (result: any) => void;
   handleAgentImportPreviewResult: (previewData: any) => void;
   handleAgentImportResult: (result: any) => void;
-  updatePrompts: (prompts: PromptConfig[]) => void;
-  handlePromptOperationResult: (result: any) => void;
-  handlePromptImportPreviewResult: (previewData: any) => void;
-  handlePromptImportResult: (result: any) => void;
   updateCodexProviders: (providers: CodexProviderConfig[]) => void;
   updateActiveCodexProvider: (provider: CodexProviderConfig) => void;
   updateCurrentCodexConfig: (config: any) => void;
   cleanupAgentsTimeout: () => void;
-  cleanupPromptsTimeout: () => void;
+
+  // Prompt-related handlers (optional - now handled by PromptSection component)
+  loadPrompts?: () => void;
+  updatePrompts?: (prompts: PromptConfig[]) => void;
+  handlePromptOperationResult?: (result: any) => void;
+  handlePromptImportPreviewResult?: (previewData: any) => void;
+  handlePromptImportResult?: (result: any) => void;
+  cleanupPromptsTimeout?: () => void;
 
   // Callbacks
   showAlert: (type: AlertType, title: string, message: string) => void;
@@ -297,12 +299,12 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
-    // Prompt library callbacks
+    // Prompt library callbacks (legacy support - now primarily handled by PromptSection)
     const previousUpdatePrompts = window.updatePrompts;
     window.updatePrompts = (jsonStr: string) => {
       try {
         const promptsList: PromptConfig[] = JSON.parse(jsonStr);
-        d().updatePrompts(promptsList);
+        d().updatePrompts?.(promptsList);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompts:', error);
       }
@@ -312,7 +314,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.promptOperationResult = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
-        d().handlePromptOperationResult(result);
+        d().handlePromptOperationResult?.(result);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt operation result:', error);
       }
@@ -325,7 +327,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
           console.error('[SettingsView] Invalid prompt import preview data structure');
           return;
         }
-        d().handlePromptImportPreviewResult(previewData);
+        d().handlePromptImportPreviewResult?.(previewData);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt import preview result:', error);
       }
@@ -334,7 +336,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.promptImportResult = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
-        d().handlePromptImportResult(result);
+        d().handlePromptImportResult?.(result);
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt import result:', error);
       }
@@ -376,7 +378,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     d().loadProviders();
     d().loadCodexProviders();
     d().loadAgents();
-    d().loadPrompts();
+    // Note: loadPrompts is now handled by PromptSection component
+    d().loadPrompts?.();
     d().setClaudeConfigLoading(true);
     sendToJava('get_current_claude_config:');
     sendToJava('get_node_path:');
@@ -388,7 +391,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
 
     return () => {
       d().cleanupAgentsTimeout();
-      d().cleanupPromptsTimeout();
+      d().cleanupPromptsTimeout?.();
 
       window.updateProviders = undefined;
       window.updateActiveProvider = undefined;

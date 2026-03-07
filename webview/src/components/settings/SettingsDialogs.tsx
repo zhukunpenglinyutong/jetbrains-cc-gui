@@ -2,22 +2,17 @@
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig, CodexProviderConfig } from '../../types/provider';
 import type { AgentConfig } from '../../types/agent';
-import type { PromptConfig } from '../../types/prompt';
 import AlertDialog from '../AlertDialog';
 import type { AlertType } from '../AlertDialog';
 import ConfirmDialog from '../ConfirmDialog';
 import ProviderDialog from '../ProviderDialog';
 import CodexProviderDialog from '../CodexProviderDialog';
 import AgentDialog from '../AgentDialog';
-import PromptDialog from '../PromptDialog';
 import AgentExportDialog from './AgentSection/AgentExportDialog';
 import AgentImportConfirmDialog from './AgentSection/AgentImportConfirmDialog';
-import PromptExportDialog from './PromptSection/PromptExportDialog';
-import PromptImportConfirmDialog from './PromptSection/PromptImportConfirmDialog';
 import type { ToastMessage } from '../Toast';
 import type { ProviderDialogState, DeleteConfirmState } from './hooks/useProviderManagement';
 import type { AgentDialogState, DeleteAgentConfirmState, ExportDialogState as AgentExportDialogState, ImportPreviewDialogState as AgentImportPreviewDialogState } from './hooks/useAgentManagement';
-import type { PromptDialogState, DeletePromptConfirmState, ExportDialogState as PromptExportDialogState, ImportPreviewDialogState as PromptImportPreviewDialogState } from './hooks/usePromptManagement';
 import type { CodexProviderDialogState, DeleteCodexConfirmState } from './hooks/useCodexProviderManagement';
 import type { ConflictStrategy } from '../../types/import';
 
@@ -60,22 +55,7 @@ interface SettingsDialogsProps {
   onCloseAgentImportPreview: () => void;
   onSaveImportedAgents: (selectedIds: string[], strategy: ConflictStrategy) => void;
 
-  // Prompt dialog
-  promptDialog: PromptDialogState;
-  deletePromptConfirm: DeletePromptConfirmState;
-  onClosePromptDialog: () => void;
-  onSavePrompt: (data: { name: string; content: string }) => void;
-  onConfirmDeletePrompt: () => void;
-  onCancelDeletePrompt: () => void;
-
-  // Prompt import/export
-  promptExportDialog: PromptExportDialogState;
-  promptImportPreviewDialog: PromptImportPreviewDialogState;
-  prompts: PromptConfig[];
-  onClosePromptExportDialog: () => void;
-  onConfirmPromptExport: (selectedIds: string[]) => void;
-  onClosePromptImportPreview: () => void;
-  onSaveImportedPrompts: (selectedIds: string[], strategy: ConflictStrategy) => void;
+  // Note: Prompt dialogs are now handled in PromptSection component
 
   addToast: (message: string, type?: ToastMessage['type']) => void;
 }
@@ -109,19 +89,6 @@ const SettingsDialogs = ({
   onConfirmAgentExport,
   onCloseAgentImportPreview,
   onSaveImportedAgents,
-  promptDialog,
-  deletePromptConfirm,
-  onClosePromptDialog,
-  onSavePrompt,
-  onConfirmDeletePrompt,
-  onCancelDeletePrompt,
-  promptExportDialog,
-  promptImportPreviewDialog,
-  prompts,
-  onClosePromptExportDialog,
-  onConfirmPromptExport,
-  onClosePromptImportPreview,
-  onSaveImportedPrompts,
   addToast,
 }: SettingsDialogsProps) => {
   const { t } = useTranslation();
@@ -178,24 +145,7 @@ const SettingsDialogs = ({
         onCancel={onCancelDeleteAgent}
       />
 
-      {/* Prompt add/edit dialog */}
-      <PromptDialog
-        isOpen={promptDialog.isOpen}
-        prompt={promptDialog.prompt}
-        onClose={onClosePromptDialog}
-        onSave={onSavePrompt}
-      />
-
-      {/* Prompt delete confirmation dialog */}
-      <ConfirmDialog
-        isOpen={deletePromptConfirm.isOpen}
-        title={t('settings.prompt.deleteConfirmTitle')}
-        message={t('settings.prompt.deleteConfirmMessage', { name: deletePromptConfirm.prompt?.name || '' })}
-        confirmText={t('common.delete')}
-        cancelText={t('common.cancel')}
-        onConfirm={onConfirmDeletePrompt}
-        onCancel={onCancelDeletePrompt}
-      />
+      {/* Note: Prompt dialogs are now rendered in PromptSection component */}
 
       {/* Codex provider add/edit dialog */}
       <CodexProviderDialog
@@ -235,23 +185,7 @@ const SettingsDialogs = ({
         />
       )}
 
-      {/* Prompt export dialog */}
-      {promptExportDialog.isOpen && (
-        <PromptExportDialog
-          prompts={prompts}
-          onConfirm={onConfirmPromptExport}
-          onCancel={onClosePromptExportDialog}
-        />
-      )}
-
-      {/* Prompt import preview dialog */}
-      {promptImportPreviewDialog.isOpen && promptImportPreviewDialog.previewData && (
-        <PromptImportConfirmDialog
-          previewData={promptImportPreviewDialog.previewData}
-          onConfirm={onSaveImportedPrompts}
-          onCancel={onClosePromptImportPreview}
-        />
-      )}
+      {/* Note: Prompt import/export dialogs are now rendered in PromptSection component */}
     </>
   );
 };

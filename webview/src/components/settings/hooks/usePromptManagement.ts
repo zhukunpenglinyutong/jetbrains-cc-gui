@@ -36,6 +36,7 @@ export interface DeletePromptConfirmState {
 export interface ImportPreviewDialogState {
   isOpen: boolean;
   previewData: ImportPreviewResult<PromptConfig> | null;
+  scope: PromptScope;
 }
 
 export interface ExportDialogState {
@@ -54,6 +55,9 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
 
   // Timeout timer reference (using useRef to avoid global variable pollution)
   const promptsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track current import scope (used when import preview result arrives)
+  const currentImportScopeRef = useRef<PromptScope>('global');
 
   // Prompt list state - dual lists for global and project scopes
   const [globalPrompts, setGlobalPrompts] = useState<PromptConfig[]>([]);
@@ -79,6 +83,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
   const [importPreviewDialog, setImportPreviewDialog] = useState<ImportPreviewDialogState>({
     isOpen: false,
     previewData: null,
+    scope: 'global',
   });
 
   // Export dialog state
@@ -269,6 +274,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
 
   // Import prompts from file
   const handleImportPromptsFile = useCallback((scope: PromptScope) => {
+    currentImportScopeRef.current = scope;
     const message: ImportPromptsFileMessage = { scope };
     sendToJava(`import_prompts_file:${JSON.stringify(message)}`);
   }, []);
@@ -279,6 +285,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
       setImportPreviewDialog({
         isOpen: true,
         previewData,
+        scope: currentImportScopeRef.current,
       });
     },
     []
@@ -289,6 +296,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
     setImportPreviewDialog({
       isOpen: false,
       previewData: null,
+      scope: 'global',
     });
   }, []);
 
@@ -308,7 +316,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
       };
 
       sendToJava(`save_imported_prompts:${JSON.stringify(message)}`);
-      setImportPreviewDialog({ isOpen: false, previewData: null });
+      setImportPreviewDialog({ isOpen: false, previewData: null, scope: 'global' });
     },
     [importPreviewDialog.previewData]
   );
