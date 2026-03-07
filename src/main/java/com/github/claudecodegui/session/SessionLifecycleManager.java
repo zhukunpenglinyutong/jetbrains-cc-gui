@@ -59,6 +59,8 @@ public class SessionLifecycleManager {
 
         void setupSessionCallbacks();
 
+        void invalidateSessionCallbacks();
+
         void setSlashCommandsFetched(boolean fetched);
 
         void setFetchedSlashCommandsCount(int count);
@@ -83,6 +85,8 @@ public class SessionLifecycleManager {
         LOG.info("Preserving session state: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
 
+        host.invalidateSessionCallbacks();
+        host.getStreamCoalescer().resetStreamState();
         host.callJavaScript("clearMessages");
 
         CompletableFuture<Void> interruptFuture = oldSession != null
@@ -92,7 +96,6 @@ public class SessionLifecycleManager {
         interruptFuture.thenRun(() -> {
             LOG.info("Old session interrupted, creating new session");
 
-            host.getStreamCoalescer().resetStreamState();
             ApplicationManager.getApplication().invokeLater(() -> {
                 host.callJavaScript("onStreamEnd");
                 host.callJavaScript("showLoading", "false");
@@ -161,6 +164,8 @@ public class SessionLifecycleManager {
         LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
 
+        host.invalidateSessionCallbacks();
+        host.getStreamCoalescer().resetStreamState();
         host.callJavaScript("clearMessages");
         host.clearPendingPermissionRequests();
 
@@ -183,9 +188,12 @@ public class SessionLifecycleManager {
         newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
             host.callJavaScript("historyLoadComplete");
         })).exceptionally(ex -> {
-            ApplicationManager.getApplication().invokeLater(() ->
-                                                                    host.callJavaScript("addErrorMessage",
-                                                                            JsUtils.escapeJs("Failed to load session: " + ex.getMessage())));
+            ApplicationManager.getApplication().invokeLater(() -> {
+                // Release transition guard so the frontend is not permanently stuck
+                host.callJavaScript("historyLoadComplete");
+                host.callJavaScript("addErrorMessage",
+                        JsUtils.escapeJs("Failed to load session: " + ex.getMessage()));
+            });
             return null;
         });
     }

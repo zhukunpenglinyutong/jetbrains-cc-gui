@@ -576,6 +576,10 @@ const App = () => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
+  const clearToasts = useCallback(() => {
+    setToasts([]);
+  }, []);
+
   // Session management (create, load, delete, export, etc.)
   const {
     showNewSessionConfirm,
@@ -604,6 +608,12 @@ const App = () => {
     setCustomSessionTitle,
     setUsagePercentage,
     setUsageUsedTokens,
+    setUsageMaxTokens,
+    setStatus,
+    setLoading,
+    setIsThinking,
+    setStreamingActive,
+    clearToasts,
     addToast,
     t,
   });
@@ -616,6 +626,7 @@ const App = () => {
   useWindowCallbacks({
     t,
     addToast,
+    clearToasts,
     setMessages,
     setStatus,
     setLoading,

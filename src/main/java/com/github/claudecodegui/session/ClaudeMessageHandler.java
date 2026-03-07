@@ -43,6 +43,8 @@ public class ClaudeMessageHandler implements MessageCallback {
     private boolean isStreaming = false;
 
     private boolean streamEndedThisTurn = false;
+    private boolean errorReportedThisTurn = false;
+    private String lastReportedError = null;
 
     // Streaming segment state (used to split text/thinking around tool calls)
     private boolean textSegmentActive = false;
@@ -135,7 +137,18 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onError(String error) {
+        if (errorReportedThisTurn && error != null && error.equals(lastReportedError)) {
+            LOG.debug("Suppressing duplicate error for current Claude turn");
+            return;
+        }
+
+        boolean wasStreaming = isStreaming;
+        isStreaming = false;
         streamEndedThisTurn = false;
+        errorReportedThisTurn = true;
+        lastReportedError = error;
+        textSegmentActive = false;
+        thinkingSegmentActive = false;
         state.setError(error);
         state.setBusy(false);
         state.setLoading(false);
@@ -143,6 +156,9 @@ public class ClaudeMessageHandler implements MessageCallback {
         Message errorMessage = new Message(Message.Type.ERROR, error);
         state.addMessage(errorMessage);
         callbackHandler.notifyMessageUpdate(state.getMessages());
+        if (wasStreaming) {
+            callbackHandler.notifyStreamEnd();
+        }
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
 
         // Show error in status bar
@@ -156,8 +172,12 @@ public class ClaudeMessageHandler implements MessageCallback {
     public void onComplete(SDKResult result) {
         if (streamEndedThisTurn) {
             streamEndedThisTurn = false;
+            errorReportedThisTurn = false;
+            lastReportedError = null;
             return;
         }
+        errorReportedThisTurn = false;
+        lastReportedError = null;
         state.setBusy(false);
         state.setLoading(false);
         state.updateLastModifiedTime();
@@ -538,6 +558,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         LOG.debug("Stream started");
         isStreaming = true;  // Mark streaming as active
         streamEndedThisTurn = false;
+        errorReportedThisTurn = false;
+        lastReportedError = null;
         textSegmentActive = false;
         thinkingSegmentActive = false;
         callbackHandler.notifyStreamStart();

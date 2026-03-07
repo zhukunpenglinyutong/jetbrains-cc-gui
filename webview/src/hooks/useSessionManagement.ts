@@ -19,6 +19,12 @@ interface UseSessionManagementOptions {
   setCustomSessionTitle: (title: string | null) => void;
   setUsagePercentage: (percent: number) => void;
   setUsageUsedTokens: (tokens: number | undefined) => void;
+  setUsageMaxTokens: (tokens: number | undefined) => void;
+  setStatus: (status: string) => void;
+  setLoading: (loading: boolean) => void;
+  setIsThinking: (thinking: boolean) => void;
+  setStreamingActive: (active: boolean) => void;
+  clearToasts: () => void;
   addToast: (message: string, type?: ToastType) => void;
   t: TFunction;
 }
@@ -55,6 +61,12 @@ export function useSessionManagement({
   setCustomSessionTitle,
   setUsagePercentage,
   setUsageUsedTokens,
+  setUsageMaxTokens,
+  setStatus,
+  setLoading: setLoadingState,
+  setIsThinking,
+  setStreamingActive,
+  clearToasts,
   addToast,
   t,
 }: UseSessionManagementOptions): UseSessionManagementReturn {
@@ -64,6 +76,28 @@ export function useSessionManagement({
   const suppressNextStatusToastRef = useRef(false);
   const historyDataRef = useRef(historyData);
   historyDataRef.current = historyData;
+
+  const beginSessionTransition = useCallback((nextSessionId: string | null, nextTitle: string | null) => {
+    window.__sessionTransitioning = true;
+    // Use the single cleanup entry point exposed by useWindowCallbacks.
+    // This clears both React state AND internal streaming refs in one shot.
+    if (typeof (window as any).__resetTransientUiState === 'function') {
+      (window as any).__resetTransientUiState();
+    } else {
+      // Fallback if useWindowCallbacks hasn't mounted yet (e.g. during SSR/tests)
+      clearToasts();
+      setStatus('');
+      setLoadingState(false);
+      setIsThinking(false);
+      setStreamingActive(false);
+    }
+    setMessages([]);
+    setCurrentSessionId(nextSessionId);
+    setCustomSessionTitle(nextTitle);
+    setUsagePercentage(0);
+    setUsageUsedTokens(undefined);
+    setUsageMaxTokens(undefined);
+  }, [clearToasts, setStatus, setLoadingState, setIsThinking, setStreamingActive, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens]);
 
   // Create new session
   const createNewSession = useCallback(() => {
@@ -79,24 +113,19 @@ export function useSessionManagement({
       setShowNewSessionConfirm(true);
     } else {
       // If empty and not loading, directly create new session
-      setCurrentSessionId(null);
-      setCustomSessionTitle(null);
+      beginSessionTransition(null, null);
       sendBridgeEvent('create_new_session');
     }
-  }, [messages.length, loading, setCurrentSessionId, setCustomSessionTitle]);
+  }, [beginSessionTransition, messages.length, loading]);
 
   // Force create new session (no confirmation, used by /clear /new /reset commands)
   const forceCreateNewSession = useCallback(() => {
     if (loading) {
       sendBridgeEvent('interrupt_session');
     }
-    // Set the transition flag to prevent stale session callbacks from writing old messages via updateMessages
-    window.__sessionTransitioning = true;
-    setCurrentSessionId(null);
-    setCustomSessionTitle(null);
-    setMessages([]);
+    beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
-  }, [setMessages, loading, setCurrentSessionId, setCustomSessionTitle]);
+  }, [beginSessionTransition, loading]);
 
   // Confirm new session
   const handleConfirmNewSession = useCallback(() => {
@@ -105,13 +134,10 @@ export function useSessionManagement({
     if (loading) {
       sendBridgeEvent('interrupt_session');
     }
-    // Clear current messages and create new session
-    setCurrentSessionId(null);
-    setCustomSessionTitle(null);
-    setMessages([]);
+    beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
-  }, [setMessages, loading, setCurrentSessionId, setCustomSessionTitle]);
+  }, [beginSessionTransition, loading]);
 
   // Cancel new session
   const handleCancelNewSession = useCallback(() => {
@@ -124,12 +150,10 @@ export function useSessionManagement({
     setShowInterruptConfirm(false);
     // Send interrupt signal and create new session
     sendBridgeEvent('interrupt_session');
-    setCurrentSessionId(null);
-    setCustomSessionTitle(null);
-    setMessages([]);
+    beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
-  }, [setMessages, setCurrentSessionId, setCustomSessionTitle]);
+  }, [beginSessionTransition]);
 
   // Cancel interrupt
   const handleCancelInterrupt = useCallback(() => {
@@ -143,15 +167,12 @@ export function useSessionManagement({
     if (loading) {
       sendBridgeEvent('interrupt_session');
     }
-    sendBridgeEvent('load_session', sessionId);
-    setCurrentSessionId(sessionId);
 
-    // Set the custom title from history data so the chat header shows it immediately
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
-    setCustomSessionTitle(session?.title ?? null);
-
+    beginSessionTransition(sessionId, session?.title ?? null);
+    sendBridgeEvent('load_session', sessionId);
     setCurrentView('chat');
-  }, [loading, setCurrentSessionId, setCustomSessionTitle, setCurrentView]);
+  }, [beginSessionTransition, loading, setCurrentView]);
 
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
@@ -176,11 +197,7 @@ export function useSessionManagement({
         if (loading) {
           sendBridgeEvent('interrupt_session');
         }
-        setCustomSessionTitle(null);
-        setMessages([]);
-        setCurrentSessionId(null);
-        setUsagePercentage(0);
-        setUsageUsedTokens(0);
+        beginSessionTransition(null, null);
         // Set flag to suppress next updateStatus toast
         suppressNextStatusToastRef.current = true;
         sendBridgeEvent('create_new_session');

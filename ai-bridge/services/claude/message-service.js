@@ -1072,7 +1072,6 @@ ${payload.error}`;
     // Truncate final payload.error to prevent webview freezing
     payload.error = truncateString(payload.error);
     console.error('[SEND_ERROR]', JSON.stringify(payload));
-    console.log(JSON.stringify(payload));
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
@@ -1297,7 +1296,6 @@ Possible causes:
       console.error('[ERROR_DETAILS] Status:', error.response.status);
       console.error('[ERROR_DETAILS] Data:', JSON.stringify(error.response.data));
     }
-    console.log(JSON.stringify({ success: false, error: error.message }));
   }
 }
 
@@ -1801,7 +1799,6 @@ ${payload.error}`;
     // Truncate final payload.error to prevent webview freezing
     payload.error = truncateString(payload.error);
     console.error('[SEND_ERROR]', JSON.stringify(payload));
-    console.log(JSON.stringify(payload));
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }

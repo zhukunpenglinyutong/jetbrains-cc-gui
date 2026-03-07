@@ -32,6 +32,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     private final PermissionHandler permissionHandler;
     private final BooleanSupplier slashCommandsFetchedSupplier;
     private final Runnable streamEndCallback;
+    private volatile boolean active = true;
 
     public SessionCallbackAdapter(
             StreamMessageCoalescer streamCoalescer,
@@ -47,26 +48,42 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         this.streamEndCallback = streamEndCallback;
     }
 
+    public void deactivate() {
+        active = false;
+    }
+
+    private boolean isInactive() {
+        return !active;
+    }
+
     @Override
     public void onMessageUpdate(List<ClaudeSession.Message> messages) {
+        if (isInactive()) {
+            return;
+        }
         streamCoalescer.enqueue(messages);
     }
 
     @Override
     public void onStateChange(boolean busy, boolean loading, String error) {
+        if (isInactive()) {
+            return;
+        }
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
             // Do not send loading=false during streaming to avoid unexpected loading state resets.
             // State cleanup is handled uniformly by onStreamEnd.
             if (!loading && streamCoalescer.isStreamActive()) {
                 LOG.debug("Suppressing showLoading(false) during active streaming");
-                if (error != null) {
-                    jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs("Error: " + error));
-                }
                 return;
             }
 
             jsTarget.callJavaScript("showLoading", String.valueOf(loading));
-            if (error != null) {
+            // Show error in status bar only (not as toast) to avoid duplicate notifications.
+            // The primary error display is the ERROR message in chat list (from onError path).
+            if (error != null && !error.isEmpty()) {
                 jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs("Error: " + error));
             }
             if (!busy && !loading) {
@@ -77,30 +94,53 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
 
     @Override
     public void onStatusMessage(String message) {
-        if (message == null || message.trim().isEmpty()) {
+        if (isInactive() || message == null || message.trim().isEmpty()) {
             return;
         }
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
             jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs(message));
         });
     }
 
     @Override
     public void onSessionIdReceived(String sessionId) {
+        if (isInactive()) {
+            return;
+        }
         LOG.info("Session ID: " + sessionId);
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
             jsTarget.callJavaScript("setSessionId", JsUtils.escapeJs(sessionId));
         });
     }
 
     @Override
     public void onPermissionRequested(PermissionRequest request) {
-        ApplicationManager.getApplication().invokeLater(() -> permissionHandler.showPermissionDialog(request));
+        if (isInactive()) {
+            return;
+        }
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
+            permissionHandler.showPermissionDialog(request);
+        });
     }
 
     @Override
     public void onThinkingStatusChanged(boolean isThinking) {
+        if (isInactive()) {
+            return;
+        }
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
             jsTarget.callJavaScript("showThinkingStatus", String.valueOf(isThinking));
             LOG.debug("Thinking status changed: " + isThinking);
         });
@@ -135,8 +175,14 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
 
     @Override
     public void onStreamStart() {
+        if (isInactive()) {
+            return;
+        }
         streamCoalescer.onStreamStart();
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
             jsTarget.callJavaScript("showLoading", "true");
             jsTarget.callJavaScript("onStreamStart");
             LOG.debug("Stream started - notified frontend with loading=true");
@@ -145,31 +191,48 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
 
     @Override
     public void onStreamEnd() {
+        if (isInactive()) {
+            return;
+        }
         streamCoalescer.onStreamEnd();
-        ApplicationManager.getApplication().invokeLater(() -> {
+        streamCoalescer.flush(() -> {
+            if (isInactive()) {
+                return;
+            }
             jsTarget.callJavaScript("onStreamEnd");
             jsTarget.callJavaScript("showLoading", "false");
             if (streamEndCallback != null) {
                 streamEndCallback.run();
             }
-            LOG.debug("Stream ended - notified frontend with onStreamEnd then loading=false");
+            LOG.debug("Stream ended - flushed messages before notifying frontend");
         });
-        streamCoalescer.flush(null);
     }
 
     @Override
     public void onContentDelta(String delta) {
+        if (isInactive()) {
+            return;
+        }
         jsTarget.callJavaScript("onContentDelta", JsUtils.escapeJs(delta));
     }
 
     @Override
     public void onThinkingDelta(String delta) {
+        if (isInactive()) {
+            return;
+        }
         jsTarget.callJavaScript("onThinkingDelta", JsUtils.escapeJs(delta));
     }
 
     @Override
     public void onUsageUpdate(int usedTokens, int maxTokens) {
+        if (isInactive()) {
+            return;
+        }
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
             double percentage = maxTokens > 0 ? (usedTokens * 100.0 / maxTokens) : 0.0;
             String json = String.format("{\"percentage\":%.2f,\"usedTokens\":%d,\"maxTokens\":%d}",
                     percentage, usedTokens, maxTokens);

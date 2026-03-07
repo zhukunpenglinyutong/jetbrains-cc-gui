@@ -733,6 +733,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
         LOG.info("[ClaudeSDKBridge] Using per-process mode (daemon not available)");
+        final boolean[] errorAlreadyReported = {false};
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
@@ -1017,11 +1018,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                             callback.onError(errorMsg);
                         }
                     } else {
-                        // Already had a SEND_ERROR, no need to append additional output
-                        if (exitCode == 0) {
-                            result.success = true;
-                            callback.onComplete(result);
-                        }
+                        // Already had a SEND_ERROR — error was already reported via onError.
+                        // Still need to signal completion so the handler cleans up stream state.
+                        result.success = exitCode == 0;
+                        callback.onComplete(result);
                     }
 
                     return result;
@@ -1033,10 +1033,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             } catch (Exception e) {
                 result.success = false;
                 result.error = e.getMessage();
+                errorAlreadyReported[0] = true;
                 callback.onError(e.getMessage());
                 return result;
             }
         }).exceptionally(ex -> {
+            if (errorAlreadyReported[0]) {
+                LOG.debug("[ClaudeSDKBridge] Skipping duplicate onError in exceptionally (already reported by catch)");
+                return new SDKResult();
+            }
             SDKResult errorResult = new SDKResult();
             errorResult.success = false;
             errorResult.error = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();

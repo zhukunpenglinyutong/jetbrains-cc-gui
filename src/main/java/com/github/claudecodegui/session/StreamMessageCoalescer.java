@@ -84,8 +84,14 @@ public class StreamMessageCoalescer {
      * Reset stream state (e.g., on new session creation).
      */
     public void resetStreamState() {
+        updateAlarm.cancelAllRequests();
         synchronized (lock) {
             streamActive = false;
+            updateScheduled = false;
+            pendingMessages = null;
+            lastSnapshot = null;
+            lastUpdateAtMs = 0L;
+            ++updateSequence;
         }
     }
 
@@ -207,6 +213,12 @@ public class StreamMessageCoalescer {
 
                 synchronized (lock) {
                     if (sequence != updateSequence) {
+                        // Message is stale — skip the webview push, but still
+                        // run the after-send callback (e.g. onStreamEnd cleanup)
+                        // so the frontend is not stuck in streaming state.
+                        if (afterSendOnEdt != null) {
+                            afterSendOnEdt.run();
+                        }
                         return;
                     }
                 }

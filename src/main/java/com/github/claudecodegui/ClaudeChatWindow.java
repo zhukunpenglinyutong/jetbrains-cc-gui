@@ -194,6 +194,13 @@ public class ClaudeChatWindow {
             }
 
             @Override
+            public void invalidateSessionCallbacks() {
+                if (sessionCallbackAdapter != null) {
+                    sessionCallbackAdapter.deactivate();
+                }
+            }
+
+            @Override
             public void setSlashCommandsFetched(boolean fetched) {
                 slashCommandsFetched = fetched;
             }
@@ -434,6 +441,9 @@ public class ClaudeChatWindow {
     // ==================== Session Delegates ====================
 
     private void setupSessionCallbacks() {
+        if (this.sessionCallbackAdapter != null) {
+            this.sessionCallbackAdapter.deactivate();
+        }
         this.sessionCallbackAdapter = new SessionCallbackAdapter(
                 streamCoalescer,
                 new SessionCallbackAdapter.JsTarget() {
