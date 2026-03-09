@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SdkId, SdkStatus, InstallProgress, InstallResult, UninstallResult, NodeEnvironmentStatus } from '../../../types/dependency';
+import type {
+  SdkId,
+  SdkStatus,
+  InstallProgress,
+  InstallResult,
+  UninstallResult,
+  NodeEnvironmentStatus,
+  UpdateCheckResult,
+} from '../../../types/dependency';
 import styles from './style.module.less';
 
 interface DependencySectionProps {
@@ -14,6 +22,31 @@ const sendToJava = (message: string) => {
   } else {
     console.warn('[DependencySection] sendToJava is not available');
   }
+};
+
+const mergeDependencyUpdates = (
+  previousStatus: Record<SdkId, SdkStatus>,
+  updatePayload: UpdateCheckResult,
+): Record<SdkId, SdkStatus> => {
+  const nextStatus = { ...previousStatus };
+
+  Object.entries(updatePayload).forEach(([sdkId, updateInfo]) => {
+    const typedSdkId = sdkId as SdkId;
+    const currentStatus = nextStatus[typedSdkId];
+    if (!currentStatus) {
+      return;
+    }
+
+    nextStatus[typedSdkId] = {
+      ...currentStatus,
+      hasUpdate: updateInfo.hasUpdate,
+      latestVersion: updateInfo.latestVersion,
+      lastChecked: new Date().toISOString(),
+      errorMessage: updateInfo.error ?? currentStatus.errorMessage,
+    };
+  });
+
+  return nextStatus;
 };
 
 const SDK_DEFINITIONS = [
@@ -75,6 +108,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
     const savedDependencyInstallProgress = window.dependencyInstallProgress;
     const savedDependencyInstallResult = window.dependencyInstallResult;
     const savedDependencyUninstallResult = window.dependencyUninstallResult;
+    const savedDependencyUpdateAvailable = window.dependencyUpdateAvailable;
     const savedNodeEnvironmentStatus = window.nodeEnvironmentStatus;
     const savedCheckNodeEnvironment = window.checkNodeEnvironment;
     const savedRunNodeEnvironmentStressTest = window.runNodeEnvironmentStressTest;
@@ -122,6 +156,8 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
           const sdkName = sdkDef ? tRef.current(sdkDef.nameKey) : result.sdkId;
           const msgKey = wasUpdating ? 'settings.dependency.updateSuccess' : 'settings.dependency.installSuccess';
           addToastRef.current?.(tRef.current(msgKey, { name: sdkName }), 'success');
+          sendToJava('get_dependency_status:');
+          sendToJava(`check_dependency_updates:${JSON.stringify({ id: result.sdkId })}`);
         } else if (result.error === 'node_not_configured') {
           addToastRef.current?.(tRef.current('settings.dependency.nodeNotConfigured'), 'warning');
         } else {
@@ -149,6 +185,16 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
           const sdkDef = SDK_DEFINITIONS.find(d => d.id === result.sdkId);
           const sdkName = sdkDef ? tRef.current(sdkDef.nameKey) : result.sdkId;
           addToastRef.current?.(tRef.current('settings.dependency.uninstallSuccess', { name: sdkName }), 'success');
+          setSdkStatus((prev) => ({
+            ...prev,
+            [result.sdkId]: {
+              ...prev[result.sdkId],
+              hasUpdate: false,
+              latestVersion: undefined,
+              lastChecked: new Date().toISOString(),
+              errorMessage: undefined,
+            },
+          }));
         } else {
           addToastRef.current?.(tRef.current('settings.dependency.uninstallFailed', { error: result.error }), 'error');
         }
@@ -159,6 +205,20 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
       if (typeof savedDependencyUninstallResult === 'function') {
         try { savedDependencyUninstallResult(jsonStr); } catch (e) {
           console.error('[DependencySection] Error in chained dependencyUninstallResult:', e);
+        }
+      }
+    };
+
+    window.dependencyUpdateAvailable = (jsonStr: string) => {
+      try {
+        const updatePayload: UpdateCheckResult = JSON.parse(jsonStr);
+        setSdkStatus((prev) => mergeDependencyUpdates(prev, updatePayload));
+      } catch (error) {
+        console.error('[DependencySection] Failed to parse dependency update result:', error);
+      }
+      if (typeof savedDependencyUpdateAvailable === 'function') {
+        try { savedDependencyUpdateAvailable(jsonStr); } catch (e) {
+          console.error('[DependencySection] Error in chained dependencyUpdateAvailable:', e);
         }
       }
     };
@@ -189,6 +249,11 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
       };
     }
 
+    if (window.__pendingDependencyUpdates) {
+      window.dependencyUpdateAvailable(window.__pendingDependencyUpdates);
+      window.__pendingDependencyUpdates = undefined;
+    }
+
     const handleNodePathReady = () => {
       isNodePathReadyRef.current = true;
       if (isActiveRef.current) {
@@ -202,6 +267,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
       window.dependencyInstallProgress = savedDependencyInstallProgress;
       window.dependencyInstallResult = savedDependencyInstallResult;
       window.dependencyUninstallResult = savedDependencyUninstallResult;
+      window.dependencyUpdateAvailable = savedDependencyUpdateAvailable;
       window.nodeEnvironmentStatus = savedNodeEnvironmentStatus;
       window.checkNodeEnvironment = savedCheckNodeEnvironment;
       window.runNodeEnvironmentStressTest = savedRunNodeEnvironmentStressTest;
@@ -216,6 +282,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
       return;
     }
     sendToJava('get_dependency_status:');
+    sendToJava('check_dependency_updates:');
     if (isNodePathReadyRef.current) {
       sendToJava('check_node_environment:');
     }
@@ -296,6 +363,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
             const hasUpdate = info?.hasUpdate;
             // Only allow one operation at a time (install, uninstall, or update)
             const isAnyOperationInProgress = installingSdk !== null || uninstallingSdk !== null || updatingSdk !== null;
+            const updateDisabled = isAnyOperationInProgress || nodeAvailable === false || !hasUpdate;
 
             return (
               <div key={sdk.id} className={styles.sdkCard}>
@@ -306,6 +374,9 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
                       <span>{t(sdk.nameKey)}</span>
                       {installed && info?.installedVersion && (
                         <span className={styles.versionBadge}>v{info.installedVersion}</span>
+                      )}
+                      {installed && hasUpdate && info?.latestVersion && (
+                        <span className={styles.versionBadge}>→ v{info.latestVersion}</span>
                       )}
                       {hasUpdate && (
                         <span className={styles.updateBadge}>
@@ -340,7 +411,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
                         <button
                           className={styles.updateBtn}
                           onClick={() => handleUpdate(sdk.id)}
-                          disabled={isAnyOperationInProgress}
+                          disabled={updateDisabled}
                         >
                           {isUpdating ? (
                             <>

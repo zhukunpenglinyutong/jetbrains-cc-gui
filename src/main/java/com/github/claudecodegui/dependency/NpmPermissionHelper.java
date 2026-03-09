@@ -226,6 +226,7 @@ public class NpmPermissionHelper {
         List<String> command = new ArrayList<>();
         command.add(npmPath);
         command.add("install");
+        command.add("--include=optional");
         command.add("--prefix");
         command.add(sdkDir.toString());
 

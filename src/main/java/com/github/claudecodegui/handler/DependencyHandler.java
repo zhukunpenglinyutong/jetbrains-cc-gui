@@ -271,7 +271,7 @@ public class DependencyHandler extends BaseMessageHandler {
     }
 
     /**
-     * Update SDK (uninstall then reinstall).
+     * Update SDK to the latest version within the supported version range.
      */
     private void handleUpdate(String content) {
         try {
@@ -306,17 +306,7 @@ public class DependencyHandler extends BaseMessageHandler {
                         return;
                     }
 
-                    // Step 1: Uninstall
-                    this.sendInstallProgress(sdkId, "Uninstalling old version...");
-                    boolean uninstallSuccess = this.dependencyManager.uninstallSdk(sdkId);
-                    if (!uninstallSuccess) {
-                        this.sendInstallProgress(sdkId, "WARNING: Uninstall encountered issues, proceeding with reinstall...");
-                    } else {
-                        this.sendInstallProgress(sdkId, "Old version uninstalled successfully.");
-                    }
-
-                    // Step 2: Reinstall
-                    this.sendInstallProgress(sdkId, "\nInstalling latest version...");
+                    this.sendInstallProgress(sdkId, "Updating SDK with npm install...");
                     InstallResult result = this.dependencyManager.installSdkSync(sdkId, (logLine) -> {
                         this.sendInstallProgress(sdkId, logLine);
                     });
