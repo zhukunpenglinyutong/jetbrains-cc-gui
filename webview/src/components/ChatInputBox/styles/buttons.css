@@ -67,3 +67,35 @@
   background: #d32f2f;
 }
 
+/* ============================================================
+   Session Token Stats
+   ============================================================ */
+.session-token-stats {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--button-bg);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: help;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.session-token-stats:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+.session-token-icon {
+  font-size: 14px;
+  color: var(--accent-color);
+}
+
+.session-token-total {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+

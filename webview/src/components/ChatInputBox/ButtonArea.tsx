@@ -5,6 +5,7 @@ import { ConfigSelect, ModelSelect, ModeSelect, ReasoningSelect } from './select
 import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
+import { SessionTokenStats } from './SessionTokenStats';
 
 /**
  * Get custom Codex model list from localStorage
@@ -74,6 +75,7 @@ export const ButtonArea = ({
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
   reasoningEffort = 'medium',
+  messages = [],
   onSubmit,
   onStop,
   onModeSelect,
@@ -268,6 +270,9 @@ export const ButtonArea = ({
       {/* Right side: tool buttons */}
       <div className="button-area-right">
         <div className="button-divider" />
+
+        {/* Session token stats */}
+        <SessionTokenStats messages={messages} />
 
         {/* Enhance prompt button */}
         <button

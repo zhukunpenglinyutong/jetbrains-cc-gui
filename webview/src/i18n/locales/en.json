@@ -88,7 +88,15 @@
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[Attachments Uploaded]",
     "streamingConnected": "Claude connected, understanding your question",
-    "showEarlierMessages": "Show {{count}} earlier messages"
+    "showEarlierMessages": "Show {{count}} earlier messages",
+    "sessionTokenStats": {
+      "title": "Session Token Statistics",
+      "input": "Input",
+      "output": "Output",
+      "cacheCreation": "Cache Write",
+      "cacheRead": "Cache Read",
+      "total": "Total"
+    }
   },
   "settings": {
     "title": "Settings",
