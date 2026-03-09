@@ -8,6 +8,8 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
 
+import com.google.gson.JsonArray;
+
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -16,8 +18,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -119,7 +124,53 @@ public class SessionCompactor {
                 otherKeep.add(new IndexedLine(i, line));
             }
 
-            // 3. Build compacted output
+            // 3. Build tool_use/tool_result dependency map
+            // Maps tool_use_id -> index in messages list (for assistant messages with tool_use)
+            Map<String, Integer> toolUseIdToMessageIndex = new HashMap<>();
+            // Maps message index -> set of tool_use_ids referenced (for user messages with tool_result)
+            Map<Integer, Set<String>> messageIndexToToolResultIds = new HashMap<>();
+
+            for (int i = 0; i < messages.size(); i++) {
+                IndexedLine il = messages.get(i);
+                String type = extractType(il.line);
+
+                if ("assistant".equals(type)) {
+                    // Extract all tool_use ids from this assistant message
+                    Set<String> toolUseIds = extractToolUseIds(il.line);
+                    for (String id : toolUseIds) {
+                        toolUseIdToMessageIndex.put(id, i);
+                    }
+                } else if ("user".equals(type)) {
+                    // Extract all tool_result ids from this user message
+                    Set<String> toolResultIds = extractToolResultIds(il.line);
+                    if (!toolResultIds.isEmpty()) {
+                        messageIndexToToolResultIds.put(i, toolResultIds);
+                    }
+                }
+            }
+
+            // 4. Determine cutoff, ensuring tool_use/tool_result pairs stay together
+            int initialCutoff = Math.max(0, messages.size() - keepMessages);
+            int adjustedCutoff = initialCutoff;
+
+            // Check if any tool_result after cutoff references a tool_use before cutoff
+            for (int i = initialCutoff; i < messages.size(); i++) {
+                Set<String> referencedIds = messageIndexToToolResultIds.get(i);
+                if (referencedIds != null) {
+                    for (String toolUseId : referencedIds) {
+                        Integer toolUseMessageIndex = toolUseIdToMessageIndex.get(toolUseId);
+                        if (toolUseMessageIndex != null && toolUseMessageIndex < adjustedCutoff) {
+                            // This tool_result references a tool_use that would be dropped
+                            // Move cutoff back to include the tool_use
+                            adjustedCutoff = toolUseMessageIndex;
+                            LOG.info("[SessionCompactor] Adjusted cutoff from " + initialCutoff
+                                    + " to " + adjustedCutoff + " to preserve tool_use/tool_result pair: " + toolUseId);
+                        }
+                    }
+                }
+            }
+
+            // 5. Build compacted output
             List<String> compacted = new ArrayList<>();
 
             // Keep first queue-operation (session init)
@@ -139,22 +190,38 @@ public class SessionCompactor {
                 compacted.add(il.line);
             }
 
-            // Keep last N messages
-            int messagesToDrop = Math.max(0, messages.size() - keepMessages);
-            droppedCount += messagesToDrop;
-            List<IndexedLine> keptMessages = messages.subList(messagesToDrop, messages.size());
+            // Keep messages from adjusted cutoff
+            droppedCount += adjustedCutoff;
+            List<IndexedLine> keptMessages = messages.subList(adjustedCutoff, messages.size());
             for (IndexedLine il : keptMessages) {
                 compacted.add(il.line);
             }
 
-            // 4. Backup (only if no backup exists yet)
+            // 6. Post-compact validation: ensure no orphaned tool_results
+            Set<String> keptToolUseIds = new HashSet<>();
+            Set<String> keptToolResultIds = new HashSet<>();
+            for (IndexedLine il : keptMessages) {
+                keptToolUseIds.addAll(extractToolUseIds(il.line));
+                keptToolResultIds.addAll(extractToolResultIds(il.line));
+            }
+            Set<String> orphanedToolResults = new HashSet<>(keptToolResultIds);
+            orphanedToolResults.removeAll(keptToolUseIds);
+            if (!orphanedToolResults.isEmpty()) {
+                LOG.warn("[SessionCompactor] VALIDATION FAILED: " + orphanedToolResults.size()
+                        + " orphaned tool_result(s) detected: " + orphanedToolResults);
+                // This should not happen with the adjusted cutoff logic above,
+                // but if it does, we abort to avoid corrupting the session
+                return CompactResult.error("Validation failed: orphaned tool_results detected");
+            }
+
+            // 8. Backup (only if no backup exists yet)
             Path backupFile = sessionFile.resolveSibling(sessionFile.getFileName() + ".bak-compact");
             if (!Files.exists(backupFile)) {
                 Files.copy(sessionFile, backupFile, StandardCopyOption.COPY_ATTRIBUTES);
                 LOG.info("[SessionCompactor] Backup created: " + backupFile.getFileName());
             }
 
-            // 5. Write compacted file
+            // 9. Write compacted file
             try (BufferedWriter writer = Files.newBufferedWriter(sessionFile, StandardCharsets.UTF_8)) {
                 for (String line : compacted) {
                     writer.write(line);
@@ -207,6 +274,76 @@ public class SessionCompactor {
             // malformed JSON — treat as unknown
         }
         return null;
+    }
+
+    /**
+     * Extract all tool_use ids from an assistant message.
+     * Structure: {"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_..."}]}}
+     */
+    private static Set<String> extractToolUseIds(String jsonLine) {
+        Set<String> ids = new HashSet<>();
+        try {
+            JsonElement el = GSON.fromJson(jsonLine, JsonElement.class);
+            if (el == null || !el.isJsonObject()) return ids;
+
+            JsonObject root = el.getAsJsonObject();
+            if (!root.has("message")) return ids;
+
+            JsonObject message = root.getAsJsonObject("message");
+            if (message == null || !message.has("content")) return ids;
+
+            JsonElement contentEl = message.get("content");
+            if (!contentEl.isJsonArray()) return ids;
+
+            JsonArray content = contentEl.getAsJsonArray();
+            for (JsonElement item : content) {
+                if (!item.isJsonObject()) continue;
+                JsonObject itemObj = item.getAsJsonObject();
+                if (itemObj.has("type") && "tool_use".equals(itemObj.get("type").getAsString())) {
+                    if (itemObj.has("id")) {
+                        ids.add(itemObj.get("id").getAsString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore parsing errors
+        }
+        return ids;
+    }
+
+    /**
+     * Extract all tool_result tool_use_ids from a user message.
+     * Structure: {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_..."}]}}
+     */
+    private static Set<String> extractToolResultIds(String jsonLine) {
+        Set<String> ids = new HashSet<>();
+        try {
+            JsonElement el = GSON.fromJson(jsonLine, JsonElement.class);
+            if (el == null || !el.isJsonObject()) return ids;
+
+            JsonObject root = el.getAsJsonObject();
+            if (!root.has("message")) return ids;
+
+            JsonObject message = root.getAsJsonObject("message");
+            if (message == null || !message.has("content")) return ids;
+
+            JsonElement contentEl = message.get("content");
+            if (!contentEl.isJsonArray()) return ids;
+
+            JsonArray content = contentEl.getAsJsonArray();
+            for (JsonElement item : content) {
+                if (!item.isJsonObject()) continue;
+                JsonObject itemObj = item.getAsJsonObject();
+                if (itemObj.has("type") && "tool_result".equals(itemObj.get("type").getAsString())) {
+                    if (itemObj.has("tool_use_id")) {
+                        ids.add(itemObj.get("tool_use_id").getAsString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore parsing errors
+        }
+        return ids;
     }
 
     // ========================================================================

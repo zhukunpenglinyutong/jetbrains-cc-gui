@@ -74,9 +74,15 @@ export function loadSessionHistory(sessionId, cwd) {
       }
     }
 
-    // Exclude the last user message (since we already persisted the current user message before calling this function)
+    // Exclude the last user message ONLY if it's a plain text message (not a tool_result).
+    // Tool_result messages must be kept to maintain tool_use/tool_result pairing.
     if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
-      messages.pop();
+      const lastUserContent = messages[messages.length - 1].content;
+      const hasToolResult = Array.isArray(lastUserContent) &&
+        lastUserContent.some(item => item.type === 'tool_result');
+      if (!hasToolResult) {
+        messages.pop();
+      }
     }
 
     return messages;
