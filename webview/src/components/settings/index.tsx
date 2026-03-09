@@ -444,6 +444,65 @@ const SettingsView = ({
     localStorage.setItem('theme', themePreference);
   }, [themePreference, ideTheme]);
 
+  // 当主题切换时，清除不适合当前主题的自定义颜色
+  useEffect(() => {
+    const resolvedTheme = themePreference === 'system'
+      ? (ideTheme || 'dark')
+      : themePreference;
+
+    const DARK_PRESETS = [
+      '#1e1e1e', '#1a1b26', '#282c34', '#2b2d30',
+      '#0d1117', '#1e1f29', '#262335', '#292d3e'
+    ];
+
+    const LIGHT_PRESETS = [
+      '#ffffff', '#fafafa', '#f5f5f5', '#faf4ed',
+      '#f6f8fa', '#fffbf0', '#f0f4f8', '#f5f0eb'
+    ];
+
+    const DARK_USER_MSG_PRESETS = [
+      '#005fb8', '#1a7f37', '#6e40c9', '#9a6700',
+      '#cf222e', '#0e6b8a', '#6b4c9a', '#4a5568'
+    ];
+
+    const LIGHT_USER_MSG_PRESETS = [
+      '#0078d4', '#1a7f37', '#8250df', '#bf8700',
+      '#cf222e', '#0e8a9a', '#7c5cbf', '#57606a'
+    ];
+
+    // 检查聊天背景色是否与当前主题匹配
+    const currentChatBg = localStorage.getItem('chatBgColor');
+    if (currentChatBg && /^#[0-9a-fA-F]{6}$/.test(currentChatBg)) {
+      const isLightPreset = LIGHT_PRESETS.some(c => c.toLowerCase() === currentChatBg.toLowerCase());
+      const isDarkPreset = DARK_PRESETS.some(c => c.toLowerCase() === currentChatBg.toLowerCase());
+
+      // 如果当前是深色主题，但背景色是浅色预设，则清除
+      if (resolvedTheme === 'dark' && isLightPreset && !isDarkPreset) {
+        setChatBgColor('');
+      }
+      // 如果当前是浅色主题，但背景色是深色预设，则清除
+      else if (resolvedTheme === 'light' && isDarkPreset && !isLightPreset) {
+        setChatBgColor('');
+      }
+    }
+
+    // 检查用户消息色是否与当前主题匹配
+    const currentUserMsgColor = localStorage.getItem('userMsgColor');
+    if (currentUserMsgColor && /^#[0-9a-fA-F]{6}$/.test(currentUserMsgColor)) {
+      const isLightUserMsgPreset = LIGHT_USER_MSG_PRESETS.some(c => c.toLowerCase() === currentUserMsgColor.toLowerCase());
+      const isDarkUserMsgPreset = DARK_USER_MSG_PRESETS.some(c => c.toLowerCase() === currentUserMsgColor.toLowerCase());
+
+      // 如果当前是深色主题，但用户消息色是浅色预设，则清除
+      if (resolvedTheme === 'dark' && isLightUserMsgPreset && !isDarkUserMsgPreset) {
+        setUserMsgColor('');
+      }
+      // 如果当前是浅色主题，但用户消息色是深色预设，则清除
+      else if (resolvedTheme === 'light' && isDarkUserMsgPreset && !isLightUserMsgPreset) {
+        setUserMsgColor('');
+      }
+    }
+  }, [themePreference, ideTheme]);
+
   // Font size scaling handler
   useEffect(() => {
     // Map level to scale ratio

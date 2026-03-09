@@ -203,14 +203,24 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       const prevUuid = getRawUuid(prevMsg);
       const nextUuid = getRawUuid(nextMsg);
 
-      const nextWithStableTimestamp =
-        nextMsg.timestamp === prevMsg.timestamp ? nextMsg : { ...nextMsg, timestamp: prevMsg.timestamp };
+      // 保留 timestamp 和 usage 数据
+      let result = nextMsg;
 
-      if (!prevUuid && nextUuid) {
-        return { ...nextWithStableTimestamp, raw: stripUuidFromRaw(nextWithStableTimestamp.raw) as any };
+      // 保留 timestamp
+      if (nextMsg.timestamp !== prevMsg.timestamp) {
+        result = { ...result, timestamp: prevMsg.timestamp };
       }
 
-      return nextWithStableTimestamp;
+      // 保留 usage 数据（如果新消息没有 usage，使用旧的）
+      if (prevMsg.usage && !nextMsg.usage) {
+        result = { ...result, usage: prevMsg.usage };
+      }
+
+      if (!prevUuid && nextUuid) {
+        return { ...result, raw: stripUuidFromRaw(result.raw) as any };
+      }
+
+      return result;
     };
 
     const appendOptimisticMessageIfMissing = (prevList: ClaudeMessage[], nextList: ClaudeMessage[]): ClaudeMessage[] => {
@@ -841,6 +851,8 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     window.onUsageUpdate = (json) => {
       try {
         const data = JSON.parse(json);
+        console.log('[Frontend] Received usage update:', data);
+
         if (typeof data.percentage === 'number') {
           let used = typeof data.usedTokens === 'number' ? data.usedTokens : (typeof data.totalTokens === 'number' ? data.totalTokens : undefined);
           const max = typeof data.maxTokens === 'number' ? data.maxTokens : (typeof data.limit === 'number' ? data.limit : undefined);
@@ -857,6 +869,47 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           setUsagePercentage(safePercentage);
           setUsageUsedTokens(used);
           setUsageMaxTokens(max);
+
+          // 将 usage 信息附加到最后一条 assistant 消息
+          if (data.inputTokens !== undefined || data.outputTokens !== undefined) {
+            console.log('[Frontend] Updating message with usage data:', {
+              inputTokens: data.inputTokens,
+              outputTokens: data.outputTokens,
+              cacheCreationTokens: data.cacheCreationTokens,
+              cacheReadTokens: data.cacheReadTokens,
+              totalTokens: used,
+            });
+
+            setMessages((prevMessages) => {
+              const lastIndex = findLastAssistantIndex(prevMessages);
+              console.log('[Frontend] Last assistant message index:', lastIndex);
+
+              if (lastIndex < 0) {
+                console.warn('[Frontend] No assistant message found to attach usage data');
+                return prevMessages;
+              }
+
+              const lastAssistant = prevMessages[lastIndex];
+              const updatedUsage = {
+                inputTokens: data.inputTokens || 0,
+                outputTokens: data.outputTokens || 0,
+                cacheCreationTokens: data.cacheCreationTokens,
+                cacheReadTokens: data.cacheReadTokens,
+                totalTokens: used,
+              };
+
+              const updatedMessage = { ...lastAssistant, usage: updatedUsage };
+              console.log('[Frontend] Updated message with usage:', updatedMessage);
+
+              const newMessages = [...prevMessages];
+              newMessages[lastIndex] = updatedMessage;
+              return newMessages;
+            });
+          } else {
+            console.warn('[Frontend] Usage data missing inputTokens/outputTokens:', data);
+          }
+        } else {
+          console.warn('[Frontend] Usage data missing percentage field:', data);
         }
       } catch (error) {
         console.error('[Frontend] Failed to parse usage update:', error);

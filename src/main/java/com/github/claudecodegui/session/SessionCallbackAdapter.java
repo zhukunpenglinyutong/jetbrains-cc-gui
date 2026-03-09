@@ -168,13 +168,34 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     }
 
     @Override
-    public void onUsageUpdate(int usedTokens, int maxTokens) {
+    public void onUsageUpdate(String usageJson, int usedTokens, int maxTokens) {
         ApplicationManager.getApplication().invokeLater(() -> {
             double percentage = maxTokens > 0 ? (usedTokens * 100.0 / maxTokens) : 0.0;
-            String json = String.format("{\"percentage\":%.2f,\"usedTokens\":%d,\"maxTokens\":%d}",
-                    percentage, usedTokens, maxTokens);
+
+            // 解析 usage JSON 以提取详细的 token 信息
+            com.google.gson.JsonObject usage = null;
+            int inputTokens = 0;
+            int outputTokens = 0;
+            int cacheCreationTokens = 0;
+            int cacheReadTokens = 0;
+
+            try {
+                usage = new com.google.gson.Gson().fromJson(usageJson, com.google.gson.JsonObject.class);
+                inputTokens = usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
+                outputTokens = usage.has("output_tokens") ? usage.get("output_tokens").getAsInt() : 0;
+                cacheCreationTokens = usage.has("cache_creation_input_tokens") ? usage.get("cache_creation_input_tokens").getAsInt() : 0;
+                cacheReadTokens = usage.has("cache_read_input_tokens") ? usage.get("cache_read_input_tokens").getAsInt() : 0;
+            } catch (Exception e) {
+                LOG.warn("Failed to parse usage JSON: " + e.getMessage());
+            }
+
+            // 构建包含详细信息的 JSON
+            String json = String.format(
+                "{\"percentage\":%.2f,\"usedTokens\":%d,\"maxTokens\":%d,\"inputTokens\":%d,\"outputTokens\":%d,\"cacheCreationTokens\":%d,\"cacheReadTokens\":%d}",
+                percentage, usedTokens, maxTokens, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens
+            );
             jsTarget.callJavaScript("onUsageUpdate", JsUtils.escapeJs(json));
-            LOG.debug("Usage update sent to frontend: " + usedTokens + "/" + maxTokens);
+            LOG.debug("Usage update sent to frontend: " + usedTokens + "/" + maxTokens + " (input:" + inputTokens + " output:" + outputTokens + ")");
         });
     }
 

@@ -122,6 +122,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       addToast,
       messageQueue,
       onRemoveFromQueue,
+      messages = [],
     }: ChatInputBoxProps,
     ref: React.ForwardedRef<ChatInputBoxHandle>
   ) => {
@@ -925,6 +926,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           permissionMode={permissionMode}
           currentProvider={currentProvider}
           reasoningEffort={reasoningEffort}
+          messages={messages}
           onSubmit={handleSubmit}
           onStop={onStop}
           onModeSelect={handleModeSelect}

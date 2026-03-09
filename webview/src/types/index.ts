@@ -26,6 +26,14 @@ export interface ClaudeRawMessage {
   [key: string]: unknown;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
+  totalTokens?: number;
+}
+
 export interface ClaudeMessage {
   type: ClaudeRole;
   content?: string;
@@ -33,6 +41,7 @@ export interface ClaudeMessage {
   timestamp?: string;
   isStreaming?: boolean; // Marks whether the message is currently being streamed
   isOptimistic?: boolean; // Marks whether the message is optimistically added by the client (awaiting backend confirmation)
+  usage?: TokenUsage; // Token usage for this message (assistant messages only)
   [key: string]: unknown;
 }
 

@@ -16,6 +16,7 @@ import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
+import './MessageItem.css';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -530,6 +531,34 @@ export const MessageItem = memo(function MessageItem({
       <div className="message-content">
         {renderGroupedBlocks()}
       </div>
+
+      {/* Token usage display for assistant messages */}
+      {message.type === 'assistant' && message.usage && !isMessageStreaming && (
+        <div className="message-token-usage">
+          <span className="token-usage-label">Token:</span>
+          <span className="token-usage-item token-input" title="输入 Tokens">
+            ↑ {message.usage.inputTokens.toLocaleString()}
+          </span>
+          <span className="token-usage-item token-output" title="输出 Tokens">
+            ↓ {message.usage.outputTokens.toLocaleString()}
+          </span>
+          {message.usage.cacheCreationTokens !== undefined && message.usage.cacheCreationTokens > 0 && (
+            <span className="token-usage-item token-cache-write" title="缓存写入 Tokens">
+              ⚡ {message.usage.cacheCreationTokens.toLocaleString()}
+            </span>
+          )}
+          {message.usage.cacheReadTokens !== undefined && message.usage.cacheReadTokens > 0 && (
+            <span className="token-usage-item token-cache-read" title="缓存读取 Tokens">
+              📖 {message.usage.cacheReadTokens.toLocaleString()}
+            </span>
+          )}
+          {message.usage.totalTokens !== undefined && (
+            <span className="token-usage-item token-total" title="总计 Tokens">
+              ∑ {message.usage.totalTokens.toLocaleString()}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 });

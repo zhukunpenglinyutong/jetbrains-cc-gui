@@ -3,6 +3,8 @@
  * Feature: 004-refactor-input-box
  */
 
+import type { ClaudeMessage } from '../../types';
+
 // ============================================================
 // Core Entity Types
 // ============================================================
@@ -535,6 +537,9 @@ export interface ChatInputBoxProps {
   messageQueue?: QueuedMessage[];
   /** Remove message from queue callback */
   onRemoveFromQueue?: (id: string) => void;
+
+  /** Messages for session token stats */
+  messages?: ClaudeMessage[];
 }
 
 /**
@@ -557,6 +562,8 @@ export interface ButtonAreaProps {
   currentProvider?: string;
   /** Current reasoning effort (Codex only) */
   reasoningEffort?: ReasoningEffort;
+  /** Messages for session token stats */
+  messages?: ClaudeMessage[];
 
   // Event callbacks
   onSubmit?: () => void;

@@ -1802,6 +1802,7 @@ const App = () => {
             addToast={addToast}
             messageQueue={messageQueue}
             onRemoveFromQueue={dequeueMessage}
+            messages={messages}
           />
         </div>
         </>

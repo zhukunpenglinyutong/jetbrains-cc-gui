@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 import type { DropdownItemData, DropdownPosition, PermissionMode, ReasoningEffort, SelectedAgent } from './types.js';
 import type { TooltipState } from './hooks/useTooltip.js';
+import type { ClaudeMessage } from '../../types';
 import { ButtonArea } from './ButtonArea.js';
 import { CompletionDropdown } from './Dropdown/index.js';
 import { PromptEnhancerDialog } from './PromptEnhancerDialog.js';
@@ -25,6 +26,7 @@ export function ChatInputBoxFooter({
   permissionMode,
   currentProvider,
   reasoningEffort,
+  messages = [],
   onSubmit,
   onStop,
   onModeSelect,
@@ -58,6 +60,7 @@ export function ChatInputBoxFooter({
   permissionMode: PermissionMode;
   currentProvider: string;
   reasoningEffort: ReasoningEffort;
+  messages?: ClaudeMessage[];
   onSubmit: () => void;
   onStop?: () => void;
   onModeSelect?: (mode: PermissionMode) => void;
@@ -103,6 +106,7 @@ export function ChatInputBoxFooter({
         permissionMode={permissionMode}
         currentProvider={currentProvider}
         reasoningEffort={reasoningEffort}
+        messages={messages}
         onSubmit={onSubmit}
         onStop={onStop}
         onModeSelect={onModeSelect}
