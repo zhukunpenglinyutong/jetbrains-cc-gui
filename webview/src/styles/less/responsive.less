@@ -61,8 +61,28 @@
         font-size: 20px;
     }
 
+    .usage-tabs {
+        flex-wrap: wrap;
+    }
+
+    .tab-btn {
+        flex: 1 1 calc(50% - 4px);
+        justify-content: center;
+        padding: 8px 10px;
+    }
+
+    .model-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .model-header .model-cost {
+        align-self: flex-end;
+    }
+
     .model-details {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
     }
 
     .sessions-header {

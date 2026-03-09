@@ -429,11 +429,11 @@ public class ProviderHandler extends BaseMessageHandler {
             File ccSwitchDir = new File(userHome, ".cc-switch");
             File dbFile = new File(ccSwitchDir, "cc-switch.db");
 
-            LOG.info("[ProviderHandler] 操作系统: " + osName);
-            LOG.info("[ProviderHandler] 用户目录: " + userHome);
-            LOG.info("[ProviderHandler] cc-switch 目录: " + ccSwitchDir.getAbsolutePath());
-            LOG.info("[ProviderHandler] 数据库文件路径: " + dbFile.getAbsolutePath());
-            LOG.info("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
+            LOG.info("[ProviderHandler] OS: " + osName);
+            LOG.info("[ProviderHandler] User home: " + userHome);
+            LOG.info("[ProviderHandler] cc-switch dir: " + ccSwitchDir.getAbsolutePath());
+            LOG.info("[ProviderHandler] Database file path: " + dbFile.getAbsolutePath());
+            LOG.info("[ProviderHandler] Database file exists: " + dbFile.exists());
 
             if (!dbFile.exists()) {
                 String errorMsg = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.notFound", dbFile.getAbsolutePath());
@@ -444,7 +444,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
             CompletableFuture.runAsync(() -> {
                 try {
-                    LOG.info("[ProviderHandler] 开始读取数据库文件...");
+                    LOG.info("[ProviderHandler] Starting to read database file...");
                     Gson gson = new Gson();
                     List<JsonObject> providers = context.getSettingsService().parseProvidersFromCcSwitchDb(dbFile.getPath());
 
@@ -464,7 +464,7 @@ public class ProviderHandler extends BaseMessageHandler {
 
                     String jsonStr = gson.toJson(response);
                     LOG.info("[ProviderHandler] Successfully read " + providers.size() + " provider configs");
-                    callJavaScript("import_preview_result", escapeJs(jsonStr));
+                    callJavaScript("window.import_preview_result", escapeJs(jsonStr));
 
                 } catch (Exception e) {
                     String errorDetails = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.readFailed") + ": " + e.getMessage();
@@ -506,8 +506,8 @@ public class ProviderHandler extends BaseMessageHandler {
                                                  .findFileByPath(defaultDir.getAbsolutePath());
                 }
 
-                LOG.info("[ProviderHandler] 打开文件选择器，默认目录: " +
-                                 (defaultVirtualFile != null ? defaultVirtualFile.getPath() : "用户主目录"));
+                LOG.info("[ProviderHandler] Opening file chooser, default dir: " +
+                                 (defaultVirtualFile != null ? defaultVirtualFile.getPath() : "user home"));
 
                 // Open file chooser
                 VirtualFile[] selectedFiles = FileChooser.chooseFiles(
@@ -526,8 +526,8 @@ public class ProviderHandler extends BaseMessageHandler {
                 String dbPath = selectedFile.getPath();
                 File dbFile = new File(dbPath);
 
-                LOG.info("[ProviderHandler] 用户选择的数据库文件路径: " + dbFile.getAbsolutePath());
-                LOG.info("[ProviderHandler] 数据库文件是否存在: " + dbFile.exists());
+                LOG.info("[ProviderHandler] User selected database file path: " + dbFile.getAbsolutePath());
+                LOG.info("[ProviderHandler] Database file exists: " + dbFile.exists());
 
                 if (!dbFile.exists()) {
                     String errorMsg = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.notFound", dbFile.getAbsolutePath());
@@ -548,7 +548,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 // Read database asynchronously
                 CompletableFuture.runAsync(() -> {
                     try {
-                        LOG.info("[ProviderHandler] 开始读取用户选择的数据库文件...");
+                        LOG.info("[ProviderHandler] Starting to read user-selected database file...");
                         Gson gson = new Gson();
                         List<JsonObject> providers = context.getSettingsService().parseProvidersFromCcSwitchDb(dbFile.getPath());
 
@@ -567,8 +567,8 @@ public class ProviderHandler extends BaseMessageHandler {
                         response.add("providers", providersArray);
 
                         String jsonStr = gson.toJson(response);
-                        LOG.info("[ProviderHandler] 成功读取 " + providers.size() + " 个供应商配置，准备发送到前端");
-                        callJavaScript("import_preview_result", escapeJs(jsonStr));
+                        LOG.info("[ProviderHandler] Successfully read " + providers.size() + " provider configs, sending to frontend");
+                        callJavaScript("window.import_preview_result", escapeJs(jsonStr));
 
                     } catch (Exception e) {
                         String errorDetails = com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.ccswitch.readFailed") + ": " + e.getMessage();
@@ -595,7 +595,7 @@ public class ProviderHandler extends BaseMessageHandler {
                 JsonObject request = gson.fromJson(content, JsonObject.class);
                 JsonArray providersArray = request.getAsJsonArray("providers");
 
-                if (providersArray == null || providersArray.size() == 0) {
+                if (providersArray == null || providersArray.isEmpty()) {
                     return;
                 }
 

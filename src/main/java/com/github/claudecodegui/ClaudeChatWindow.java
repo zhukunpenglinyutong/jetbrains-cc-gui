@@ -1,5 +1,6 @@
 package com.github.claudecodegui;
 
+import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.handler.HandlerContext;
 import com.github.claudecodegui.handler.HistoryHandler;
 import com.github.claudecodegui.handler.MessageDispatcher;
@@ -50,8 +51,8 @@ public class ClaudeChatWindow {
 
     private JBCefBrowser browser;
     private ClaudeSession session;
-    private WebviewWatchdog webviewWatchdog;
-    private StreamMessageCoalescer streamCoalescer;
+    private final WebviewWatchdog webviewWatchdog;
+    private final StreamMessageCoalescer streamCoalescer;
 
     private volatile boolean disposed = false;
     private volatile boolean initialized = false;
@@ -63,12 +64,12 @@ public class ClaudeChatWindow {
     private MessageDispatcher messageDispatcher;
     private PermissionHandler permissionHandler;
     private HistoryHandler historyHandler;
-    private SessionLifecycleManager sessionLifecycleManager;
+    private final SessionLifecycleManager sessionLifecycleManager;
 
     // Delegates
     private WebviewInitializer webviewInitializer;
-    private EditorContextTracker editorContextTracker;
-    private ChatWindowDelegate chatWindowDelegate;
+    private final EditorContextTracker editorContextTracker;
+    private final ChatWindowDelegate chatWindowDelegate;
     private SessionCallbackAdapter sessionCallbackAdapter;
 
     public ClaudeChatWindow(Project project) {
@@ -109,36 +110,111 @@ public class ClaudeChatWindow {
 
         // Initialize stream message coalescer
         this.streamCoalescer = new StreamMessageCoalescer(new StreamMessageCoalescer.JsCallbackTarget() {
-            @Override public void callJavaScript(String functionName, String... args) {
+            @Override
+            public void callJavaScript(String functionName, String... args) {
                 ClaudeChatWindow.this.callJavaScript(functionName, args);
             }
-            @Override public JBCefBrowser getBrowser() { return browser; }
-            @Override public boolean isDisposed() { return disposed; }
-            @Override public HandlerContext getHandlerContext() { return handlerContext; }
+
+            @Override
+            public JBCefBrowser getBrowser() {
+                return browser;
+            }
+
+            @Override
+            public boolean isDisposed() {
+                return disposed;
+            }
+
+            @Override
+            public HandlerContext getHandlerContext() {
+                return handlerContext;
+            }
         });
 
         // Initialize session lifecycle manager
         this.sessionLifecycleManager = new SessionLifecycleManager(new SessionLifecycleManager.SessionHost() {
-            @Override public Project getProject() { return project; }
-            @Override public ClaudeSDKBridge getClaudeSDKBridge() { return claudeSDKBridge; }
-            @Override public CodexSDKBridge getCodexSDKBridge() { return codexSDKBridge; }
-            @Override public ClaudeSession getSession() { return session; }
-            @Override public void setSession(ClaudeSession s) { session = s; }
-            @Override public HandlerContext getHandlerContext() { return handlerContext; }
-            @Override public StreamMessageCoalescer getStreamCoalescer() { return streamCoalescer; }
-            @Override public void clearPendingPermissionRequests() { permissionHandler.clearPendingRequests(); }
-            @Override public void callJavaScript(String fn, String... args) { ClaudeChatWindow.this.callJavaScript(fn, args); }
-            @Override public boolean isDisposed() { return disposed; }
-            @Override public JBCefBrowser getBrowser() { return browser; }
-            @Override public void setupSessionCallbacks() { ClaudeChatWindow.this.setupSessionCallbacks(); }
-            @Override public void setSlashCommandsFetched(boolean fetched) { slashCommandsFetched = fetched; }
-            @Override public void setFetchedSlashCommandsCount(int count) { fetchedSlashCommandsCount = count; }
+            @Override
+            public Project getProject() {
+                return project;
+            }
+
+            @Override
+            public ClaudeSDKBridge getClaudeSDKBridge() {
+                return claudeSDKBridge;
+            }
+
+            @Override
+            public CodexSDKBridge getCodexSDKBridge() {
+                return codexSDKBridge;
+            }
+
+            @Override
+            public ClaudeSession getSession() {
+                return session;
+            }
+
+            @Override
+            public void setSession(ClaudeSession s) {
+                session = s;
+            }
+
+            @Override
+            public HandlerContext getHandlerContext() {
+                return handlerContext;
+            }
+
+            @Override
+            public StreamMessageCoalescer getStreamCoalescer() {
+                return streamCoalescer;
+            }
+
+            @Override
+            public void clearPendingPermissionRequests() {
+                permissionHandler.clearPendingRequests();
+            }
+
+            @Override
+            public void callJavaScript(String fn, String... args) {
+                ClaudeChatWindow.this.callJavaScript(fn, args);
+            }
+
+            @Override
+            public boolean isDisposed() {
+                return disposed;
+            }
+
+            @Override
+            public JBCefBrowser getBrowser() {
+                return browser;
+            }
+
+            @Override
+            public void setupSessionCallbacks() {
+                ClaudeChatWindow.this.setupSessionCallbacks();
+            }
+
+            @Override
+            public void setSlashCommandsFetched(boolean fetched) {
+                slashCommandsFetched = fetched;
+            }
+
+            @Override
+            public void setFetchedSlashCommandsCount(int count) {
+                fetchedSlashCommandsCount = count;
+            }
         });
 
         // Initialize editor context tracker
         this.editorContextTracker = new EditorContextTracker(project, new EditorContextTracker.ContextCallback() {
-            @Override public void addSelectionInfo(String info) { callJavaScript("addSelectionInfo", info); }
-            @Override public void clearSelectionInfo() { callJavaScript("clearSelectionInfo"); }
+            @Override
+            public void addSelectionInfo(String info) {
+                callJavaScript("addSelectionInfo", info);
+            }
+
+            @Override
+            public void clearSelectionInfo() {
+                callJavaScript("clearSelectionInfo");
+            }
         });
         editorContextTracker.registerListeners();
 
@@ -148,20 +224,37 @@ public class ClaudeChatWindow {
         setupSessionCallbacks();
         initializeSessionInfo();
         webviewInitializer.overrideBridgePathIfAvailable();
-        webviewInitializer.createUIComponents();
-        registerSessionLoadListener();
+
+        // Delay JCEF browser creation to avoid service initialization conflicts
+        // during JBCefApp$Holder class init (ProxyMigrationService dependency).
+        // Operations that depend on browser readiness are also deferred.
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (!disposed) {
+                webviewInitializer.createUIComponents();
+                registerSessionLoadListener();
+                this.initialized = true;
+                LOG.info("Window instance fully initialized, project: " + project.getName());
+            }
+        });
+
         if (!skipRegister) {
             registerInstance();
         }
         chatWindowDelegate.initializeStatusBar();
 
-        this.initialized = true;
-        LOG.info("Window instance fully initialized, project: " + project.getName());
+        // Sync IDEA keymap for ChatSendAction based on current sendShortcut setting
+        SendShortcutSync.syncFromSettings();
     }
 
     // ==================== Public API ====================
 
     public void setParentContent(Content content) {
+        // Unregister old mapping when changing or clearing parent content
+        if (this.parentContent != null && this.parentContent != content) {
+            ClaudeSDKToolWindow.unregisterContentMapping(this.parentContent);
+            LOG.debug("[MultiTab] Unregistered old Content -> ClaudeChatWindow mapping");
+        }
+
         this.parentContent = content;
         if (content != null) {
             ClaudeSDKToolWindow.registerContentMapping(content, this);
@@ -170,8 +263,8 @@ public class ClaudeChatWindow {
             if (this.originalTabName == null) {
                 String displayName = content.getDisplayName();
                 this.originalTabName = displayName.endsWith("...")
-                    ? displayName.substring(0, displayName.length() - 3)
-                    : displayName;
+                        ? displayName.substring(0, displayName.length() - 3)
+                        : displayName;
                 LOG.debug("[TabLoading] Auto-initialized original tab name: " + this.originalTabName);
             }
         }
@@ -179,17 +272,38 @@ public class ClaudeChatWindow {
 
     public void setOriginalTabName(String name) {
         this.originalTabName = (name != null && name.endsWith("..."))
-            ? name.substring(0, name.length() - 3)
-            : name;
+                ? name.substring(0, name.length() - 3)
+                : name;
         LOG.debug("[TabLoading] Set original tab name: " + this.originalTabName);
     }
 
-    public boolean isDisposed() { return disposed; }
-    public boolean isInitialized() { return initialized; }
-    public Content getParentContent() { return parentContent; }
-    public JPanel getContent() { return mainPanel; }
-    public ClaudeSDKBridge getClaudeSDKBridge() { return claudeSDKBridge; }
-    public CodexSDKBridge getCodexSDKBridge() { return codexSDKBridge; }
+    public boolean isDisposed() {
+        return disposed;
+    }
+
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public Content getParentContent() {
+        return parentContent;
+    }
+
+    public JPanel getContent() {
+        return mainPanel;
+    }
+
+    public ClaudeSDKBridge getClaudeSDKBridge() {
+        return claudeSDKBridge;
+    }
+
+    public CodexSDKBridge getCodexSDKBridge() {
+        return codexSDKBridge;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
 
     public void addCodeSnippetFromExternal(String selectionInfo) {
         addCodeSnippet(selectionInfo);
@@ -221,9 +335,18 @@ public class ClaudeChatWindow {
 
     // ==================== JavaScript Bridge ====================
 
+    private static final java.util.regex.Pattern SAFE_JS_FUNCTION_NAME =
+            java.util.regex.Pattern.compile("^[a-zA-Z_$][a-zA-Z0-9_$.]*$");
+
     void callJavaScript(String functionName, String... args) {
         if (disposed || browser == null) {
             LOG.warn("Cannot call JS function " + functionName + ": disposed=" + disposed + ", browser=" + (browser == null ? "null" : "exists"));
+            return;
+        }
+
+        // Validate function name to prevent JS injection
+        if (functionName == null || !SAFE_JS_FUNCTION_NAME.matcher(functionName).matches()) {
+            LOG.error("Invalid JavaScript function name rejected: " + functionName);
             return;
         }
 
@@ -233,7 +356,7 @@ public class ClaudeChatWindow {
             }
             try {
                 String callee = functionName;
-                if (functionName != null && !functionName.isEmpty() && !functionName.contains(".")) {
+                if (!functionName.contains(".")) {
                     callee = "window." + functionName;
                 }
 
@@ -247,15 +370,15 @@ public class ClaudeChatWindow {
                 }
 
                 String checkAndCall =
-                    "(function() {" +
-                    "  try {" +
-                    "    if (typeof " + callee + " === 'function') {" +
-                    "      " + callee + "(" + argsJs + ");" +
-                    "    }" +
-                    "  } catch (e) {" +
-                    "    console.error('[Backend->Frontend] Failed to call " + functionName + ":', e);" +
-                    "  }" +
-                    "})();";
+                        "(function() {" +
+                                "  try {" +
+                                "    if (typeof " + callee + " === 'function') {" +
+                                "      " + callee + "(" + argsJs + ");" +
+                                "    }" +
+                                "  } catch (e) {" +
+                                "    console.error('[Backend->Frontend] Failed to call " + functionName + ":', e);" +
+                                "  }" +
+                                "})();";
 
                 browser.getCefBrowser().executeJavaScript(checkAndCall, browser.getCefBrowser().getURL(), 0);
             } catch (Exception e) {
@@ -312,11 +435,16 @@ public class ClaudeChatWindow {
 
     private void setupSessionCallbacks() {
         this.sessionCallbackAdapter = new SessionCallbackAdapter(
-            streamCoalescer,
-            this::callJavaScript,
-            permissionHandler,
-            () -> slashCommandsFetched,
-            this::onStreamEnded
+                streamCoalescer,
+                new SessionCallbackAdapter.JsTarget() {
+                    @Override
+                    public void callJavaScript(String functionName, String... args) {
+                        ClaudeChatWindow.this.callJavaScript(functionName, args);
+                    }
+                },
+                permissionHandler,
+                () -> slashCommandsFetched,
+                this::onStreamEnded
         );
         session.setCallback(sessionCallbackAdapter);
     }
@@ -343,7 +471,7 @@ public class ClaudeChatWindow {
     private void registerSessionLoadListener() {
         SessionLoadService.getInstance().setListener((sessionId, projectPath) -> {
             ApplicationManager.getApplication().invokeLater(() ->
-                sessionLifecycleManager.loadHistorySession(sessionId, projectPath));
+                    sessionLifecycleManager.loadHistorySession(sessionId, projectPath));
         });
     }
 
@@ -455,59 +583,209 @@ public class ClaudeChatWindow {
 
     private WebviewInitializer.WebviewHost createWebviewHost() {
         return new WebviewInitializer.WebviewHost() {
-            @Override public Project getProject() { return project; }                       // Current IDEA project
-            @Override public ClaudeSDKBridge getClaudeSDKBridge() { return claudeSDKBridge; } // Claude SDK bridge for AI communication
-            @Override public CodexSDKBridge getCodexSDKBridge() { return codexSDKBridge; }   // Codex SDK bridge for AI communication
-            @Override public JPanel getMainPanel() { return mainPanel; }                     // Root UI panel for webview embedding
-            @Override public HtmlLoader getHtmlLoader() { return htmlLoader; }               // HTML resource loader for webview content
-            @Override public HandlerContext getHandlerContext() { return handlerContext; }    // Shared handler context (JS query, bridges, etc.)
-            @Override public JBCefBrowser getBrowser() { return browser; }                   // Current JCEF browser instance
-            @Override public void setBrowser(JBCefBrowser b) { browser = b; }                // Replace browser instance on recreate
-            @Override public boolean isDisposed() { return disposed; }                       // Check if window has been disposed
-            @Override public void handleJavaScriptMessage(String msg) { ClaudeChatWindow.this.handleJavaScriptMessage(msg); } // Route JS→Java messages
-            @Override public WebviewWatchdog getWebviewWatchdog() { return webviewWatchdog; } // Watchdog for webview health monitoring
-            @Override public void setFrontendReady(boolean ready) { frontendReady = ready; } // Mark frontend load state (reset on reload/recreate)
+            @Override
+            public Project getProject() {
+                return project;
+            }                       // Current IDEA project
+
+            @Override
+            public ClaudeSDKBridge getClaudeSDKBridge() {
+                return claudeSDKBridge;
+            } // Claude SDK bridge for AI communication
+
+            @Override
+            public CodexSDKBridge getCodexSDKBridge() {
+                return codexSDKBridge;
+            }   // Codex SDK bridge for AI communication
+
+            @Override
+            public JPanel getMainPanel() {
+                return mainPanel;
+            }                     // Root UI panel for webview embedding
+
+            @Override
+            public HtmlLoader getHtmlLoader() {
+                return htmlLoader;
+            }               // HTML resource loader for webview content
+
+            @Override
+            public HandlerContext getHandlerContext() {
+                return handlerContext;
+            }    // Shared handler context (JS query, bridges, etc.)
+
+            @Override
+            public JBCefBrowser getBrowser() {
+                return browser;
+            }                   // Current JCEF browser instance
+
+            @Override
+            public void setBrowser(JBCefBrowser b) {
+                browser = b;
+            }                // Replace browser instance on recreate
+
+            @Override
+            public boolean isDisposed() {
+                return disposed;
+            }                       // Check if window has been disposed
+
+            @Override
+            public void handleJavaScriptMessage(String msg) {
+                ClaudeChatWindow.this.handleJavaScriptMessage(msg);
+            } // Route JS→Java messages
+
+            @Override
+            public WebviewWatchdog getWebviewWatchdog() {
+                return webviewWatchdog;
+            } // Watchdog for webview health monitoring
+
+            @Override
+            public void setFrontendReady(boolean ready) {
+                frontendReady = ready;
+            } // Mark frontend load state (reset on reload/recreate)
         };
     }
 
     private ChatWindowDelegate.DelegateHost createDelegateHost() {
         return new ChatWindowDelegate.DelegateHost() {
             // --- Read-only accessors ---
-            @Override public Project getProject() { return project; }                       // Current IDEA project
-            @Override public ClaudeSDKBridge getClaudeSDKBridge() { return claudeSDKBridge; } // Claude SDK bridge for AI communication
-            @Override public CodexSDKBridge getCodexSDKBridge() { return codexSDKBridge; }   // Codex SDK bridge for AI communication
-            @Override public ClaudeSession getSession() { return session; }                  // Active Claude session instance
-            @Override public CodemossSettingsService getSettingsService() { return settingsService; } // Plugin settings (provider, API key, etc.)
-            @Override public JPanel getMainPanel() { return mainPanel; }                     // Root UI panel
-            @Override public JBCefBrowser getBrowser() { return browser; }                   // Current JCEF browser instance
-            @Override public boolean isDisposed() { return disposed; }                       // Check if window has been disposed
-            @Override public Content getParentContent() { return parentContent; }            // Tab content this window belongs to
-            @Override public String getOriginalTabName() { return originalTabName; }         // Original tab name before any rename
-            @Override public void setOriginalTabName(String name) { ClaudeChatWindow.this.setOriginalTabName(name); }
-            @Override public String getSessionId() { return sessionId; }                     // Unique session identifier
+            @Override
+            public Project getProject() {
+                return project;
+            }                       // Current IDEA project
+
+            @Override
+            public ClaudeSDKBridge getClaudeSDKBridge() {
+                return claudeSDKBridge;
+            } // Claude SDK bridge for AI communication
+
+            @Override
+            public CodexSDKBridge getCodexSDKBridge() {
+                return codexSDKBridge;
+            }   // Codex SDK bridge for AI communication
+
+            @Override
+            public ClaudeSession getSession() {
+                return session;
+            }                  // Active Claude session instance
+
+            @Override
+            public CodemossSettingsService getSettingsService() {
+                return settingsService;
+            } // Plugin settings (provider, API key, etc.)
+
+            @Override
+            public JPanel getMainPanel() {
+                return mainPanel;
+            }                     // Root UI panel
+
+            @Override
+            public JBCefBrowser getBrowser() {
+                return browser;
+            }                   // Current JCEF browser instance
+
+            @Override
+            public boolean isDisposed() {
+                return disposed;
+            }                       // Check if window has been disposed
+
+            @Override
+            public Content getParentContent() {
+                return parentContent;
+            }            // Tab content this window belongs to
+
+            @Override
+            public String getOriginalTabName() {
+                return originalTabName;
+            }         // Original tab name before any rename
+
+            @Override
+            public void setOriginalTabName(String name) {
+                ClaudeChatWindow.this.setOriginalTabName(name);
+            }
+
+            @Override
+            public String getSessionId() {
+                return sessionId;
+            }                     // Unique session identifier
 
             // --- Handler context & wiring (initialized during startup) ---
-            @Override public HandlerContext getHandlerContext() { return handlerContext; }    // Shared handler context (JS query, bridges, etc.)
-            @Override public void setHandlerContext(HandlerContext ctx) { handlerContext = ctx; }       // Set by initializeHandlers()
-            @Override public void setMessageDispatcher(MessageDispatcher d) { messageDispatcher = d; } // Set by initializeHandlers()
-            @Override public void setPermissionHandler(PermissionHandler h) { permissionHandler = h; } // Set by initializeHandlers()
-            @Override public void setHistoryHandler(HistoryHandler h) { historyHandler = h; }          // Set by initializeHandlers()
+            @Override
+            public HandlerContext getHandlerContext() {
+                return handlerContext;
+            }    // Shared handler context (JS query, bridges, etc.)
+
+            @Override
+            public void setHandlerContext(HandlerContext ctx) {
+                handlerContext = ctx;
+            }       // Set by initializeHandlers()
+
+            @Override
+            public void setMessageDispatcher(MessageDispatcher d) {
+                messageDispatcher = d;
+            } // Set by initializeHandlers()
+
+            @Override
+            public void setPermissionHandler(PermissionHandler h) {
+                permissionHandler = h;
+            } // Set by initializeHandlers()
+
+            @Override
+            public void setHistoryHandler(HistoryHandler h) {
+                historyHandler = h;
+            }          // Set by initializeHandlers()
 
             // --- Session & stream management ---
-            @Override public SessionLifecycleManager getSessionLifecycleManager() { return sessionLifecycleManager; } // Manages session start/stop lifecycle
-            @Override public StreamMessageCoalescer getStreamCoalescer() { return streamCoalescer; }                  // Throttles webview stream updates
-            @Override public WebviewWatchdog getWebviewWatchdog() { return webviewWatchdog; }                          // Watchdog for webview health monitoring
-            @Override public PermissionHandler getPermissionHandler() { return permissionHandler; }                    // Lazy access — may be null before initializeHandlers()
+            @Override
+            public SessionLifecycleManager getSessionLifecycleManager() {
+                return sessionLifecycleManager;
+            } // Manages session start/stop lifecycle
+
+            @Override
+            public StreamMessageCoalescer getStreamCoalescer() {
+                return streamCoalescer;
+            }                  // Throttles webview stream updates
+
+            @Override
+            public WebviewWatchdog getWebviewWatchdog() {
+                return webviewWatchdog;
+            }                          // Watchdog for webview health monitoring
+
+            @Override
+            public PermissionHandler getPermissionHandler() {
+                return permissionHandler;
+            }                    // Lazy access — may be null before initializeHandlers()
 
             // --- Actions & callbacks ---
-            @Override public void callJavaScript(String fn, String... args) { ClaudeChatWindow.this.callJavaScript(fn, args); } // Java→JS bridge call
-            @Override public void interruptDueToPermissionDenial() { ClaudeChatWindow.this.interruptDueToPermissionDenial(); }  // Abort session on permission deny
+            @Override
+            public void callJavaScript(String fn, String... args) {
+                ClaudeChatWindow.this.callJavaScript(fn, args);
+            } // Java→JS bridge call
+
+            @Override
+            public void interruptDueToPermissionDenial() {
+                ClaudeChatWindow.this.interruptDueToPermissionDenial();
+            }  // Abort session on permission deny
 
             // --- Mutable state flags ---
-            @Override public boolean isFrontendReady() { return frontendReady; }                       // Whether webview has finished loading
-            @Override public void setFrontendReady(boolean ready) { frontendReady = ready; }           // Updated on load complete / reload
-            @Override public void setSlashCommandsFetched(boolean fetched) { slashCommandsFetched = fetched; }       // Slash commands loaded from backend
-            @Override public void setFetchedSlashCommandsCount(int count) { fetchedSlashCommandsCount = count; }     // Number of slash commands fetched
+            @Override
+            public boolean isFrontendReady() {
+                return frontendReady;
+            }                       // Whether webview has finished loading
+
+            @Override
+            public void setFrontendReady(boolean ready) {
+                frontendReady = ready;
+            }           // Updated on load complete / reload
+
+            @Override
+            public void setSlashCommandsFetched(boolean fetched) {
+                slashCommandsFetched = fetched;
+            }       // Slash commands loaded from backend
+
+            @Override
+            public void setFetchedSlashCommandsCount(int count) {
+                fetchedSlashCommandsCount = count;
+            }     // Number of slash commands fetched
         };
     }
 }

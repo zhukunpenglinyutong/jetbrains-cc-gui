@@ -201,7 +201,7 @@
     "dependency": {
       "title": "Gestión de dependencias SDK",
       "description": "Gestionar dependencias de AI SDK. Instala el SDK requerido antes del primer uso.",
-      "installPolicyTip": "Para reducir el tamaño del paquete, los SDKs ahora deben instalarse manualmente",
+      "installPolicyTip": "¿Problemas de instalación? Copia el error a un CLI AI de terminal para resolverlo",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Requerido para funciones de Claude AI. Incluye Claude Code SDK y dependencias relacionadas.",
       "codexSdkName": "Codex SDK",
@@ -219,7 +219,9 @@
       "installSuccess": "{{name}} instalado correctamente",
       "installFailed": "Instalación fallida: {{error}}",
       "uninstallSuccess": "{{name}} ha sido desinstalado",
-      "uninstallFailed": "Desinstalación fallida: {{error}}"
+      "uninstallFailed": "Desinstalación fallida: {{error}}",
+      "updating": "Actualizando...",
+      "updateSuccess": "{{name}} actualizado correctamente"
     },
     "usage": "Estadísticas de uso",
     "usageDesc": "Ver consumo de Token, estadísticas de costos y análisis de tendencias de uso",
@@ -346,6 +348,49 @@
       "localProviderName": "Local settings.json",
       "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
       "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
+      "subscriptionTutorial": {
+        "entry": "Tutorial de cuenta de suscripción",
+        "dialogTitle": "Cómo usar una cuenta de suscripción",
+        "tabAriaLabel": "Pestañas del tutorial de cuenta de suscripción",
+        "tabs": {
+          "claude": "Suscripción Claude",
+          "codex": "Suscripción Codex"
+        },
+        "code": {
+          "copy": "Copiar código",
+          "copied": "Copiado"
+        },
+        "providers": {
+          "claude": {
+            "title": "Cómo usar la cuenta de suscripción de Claude Code",
+            "item1": "Inicia sesión en tu cuenta de suscripción de Claude Code a través del CLI en la terminal, luego puedes chatear normalmente en la terminal",
+            "item2": "Asegúrate de que el archivo ~/.claude/settings.json y el archivo .env estén vacíos",
+            "item3": "Reinicia IDEA y podrás chatear normalmente",
+            "emptyConfigCodeLabel": "~/.claude/settings.json",
+            "emptyConfigCode": "{\n  \"env\": {\n  }\n}",
+            "noteTitle": "Notas de casos especiales:",
+            "note1": "Si ya realizaste los pasos anteriores pero el plugin aún no responde, intenta configurar ~/.claude/settings.json .env a:",
+            "proxyConfigCodeLabel": "~/.claude/settings.json",
+            "proxyConfigCode": "{\n  \"env\": {\n    \"HTTP_PROXY\": \"http://127.0.0.1:7897\",\n    \"HTTPS_PROXY\": \"http://127.0.0.1:7897\"\n  }\n}",
+            "issuePrefix": "Si todavía no funciona, reporta un problema en GitHub: ",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          },
+          "codex": {
+            "title": "Configuración de cuenta de suscripción Codex",
+            "item1": "Ejecuta codex login en la terminal Codex CLI e inicia sesión, luego puedes chatear en la terminal",
+            "item2": "Reinicia IDEA",
+            "item3": "Ahora puedes chatear normalmente",
+            "emptyConfigCodeLabel": "",
+            "emptyConfigCode": "",
+            "noteTitle": "",
+            "note1": "",
+            "proxyConfigCodeLabel": "",
+            "proxyConfigCode": "",
+            "issuePrefix": "Si todavía no funciona, reporta un problema en GitHub: ",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          }
+        }
+      },
       "importDialog": {
         "title": "Importar configuración de cc-switch",
         "summary": "Se encontraron {{total}} configuraciones, incluyendo",
@@ -872,8 +917,7 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed",
-    "promptLabel": "Prompt"
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "En progreso {{completed}}/{{total}} tareas",

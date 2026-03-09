@@ -20,6 +20,8 @@ export interface UseSubmitHandlerOptions {
   invalidateCache: () => void;
   externalAttachments: Attachment[] | undefined;
   setInternalAttachments: Dispatch<SetStateAction<Attachment[]>>;
+  /** Clear attachments draft from localStorage */
+  clearAttachmentsDraft?: () => void;
   fileCompletion: CompletionLike;
   commandCompletion: CompletionLike;
   agentCompletion: CompletionLike;
@@ -52,6 +54,7 @@ export function useSubmitHandler({
   invalidateCache,
   externalAttachments,
   setInternalAttachments,
+  clearAttachmentsDraft,
   fileCompletion,
   commandCompletion,
   agentCompletion,
@@ -107,6 +110,8 @@ export function useSubmitHandler({
     clearInput();
     if (externalAttachments === undefined) {
       setInternalAttachments([]);
+      // Clear attachments draft from localStorage
+      clearAttachmentsDraft?.();
     }
 
     // Call onSubmit even when loading - let parent handle queueing
@@ -125,6 +130,7 @@ export function useSubmitHandler({
     cancelPendingInput,
     externalAttachments,
     setInternalAttachments,
+    clearAttachmentsDraft,
     fileCompletion,
     commandCompletion,
     agentCompletion,

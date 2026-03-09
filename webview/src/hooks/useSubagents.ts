@@ -41,8 +41,8 @@ export function useSubagents({
 
         const toolName = block.name?.toLowerCase() ?? '';
 
-        // Only process Task tool calls
-        if (toolName !== 'task') return;
+        // Only process Task/Agent tool calls
+        if (toolName !== 'task' && toolName !== 'agent') return;
 
         const input = block.input as Record<string, unknown> | undefined;
         if (!input) return;

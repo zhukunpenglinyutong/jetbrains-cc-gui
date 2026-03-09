@@ -57,11 +57,11 @@ Codex SDK operates differently from Claude SDK:
 ```javascript
 const threadOptions = {
   skipGitRepoCheck: permissionConfig.skipGitRepoCheck,
-  maxTurns: 20  // ← Prevents runaway execution
+  maxTurns: 200  // ← Prevents runaway execution
 };
 ```
 
-**Effect**: Codex will stop after 20 tool execution rounds.
+**Effect**: Codex will stop after 200 tool execution rounds.
 
 ### 2. Real-Time Tool Feedback
 
@@ -104,7 +104,7 @@ if (assistantContent.length === 0) {
     '\n⚠️ Codex completed tool executions but did not generate a text response.',
     'This may happen when:',
     '- The task was purely about gathering information',
-    '- Codex reached maxTurns limit (20 turns)',
+    '- Codex reached maxTurns limit (100 turns)',
     '...'
   ].join('\n');
 
@@ -139,7 +139,7 @@ UI:
   🔧 Executing: `sed -n '520,560p' webview/src/App.tsx`
   ✓ Result: function code preview...
 
-  [After 20 turns or completion]
+  [After 100 turns or completion]
   ⚠️ Codex completed tool executions but did not generate a text response.
   Please try:
   - Asking a more specific question
@@ -194,7 +194,7 @@ UI:
 1. **Check maxTurns**
    ```javascript
    // In codex/message-service.js
-   maxTurns: 20  // Increase if needed
+   maxTurns: 100  // Increase if needed
    ```
 
 2. **Add More Debug Logs**
@@ -221,7 +221,7 @@ permissionMode: 'sandbox'  // read-only, no commands
 
 ## 📈 Performance Impact
 
-- **maxTurns: 20**: Typical query uses 2-5 turns
+- **maxTurns: 100**: Typical query uses 2-5 turns
 - **Real-time feedback**: Adds ~10ms per tool call (negligible)
 - **No-response check**: Single string comparison at end (< 1ms)
 

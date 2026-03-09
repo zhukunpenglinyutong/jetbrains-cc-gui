@@ -167,6 +167,17 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         jsTarget.callJavaScript("onThinkingDelta", JsUtils.escapeJs(delta));
     }
 
+    @Override
+    public void onUsageUpdate(int usedTokens, int maxTokens) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            double percentage = maxTokens > 0 ? (usedTokens * 100.0 / maxTokens) : 0.0;
+            String json = String.format("{\"percentage\":%.2f,\"usedTokens\":%d,\"maxTokens\":%d}",
+                    percentage, usedTokens, maxTokens);
+            jsTarget.callJavaScript("onUsageUpdate", JsUtils.escapeJs(json));
+            LOG.debug("Usage update sent to frontend: " + usedTokens + "/" + maxTokens);
+        });
+    }
+
     /**
      * Dispose internal resources. Call when the parent window is disposed.
      */

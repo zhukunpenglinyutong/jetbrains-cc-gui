@@ -182,6 +182,8 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "When enabled, a notification sound will play when AI completes a task, so you'll know even when away from the screen.",
+        "onlyWhenUnfocused": "Play only when IDE is not focused",
+        "onlyWhenUnfocusedHint": "When enabled, the sound will only play when the IDE window is not in focus.",
         "selectSound": "Notification Sound",
         "soundDefault": "Default",
         "soundChime": "Chime",
@@ -221,7 +223,7 @@
     "dependency": {
       "title": "SDK Dependency Management",
       "description": "Manage AI SDK dependencies. Install the required SDK before first use.",
-      "installPolicyTip": "To reduce package size, SDKs now need to be installed manually",
+      "installPolicyTip": "Installation issues? Copy the error to a terminal CLI AI to resolve",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Required for Claude AI features. Includes Claude Code SDK and related dependencies.",
       "codexSdkName": "Codex SDK",
@@ -239,7 +241,9 @@
       "installSuccess": "{{name}} installed successfully",
       "installFailed": "Installation failed: {{error}}",
       "uninstallSuccess": "{{name}} has been uninstalled",
-      "uninstallFailed": "Uninstall failed: {{error}}"
+      "uninstallFailed": "Uninstall failed: {{error}}",
+      "updating": "Updating...",
+      "updateSuccess": "{{name}} updated successfully"
     },
     "usage": "Usage Statistics",
     "usageDesc": "View your Token consumption, cost statistics and usage trend analysis",
@@ -368,6 +372,49 @@
       "localProviderName": "Local settings.json",
       "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
       "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
+      "subscriptionTutorial": {
+        "entry": "Subscription Account Guide",
+        "dialogTitle": "How to use a subscription account",
+        "tabAriaLabel": "Subscription account guide tabs",
+        "tabs": {
+          "claude": "Claude Subscription",
+          "codex": "Codex Subscription"
+        },
+        "code": {
+          "copy": "Copy Code",
+          "copied": "Copied"
+        },
+        "providers": {
+          "claude": {
+            "title": "How to use Claude Code Subscription Account",
+            "item1": "Log in to your Claude Code subscription account via claude code CLI in the terminal, then you can chat normally in the terminal",
+            "item2": "Make sure the ~/.claude/settings.json file and .env file are empty",
+            "item3": "Restart IDEA, and you can chat normally",
+            "emptyConfigCodeLabel": "~/.claude/settings.json",
+            "emptyConfigCode": "{\n  \"env\": {\n  }\n}",
+            "noteTitle": "Special Case Notes:",
+            "note1": "If you have done the above but the plugin still does not respond, try setting ~/.claude/settings.json .env to:",
+            "proxyConfigCodeLabel": "~/.claude/settings.json",
+            "proxyConfigCode": "{\n  \"env\": {\n    \"HTTP_PROXY\": \"http://127.0.0.1:7897\",\n    \"HTTPS_PROXY\": \"http://127.0.0.1:7897\"\n  }\n}",
+            "issuePrefix": "If it still doesn't work, please report an issue on GitHub: ",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          },
+          "codex": {
+            "title": "Codex Subscription Account Setup",
+            "item1": "Run codex login in the terminal Codex CLI and log in successfully, then you can chat in the terminal",
+            "item2": "Restart IDEA",
+            "item3": "You can now chat normally",
+            "emptyConfigCodeLabel": "",
+            "emptyConfigCode": "",
+            "noteTitle": "",
+            "note1": "",
+            "proxyConfigCodeLabel": "",
+            "proxyConfigCode": "",
+            "issuePrefix": "If it still doesn't work, please report an issue on GitHub: ",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          }
+        }
+      },
       "importDialog": {
         "title": "Import cc-switch Configuration",
         "summary": "Found {{total}} configurations, including",

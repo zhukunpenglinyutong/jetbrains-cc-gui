@@ -2,6 +2,7 @@ package com.github.claudecodegui.dependency;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -44,7 +45,8 @@ public class DependencyManager {
 
     public DependencyManager() {
         this.gson = new GsonBuilder().setPrettyPrinting().create();
-        this.nodeDetector = new NodeDetector();
+        // Use shared NodeDetector instance (singleton pattern)
+        this.nodeDetector = NodeDetector.getInstance();
         this.envConfigurator = new EnvironmentConfigurator();
     }
 
@@ -495,13 +497,27 @@ public class DependencyManager {
      */
     public boolean checkNodeEnvironment() {
         try {
-            String nodePath = nodeDetector.findNodeExecutable();
+            String cachedPath = this.nodeDetector.getCachedNodePath();
+            String cachedVersion = this.nodeDetector.getCachedNodeVersion();
+            if (cachedPath != null && cachedVersion != null) {
+                return true;
+            }
+
+            String nodePath = this.nodeDetector.findNodeExecutable();
             if (nodePath == null) {
                 return false;
             }
 
-            String version = nodeDetector.verifyNodePath(nodePath);
-            return version != null;
+            // findNodeExecutable() already verifies and caches on successful detection.
+            // Only re-verify for the "node" fallback case where detection failed.
+            NodeDetectionResult cached = this.nodeDetector.getCachedDetectionResult();
+            if (cached != null && cached.isFound()) {
+                return true;
+            }
+
+            // Fallback case: verify and cache in a single call (avoids double process spawn).
+            NodeDetectionResult fallbackResult = this.nodeDetector.verifyAndCacheNodePath(nodePath);
+            return fallbackResult.isFound();
         } catch (Exception e) {
             LOG.warn("[DependencyManager] Node.js environment check failed: " + e.getMessage());
             return false;

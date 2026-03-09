@@ -184,7 +184,8 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
     const getRawUuid = (msg: ClaudeMessage | undefined): string | undefined => {
       const raw = msg?.raw;
       if (!raw || typeof raw !== 'object') return undefined;
-      return (raw as any).uuid as string | undefined;
+      const rawObj = raw as Record<string, unknown>;
+      return typeof rawObj.uuid === 'string' ? rawObj.uuid : undefined;
     };
 
     const stripUuidFromRaw = (raw: unknown): unknown => {

@@ -18,7 +18,9 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -39,6 +41,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     private static final Map<Content, ClaudeChatWindow> contentToWindowMap = new ConcurrentHashMap<>();
     private static volatile boolean shutdownHookRegistered = false;
     private static final String TAB_NAME_PREFIX = "AI";
+    // Track contents being detached to prevent contentRemoved listener from disposing them
+    private static final Set<Content> detachingContents =
+            Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     /**
      * Get the chat window instance for the specified project.
@@ -101,6 +106,28 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     static void unregisterContentMapping(Content content) {
         contentToWindowMap.remove(content);
+    }
+
+    /**
+     * Mark a Content as being detached (moving to a floating window).
+     * This prevents the contentRemoved listener from disposing the associated ClaudeChatWindow.
+     */
+    static void markContentAsDetaching(Content content) {
+        detachingContents.add(content);
+    }
+
+    /**
+     * Remove the detaching mark from a Content after the detach operation is complete.
+     */
+    static void unmarkContentAsDetaching(Content content) {
+        detachingContents.remove(content);
+    }
+
+    /**
+     * Check if a Content is currently being detached.
+     */
+    static boolean isContentDetaching(Content content) {
+        return detachingContents.contains(content);
     }
 
     /**
@@ -175,13 +202,26 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
         }
 
-        // Add Rename Tab action to tool window gear menu
+        // Add Rename Tab and Detach Tab actions to tool window gear menu
         com.intellij.openapi.actionSystem.AnAction renameTabAction =
                 com.intellij.openapi.actionSystem.ActionManager.getInstance()
                         .getAction("ClaudeCodeGUI.RenameTabAction");
+        com.intellij.openapi.actionSystem.AnAction detachTabAction =
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                        .getAction("ClaudeCodeGUI.DetachTabAction");
+
+        com.intellij.openapi.actionSystem.DefaultActionGroup gearActions =
+                new com.intellij.openapi.actionSystem.DefaultActionGroup();
         if (renameTabAction != null) {
-            toolWindow.setAdditionalGearActions(new com.intellij.openapi.actionSystem.DefaultActionGroup(renameTabAction));
+            gearActions.add(renameTabAction);
         }
+        if (detachTabAction != null) {
+            gearActions.add(detachTabAction);
+        }
+        toolWindow.setAdditionalGearActions(gearActions);
+
+        // Register project closing listener to dispose detached windows
+        registerProjectCloseListener(project);
 
         // Add listener to manage tab closeable state based on tab count
         contentManager.addContentManagerListener(new ContentManagerListener() {
@@ -195,13 +235,23 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             @Override
             public void contentRemoved(@NotNull ContentManagerEvent event) {
                 updateTabCloseableState(contentManager);
+
+                Content removedContent = event.getContent();
+
+                // Skip dispose and tab state cleanup when the tab is being detached
+                // to a floating window (the ClaudeChatWindow is still alive in the frame)
+                if (isContentDetaching(removedContent)) {
+                    LOG.info("[TabManager] Tab detaching to floating window, skipping dispose: "
+                        + removedContent.getDisplayName());
+                    return;
+                }
+
                 int removedIndex = event.getIndex();
                 TabStateService tabStateService = TabStateService.getInstance(project);
                 tabStateService.onTabRemoved(removedIndex);
 
                 // Dispose the ClaudeChatWindow associated with the removed tab
                 // to shut down its Daemon process and release resources
-                Content removedContent = event.getContent();
                 ClaudeChatWindow window = contentToWindowMap.get(removedContent);
                 if (window != null) {
                     LOG.info("[TabManager] Disposing ClaudeChatWindow for removed tab: "
@@ -213,6 +263,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             @Override
             public void contentRemoveQuery(@NotNull ContentManagerEvent event) {
                 Content content = event.getContent();
+
+                // Skip confirmation dialog when the tab is being detached to a floating window
+                if (isContentDetaching(content)) {
+                    return;
+                }
+
                 String tabName = content.getDisplayName();
 
                 int result = com.intellij.openapi.ui.Messages.showYesNoDialog(
@@ -399,11 +455,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             ExecutorService executor = Executors.newSingleThreadExecutor();
             try {
                 Future<?> future = executor.submit(() -> {
-                    // Collect all unique windows from both maps to cover all tabs
+                    // Collect all unique windows from both maps and detached windows
                     java.util.Set<ClaudeChatWindow> allWindows = java.util.Collections.newSetFromMap(
                         new java.util.IdentityHashMap<>());
                     allWindows.addAll(instances.values());
                     allWindows.addAll(contentToWindowMap.values());
+                    allWindows.addAll(DetachedWindowManager.getAllDetachedChatWindows());
 
                     for (ClaudeChatWindow window : allWindows) {
                         try {
@@ -437,5 +494,26 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     public static void addSelectionFromExternal(Project project, String selectionInfo) {
         codeSnippetManager.addSelectionFromExternal(project, selectionInfo);
+    }
+
+    /**
+     * Register project closing listener to dispose all detached windows for the project.
+     * This ensures proper cleanup when a project is closed.
+     *
+     * @param project The project to listen to
+     */
+    private void registerProjectCloseListener(@NotNull Project project) {
+        project.getMessageBus().connect(project).subscribe(
+                com.intellij.openapi.project.ProjectManager.TOPIC,
+                new com.intellij.openapi.project.ProjectManagerListener() {
+                    @Override
+                    public void projectClosing(@NotNull Project closingProject) {
+                        if (closingProject.equals(project)) {
+                            LOG.info("[ToolWindow] Project closing, disposing detached windows for: " + project.getName());
+                            DetachedWindowManager.disposeAllDetached(project);
+                        }
+                    }
+                }
+        );
     }
 }

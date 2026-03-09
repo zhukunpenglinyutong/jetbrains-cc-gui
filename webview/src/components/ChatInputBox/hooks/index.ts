@@ -23,6 +23,7 @@ export { useKeyboardHandler } from './useKeyboardHandler.js';
 export { useNativeEventCapture } from './useNativeEventCapture.js';
 export { useControlledValueSync } from './useControlledValueSync.js';
 export { useAttachmentHandlers } from './useAttachmentHandlers.js';
+export { useAttachmentPersistence, ATTACHMENTS_DRAFT_KEY } from './useAttachmentPersistence.js';
 export { useChatInputImperativeHandle } from './useChatInputImperativeHandle.js';
 export { useSpaceKeyListener } from './useSpaceKeyListener.js';
 export { useResizableChatInputBox, computeResize } from './useResizableChatInputBox.js';

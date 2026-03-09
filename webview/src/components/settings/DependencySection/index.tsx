@@ -5,6 +5,7 @@ import styles from './style.module.less';
 
 interface DependencySectionProps {
   addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+  isActive: boolean;
 }
 
 const sendToJava = (message: string) => {
@@ -30,16 +31,19 @@ const SDK_DEFINITIONS = [
   },
 ];
 
-const DependencySection = ({ addToast }: DependencySectionProps) => {
+const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
   const { t } = useTranslation();
   const [sdkStatus, setSdkStatus] = useState<Record<SdkId, SdkStatus>>({} as Record<SdkId, SdkStatus>);
   const [loading, setLoading] = useState(true);
   const [installingSdk, setInstallingSdk] = useState<SdkId | null>(null);
   const [uninstallingSdk, setUninstallingSdk] = useState<SdkId | null>(null);
+  const [updatingSdk, setUpdatingSdk] = useState<SdkId | null>(null);
+  const updatingSdkRef = useRef<SdkId | null>(null);
   const [installLogs, setInstallLogs] = useState<string>('');
   const [showLogs, setShowLogs] = useState(false);
   const [nodeAvailable, setNodeAvailable] = useState<boolean | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const isNodePathReadyRef = useRef(false);
 
   // Use refs to store the latest callback and t function to avoid useEffect re-runs
   const addToastRef = useRef(addToast);
@@ -58,21 +62,23 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
     }
   }, [installLogs, showLogs]);
 
-  // Setup window callbacks - only run once on mount
+  // Use a ref to track isActive so the mount-only effect can access the latest value
+  const isActiveRef = useRef(isActive);
   useEffect(() => {
-    // Use a safer callback management approach:
-    // 1. Save references to existing callbacks (captured when effect runs)
-    // 2. Create wrapper functions instead of directly overwriting
-    // 3. Restore original callbacks on cleanup
+    isActiveRef.current = isActive;
+  }, [isActive]);
 
+  // Setup window callbacks - run once on mount only
+  useEffect(() => {
     // Capture current callback references (may have been set by App.tsx)
     const savedUpdateDependencyStatus = window.updateDependencyStatus;
     const savedDependencyInstallProgress = window.dependencyInstallProgress;
     const savedDependencyInstallResult = window.dependencyInstallResult;
     const savedDependencyUninstallResult = window.dependencyUninstallResult;
     const savedNodeEnvironmentStatus = window.nodeEnvironmentStatus;
+    const savedCheckNodeEnvironment = window.checkNodeEnvironment;
+    const savedRunNodeEnvironmentStressTest = window.runNodeEnvironmentStressTest;
 
-    // Create wrapped callback functions
     window.updateDependencyStatus = (jsonStr: string) => {
       try {
         const status = JSON.parse(jsonStr);
@@ -82,11 +88,8 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         console.error('[DependencySection] Failed to parse dependency status:', error);
         setLoading(false);
       }
-      // Chain call: also trigger previously saved callbacks (e.g., from App.tsx)
       if (typeof savedUpdateDependencyStatus === 'function') {
-        try {
-          savedUpdateDependencyStatus(jsonStr);
-        } catch (e) {
+        try { savedUpdateDependencyStatus(jsonStr); } catch (e) {
           console.error('[DependencySection] Error in chained updateDependencyStatus:', e);
         }
       }
@@ -99,11 +102,8 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       } catch (error) {
         console.error('[DependencySection] Failed to parse install progress:', error);
       }
-      // Chain call
       if (typeof savedDependencyInstallProgress === 'function') {
-        try {
-          savedDependencyInstallProgress(jsonStr);
-        } catch (e) {
+        try { savedDependencyInstallProgress(jsonStr); } catch (e) {
           console.error('[DependencySection] Error in chained dependencyInstallProgress:', e);
         }
       }
@@ -112,12 +112,16 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
     window.dependencyInstallResult = (jsonStr: string) => {
       try {
         const result: InstallResult = JSON.parse(jsonStr);
+        const wasUpdating = updatingSdkRef.current === result.sdkId;
         setInstallingSdk(null);
+        setUpdatingSdk(null);
+        updatingSdkRef.current = null;
 
         if (result.success) {
           const sdkDef = SDK_DEFINITIONS.find(d => d.id === result.sdkId);
           const sdkName = sdkDef ? tRef.current(sdkDef.nameKey) : result.sdkId;
-          addToastRef.current?.(tRef.current('settings.dependency.installSuccess', { name: sdkName }), 'success');
+          const msgKey = wasUpdating ? 'settings.dependency.updateSuccess' : 'settings.dependency.installSuccess';
+          addToastRef.current?.(tRef.current(msgKey, { name: sdkName }), 'success');
         } else if (result.error === 'node_not_configured') {
           addToastRef.current?.(tRef.current('settings.dependency.nodeNotConfigured'), 'warning');
         } else {
@@ -126,12 +130,11 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       } catch (error) {
         console.error('[DependencySection] Failed to parse install result:', error);
         setInstallingSdk(null);
+        setUpdatingSdk(null);
+        updatingSdkRef.current = null;
       }
-      // Chain call
       if (typeof savedDependencyInstallResult === 'function') {
-        try {
-          savedDependencyInstallResult(jsonStr);
-        } catch (e) {
+        try { savedDependencyInstallResult(jsonStr); } catch (e) {
           console.error('[DependencySection] Error in chained dependencyInstallResult:', e);
         }
       }
@@ -153,11 +156,8 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
         console.error('[DependencySection] Failed to parse uninstall result:', error);
         setUninstallingSdk(null);
       }
-      // Chain call
       if (typeof savedDependencyUninstallResult === 'function') {
-        try {
-          savedDependencyUninstallResult(jsonStr);
-        } catch (e) {
+        try { savedDependencyUninstallResult(jsonStr); } catch (e) {
           console.error('[DependencySection] Error in chained dependencyUninstallResult:', e);
         }
       }
@@ -170,29 +170,56 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
       } catch (error) {
         console.error('[DependencySection] Failed to parse node environment status:', error);
       }
-      // Chain call
       if (typeof savedNodeEnvironmentStatus === 'function') {
-        try {
-          savedNodeEnvironmentStatus(jsonStr);
-        } catch (e) {
+        try { savedNodeEnvironmentStatus(jsonStr); } catch (e) {
           console.error('[DependencySection] Error in chained nodeEnvironmentStatus:', e);
         }
       }
     };
+    window.checkNodeEnvironment = () => {
+      sendToJava('check_node_environment:');
+      savedCheckNodeEnvironment?.();
+    };
+    if (import.meta.env.DEV) {
+      window.runNodeEnvironmentStressTest = (count: number = 10) => {
+        for (let i = 0; i < count; i += 1) {
+          sendToJava('check_node_environment:');
+        }
+        savedRunNodeEnvironmentStressTest?.(count);
+      };
+    }
 
-    // Load initial status - only once on mount
-    sendToJava('get_dependency_status:');
-    sendToJava('check_node_environment:');
+    const handleNodePathReady = () => {
+      isNodePathReadyRef.current = true;
+      if (isActiveRef.current) {
+        sendToJava('check_node_environment:');
+      }
+    };
+    window.addEventListener('nodePathReady', handleNodePathReady);
 
     return () => {
-      // Restore previously saved callbacks on cleanup to avoid losing other components' callbacks
       window.updateDependencyStatus = savedUpdateDependencyStatus;
       window.dependencyInstallProgress = savedDependencyInstallProgress;
       window.dependencyInstallResult = savedDependencyInstallResult;
       window.dependencyUninstallResult = savedDependencyUninstallResult;
       window.nodeEnvironmentStatus = savedNodeEnvironmentStatus;
+      window.checkNodeEnvironment = savedCheckNodeEnvironment;
+      window.runNodeEnvironmentStressTest = savedRunNodeEnvironmentStressTest;
+      window.removeEventListener('nodePathReady', handleNodePathReady);
     };
-  }, []); // Empty dependency array - only run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch data when tab becomes active
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+    sendToJava('get_dependency_status:');
+    if (isNodePathReadyRef.current) {
+      sendToJava('check_node_environment:');
+    }
+  }, [isActive]);
 
   const handleInstall = (sdkId: SdkId) => {
     if (nodeAvailable === false) {
@@ -209,6 +236,19 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
   const handleUninstall = (sdkId: SdkId) => {
     setUninstallingSdk(sdkId);
     sendToJava(`uninstall_dependency:${JSON.stringify({ id: sdkId })}`);
+  };
+
+  const handleUpdate = (sdkId: SdkId) => {
+    if (nodeAvailable === false) {
+      addToast?.(t('settings.dependency.nodeNotConfigured'), 'warning');
+      return;
+    }
+
+    setUpdatingSdk(sdkId);
+    updatingSdkRef.current = sdkId;
+    setInstallLogs('');
+    setShowLogs(true);
+    sendToJava(`update_dependency:${JSON.stringify({ id: sdkId })}`);
   };
 
   const getSdkInfo = (sdkId: SdkId): SdkStatus | undefined => {
@@ -252,9 +292,10 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
             const installed = isInstalled(sdk.id);
             const isInstalling = installingSdk === sdk.id;
             const isUninstalling = uninstallingSdk === sdk.id;
+            const isUpdating = updatingSdk === sdk.id;
             const hasUpdate = info?.hasUpdate;
-            // Only allow one operation at a time (install or uninstall)
-            const isAnyOperationInProgress = installingSdk !== null || uninstallingSdk !== null;
+            // Only allow one operation at a time (install, uninstall, or update)
+            const isAnyOperationInProgress = installingSdk !== null || uninstallingSdk !== null || updatingSdk !== null;
 
             return (
               <div key={sdk.id} className={styles.sdkCard}>
@@ -296,16 +337,23 @@ const DependencySection = ({ addToast }: DependencySectionProps) => {
                       </button>
                     ) : (
                       <>
-                        {hasUpdate && (
-                          <button
-                            className={styles.updateBtn}
-                            onClick={() => handleInstall(sdk.id)}
-                            disabled={isAnyOperationInProgress}
-                          >
-                            <span className="codicon codicon-sync" />
-                            <span>{t('settings.dependency.update')}</span>
-                          </button>
-                        )}
+                        <button
+                          className={styles.updateBtn}
+                          onClick={() => handleUpdate(sdk.id)}
+                          disabled={isAnyOperationInProgress}
+                        >
+                          {isUpdating ? (
+                            <>
+                              <span className="codicon codicon-loading codicon-modifier-spin" />
+                              <span>{t('settings.dependency.updating')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="codicon codicon-sync" />
+                              <span>{t('settings.dependency.update')}</span>
+                            </>
+                          )}
+                        </button>
                         <button
                           className={styles.uninstallBtn}
                           onClick={() => handleUninstall(sdk.id)}

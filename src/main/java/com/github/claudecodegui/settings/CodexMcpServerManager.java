@@ -570,8 +570,13 @@ public class CodexMcpServerManager {
 
         try {
             Process process = pb.start();
-            int exitCode = process.waitFor();
-            return exitCode == 0;
+            boolean finished = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                LOG.warn("[CodexMcpServerManager] Command check timed out for: " + commandName);
+                return false;
+            }
+            return process.exitValue() == 0;
         } catch (Exception e) {
             return false;
         }

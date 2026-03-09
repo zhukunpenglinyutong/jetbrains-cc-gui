@@ -201,7 +201,7 @@
     "dependency": {
       "title": "SDK依存関係管理",
       "description": "AI SDK依存関係を管理します。初回使用前に必要なSDKをインストールしてください。",
-      "installPolicyTip": "パッケージサイズを削減するため、SDKは手動でインストールする必要があります",
+      "installPolicyTip": "インストールに問題がある場合、エラーをターミナルCLI AIにコピーして解決できます",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI機能に必要です。Claude Code SDKと関連依存関係が含まれます。",
       "codexSdkName": "Codex SDK",
@@ -219,7 +219,9 @@
       "installSuccess": "{{name}}のインストールが完了しました",
       "installFailed": "インストール失敗: {{error}}",
       "uninstallSuccess": "{{name}}がアンインストールされました",
-      "uninstallFailed": "アンインストール失敗: {{error}}"
+      "uninstallFailed": "アンインストール失敗: {{error}}",
+      "updating": "更新中...",
+      "updateSuccess": "{{name}}が正常に更新されました"
     },
     "usage": "使用統計",
     "usageDesc": "トークン消費量、コスト統計、使用傾向分析を表示",
@@ -351,6 +353,49 @@
       "localProviderName": "Local settings.json",
       "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
       "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
+      "subscriptionTutorial": {
+        "entry": "サブスクリプションアカウントガイド",
+        "dialogTitle": "サブスクリプションアカウントの使い方",
+        "tabAriaLabel": "サブスクリプションアカウントガイドタブ",
+        "tabs": {
+          "claude": "Claude サブスクリプション",
+          "codex": "Codex サブスクリプション"
+        },
+        "code": {
+          "copy": "コードをコピー",
+          "copied": "コピー済み"
+        },
+        "providers": {
+          "claude": {
+            "title": "Claude Code サブスクリプションアカウントの使い方",
+            "item1": "ターミナルの Claude Code CLI でサブスクリプションアカウントにログインし、ターミナルで正常にチャットできることを確認してください",
+            "item2": "~/.claude/settings.json ファイルと .env ファイルが空であることを確認してください",
+            "item3": "IDEA を再起動すると、正常にチャットできます",
+            "emptyConfigCodeLabel": "~/.claude/settings.json",
+            "emptyConfigCode": "{\n  \"env\": {\n  }\n}",
+            "noteTitle": "特殊ケースの注意：",
+            "note1": "上記の手順を実行したにもかかわらずプラグインが応答しない場合は、~/.claude/settings.json .env を以下に変更してみてください：",
+            "proxyConfigCodeLabel": "~/.claude/settings.json",
+            "proxyConfigCode": "{\n  \"env\": {\n    \"HTTP_PROXY\": \"http://127.0.0.1:7897\",\n    \"HTTPS_PROXY\": \"http://127.0.0.1:7897\"\n  }\n}",
+            "issuePrefix": "それでも解決しない場合は、GitHub に問題を報告してください：",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          },
+          "codex": {
+            "title": "Codex サブスクリプションアカウントのセットアップ",
+            "item1": "ターミナルの Codex CLI で codex login を実行してログインし、ターミナルでチャットできることを確認してください",
+            "item2": "IDEA を再起動",
+            "item3": "正常にチャットできます",
+            "emptyConfigCodeLabel": "",
+            "emptyConfigCode": "",
+            "noteTitle": "",
+            "note1": "",
+            "proxyConfigCodeLabel": "",
+            "proxyConfigCode": "",
+            "issuePrefix": "それでも解決しない場合は、GitHub に問題を報告してください：",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          }
+        }
+      },
       "importDialog": {
         "title": "cc-switch設定をインポート",
         "summary": "{{total}}個の設定が見つかりました。以下を含みます",
@@ -877,8 +922,7 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed",
-    "promptLabel": "プロンプト"
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "進行中 {{completed}}/{{total}} タスク",

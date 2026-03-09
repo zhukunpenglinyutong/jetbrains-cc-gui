@@ -269,6 +269,31 @@ public class EditorFileUtils {
     }
 
     /**
+     * Gets the currently selected editor file path.
+     * Shared utility to avoid duplication across handlers and lifecycle managers.
+     *
+     * @param project the IDEA project
+     * @return selected file path, or null if no active file
+     */
+    public static String getCurrentEditorFilePath(Project project) {
+        if (project == null || project.isDisposed()) {
+            return null;
+        }
+        try {
+            return ReadAction.compute(() -> {
+                VirtualFile[] files = FileEditorManager.getInstance(project).getSelectedFiles();
+                if (files.length == 0 || files[0] == null) {
+                    return null;
+                }
+                return files[0].getPath();
+            });
+        } catch (Exception e) {
+            LOG.debug("Failed to resolve current editor file path", e);
+            return null;
+        }
+    }
+
+    /**
      * Synchronously refresh and find a virtual file on UI thread.
      * WARNING: This should only be called when already on UI thread and not under read lock.
      *

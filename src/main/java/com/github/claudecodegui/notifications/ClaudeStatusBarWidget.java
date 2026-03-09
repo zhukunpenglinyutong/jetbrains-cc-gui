@@ -7,10 +7,12 @@ import com.intellij.openapi.wm.CustomStatusBarWidget;
 import com.intellij.openapi.wm.StatusBar;
 import com.intellij.openapi.wm.StatusBarWidget;
 import com.intellij.openapi.wm.StatusBarWidgetFactory;
-import com.intellij.openapi.wm.WindowManager;
 import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.openapi.wm.WindowManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import com.intellij.openapi.application.ApplicationManager;
 
 import javax.swing.*;
 import java.awt.event.MouseAdapter;
@@ -47,13 +49,24 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     }
 
     @Override
-    public @NotNull String ID() { return "ClaudeStatusBarWidget"; }
+    public @NotNull String ID() {
+        return "ClaudeStatusBarWidget";
+    }
 
     @Override
     public @NotNull WidgetPresentation getPresentation() {
         return new WidgetPresentation() {
-            @Nullable @Override public String getTooltipText() { return tooltipRef.get(); }
-            @Nullable @Override public com.intellij.util.Consumer<MouseEvent> getClickConsumer() { return null; }
+            @Nullable
+            @Override
+            public String getTooltipText() {
+                return tooltipRef.get();
+            }
+
+            @Nullable
+            @Override
+            public com.intellij.util.Consumer<MouseEvent> getClickConsumer() {
+                return null;
+            }
         };
     }
 
@@ -78,7 +91,9 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     }
 
     @Override
-    public void install(@NotNull StatusBar statusBar) { this.statusBar = statusBar; }
+    public void install(@NotNull StatusBar statusBar) {
+        this.statusBar = statusBar;
+    }
 
     @Override
     public void dispose() {
@@ -168,6 +183,11 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
             text.append(" ").append(statusText);
         }
 
+        // Add Token Info
+        if (tokenInfo != null && !tokenInfo.isEmpty()) {
+            text.append(" ").append(tokenInfo);
+        }
+
         StringBuilder tooltip = new StringBuilder(ClaudeCodeGuiBundle.message("status.tooltip.status", status));
         if (model != null && !model.isEmpty()) {
             tooltip.append(ClaudeCodeGuiBundle.message("status.tooltip.model", model));
@@ -211,6 +231,15 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
         if (disposed) return;
         textRef.set(text);
         tooltipRef.set(tooltip);
+        if (ApplicationManager.getApplication().isDispatchThread()) {
+            updateLabelOnEdt(text, tooltip);
+        } else {
+            ApplicationManager.getApplication().invokeLater(() -> updateLabelOnEdt(text, tooltip));
+        }
+    }
+
+    private void updateLabelOnEdt(String text, String tooltip) {
+        if (disposed) return;
         if (label != null) {
             label.setText(text);
             label.setToolTipText(tooltip);
@@ -219,11 +248,30 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     }
 
     public static class Factory implements StatusBarWidgetFactory {
-        @Override public @NotNull String getId() { return "ClaudeStatusBarWidget"; }
-        @Override public @NotNull String getDisplayName() { return ClaudeCodeGuiBundle.message("status.widgetName"); }
-        @Override public boolean isAvailable(@NotNull Project project) { return project != null; }
-        @Override public @NotNull StatusBarWidget createWidget(@NotNull Project project) { return new ClaudeStatusBarWidget(project); }
-        @Override public void disposeWidget(@NotNull StatusBarWidget widget) { widget.dispose(); }
+        @Override
+        public @NotNull String getId() {
+            return "ClaudeStatusBarWidget";
+        }
+
+        @Override
+        public @NotNull String getDisplayName() {
+            return ClaudeCodeGuiBundle.message("status.widgetName");
+        }
+
+        @Override
+        public boolean isAvailable(@NotNull Project project) {
+            return project != null;
+        }
+
+        @Override
+        public @NotNull StatusBarWidget createWidget(@NotNull Project project) {
+            return new ClaudeStatusBarWidget(project);
+        }
+
+        @Override
+        public void disposeWidget(@NotNull StatusBarWidget widget) {
+            widget.dispose();
+        }
 
         @Nullable
         public static ClaudeStatusBarWidget getWidget(@NotNull Project project) {

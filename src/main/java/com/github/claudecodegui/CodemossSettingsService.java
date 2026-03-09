@@ -719,6 +719,45 @@ public class CodemossSettingsService {
     }
 
     /**
+     * Get whether sound should only play when IDE window is not focused.
+     * @return whether only-when-unfocused is enabled, default is false
+     */
+    public boolean getSoundOnlyWhenUnfocused() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return false;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("onlyWhenUnfocused")) {
+            return soundConfig.get("onlyWhenUnfocused").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set whether sound should only play when IDE window is not focused.
+     * @param enabled whether to enable
+     */
+    public void setSoundOnlyWhenUnfocused(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("onlyWhenUnfocused", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set sound only when unfocused: " + enabled);
+    }
+
+    /**
      * Get selected sound ID.
      * @return sound ID (e.g. "default", "chime", "bell", "ding", "success", "custom"), defaults to "default"
      */

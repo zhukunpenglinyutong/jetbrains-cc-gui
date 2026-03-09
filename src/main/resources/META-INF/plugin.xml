@@ -139,6 +139,11 @@
                 class="com.github.claudecodegui.RenameTabAction"
                 icon="AllIcons.Actions.Edit"/>
 
+        <!-- Detach Tab Action -->
+        <action id="ClaudeCodeGUI.DetachTabAction"
+                class="com.github.claudecodegui.DetachTabAction"
+                icon="AllIcons.Actions.MoveToWindow"/>
+
         <!-- Open DevTools Action for JCEF debugging -->
         <action id="ClaudeCodeGUI.OpenDevToolsAction"
                 class="com.github.claudecodegui.OpenDevToolsAction"
@@ -158,6 +163,48 @@
                 icon="/icons/logo-16.png">
             <!-- Add to VCS Commit toolbar -->
             <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
+        </action>
+
+        <!-- Chat tool window clipboard actions (scoped to CCG tool window) -->
+        <action id="ClaudeCodeGUI.ChatCopyAction"
+                class="com.github.claudecodegui.action.ChatCopyAction"
+                text="Copy (Chat Window)"
+                description="Copy selected text in Claude chat window">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl C"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta C"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="meta C"/>
+        </action>
+        <action id="ClaudeCodeGUI.ChatCutAction"
+                class="com.github.claudecodegui.action.ChatCutAction"
+                text="Cut (Chat Window)"
+                description="Cut selected text in Claude chat window">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl X"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta X"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="meta X"/>
+        </action>
+        <action id="ClaudeCodeGUI.ChatPasteAction"
+                class="com.github.claudecodegui.action.ChatPasteAction"
+                text="Paste (Chat Window)"
+                description="Paste clipboard text in Claude chat window">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl V"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta V"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="meta V"/>
+        </action>
+
+        <!-- Chat tool window send action (no default shortcut; dynamically managed by SendShortcutSync) -->
+        <action id="ClaudeCodeGUI.ChatSendAction"
+                class="com.github.claudecodegui.action.ChatSendAction"
+                text="Send Message (Chat Window)"
+                description="Send message in Claude chat window"/>
+
+        <!-- Chat tool window newline action (Shift+Enter always newline; Ctrl+Enter dynamically managed by SendShortcutSync) -->
+        <action id="ClaudeCodeGUI.ChatNewlineAction"
+                class="com.github.claudecodegui.action.ChatNewlineAction"
+                text="Insert Newline (Chat Window)"
+                description="Insert newline in Claude chat window input">
+            <keyboard-shortcut keymap="$default" first-keystroke="shift ENTER"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="shift ENTER"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="shift ENTER"/>
         </action>
     </actions>
 </idea-plugin>

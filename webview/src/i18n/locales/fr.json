@@ -201,7 +201,7 @@
     "dependency": {
       "title": "Gestion des dépendances SDK",
       "description": "Gérer les dépendances AI SDK. Installez le SDK requis avant la première utilisation.",
-      "installPolicyTip": "Pour réduire la taille du package, les SDKs doivent maintenant être installés manuellement",
+      "installPolicyTip": "Problème d'installation ? Copiez l'erreur vers un CLI AI terminal pour résoudre",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Requis pour les fonctionnalités Claude AI. Inclut Claude Code SDK et les dépendances associées.",
       "codexSdkName": "Codex SDK",
@@ -219,7 +219,9 @@
       "installSuccess": "{{name}} installé avec succès",
       "installFailed": "Échec de l'installation: {{error}}",
       "uninstallSuccess": "{{name}} a été désinstallé",
-      "uninstallFailed": "Échec de la désinstallation: {{error}}"
+      "uninstallFailed": "Échec de la désinstallation: {{error}}",
+      "updating": "Mise à jour...",
+      "updateSuccess": "{{name}} mis à jour avec succès"
     },
     "usage": "Statistiques d'utilisation",
     "usageDesc": "Afficher votre consommation de Token, statistiques de coûts et analyse des tendances d'utilisation",
@@ -346,6 +348,49 @@
       "localProviderName": "Local settings.json",
       "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
       "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
+      "subscriptionTutorial": {
+        "entry": "Guide du compte d'abonnement",
+        "dialogTitle": "Comment utiliser un compte d'abonnement",
+        "tabAriaLabel": "Onglets du guide du compte d'abonnement",
+        "tabs": {
+          "claude": "Abonnement Claude",
+          "codex": "Abonnement Codex"
+        },
+        "code": {
+          "copy": "Copier le code",
+          "copied": "Copié"
+        },
+        "providers": {
+          "claude": {
+            "title": "Comment utiliser le compte d'abonnement Claude Code",
+            "item1": "Connectez-vous à votre compte d'abonnement Claude Code via le CLI dans le terminal, puis vous pouvez discuter normalement dans le terminal",
+            "item2": "Assurez-vous que le fichier ~/.claude/settings.json et le fichier .env sont vides",
+            "item3": "Redémarrez IDEA et vous pourrez discuter normalement",
+            "emptyConfigCodeLabel": "~/.claude/settings.json",
+            "emptyConfigCode": "{\n  \"env\": {\n  }\n}",
+            "noteTitle": "Remarques sur les cas spéciaux :",
+            "note1": "Si vous avez effectué les étapes ci-dessus mais que le plugin ne répond toujours pas, essayez de définir ~/.claude/settings.json .env sur :",
+            "proxyConfigCodeLabel": "~/.claude/settings.json",
+            "proxyConfigCode": "{\n  \"env\": {\n    \"HTTP_PROXY\": \"http://127.0.0.1:7897\",\n    \"HTTPS_PROXY\": \"http://127.0.0.1:7897\"\n  }\n}",
+            "issuePrefix": "Si cela ne fonctionne toujours pas, signalez un problème sur GitHub : ",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          },
+          "codex": {
+            "title": "Configuration du compte d'abonnement Codex",
+            "item1": "Exécutez codex login dans le CLI Codex du terminal et connectez-vous, puis vous pouvez discuter dans le terminal",
+            "item2": "Redémarrez IDEA",
+            "item3": "Vous pouvez maintenant discuter normalement",
+            "emptyConfigCodeLabel": "",
+            "emptyConfigCode": "",
+            "noteTitle": "",
+            "note1": "",
+            "proxyConfigCodeLabel": "",
+            "proxyConfigCode": "",
+            "issuePrefix": "Si cela ne fonctionne toujours pas, signalez un problème sur GitHub : ",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          }
+        }
+      },
       "importDialog": {
         "title": "Importer la configuration cc-switch",
         "summary": "{{total}} configurations trouvées, incluant",
@@ -872,8 +917,7 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed",
-    "promptLabel": "Prompt"
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "En cours {{completed}}/{{total}} tâches",

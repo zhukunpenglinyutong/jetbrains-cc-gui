@@ -21,12 +21,17 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+    flex: 1;
   }
 
   .title {
     font-size: 13px;
     font-weight: 500;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .badge {
@@ -48,6 +53,37 @@
   padding: 24px;
   color: var(--text-tertiary);
   font-size: 13px;
+}
+
+.tutorialBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 16px;
+  background: color-mix(in srgb, var(--accent-primary, #0078d4) 10%, transparent);
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-primary, #0078d4) 25%, transparent);
+  color: var(--accent-primary, #0078d4);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+
+  &:hover {
+    background: color-mix(in srgb, var(--accent-primary, #0078d4) 18%, transparent);
+  }
+}
+
+.tutorialBannerIcon {
+  font-size: 14px;
+}
+
+.tutorialBannerArrow {
+  margin-left: auto;
+  font-size: 13px;
+  opacity: 0.7;
 }
 
 .switchWrapper {
@@ -181,5 +217,192 @@
   &:hover {
     background: var(--bg-hover);
     color: var(--text-secondary);
+  }
+}
+
+.tutorialDialog {
+  max-width: 620px;
+}
+
+.tutorialTabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tutorialTabBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    color: var(--text-secondary);
+    border-color: var(--border-hover);
+    background: var(--bg-hover);
+  }
+}
+
+.activeTab {
+  color: var(--text-white, #ffffff);
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+}
+
+.tutorialSection {
+  h4 {
+    margin: 0 0 10px;
+    font-size: 16px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  p {
+    margin: 0 0 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  li {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+.tutorialOrderedList {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  li {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+    padding-top: 2px;
+  }
+}
+
+.noteTitle {
+  margin: 22px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e8890c;
+}
+
+.codeBlockList {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.codeBlock {
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.codeBlockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-tertiary);
+}
+
+.codeBlockLabel {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.copyCodeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+  }
+}
+
+.codeBlockContent {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.issueParagraph {
+  margin-top: 20px !important;
+}
+
+.inlineIssueLink {
+  margin-left: 4px;
+  color: var(--accent-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.tutorialFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.tutorialFooterRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .content {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .tutorialTabs {
+    flex-wrap: wrap;
   }
 }

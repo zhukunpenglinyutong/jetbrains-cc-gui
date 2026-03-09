@@ -54,6 +54,8 @@ interface BasicConfigSectionProps {
   // Sound notification configuration
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
+  soundOnlyWhenUnfocused?: boolean;
+  onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
   selectedSound?: string;
   onSelectedSoundChange?: (soundId: string) => void;
   customSoundPath?: string;
@@ -113,6 +115,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onDiffExpandedByDefaultChange={props.onDiffExpandedByDefaultChange}
           soundNotificationEnabled={props.soundNotificationEnabled}
           onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
+          soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}
+          onSoundOnlyWhenUnfocusedChange={props.onSoundOnlyWhenUnfocusedChange}
           selectedSound={props.selectedSound}
           onSelectedSoundChange={props.onSelectedSoundChange}
           customSoundPath={props.customSoundPath}

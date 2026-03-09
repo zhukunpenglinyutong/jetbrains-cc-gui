@@ -31,16 +31,16 @@ const ITEM_HEIGHT = 28;
  * Extract file path from tool input
  */
 const extractFilePath = (input: ToolInput): string | undefined => {
-  // Try standard file path fields first
+  // Try standard file path fields first (ensure they are strings, not objects)
   let filePath =
-    (input.file_path as string | undefined) ??
-    (input.target_file as string | undefined) ??
-    (input.path as string | undefined);
+    (typeof input.file_path === 'string' ? input.file_path : undefined) ??
+    (typeof input.target_file === 'string' ? input.target_file : undefined) ??
+    (typeof input.path === 'string' ? input.path : undefined);
 
   // If not found, try extracting from Codex command
-  if (!filePath && input.command) {
-    const workdir = (input.workdir as string | undefined) ?? undefined;
-    filePath = extractFilePathFromCommand(input.command as string, workdir);
+  if (!filePath && typeof input.command === 'string') {
+    const workdir = typeof input.workdir === 'string' ? input.workdir : undefined;
+    filePath = extractFilePathFromCommand(input.command, workdir);
   }
 
   return filePath;

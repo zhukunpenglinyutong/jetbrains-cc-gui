@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 
 interface TaskExecutionBlockProps {
+  name?: string;
   input?: ToolInput;
   result?: ToolResultBlock | null;
 }
 
-const TaskExecutionBlock = ({ input, result }: TaskExecutionBlockProps) => {
+const TaskExecutionBlock = ({ name, input, result }: TaskExecutionBlockProps) => {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
@@ -23,12 +24,15 @@ const TaskExecutionBlock = ({ input, result }: TaskExecutionBlockProps) => {
 
   return (
     <div className="task-container">
-      <div className="task-header" onClick={() => setExpanded((prev) => !prev)}>
+      <div
+        className={`task-header ${expanded ? 'task-header-expanded' : ''}`}
+        onClick={() => setExpanded((prev) => !prev)}
+      >
         <div className="task-title-section">
           <span className="codicon codicon-tools tool-title-icon" />
 
           <span className="tool-title-text">
-            {t('tools.task')}
+            {name ?? t('tools.task')}
           </span>
           {typeof subagentType === 'string' && subagentType && (
             <span className="tool-title-summary">{subagentType}</span>
@@ -41,7 +45,10 @@ const TaskExecutionBlock = ({ input, result }: TaskExecutionBlockProps) => {
           )}
         </div>
 
-        <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
+        <div className="task-header-right">
+          <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
+          <span className={`task-chevron codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} />
+        </div>
       </div>
 
       {expanded && (

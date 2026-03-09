@@ -201,7 +201,7 @@
     "dependency": {
       "title": "SDK 依賴管理",
       "description": "管理 AI SDK 依賴套件。首次使用時需要安裝對應的 SDK。",
-      "installPolicyTip": "為了減少套件體積，SDK 現在需要手動安裝",
+      "installPolicyTip": "安裝遇到問題？可將報錯複製給終端CLI AI 解決",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相關依賴。",
       "codexSdkName": "Codex SDK",
@@ -219,7 +219,9 @@
       "installSuccess": "{{name}} 安裝成功",
       "installFailed": "安裝失敗: {{error}}",
       "uninstallSuccess": "{{name}} 已解除安裝",
-      "uninstallFailed": "解除安裝失敗: {{error}}"
+      "uninstallFailed": "解除安裝失敗: {{error}}",
+      "updating": "更新中...",
+      "updateSuccess": "{{name}} 更新成功"
     },
     "usage": "使用統計",
     "usageDesc": "檢視您的 Token 消耗、費用統計和使用趨勢分析",
@@ -351,6 +353,49 @@
       "localProviderName": "Local settings.json",
       "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
       "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
+      "subscriptionTutorial": {
+        "entry": "訂閱制帳號教學",
+        "dialogTitle": "如何使用訂閱制帳號",
+        "tabAriaLabel": "訂閱制帳號教學標籤",
+        "tabs": {
+          "claude": "Claude訂閱制",
+          "codex": "Codex訂閱制"
+        },
+        "code": {
+          "copy": "複製程式碼",
+          "copied": "已複製"
+        },
+        "providers": {
+          "claude": {
+            "title": "Claude Code 訂閱制帳號使用方式",
+            "item1": "首先在終端 Claude Code CLI 登入成功 Claude Code 訂閱制帳號，然後可以正常在終端提問",
+            "item2": "確保 ~/.claude/settings.json 檔案和 .env 檔案內容為空",
+            "item3": "重啟 IDEA，就可以正常提問了",
+            "emptyConfigCodeLabel": "~/.claude/settings.json",
+            "emptyConfigCode": "{\n  \"env\": {\n  }\n}",
+            "noteTitle": "特殊情況備註：",
+            "note1": "如果已經進行上述操作，但是本外掛還是無法回覆，可以將 ~/.claude/settings.json .env 內容改為：",
+            "proxyConfigCodeLabel": "~/.claude/settings.json",
+            "proxyConfigCode": "{\n  \"env\": {\n    \"HTTP_PROXY\": \"http://127.0.0.1:7897\",\n    \"HTTPS_PROXY\": \"http://127.0.0.1:7897\"\n  }\n}",
+            "issuePrefix": "如果還是不行，可以去GitHub留言排查：",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          },
+          "codex": {
+            "title": "Codex 訂閱制帳號使用方式",
+            "item1": "在終端 Codex CLI 執行 codex login 登入成功之後，可以正常在終端提問",
+            "item2": "重啟 IDEA",
+            "item3": "即可正常對話",
+            "emptyConfigCodeLabel": "",
+            "emptyConfigCode": "",
+            "noteTitle": "",
+            "note1": "",
+            "proxyConfigCodeLabel": "",
+            "proxyConfigCode": "",
+            "issuePrefix": "如果還是不行，可以去GitHub留言排查：",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          }
+        }
+      },
       "importDialog": {
         "title": "匯入 cc-switch 配置",
         "summary": "共識別到 {{total}} 個配置，其中",
@@ -842,7 +887,7 @@
     "runCommand": "運行命令",
     "contextEngine": "上下文引擎",
     "task": "任務",
-    "promptLabel": "提示詞 (Prompt)",
+    "promptLabel": "提示詞",
     "readFile": "讀取文件",
     "editFile": "編輯文件",
     "writeFile": "寫入文件",
@@ -877,8 +922,7 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed",
-    "promptLabel": "提示詞"
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "進行中 {{completed}}/{{total}} 個任務",

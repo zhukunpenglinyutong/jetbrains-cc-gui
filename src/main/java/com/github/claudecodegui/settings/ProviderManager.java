@@ -475,9 +475,9 @@ public class ProviderManager {
                 LOG.info("[ProviderManager] Failed to read user-configured Node.js path: " + e.getMessage());
             }
 
-            // If the user hasn't configured a path or the config is invalid, auto-detect via NodeDetector
+            // If the user hasn't configured a path or the config is invalid, auto-detect via shared NodeDetector
             if (nodePath == null) {
-                NodeDetector nodeDetector = new NodeDetector();
+                NodeDetector nodeDetector = NodeDetector.getInstance();
                 nodePath = nodeDetector.findNodeExecutable();
                 LOG.info("[ProviderManager] Auto-detected Node.js path: " + nodePath);
             }

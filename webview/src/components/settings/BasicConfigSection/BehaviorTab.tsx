@@ -83,6 +83,8 @@ export interface BehaviorTabProps {
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
+  soundOnlyWhenUnfocused?: boolean;
+  onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
   selectedSound?: string;
   onSelectedSoundChange?: (soundId: string) => void;
   customSoundPath?: string;
@@ -103,6 +105,8 @@ const BehaviorTab = ({
   onDiffExpandedByDefaultChange = () => {},
   soundNotificationEnabled = false,
   onSoundNotificationEnabledChange = () => {},
+  soundOnlyWhenUnfocused = false,
+  onSoundOnlyWhenUnfocusedChange = () => {},
   selectedSound = 'default',
   onSelectedSoundChange = () => {},
   customSoundPath = '',
@@ -264,6 +268,31 @@ const BehaviorTab = ({
 
         {soundNotificationEnabled && (
           <div className={styles.customSoundSection}>
+            <div className={styles.soundOnlyWhenUnfocusedSection}>
+              <div className={styles.fieldHeader}>
+                <span className="codicon codicon-eye-closed" />
+                <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.onlyWhenUnfocused')}</span>
+              </div>
+              <label className={styles.toggleWrapper}>
+                <input
+                  type="checkbox"
+                  className={styles.toggleInput}
+                  checked={soundOnlyWhenUnfocused}
+                  onChange={(e) => onSoundOnlyWhenUnfocusedChange(e.target.checked)}
+                />
+                <span className={styles.toggleSlider} />
+                <span className={styles.toggleLabel}>
+                  {soundOnlyWhenUnfocused
+                    ? t('settings.basic.soundNotification.enabled')
+                    : t('settings.basic.soundNotification.disabled')}
+                </span>
+              </label>
+              <small className={styles.formHint}>
+                <span className="codicon codicon-info" />
+                <span>{t('settings.basic.soundNotification.onlyWhenUnfocusedHint')}</span>
+              </small>
+            </div>
+
             <div className={styles.fieldHeader}>
               <span className="codicon codicon-library" />
               <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.selectSound')}</span>

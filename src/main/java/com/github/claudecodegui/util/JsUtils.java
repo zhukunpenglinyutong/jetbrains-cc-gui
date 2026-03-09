@@ -1,10 +1,14 @@
 package com.github.claudecodegui.util;
 
+import java.util.regex.Pattern;
+
 /**
  * JavaScript utility class.
  * Provides helper methods for JavaScript string escaping and function invocation.
  */
 public class JsUtils {
+
+    private static final Pattern SAFE_JS_NAME = Pattern.compile("^[a-zA-Z_$][a-zA-Z0-9_$.]*$");
 
     /**
      * Escape a string for safe embedding in JavaScript code.
@@ -21,9 +25,14 @@ public class JsUtils {
             .replace("`", "\\`")
             .replace("\n", "\\n")
             .replace("\r", "\\r")
+            .replace("\t", "\\t")          // Tab
+            .replace("\b", "\\b")          // Backspace
+            .replace("\f", "\\f")          // Form feed
+            .replace("\u0085", "\\u0085")  // Next Line (NEL)
             .replace("\u2028", "\\u2028")  // Line separator
             .replace("\u2029", "\\u2029")  // Paragraph separator
-            .replace("\0", "\\0");         // Null character
+            .replace("\0", "\\0")          // Null character
+            .replace("</", "<\\/");        // Prevent </script> breakout in HTML context
     }
 
     /**
@@ -33,6 +42,9 @@ public class JsUtils {
      * @return the JavaScript code
      */
     public static String buildJsCall(String functionName, String... args) {
+        if (functionName == null || !SAFE_JS_NAME.matcher(functionName).matches()) {
+            throw new IllegalArgumentException("Invalid JavaScript function name: " + functionName);
+        }
         StringBuilder js = new StringBuilder();
         js.append("if (typeof ").append(functionName).append(" === 'function') { ");
         js.append(functionName).append("(");
@@ -53,6 +65,9 @@ public class JsUtils {
      * @return the JavaScript code
      */
     public static String buildSafeJsCall(String objectPath, String... args) {
+        if (objectPath == null || !SAFE_JS_NAME.matcher(objectPath).matches()) {
+            throw new IllegalArgumentException("Invalid JavaScript object path: " + objectPath);
+        }
         StringBuilder js = new StringBuilder();
         js.append("if (").append(objectPath).append(") { ");
         js.append(objectPath).append("(");

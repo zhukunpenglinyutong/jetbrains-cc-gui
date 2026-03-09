@@ -22,6 +22,30 @@
     background: var(--bg-secondary);
 }
 
+.task-header-expanded {
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.task-header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.task-chevron {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    transition: transform 0.2s ease;
+}
+
+.tool-chevron {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    margin-right: 4px;
+}
+
 .task-title-section {
     display: flex;
     align-items: center;
@@ -66,6 +90,25 @@
     /* text-overflow: ellipsis; */
     font-weight: 500;
     flex: 1;
+}
+
+/* Accordion animation wrapper */
+.task-details-accordion {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.2s ease;
+}
+
+.task-details-accordion.expanded {
+    grid-template-rows: 1fr;
+}
+
+.task-details-accordion > .task-details {
+    overflow: hidden;
+}
+
+.task-details-accordion.expanded > .task-details {
+    border-top: 1px solid var(--border-primary);
 }
 
 .task-details {

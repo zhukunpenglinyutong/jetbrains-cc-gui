@@ -4,6 +4,7 @@ import com.github.claudecodegui.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.CodemossSettingsService;
 import com.github.claudecodegui.handler.AgentHandler;
+import com.github.claudecodegui.handler.ClipboardHandler;
 import com.github.claudecodegui.handler.CodexMcpServerHandler;
 import com.github.claudecodegui.handler.DependencyHandler;
 import com.github.claudecodegui.handler.DiffHandler;
@@ -262,6 +263,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new RewindHandler(handlerContext));
         messageDispatcher.registerHandler(new UndoFileHandler(handlerContext));
         messageDispatcher.registerHandler(new DependencyHandler(handlerContext));
+        messageDispatcher.registerHandler(new ClipboardHandler(handlerContext));
 
         // Window event handler
         messageDispatcher.registerHandler(new WindowEventHandler(handlerContext, new WindowEventHandler.Callback() {
@@ -436,7 +438,7 @@ public class ChatWindowDelegate {
         host.callJavaScript("addUserMessage", escapedPrompt);
         host.callJavaScript("showLoading", "true");
 
-        host.getSession().send(prompt).thenRun(() -> {
+        host.getSession().send(prompt, null, (String) null).thenRun(() -> {
             List<ClaudeSession.Message> messages = host.getSession().getMessages();
             if (!messages.isEmpty()) {
                 ClaudeSession.Message last = messages.get(messages.size() - 1);

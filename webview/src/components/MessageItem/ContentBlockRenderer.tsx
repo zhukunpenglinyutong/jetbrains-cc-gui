@@ -173,9 +173,10 @@ export function ContentBlockRenderer({
       return null;
     }
 
-    if (toolName === 'task') {
+    if (toolName === 'task' || toolName === 'agent') {
       return (
         <TaskExecutionBlock
+          name={block.name}
           input={block.input}
           result={findToolResult(block.id, messageIndex)}
         />

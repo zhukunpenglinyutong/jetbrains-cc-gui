@@ -1,10 +1,5 @@
 package com.github.claudecodegui;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.permission.PermissionManager;
@@ -12,19 +7,21 @@ import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.diagnostics.SessionCompactor;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.session.ClaudeMessageHandler;
 import com.github.claudecodegui.session.CodexMessageHandler;
 import com.github.claudecodegui.session.SessionState;
-import com.github.claudecodegui.util.EditorFileUtils;
-import com.github.claudecodegui.util.TokenUsageUtils;
-import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.project.Project;
-import com.intellij.util.concurrency.AppExecutorUtil;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
-import org.jetbrains.annotations.Nullable;
+import com.github.claudecodegui.util.TokenUsageUtils;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
 
 import java.util.ArrayList;
-import com.github.claudecodegui.service.RunConfigMonitorService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +39,9 @@ public class ClaudeSession {
 
     private static final Logger LOG = Logger.getInstance(ClaudeSession.class);
 
-    /** Maximum file size for Codex context injection (100KB) */
+    /**
+     * Maximum file size for Codex context injection (100KB)
+     */
     private static final int MAX_FILE_SIZE_BYTES = 100 * 1024;
 
     private final Gson gson = new Gson();
@@ -113,23 +112,44 @@ public class ClaudeSession {
         }
     }
 
-    /** Callback interface for session events. */
+    /**
+     * Callback interface for session events.
+     */
     public interface SessionCallback {
         void onMessageUpdate(List<Message> messages);
+
         void onStateChange(boolean busy, boolean loading, String error);
-        default void onStatusMessage(String message) {}
+
+        default void onStatusMessage(String message) {
+        }
+
         void onSessionIdReceived(String sessionId);
+
         void onPermissionRequested(PermissionRequest request);
+
         void onThinkingStatusChanged(boolean isThinking);
+
         void onSlashCommandsReceived(List<String> slashCommands);
+
         void onNodeLog(String log);
+
         void onSummaryReceived(String summary);
 
         // Streaming callback methods (with default implementations for backward compatibility)
-        default void onStreamStart() {}
-        default void onStreamEnd() {}
-        default void onContentDelta(String delta) {}
-        default void onThinkingDelta(String delta) {}
+        default void onStreamStart() {
+        }
+
+        default void onStreamEnd() {
+        }
+
+        default void onContentDelta(String delta) {
+        }
+
+        default void onThinkingDelta(String delta) {
+        }
+
+        default void onUsageUpdate(int usedTokens, int maxTokens) {
+        }
     }
 
     public ClaudeSession(Project project, ClaudeSDKBridge claudeSDKBridge, CodexSDKBridge codexSDKBridge) {
@@ -191,7 +211,9 @@ public class ClaudeSession {
         return state.getLastModifiedTime();
     }
 
-    /** Set session ID and working directory (used for session restoration). */
+    /**
+     * Set session ID and working directory (used for session restoration).
+     */
     public void setSessionInfo(String sessionId, String cwd) {
         state.setSessionId(sessionId);
         if (cwd != null) {
@@ -201,12 +223,16 @@ public class ClaudeSession {
         }
     }
 
-    /** Get the current working directory. */
+    /**
+     * Get the current working directory.
+     */
     public String getCwd() {
         return state.getCwd();
     }
 
-    /** Set the working directory. */
+    /**
+     * Set the working directory.
+     */
     public void setCwd(String cwd) {
         state.setCwd(cwd);
         LOG.info("Working directory updated to: " + cwd);
@@ -225,65 +251,67 @@ public class ClaudeSession {
         state.setChannelId(UUID.randomUUID().toString());
 
         return CompletableFuture.supplyAsync(() -> {
-            try {
-                // Validate and clean invalid sessionId (e.g., path instead of UUID)
-                String currentSessionId = state.getSessionId();
-                if (currentSessionId != null && (currentSessionId.contains("/") || currentSessionId.contains("\\"))) {
-                    LOG.warn("sessionId looks like a path, resetting: " + currentSessionId);
-                    state.setSessionId(null);
-                    currentSessionId = null;
-                }
+                    try {
+                        // Validate and clean invalid sessionId (e.g., path instead of UUID)
+                        String currentSessionId = state.getSessionId();
+                        if (currentSessionId != null && (currentSessionId.contains("/") || currentSessionId.contains("\\"))) {
+                            LOG.warn("sessionId looks like a path, resetting: " + currentSessionId);
+                            state.setSessionId(null);
+                            currentSessionId = null;
+                        }
 
-                // Select SDK based on provider
-                JsonObject result;
-                String currentProvider = state.getProvider();
-                String currentChannelId = state.getChannelId();
-                String currentCwd = state.getCwd();
-                if ("codex".equals(currentProvider)) {
-                    result = codexSDKBridge.launchChannel(currentChannelId, currentSessionId, currentCwd);
-                } else {
-                    result = claudeSDKBridge.launchChannel(currentChannelId, currentSessionId, currentCwd);
-                }
+                        // Select SDK based on provider
+                        JsonObject result;
+                        String currentProvider = state.getProvider();
+                        String currentChannelId = state.getChannelId();
+                        String currentCwd = state.getCwd();
+                        if ("codex".equals(currentProvider)) {
+                            result = codexSDKBridge.launchChannel(currentChannelId, currentSessionId, currentCwd);
+                        } else {
+                            result = claudeSDKBridge.launchChannel(currentChannelId, currentSessionId, currentCwd);
+                        }
 
-                // Check if sessionId exists and is not null
-                if (result.has("sessionId") && !result.get("sessionId").isJsonNull()) {
-                    String newSessionId = result.get("sessionId").getAsString();
-                    // Validate sessionId format (should be UUID format)
-                    if (!newSessionId.contains("/") && !newSessionId.contains("\\")) {
-                        state.setSessionId(newSessionId);
-                        callbackHandler.notifySessionIdReceived(newSessionId);
-                    } else {
-                        LOG.warn("Ignoring invalid sessionId: " + newSessionId);
+                        // Check if sessionId exists and is not null
+                        if (result.has("sessionId") && !result.get("sessionId").isJsonNull()) {
+                            String newSessionId = result.get("sessionId").getAsString();
+                            // Validate sessionId format (should be UUID format)
+                            if (!newSessionId.contains("/") && !newSessionId.contains("\\")) {
+                                state.setSessionId(newSessionId);
+                                callbackHandler.notifySessionIdReceived(newSessionId);
+                            } else {
+                                LOG.warn("Ignoring invalid sessionId: " + newSessionId);
+                            }
+                        }
+
+                        return currentChannelId;
+                    } catch (Exception e) {
+                        state.setError(e.getMessage());
+                        state.setChannelId(null);
+                        updateState();
+                        throw new RuntimeException("Failed to launch: " + e.getMessage(), e);
                     }
-                }
-
-                return currentChannelId;
-            } catch (Exception e) {
-                state.setError(e.getMessage());
-                state.setChannelId(null);
-                updateState();
-                throw new RuntimeException("Failed to launch: " + e.getMessage(), e);
-            }
-        }).orTimeout(com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT,
-                     com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_UNIT)
-          .exceptionally(ex -> {
-              if (ex instanceof java.util.concurrent.TimeoutException) {
-                  String timeoutMsg = "Channel launch timed out (" +
-                      com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT + "s), please retry";
-                  LOG.warn(timeoutMsg);
-                  state.setError(timeoutMsg);
-                  state.setChannelId(null);
-                  updateState();
-                  throw new RuntimeException(timeoutMsg);
-              }
-              throw new RuntimeException(ex.getCause());
-          });
+                }).orTimeout(com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT,
+                        com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_UNIT)
+                .exceptionally(ex -> {
+                    if (ex instanceof java.util.concurrent.TimeoutException) {
+                        String timeoutMsg = "Channel launch timed out (" +
+                                com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT + "s), please retry";
+                        LOG.warn(timeoutMsg);
+                        state.setError(timeoutMsg);
+                        state.setChannelId(null);
+                        updateState();
+                        throw new RuntimeException(timeoutMsg);
+                    }
+                    throw new RuntimeException(ex.getCause());
+                });
     }
 
     /**
      * Send a message using global agent settings.
+     *
      * @deprecated Use {@link #send(String, String)} with explicit agent prompt instead.
      */
+    @Deprecated
     public CompletableFuture<Void> send(String input) {
         return send(input, (List<Attachment>) null, null);
     }
@@ -314,8 +342,10 @@ public class ClaudeSession {
 
     /**
      * Send a message with attachments using global agent settings.
+     *
      * @deprecated Use {@link #send(String, List, String)} with explicit agent prompt instead.
      */
+    @Deprecated
     public CompletableFuture<Void> send(String input, List<Attachment> attachments) {
         return send(input, attachments, null, null, null);
     }
@@ -323,7 +353,8 @@ public class ClaudeSession {
     /**
      * Send a message with attachments and a specific agent prompt.
      * Used for per-tab independent agent selection.
-     * @param input User input text
+     *
+     * @param input       User input text
      * @param attachments List of attachments (nullable)
      * @param agentPrompt Agent prompt (falls back to global setting if null)
      */
@@ -334,9 +365,10 @@ public class ClaudeSession {
     /**
      * Send a message with attachments, agent prompt, and file tags.
      * Used for Codex context injection.
-     * @param input User input text
-     * @param attachments List of attachments (nullable)
-     * @param agentPrompt Agent prompt (falls back to global setting if null)
+     *
+     * @param input        User input text
+     * @param attachments  List of attachments (nullable)
+     * @param agentPrompt  Agent prompt (falls back to global setting if null)
      * @param fileTagPaths File tag paths for Codex context injection
      */
     public CompletableFuture<Void> send(String input, List<Attachment> attachments, String agentPrompt, List<String> fileTagPaths) {
@@ -349,11 +381,11 @@ public class ClaudeSession {
      * requestedPermissionMode > sessionMode > default, with codex forced to bypassPermissions.
      */
     public CompletableFuture<Void> send(
-        String input,
-        List<Attachment> attachments,
-        String agentPrompt,
-        List<String> fileTagPaths,
-        String requestedPermissionMode
+            String input,
+            List<Attachment> attachments,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode
     ) {
         // Save params for auto-compact retry
         this.lastSendParams = new SendParams(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode);
@@ -390,15 +422,15 @@ public class ClaudeSession {
             contextCollector.setAutoOpenFileEnabled(autoOpenFileEnabled);
 
             return contextCollector.collectContext().thenCompose(openedFilesJson ->
-                sendMessageToProvider(
-                    chId,
-                    userMessage.content,
-                    attachments,
-                    openedFilesJson,
-                    finalAgentPrompt,
-                    finalFileTagPaths,
-                    finalRequestedPermissionMode
-                )
+                    sendMessageToProvider(
+                            chId,
+                            userMessage.content,
+                            attachments,
+                            openedFilesJson,
+                            finalAgentPrompt,
+                            finalFileTagPaths,
+                            finalRequestedPermissionMode
+                    )
             );
         }).exceptionally(ex -> {
             state.setError(ex.getMessage());
@@ -409,7 +441,9 @@ public class ClaudeSession {
         });
     }
 
-    /** Build a user message from input text and attachments. */
+    /**
+     * Build a user message from input text and attachments.
+     */
     private Message buildUserMessage(String normalizedInput, List<Attachment> attachments) {
         Message userMessage = new Message(Message.Type.USER, normalizedInput);
 
@@ -459,14 +493,15 @@ public class ClaudeSession {
 
     /**
      * Process @protocol://name reference patterns in the input text.
-     * @param input Input text
-     * @param protocol Protocol name (e.g., "terminal", "service")
-     * @param blockTitle Output block title (e.g., "Terminal Output")
+     *
+     * @param input           Input text
+     * @param protocol        Protocol name (e.g., "terminal", "service")
+     * @param blockTitle      Output block title (e.g., "Terminal Output")
      * @param contentResolver Content resolution function
      * @return Processed text with references replaced
      */
     private String processReferences(String input, String protocol, String blockTitle,
-                                      Function<String, String> contentResolver) {
+            Function<String, String> contentResolver) {
         Pattern pattern = Pattern.compile("@" + protocol + "://([a-zA-Z0-9_]+)");
         Matcher matcher = pattern.matcher(input);
         StringBuffer result = new StringBuffer();
@@ -555,14 +590,18 @@ public class ClaudeSession {
         });
     }
 
-    /** Check if the attachment is an image. */
+    /**
+     * Check if the attachment is an image.
+     */
     private boolean isImageAttachment(Attachment att) {
         if (att == null) return false;
         String mt = (att.mediaType != null) ? att.mediaType : "";
         return mt.startsWith("image/") && att.data != null;
     }
 
-    /** Create an image content block for the API request. */
+    /**
+     * Create an image content block for the API request.
+     */
     private JsonObject createImageBlock(Attachment att) {
         JsonObject imageBlock = new JsonObject();
         imageBlock.addProperty("type", "image");
@@ -576,7 +615,9 @@ public class ClaudeSession {
         return imageBlock;
     }
 
-    /** Create a text content block for the API request. */
+    /**
+     * Create a text content block for the API request.
+     */
     private JsonObject createTextBlock(String text) {
         JsonObject textBlock = new JsonObject();
         textBlock.addProperty("type", "text");
@@ -584,7 +625,9 @@ public class ClaudeSession {
         return textBlock;
     }
 
-    /** Generate a summary text for image-only messages. */
+    /**
+     * Generate a summary text for image-only messages.
+     */
     private String generateAttachmentSummary(List<Attachment> attachments) {
         int imageCount = 0;
         List<String> names = new ArrayList<>();
@@ -614,7 +657,9 @@ public class ClaudeSession {
         return "[Uploaded Attachments: " + String.join(", ", names) + "]";
     }
 
-    /** Update session state when sending a message. */
+    /**
+     * Update session state when sending a message.
+     */
     private void updateSessionStateForSend(Message userMessage, String normalizedInput) {
         // Add message to history
         state.addMessage(userMessage);
@@ -623,8 +668,8 @@ public class ClaudeSession {
         // Update summary (first message only)
         if (state.getSummary() == null) {
             String baseSummary = (userMessage.content != null && !userMessage.content.isEmpty())
-                ? userMessage.content
-                : normalizedInput;
+                    ? userMessage.content
+                    : normalizedInput;
             String newSummary = baseSummary.length() > 45 ? baseSummary.substring(0, 45) + "..." : baseSummary;
             state.setSummary(newSummary);
             callbackHandler.notifySummaryReceived(newSummary);
@@ -641,21 +686,22 @@ public class ClaudeSession {
 
     /**
      * Send message to the AI provider.
-     * @param channelId Channel ID
-     * @param input User input
-     * @param attachments Attachment list
-     * @param openedFilesJson Opened files context from IDE
+     *
+     * @param channelId           Channel ID
+     * @param input               User input
+     * @param attachments         Attachment list
+     * @param openedFilesJson     Opened files context from IDE
      * @param externalAgentPrompt External agent prompt (falls back to global setting if null)
-     * @param fileTagPaths File tag paths for Codex context injection
+     * @param fileTagPaths        File tag paths for Codex context injection
      */
     private CompletableFuture<Void> sendMessageToProvider(
-        String channelId,
-        String input,
-        List<Attachment> attachments,
-        JsonObject openedFilesJson,
-        String externalAgentPrompt,
-        List<String> fileTagPaths,
-        String requestedPermissionMode
+            String channelId,
+            String input,
+            List<Attachment> attachments,
+            JsonObject openedFilesJson,
+            String externalAgentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode
     ) {
         // Prefer external agent prompt; fall back to global setting if not provided
         String agentPrompt = externalAgentPrompt;
@@ -672,27 +718,27 @@ public class ClaudeSession {
         String sessionModeBeforeSend = state.getPermissionMode();
         String normalizedRequestedMode = normalizeRequestedPermissionMode(requestedPermissionMode);
         String effectivePermissionMode = resolveEffectivePermissionMode(
-            currentProvider,
-            normalizedRequestedMode,
-            sessionModeBeforeSend
+                currentProvider,
+                normalizedRequestedMode,
+                sessionModeBeforeSend
         );
 
         LOG.info(
-            "[ModeSync][Backend] provider=" + currentProvider
-                + ", requested=" + (normalizedRequestedMode != null ? normalizedRequestedMode : "(none)")
-                + ", session=" + (sessionModeBeforeSend != null ? sessionModeBeforeSend : "(none)")
-                + ", effective=" + effectivePermissionMode
+                "[ModeSync][Backend] provider=" + currentProvider
+                        + ", requested=" + (normalizedRequestedMode != null ? normalizedRequestedMode : "(none)")
+                        + ", session=" + (sessionModeBeforeSend != null ? sessionModeBeforeSend : "(none)")
+                        + ", effective=" + effectivePermissionMode
         );
 
         if ("codex".equals(currentProvider)) {
             return sendToCodex(
-                channelId,
-                input,
-                attachments,
-                openedFilesJson,
-                agentPrompt,
-                fileTagPaths,
-                effectivePermissionMode
+                    channelId,
+                    input,
+                    attachments,
+                    openedFilesJson,
+                    agentPrompt,
+                    fileTagPaths,
+                    effectivePermissionMode
             );
         } else {
             return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
@@ -701,16 +747,17 @@ public class ClaudeSession {
 
     /**
      * Send message via Codex SDK.
+     *
      * @param fileTagPaths File tag paths for context injection
      */
     private CompletableFuture<Void> sendToCodex(
-        String channelId,
-        String input,
-        List<Attachment> attachments,
-        JsonObject openedFilesJson,
-        String agentPrompt,
-        List<String> fileTagPaths,
-        String effectivePermissionMode
+            String channelId,
+            String input,
+            List<Attachment> attachments,
+            JsonObject openedFilesJson,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String effectivePermissionMode
     ) {
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
 
@@ -718,24 +765,25 @@ public class ClaudeSession {
         String finalInput = (input != null ? input : "") + contextAppend;
 
         return codexSDKBridge.sendMessage(
-            channelId,
-            finalInput,
-            state.getSessionId(),
-            state.getCwd(),
-            attachments,
-            effectivePermissionMode,
-            state.getModel(),
-            agentPrompt,
-            state.getReasoningEffort(),
-            handler
+                channelId,
+                finalInput,
+                state.getSessionId(),
+                state.getCwd(),
+                attachments,
+                effectivePermissionMode,
+                state.getModel(),
+                agentPrompt,
+                state.getReasoningEffort(),
+                handler
         ).thenApply(result -> null);
     }
 
     /**
      * Build context content to append to Codex messages.
      * Handles IDE open files, selected code, and user file tags for context injection.
+     *
      * @param openedFilesJson IDE open file info (includes active file and selection)
-     * @param fileTagPaths User-added file tag paths from the input box
+     * @param fileTagPaths    User-added file tag paths from the input box
      */
     private String buildCodexContextAppend(JsonObject openedFilesJson, List<String> fileTagPaths) {
         StringBuilder sb = new StringBuilder();
@@ -860,6 +908,7 @@ public class ClaudeSession {
 
     /**
      * Read file content with size limit.
+     *
      * @param filePath File path
      * @return File content, or null if reading fails
      */
@@ -880,7 +929,7 @@ public class ClaudeSession {
                     int bytesRead = fis.read(buffer);
                     if (bytesRead > 0) {
                         return new String(buffer, 0, bytesRead, java.nio.charset.StandardCharsets.UTF_8)
-                            + "\n\n... (file truncated, showing first 100KB of " + (fileSize / 1024) + "KB)";
+                                + "\n\n... (file truncated, showing first 100KB of " + (fileSize / 1024) + "KB)";
                     }
                 }
                 return null;
@@ -895,7 +944,9 @@ public class ClaudeSession {
         }
     }
 
-    /** Get file extension for code block syntax highlighting. */
+    /**
+     * Get file extension for code block syntax highlighting.
+     */
     private String getFileExtension(String filePath) {
         if (filePath == null) return "";
         int lastDot = filePath.lastIndexOf('.');
@@ -905,14 +956,16 @@ public class ClaudeSession {
         return "";
     }
 
-    /** Send message via Claude SDK. */
+    /**
+     * Send message via Claude SDK.
+     */
     private CompletableFuture<Void> sendToClaude(
-        String channelId,
-        String input,
-        List<Attachment> attachments,
-        JsonObject openedFilesJson,
-        String agentPrompt,
-        String effectivePermissionMode
+            String channelId,
+            String input,
+            List<Attachment> attachments,
+            JsonObject openedFilesJson,
+            String agentPrompt,
+            String effectivePermissionMode
     ) {
         // Pass auto-compact callback only if not already in progress (prevents infinite loop)
         Runnable autoCompactCallback = autoCompactInProgress ? null : () -> handleAutoCompact();
@@ -942,40 +995,40 @@ public class ClaudeSession {
         final String previousSessionId = state.getSessionId();
 
         return claudeSDKBridge.sendMessage(
-            channelId,
-            input,
-            state.getSessionId(),
-            state.getCwd(),
-            attachments,
-            effectivePermissionMode,
-            state.getModel(),
-            openedFilesJson,
-            agentPrompt,
-            streaming,
-            handler
-        ).thenApply(result -> null)
-        .thenCompose(v -> {
-            // Add a small delay to ensure JSONL file is written and flushed
-            // Non-streaming responses return very fast, and filesystem I/O may not be complete yet
-            return CompletableFuture.runAsync(() -> {
-                try {
-                    Thread.sleep(100); // 100ms delay to allow file system flush
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                updateUserMessageUuids();
-            });
-        }).whenComplete((unused, throwable) -> {
-            if (throwable == null
-                    && (previousSessionId == null || previousSessionId.isEmpty())
-                    && state.getSessionId() != null && !state.getSessionId().isEmpty()) {
-                // Refill anonymous warm runtime after first turn captures a session ID,
-                // so the next new chat can also hit a pre-warmed path.
-                // NOTE: Idle anonymous runtimes are cleaned up by persistent-query-service's
-                // cleanupStaleAnonymousRuntimes() (ANONYMOUS_RUNTIME_MAX_IDLE_MS = 10min).
-                claudeSDKBridge.prewarmDaemonAsync(state.getCwd());
-            }
-        });
+                        channelId,
+                        input,
+                        state.getSessionId(),
+                        state.getCwd(),
+                        attachments,
+                        effectivePermissionMode,
+                        state.getModel(),
+                        openedFilesJson,
+                        agentPrompt,
+                        streaming,
+                        handler
+                ).thenApply(result -> null)
+                .thenCompose(v -> {
+                    // Add a small delay to ensure JSONL file is written and flushed
+                    // Non-streaming responses return very fast, and filesystem I/O may not be complete yet
+                    return CompletableFuture.runAsync(() -> {
+                        try {
+                            Thread.sleep(100); // 100ms delay to allow file system flush
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        updateUserMessageUuids();
+                    });
+                }).whenComplete((unused, throwable) -> {
+                    if (throwable == null
+                            && (previousSessionId == null || previousSessionId.isEmpty())
+                            && state.getSessionId() != null && !state.getSessionId().isEmpty()) {
+                        // Refill anonymous warm runtime after first turn captures a session ID,
+                        // so the next new chat can also hit a pre-warmed path.
+                        // NOTE: Idle anonymous runtimes are cleaned up by persistent-query-service's
+                        // cleanupStaleAnonymousRuntimes() (ANONYMOUS_RUNTIME_MAX_IDLE_MS = 10min).
+                        claudeSDKBridge.prewarmDaemonAsync(state.getCwd());
+                    }
+                });
     }
 
     /**
@@ -1228,7 +1281,9 @@ public class ClaudeSession {
         return null;
     }
 
-    /** Get the agent prompt from settings. */
+    /**
+     * Get the agent prompt from settings.
+     */
     private String getAgentPrompt() {
         try {
             CodemossSettingsService settingsService = new CodemossSettingsService();
@@ -1256,7 +1311,9 @@ public class ClaudeSession {
         return null;
     }
 
-    /** Interrupt the current execution. */
+    /**
+     * Interrupt the current execution.
+     */
     public CompletableFuture<Void> interrupt() {
         if (state.getChannelId() == null) {
             return CompletableFuture.completedFuture(null);
@@ -1290,7 +1347,9 @@ public class ClaudeSession {
         });
     }
 
-    /** Restart the Claude agent. */
+    /**
+     * Restart the Claude agent.
+     */
     public CompletableFuture<Void> restart() {
         return interrupt().thenCompose(v -> {
             state.setChannelId(null);
@@ -1300,7 +1359,9 @@ public class ClaudeSession {
         });
     }
 
-    /** Load message history from the server. */
+    /**
+     * Load message history from the server.
+     */
     public CompletableFuture<Void> loadFromServer() {
         if (state.getSessionId() == null) {
             return CompletableFuture.completedFuture(null);
@@ -1369,15 +1430,19 @@ public class ClaudeSession {
         }
     }
 
-    /** Notify callback of message updates. */
+    /**
+     * Notify callback of message updates.
+     */
     private void notifyMessageUpdate() {
         callbackHandler.notifyMessageUpdate(getMessages());
     }
 
-    /** Notify callback of state changes. */
+    /**
+     * Notify callback of state changes.
+     */
     private void updateState() {
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
-        
+
         // Show error in status bar
         String error = state.getError();
         if (error != null && !error.isEmpty()) {
@@ -1385,7 +1450,9 @@ public class ClaudeSession {
         }
     }
 
-    /** Represents a file attachment (e.g., image). */
+    /**
+     * Represents a file attachment (e.g., image).
+     */
     public static class Attachment {
         public String fileName;
         public String mediaType;
@@ -1398,7 +1465,9 @@ public class ClaudeSession {
         }
     }
 
-    /** Get the permission manager. */
+    /**
+     * Get the permission manager.
+     */
     public PermissionManager getPermissionManager() {
         return permissionManager;
     }
@@ -1434,62 +1503,83 @@ public class ClaudeSession {
         permissionManager.setPermissionMode(pmMode);
     }
 
-    /** Get the permission mode. */
+    /**
+     * Get the permission mode.
+     */
     public String getPermissionMode() {
         return state.getPermissionMode();
     }
 
-    /** Set the model. */
+    /**
+     * Set the model.
+     */
     public void setModel(String model) {
         state.setModel(model);
         LOG.info("Model updated to: " + model);
     }
 
-    /** Get the model. */
+    /**
+     * Get the model.
+     */
     public String getModel() {
         return state.getModel();
     }
 
-    /** Set the AI provider. */
+    /**
+     * Set the AI provider.
+     */
     public void setProvider(String provider) {
         state.setProvider(provider);
         LOG.info("Provider updated to: " + provider);
     }
 
-    /** Get the AI provider. */
+    /**
+     * Get the AI provider.
+     */
     public String getProvider() {
         return state.getProvider();
     }
 
-    /** Set the reasoning effort level. */
+    /**
+     * Set the reasoning effort level.
+     */
     public void setReasoningEffort(String effort) {
         state.setReasoningEffort(effort);
         LOG.info("Reasoning effort updated to: " + effort);
     }
 
-    /** Get the reasoning effort level. */
+    /**
+     * Get the reasoning effort level.
+     */
     public String getReasoningEffort() {
         return state.getReasoningEffort();
     }
 
-    /** Get the list of available slash commands. */
+    /**
+     * Get the list of available slash commands.
+     */
     public List<String> getSlashCommands() {
         return state.getSlashCommands();
     }
 
 
-
-    /** Create a permission request (called by the SDK). */
+    /**
+     * Create a permission request (called by the SDK).
+     */
     public PermissionRequest createPermissionRequest(String toolName, Map<String, Object> inputs, JsonObject suggestions, Project project) {
         return permissionManager.createRequest(state.getChannelId(), toolName, inputs, suggestions, project);
     }
 
-    /** Handle a permission decision. */
+    /**
+     * Handle a permission decision.
+     */
     public void handlePermissionDecision(String channelId, boolean allow, boolean remember, String rejectMessage) {
         permissionManager.handlePermissionDecision(channelId, allow, remember, rejectMessage);
     }
 
-    /** Handle an "always allow" permission decision. */
+    /**
+     * Handle an "always allow" permission decision.
+     */
     public void handlePermissionDecisionAlways(String channelId, boolean allow) {
         permissionManager.handlePermissionDecisionAlways(channelId, allow);
     }

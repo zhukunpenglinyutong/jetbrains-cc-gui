@@ -87,6 +87,7 @@ public class CallbackHandler {
             callback.onNodeLog(log);
         }
     }
+
     public void notifySummaryReceived(String summary) {
         if (callback != null) {
             callback.onSummaryReceived(summary);
@@ -127,6 +128,15 @@ public class CallbackHandler {
     public void notifyThinkingDelta(String delta) {
         if (callback != null) {
             callback.onThinkingDelta(delta);
+        }
+    }
+
+    /**
+     * Notify of a usage update.
+     */
+    public void notifyUsageUpdate(int usedTokens, int maxTokens) {
+        if (callback != null) {
+            callback.onUsageUpdate(usedTokens, maxTokens);
         }
     }
 }

@@ -9,6 +9,7 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -29,7 +30,12 @@ public abstract class BaseSDKBridge {
 
     protected final Logger LOG;
     protected final Gson gson = new Gson();
-    protected final NodeDetector nodeDetector = new NodeDetector();
+    /**
+     * Shared NodeDetector instance (singleton pattern).
+     * This ensures that ClaudeSDKBridge and CodexSDKBridge share the same cache,
+     * avoiding redundant Node.js path detections across modes.
+     */
+    protected final NodeDetector nodeDetector = NodeDetector.getInstance();
     protected final ProcessManager processManager = new ProcessManager();
     protected final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
 
@@ -43,6 +49,8 @@ public abstract class BaseSDKBridge {
 
     protected BaseSDKBridge(Class<?> loggerClass) {
         this.LOG = Logger.getInstance(loggerClass);
+        // Inject IntelliJ's managed executor into NodeDetector for in-flight detection tasks.
+        this.nodeDetector.setDetectionExecutor(AppExecutorUtil.getAppExecutorService());
     }
 
     // ============================================================================

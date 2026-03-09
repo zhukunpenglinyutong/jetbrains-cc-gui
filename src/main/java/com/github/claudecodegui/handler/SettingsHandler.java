@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.CodemossSettingsService;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
@@ -8,6 +9,7 @@ import com.github.claudecodegui.util.TokenUsageUtils;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
+import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.IgnoreRuleMatcher;
 import com.github.claudecodegui.util.SoundNotificationService;
@@ -16,11 +18,13 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.HashMap;
@@ -77,6 +81,7 @@ public class SettingsHandler extends BaseMessageHandler {
         // 提示音配置
         "get_sound_notification_config",
         "set_sound_notification_enabled",
+        "set_sound_only_when_unfocused",
         "set_selected_sound",
         "set_custom_sound_path",
         "test_sound",
@@ -212,6 +217,9 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_sound_notification_enabled":
                 handleSetSoundNotificationEnabled(content);
                 return true;
+            case "set_sound_only_when_unfocused":
+                handleSetSoundOnlyWhenUnfocused(content);
+                return true;
             case "set_selected_sound":
                 handleSetSelectedSound(content);
                 return true;
@@ -272,7 +280,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String mode = content;
             if (content != null && !content.isEmpty()) {
                 try {
-                    Gson gson = new Gson();
                     JsonObject json = gson.fromJson(content, JsonObject.class);
                     if (json.has("mode")) {
                         mode = json.get("mode").getAsString();
@@ -322,7 +329,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String model = content;
             if (content != null && !content.isEmpty()) {
                 try {
-                    Gson gson = new Gson();
                     JsonObject json = gson.fromJson(content, JsonObject.class);
                     if (json.has("model")) {
                         model = json.get("model").getAsString();
@@ -419,7 +425,7 @@ public class SettingsHandler extends BaseMessageHandler {
         usageUpdate.addProperty("usedTokens", usedTokens);
         usageUpdate.addProperty("maxTokens", maxTokens);
 
-        String usageJson = new Gson().toJson(usageUpdate);
+        String usageJson = gson.toJson(usageUpdate);
 
         // Push to frontend (must be executed on the EDT thread)
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -444,7 +450,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String provider = content;
             if (content != null && !content.isEmpty()) {
                 try {
-                    Gson gson = new Gson();
                     JsonObject json = gson.fromJson(content, JsonObject.class);
                     if (json.has("provider")) {
                         provider = json.get("provider").getAsString();
@@ -484,7 +489,8 @@ public class SettingsHandler extends BaseMessageHandler {
 
         final String finalCwd = cwd;
         CompletableFuture.runAsync(() -> {
-            var commands = SlashCommandRegistry.getCommands(provider, finalCwd);
+            String currentFilePath = getCurrentEditorFilePath();
+            var commands = SlashCommandRegistry.getCommands(provider, finalCwd, currentFilePath);
             String json = SlashCommandRegistry.toJson(commands);
 
             final String codexJson;
@@ -512,6 +518,10 @@ public class SettingsHandler extends BaseMessageHandler {
             LOG.error("[SettingsHandler] Failed to refresh slash commands asynchronously: " + ex.getMessage(), ex);
             return null;
         });
+    }
+
+    private String getCurrentEditorFilePath() {
+        return EditorFileUtils.getCurrentEditorFilePath(this.context.getProject());
     }
 
     private void refreshContextBar() {
@@ -600,7 +610,6 @@ public class SettingsHandler extends BaseMessageHandler {
             String effort = content;
             if (content != null && !content.isEmpty()) {
                 try {
-                    Gson gson = new Gson();
                     JsonObject json = gson.fromJson(content, JsonObject.class);
                     if (json.has("reasoningEffort")) {
                         effort = json.get("reasoningEffort").getAsString();
@@ -622,131 +631,157 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * Get Node.js path and version information.
+     * Runs detection/verification in a background thread to avoid blocking the CEF IO thread.
      */
     private void handleGetNodePath() {
-        try {
-            PropertiesComponent props = PropertiesComponent.getInstance();
-            String saved = props.getValue(NODE_PATH_PROPERTY_KEY);
-            String pathToSend = "";
-            String versionToSend = null;
+        CompletableFuture.runAsync(() -> {
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String saved = props.getValue(NODE_PATH_PROPERTY_KEY);
+                String pathToSend = "";
+                String versionToSend = null;
 
-            if (saved != null && !saved.trim().isEmpty()) {
-                pathToSend = saved.trim();
-                NodeDetectionResult result = context.getClaudeSDKBridge().verifyAndCacheNodePath(pathToSend);
-                if (result != null && result.isFound()) {
-                    versionToSend = result.getNodeVersion();
+                if (saved != null && !saved.trim().isEmpty()) {
+                    pathToSend = saved.trim();
+                    NodeDetectionResult result = context.getClaudeSDKBridge().verifyAndCacheNodePath(pathToSend);
+                    if (result != null && result.isFound()) {
+                        versionToSend = result.getNodeVersion();
+                    }
+                } else {
+                    NodeDetectionResult detected = context.getClaudeSDKBridge().detectNodeWithDetails();
+                    if (detected != null && detected.isFound() && detected.getNodePath() != null) {
+                        pathToSend = detected.getNodePath();
+                        versionToSend = detected.getNodeVersion();
+                        props.setValue(NODE_PATH_PROPERTY_KEY, pathToSend);
+                        // Use verifyAndCacheNodePath instead of setNodeExecutable to ensure version info is cached
+                        context.getClaudeSDKBridge().verifyAndCacheNodePath(pathToSend);
+                        context.getCodexSDKBridge().setNodeExecutable(pathToSend);
+                    }
                 }
-            } else {
-                NodeDetectionResult detected = context.getClaudeSDKBridge().detectNodeWithDetails();
-                if (detected != null && detected.isFound() && detected.getNodePath() != null) {
-                    pathToSend = detected.getNodePath();
-                    versionToSend = detected.getNodeVersion();
-                    props.setValue(NODE_PATH_PROPERTY_KEY, pathToSend);
-                    // Use verifyAndCacheNodePath instead of setNodeExecutable to ensure version info is cached
-                    context.getClaudeSDKBridge().verifyAndCacheNodePath(pathToSend);
-                    context.getCodexSDKBridge().setNodeExecutable(pathToSend);
-                }
+
+                final String finalPath = pathToSend;
+                final String finalVersion = versionToSend;
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    JsonObject response = new JsonObject();
+                    response.addProperty("path", finalPath);
+                    response.addProperty("version", finalVersion);
+                    response.addProperty("minVersion", NodeDetector.MIN_NODE_MAJOR_VERSION);
+                    callJavaScript("window.updateNodePath", escapeJs(gson.toJson(response)));
+                });
+            } catch (Exception e) {
+                LOG.error("[SettingsHandler] Failed to get Node.js path: " + e.getMessage(), e);
+                ApplicationManager.getApplication().invokeLater(() ->
+                    callJavaScript("window.showError", escapeJs("获取 Node.js 路径失败: " + e.getMessage()))
+                );
             }
-
-            final String finalPath = pathToSend;
-            final String finalVersion = versionToSend;
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject response = new JsonObject();
-                response.addProperty("path", finalPath);
-                response.addProperty("version", finalVersion);
-                response.addProperty("minVersion", NodeDetector.MIN_NODE_MAJOR_VERSION);
-                callJavaScript("window.updateNodePath", escapeJs(new Gson().toJson(response)));
-            });
-        } catch (Exception e) {
-            LOG.error("[SettingsHandler] Failed to get Node.js path: " + e.getMessage(), e);
-        }
+        }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
+            LOG.error("[SettingsHandler] Unexpected error in handleGetNodePath: " + ex.getMessage(), ex);
+            return null;
+        });
     }
 
     /**
      * Set Node.js path.
+     * JSON parsing runs on the CEF IO thread (safe, no I/O), while verification/detection
+     * runs in a background thread to avoid blocking the CEF IO thread.
      */
     private void handleSetNodePath(String content) {
         LOG.debug("[SettingsHandler] ========== handleSetNodePath START ==========");
         LOG.debug("[SettingsHandler] Received content: " + content);
+
+        // Parse path on the CEF IO thread — pure JSON parsing, no I/O, safe to do synchronously
+        String parsedPath = null;
         try {
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String path = null;
             if (json != null && json.has("path") && !json.get("path").isJsonNull()) {
-                path = json.get("path").getAsString();
+                parsedPath = json.get("path").getAsString();
             }
-
-            if (path != null) {
-                path = path.trim();
-            }
-
-            PropertiesComponent props = PropertiesComponent.getInstance();
-            String finalPath = "";
-            String versionToSend = null;
-            boolean verifySuccess = false;
-            String failureMsg = null;
-
-            if (path == null || path.isEmpty()) {
-                props.unsetValue(NODE_PATH_PROPERTY_KEY);
-                context.getClaudeSDKBridge().setNodeExecutable(null);
-                context.getCodexSDKBridge().setNodeExecutable(null);
-                LOG.info("[SettingsHandler] Cleared manual Node.js path from settings");
-
-                NodeDetectionResult detected = context.getClaudeSDKBridge().detectNodeWithDetails();
-                if (detected != null && detected.isFound() && detected.getNodePath() != null) {
-                    finalPath = detected.getNodePath();
-                    versionToSend = detected.getNodeVersion();
-                    props.setValue(NODE_PATH_PROPERTY_KEY, finalPath);
-                    // Use verifyAndCacheNodePath to ensure version info is cached
-                    context.getClaudeSDKBridge().verifyAndCacheNodePath(finalPath);
-                    context.getCodexSDKBridge().setNodeExecutable(finalPath);
-                    verifySuccess = true;
-                }
-            } else {
-                props.setValue(NODE_PATH_PROPERTY_KEY, path);
-                NodeDetectionResult result = context.getClaudeSDKBridge().verifyAndCacheNodePath(path);
-                context.getCodexSDKBridge().setNodeExecutable(path);
-                LOG.info("[SettingsHandler] Updated manual Node.js path from settings: " + path);
-                finalPath = path;
-                if (result != null && result.isFound()) {
-                    versionToSend = result.getNodeVersion();
-                    verifySuccess = true;
-                } else {
-                    failureMsg = result != null ? result.getErrorMessage() : "无法验证指定的 Node.js 路径";
-                }
-            }
-
-            final boolean successFlag = verifySuccess;
-            final String failureMsgFinal = failureMsg;
-            final String finalPathToSend = finalPath;
-            final String finalVersionToSend = versionToSend;
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject response = new JsonObject();
-                response.addProperty("path", finalPathToSend);
-                response.addProperty("version", finalVersionToSend);
-                response.addProperty("minVersion", NodeDetector.MIN_NODE_MAJOR_VERSION);
-                callJavaScript("window.updateNodePath", escapeJs(gson.toJson(response)));
-
-                if (successFlag) {
-                    // Trigger environment re-check, no IDE restart needed
-                    callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存并生效,无需重启IDE"));
-
-                    // Notify DependencySection to re-check Node.js environment
-                    callJavaScript("window.checkNodeEnvironment");
-                } else {
-                    String msg = failureMsgFinal != null ? failureMsgFinal : "无法验证指定的 Node.js 路径";
-                    callJavaScript("window.showError", escapeJs("保存的 Node.js 路径无效: " + msg));
-                }
-            });
         } catch (Exception e) {
-            LOG.error("[SettingsHandler] Failed to set Node.js path: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.showError", escapeJs("保存 Node.js 路径失败: " + e.getMessage()));
-            });
+            LOG.error("[SettingsHandler] Failed to parse set_node_path content: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                callJavaScript("window.showError", escapeJs("保存 Node.js 路径失败: " + e.getMessage()))
+            );
+            return;
         }
-        LOG.debug("[SettingsHandler] ========== handleSetNodePath END ==========");
+        final String pathArg = (parsedPath != null) ? parsedPath.trim() : null;
+
+        // All I/O and process-spawning runs in a background thread
+        CompletableFuture.runAsync(() -> {
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
+                String finalPath = "";
+                String versionToSend = null;
+                boolean verifySuccess = false;
+                String failureMsg = null;
+
+                if (pathArg == null || pathArg.isEmpty()) {
+                    props.unsetValue(NODE_PATH_PROPERTY_KEY);
+                    context.getClaudeSDKBridge().setNodeExecutable(null);
+                    context.getCodexSDKBridge().setNodeExecutable(null);
+                    LOG.info("[SettingsHandler] Cleared manual Node.js path from settings");
+
+                    NodeDetectionResult detected = context.getClaudeSDKBridge().detectNodeWithDetails();
+                    if (detected != null && detected.isFound() && detected.getNodePath() != null) {
+                        finalPath = detected.getNodePath();
+                        versionToSend = detected.getNodeVersion();
+                        props.setValue(NODE_PATH_PROPERTY_KEY, finalPath);
+                        // Use verifyAndCacheNodePath to ensure version info is cached
+                        context.getClaudeSDKBridge().verifyAndCacheNodePath(finalPath);
+                        context.getCodexSDKBridge().setNodeExecutable(finalPath);
+                        verifySuccess = true;
+                    } else {
+                        failureMsg = "已清空自定义路径，但无法自动检测到 Node.js，请手动配置路径";
+                    }
+                } else {
+                    props.setValue(NODE_PATH_PROPERTY_KEY, pathArg);
+                    NodeDetectionResult result = context.getClaudeSDKBridge().verifyAndCacheNodePath(pathArg);
+                    LOG.info("[SettingsHandler] Updated manual Node.js path from settings: " + pathArg);
+                    finalPath = pathArg;
+                    if (result != null && result.isFound()) {
+                        context.getCodexSDKBridge().setNodeExecutable(pathArg);
+                        versionToSend = result.getNodeVersion();
+                        verifySuccess = true;
+                    } else {
+                        failureMsg = result != null ? result.getErrorMessage() : "无法验证指定的 Node.js 路径";
+                    }
+                }
+
+                final boolean successFlag = verifySuccess;
+                final String failureMsgFinal = failureMsg;
+                final String finalPathToSend = finalPath;
+                final String finalVersionToSend = versionToSend;
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    JsonObject response = new JsonObject();
+                    response.addProperty("path", finalPathToSend);
+                    response.addProperty("version", finalVersionToSend);
+                    response.addProperty("minVersion", NodeDetector.MIN_NODE_MAJOR_VERSION);
+                    callJavaScript("window.updateNodePath", escapeJs(gson.toJson(response)));
+
+                    if (successFlag) {
+                        // Trigger environment re-check, no IDE restart needed
+                        callJavaScript("window.showSwitchSuccess", escapeJs("Node.js 路径已保存并生效,无需重启IDE"));
+
+                        // Notify DependencySection to re-check Node.js environment
+                        callJavaScript("window.checkNodeEnvironment");
+                    } else {
+                        String msg = failureMsgFinal != null ? failureMsgFinal : "无法验证指定的 Node.js 路径";
+                        callJavaScript("window.showError", escapeJs("保存的 Node.js 路径无效: " + msg));
+                    }
+                });
+            } catch (Exception e) {
+                LOG.error("[SettingsHandler] Failed to set Node.js path: " + e.getMessage(), e);
+                ApplicationManager.getApplication().invokeLater(() ->
+                    callJavaScript("window.showError", escapeJs("保存 Node.js 路径失败: " + e.getMessage()))
+                );
+            }
+        }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
+            LOG.error("[SettingsHandler] Unexpected error in handleSetNodePath: " + ex.getMessage(), ex);
+            return null;
+        });
+
+        LOG.debug("[SettingsHandler] ========== handleSetNodePath END (async dispatched) ==========");
     }
 
     /**
@@ -762,7 +797,6 @@ public class SettingsHandler extends BaseMessageHandler {
 
                 if (content != null && !content.isEmpty() && !content.equals("{}")) {
                     try {
-                        Gson gson = new Gson();
                         JsonObject json = gson.fromJson(content, JsonObject.class);
 
                         // Parse scope
@@ -800,7 +834,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 }
 
                 // Use corresponding reader based on provider
-                Gson gson = new Gson();
                 String json;
                 if ("codex".equals(provider)) {
                     CodexHistoryReader reader = new CodexHistoryReader();
@@ -852,7 +885,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 new com.github.claudecodegui.CodemossSettingsService();
             String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
 
-            Gson gson = new Gson();
             JsonObject response = new JsonObject();
             response.addProperty("projectPath", projectPath);
             response.addProperty("customWorkingDir", customWorkingDir != null ? customWorkingDir : "");
@@ -882,7 +914,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return;
             }
 
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String customWorkingDir = null;
 
@@ -949,7 +980,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     JsonObject response = new JsonObject();
                     response.addProperty("streamingEnabled", true);
-                    callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+                    callJavaScript("window.updateStreamingEnabled", escapeJs(gson.toJson(response)));
                 });
                 return;
             }
@@ -961,14 +992,14 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("streamingEnabled", streamingEnabled);
-                callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateStreamingEnabled", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get streaming enabled: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("streamingEnabled", true);
-                callJavaScript("window.updateStreamingEnabled", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateStreamingEnabled", escapeJs(gson.toJson(response)));
             });
         }
     }
@@ -986,7 +1017,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return;
             }
 
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             boolean streamingEnabled = true;
 
@@ -1025,7 +1055,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     JsonObject response = new JsonObject();
                     response.addProperty("autoOpenFileEnabled", true);
-                    callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+                    callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(gson.toJson(response)));
                 });
                 return;
             }
@@ -1037,14 +1067,14 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("autoOpenFileEnabled", autoOpenFileEnabled);
-                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get auto open file enabled: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("autoOpenFileEnabled", true);
-                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateAutoOpenFileEnabled", escapeJs(gson.toJson(response)));
             });
         }
     }
@@ -1062,7 +1092,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return;
             }
 
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             boolean autoOpenFileEnabled = true;
 
@@ -1222,7 +1251,7 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("sendShortcut", sendShortcut);
-                callJavaScript("window.updateSendShortcut", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateSendShortcut", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get send shortcut: " + e.getMessage(), e);
@@ -1234,7 +1263,6 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleSetSendShortcut(String content) {
         try {
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String sendShortcut = "enter";
 
@@ -1249,6 +1277,9 @@ public class SettingsHandler extends BaseMessageHandler {
 
             PropertiesComponent props = PropertiesComponent.getInstance();
             props.setValue(SEND_SHORTCUT_PROPERTY_KEY, sendShortcut);
+
+            // Sync IDEA keymap for ChatSendAction
+            SendShortcutSync.sync(sendShortcut);
 
             LOG.info("[SettingsHandler] Set send shortcut: " + sendShortcut);
 
@@ -1278,7 +1309,7 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("commitPrompt", commitPrompt);
-                callJavaScript("window.updateCommitPrompt", escapeJs(new Gson().toJson(response)));
+                callJavaScript("window.updateCommitPrompt", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to get commit prompt: " + e.getMessage(), e);
@@ -1290,7 +1321,6 @@ public class SettingsHandler extends BaseMessageHandler {
      */
     private void handleSetCommitPrompt(String content) {
         try {
-            Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
 
             if (json == null || !json.has("prompt")) {
@@ -1581,12 +1611,14 @@ public class SettingsHandler extends BaseMessageHandler {
     private void handleGetSoundNotificationConfig() {
         try {
             boolean enabled = settingsService.getSoundNotificationEnabled();
+            boolean onlyWhenUnfocused = settingsService.getSoundOnlyWhenUnfocused();
             String selectedSound = settingsService.getSelectedSound();
             String customPath = settingsService.getCustomSoundPath();
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("enabled", enabled);
+                response.addProperty("onlyWhenUnfocused", onlyWhenUnfocused);
                 response.addProperty("selectedSound", selectedSound);
                 response.addProperty("customSoundPath", customPath != null ? customPath : "");
                 callJavaScript("window.updateSoundNotificationConfig", escapeJs(gson.toJson(response)));
@@ -1596,6 +1628,7 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("enabled", false);
+                response.addProperty("onlyWhenUnfocused", false);
                 response.addProperty("selectedSound", "default");
                 response.addProperty("customSoundPath", "");
                 callJavaScript("window.updateSoundNotificationConfig", escapeJs(gson.toJson(response)));
@@ -1614,15 +1647,19 @@ public class SettingsHandler extends BaseMessageHandler {
             settingsService.setSoundNotificationEnabled(enabled);
 
             // Read config values before entering invokeLater to avoid disk IO on EDT
+            boolean onlyWhenUnfocused;
             String selectedSound;
             String customPath;
             try {
+                onlyWhenUnfocused = settingsService.getSoundOnlyWhenUnfocused();
                 selectedSound = settingsService.getSelectedSound();
                 customPath = settingsService.getCustomSoundPath();
             } catch (Exception e) {
+                onlyWhenUnfocused = false;
                 selectedSound = "default";
                 customPath = null;
             }
+            final boolean finalOnlyWhenUnfocused = onlyWhenUnfocused;
             final String finalSelectedSound = selectedSound;
             final String finalCustomPath = customPath != null ? customPath : "";
 
@@ -1631,12 +1668,58 @@ public class SettingsHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject response = new JsonObject();
                 response.addProperty("enabled", enabled);
+                response.addProperty("onlyWhenUnfocused", finalOnlyWhenUnfocused);
                 response.addProperty("selectedSound", finalSelectedSound);
                 response.addProperty("customSoundPath", finalCustomPath);
                 callJavaScript("window.updateSoundNotificationConfig", escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to set sound notification enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.showError", escapeJs("Failed to save sound notification config: " + e.getMessage()));
+            });
+        }
+    }
+
+    /**
+     * Set sound only-when-unfocused state.
+     */
+    private void handleSetSoundOnlyWhenUnfocused(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean onlyWhenUnfocused = json != null && json.has("onlyWhenUnfocused") && json.get("onlyWhenUnfocused").getAsBoolean();
+
+            settingsService.setSoundOnlyWhenUnfocused(onlyWhenUnfocused);
+
+            // Read config values before entering invokeLater to avoid disk IO on EDT
+            boolean enabled;
+            String selectedSound;
+            String customPath;
+            try {
+                enabled = settingsService.getSoundNotificationEnabled();
+                selectedSound = settingsService.getSelectedSound();
+                customPath = settingsService.getCustomSoundPath();
+            } catch (Exception e) {
+                enabled = false;
+                selectedSound = "default";
+                customPath = null;
+            }
+            final boolean finalEnabled = enabled;
+            final String finalSelectedSound = selectedSound;
+            final String finalCustomPath = customPath != null ? customPath : "";
+
+            LOG.info("[SettingsHandler] Set sound only when unfocused: " + onlyWhenUnfocused);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("enabled", finalEnabled);
+                response.addProperty("onlyWhenUnfocused", onlyWhenUnfocused);
+                response.addProperty("selectedSound", finalSelectedSound);
+                response.addProperty("customSoundPath", finalCustomPath);
+                callJavaScript("window.updateSoundNotificationConfig", escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to set sound only when unfocused: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.showError", escapeJs("Failed to save sound notification config: " + e.getMessage()));
             });

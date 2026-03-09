@@ -185,19 +185,24 @@ const extractFilePathFromCommand = (command: string | undefined, workdir?: strin
 };
 
 const pickFilePath = (input: ToolInput, name?: string) => {
-  // First try standard file path fields
-  const standardPath = (input.file_path as string | undefined) ??
-    (input.path as string | undefined) ??
-    (input.target_file as string | undefined) ??
-    (input.notebook_path as string | undefined);
+  // First try standard file path fields (ensure they are strings, not objects)
+  const pathValue = input.path;
+  const filePathValue = input.file_path;
+  const targetFileValue = input.target_file;
+  const notebookPathValue = input.notebook_path;
+
+  const standardPath = (typeof filePathValue === 'string' ? filePathValue : undefined) ??
+    (typeof pathValue === 'string' ? pathValue : undefined) ??
+    (typeof targetFileValue === 'string' ? targetFileValue : undefined) ??
+    (typeof notebookPathValue === 'string' ? notebookPathValue : undefined);
 
   if (standardPath) return standardPath;
 
   // For Codex read or shell_command commands, extract from command string
   const lowerName = (name ?? '').toLowerCase();
-  if ((lowerName === 'read' || lowerName === 'shell_command') && input.command) {
-    const workdir = (input.workdir as string | undefined) ?? undefined;
-    return extractFilePathFromCommand(input.command as string, workdir);
+  if ((lowerName === 'read' || lowerName === 'shell_command') && typeof input.command === 'string') {
+    const workdir = typeof input.workdir === 'string' ? input.workdir : undefined;
+    return extractFilePathFromCommand(input.command, workdir);
   }
 
   return undefined;
@@ -224,10 +229,7 @@ interface GenericToolBlockProps {
 
 const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps) => {
   const { t } = useTranslation();
-  // Tools that should be collapsible (Grep, Glob, Write, Update Plan, Shell Command and MCP tools)
   const lowerName = (name ?? '').toLowerCase();
-  const isMcpTool = lowerName.startsWith('mcp__');
-  const isCollapsible = ['grep', 'glob', 'write', 'save-file', 'askuserquestion', 'update_plan', 'shell_command', 'exitplanmode', 'webfetch', 'websearch', 'skill', 'useskill', 'runskill', 'run_skill', 'execute_skill', 'taskoutput'].includes(lowerName) || isMcpTool;
   const [expanded, setExpanded] = useState(false);
 
   const filePath = input ? pickFilePath(input, name) : undefined;
@@ -265,7 +267,7 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
     ([key]) => !omitFields.has(key) && key !== 'pattern',
   );
 
-  const shouldShowDetails = otherParams.length > 0 && (!isCollapsible || expanded);
+  const hasExpandableContent = otherParams.length > 0;
 
   // Check if it's a special file (no extension but still a file)
   const isSpecialFile = (fileName: string): boolean => {
@@ -317,13 +319,15 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
     <div className="task-container">
       <div
         className="task-header"
-        onClick={isCollapsible ? () => setExpanded((prev) => !prev) : undefined}
+        onClick={hasExpandableContent ? () => setExpanded((prev) => !prev) : undefined}
         style={{
-          cursor: isCollapsible ? 'pointer' : 'default',
-          borderBottom: expanded && isCollapsible ? '1px solid var(--border-primary)' : undefined,
+          cursor: hasExpandableContent ? 'pointer' : 'default',
         }}
       >
         <div className="task-title-section">
+          {hasExpandableContent && (
+            <span className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'} tool-chevron`} />
+          )}
           <span className={`codicon ${codicon} tool-title-icon`} />
 
           <span className="tool-title-text">
@@ -353,15 +357,17 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
 
         <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
       </div>
-      {shouldShowDetails && (
-        <div className="task-details">
-          <div className="task-content-wrapper">
-            {otherParams.map(([key, value]) => (
-              <div key={key} className="task-field">
-                <div className="task-field-label">{key}</div>
-                <div className="task-field-content">{formatParamValue(value)}</div>
-              </div>
-            ))}
+      {hasExpandableContent && (
+        <div className={`task-details-accordion ${expanded ? 'expanded' : ''}`}>
+          <div className="task-details">
+            <div className="task-content-wrapper">
+              {otherParams.map(([key, value]) => (
+                <div key={key} className="task-field">
+                  <div className="task-field-label">{key}</div>
+                  <div className="task-field-content">{formatParamValue(value)}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -3,17 +3,20 @@
  * Keeps Claude Query processes alive across turns to reduce per-request latency.
  */
 
-import {
-  loadClaudeSdk
-} from '../../utils/sdk-loader.js';
-import { setupApiKey, isCustomBaseUrl, loadClaudeSettings } from '../../config/api-config.js';
+import { loadClaudeSdk } from '../../utils/sdk-loader.js';
+import { isCustomBaseUrl, loadClaudeSettings, setupApiKey } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
-import { mapModelIdToSdkName, resolveModelFromSettings, setModelEnvironmentVariables } from '../../utils/model-utils.js';
+import {
+  mapModelIdToSdkName,
+  resolveModelFromSettings,
+  setModelEnvironmentVariables
+} from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
 import { canUseTool, requestPlanApproval } from '../../permission-handler.js';
-import { loadAttachments, buildContentBlocks } from './attachment-service.js';
+import { buildContentBlocks, loadAttachments } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
+import { emitAccumulatedUsage, mergeUsage } from '../../utils/usage-utils.js';
 import { registerActiveQueryResult, removeSession } from './message-service.js';
 
 const runtimesBySessionId = new Map();
@@ -590,6 +593,18 @@ function processStreamEvent(msg, turnState) {
   const event = msg.event;
   if (!event) return;
 
+  // Handle message_start: reset per-turn accumulator (matches CLI behavior)
+  if (event.type === 'message_start' && event.message?.usage) {
+    turnState.accumulatedUsage = mergeUsage(null, event.message.usage);
+  }
+
+  // Handle message_delta: accumulate output_tokens and emit [USAGE] tag
+  if (event.type === 'message_delta' && event.usage) {
+    turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.usage);
+    emitAccumulatedUsage(turnState.accumulatedUsage);
+  }
+
+  // Handle content_block_delta: text and thinking deltas
   if (event.type === 'content_block_delta' && event.delta) {
     if (event.delta.type === 'text_delta' && event.delta.text) {
       process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(event.delta.text)}\n`);
@@ -692,7 +707,8 @@ async function executeTurn(runtime, requestContext, turnMeta) {
     hasStreamEvents: false,
     lastAssistantContent: '',
     lastThinkingContent: '',
-    finalSessionId: requestContext.requestedSessionId || runtime.sessionId || ''
+    finalSessionId: requestContext.requestedSessionId || runtime.sessionId || '',
+    accumulatedUsage: null
   };
   if (turnMeta) {
     turnMeta.state = turnState;
@@ -753,7 +769,11 @@ async function executeTurn(runtime, requestContext, turnMeta) {
   }
 
   if (turnState.streamingEnabled && turnState.streamStarted && !turnState.streamEnded) {
-    console.log('[STREAM_END]');
+    // Emit final accumulated usage before stream end
+    if (turnState.accumulatedUsage) {
+      emitAccumulatedUsage(turnState.accumulatedUsage);
+    }
+    process.stdout.write('[STREAM_END]\n');
     turnState.streamEnded = true;
   }
 
@@ -812,7 +832,11 @@ async function sendInternal(params, withAttachments) {
       activeTurnRuntime = null;
     }
     if (turnMeta.state?.streamingEnabled && turnMeta.state?.streamStarted && !turnMeta.state?.streamEnded) {
-      console.log('[STREAM_END]');
+      // Emit final accumulated usage before stream end
+      if (turnMeta.state?.accumulatedUsage) {
+        emitAccumulatedUsage(turnMeta.state.accumulatedUsage);
+      }
+      process.stdout.write('[STREAM_END]\n');
       turnMeta.state.streamEnded = true;
     }
     emitSendError(runtime, error, requestContext);

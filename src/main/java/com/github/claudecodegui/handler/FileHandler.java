@@ -2,7 +2,6 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.model.FileSortItem;
 import com.github.claudecodegui.service.RunConfigMonitorService;
-import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.IgnoreRuleMatcher;
@@ -28,13 +27,13 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * File and command related message handler.
+ * File related message handler.
  */
 public class FileHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(FileHandler.class);
 
-    private static final String[] SUPPORTED_TYPES = {"list_files", "get_commands", "open_file", "open_browser",};
+    private static final String[] SUPPORTED_TYPES = {"list_files", "open_file", "open_browser"};
 
     // Constants
     private static final int MAX_RECENT_FILES = 50;
@@ -87,22 +86,21 @@ public class FileHandler extends BaseMessageHandler {
 
     @Override
     public boolean handle(String type, String content) {
-        switch (type) {
-            case "list_files":
+        return switch (type) {
+            case "list_files" -> {
                 handleListFiles(content);
-                return true;
-            case "get_commands":
-                handleGetCommands(content);
-                return true;
-            case "open_file":
+                yield true;
+            }
+            case "open_file" -> {
                 handleOpenFile(content);
-                return true;
-            case "open_browser":
+                yield true;
+            }
+            case "open_browser" -> {
                 handleOpenBrowser(content);
-                return true;
-            default:
-                return false;
-        }
+                yield true;
+            }
+            default -> false;
+        };
     }
 
     /**
@@ -439,59 +437,6 @@ public class FileHandler extends BaseMessageHandler {
     }
 
     /**
-     * Handle get command list request.
-     * Uses local SlashCommandRegistry instead of SDK bridge call.
-     */
-    private void handleGetCommands(String content) {
-        String query = "";
-        if (content != null && !content.isEmpty()) {
-            try {
-                JsonObject json = new Gson().fromJson(content, JsonObject.class);
-                if (json.has("query")) {
-                    query = json.get("query").getAsString();
-                }
-            } catch (Exception e) {
-                query = content;
-            }
-        }
-
-        String cwd = getEffectiveBasePath();
-        String provider = "claude";
-        if (context.getSession() != null && context.getSession().getProvider() != null) {
-            provider = context.getSession().getProvider();
-        }
-
-        var registryCommands = SlashCommandRegistry.getCommands(provider, cwd);
-
-        Gson gson = new Gson();
-        List<JsonObject> commands = new ArrayList<>();
-        final String finalQuery = query.toLowerCase();
-
-        for (var cmd : registryCommands) {
-            String name = cmd.name();
-            String description = cmd.description();
-            if (finalQuery.isEmpty()
-                        || name.toLowerCase().contains(finalQuery)
-                        || description.toLowerCase().contains(finalQuery)) {
-                JsonObject cmdObj = new JsonObject();
-                cmdObj.addProperty("label", name);
-                cmdObj.addProperty("description", description);
-                commands.add(cmdObj);
-            }
-        }
-
-        JsonObject result = new JsonObject();
-        result.add("commands", gson.toJsonTree(commands));
-        String resultJson = gson.toJson(result);
-
-        ApplicationManager.getApplication().invokeLater(() -> {
-            String js = "if (window.onCommandListResult) { window.onCommandListResult('"
-                                + escapeJs(resultJson) + "'); }";
-            context.executeJavaScriptOnEDT(js);
-        });
-    }
-
-    /**
      * Open a file in the editor.
      * Supports file paths with line numbers: file.txt:100 or file.txt:100-200.
      */
@@ -777,18 +722,6 @@ public class FileHandler extends BaseMessageHandler {
             }
         }
         return fileObj;
-    }
-
-    /**
-     * Add a command to the list.
-     */
-    private void addCommand(List<JsonObject> commands, String label, String description, String query) {
-        if (query.isEmpty() || label.toLowerCase().contains(query.toLowerCase()) || description.toLowerCase().contains(query.toLowerCase())) {
-            JsonObject cmd = new JsonObject();
-            cmd.addProperty("label", label);
-            cmd.addProperty("description", description);
-            commands.add(cmd);
-        }
     }
 
     /**

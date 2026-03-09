@@ -5,9 +5,11 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Codex MCP Server Handler
@@ -70,55 +72,68 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
     }
 
     /**
-     * Get all Codex MCP servers from config.toml
+     * Get all Codex MCP servers from config.toml.
+     * Runs file I/O in a background thread to avoid blocking the CEF IPC thread.
      */
     private void handleGetMcpServers() {
-        try {
-            List<JsonObject> servers = codexMcpServerManager.getMcpServers();
-            Gson gson = new Gson();
-            String serversJson = gson.toJson(servers);
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<JsonObject> servers = codexMcpServerManager.getMcpServers();
+                Gson gson = new Gson();
+                String serversJson = gson.toJson(servers);
 
-            LOG.info("[CodexMcpServerHandler] Loaded " + servers.size() + " Codex MCP servers");
+                LOG.info("[CodexMcpServerHandler] Loaded " + servers.size() + " Codex MCP servers");
 
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.updateCodexMcpServers", escapeJs(serversJson));
-            });
-        } catch (Exception e) {
-            LOG.error("[CodexMcpServerHandler] Failed to get Codex MCP servers: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.updateCodexMcpServers", escapeJs("[]"));
-            });
-        }
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.updateCodexMcpServers", escapeJs(serversJson));
+                });
+            } catch (Exception e) {
+                LOG.error("[CodexMcpServerHandler] Failed to get Codex MCP servers: " + e.getMessage(), e);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.updateCodexMcpServers", escapeJs("[]"));
+                });
+            }
+        }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
+            LOG.error("[CodexMcpServerHandler] Unexpected error in handleGetMcpServers: " + ex.getMessage(), ex);
+            return null;
+        });
     }
 
     /**
-     * Get Codex MCP server connection status
-     * Validates server configuration and checks availability
+     * Get Codex MCP server connection status.
+     * Validates server configuration and checks availability.
+     * Runs in a background thread because status checks involve network I/O and process spawning
+     * that can block for seconds per server (HTTP timeouts, `which` command execution).
      */
     private void handleGetMcpServerStatus() {
-        try {
-            List<JsonObject> statusList = codexMcpServerManager.getMcpServerStatus();
-            Gson gson = new Gson();
-            String statusJson = gson.toJson(statusList);
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<JsonObject> statusList = codexMcpServerManager.getMcpServerStatus();
+                Gson gson = new Gson();
+                String statusJson = gson.toJson(statusList);
 
-            LOG.info("[CodexMcpServerHandler] Got status for " + statusList.size() + " Codex MCP servers");
-            for (JsonObject status : statusList) {
-                if (status.has("name")) {
-                    String serverName = status.get("name").getAsString();
-                    String serverStatus = status.has("status") ? status.get("status").getAsString() : "unknown";
-                    LOG.info("[CodexMcpServerHandler] Server: " + serverName + ", Status: " + serverStatus);
+                LOG.info("[CodexMcpServerHandler] Got status for " + statusList.size() + " Codex MCP servers");
+                for (JsonObject status : statusList) {
+                    if (status.has("name")) {
+                        String serverName = status.get("name").getAsString();
+                        String serverStatus = status.has("status") ? status.get("status").getAsString() : "unknown";
+                        LOG.info("[CodexMcpServerHandler] Server: " + serverName + ", Status: " + serverStatus);
+                    }
                 }
-            }
 
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.updateCodexMcpServerStatus", escapeJs(statusJson));
-            });
-        } catch (Exception e) {
-            LOG.error("[CodexMcpServerHandler] Failed to get Codex MCP server status: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.updateCodexMcpServerStatus", escapeJs("[]"));
-            });
-        }
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.updateCodexMcpServerStatus", escapeJs(statusJson));
+                });
+            } catch (Exception e) {
+                LOG.error("[CodexMcpServerHandler] Failed to get Codex MCP server status: " + e.getMessage(), e);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.updateCodexMcpServerStatus", escapeJs("[]"));
+                });
+            }
+        }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
+            LOG.error("[CodexMcpServerHandler] Unexpected error in handleGetMcpServerStatus: " + ex.getMessage(), ex);
+            return null;
+        });
     }
 
     /**

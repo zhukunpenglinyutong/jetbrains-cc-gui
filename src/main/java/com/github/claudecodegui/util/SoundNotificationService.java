@@ -77,6 +77,11 @@ public class SoundNotificationService {
                     return;
                 }
 
+                if (settings.getSoundOnlyWhenUnfocused() && ApplicationManager.getApplication().isActive()) {
+                    LOG.debug("[SoundNotification] IDE window is focused, skipping notification sound");
+                    return;
+                }
+
                 String selectedSound = settings.getSelectedSound();
                 playBySelection(selectedSound, settings.getCustomSoundPath());
             } catch (Exception e) {

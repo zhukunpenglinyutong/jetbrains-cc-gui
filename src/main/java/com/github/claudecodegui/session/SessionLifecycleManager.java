@@ -246,7 +246,8 @@ public class SessionLifecycleManager {
 
         LOG.info("Fetching slash commands locally, provider=" + provider + ", cwd=" + cwd);
 
-        var commands = SlashCommandRegistry.getCommands(provider, cwd);
+        String currentFilePath = getCurrentEditorFilePath();
+        var commands = SlashCommandRegistry.getCommands(provider, cwd, currentFilePath);
         String commandsJson = SlashCommandRegistry.toJson(commands);
 
         host.setFetchedSlashCommandsCount(commands.size());
@@ -332,5 +333,9 @@ public class SessionLifecycleManager {
                                 "})();";
             browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
         }
+    }
+
+    private String getCurrentEditorFilePath() {
+        return com.github.claudecodegui.util.EditorFileUtils.getCurrentEditorFilePath(this.host.getProject());
     }
 }

@@ -97,17 +97,17 @@ html {
 }
 
 .notice-box--info {
-    background: var(--vscode-inputValidation-infoBackground, #063b49);
-    border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
-    color: var(--vscode-inputValidation-infoForeground, #ccc);
-    padding: 8px 12px;
+    background: var(--color-notice-info-bg, var(--vscode-inputValidation-infoBackground, rgba(0, 127, 212, 0.12)));
+    border: 1px solid var(--color-notice-info-border, var(--vscode-inputValidation-infoBorder, rgba(0, 127, 212, 0.35)));
+    color: var(--color-notice-info-text, var(--vscode-inputValidation-infoForeground, #2f6fab));
+    padding: 9px 12px;
     margin-bottom: 12px;
 }
 
 .notice-box--warning {
-    background: var(--vscode-inputValidation-warningBackground, #352a05);
-    border: 1px solid var(--vscode-inputValidation-warningBorder, #e0a000);
-    color: var(--vscode-inputValidation-warningForeground, #ccc);
+    background: var(--color-notice-warning-bg, var(--vscode-inputValidation-warningBackground, rgba(255, 193, 7, 0.12)));
+    border: 1px solid var(--color-notice-warning-border, var(--vscode-inputValidation-warningBorder, rgba(255, 193, 7, 0.38)));
+    color: var(--color-notice-warning-text, var(--vscode-inputValidation-warningForeground, #8a5200));
     padding: 6px 10px;
     margin-bottom: 10px;
 }

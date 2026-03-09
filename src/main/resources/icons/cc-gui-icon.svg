@@ -1,15 +1,23 @@
-<svg width="140" height="140" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M35.0001 11.6152L110.699 120.876" stroke="#F57A53" stroke-width="14" stroke-linecap="round"/>
-<path d="M13.0001 41.3457L69.5723 68.0306" stroke="#F57A53" stroke-width="7" stroke-linecap="round"/>
-<path d="M112.752 25.877L72 75.8944" stroke="#F57A53" stroke-width="16" stroke-linecap="round"/>
-<path d="M83.1165 14.1501L65.8835 133.85" stroke="#F57A53" stroke-width="10" stroke-linecap="round"/>
-<path d="M78.796 66.772L38.204 126.726" stroke="#F57A53" stroke-width="10" stroke-linecap="round"/>
-<path d="M74 71.5005L25 101" stroke="#F57A53" stroke-width="10" stroke-linecap="round"/>
-<path d="M71.0595 73.0654L10 69.9999" stroke="#F57A53" stroke-width="14" stroke-linecap="round"/>
-<path d="M70.1191 53.4589L63.6928 9.99988" stroke="#F57A53" stroke-width="6" stroke-linecap="round"/>
-<path d="M85.4928 130L78.1184 86.9999" stroke="#F57A53" stroke-width="6" stroke-linecap="round"/>
-<path d="M132.938 56.4116L81 70.9525" stroke="#F57A53" stroke-width="10" stroke-linecap="round"/>
-<path d="M132.945 84.5932L75.0001 75.8262" stroke="#F57A53" stroke-width="10" stroke-linecap="round"/>
-<path d="M51 70.5C54.2 67.3 52.3333 62.1667 51 60L58 57.5L69 54.5L81.5 47.5L85 49L92 61L96 70.5L94.5 83V86L97.5 97.5H93L81.5 93.5L69 95.5L58 90L56 79.5L51 70.5Z" fill="#F57A53"/>
-<circle cx="73" cy="70" r="27" fill="#F57A53"/>
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140" width="16" height="16">
+	<style>
+		.s0 { fill: none;stroke: #f57a53;stroke-linecap: round;stroke-width: 14 } 
+		.s1 { fill: none;stroke: #f57a53;stroke-linecap: round;stroke-width: 7 } 
+		.s2 { fill: none;stroke: #f57a53;stroke-linecap: round;stroke-width: 16 } 
+		.s3 { fill: none;stroke: #f57a53;stroke-linecap: round;stroke-width: 10 } 
+		.s4 { fill: none;stroke: #f57a53;stroke-linecap: round;stroke-width: 6 } 
+		.s5 { fill: #f57a53 } 
+	</style>
+	<path class="s0" d="m35 11.62l75.7 109.26"/>
+	<path class="s1" d="m13 41.35l56.57 26.68"/>
+	<path class="s2" d="m112.75 25.88l-40.75 50.01"/>
+	<path class="s3" d="m83.12 14.15l-17.24 119.7"/>
+	<path class="s3" d="m78.8 66.77l-40.6 59.96"/>
+	<path class="s3" d="m74 71.5l-49 29.5"/>
+	<path class="s0" d="m71.06 73.07l-61.06-3.07"/>
+	<path class="s4" d="m70.12 53.46l-6.43-43.46"/>
+	<path class="s4" d="m85.49 130l-7.37-43"/>
+	<path class="s3" d="m132.94 56.41l-51.94 14.54"/>
+	<path class="s3" d="m132.94 84.59l-57.94-8.76"/>
+	<path class="s5" d="m51 70.5c3.2-3.2 1.33-8.33 0-10.5l7-2.5 11-3 12.5-7 3.5 1.5 7 12 4 9.5-1.5 12.5v3l3 11.5h-4.5l-11.5-4-12.5 2-11-5.5-2-10.5z"/>
+	<path fill-rule="evenodd" class="s5" d="m73 97c-14.93 0-27-12.07-27-27 0-14.93 12.07-27 27-27 14.93 0 27 12.07 27 27 0 14.93-12.07 27-27 27z"/>
 </svg>

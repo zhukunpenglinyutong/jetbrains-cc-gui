@@ -424,12 +424,15 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+    gap: 12px;
 }
 
 .model-header .model-name {
     font-size: 15px;
     font-weight: 600;
     color: var(--text-secondary);
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .model-header .model-cost {
@@ -444,19 +447,19 @@
     gap: 12px;
 }
 
-.detail-item {
+.model-detail-item {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.detail-label {
+.model-detail-label {
     font-size: 11px;
     color: var(--text-tertiary);
     text-transform: uppercase;
 }
 
-.detail-value {
+.model-detail-value {
     font-size: 13px;
     color: var(--text-primary);
     font-weight: 500;

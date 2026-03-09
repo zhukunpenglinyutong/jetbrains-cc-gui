@@ -37,6 +37,7 @@ export interface SettingsWindowCallbacksDeps {
   setCodexConfigLoading: (loading: boolean) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
+  setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
   setSelectedSound?: (soundId: string) => void;
   setCustomSoundPath?: (path: string) => void;
 
@@ -143,6 +144,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         d().setNodePath(jsonStr || '');
       }
       d().setSavingNodePath(false);
+      window.dispatchEvent(new CustomEvent('nodePathReady'));
     };
 
     window.updateWorkingDirectory = (jsonStr: string) => {
@@ -237,6 +239,9 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         const data = JSON.parse(jsonStr);
         if (data.enabled !== undefined) {
           d().setSoundNotificationEnabled?.(data.enabled);
+        }
+        if (data.onlyWhenUnfocused !== undefined) {
+          d().setSoundOnlyWhenUnfocused?.(data.onlyWhenUnfocused);
         }
         if (data.selectedSound !== undefined) {
           d().setSelectedSound?.(data.selectedSound);

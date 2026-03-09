@@ -152,11 +152,6 @@ interface Window {
   onFileListResult?: (json: string) => void;
 
   /**
-   * Command list result callback (for slash command provider)
-   */
-  onCommandListResult?: (json: string) => void;
-
-  /**
    * Update MCP servers list
    */
   updateMcpServers?: (json: string) => void;
@@ -503,11 +498,6 @@ interface Window {
   __sessionTransitioning?: boolean;
 
   /**
-   * Update streaming enabled configuration - receives streaming config
-   */
-  updateStreamingEnabled?: (json: string) => void;
-
-  /**
    * Rewind result callback - returns the result of a rewind operation
    */
   onRewindResult?: (json: string) => void;
@@ -563,6 +553,16 @@ interface Window {
   nodeEnvironmentStatus?: (json: string) => void;
 
   /**
+   * Trigger Node environment re-check.
+   */
+  checkNodeEnvironment?: () => void;
+
+  /**
+   * Trigger concurrent Node environment checks for diagnostics.
+   */
+  runNodeEnvironmentStressTest?: (count?: number) => void;
+
+  /**
    * Dependency update available callback
    */
   dependencyUpdateAvailable?: (json: string) => void;
@@ -610,4 +610,14 @@ interface Window {
 
   // Session compact result callback
   onCompactSessionResult?: (json: string) => void;
+
+  /**
+   * Execute context action from IDEA shortcut (copy/cut/send)
+   */
+  execContextAction?: (action: string) => void;
+
+  /**
+   * Clipboard read callback for paste from IDEA shortcut
+   */
+  onClipboardRead?: (text: string) => void;
 }

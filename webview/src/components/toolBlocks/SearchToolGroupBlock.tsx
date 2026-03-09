@@ -43,18 +43,18 @@ const parseSearchItem = (item: { name?: string; input?: ToolInput; result?: Tool
 
   const toolName = name ?? 'search';
 
-  // Extract search pattern from various fields
+  // Extract search pattern from various fields (ensure they are strings)
   const pattern =
-    (input.pattern as string | undefined) ??
-    (input.search_term as string | undefined) ??
-    (input.query as string | undefined) ??
-    (input.regex as string | undefined) ??
+    (typeof input.pattern === 'string' ? input.pattern : undefined) ??
+    (typeof input.search_term === 'string' ? input.search_term : undefined) ??
+    (typeof input.query === 'string' ? input.query : undefined) ??
+    (typeof input.regex === 'string' ? input.regex : undefined) ??
     '';
 
-  // Extract search path
+  // Extract search path (ensure it is a string, not an object)
   const path =
-    (input.path as string | undefined) ??
-    (input.directory as string | undefined) ??
+    (typeof input.path === 'string' ? input.path : undefined) ??
+    (typeof input.directory === 'string' ? input.directory : undefined) ??
     '';
 
   const isCompleted = result !== undefined && result !== null;

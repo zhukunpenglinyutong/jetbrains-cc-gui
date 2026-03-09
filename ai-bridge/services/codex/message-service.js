@@ -307,7 +307,7 @@ export async function sendMessage(
 
     const threadOptions = {
       skipGitRepoCheck: permissionConfig.skipGitRepoCheck,
-      maxTurns: 20  // Prevent infinite loops
+      maxTurns: 200  // Prevent infinite loops while supporting long-running tasks
     };
 
     // Set reasoning effort (thinking depth)
@@ -940,7 +940,7 @@ export async function sendMessage(
         '\n⚠️ Codex completed tool executions but did not generate a text response.',
         'This may happen when:',
         '- The task was purely about gathering information',
-        '- Codex reached maxTurns limit (20 turns)',
+        '- Codex reached maxTurns limit (100 turns)',
         '- The query required only command execution',
         '\nPlease try:',
         '- Asking a more specific question',

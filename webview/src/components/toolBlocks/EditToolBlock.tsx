@@ -107,19 +107,19 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
   const isError = isDenied || (isCompleted && result?.is_error === true);
 
   const filePath =
-    (input?.file_path as string | undefined) ??
-    (input?.filePath as string | undefined) ??
-    (input?.path as string | undefined) ??
-    (input?.target_file as string | undefined) ??
-    (input?.targetFile as string | undefined);
+    (typeof input?.file_path === 'string' ? input.file_path : undefined) ??
+    (typeof input?.filePath === 'string' ? input.filePath : undefined) ??
+    (typeof input?.path === 'string' ? input.path : undefined) ??
+    (typeof input?.target_file === 'string' ? input.target_file : undefined) ??
+    (typeof input?.targetFile === 'string' ? input.targetFile : undefined);
 
   const oldString =
-    (input?.old_string as string | undefined) ??
-    (input?.oldString as string | undefined) ??
+    (typeof input?.old_string === 'string' ? input.old_string : undefined) ??
+    (typeof input?.oldString === 'string' ? input.oldString : undefined) ??
     '';
   const newString =
-    (input?.new_string as string | undefined) ??
-    (input?.newString as string | undefined) ??
+    (typeof input?.new_string === 'string' ? input.new_string : undefined) ??
+    (typeof input?.newString === 'string' ? input.newString : undefined) ??
     '';
 
   const diff = useMemo(() => {

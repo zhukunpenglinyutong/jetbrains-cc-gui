@@ -19,7 +19,7 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [projectScope, setProjectScope] = useState<ScopeType>('current');
-  const [dateRange, setDateRange] = useState<DateRangeType>('30d');
+  const [dateRange, setDateRange] = useState<DateRangeType>('7d');
   const [sessionPage, setSessionPage] = useState(1);
   const [sessionSortBy, setSessionSortBy] = useState<'cost' | 'time'>('cost');
   const [tooltip, setTooltip] = useState<{
@@ -478,21 +478,21 @@ const UsageStatisticsSection = ({ currentProvider }: { currentProvider?: string 
                     <span className="model-cost">{formatCost(model.totalCost)}</span>
                   </div>
                   <div className="model-details">
-                    <div className="detail-item">
-                      <span className="detail-label">{t('usage.sessionCount')}:</span>
-                      <span className="detail-value">{model.sessionCount}</span>
+                    <div className="model-detail-item">
+                      <span className="model-detail-label">{t('usage.sessionCount')}:</span>
+                      <span className="model-detail-value">{model.sessionCount}</span>
                     </div>
-                    <div className="detail-item">
-                      <span className="detail-label">{t('usage.totalTokens')}:</span>
-                      <span className="detail-value">{formatNumber(model.totalTokens)}</span>
+                    <div className="model-detail-item">
+                      <span className="model-detail-label">{t('usage.totalTokens')}:</span>
+                      <span className="model-detail-value">{formatNumber(model.totalTokens)}</span>
                     </div>
-                    <div className="detail-item">
-                      <span className="detail-label">{t('usage.input')}:</span>
-                      <span className="detail-value">{formatNumber(model.inputTokens)}</span>
+                    <div className="model-detail-item">
+                      <span className="model-detail-label">{t('usage.input')}:</span>
+                      <span className="model-detail-value">{formatNumber(model.inputTokens)}</span>
                     </div>
-                    <div className="detail-item">
-                      <span className="detail-label">{t('usage.output')}:</span>
-                      <span className="detail-value">{formatNumber(model.outputTokens)}</span>
+                    <div className="model-detail-item">
+                      <span className="model-detail-label">{t('usage.output')}:</span>
+                      <span className="model-detail-value">{formatNumber(model.outputTokens)}</span>
                     </div>
                   </div>
                 </div>

@@ -22,11 +22,10 @@ export const TokenIndicator = ({
   // Calculate offset (fill clockwise from top)
   const strokeOffset = circumference * (1 - percentage / 100);
 
-  // Round percentage to one decimal place, but hide trailing .0
-  const rounded = Math.round(percentage * 10) / 10;
-  const formattedPercentage = Number.isInteger(rounded)
-    ? `${Math.round(rounded)}%`
-    : `${rounded.toFixed(1)}%`;
+  // Indicator label: integer percentage (no decimal)
+  const labelPercentage = `${Math.round(percentage)}%`;
+  // Tooltip: one decimal place for precision
+  const tooltipPercentage = `${(Math.round(percentage * 10) / 10).toFixed(1)}%`;
 
   const formatTokens = (value?: number) => {
     if (typeof value !== 'number' || !isFinite(value)) return undefined;
@@ -43,8 +42,8 @@ export const TokenIndicator = ({
   const usedText = formatTokens(usedTokens);
   const maxText = formatTokens(maxTokens);
   const tooltip = usedText && maxText
-    ? `${formattedPercentage} · ${usedText} / ${maxText} ${' '}${t('chat.context')}`
-    : t('chat.usagePercentage', { percentage: formattedPercentage });
+    ? `${tooltipPercentage} · ${usedText} / ${maxText} ${' '}${t('chat.context')}`
+    : t('chat.usagePercentage', { percentage: tooltipPercentage });
 
   return (
     <div className="token-indicator">
@@ -77,7 +76,7 @@ export const TokenIndicator = ({
           {tooltip}
         </div>
       </div>
-      <span className="token-percentage-label">{formattedPercentage}</span>
+      <span className="token-percentage-label">{labelPercentage}</span>
     </div>
   );
 };

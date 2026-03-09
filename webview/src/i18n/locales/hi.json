@@ -201,7 +201,7 @@
     "dependency": {
       "title": "SDK निर्भरता प्रबंधन",
       "description": "AI SDK निर्भरताएं प्रबंधित करें। पहली बार उपयोग करने से पहले आवश्यक SDK इंस्टॉल करें।",
-      "installPolicyTip": "पैकेज का आकार कम करने के लिए, SDK अब मैन्युअल रूप से इंस्टॉल करना होगा",
+      "installPolicyTip": "इंस्टॉलेशन में समस्या? त्रुटि को टर्मिनल CLI AI में कॉपी करके हल करें",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI सुविधाओं के लिए आवश्यक। Claude Code SDK और संबंधित निर्भरताएं शामिल हैं।",
       "codexSdkName": "Codex SDK",
@@ -219,7 +219,9 @@
       "installSuccess": "{{name}} सफलतापूर्वक इंस्टॉल हो गया",
       "installFailed": "इंस्टॉलेशन विफल: {{error}}",
       "uninstallSuccess": "{{name}} अनइंस्टॉल हो गया",
-      "uninstallFailed": "अनइंस्टॉल विफल: {{error}}"
+      "uninstallFailed": "अनइंस्टॉल विफल: {{error}}",
+      "updating": "अपडेट हो रहा है...",
+      "updateSuccess": "{{name}} सफलतापूर्वक अपडेट हो गया"
     },
     "usage": "उपयोग सांख्यिकी",
     "usageDesc": "अपनी Token खपत, लागत सांख्यिकी और उपयोग प्रवृत्ति विश्लेषण देखें",
@@ -346,6 +348,49 @@
       "localProviderName": "Local settings.json",
       "localProviderDescription": "Use configuration directly from ~/.claude/settings.json",
       "localProviderHelp": "When using local provider mode:\n• The plugin will not modify your ~/.claude/settings.json file\n• You need to manually manage your configurations\n• Make sure the file exists and contains valid JSON\n• Suitable for advanced users who prefer manual control",
+      "subscriptionTutorial": {
+        "entry": "सदस्यता खाता गाइड",
+        "dialogTitle": "सदस्यता खाता कैसे उपयोग करें",
+        "tabAriaLabel": "सदस्यता खाता गाइड टैब",
+        "tabs": {
+          "claude": "Claude सदस्यता",
+          "codex": "Codex सदस्यता"
+        },
+        "code": {
+          "copy": "कोड कॉपी करें",
+          "copied": "कॉपी किया"
+        },
+        "providers": {
+          "claude": {
+            "title": "Claude Code सदस्यता खाता कैसे उपयोग करें",
+            "item1": "टर्मिनल में Claude Code CLI के माध्यम से सदस्यता खाते में लॉगिन करें, फिर टर्मिनल में सामान्य रूप से चैट कर सकते हैं",
+            "item2": "सुनिश्चित करें कि ~/.claude/settings.json फ़ाइल और .env फ़ाइल खाली हैं",
+            "item3": "IDEA को रीस्टार्ट करें, और आप सामान्य रूप से चैट कर सकते हैं",
+            "emptyConfigCodeLabel": "~/.claude/settings.json",
+            "emptyConfigCode": "{\n  \"env\": {\n  }\n}",
+            "noteTitle": "विशेष मामले की टिप्पणी:",
+            "note1": "यदि आपने उपरोक्त चरण किए हैं लेकिन प्लगइन अभी भी प्रतिसाद नहीं दे रहा, तो ~/.claude/settings.json .env को इस पर सेट करें:",
+            "proxyConfigCodeLabel": "~/.claude/settings.json",
+            "proxyConfigCode": "{\n  \"env\": {\n    \"HTTP_PROXY\": \"http://127.0.0.1:7897\",\n    \"HTTPS_PROXY\": \"http://127.0.0.1:7897\"\n  }\n}",
+            "issuePrefix": "यदि यह अभी भी काम नहीं करता, तो GitHub पर समस्या रिपोर्ट करें: ",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          },
+          "codex": {
+            "title": "Codex सदस्यता खाता सेटअप",
+            "item1": "टर्मिनल Codex CLI में codex login चलाएं और लॉगिन करें, फिर टर्मिनल में चैट कर सकते हैं",
+            "item2": "IDEA रीस्टार्ट करें",
+            "item3": "अब आप सामान्य रूप से चैट कर सकते हैं",
+            "emptyConfigCodeLabel": "",
+            "emptyConfigCode": "",
+            "noteTitle": "",
+            "note1": "",
+            "proxyConfigCodeLabel": "",
+            "proxyConfigCode": "",
+            "issuePrefix": "यदि यह अभी भी काम नहीं करता, तो GitHub पर समस्या रिपोर्ट करें: ",
+            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+          }
+        }
+      },
       "importDialog": {
         "title": "cc-switch कॉन्फ़िगरेशन आयात करें",
         "summary": "कुल {{total}} कॉन्फ़िगरेशन पहचाने गए, जिनमें",
@@ -872,8 +917,7 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed",
-    "promptLabel": "प्रॉम्प्ट"
+    "bashGroupFailed": "failed"
   },
   "todo": {
     "inProgress": "{{completed}}/{{total}} कार्य प्रगति में",

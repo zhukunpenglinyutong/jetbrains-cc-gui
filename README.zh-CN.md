@@ -16,7 +16,7 @@
 
 > AI 声明：本项目绝大部分代码由 Claude Code、Codex、Gemini、GLM 生成；本人还在学习中，非佬
 
-<img width="850" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.1.0/2.png" />
+<img width="850" alt="Image" src="/docs/img/banner.png" />
 
 ---
 

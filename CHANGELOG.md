@@ -1,3 +1,113 @@
+##### **2026年3月5日（v0.2.6）**
+
+English:
+
+✨ Features
+- Support pasting clipboard images in chat input: convert clipboard image data to base64 PNG on Java side, dispatch to webview via CustomEvent and add as attachment
+- Add subscription tutorial dialog for Claude and Codex providers: tabbed step-by-step instructions with code block copy functionality, i18n translations for 8 languages
+- Align slash command scanning with CLI behavior: rename PluginSkillPath to PluginPath with type field, add plugin namespace prefixing for commands, recursive directory scanning with SKILL.md leaf node detection, marketplace manifest fallback (#579) #gadfly3173
+- Add configurable "play sound only when IDE unfocused" setting: toggle under sound notification settings, defaults to disabled (#583) #PaulGiletich
+
+🐛 Fixes
+- Gate Write tool with permission check in plan mode: add Write to Edit/Bash permission check branch, remove Write/Edit/Bash from PLAN_MODE_ALLOWED_TOOLS, add findProjectByPath fallback and retry logic in tryDiffReview (#580) #gadfly3173
+- Align token usage display with CLI behavior: reset per-turn token accumulator on message_start, emit final accumulated usage before STREAM_END marker, add onUsageUpdate callback chain, show token info in IDEA status bar widget (#578) #gadfly3173
+- Fix token usage display in streaming and non-streaming modes: fix EDT thread violation in status bar widget, avoid duplicate updates, add monotonic increase check, unify JS bridge methods
+- Offload MCP server I/O to background threads: run MCP handler via CompletableFuture.runAsync, add 5-second timeout to command availability check
+- Harden plugin command scanning with depth limit and path safety: MAX_COMMAND_SCAN_DEPTH to prevent stack overflow, strengthen path traversal defense, deduplicate extracted paths
+- Address code review issues for security, quality and consistency: GSON encoding for base64 in JS injection prevention, fix i18n condition checks, replace hardcoded color with theme variable
+- Normalize sound config response format: include full config fields in all sound setting handler responses, replace inline style with CSS Module class
+
+🔧 Improvements
+- Refactor tool block collapse UI: all tools with params are now collapsible with chevron icon and CSS accordion animation (grid-template-rows transition)
+- Improve theme and responsive support: add CSS variables for notice-box colors with dark/light theme support, responsive layout for usage tabs on narrow viewports
+- Fix CSS class naming collision in usage stats (detail-item -> model-detail-item), change default date range from 30d to 7d
+
+中文：
+
+✨ Features
+- 支持在聊天输入框粘贴剪贴板图片：Java 端将剪贴板图片数据转换为 base64 PNG，通过 CustomEvent 分发到 webview 并作为附件添加
+- 新增 Claude 和 Codex 订阅教程对话框：分标签页的逐步操作说明，支持代码块复制功能，8 种语言国际化
+- 对齐斜杠命令扫描与 CLI 行为：PluginSkillPath 重命名为 PluginPath 并增加类型字段，添加插件命名空间前缀，递归目录扫描支持 SKILL.md 叶节点检测，市场清单回退 (#579) #gadfly3173
+- 新增 "仅在 IDE 失焦时播放提示音" 配置项：声音通知设置下的开关选项，默认关闭 (#583) #PaulGiletich
+
+🐛 Fixes
+- 修复 Plan 模式下 Write 工具权限检查：将 Write 加入 Edit/Bash 权限检查分支，从 PLAN_MODE_ALLOWED_TOOLS 中移除 Write/Edit/Bash，添加 findProjectByPath 回退和 tryDiffReview 重试逻辑 (#580) #gadfly3173
+- 修复 Token 用量显示对齐 CLI 行为：message_start 时重置每轮累计器，STREAM_END 前发送最终累计用量，添加 onUsageUpdate 回调链，IDEA 状态栏显示 Token 信息 (#578) #gadfly3173
+- 修复流式和非流式模式下 Token 用量显示：修复状态栏 Widget EDT 线程违规，避免重复更新，添加单调递增检查，统一 JS 桥接方法
+- 将 MCP 服务器 I/O 操作移至后台线程：通过 CompletableFuture.runAsync 运行 MCP 处理器，命令可用性检查添加 5 秒超时
+- 加固插件命令扫描安全：添加 MAX_COMMAND_SCAN_DEPTH 防止栈溢出，增强路径遍历防护，提取路径去重
+- 修复代码审查中的安全、质量和一致性问题：GSON 编码 base64 防止 JS 注入，修复 i18n 条件检查，硬编码颜色替换为主题变量
+- 规范化声音配置响应格式：所有声音设置处理器响应包含完整配置字段，内联样式替换为 CSS Module 类
+
+🔧 Improvements
+- 重构工具块折叠 UI：所有含参数的工具现在均可折叠，带有箭头图标和 CSS 手风琴动画（grid-template-rows 过渡）
+- 改进主题和响应式支持：为 notice-box 颜色添加 CSS 变量并支持深色/浅色主题，窄视口下 usage tabs 响应式布局
+- 修复使用统计中 CSS 类名冲突（detail-item -> model-detail-item），默认日期范围从 30 天改为 7 天
+
+---
+
+##### **2026年3月4日（v0.2.5）**
+
+English:
+
+✨ Features
+- Tab detach to floating window: detach chat tabs into independent floating JFrame windows for multi-window parallel conversations across screens, with theme sync, close/reattach dialog, and project dispose guards (#564) #hpstream
+- Register IDEA keyboard shortcuts for chat tool window: Ctrl+C/X/V/Enter actions scoped to CCG window, right-click context menu with copy/cut/paste/newline, clipboard read/write handler via JS bridge (#541) #gadfly3173
+- Persist chat input attachments across view switches: save/restore images via localStorage when switching to history or settings views, 2MB size limit with quota error handling (#542) #hpstream
+- Support agent tool type and improve task block UI: recognize agent tool calls alongside task, display actual tool name in header, add chevron expand/collapse icon
+- Add SDK update functionality with uninstall-reinstall strategy: update_dependency handler, dedicated UI state and progress feedback, i18n translations for 8 locales
+- Increase Codex maxTurns from 20 to 200 for long-running tasks
+
+🐛 Fixes
+- Accumulate streaming token usage from message_start and message_delta events: follow CLI's mergeUsage logic, emit real-time token counts during streaming, extract shared usage utilities (#559) #gadfly3173
+- Preserve Node.js version cache when new IDEA window opens: prevent DependencyHandler from clearing cachedDetectionResult on path re-verification, add resolveNodeVersion fallback in SessionHandler (#562) #gadfly3173
+- Support Ctrl+C/X/V in native input and textarea elements: add setRangeText branch for INPUT/TEXTAREA in ChatPasteAction, use selectionStart/selectionEnd for copy/cut in form fields (#560) #gadfly3173
+- Defer JCEF browser creation to avoid service initialization conflict: delay createUIComponents via invokeLater to prevent ProxyMigrationService clash during class init (#569) #gadfly3173
+- Replace type assertions with runtime type checks to prevent crashes: use typeof checks across tool block components and utility functions to handle MCP tools passing objects instead of strings (#567) #gadfly3173
+- Prevent UI freeze when opening settings on macOS in Codex mode: convert NodeDetector to singleton with shared cache, offload handleGetNodePath/handleSetNodePath to background threads, add in-flight dedup for concurrent detection (#543) #gadfly3173
+- Restore Claude slash-command skill discovery for plugin skills: multi-directory upward traversal, read installed_plugins.json for manifest resolution, context-aware ConditionalSkillFilter, source metadata in command descriptions (#551) #gadfly3173
+- Harden skill discovery against path traversal and resource exhaustion: plugin ID validation, traversal depth limits, toRealPath() over normalize(), disable YAML alias expansion, JSON file size and glob complexity limits
+- Resolve race condition in Node.js path caching during manual configuration
+- Improve async robustness and fix stale closure in DependencySection: 30s detection timeout, Node.js binary name validation, CompletableFuture lazy-init tracking, .exceptionally() handlers on all async chains
+- Harden WebView bridge security and improve context menu accessibility: JS function name regex validation, extended string escaping (tab/backspace/form-feed/NEL/script breakout), clipboard read rate limiting (200ms) and write size cap (10MB), ARIA roles and keyboard navigation
+- Fix detached window feature issues: use project basePath as map key to prevent memory leak, pass chatWindow from actionPerformed to fix race condition, add disposed flag guard to prevent double dispose (#564)
+
+🔧 Improvements
+- Optimize SVG icon with CSS classes and simplified paths
+- Stabilize attachment persistence callbacks with useCallback to prevent unnecessary re-renders
+- Replace remote banner image with local asset
+
+中文：
+
+✨ Features
+- Tab 分离到浮动窗口：将聊天标签页分离为独立浮动 JFrame 窗口，支持多窗口跨屏幕并行对话，包含主题同步、关闭/重新附加对话框和项目销毁守卫 (#564) #hpstream
+- 注册 IDEA 键盘快捷键到聊天工具窗口：Ctrl+C/X/V/Enter 限定在 CCG 窗口范围，右键上下文菜单支持复制/剪切/粘贴/换行，通过 JS 桥接实现剪贴板读写 (#541) #gadfly3173
+- 切换页面后保留输入框图片附件：通过 localStorage 保存/恢复附件数据，支持 2MB 大小限制和配额超限处理 (#542) #hpstream
+- 支持 agent 工具类型并改进任务块 UI：识别 agent 工具调用，在标题中显示实际工具名，添加展开/折叠箭头图标
+- 新增 SDK 更新功能（卸载后重装策略）：update_dependency 处理器，独立的 UI 状态和进度反馈，支持 8 种语言国际化
+- 将 Codex maxTurns 从 20 提升到 200，支持长时间运行的任务
+
+🐛 Fixes
+- 修复流式 Token 用量累计：从 message_start 和 message_delta 事件中正确累计 Token，遵循 CLI 的 mergeUsage 逻辑，提取共享用量工具 (#559) #gadfly3173
+- 修复新 IDEA 窗口打开时 Node.js 版本缓存丢失：防止 DependencyHandler 在路径重新验证时清除 cachedDetectionResult，SessionHandler 添加 resolveNodeVersion 回退 (#562) #gadfly3173
+- 修复原生 input 和 textarea 元素中 Ctrl+C/X/V 不工作：ChatPasteAction 添加 setRangeText 分支，复制/剪切使用 selectionStart/selectionEnd (#560) #gadfly3173
+- 修复 JCEF 浏览器创建时服务初始化冲突：通过 invokeLater 延迟 createUIComponents，避免类初始化期间 ProxyMigrationService 冲突 (#569) #gadfly3173
+- 修复类型断言导致的崩溃：在工具块组件和工具函数中使用 typeof 运行时检查替代类型断言，处理 MCP 工具传递对象而非字符串的情况 (#567) #gadfly3173
+- 修复 macOS 下 Codex 模式打开设置时 UI 冻结：NodeDetector 改为单例共享缓存，handleGetNodePath/handleSetNodePath 异步化到后台线程，并发检测去重 (#543) #gadfly3173
+- 恢复 Claude 斜杠命令对插件 Skills 的发现：多目录向上遍历，读取 installed_plugins.json 解析清单，上下文感知 ConditionalSkillFilter，命令描述中显示来源 (#551) #gadfly3173
+- 加固 Skill 发现的路径遍历和资源耗尽防护：插件 ID 验证、遍历深度限制、使用 toRealPath() 替代 normalize()、禁用 YAML 别名展开、JSON 文件大小和 glob 复杂度限制
+- 修复手动配置时 Node.js 路径缓存的竞态条件
+- 改进异步健壮性并修复 DependencySection 闭包过期：30 秒检测超时、Node.js 二进制名验证、CompletableFuture 懒初始化追踪、所有异步链添加 .exceptionally() 处理
+- 加固 WebView 桥接安全和上下文菜单无障碍：JS 函数名正则验证、扩展字符串转义（tab/backspace/form-feed/NEL/script 突破）、剪贴板读取限流(200ms)和写入大小上限(10MB)、ARIA 角色和键盘导航
+- 修复浮动窗口功能问题：使用 project basePath 作为 map key 防止内存泄漏、修复 chatWindow 传递的竞态条件、添加 disposed 标志防止双重销毁 (#564)
+
+🔧 Improvements
+- 优化 SVG 图标：使用 CSS 类和简化路径
+- 使用 useCallback 稳定附件持久化回调，避免不必要的重新渲染
+- 用本地资源替换远程 Banner 图片
+
+---
+
 ##### **2026年3月2日（v0.2.4）**
 
 English:
