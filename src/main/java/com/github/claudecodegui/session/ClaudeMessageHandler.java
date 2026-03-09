@@ -249,7 +249,8 @@ public class ClaudeMessageHandler implements MessageCallback {
                     int usedTokens = TokenUsageUtils.extractUsedTokens(usage, state.getProvider());
                     int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
                     ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
-                    callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
+                    // 将 usage JSON 对象转换为字符串并传递
+                    callbackHandler.notifyUsageUpdate(usage.toString(), usedTokens, maxTokens);
                     LOG.debug("Updated token usage from assistant message (non-streaming): " + usedTokens);
                 }
             }
@@ -478,7 +479,8 @@ public class ClaudeMessageHandler implements MessageCallback {
                     int usedTokens = TokenUsageUtils.extractUsedTokens(usageJson, state.getProvider());
                     int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
                     ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
-                    callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
+                    // 将 usage JSON 对象转换为字符串并传递
+                    callbackHandler.notifyUsageUpdate(usageJson.toString(), usedTokens, maxTokens);
                     LOG.debug("Fallback: updated token usage from result message: " + usedTokens);
                 }
             }
@@ -661,8 +663,8 @@ public class ClaudeMessageHandler implements MessageCallback {
             int usedTokens = TokenUsageUtils.extractUsedTokens(usageJson, state.getProvider());
             int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
             ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
-            // Notify webview of usage update
-            callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
+            // Notify webview of usage update (传递完整的 usage JSON)
+            callbackHandler.notifyUsageUpdate(content, usedTokens, maxTokens);
             // Ensure assistant message exists before backfilling usage
             ensureCurrentAssistantMessageExists();
             backfillUsageToAssistantMessage(usageJson);

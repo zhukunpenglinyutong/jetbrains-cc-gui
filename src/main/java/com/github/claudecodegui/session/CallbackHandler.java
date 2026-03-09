@@ -133,10 +133,13 @@ public class CallbackHandler {
 
     /**
      * Notify of a usage update.
+     * @param usageJson usage JSON 字符串
+     * @param usedTokens 已使用的总 token 数
+     * @param maxTokens 最大 token 限制
      */
-    public void notifyUsageUpdate(int usedTokens, int maxTokens) {
+    public void notifyUsageUpdate(String usageJson, int usedTokens, int maxTokens) {
         if (callback != null) {
-            callback.onUsageUpdate(usedTokens, maxTokens);
+            callback.onUsageUpdate(usageJson, usedTokens, maxTokens);
         }
     }
 }

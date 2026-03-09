@@ -1,0 +1,131 @@
+/* Token 使用信息显示样式 */
+.message-token-usage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.1));
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: var(--vscode-font-family, 'SF Mono', Consolas, monospace);
+  color: var(--vscode-descriptionForeground, #999);
+  border-left: 3px solid var(--vscode-textLink-foreground, #3794ff);
+}
+
+.token-usage-label {
+  font-weight: 600;
+  color: var(--vscode-foreground, #cccccc);
+  margin-right: 4px;
+}
+
+.token-usage-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.token-usage-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 输入 token 样式 */
+.token-input {
+  background: var(--vscode-inputValidation-infoBackground, rgba(75, 166, 252, 0.15));
+  color: var(--vscode-inputValidation-infoForeground, #4ba6fc);
+  border: 1px solid var(--vscode-inputValidation-infoBorder, #4ba6fc);
+}
+
+/* 输出 token 样式 */
+.token-output {
+  background: var(--vscode-inputValidation-warningBackground, rgba(255, 191, 0, 0.15));
+  color: var(--vscode-inputValidation-warningForeground, #ffbf00);
+  border: 1px solid var(--vscode-inputValidation-warningBorder, #ffbf00);
+}
+
+/* 缓存写入 token 样式 */
+.token-cache-write {
+  background: var(--vscode-editorInfo-background, rgba(75, 166, 252, 0.12));
+  color: var(--vscode-editorInfo-foreground, #75beff);
+  border: 1px solid var(--vscode-editorInfo-border, #75beff);
+}
+
+/* 缓存读取 token 样式 */
+.token-cache-read {
+  background: var(--vscode-editorHint-background, rgba(156, 220, 254, 0.12));
+  color: var(--vscode-editorHint-foreground, #9cdcfe);
+  border: 1px solid var(--vscode-editorHint-border, #9cdcfe);
+}
+
+/* 总计 token 样式 */
+.token-total {
+  background: var(--vscode-badge-background, #4d4d4d);
+  color: var(--vscode-badge-foreground, #ffffff);
+  border: 1px solid var(--vscode-badge-background, #4d4d4d);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* 响应式设计 - 小屏幕优化 */
+@media (max-width: 600px) {
+  .message-token-usage {
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .token-usage-item {
+    padding: 2px 6px;
+  }
+}
+
+/* 暗色主题优化 */
+[data-theme='dark'] .message-token-usage {
+  background: rgba(255, 255, 255, 0.05);
+  border-left-color: #4ba6fc;
+}
+
+/* 亮色主题优化 */
+[data-theme='light'] .message-token-usage {
+  background: rgba(0, 0, 0, 0.03);
+  border-left-color: #0078d4;
+  color: #616161;
+}
+
+[data-theme='light'] .token-usage-label {
+  color: #333333;
+}
+
+[data-theme='light'] .token-input {
+  background: rgba(0, 120, 212, 0.1);
+  color: #0078d4;
+  border-color: #0078d4;
+}
+
+[data-theme='light'] .token-output {
+  background: rgba(255, 165, 0, 0.1);
+  color: #ff8c00;
+  border-color: #ff8c00;
+}
+
+[data-theme='light'] .token-cache-write {
+  background: rgba(0, 120, 212, 0.08);
+  color: #106ebe;
+  border-color: #106ebe;
+}
+
+[data-theme='light'] .token-cache-read {
+  background: rgba(0, 153, 255, 0.08);
+  color: #0099ff;
+  border-color: #0099ff;
+}
+
+[data-theme='light'] .token-total {
+  background: #333333;
+  color: #ffffff;
+  border-color: #333333;
+}

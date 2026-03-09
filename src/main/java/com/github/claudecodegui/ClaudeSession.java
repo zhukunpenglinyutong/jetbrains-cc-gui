@@ -127,7 +127,13 @@ public class ClaudeSession {
         default void onThinkingDelta(String delta) {
         }
 
-        default void onUsageUpdate(int usedTokens, int maxTokens) {
+        /**
+         * 接收完整的 token usage 数据
+         * @param usageJson usage JSON 字符串，包含 input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens
+         * @param usedTokens 已使用的总 token 数（用于状态栏显示）
+         * @param maxTokens 最大 token 限制
+         */
+        default void onUsageUpdate(String usageJson, int usedTokens, int maxTokens) {
         }
     }
 
