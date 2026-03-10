@@ -5,7 +5,7 @@
 
 import fs from 'fs';
 import { resolve, join } from 'path';
-import { homedir, tmpdir } from 'os';
+import { homedir, tmpdir, platform } from 'os';
 
 // Cache the resolved home directory path to avoid redundant computation
 let cachedRealHomeDir = null;
@@ -50,6 +50,25 @@ export function getCodemossDir() {
  */
 export function getClaudeDir() {
   return join(getRealHomeDir(), '.claude');
+}
+
+/**
+ * Get the platform-specific path for Claude Code managed settings.
+ * Managed settings are typically configured by enterprise IT administrators.
+ * - macOS: /Library/Application Support/ClaudeCode/managed-settings.json
+ * - Linux: /etc/claude-code/managed-settings.json
+ * - Windows: C:\Program Files\ClaudeCode\managed-settings.json
+ * @returns {string} The managed-settings.json file path
+ */
+export function getManagedSettingsPath() {
+  const currentPlatform = platform();
+  if (currentPlatform === 'win32') {
+    return join('C:', 'Program Files', 'ClaudeCode', 'managed-settings.json');
+  } else if (currentPlatform === 'darwin') {
+    return join('/Library', 'Application Support', 'ClaudeCode', 'managed-settings.json');
+  } else {
+    return join('/etc', 'claude-code', 'managed-settings.json');
+  }
 }
 
 /**

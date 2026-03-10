@@ -11,6 +11,7 @@ export interface ClaudeConfig {
   baseUrl: string;
   providerId?: string;
   providerName?: string;
+  authType?: string;
 }
 
 /**
@@ -336,7 +337,7 @@ const ConfigInfoDisplay = ({
     );
   }
 
-  if (!config || (!config.apiKey && !config.baseUrl)) {
+  if (!config || (!config.apiKey && !config.baseUrl && config.authType !== 'api_key_helper')) {
     return (
       <div className={styles.container}>
         <div className={styles.header}>
@@ -444,22 +445,30 @@ const ConfigInfoDisplay = ({
         {/* API Key preview */}
         <div className={styles.field}>
           <span className={`codicon codicon-key ${styles.icon}`} />
-          <code
-            className={`${styles.value} ${styles.clickable}`}
-            onClick={() => handleCopy(apiKey, t('settings.provider.apiKey'))}
-            title={t('config.clickToCopy')}
-          >
-            {getApiKeyPreview()}
-          </code>
-          {apiKey && (
-            <button
-              type="button"
-              className={styles.toggleBtn}
-              onClick={() => setShowApiKey(!showApiKey)}
-              title={showApiKey ? t('settings.provider.hide') : t('settings.provider.show')}
-            >
-              <span className={`codicon ${showApiKey ? 'codicon-eye-closed' : 'codicon-eye'}`} style={{ fontSize: '14px' }} />
-            </button>
+          {config.authType === 'api_key_helper' ? (
+            <code className={styles.value}>
+              {t('settings.provider.apiKeyHelper', 'API Key Helper')}
+            </code>
+          ) : (
+            <>
+              <code
+                className={`${styles.value} ${styles.clickable}`}
+                onClick={() => handleCopy(apiKey, t('settings.provider.apiKey'))}
+                title={t('config.clickToCopy')}
+              >
+                {getApiKeyPreview()}
+              </code>
+              {apiKey && (
+                <button
+                  type="button"
+                  className={styles.toggleBtn}
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  title={showApiKey ? t('settings.provider.hide') : t('settings.provider.show')}
+                >
+                  <span className={`codicon ${showApiKey ? 'codicon-eye-closed' : 'codicon-eye'}`} style={{ fontSize: '14px' }} />
+                </button>
+              )}
+            </>
           )}
         </div>
 

@@ -344,6 +344,7 @@
       "emptyProvider": "No provider configured",
       "notConfigured": "Not configured",
       "apiKey": "API Key",
+      "apiKeyHelper": "API Key Helper",
       "baseUrl": "Base URL",
       "provider": "Provider",
       "source": "Source",

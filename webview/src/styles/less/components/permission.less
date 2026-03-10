@@ -28,9 +28,9 @@
 
 .permission-dialog {
     background: var(--bg-elevated);
-    border: 1px solid #454545;
+    border: 1px solid var(--border-secondary);
     border-radius: 12px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+    box-shadow: var(--shadow-lg);
     min-width: 500px;
     max-width: 600px;
     max-height: 80vh;
@@ -40,11 +40,11 @@
 
 .permission-dialog-header {
     padding: 20px 24px;
-    border-bottom: 1px solid #454545;
+    border-bottom: 1px solid var(--border-secondary);
     display: flex;
     align-items: center;
     gap: 12px;
-    background: linear-gradient(180deg, #2d2d30 0%, #252526 100%);
+    background: var(--bg-secondary);
 }
 
 .permission-dialog-icon {
@@ -78,7 +78,7 @@
 .permission-dialog-label {
     font-size: 12px;
     font-weight: 600;
-    color: #999;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 8px;
@@ -88,7 +88,7 @@
     font-size: 14px;
     color: var(--text-secondary);
     padding: 10px 12px;
-    background: #1e1e1e;
+    background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
     font-family: var(--idea-editor-font-family, monospace);
@@ -96,7 +96,7 @@
 
 .permission-dialog-value.tool-name {
     font-weight: 600;
-    color: #4ec9b0;
+    color: var(--color-success);
 }
 
 .permission-dialog-params {
@@ -107,7 +107,7 @@
 
 .permission-dialog-param {
     padding: 10px 12px;
-    background: #1e1e1e;
+    background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
     font-size: 13px;
@@ -115,14 +115,14 @@
 }
 
 .permission-dialog-param .param-key {
-    color: #9cdcfe;
+    color: var(--color-info);
     font-weight: 600;
     margin-right: 8px;
     font-family: var(--idea-editor-font-family, monospace);
 }
 
 .permission-dialog-param .param-value {
-    color: #ce9178;
+    color: var(--text-primary);
     word-break: break-all;
     white-space: pre-wrap;
     font-family: var(--idea-editor-font-family, monospace);
@@ -131,7 +131,7 @@
 .permission-dialog-remember {
     margin-top: 20px;
     padding-top: 16px;
-    border-top: 1px solid #3e3e42;
+    border-top: 1px solid var(--border-secondary);
 }
 
 .permission-dialog-checkbox {
@@ -148,7 +148,7 @@
     width: 16px;
     height: 16px;
     cursor: pointer;
-    accent-color: #007fd4;
+    accent-color: var(--accent-primary);
 }
 
 .permission-dialog-checkbox:hover {
@@ -157,7 +157,7 @@
 
 .permission-dialog-footer {
     padding: 16px 24px;
-    border-top: 1px solid #454545;
+    border-top: 1px solid var(--border-secondary);
     display: flex;
     justify-content: flex-end;
     gap: 12px;
@@ -178,49 +178,49 @@
 }
 
 .permission-dialog-button.deny-button {
-    background: #d13438;
+    background: var(--color-dialog-button-danger);
     color: #ffffff;
-    border: 1px solid #d13438;
+    border: 1px solid var(--color-dialog-button-danger);
 }
 
 .permission-dialog-button.deny-button:hover {
-    background: #e74c50;
-    border-color: #e74c50;
+    background: var(--color-dialog-button-danger-hover);
+    border-color: var(--color-dialog-button-danger-hover);
 }
 
 .permission-dialog-button.approve-button {
-    background: #3e3e42;
+    background: var(--bg-hover);
     color: var(--text-primary);
-    border: 1px solid #555;
+    border: 1px solid var(--border-hover);
 }
 
 .permission-dialog-button.approve-button:hover {
-    background: #4a4a4f;
+    background: var(--bg-active);
     border-color: var(--text-muted);
 }
 
 .permission-dialog-button.approve-always-button {
-    background: #007fd4;
+    background: var(--accent-primary);
     color: #ffffff;
     min-width: 120px;
 }
 
 .permission-dialog-button.approve-always-button:hover {
-    background: #0098ff;
+    background: var(--accent-primary-hover);
     box-shadow: 0 0 12px rgba(0, 127, 212, 0.4);
 }
 
 .permission-dialog-button.approve-always-button:active {
-    background: #0060a0;
+    background: var(--accent-primary-active);
     transform: scale(0.98);
 }
 
 /* Permission Dialog V2 Styles - New compact design */
 .permission-dialog-v2 {
-    background: #1e1e1e;
+    background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
     border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-lg);
     min-width: 400px;
     max-width: 500px;
     padding: 20px;
@@ -250,7 +250,7 @@
 }
 
 .permission-dialog-v2-details-toggle:hover {
-    background: #363639;
+    background: var(--bg-hover);
 }
 
 .permission-dialog-v2-details-toggle .codicon {
@@ -278,14 +278,14 @@
 }
 
 .permission-dialog-v2-param .param-key {
-    color: #9cdcfe;
+    color: var(--color-info);
     font-weight: 600;
     margin-right: 6px;
     font-family: var(--idea-editor-font-family, monospace);
 }
 
 .permission-dialog-v2-param .param-value {
-    color: #ce9178;
+    color: var(--text-primary);
     word-break: break-all;
     white-space: pre-wrap;
     font-family: var(--idea-editor-font-family, monospace);
@@ -314,19 +314,19 @@
 }
 
 .permission-dialog-v2-option:hover {
-    background: #363639;
+    background: var(--bg-hover);
     border-color: var(--border-hover);
 }
 
 .permission-dialog-v2-option.selected {
-    background: #007fd4;
-    border-color: #007fd4;
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
     color: #ffffff;
 }
 
 .permission-dialog-v2-option.selected:hover {
-    background: #0098ff;
-    border-color: #0098ff;
+    background: var(--accent-primary-hover);
+    border-color: var(--accent-primary-hover);
 }
 
 .permission-dialog-v2-option .option-key {
@@ -356,25 +356,25 @@
 }
 
 .permission-dialog-v2-input::placeholder {
-    color: #6e6e6e;
+    color: var(--text-placeholder);
 }
 
 .permission-dialog-v2-input:focus {
-    border-color: #007fd4;
+    border-color: var(--accent-primary);
 }
 
 /* Permission Dialog V3 Styles - 底部固定栏设计 */
 .permission-dialog-v3 {
     position: relative;
-    background: rgba(26, 26, 26, 0.85);
+    background: var(--bg-elevated);
     /* 毛玻璃效果 */
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     /* 只有顶部圆角 */
     border-radius: 12px 12px 0 0;
     /* 顶部边框强调分隔 */
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    border-top: 1px solid var(--border-secondary);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
     /* 全宽 */
     width: 100%;
     max-width: 100%;
@@ -405,33 +405,33 @@
     transform: translateX(-50%);
     width: 32px;
     height: 3px;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-secondary);
     border-radius: 2px;
     transition: background 0.15s;
 }
 
 .permission-dialog-v3-resize-handle:hover::after {
-    background: rgba(255, 255, 255, 0.4);
+    background: var(--accent-primary);
 }
 
 .permission-dialog-v3-title {
     margin: 0 0 4px 0;
     font-size: 15px;
     font-weight: 600;
-    color: #ffffff;
+    color: var(--text-secondary);
     flex-shrink: 0;
 }
 
 .permission-dialog-v3-subtitle {
     margin: 0 0 14px 0;
     font-size: 12px;
-    color: #888888;
+    color: var(--text-muted);
     flex-shrink: 0;
 }
 
 .permission-dialog-v3-command-box {
-    background: #0d0d0d;
-    border: 1px solid #333333;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
     border-radius: 8px;
     margin-bottom: 14px;
     overflow: hidden;
@@ -447,14 +447,14 @@
     justify-content: space-between;
     align-items: center;
     padding: 10px 12px;
-    border-bottom: 1px solid #333333;
+    border-bottom: 1px solid var(--border-primary);
     flex-shrink: 0;
 }
 
 .permission-dialog-v3-command-header .command-path {
     font-family: var(--idea-editor-font-family, monospace);
     font-size: 12px;
-    color: #e0e0e0;
+    color: var(--text-primary);
     flex: 1;
     min-width: 0;
     white-space: nowrap;
@@ -464,14 +464,14 @@
 }
 
 .permission-dialog-v3-command-header .command-arrow {
-    color: #4ade80;
+    color: var(--color-success);
     margin-right: 6px;
 }
 
 .permission-dialog-v3-command-header .command-toggle {
     background: none;
     border: none;
-    color: #888888;
+    color: var(--text-muted);
     font-size: 14px;
     cursor: pointer;
     padding: 4px;
@@ -483,8 +483,8 @@
 }
 
 .permission-dialog-v3-command-header .command-toggle:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    background: var(--bg-hover);
 }
 
 .permission-dialog-v3-command-header .command-toggle .codicon {
@@ -529,12 +529,12 @@
     justify-content: center;
     align-items: center;
     gap: 6px;
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--bg-hover);
+    border: 1px solid var(--border-secondary);
     border-radius: 6px;
     /* 调整为适合横排的 padding */
     padding: 8px 14px;
-    color: #e0e0e0;
+    color: var(--text-primary);
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s;
@@ -544,19 +544,19 @@
 }
 
 .permission-dialog-v3-option:hover {
-    background: #333333;
-    border-color: #444444;
+    background: var(--bg-active);
+    border-color: var(--border-hover);
 }
 
 .permission-dialog-v3-option.selected {
-    background: #ffffff;
-    border-color: #ffffff;
-    color: #000000;
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #ffffff;
 }
 
 .permission-dialog-v3-option.selected:hover {
-    background: #f0f0f0;
-    border-color: #f0f0f0;
+    background: var(--accent-primary-hover);
+    border-color: var(--accent-primary-hover);
 }
 
 .permission-dialog-v3-option .option-text {
@@ -566,15 +566,15 @@
 .permission-dialog-v3-option .option-key {
     font-size: 11px;
     font-weight: 400;
-    color: #888888;
-    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    background: var(--bg-elevated);
     padding: 2px 8px;
     border-radius: 4px;
 }
 
 .permission-dialog-v3-option.selected .option-key {
-    color: #666666;
-    background: rgba(0, 0, 0, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.15);
 }
 
 @media (max-width: 450px) {

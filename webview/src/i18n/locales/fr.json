@@ -309,6 +309,7 @@
       "emptyProvider": "Aucun fournisseur configuré",
       "notConfigured": "Non configuré",
       "apiKey": "API Key",
+      "apiKeyHelper": "Assistant clé API",
       "baseUrl": "Base URL",
       "provider": "Fournisseur",
       "source": "Source",

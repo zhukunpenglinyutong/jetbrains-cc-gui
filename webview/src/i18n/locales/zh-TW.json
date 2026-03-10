@@ -314,6 +314,7 @@
       "emptyProvider": "暫無供應商配置",
       "notConfigured": "未配置",
       "apiKey": "API Key",
+      "apiKeyHelper": "API Key 助手",
       "baseUrl": "Base URL",
       "provider": "供應商",
       "source": "來源",

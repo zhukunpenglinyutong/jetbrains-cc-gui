@@ -321,6 +321,7 @@
       "emptyProvider": "Провайдер не настроен",
       "notConfigured": "Не настроено",
       "apiKey": "API-ключ",
+      "apiKeyHelper": "Помощник API-ключа",
       "baseUrl": "Base URL",
       "provider": "Провайдер",
       "source": "Источник",

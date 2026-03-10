@@ -309,6 +309,7 @@
       "emptyProvider": "कोई प्रदाता कॉन्फ़िगर नहीं",
       "notConfigured": "कॉन्फ़िगर नहीं किया गया",
       "apiKey": "API Key",
+      "apiKeyHelper": "API Key हेल्पर",
       "baseUrl": "Base URL",
       "provider": "प्रदाता",
       "source": "स्रोत",

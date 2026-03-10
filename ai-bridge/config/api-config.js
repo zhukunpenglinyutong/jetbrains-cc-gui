@@ -7,7 +7,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { platform } from 'os';
 import { execSync } from 'child_process';
-import { getClaudeDir } from '../utils/path-utils.js';
+import { getClaudeDir, getManagedSettingsPath } from '../utils/path-utils.js';
 
 // Conditional debug logging: set CLAUDE_DEBUG=1 to enable verbose diagnostics
 const DEBUG = process.env.CLAUDE_DEBUG === '1' || process.env.CLAUDE_DEBUG === 'true';
@@ -29,6 +29,26 @@ function injectProxyEnvVars(settings) {
       process.env[varName] = settings.env[varName];
       debugLog(`[DEBUG] Set ${varName} from settings.json`);
     }
+  }
+}
+
+/**
+ * Load managed settings from the platform-specific managed-settings.json.
+ * These are typically configured by enterprise IT administrators.
+ * @returns {Object|null} Parsed managed settings or null if not found/invalid
+ */
+export function loadManagedSettings() {
+  try {
+    const managedPath = getManagedSettingsPath();
+    if (!existsSync(managedPath)) {
+      return null;
+    }
+    const settings = JSON.parse(readFileSync(managedPath, 'utf8'));
+    debugLog('[DEBUG] Loaded managed settings from:', managedPath);
+    return settings;
+  } catch (error) {
+    debugLog('[DEBUG] Failed to load managed settings:', error.message);
+    return null;
   }
 }
 
@@ -219,11 +239,36 @@ export function setupApiKey() {
       debugLog('[DEBUG] Auth type:', authType);
       return { apiKey: null, baseUrl, authType, apiKeySource, baseUrlSource };
     } else {
-      // Neither API Key nor CLI session found
+      // Check for apiKeyHelper in managed settings or user settings before giving up.
+      // The SDK handles apiKeyHelper execution natively, so we just need to not throw.
+      const managedSettings = loadManagedSettings();
+      const hasApiKeyHelper = managedSettings?.apiKeyHelper || settings?.apiKeyHelper;
+
+      if (hasApiKeyHelper) {
+        debugLog('[INFO] Using apiKeyHelper authentication (SDK will handle execution)');
+        authType = 'api_key_helper';
+        apiKeySource = managedSettings?.apiKeyHelper
+          ? 'managed-settings.json (apiKeyHelper)'
+          : 'settings.json (apiKeyHelper)';
+
+        // Clear all API Key environment variables so the SDK uses apiKeyHelper
+        delete process.env.ANTHROPIC_API_KEY;
+        delete process.env.ANTHROPIC_AUTH_TOKEN;
+
+        if (baseUrl) {
+          process.env.ANTHROPIC_BASE_URL = baseUrl;
+        }
+
+        debugLog('[DEBUG] Auth type:', authType);
+        return { apiKey: null, baseUrl, authType, apiKeySource, baseUrlSource };
+      }
+
+      // Neither API Key, CLI session, nor apiKeyHelper found
       console.error('[ERROR] API Key not configured and no CLI session found.');
       console.error('[ERROR] Please either:');
       console.error('[ERROR]   1. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in ~/.claude/settings.json');
       console.error('[ERROR]   2. Run "claude login" to authenticate via CLI');
+      console.error('[ERROR]   3. Configure apiKeyHelper in managed-settings.json or settings.json');
       throw new Error('API Key not configured and no CLI session found');
     }
   }

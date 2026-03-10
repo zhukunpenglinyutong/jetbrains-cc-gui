@@ -349,6 +349,7 @@
       "emptyProvider": "暂无供应商配置",
       "notConfigured": "未配置",
       "apiKey": "API Key",
+      "apiKeyHelper": "API Key 助手",
       "baseUrl": "Base URL",
       "provider": "供应商",
       "source": "来源",

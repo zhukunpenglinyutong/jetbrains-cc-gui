@@ -314,6 +314,7 @@
       "emptyProvider": "プロバイダーが設定されていません",
       "notConfigured": "未設定",
       "apiKey": "APIキー",
+      "apiKeyHelper": "APIキーヘルパー",
       "baseUrl": "ベースURL",
       "provider": "プロバイダー",
       "source": "ソース",
