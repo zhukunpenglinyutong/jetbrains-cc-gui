@@ -900,7 +900,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               onClose={ctxMenu.close}
               items={[
                 { label: t('contextMenu.copy', 'Copy'), action: () => copySelection(ctxMenu.savedRange, ctxMenu.selectedText), disabled: !ctxMenu.hasSelection },
-                { label: t('contextMenu.cut', 'Cut'), action: () => { if (editableRef.current) { cutSelection(ctxMenu.savedRange, ctxMenu.selectedText, editableRef.current); handleInput(); } }, disabled: !ctxMenu.hasSelection },
+                { label: t('contextMenu.cut', 'Cut'), action: () => { if (editableRef.current) { cutSelection(ctxMenu.savedRange, ctxMenu.selectedText, editableRef.current, ctxMenu.targetFileTag); handleInput(); } }, disabled: !ctxMenu.hasSelection },
                 { label: t('contextMenu.paste', 'Paste'), action: () => { if (editableRef.current) { pasteAtCursor(ctxMenu.savedRange, editableRef.current, handleInput); } } },
                 { separator: true },
                 { label: t('contextMenu.newline', 'Insert Newline'), action: () => { if (editableRef.current) { insertNewline(ctxMenu.savedRange, editableRef.current); handleInput(); } } },
