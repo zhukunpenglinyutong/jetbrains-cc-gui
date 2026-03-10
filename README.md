@@ -1,6 +1,6 @@
 <div align="center">
 
-# IDEA Claude Code GUI Plugin
+# Dee CC GUI Plugin
 
 <img width="120" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/idea-claude-code-gui-logo.png" />
 

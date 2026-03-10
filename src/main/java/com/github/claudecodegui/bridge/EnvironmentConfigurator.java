@@ -37,6 +37,11 @@ public class EnvironmentConfigurator {
     // Cache for Codex env_key values from config.toml
     private volatile Map<String, String> cachedCodexEnvVars = null;
 
+    // 缓存从 zsh 加载的环境变量（静态共享，所有实例共用）
+    private static volatile Map<String, String> cachedZshEnvVars = null;
+    private static volatile boolean zshEnvLoaded = false;
+    private static final Object ZSH_ENV_LOCK = new Object();
+
     /**
      * Updates the process environment variables, ensuring PATH includes the Node.js directory.
      * Supports both Windows (Path) and Unix (PATH) naming conventions.
@@ -135,6 +140,9 @@ public class EnvironmentConfigurator {
                 env.put(CODEX_HOME_ENV, Paths.get(userHome, ".codex").toString());
             }
         }
+
+        // 6. 应用从 zsh 加载的环境变量
+        applyZshEnvironment(env);
 
         configurePermissionEnv(env);
     }
@@ -384,7 +392,7 @@ public class EnvironmentConfigurator {
      * @param envName Environment variable name to validate
      * @return true if valid, false otherwise
      */
-    private boolean isValidEnvName(String envName) {
+    private static boolean isValidEnvName(String envName) {
         if (envName == null || envName.isEmpty()) {
             return false;
         }
@@ -532,5 +540,134 @@ public class EnvironmentConfigurator {
         }
 
         return null;
+    }
+
+    /**
+     * 在插件启动时加载 zsh 环境变量。
+     * 这个方法会执行 zsh 来获取所有环境变量，并缓存到内存中。
+     * 只在第一次调用时执行，后续调用直接使用缓存。
+     *
+     * 这是一个静态方法，所有 EnvironmentConfigurator 实例共享缓存。
+     */
+    public static void loadZshEnvironment() {
+        if (zshEnvLoaded) {
+            return;
+        }
+
+        synchronized (ZSH_ENV_LOCK) {
+            if (zshEnvLoaded) {
+                return;
+            }
+
+            Logger LOG = Logger.getInstance(EnvironmentConfigurator.class);
+
+            // Windows 不支持 zsh
+            if (PlatformUtils.isWindows()) {
+                LOG.debug("[ZshEnv] Skipping zsh environment loading on Windows");
+                zshEnvLoaded = true;
+                return;
+            }
+
+            try {
+                LOG.info("[ZshEnv] Loading zsh environment variables...");
+                Map<String, String> zshEnvVars = new java.util.HashMap<>();
+
+                // 使用 login + interactive shell 来获取完整的环境变量
+                String shell = System.getenv("SHELL");
+                if (shell == null || shell.isEmpty()) {
+                    shell = "/bin/zsh"; // macOS 默认使用 zsh
+                }
+
+                // 构建命令：使用 zsh 执行 env 命令来获取所有环境变量
+                List<String> command = new ArrayList<>();
+                command.add(shell);
+                command.add("-l"); // Login shell
+                command.add("-i"); // Interactive shell（加载 ~/.zshrc）
+                command.add("-c");
+                command.add("env");
+
+                ProcessBuilder pb = new ProcessBuilder(command);
+                pb.redirectErrorStream(true);
+
+                Process process = pb.start();
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        // 跳过 zsh 初始化输出（不包含 = 的行）
+                        int equalsIndex = line.indexOf('=');
+                        if (equalsIndex > 0) {
+                            String key = line.substring(0, equalsIndex);
+                            String value = line.substring(equalsIndex + 1);
+
+                            // 验证环境变量名格式
+                            if (isValidEnvName(key)) {
+                                zshEnvVars.put(key, value);
+                            }
+                        }
+                    }
+
+                    int exitCode = process.waitFor();
+                    if (exitCode == 0) {
+                        cachedZshEnvVars = zshEnvVars;
+                        LOG.info("[ZshEnv] Successfully loaded " + zshEnvVars.size() + " environment variables from zsh");
+
+                        // 仅在 debug 模式下输出部分关键变量
+                        if (LOG.isDebugEnabled()) {
+                            for (String key : new String[]{"PATH", "HOME", "USER", "NODE_PATH"}) {
+                                if (zshEnvVars.containsKey(key)) {
+                                    LOG.debug("[ZshEnv] " + key + " = " +
+                                            (key.equals("PATH") ? zshEnvVars.get(key).substring(0, Math.min(100, zshEnvVars.get(key).length())) + "..." : zshEnvVars.get(key)));
+                                }
+                            }
+                        }
+                    } else {
+                        LOG.warn("[ZshEnv] Failed to load zsh environment, exit code: " + exitCode);
+                    }
+                }
+
+                zshEnvLoaded = true;
+            } catch (Exception e) {
+                LOG.warn("[ZshEnv] Error loading zsh environment: " + e.getMessage());
+                zshEnvLoaded = true; // 即使失败也标记为已加载，避免重复尝试
+            }
+        }
+    }
+
+    /**
+     * 将缓存的 zsh 环境变量应用到进程环境中。
+     * 只添加当前环境中不存在的变量，避免覆盖已有值。
+     *
+     * @param env ProcessBuilder 的环境变量 Map
+     */
+    public void applyZshEnvironment(Map<String, String> env) {
+        if (env == null || cachedZshEnvVars == null || cachedZshEnvVars.isEmpty()) {
+            return;
+        }
+
+        int appliedCount = 0;
+        for (Map.Entry<String, String> entry : cachedZshEnvVars.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+
+            // 只添加当前环境中不存在的变量
+            if (!env.containsKey(key) || env.get(key) == null || env.get(key).isEmpty()) {
+                env.put(key, value);
+                appliedCount++;
+            }
+        }
+
+        if (appliedCount > 0) {
+            LOG.debug("[ZshEnv] Applied " + appliedCount + " zsh environment variables to process");
+        }
+    }
+
+    /**
+     * 获取 zsh 环境变量加载状态。
+     * @return true 表示已加载，false 表示未加载
+     */
+    public static boolean isZshEnvLoaded() {
+        return zshEnvLoaded;
     }
 }

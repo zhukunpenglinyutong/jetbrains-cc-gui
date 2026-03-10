@@ -1,6 +1,7 @@
 package com.github.claudecodegui.startup;
 
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
+import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -69,9 +70,14 @@ public class BridgePreloader implements ProjectActivity {
         // Run extraction on a background thread
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                BridgeDirectoryResolver resolver = getSharedResolver();
+                // 1. 加载 zsh 环境变量（在 bridge 提取之前）
+                if (!EnvironmentConfigurator.isZshEnvLoaded()) {
+                    LOG.info("[BridgePreloader] Loading zsh environment variables...");
+                    EnvironmentConfigurator.loadZshEnvironment();
+                }
 
-                // Trigger extraction (non-blocking on this pooled thread)
+                // 2. 提取 ai-bridge
+                BridgeDirectoryResolver resolver = getSharedResolver();
                 resolver.findSdkDir();
 
                 LOG.info("[BridgePreloader] Bridge preload completed for project: " + project.getName());

@@ -746,6 +746,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       let lastAssistantContent = '';
       let lastThinkingContent = '';
       let accumulatedUsage = null;
+      let actualModel = model; // Track actual model name from API response
 
       // Only log retry attempts (not the first attempt)
       if (retryAttempt > 0) {
@@ -815,12 +816,17 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
                 // message_start: reset per-turn accumulator (matches CLI behavior)
                 if (event.type === 'message_start' && event.message?.usage) {
                   accumulatedUsage = mergeUsage(null, event.message.usage);
+                  // Capture actual model name from API response
+                  if (event.message.model) {
+                    actualModel = event.message.model;
+                    console.log('[DEBUG] Captured actual model from API:', actualModel);
+                  }
                 }
 
                 // message_delta: accumulate output_tokens and emit [USAGE] tag
                 if (event.type === 'message_delta' && event.usage) {
                   accumulatedUsage = mergeUsage(accumulatedUsage, event.usage);
-                  emitAccumulatedUsage(accumulatedUsage);
+                  emitAccumulatedUsage(accumulatedUsage, actualModel);
                 }
 
                 // content_block_delta: text or JSON incremental update
@@ -1028,7 +1034,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
         if (streamingEnabled && streamStarted) {
           // Emit final accumulated usage before stream end
           if (accumulatedUsage) {
-            emitAccumulatedUsage(accumulatedUsage);
+            emitAccumulatedUsage(accumulatedUsage, actualModel);
           }
           process.stdout.write('[STREAM_END]\n');
           streamEnded = true;
@@ -1053,7 +1059,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
   } catch (error) {
     // Streaming: also end stream on error to prevent the frontend from getting stuck in streaming state
     if (streamingEnabled && streamStarted && !streamEnded) {
-      emitAccumulatedUsage(accumulatedUsage);
+      emitAccumulatedUsage(accumulatedUsage, actualModel);
       process.stdout.write('[STREAM_END]\n');
       streamEnded = true;
     }
@@ -1566,12 +1572,17 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
                 // message_start: reset per-turn accumulator (matches CLI behavior)
                 if (event.type === 'message_start' && event.message?.usage) {
                   accumulatedUsage = mergeUsage(null, event.message.usage);
+                  // Capture actual model name from API response
+                  if (event.message.model) {
+                    actualModel = event.message.model;
+                    console.log('[DEBUG] Captured actual model from API:', actualModel);
+                  }
                 }
 
                 // message_delta: accumulate output_tokens and emit [USAGE] tag
                 if (event.type === 'message_delta' && event.usage) {
                   accumulatedUsage = mergeUsage(accumulatedUsage, event.usage);
-                  emitAccumulatedUsage(accumulatedUsage);
+                  emitAccumulatedUsage(accumulatedUsage, actualModel);
                 }
 
                 // content_block_delta: text or JSON incremental update
@@ -1757,7 +1768,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
         if (streamingEnabled && streamStarted) {
           // Emit final accumulated usage before stream end
           if (accumulatedUsage) {
-            emitAccumulatedUsage(accumulatedUsage);
+            emitAccumulatedUsage(accumulatedUsage, actualModel);
           }
           process.stdout.write('[STREAM_END]\n');
           streamEnded = true;
@@ -1782,7 +1793,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
   } catch (error) {
     // Streaming: also end stream on error to prevent the frontend from getting stuck in streaming state
     if (streamingEnabled && streamStarted && !streamEnded) {
-      emitAccumulatedUsage(accumulatedUsage);
+      emitAccumulatedUsage(accumulatedUsage, actualModel);
       process.stdout.write('[STREAM_END]\n');
       streamEnded = true;
     }

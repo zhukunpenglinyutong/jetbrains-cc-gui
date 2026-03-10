@@ -29,8 +29,8 @@ checkstyle {
     configFile = file('checkstyle.xml')
 }
 
-group = 'com.github.idea-claude-code-gui'
-version = '0.2.6'
+group = 'com.github.deeokay-cc-gui'
+version = '1.0.0'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17

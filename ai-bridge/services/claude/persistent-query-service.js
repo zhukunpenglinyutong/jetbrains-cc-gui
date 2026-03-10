@@ -589,19 +589,25 @@ async function acquireRuntime(requestContext) {
   return runtime;
 }
 
-function processStreamEvent(msg, turnState) {
+function processStreamEvent(msg, turnState, requestContext) {
   const event = msg.event;
   if (!event) return;
 
   // Handle message_start: reset per-turn accumulator (matches CLI behavior)
   if (event.type === 'message_start' && event.message?.usage) {
     turnState.accumulatedUsage = mergeUsage(null, event.message.usage);
+    // Capture actual model name from API response
+    if (event.message.model) {
+      turnState.actualModel = event.message.model;
+      console.log('[DEBUG] Captured actual model from API:', turnState.actualModel);
+    }
   }
 
   // Handle message_delta: accumulate output_tokens and emit [USAGE] tag
   if (event.type === 'message_delta' && event.usage) {
     turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.usage);
-    emitAccumulatedUsage(turnState.accumulatedUsage);
+    const modelForCost = turnState.actualModel || requestContext.model;
+    emitAccumulatedUsage(turnState.accumulatedUsage, modelForCost);
   }
 
   // Handle content_block_delta: text and thinking deltas
@@ -742,7 +748,7 @@ async function executeTurn(runtime, requestContext, turnMeta) {
 
     if (msg?.type === 'stream_event' && turnState.streamingEnabled) {
       turnState.hasStreamEvents = true;
-      processStreamEvent(msg, turnState);
+      processStreamEvent(msg, turnState, requestContext);
       continue;
     }
 
@@ -771,7 +777,8 @@ async function executeTurn(runtime, requestContext, turnMeta) {
   if (turnState.streamingEnabled && turnState.streamStarted && !turnState.streamEnded) {
     // Emit final accumulated usage before stream end
     if (turnState.accumulatedUsage) {
-      emitAccumulatedUsage(turnState.accumulatedUsage);
+      const modelForCost = turnState.actualModel || requestContext.model;
+      emitAccumulatedUsage(turnState.accumulatedUsage, modelForCost);
     }
     process.stdout.write('[STREAM_END]\n');
     turnState.streamEnded = true;
@@ -834,7 +841,8 @@ async function sendInternal(params, withAttachments) {
     if (turnMeta.state?.streamingEnabled && turnMeta.state?.streamStarted && !turnMeta.state?.streamEnded) {
       // Emit final accumulated usage before stream end
       if (turnMeta.state?.accumulatedUsage) {
-        emitAccumulatedUsage(turnMeta.state.accumulatedUsage);
+        const modelForCost = turnMeta.state?.actualModel || requestContext?.model;
+        emitAccumulatedUsage(turnMeta.state.accumulatedUsage, modelForCost);
       }
       process.stdout.write('[STREAM_END]\n');
       turnMeta.state.streamEnded = true;

@@ -1,6 +1,6 @@
 <div align="center">
 
-# IDEA Claude Code GUI 插件
+# Dee CC GUI 插件
 
 <img width="120" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/idea-claude-code-gui-logo.png" />
 

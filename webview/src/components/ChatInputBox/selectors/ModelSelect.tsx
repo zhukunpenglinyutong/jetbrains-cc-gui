@@ -142,6 +142,20 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   };
 
   /**
+   * 格式化模型名称用于按钮显示（缩短版本）
+   * 例如: global.anthropic.claude-sonnet-4-5-20250929-v1:0 → sonnet-4.5
+   */
+  const formatModelNameForButton = (fullName: string): string => {
+    if (!fullName || fullName.length <= 30) return fullName;
+
+    return fullName
+      .replace(/^.*\.anthropic\./, '') // 移除 global.anthropic. 等前缀
+      .replace(/^claude-/, '') // 移除 claude- 前缀
+      .replace(/-\d{8}.*$/, '') // 移除日期和后续所有内容（包括 -v1:0）
+      .replace(/(\w+)-(\d+)-(\d+)$/, '$1-$2.$3'); // 将版本号的 - 替换为 .
+  };
+
+  /**
    * Toggle dropdown
    */
   const handleToggle = useCallback((e: React.MouseEvent) => {
@@ -194,7 +208,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
         title={t('chat.currentModel', { model: getModelLabel(currentModel) })}
       >
         <ModelIcon provider={currentProvider} size={12} />
-        <span className="selector-button-text">{getModelLabel(currentModel)}</span>
+        <span className="selector-button-text">{formatModelNameForButton(getModelLabel(currentModel))}</span>
         <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
       </button>
 

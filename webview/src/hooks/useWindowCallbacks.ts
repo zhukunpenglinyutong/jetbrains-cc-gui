@@ -891,11 +891,15 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
               const lastAssistant = prevMessages[lastIndex];
               const updatedUsage = {
-                inputTokens: data.inputTokens || 0,
-                outputTokens: data.outputTokens || 0,
-                cacheCreationTokens: data.cacheCreationTokens,
-                cacheReadTokens: data.cacheReadTokens,
+                inputTokens: data.inputTokens || data.input_tokens || 0,
+                outputTokens: data.outputTokens || data.output_tokens || 0,
+                cacheCreationTokens: data.cacheCreationTokens || data.cache_creation_input_tokens,
+                cacheReadTokens: data.cacheReadTokens || data.cache_read_input_tokens,
                 totalTokens: used,
+                inputCost: data.inputCost || data.input_cost,
+                outputCost: data.outputCost || data.output_cost,
+                totalCost: data.totalCost || data.total_cost,
+                model: data.model,
               };
 
               const updatedMessage = { ...lastAssistant, usage: updatedUsage };

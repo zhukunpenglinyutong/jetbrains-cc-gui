@@ -32,6 +32,10 @@ export interface TokenUsage {
   cacheCreationTokens?: number;
   cacheReadTokens?: number;
   totalTokens?: number;
+  inputCost?: number;  // 输入 token 的成本（美元）
+  outputCost?: number; // 输出 token 的成本（美元）
+  totalCost?: number;  // 总成本（美元）
+  model?: string;      // 模型名称
 }
 
 export interface ClaudeMessage {
