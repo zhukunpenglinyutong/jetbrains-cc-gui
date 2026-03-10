@@ -368,6 +368,7 @@
       "convertSuccess": "转换成功，已生成新 ID 并断开关联",
       "importing": "导入中...",
       "allProviders": "所有供应商",
+      "dragToSort": "拖拽排序",
       "import": "导入",
       "importFromCcSwitchUpdate": "从cc-switch导入/更新",
       "importFromCcSwitchFile": "选择 cc-switch.db 文件导入",

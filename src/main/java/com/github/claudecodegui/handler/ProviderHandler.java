@@ -44,6 +44,7 @@ public class ProviderHandler extends BaseMessageHandler {
             "preview_cc_switch_import",
             "open_file_chooser_for_cc_switch",
             "save_imported_providers",
+            "sort_providers",
             // Codex provider operations
             "get_codex_providers",
             "get_current_codex_config",
@@ -51,7 +52,8 @@ public class ProviderHandler extends BaseMessageHandler {
             "update_codex_provider",
             "delete_codex_provider",
             "switch_codex_provider",
-            "get_active_codex_provider"
+            "get_active_codex_provider",
+            "sort_codex_providers"
     };
 
     public ProviderHandler(HandlerContext context) {
@@ -103,6 +105,9 @@ public class ProviderHandler extends BaseMessageHandler {
             case "save_imported_providers":
                 handleSaveImportedProviders(content);
                 return true;
+            case "sort_providers":
+                handleSortProviders(content);
+                return true;
             // Codex provider operations
             case "get_codex_providers":
                 handleGetCodexProviders();
@@ -124,6 +129,9 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "get_active_codex_provider":
                 handleGetActiveCodexProvider();
+                return true;
+            case "sort_codex_providers":
+                handleSortCodexProviders(content);
                 return true;
             default:
                 return false;
@@ -621,6 +629,23 @@ public class ProviderHandler extends BaseMessageHandler {
     }
 
     /**
+     * Save provider order after drag-and-drop sorting.
+     */
+    private void handleSortProviders(String content) {
+        List<String> orderedIds = parseOrderedIds(content, "sorting");
+        if (orderedIds == null) return;
+        try {
+            context.getSettingsService().saveProviderOrder(orderedIds);
+            LOG.info("[ProviderHandler] Saved provider order: " + orderedIds);
+            ApplicationManager.getApplication().invokeLater(this::handleGetProviders);
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to save provider order: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                callJavaScript("window.showError", escapeJs("Failed to save provider order: " + e.getMessage())));
+        }
+    }
+
+    /**
      * Send info notification to the frontend.
      */
     private void sendInfoToFrontend(String title, String message) {
@@ -816,6 +841,46 @@ public class ProviderHandler extends BaseMessageHandler {
             });
         } catch (Exception e) {
             LOG.error("[ProviderHandler] Failed to get active Codex provider: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Save Codex provider order after drag-and-drop sorting.
+     */
+    private void handleSortCodexProviders(String content) {
+        List<String> orderedIds = parseOrderedIds(content, "Codex sorting");
+        if (orderedIds == null) return;
+        try {
+            context.getSettingsService().saveCodexProviderOrder(orderedIds);
+            LOG.info("[ProviderHandler] Saved Codex provider order: " + orderedIds);
+            ApplicationManager.getApplication().invokeLater(this::handleGetCodexProviders);
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to save Codex provider order: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                callJavaScript("window.showError", escapeJs("Failed to save provider order: " + e.getMessage())));
+        }
+    }
+
+    /**
+     * Parse orderedIds from sort request content. Returns null if invalid.
+     */
+    private List<String> parseOrderedIds(String content, String context) {
+        try {
+            Gson gson = new Gson();
+            JsonObject data = gson.fromJson(content, JsonObject.class);
+            JsonArray orderedIdsArray = data.getAsJsonArray("orderedIds");
+            if (orderedIdsArray == null || orderedIdsArray.isEmpty()) {
+                LOG.warn("[ProviderHandler] No orderedIds provided for " + context);
+                return null;
+            }
+            List<String> orderedIds = new ArrayList<>();
+            for (JsonElement e : orderedIdsArray) {
+                orderedIds.add(e.getAsString());
+            }
+            return orderedIds;
+        } catch (Exception e) {
+            LOG.error("[ProviderHandler] Failed to parse orderedIds for " + context + ": " + e.getMessage(), e);
+            return null;
         }
     }
 }

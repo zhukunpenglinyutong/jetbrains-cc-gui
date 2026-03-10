@@ -363,6 +363,7 @@
       "convertSuccess": "Conversion successful, new ID generated and disconnected",
       "importing": "Importing...",
       "allProviders": "All Providers",
+      "dragToSort": "Drag to reorder",
       "import": "Import",
       "importFromCcSwitchUpdate": "Import/Update from cc-switch",
       "importFromCcSwitchFile": "Select cc-switch.db File to Import",

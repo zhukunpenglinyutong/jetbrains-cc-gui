@@ -489,6 +489,43 @@
     border-color: #0078d4;
     box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.1);
   }
+
+  &.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  &.dragOver {
+    border-color: #0078d4;
+    background: rgba(0, 120, 212, 0.05);
+    border-style: dashed;
+  }
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  margin-right: 8px;
+  cursor: grab;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  .codicon {
+    font-size: 16px;
+  }
 }
 
 .cardInfo {

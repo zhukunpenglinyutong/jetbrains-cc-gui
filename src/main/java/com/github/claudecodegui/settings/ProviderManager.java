@@ -74,16 +74,73 @@ public class ProviderManager {
 
         JsonObject providers = claude.getAsJsonObject("providers");
 
-        for (String key : providers.keySet()) {
-            JsonObject provider = providers.getAsJsonObject(key);
-            if (!provider.has("id")) {
-                provider.addProperty("id", key);
+        // Get provider order from config, or use default order (by key)
+        List<String> orderedIds = getProviderOrder(claude, providers.keySet());
+
+        // Add providers in order
+        for (String id : orderedIds) {
+            if (providers.has(id)) {
+                JsonObject provider = providers.getAsJsonObject(id).deepCopy();
+                if (!provider.has("id")) {
+                    provider.addProperty("id", id);
+                }
+                provider.addProperty("isActive", id.equals(currentId));
+                result.add(provider);
             }
-            provider.addProperty("isActive", key.equals(currentId));
-            result.add(provider);
         }
 
         return result;
+    }
+
+    /**
+     * Get provider order from config, or return default order based on keys.
+     */
+    private List<String> getProviderOrder(JsonObject claude, java.util.Set<String> providerKeys) {
+        List<String> order = new ArrayList<>();
+
+        // Try to get saved order from config
+        if (claude.has("providerOrder") && claude.get("providerOrder").isJsonArray()) {
+            JsonArray savedOrder = claude.getAsJsonArray("providerOrder");
+            for (JsonElement e : savedOrder) {
+                String id = e.getAsString();
+                if (providerKeys.contains(id)) {
+                    order.add(id);
+                }
+            }
+        }
+
+        // Add any providers not in the saved order
+        for (String key : providerKeys) {
+            if (!order.contains(key)) {
+                order.add(key);
+            }
+        }
+
+        return order;
+    }
+
+    /**
+     * Save provider order.
+     */
+    public void saveProviderOrder(List<String> orderedIds) throws IOException {
+        JsonObject config = configReader.apply(null);
+
+        if (!config.has("claude")) {
+            JsonObject claude = new JsonObject();
+            claude.add("providers", new JsonObject());
+            claude.addProperty("current", "");
+            config.add("claude", claude);
+        }
+
+        JsonObject claude = config.getAsJsonObject("claude");
+        JsonArray orderArray = new JsonArray();
+        for (String id : orderedIds) {
+            orderArray.add(id);
+        }
+        claude.add("providerOrder", orderArray);
+
+        configWriter.accept(config);
+        LOG.info("[ProviderManager] Saved provider order: " + orderedIds);
     }
 
     /**
@@ -298,6 +355,18 @@ public class ProviderManager {
                     claude.addProperty("current", "");
                     LOG.info("[ProviderManager] No remaining providers");
                 }
+            }
+
+            // Remove deleted provider from providerOrder to avoid stale IDs
+            if (claude.has("providerOrder") && claude.get("providerOrder").isJsonArray()) {
+                JsonArray oldOrder = claude.getAsJsonArray("providerOrder");
+                JsonArray newOrder = new JsonArray();
+                for (JsonElement e : oldOrder) {
+                    if (!e.getAsString().equals(id)) {
+                        newOrder.add(e);
+                    }
+                }
+                claude.add("providerOrder", newOrder);
             }
 
             // Write config
