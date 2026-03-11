@@ -318,6 +318,33 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
       return copy;
     };
 
+    // FIX B-034: When onStreamStart adds a streaming assistant placeholder, a subsequent
+    // messages_update from the backend may replace the message list without that placeholder
+    // (backend doesn't know about it yet). This causes streamingMessageIndex to regress to
+    // the previous turn's assistant, writing new streaming content into the wrong message
+    // and making the old assistant's text disappear temporarily.
+    const appendStreamingAssistantIfMissing = (prevList: ClaudeMessage[], nextList: ClaudeMessage[]): ClaudeMessage[] => {
+      if (!isStreamingRef.current) return nextList;
+
+      // Find the streaming assistant placeholder in prev (scan from end — it's always near the tail)
+      let streamingMsg: ClaudeMessage | undefined;
+      for (let i = prevList.length - 1; i >= 0; i--) {
+        if (prevList[i].type === 'assistant' && prevList[i].isStreaming) {
+          streamingMsg = prevList[i];
+          break;
+        }
+      }
+      if (!streamingMsg) return nextList;
+
+      // Check if nextList already includes a streaming assistant
+      for (let i = nextList.length - 1; i >= 0; i--) {
+        if (nextList[i].type === 'assistant' && nextList[i].isStreaming) return nextList;
+      }
+
+      // Re-append the streaming placeholder so streamingMessageIndex stays correct
+      return [...nextList, streamingMsg];
+    };
+
     const preserveStreamingAssistantContent = (prevList: ClaudeMessage[], nextList: ClaudeMessage[]): ClaudeMessage[] => {
       if (!isStreamingRef.current) return nextList;
 
@@ -378,6 +405,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
               smartMerged = preserveLastAssistantIdentity(prev, smartMerged);
               smartMerged = preserveStreamingAssistantContent(prev, smartMerged);
+              smartMerged = appendStreamingAssistantIfMissing(prev, smartMerged);
               const result = appendOptimisticMessageIfMissing(prev, smartMerged);
 
               // FIX: In Claude mode, update streamingMessageIndexRef so that
@@ -409,7 +437,9 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
             const lastAssistantIdx = findLastAssistantIndex(parsed);
             if (lastAssistantIdx < 0) {
-              return appendOptimisticMessageIfMissing(prev, parsed);
+              let earlyResult = appendOptimisticMessageIfMissing(prev, parsed);
+              earlyResult = appendStreamingAssistantIfMissing(prev, earlyResult);
+              return earlyResult;
             }
             // ... (rest of streaming logic)
             // Simplified handling due to code structure — reuse existing streaming logic.
@@ -470,6 +500,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
           patched = appendOptimisticMessageIfMissing(prev, patched);
           patched = preserveLastAssistantIdentity(prev, patched);
           patched = preserveStreamingAssistantContent(prev, patched);
+          patched = appendStreamingAssistantIfMissing(prev, patched);
 
           const patchedAssistantIdx = findLastAssistantIndex(patched);
           if (patchedAssistantIdx >= 0 && patched[patchedAssistantIdx]?.type === 'assistant') {
