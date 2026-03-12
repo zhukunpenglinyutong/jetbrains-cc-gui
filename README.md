@@ -2,7 +2,7 @@
 
 # IDEA Claude Code GUI Plugin
 
-<img width="120" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/idea-claude-code-gui-logo.png" />
+<img width="120" alt="Image" src="./docs/images/idea-claude-code-gui-logo.png" />
 
 **English** · [简体中文](./README.zh-CN.md)
 

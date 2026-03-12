@@ -13,6 +13,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.2.8',
+    date: '2026-03-12',
+    content: {
+      en: `🐛 Fixes
+- Fix network env vars injection timing: inject proxy and TLS settings before any HTTPS connection to fix corporate SSL-inspection proxy issues, add URL validation and security warning for disabled TLS verification
+
+🔧 Improvements
+- Refactor Claude message-service into focused submodules: message-utils, message-permission, message-session-registry, message-sender, message-sender-anthropic, message-rewind
+- Refactor Codex message-service into focused submodules: codex-agents-loader, codex-command-utils, codex-event-handler, codex-patch-parser, codex-utils
+- Refactor permission-handler into focused modules: permission-ipc and permission-safety
+- Refactor UsageStatisticsSection into tab components: UsageOverviewTab, UsageModelsTab, UsageSessionsTab, UsageTimelineTab, useUsageStatistics hook
+- Refactor useInputHistory: extract pure storage functions to inputHistoryStorage.ts
+- Refactor fileIcons: extract icon maps to fileIconMaps.ts`,
+      zh: `🐛 Fixes
+- 修复网络环境变量注入时机：在任何 HTTPS 连接之前注入代理和 TLS 设置，修复企业 SSL 检查代理问题，新增代理 URL 验证和 TLS 验证禁用安全警告
+
+🔧 Improvements
+- 重构 Claude message-service 为聚焦子模块：message-utils、message-permission、message-session-registry、message-sender、message-sender-anthropic、message-rewind
+- 重构 Codex message-service 为聚焦子模块：codex-agents-loader、codex-command-utils、codex-event-handler、codex-patch-parser、codex-utils
+- 重构 permission-handler 为聚焦模块：permission-ipc 和 permission-safety
+- 重构 UsageStatisticsSection 为 Tab 组件：UsageOverviewTab、UsageModelsTab、UsageSessionsTab、UsageTimelineTab、useUsageStatistics hook
+- 重构 useInputHistory：将纯存储函数提取到 inputHistoryStorage.ts
+- 重构 fileIcons：将图标映射提取到 fileIconMaps.ts`,
+    },
+  },
+  {
     version: '0.2.7',
     date: '2026-03-10',
     content: {

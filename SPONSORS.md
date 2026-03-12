@@ -3,17 +3,17 @@
 <table>
   <tr>
     <td align="center">
-      <img src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/zfb.jpg" width="200" alt="Alipay">
+      <img src="./docs/images/zfb.jpg" width="200" alt="Alipay">
       <br>
       <b>Alipay</b>
     </td>
     <td align="center">
-      <img src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/wx.jpg" width="200" alt="WeChat">
+      <img src="./docs/images/wx.jpg" width="200" alt="WeChat">
       <br>
       <b>WeChat</b>
     </td>
     <td align="center">
-      <img src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/paypal.png" width="200" alt="PayPal">
+      <img src="./docs/images/paypal.png" width="200" alt="PayPal">
       <br>
       <b>PayPal</b>
     </td>

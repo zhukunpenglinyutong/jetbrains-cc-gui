@@ -1,3 +1,37 @@
+##### **2026年3月12日（v0.2.8）**
+
+English:
+
+🐛 Fixes
+- Change registrant. npmmirror. com to registry. npmjs. org
+- Change the remote images used to join WeChat groups on the settings page to local images
+- Fix network env vars injection timing: inject proxy and TLS settings (HTTP_PROXY, HTTPS_PROXY, NODE_EXTRA_CA_CERTS, NODE_TLS_REJECT_UNAUTHORIZED) before any HTTPS connection to fix corporate SSL-inspection proxy issues, add URL validation for proxy settings and security warning for disabled TLS verification
+
+🔧 Improvements
+- Refactor Claude message-service into focused submodules: split 2000+ line monolith into message-utils, message-permission, message-session-registry, message-sender, message-sender-anthropic, and message-rewind
+- Refactor Codex message-service into focused submodules: split 1800+ line monolith into codex-agents-loader, codex-command-utils, codex-event-handler, codex-patch-parser, and codex-utils
+- Refactor permission-handler into focused modules: extract permission-ipc (IPC message handling) and permission-safety (safety checks)
+- Refactor UsageStatisticsSection into tab components: extract UsageOverviewTab, UsageModelsTab, UsageSessionsTab, UsageTimelineTab, and useUsageStatistics hook
+- Refactor useInputHistory: extract pure storage functions to inputHistoryStorage.ts (no React dependency)
+- Refactor fileIcons: extract icon maps to dedicated fileIconMaps.ts module
+
+中文：
+
+🐛 Fixes
+- 将registry.npmmirror.com 修改为 registry.npmjs.org
+- 将设置页面用于加入微信群的远程图片，改为本地图片
+- 修复网络环境变量注入时机：在任何 HTTPS 连接之前注入代理和 TLS 设置（HTTP_PROXY、HTTPS_PROXY、NODE_EXTRA_CA_CERTS、NODE_TLS_REJECT_UNAUTHORIZED），修复企业 SSL 检查代理问题，新增代理 URL 验证和 TLS 验证禁用安全警告
+
+🔧 Improvements
+- 重构 Claude message-service 为聚焦子模块：将 2000+ 行单体文件拆分为 message-utils、message-permission、message-session-registry、message-sender、message-sender-anthropic 和 message-rewind
+- 重构 Codex message-service 为聚焦子模块：将 1800+ 行单体文件拆分为 codex-agents-loader、codex-command-utils、codex-event-handler、codex-patch-parser 和 codex-utils
+- 重构 permission-handler 为聚焦模块：提取 permission-ipc（IPC 消息处理）和 permission-safety（安全检查）
+- 重构 UsageStatisticsSection 为 Tab 组件：提取 UsageOverviewTab、UsageModelsTab、UsageSessionsTab、UsageTimelineTab 和 useUsageStatistics hook
+- 重构 useInputHistory：将纯存储函数提取到 inputHistoryStorage.ts（无 React 依赖）
+- 重构 fileIcons：将图标映射提取到独立的 fileIconMaps.ts 模块
+
+---
+
 ##### **2026年3月10日（v0.2.7）**
 
 English:
@@ -1359,11 +1393,8 @@ English:
 - [x] P3（UI）解决渠道删除按钮背景颜色问题
 - [x] P3（fix）将点击供应商链接调跳转改为复制链接，以防止出现问题
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/4.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/5.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/6.png" />
 
 ##### **12月2日（v0.0.8）**
 
@@ -1377,11 +1408,8 @@ English:
 - [x] P2（UX）优化多处其他UI以及交互细节
 - [x] P3（chore）插件兼容23.2版本IDEA版本
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/1.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/2.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.8/3.png" />
 
 ---
 
@@ -1399,9 +1427,7 @@ English:
 - [x] P3: 优化Loding样式
 - [x] P5: 优化样式细节
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/2.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.7/1.png" />
 
 
 ##### **11月27日（v0.0.6）**
@@ -1414,9 +1440,7 @@ English:
 - [x] 重构 多平台兼容性问题
 - [x] 解决某些特殊情况下响应无法中断的BUG
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.6/1.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.6/3.png" />
 
 
 ##### **11月26日（v0.0.5）**
@@ -1425,7 +1449,6 @@ English:
 - [x] 解决Window下新建问题按钮失效问题
 - [x] 优化一些细节样式
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.6/2.png" />
 
 
 ##### **11月24日（v0.0.4）**
@@ -1433,9 +1456,7 @@ English:
 - [x] 实现简易版本cc-switch功能
 - [x] 解决一些小的交互问题
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.4/1.png" />
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.4/2.png" />
 
 
 ##### **11月23日（v0.0.3）**
@@ -1443,7 +1464,6 @@ English:
 - [x] 解决一些核心交互阻塞流程
 - [x] 重构交互页面UI展示
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.3/1.png" />
 
 
 ##### **11月22日**
@@ -1457,27 +1477,21 @@ English:
 
 完成简易的，GUI对话 权限控制功能
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/5.png" />
 
 文件写入功能展示
 
-<img width="500" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/6.png" />
 
 
 ##### 11月20日
 
 完成简易的，GUI对话基础页面
 
-<img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/2.png" />
 
 完成简易的，GUI对话页面，历史消息渲染功能
 
-<img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/3.png" />
 
 完成简易的，GUI页面，对话 + 回复 功能（**完成 claude-bridge 核心**）
 
-<img width="300" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/4.png" />
 
 ##### 11月19日（v0.0.1） - 实现历史记录读取功能
 
-<img width="400" alt="Image" src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/idea/v0.0.2/1.png" />

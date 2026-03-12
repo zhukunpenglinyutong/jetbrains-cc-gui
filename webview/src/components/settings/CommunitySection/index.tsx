@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChangelogDialog from '../../ChangelogDialog';
 import { CHANGELOG_DATA } from '../../../version/changelog';
+import wxqImage from '../../../assets/images/wxq.png';
 import styles from './style.module.less';
 
 const CommunitySection = () => {
@@ -17,7 +18,7 @@ const CommunitySection = () => {
       <div className={styles.qrcodeContainer}>
         <div className={styles.qrcodeWrapper}>
           <img
-            src="https://claudecodecn-1253302184.cos.ap-beijing.myqcloud.com/vscode/wxq.png"
+            src={wxqImage}
             alt={t('settings.communityQrAlt')}
             className={styles.qrcodeImage}
           />
