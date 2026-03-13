@@ -3,12 +3,13 @@ import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../typ
 
 /**
  * Generate a stable key for a message, used for React list keys and anchor navigation.
- * Prefer raw.uuid > type-timestamp > fallback to type-index.
+ * Prefer raw.uuid > __turnId > type-timestamp > fallback to type-index.
  */
 export function getMessageKey(message: ClaudeMessage, index: number): string {
   const rawObj = typeof message.raw === 'object' ? message.raw as Record<string, unknown> : null;
-  return (rawObj?.uuid as string)
-    || (message.timestamp ? `${message.type}-${message.timestamp}` : `${message.type}-${index}`);
+  if (rawObj?.uuid) return rawObj.uuid as string;
+  if (message.__turnId !== undefined) return `turn-${message.__turnId}`;
+  return message.timestamp ? `${message.type}-${message.timestamp}` : `${message.type}-${index}`;
 }
 
 /**
@@ -425,6 +426,7 @@ export function mergeConsecutiveAssistantMessages(
       ...first,
       content: mergedContent,
       raw: nextRaw,
+      __turnId: first.__turnId,
     };
   };
 

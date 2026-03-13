@@ -132,6 +132,10 @@ public class SessionLifecycleManager {
             fetchSlashCommandsOnStartup();
 
             ApplicationManager.getApplication().invokeLater(() -> {
+                // Release the frontend session transition guard so updateMessages works again.
+                // Must come BEFORE updateStatus to ensure the guard is lifted before any
+                // subsequent message updates arrive.
+                host.callJavaScript("historyLoadComplete");
                 host.callJavaScript("updateStatus",
                         JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
                 resetTokenUsage();
@@ -139,6 +143,7 @@ public class SessionLifecycleManager {
         }).exceptionally(ex -> {
             LOG.error("Failed to create new session: " + ex.getMessage(), ex);
             ApplicationManager.getApplication().invokeLater(() -> {
+                host.callJavaScript("historyLoadComplete");
                 host.callJavaScript("updateStatus",
                         JsUtils.escapeJs("Failed to create new session: " + ex.getMessage()));
             });

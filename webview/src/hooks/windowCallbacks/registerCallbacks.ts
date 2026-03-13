@@ -59,6 +59,7 @@ export function registerWindowCallbacks(
     autoExpandedThinkingKeysRef: options.autoExpandedThinkingKeysRef,
     contentUpdateTimeoutRef: options.contentUpdateTimeoutRef,
     thinkingUpdateTimeoutRef: options.thinkingUpdateTimeoutRef,
+    streamingTurnIdRef: options.streamingTurnIdRef,
   });
 
   // Expose as single entry point for session transition cleanup.

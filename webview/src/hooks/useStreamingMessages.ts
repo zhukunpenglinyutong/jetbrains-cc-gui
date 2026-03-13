@@ -30,6 +30,10 @@ interface UseStreamingMessagesReturn {
   // Auto-expanded thinking keys
   autoExpandedThinkingKeysRef: React.MutableRefObject<Set<string>>;
 
+  // Turn tracking
+  streamingTurnIdRef: React.MutableRefObject<number>;
+  turnIdCounterRef: React.MutableRefObject<number>;
+
   // Helper functions
   findLastAssistantIndex: (list: ClaudeMessage[]) => number;
   extractRawBlocks: (raw: unknown) => any[];
@@ -70,6 +74,10 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
 
   // Auto-expanded thinking keys
   const autoExpandedThinkingKeysRef = useRef<Set<string>>(new Set());
+
+  // Turn tracking
+  const streamingTurnIdRef = useRef(-1);
+  const turnIdCounterRef = useRef(0);
 
   // Helper: Find last assistant message index
   const findLastAssistantIndex = (list: ClaudeMessage[]): number => {
@@ -209,6 +217,7 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     lastContentUpdateRef.current = 0;
     lastThinkingUpdateRef.current = 0;
     autoExpandedThinkingKeysRef.current.clear();
+    streamingTurnIdRef.current = -1;
 
     if (contentUpdateTimeoutRef.current) {
       clearTimeout(contentUpdateTimeoutRef.current);
@@ -246,6 +255,10 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
 
     // Auto-expanded thinking keys
     autoExpandedThinkingKeysRef,
+
+    // Turn tracking
+    streamingTurnIdRef,
+    turnIdCounterRef,
 
     // Helper functions
     findLastAssistantIndex,

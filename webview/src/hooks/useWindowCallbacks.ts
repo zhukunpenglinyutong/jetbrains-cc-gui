@@ -75,6 +75,8 @@ export interface UseWindowCallbacksOptions {
   activeThinkingSegmentIndexRef: MutableRefObject<number>;
   seenToolUseCountRef: MutableRefObject<number>;
   streamingMessageIndexRef: MutableRefObject<number>;
+  streamingTurnIdRef: MutableRefObject<number>;
+  turnIdCounterRef: MutableRefObject<number>;
   lastContentUpdateRef: MutableRefObject<number>;
   contentUpdateTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   lastThinkingUpdateRef: MutableRefObject<number>;

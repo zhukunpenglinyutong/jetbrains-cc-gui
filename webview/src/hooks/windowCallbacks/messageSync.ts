@@ -140,6 +140,12 @@ export const preserveLastAssistantIdentity = (
 
   const prevAssistant = prevList[prevAssistantIdx];
   const nextAssistant = nextList[nextAssistantIdx];
+  // Guard: do not merge identity across different streaming turns
+  // Only block when BOTH have __turnId and they differ; allow merge when either lacks __turnId (backward compat)
+  if (prevAssistant.__turnId !== undefined && nextAssistant.__turnId !== undefined &&
+      prevAssistant.__turnId !== nextAssistant.__turnId) {
+    return nextList;
+  }
   const stabilized = preserveMessageIdentity(prevAssistant, nextAssistant);
   if (stabilized === nextAssistant) return nextList;
 
@@ -169,6 +175,13 @@ export const preserveStreamingAssistantContent = (
   const prevAssistant = prevList[prevAssistantIdx];
   const nextAssistant = nextList[nextAssistantIdx];
   if (prevAssistant.type !== 'assistant' || nextAssistant.type !== 'assistant') {
+    return nextList;
+  }
+
+  // Guard: do not merge content across different streaming turns
+  // Only block when BOTH have __turnId and they differ
+  if (prevAssistant.__turnId !== undefined && nextAssistant.__turnId !== undefined &&
+      prevAssistant.__turnId !== nextAssistant.__turnId) {
     return nextList;
   }
 

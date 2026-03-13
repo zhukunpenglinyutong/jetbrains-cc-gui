@@ -29,6 +29,9 @@ export interface ResetTransientUiStateOptions {
   autoExpandedThinkingKeysRef: MutableRefObject<Set<string>>;
   contentUpdateTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   thinkingUpdateTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+
+  // Turn tracking ref (for streaming assistant isolation)
+  streamingTurnIdRef: MutableRefObject<number>;
 }
 
 /**
@@ -54,6 +57,11 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
     opts.activeThinkingSegmentIndexRef.current = -1;
     opts.seenToolUseCountRef.current = 0;
     opts.autoExpandedThinkingKeysRef.current.clear();
+    // Reset active turn ID to prevent stale streaming assistant recovery.
+    // NOTE: turnIdCounterRef is intentionally NOT reset — it must stay monotonically
+    // increasing across sessions so that stale messages from an old session can never
+    // collide with a new session's turn IDs (and React keys like "turn-N" stay unique).
+    opts.streamingTurnIdRef.current = -1;
     if (opts.contentUpdateTimeoutRef.current) {
       clearTimeout(opts.contentUpdateTimeoutRef.current);
       opts.contentUpdateTimeoutRef.current = null;

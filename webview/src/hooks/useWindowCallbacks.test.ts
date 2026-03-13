@@ -64,6 +64,8 @@ describe('useWindowCallbacks integration', () => {
     activeThinkingSegmentIndexRef: { current: -1 },
     seenToolUseCountRef: { current: 0 },
     streamingMessageIndexRef: { current: -1 },
+    streamingTurnIdRef: { current: -1 },
+    turnIdCounterRef: { current: 0 },
     lastContentUpdateRef: { current: 0 },
     contentUpdateTimeoutRef: { current: null },
     lastThinkingUpdateRef: { current: 0 },
@@ -227,6 +229,27 @@ describe('useWindowCallbacks integration', () => {
     expect(isStreamingRef.current).toBe(false);
     expect(streamingContentRef.current).toBe('');
     expect(streamingMessageIndexRef.current).toBe(-1);
+  });
+
+  // ===== clearMessages resets turn tracking refs =====
+
+  it('clearMessages resets streamingTurnIdRef but preserves turnIdCounterRef', () => {
+    const streamingTurnIdRef = { current: 5 };
+    const turnIdCounterRef = { current: 10 };
+    const opts = createOptions({
+      streamingTurnIdRef,
+      turnIdCounterRef,
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      (window as any).clearMessages();
+    });
+
+    // Turn ID should be reset to -1 (no active streaming turn)
+    expect(streamingTurnIdRef.current).toBe(-1);
+    // Counter stays monotonically increasing (NOT reset) so React keys stay unique across sessions
+    expect(turnIdCounterRef.current).toBe(10);
   });
 
   // ===== Full failure scenario: load history fails, guard is released, new messages work =====

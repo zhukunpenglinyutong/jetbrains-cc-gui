@@ -385,4 +385,83 @@ describe('preserveStreamingAssistantContent', () => {
     expect(result[0]).toBe(next[0]); // user message unchanged
     expect(result[1].content).toBe(longContent);
   });
+
+  it('does not merge content across different turn IDs', () => {
+    const longContent = 'long content from turn 1';
+    const prev = [makeAssistantMsg(longContent, { __turnId: 1 })];
+    const next = [makeAssistantMsg('short', { __turnId: 2 })];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref(longContent),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+    expect(result).toBe(next);
+  });
+
+  it('allows merge when both have same turn ID', () => {
+    const longContent = 'long streamed content';
+    const prev = [makeAssistantMsg(longContent, { __turnId: 1 })];
+    const next = [makeAssistantMsg('short', { __turnId: 1 })];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref(longContent),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+    expect(result[0].content).toBe(longContent);
+  });
+
+  it('allows merge when neither has turn ID (backward compat)', () => {
+    const longContent = 'long content without turn ID';
+    const prev = [makeAssistantMsg(longContent)];
+    const next = [makeAssistantMsg('short')];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref(longContent),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+    expect(result[0].content).toBe(longContent);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// preserveLastAssistantIdentity — turn ID guards
+// ---------------------------------------------------------------------------
+
+describe('preserveLastAssistantIdentity — turn ID guards', () => {
+  it('does not merge identity across different turn IDs', () => {
+    const prevTs = '2024-01-01T10:00:00.000Z';
+    const prev = [makeAssistantMsg('a1', { timestamp: prevTs, __turnId: 1 })];
+    const next = [makeAssistantMsg('a2', { timestamp: '2024-01-01T10:00:01.000Z', __turnId: 2 })];
+
+    const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
+    expect(result).toBe(next);
+    expect(result[0].timestamp).not.toBe(prevTs);
+  });
+
+  it('merges identity when both have same turn ID', () => {
+    const prevTs = '2024-01-01T10:00:00.000Z';
+    const prev = [makeAssistantMsg('a1', { timestamp: prevTs, __turnId: 1 })];
+    const next = [makeAssistantMsg('a1 updated', { timestamp: '2024-01-01T10:00:01.000Z', __turnId: 1 })];
+
+    const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
+    expect(result[0].timestamp).toBe(prevTs);
+  });
+
+  it('merges identity when neither has turn ID (backward compat)', () => {
+    const prevTs = '2024-01-01T10:00:00.000Z';
+    const prev = [makeAssistantMsg('a1', { timestamp: prevTs })];
+    const next = [makeAssistantMsg('a1 updated', { timestamp: '2024-01-01T10:00:01.000Z' })];
+
+    const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
+    expect(result[0].timestamp).toBe(prevTs);
+  });
+
+  it('allows merge when only one has turn ID (Java message without turnId)', () => {
+    const prevTs = '2024-01-01T10:00:00.000Z';
+    const prev = [makeAssistantMsg('a1', { timestamp: prevTs, __turnId: 1 })];
+    const next = [makeAssistantMsg('a1', { timestamp: '2024-01-01T10:00:01.000Z' })];
+
+    const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
+    expect(result[0].timestamp).toBe(prevTs);
+  });
 });

@@ -26,13 +26,16 @@ export interface ClaudeRawMessage {
   [key: string]: unknown;
 }
 
+/** Represents a single message in the chat conversation. */
 export interface ClaudeMessage {
   type: ClaudeRole;
   content?: string;
   raw?: ClaudeRawMessage | string;
   timestamp?: string;
-  isStreaming?: boolean; // Marks whether the message is currently being streamed
-  isOptimistic?: boolean; // Marks whether the message is optimistically added by the client (awaiting backend confirmation)
+  isStreaming?: boolean;
+  isOptimistic?: boolean;
+  /** Runtime-only: numeric turn identifier for streaming assistant isolation. */
+  __turnId?: number;
   [key: string]: unknown;
 }
 

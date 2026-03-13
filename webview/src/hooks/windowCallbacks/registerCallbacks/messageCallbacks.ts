@@ -42,10 +42,39 @@ export function registerMessageCallbacks(
     activeThinkingSegmentIndexRef,
     seenToolUseCountRef,
     streamingMessageIndexRef,
+    streamingTurnIdRef,
     findLastAssistantIndex,
     extractRawBlocks,
     patchAssistantForStreaming,
   } = options;
+
+  const ensureStreamingAssistantPreserved = (prevList: ClaudeMessage[], resultList: ClaudeMessage[]): ClaudeMessage[] => {
+    if (!isStreamingRef.current || streamingTurnIdRef.current <= 0) return resultList;
+
+    // Check if result already contains the current streaming assistant
+    const turnId = streamingTurnIdRef.current;
+    const existingIdx = resultList.findIndex((m) => m.__turnId === turnId && m.type === 'assistant');
+    if (existingIdx >= 0) {
+      streamingMessageIndexRef.current = existingIdx;
+      return resultList;
+    }
+
+    // Find the streaming assistant in prev (reverse search for efficiency)
+    let streamingAssistant: ClaudeMessage | undefined;
+    for (let i = prevList.length - 1; i >= 0; i--) {
+      if (prevList[i].__turnId === turnId && prevList[i].type === 'assistant') {
+        streamingAssistant = prevList[i];
+        break;
+      }
+    }
+
+    if (!streamingAssistant) return resultList;
+
+    // Append the streaming assistant to result
+    const result = [...resultList, streamingAssistant];
+    streamingMessageIndexRef.current = result.length - 1;
+    return result;
+  };
 
   window.updateMessages = (json) => {
     // During session transition, ignore message updates from stale session
@@ -87,9 +116,29 @@ export function registerMessageCallbacks(
 
             // FIX: In Claude mode, update streamingMessageIndexRef so that
             // onContentDelta knows which assistant message to update.
-            const lastAssistantIdx = findLastAssistantIndex(result);
+            let lastAssistantIdx = findLastAssistantIndex(result);
+            // Verify the found assistant belongs to the current streaming turn
+            if (lastAssistantIdx >= 0 && streamingTurnIdRef.current > 0 &&
+                result[lastAssistantIdx].__turnId !== streamingTurnIdRef.current) {
+              // Scan for the correct turn ID match (from end, consistent with findLastAssistantIndex)
+              for (let i = result.length - 1; i >= 0; i--) {
+                if (result[i].type === 'assistant' && result[i].__turnId === streamingTurnIdRef.current) {
+                  lastAssistantIdx = i;
+                  break;
+                }
+              }
+            }
             if (lastAssistantIdx >= 0) {
               streamingMessageIndexRef.current = lastAssistantIdx;
+
+              // Always stamp __turnId so ensureStreamingAssistantPreserved can find it,
+              // even before any content delta arrives (streamingContentRef may be empty).
+              if (result[lastAssistantIdx]?.__turnId !== streamingTurnIdRef.current) {
+                result[lastAssistantIdx] = {
+                  ...result[lastAssistantIdx],
+                  __turnId: streamingTurnIdRef.current,
+                };
+              }
 
               // FIX: If there is buffered streaming content (onContentDelta may
               // fire before updateMessages), apply it to the assistant message
@@ -109,12 +158,12 @@ export function registerMessageCallbacks(
               }
             }
 
-            return result;
+            return ensureStreamingAssistantPreserved(prev, result);
           }
 
           const lastAssistantIdx = findLastAssistantIndex(parsed);
           if (lastAssistantIdx < 0) {
-            return appendOptimisticMessageIfMissing(prev, parsed);
+            return ensureStreamingAssistantPreserved(prev, appendOptimisticMessageIfMissing(prev, parsed));
           }
         }
 
@@ -137,13 +186,13 @@ export function registerMessageCallbacks(
           });
 
           smartMerged = preserveLastAssistantIdentity(prev, smartMerged, findLastAssistantIndex);
-          return appendOptimisticMessageIfMissing(prev, smartMerged);
+          return ensureStreamingAssistantPreserved(prev, appendOptimisticMessageIfMissing(prev, smartMerged));
         }
 
         // Streaming + !useBackendStreamingRender: only update on tool_use changes
         const lastAssistantIdx = findLastAssistantIndex(parsed);
         if (lastAssistantIdx < 0) {
-          return parsed;
+          return ensureStreamingAssistantPreserved(prev, parsed);
         }
 
         const lastAssistant = parsed[lastAssistantIdx];
@@ -180,10 +229,13 @@ export function registerMessageCallbacks(
         const patchedAssistantIdx = findLastAssistantIndex(patched);
         if (patchedAssistantIdx >= 0 && patched[patchedAssistantIdx]?.type === 'assistant') {
           streamingMessageIndexRef.current = patchedAssistantIdx;
-          patched[patchedAssistantIdx] = patchAssistantForStreaming(patched[patchedAssistantIdx]);
+          patched[patchedAssistantIdx] = patchAssistantForStreaming({
+            ...patched[patchedAssistantIdx],
+            __turnId: streamingTurnIdRef.current,
+          });
         }
 
-        return patched;
+        return ensureStreamingAssistantPreserved(prev, patched);
       });
     } catch (error) {
       console.error('[Frontend] Failed to parse messages:', error);
@@ -237,6 +289,7 @@ export function registerMessageCallbacks(
   };
 
   window.addHistoryMessage = (message: ClaudeMessage) => {
+    if (window.__sessionTransitioning) return;
     setMessages((prev) => [...prev, message]);
   };
 
@@ -252,6 +305,7 @@ export function registerMessageCallbacks(
   };
 
   window.addUserMessage = (content: string) => {
+    if (window.__sessionTransitioning) return;
     const userMessage: ClaudeMessage = {
       type: 'user',
       content: content || '',

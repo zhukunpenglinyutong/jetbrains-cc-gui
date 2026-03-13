@@ -24,6 +24,8 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     activeThinkingSegmentIndexRef,
     seenToolUseCountRef,
     streamingMessageIndexRef,
+    streamingTurnIdRef,
+    turnIdCounterRef,
     lastContentUpdateRef,
     contentUpdateTimeoutRef,
     lastThinkingUpdateRef,
@@ -47,11 +49,15 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
 
     // FIX: Always reset streamingMessageIndexRef regardless of backend streaming mode
     streamingMessageIndexRef.current = -1;
+    turnIdCounterRef.current += 1;
+    streamingTurnIdRef.current = turnIdCounterRef.current;
     setMessages((prev) => {
       const last = prev[prev.length - 1];
       if (last?.type === 'assistant' && last?.isStreaming) {
         streamingMessageIndexRef.current = prev.length - 1;
-        return prev;
+        const updated = [...prev];
+        updated[prev.length - 1] = { ...updated[prev.length - 1], __turnId: streamingTurnIdRef.current };
+        return updated;
       }
       streamingMessageIndexRef.current = prev.length;
       return [
@@ -61,6 +67,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           content: '',
           isStreaming: true,
           timestamp: new Date().toISOString(),
+          __turnId: streamingTurnIdRef.current,
         },
       ];
     });
@@ -189,16 +196,18 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
 
     // Flush final content BEFORE marking stream as ended
     setMessages((prev) => {
-      const newMessages = [...prev];
+      if (prev.length === 0) return prev;
       const idx = streamingMessageIndexRef.current;
-      if (idx >= 0 && idx < newMessages.length && newMessages[idx]?.type === 'assistant') {
-        const finalContent = streamingContentRef.current;
-        newMessages[idx] = {
-          ...newMessages[idx],
-          content: finalContent || newMessages[idx].content,
-          isStreaming: false,
-        };
+      if (idx < 0 || idx >= prev.length || prev[idx]?.type !== 'assistant') {
+        return prev;
       }
+      const finalContent = streamingContentRef.current;
+      const newMessages = [...prev];
+      newMessages[idx] = {
+        ...newMessages[idx],
+        content: finalContent || newMessages[idx].content,
+        isStreaming: false,
+      };
       return newMessages;
     });
 
@@ -219,6 +228,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     }
 
     streamingMessageIndexRef.current = -1;
+    streamingTurnIdRef.current = -1;
     streamingContentRef.current = '';
     streamingTextSegmentsRef.current = [];
     activeTextSegmentIndexRef.current = -1;
