@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { isSoundEnabled, setSoundEnabled } from '../../../utils/soundNotification';
 import styles from './style.module.less';
 
 const SunIcon = () => (
@@ -67,6 +69,8 @@ const BasicConfigSection = ({
   sendShortcut = 'enter',
   onSendShortcutChange = () => {},
 }: BasicConfigSectionProps) => {
+  const [soundEnabled, setSoundState] = useState(isSoundEnabled());
+
   const parseMajorVersion = (version: string | null | undefined): number => {
     if (!version) return 0;
     const versionStr = version.startsWith('v') ? version.substring(1) : version;
@@ -262,6 +266,32 @@ const BasicConfigSection = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>When enabled, AI responses will appear character by character in real-time, instead of waiting for the complete response. May consume more resources.</span>
+        </small>
+      </div>
+
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-unmute" />
+          <span className={styles.fieldLabel}>Sound Notification</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={soundEnabled}
+            onChange={(e) => {
+              setSoundEnabled(e.target.checked);
+              setSoundState(e.target.checked);
+            }}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {soundEnabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>Play a sound when a task completes while the window is not focused.</span>
         </small>
       </div>
 
