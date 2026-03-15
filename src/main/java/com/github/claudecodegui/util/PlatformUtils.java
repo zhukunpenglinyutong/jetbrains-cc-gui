@@ -117,10 +117,10 @@ public class PlatformUtils {
 
                         // If no matching plugin found, use fallback value
                         LOG.warn("Failed to detect plugin ID: no matching plugin found");
-                        cachedPluginId = "com.github.idea-claude-code-gui"; // fallback value
+                        cachedPluginId = "com.github.jetbrains-long-gui"; // fallback value
                     } catch (Exception e) {
                         LOG.warn("Failed to detect plugin ID: " + e.getMessage());
-                        cachedPluginId = "com.github.idea-claude-code-gui"; // fallback value
+                        cachedPluginId = "com.github.jetbrains-long-gui"; // fallback value
                     }
                 }
             }
