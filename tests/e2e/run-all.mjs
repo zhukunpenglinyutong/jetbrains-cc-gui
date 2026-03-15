@@ -49,6 +49,7 @@ const TESTS = [
   'test-auth-warning-bar.mjs',    // Auth warning bar (CDP-injected)
   'test-auth-validation.mjs',     // Auth validation with API calls
   'test-image-attachment.mjs',    // Image attachment flow
+  'test-streaming-and-usage.mjs', // Streaming deltas + token usage
 ];
 
 async function runTest(testFile) {
