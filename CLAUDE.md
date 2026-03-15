@@ -106,6 +106,9 @@ it('calls sendToJava when clicked', async () => {
 **Webview (React):**
 - `webview/src/App.tsx` - Main React app, message rendering, state management
 - `webview/src/utils/bridge.ts` - Java bridge communication (`sendToJava`)
+- `webview/src/hooks/useProviderConfig.ts` - Model/provider/reasoning effort state
+- `webview/src/hooks/useChatHandlers.ts` - Chat handlers, bridge event dispatch
+- `webview/src/components/ChatInputBox/types.ts` - Model and reasoning effort types/constants
 - `webview/src/components/PermissionDialog.tsx` - Tool permission UI
 
 **ai-bridge (Node.js):**
@@ -115,8 +118,18 @@ it('calls sendToJava when clicked', async () => {
 - `src/main/java/.../ClaudeSDKToolWindow.java` - Plugin entry, JCEF webview setup
 - `src/main/java/.../handler/MessageDispatcher.java` - Routes messages to handlers
 - `src/main/java/.../handler/SessionHandler.java` - Chat session management
+- `src/main/java/.../handler/SettingsHandler.java` - Settings from webview (model, effort, permissions)
+- `src/main/java/.../handler/HandlerContext.java` - Per-window mutable state
+- `src/main/java/.../session/SessionState.java` - Per-session state
 - `src/main/java/.../permission/PermissionService.java` - Tool approval logic
 - `src/main/java/.../provider/claude/ClaudeSDKBridge.java` - Spawns ai-bridge process
+- `src/main/java/.../provider/claude/ProcessManager.java` - Process registry, cleanup
+- `src/main/java/.../bridge/EnvironmentConfigurator.java` - Env vars for spawned processes
+- `src/main/java/.../settings/WorkingDirectoryManager.java` - CWD resolution
+
+**Architecture docs:**
+- `docs/CODEBASE_MAP.md` - Process spawning paths, lifecycle, env vars, session architecture
+- `docs/UPSTREAM_DELTA.md` - Upstream feature analysis and port candidates
 
 ## Release Checklist
 
@@ -129,11 +142,16 @@ it('calls sendToJava when clicked', async () => {
 
 Note: `build.gradle` auto-generates `<change-notes>` from CHANGELOG.md
 
+## Adding New Features
+
+For full-stack settings/features that span React → Java → bridge.js → SDK, see `.claude/skills/full-stack-feature.md` — documents the exact 11-file path with checklist.
+
 ## Fork History
 
-Originally forked from [zhukunpenglinyutong/idea-claude-code-gui](https://github.com/zhukunpenglinyutong/idea-claude-code-gui). Upstream sync abandoned January 2026.
+Originally forked from [zhukunpenglinyutong/idea-claude-code-gui](https://github.com/zhukunpenglinyutong/idea-claude-code-gui). Upstream sync abandoned January 2026. See `docs/UPSTREAM_DELTA.md` for full feature delta analysis.
 
 **Key differences from upstream:**
 - English-only (removed i18n)
 - Claude-only (removed Codex/multi-provider)
 - Simplified architecture
+- Ported: UTF-8 enforcement, proxy/TLS forwarding, zombie process fixes, CWD dedup, reasoning effort selector

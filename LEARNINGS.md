@@ -34,3 +34,13 @@ Greppable: `grep "#hooks" LEARNINGS.md`
 [2026-02-25] #build #deploy: Java 21 not default — must `export JAVA_HOME=/opt/homebrew/Cellar/openjdk@21/21.0.10/libexec/openjdk.jdk/Contents/Home` before `./gradlew clean buildPlugin`. Deploy: `rm -rf` then `unzip` to `~/Library/Application Support/JetBrains/Rider2025.3/plugins/`. Restart Rider after.
 
 [2026-02-25] #models #architecture: Model IDs are scattered across 9 files (TS types, selectors, defaults in 4 Java files, pricing). When adding/replacing models, grep for old IDs across `*.{ts,tsx,java}` to catch all occurrences. Pricing in ClaudeHistoryReader uses substring matching — new versions in same family match automatically.
+
+[2026-03-15] #feature #full-stack: Adding a new user-facing setting touches 11-12 files across 4 layers (React types → selector → hooks → App.tsx → Java handler → HandlerContext → SessionState → ClaudeSDKBridge → bridge.js → SDK). See `.claude/skills/full-stack-feature.md` for the exact path. Reference impl: reasoning effort selector.
+
+[2026-03-15] #java #charset: 13 instances of `new FileReader()`/`new FileWriter()` without charset use platform default encoding — breaks on Windows with non-UTF-8 locale. Always use `new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)` and equivalent for writers.
+
+[2026-03-15] #process #zombie: 6 process spawning paths exist (see `docs/CODEBASE_MAP.md`). Only the main bridge was registered with ProcessManager. Unregistered processes without timeouts (SessionOperations) can become zombies. Always register with ProcessManager + add a timeout for any new process spawning path.
+
+[2026-03-15] #proxy #env: Corporate proxy users need `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, `NODE_TLS_REJECT_UNAUTHORIZED`, `SSL_CERT_FILE`, `SSL_CERT_DIR` forwarded to spawned Node processes. Done via `EnvironmentConfigurator.configureNetworkEnv()`.
+
+[2026-03-15] #sdk #thinking: Claude Agent SDK `query()` accepts `thinkingBudget` in options to control reasoning depth. Pass as integer (token count). Values: Low=1024, Medium=10000, High=32000. Omit to let SDK decide.
