@@ -359,9 +359,14 @@ async function main() {
     const result = query({ prompt, options });
 
     let currentSessionId = sessionId;
+    let streamingStarted = false;
 
     for await (const msg of result) {
       if (streaming && msg.type === 'stream_event') {
+        if (!streamingStarted) {
+          send({ type: 'stream_start' });
+          streamingStarted = true;
+        }
         const event = msg.event;
         if (event?.type === 'content_block_delta' && event.delta) {
           if (event.delta.type === 'text_delta' && event.delta.text) {
@@ -409,6 +414,10 @@ async function main() {
       if (msg.type === 'result' && msg.is_error) {
         sendError(msg.result || 'Query failed');
       }
+    }
+
+    if (streamingStarted) {
+      send({ type: 'stream_end' });
     }
 
     send({ type: 'done', sessionId: currentSessionId });

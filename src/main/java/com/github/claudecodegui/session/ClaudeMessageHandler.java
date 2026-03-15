@@ -234,7 +234,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         applyTextDeltaToRaw(content);
         textSegmentActive = true;
 
-        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyContentDelta(content);
     }
 
     private void handleSessionId(String content) {
@@ -432,7 +432,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         ensureCurrentAssistantMessageExists();
         applyThinkingDeltaToRaw(content);
         thinkingSegmentActive = true;
-        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyThinkingDelta(content);
     }
 
     private void ensureCurrentAssistantMessageExists() {
