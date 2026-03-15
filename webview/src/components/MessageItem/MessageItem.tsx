@@ -12,6 +12,7 @@ import {
 import { extractMarkdownContent, copyToClipboard } from '../../utils/copyUtils';
 import { formatTime } from '../../utils/helpers';
 import { getMessageText, getContentBlocks } from '../../utils/messageUtils';
+import { MessageUsage } from './MessageUsage';
 import type { ClaudeMessage, TodoItem, ToolResultBlock } from '../../types';
 
 interface MessageItemProps {
@@ -191,6 +192,9 @@ export const MessageItem = ({
           ))
         )}
       </div>
+      {message.type === 'assistant' && !isMessageStreaming && (
+        <MessageUsage raw={message.raw} />
+      )}
     </div>
   );
 };
