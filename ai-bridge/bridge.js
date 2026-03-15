@@ -96,6 +96,24 @@ function readFileCredentials() {
 }
 
 function setupAuthentication() {
+  // Check managed-settings.json for enterprise apiKeyHelper
+  const managedSettingsPath = join(homedir(), '.claude', 'managed-settings.json');
+  try {
+    if (existsSync(managedSettingsPath)) {
+      const managed = JSON.parse(readFileSync(managedSettingsPath, 'utf8'));
+      if (managed.apiKeyHelper) {
+        const apiKey = execSync(managed.apiKeyHelper, { encoding: 'utf8', timeout: 10000 }).trim();
+        if (apiKey) {
+          process.env.ANTHROPIC_API_KEY = apiKey;
+          delete process.env.ANTHROPIC_AUTH_TOKEN;
+          return { authType: 'api_key_helper', source: 'managed-settings.json' };
+        }
+      }
+    }
+  } catch {
+    // managed-settings.json not found or helper failed — fall through to normal auth
+  }
+
   const settings = loadClaudeSettings();
 
   if (settings?.env?.ANTHROPIC_AUTH_TOKEN) {
