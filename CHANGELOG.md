@@ -1,3 +1,8 @@
+##### **v0.2.13** (2026-03-15)
+
+- Add fork attribution to plugin description and README
+- Update model names to Opus 4.6 and Sonnet 4.6 in marketplace description
+
 ##### **v0.2.12** (2026-02-25)
 
 **Proactive Auth Status Indicator**

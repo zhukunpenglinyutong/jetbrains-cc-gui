@@ -10,6 +10,8 @@ IntelliJ IDEA Plugin for Claude Code
 
 A powerful IntelliJ IDEA plugin that provides a visual interface for **Claude Code**, making AI-assisted programming more efficient and intuitive.
 
+> Originally forked from [idea-claude-code-gui](https://github.com/zhukunpenglinyutong/idea-claude-code-gui) by zhukunpenglinyutong — rewritten for English-only, Claude-only use.
+
 ---
 
 ## Key Features

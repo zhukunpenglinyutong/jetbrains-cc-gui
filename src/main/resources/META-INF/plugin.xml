@@ -6,10 +6,12 @@
     <description><![CDATA[
         <p><strong>Claude GUI</strong> - A visual interface for <strong>Claude Code</strong> in JetBrains IDEs. Brings Anthropic's AI programming assistant directly into your workflow.</p>
 
+        <p><em>Originally forked from <a href="https://github.com/zhukunpenglinyutong/idea-claude-code-gui">idea-claude-code-gui</a> by zhukunpenglinyutong — rewritten for English-only, Claude-only use.</em></p>
+
         <h2>Key Features</h2>
         <ul>
             <li><strong>Flexible Authentication</strong>: Works with Claude subscription (Pro/Max) or API key</li>
-            <li><strong>Model Selection</strong>: Switch between Opus 4.5, Sonnet 4, and other Claude models</li>
+            <li><strong>Model Selection</strong>: Switch between Opus 4.6, Sonnet 4.6, and other Claude models</li>
             <li><strong>Plan Mode</strong>: Let Claude analyze and plan before making changes</li>
             <li><strong>Context-aware</strong>: @file references and image support for precise context</li>
             <li><strong>Agent System</strong>: Built-in agents for automated complex tasks</li>
