@@ -136,8 +136,14 @@ function processStreamMessage(msg, state, logPrefix) {
     state.hasStreamEvents = true;
     const event = msg.event;
     if (event) {
+      // Usage tracking during streaming (following CLI's accumulation logic):
+      // - message_start: ACCUMULATE usage across all turns (not reset!)
+      // - message_delta: incremental output_tokens updates
+      // - The accumulatedUsage represents the cumulative total across all turns in multi-turn tool use.
       if (event.type === 'message_start' && event.message?.usage) {
-        state.accumulatedUsage = mergeUsage(null, event.message.usage);
+        // IMPORTANT: Must use mergeUsage(state.accumulatedUsage, ...) to accumulate across turns.
+        // Using mergeUsage(null, ...) would reset and only show the last turn's usage.
+        state.accumulatedUsage = mergeUsage(state.accumulatedUsage, event.message.usage);
       }
       if (event.type === 'message_delta' && event.usage) {
         state.accumulatedUsage = mergeUsage(state.accumulatedUsage, event.usage);
@@ -185,6 +191,11 @@ function processStreamMessage(msg, state, logPrefix) {
     }
   }
 
+  // Emit usage tag for assistant messages.
+  // IMPORTANT: This is the authoritative source for token usage, NOT the accumulatedUsage.
+  // The assistant message's usage field contains the correct cumulative total.
+  // In streaming mode, this overwrites any intermediate [USAGE] values sent during streaming.
+  // The Java backend (ClaudeMessageHandler.handleAssistantMessage) relies on this for correct totals.
   emitUsageTag(msg);
 
   // Output tool_result blocks from user messages
@@ -290,7 +301,9 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
       // Success
       if (retryAttempt > 0) console.log(`[RETRY]${lp} Success after ${retryAttempt} retry attempt(s)`);
       if (streamingEnabled && state.streamStarted) {
-        if (state.accumulatedUsage) emitAccumulatedUsage(state.accumulatedUsage);
+        // NOTE: Do NOT emit accumulatedUsage at stream end.
+        // The assistant message's usage (sent via emitUsageTag at line 200) is the authoritative final value.
+        // Emitting accumulatedUsage here would send a redundant or potentially stale value.
         process.stdout.write('[STREAM_END]\n');
         outerStreamState.streamEnded = true;
       }
@@ -346,7 +359,9 @@ function logLoopError(error, lp) {
  */
 function handleSendError(error, streamState, sdkStderrLines) {
   if (streamState.streamingEnabled && streamState.streamStarted && !streamState.streamEnded) {
-    emitAccumulatedUsage(streamState.accumulatedUsage);
+    // NOTE: Do NOT emit accumulatedUsage at stream end, even on error.
+    // If assistant messages were received, emitUsageTag already sent the correct usage.
+    // If no assistant message was received, the usage would be incomplete anyway.
     process.stdout.write('[STREAM_END]\n');
   }
   const payload = buildConfigErrorPayload(error);

@@ -676,12 +676,17 @@ function processStreamEvent(msg, turnState) {
   const event = msg.event;
   if (!event) return;
 
-  // Handle message_start: reset per-turn accumulator (matches CLI behavior)
+  // Usage tracking during streaming (following CLI's accumulation logic):
+  // - message_start: ACCUMULATE usage across all turns (not reset!)
+  // - message_delta: incremental output_tokens updates
+  // - The accumulatedUsage represents the cumulative total across all turns in multi-turn tool use.
   if (event.type === 'message_start' && event.message?.usage) {
-    turnState.accumulatedUsage = mergeUsage(null, event.message.usage);
+    // IMPORTANT: Must use mergeUsage(turnState.accumulatedUsage, ...) to accumulate across turns.
+    // Using mergeUsage(null, ...) would reset and only show the last turn's usage.
+    turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.message.usage);
   }
 
-  // Handle message_delta: accumulate output_tokens and emit [USAGE] tag
+  // Handle message_delta: accumulate output_tokens and emit [USAGE] tag for real-time feedback
   if (event.type === 'message_delta' && event.usage) {
     turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.usage);
     emitAccumulatedUsage(turnState.accumulatedUsage);
@@ -836,6 +841,11 @@ async function executeTurn(runtime, requestContext, turnMeta) {
     }
 
     processMessageContent(msg, turnState);
+    // Emit usage tag for assistant messages.
+    // IMPORTANT: This is the authoritative source for token usage, NOT the accumulatedUsage.
+    // The assistant message's usage field contains the correct cumulative total.
+    // In streaming mode, this overwrites any intermediate [USAGE] values sent during streaming.
+    // The Java backend (ClaudeMessageHandler.handleAssistantMessage) relies on this for correct totals.
     emitUsageTag(msg);
     processToolResultMessages(msg);
 
@@ -854,10 +864,9 @@ async function executeTurn(runtime, requestContext, turnMeta) {
   }
 
   if (turnState.streamingEnabled && turnState.streamStarted && !turnState.streamEnded) {
-    // Emit final accumulated usage before stream end
-    if (turnState.accumulatedUsage) {
-      emitAccumulatedUsage(turnState.accumulatedUsage);
-    }
+    // NOTE: Do NOT emit accumulatedUsage at stream end.
+    // The assistant message's usage (sent via emitUsageTag above) is the authoritative final value.
+    // Emitting accumulatedUsage here would send a redundant or potentially stale value.
     process.stdout.write('[STREAM_END]\n');
     turnState.streamEnded = true;
   }
@@ -917,10 +926,9 @@ async function sendInternal(params, withAttachments) {
       activeTurnRuntime = null;
     }
     if (turnMeta.state?.streamingEnabled && turnMeta.state?.streamStarted && !turnMeta.state?.streamEnded) {
-      // Emit final accumulated usage before stream end
-      if (turnMeta.state?.accumulatedUsage) {
-        emitAccumulatedUsage(turnMeta.state.accumulatedUsage);
-      }
+      // NOTE: Do NOT emit accumulatedUsage at stream end, even on error.
+      // If an assistant message was received, emitUsageTag already sent the correct usage.
+      // If no assistant message was received, the usage would be incomplete anyway.
       process.stdout.write('[STREAM_END]\n');
       turnMeta.state.streamEnded = true;
     }
