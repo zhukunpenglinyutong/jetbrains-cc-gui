@@ -7,4 +7,17 @@
         <!-- Monitor Terminal Output - Only active when Terminal plugin is installed -->
         <postStartupActivity implementation="com.github.claudecodegui.terminal.TerminalMonitorService"/>
     </extensions>
+
+    <actions>
+        <action id="ClaudeCodeGUI.SendTerminalSelectionToInputAction"
+                class="com.github.claudecodegui.terminal.SendTerminalSelectionToInputAction"
+                icon="/icons/send-to-terminal.svg">
+            <add-to-group group-id="Terminal.OutputContextMenu"
+                          relative-to-action="Terminal.CopySelectedText"
+                          anchor="after"/>
+            <add-to-group group-id="Terminal.PromptContextMenu"
+                          relative-to-action="Terminal.CopySelectedText"
+                          anchor="after"/>
+        </action>
+    </actions>
 </idea-plugin>
