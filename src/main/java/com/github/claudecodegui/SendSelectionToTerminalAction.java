@@ -13,13 +13,10 @@ import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.openapi.wm.ToolWindow;
-import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import com.github.claudecodegui.util.SelectionTextUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import java.io.File;
 
 /**
  * Action that sends selected code to the plugin chat window.
@@ -179,42 +176,7 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
      * Sends the selection information to the plugin chat window.
      */
     private void sendToChatWindow(@NotNull Project project, @NotNull String text) {
-        try {
-            // Get the plugin tool window
-            ToolWindowManager toolWindowManager = ToolWindowManager.getInstance(project);
-            ToolWindow toolWindow = toolWindowManager.getToolWindow("CCG");
-
-            if (toolWindow != null) {
-                // If the window is not visible, activate it first and wait for it to open before sending content
-                if (!toolWindow.isVisible()) {
-                    // Activate the window
-                    toolWindow.activate(() -> {
-                        // After window activation, add a short delay to ensure the UI is fully loaded, then send content
-                        ApplicationManager.getApplication().invokeLater(() -> {
-                            try {
-                                Thread.sleep(300); // Wait 300ms to ensure the UI is fully loaded
-                                ClaudeSDKToolWindow.addSelectionFromExternal(project, text);
-                                LOG.info("窗口已激活并发送内容到项目: " + project.getName());
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            }
-                        });
-                    }, true);
-                } else {
-                    // Window is already open, send content directly
-                    ClaudeSDKToolWindow.addSelectionFromExternal(project, text);
-                    // Ensure the window gains focus
-                    toolWindow.activate(null, true);
-                    LOG.info("聊天窗口已激活并发送内容到项目: " + project.getName());
-                }
-            } else {
-                showError(project, ClaudeCodeGuiBundle.message("send.toolWindowNotFound"));
-            }
-
-        } catch (Exception ex) {
-            showError(project, ClaudeCodeGuiBundle.message("send.sendToChatFailed", ex.getMessage()));
-            LOG.error("Error occurred", ex);
-        }
+        SelectionTextUtils.sendToChatWindow(project, text, "editor");
     }
 
     /**
