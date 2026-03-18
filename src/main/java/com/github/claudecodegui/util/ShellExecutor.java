@@ -265,4 +265,23 @@ public final class ShellExecutor {
                    line.endsWith("/node");
         };
     }
+
+    /**
+     * Create a filter for Claude Code CLI paths.
+     *
+     * @return the line filter
+     */
+    public static Predicate<String> createCliPathFilter() {
+        return line -> {
+            if (line == null || line.isEmpty()) {
+                return false;
+            }
+            // A valid CLI path should start with /, end with /claude or /claude-code, and not contain error messages
+            return (line.startsWith("/") || line.matches("^[A-Za-z]:.*")) &&
+                   !line.contains("not found") &&
+                   !line.contains("command not found") &&
+                   (line.endsWith("/claude") || line.endsWith("/claude-code") ||
+                    line.endsWith("\\claude.cmd") || line.endsWith("\\claude-code.cmd"));
+        };
+    }
 }
