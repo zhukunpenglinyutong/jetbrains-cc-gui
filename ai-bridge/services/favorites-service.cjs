@@ -1,6 +1,6 @@
 /**
- * 收藏服务模块
- * 负责管理会话收藏功能
+ * Favorites service module
+ * Responsible for managing session favorites
  */
 
 const fs = require('fs');
@@ -11,7 +11,7 @@ const FAVORITES_DIR = getCodemossDir();
 const FAVORITES_FILE = path.join(FAVORITES_DIR, 'favorites.json');
 
 /**
- * 确保收藏目录存在
+ * Ensure the favorites directory exists
  */
 function ensureFavoritesDir() {
   if (!fs.existsSync(FAVORITES_DIR)) {
@@ -20,8 +20,8 @@ function ensureFavoritesDir() {
 }
 
 /**
- * 加载收藏数据
- * @returns {Object} 收藏数据，格式: { "sessionId": { "favoritedAt": timestamp } }
+ * Load favorites data
+ * @returns {Object} Favorites data in the format: { "sessionId": { "favoritedAt": timestamp } }
  */
 function loadFavorites() {
   try {
@@ -40,8 +40,8 @@ function loadFavorites() {
 }
 
 /**
- * 保存收藏数据
- * @param {Object} favorites - 收藏数据
+ * Save favorites data
+ * @param {Object} favorites - Favorites data
  */
 function saveFavorites(favorites) {
   try {
@@ -54,9 +54,9 @@ function saveFavorites(favorites) {
 }
 
 /**
- * 添加收藏
- * @param {string} sessionId - 会话ID
- * @returns {boolean} 是否成功
+ * Add a favorite
+ * @param {string} sessionId - Session ID
+ * @returns {boolean} Whether the operation succeeded
  */
 function addFavorite(sessionId) {
   try {
@@ -81,9 +81,9 @@ function addFavorite(sessionId) {
 }
 
 /**
- * 移除收藏
- * @param {string} sessionId - 会话ID
- * @returns {boolean} 是否成功
+ * Remove a favorite
+ * @param {string} sessionId - Session ID
+ * @returns {boolean} Whether the operation succeeded
  */
 function removeFavorite(sessionId) {
   try {
@@ -106,8 +106,8 @@ function removeFavorite(sessionId) {
 }
 
 /**
- * 切换收藏状态
- * @param {string} sessionId - 会话ID
+ * Toggle favorite status
+ * @param {string} sessionId - Session ID
  * @returns {Object} { success: boolean, isFavorited: boolean }
  */
 function toggleFavorite(sessionId) {
@@ -136,8 +136,8 @@ function toggleFavorite(sessionId) {
 }
 
 /**
- * 检查会话是否已收藏
- * @param {string} sessionId - 会话ID
+ * Check whether a session is favorited
+ * @param {string} sessionId - Session ID
  * @returns {boolean}
  */
 function isFavorited(sessionId) {
@@ -146,9 +146,9 @@ function isFavorited(sessionId) {
 }
 
 /**
- * 获取收藏时间
- * @param {string} sessionId - 会话ID
- * @returns {number|null} 收藏时间戳，未收藏返回 null
+ * Get the favorite timestamp
+ * @param {string} sessionId - Session ID
+ * @returns {number|null} Favorite timestamp, or null if not favorited
  */
 function getFavoritedAt(sessionId) {
   const favorites = loadFavorites();
@@ -156,7 +156,7 @@ function getFavoritedAt(sessionId) {
 }
 
 /**
- * 获取所有收藏的会话ID列表（按收藏时间倒序）
+ * Get all favorited session IDs in reverse favorite-time order
  * @returns {string[]}
  */
 function getFavoritedSessionIds() {
@@ -167,7 +167,7 @@ function getFavoritedSessionIds() {
     .map(([sessionId]) => sessionId);
 }
 
-// 使用 CommonJS 导出
+// Export via CommonJS
 module.exports = {
   loadFavorites,
   addFavorite,

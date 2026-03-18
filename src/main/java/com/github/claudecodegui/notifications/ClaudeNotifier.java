@@ -26,7 +26,7 @@ public class ClaudeNotifier {
     public static void showSuccess(@NotNull Project project, String message) {
         show(project, "Claude ✓", message, 5000);
 
-        // 播放任务完成提示音
+        // Play the task completion notification sound
         SoundNotificationService.getInstance().playTaskCompleteSound();
     }
 

@@ -3,7 +3,6 @@
  * Keeps Claude Query processes alive across turns to reduce per-request latency.
  */
 
-import { loadClaudeSdk } from '../../utils/sdk-loader.js';
 import { isCustomBaseUrl, loadClaudeSettings, setupApiKey } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import {
@@ -11,284 +10,45 @@ import {
   resolveModelFromSettings,
   setModelEnvironmentVariables
 } from '../../utils/model-utils.js';
-import { AsyncStream } from '../../utils/async-stream.js';
-import { canUseTool, requestPlanApproval, READ_ONLY_TOOLS } from '../../permission-handler.js';
+import { canUseTool } from '../../permission-handler.js';
 import { buildContentBlocks, loadAttachments } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
-import { emitAccumulatedUsage, mergeUsage } from '../../utils/usage-utils.js';
 import { registerActiveQueryResult, removeSession } from './message-service.js';
-
-const runtimesBySessionId = new Map();
-const anonymousRuntimes = new Set();
-const anonymousRuntimesBySignature = new Map();
-
-let cachedQueryFn = null;
-
-// Tracks the runtime currently executing a turn (for abort support)
-let activeTurnRuntime = null;
-
-const ACCEPT_EDITS_AUTO_APPROVE_TOOLS = new Set([
-  'Write',
-  'Edit',
-  'MultiEdit',
-  'CreateDirectory',
-  'MoveFile',
-  'CopyFile',
-  'Rename'
-]);
-
-const PLAN_MODE_ALLOWED_TOOLS = new Set([
-  'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
-  'ListMcpResources', 'ListMcpResourcesTool',
-  'ReadMcpResource', 'ReadMcpResourceTool',
-  'TodoWrite', 'Skill', 'TaskOutput',
-  'Task',
-  'Write',
-  'Edit',
-  'Bash',
-  'AskUserQuestion',
-  'EnterPlanMode',
-  'ExitPlanMode',
-  'mcp__ace-tool__search_context',
-  'mcp__context7__resolve-library-id',
-  'mcp__context7__query-docs',
-  'mcp__conductor__GetWorkspaceDiff',
-  'mcp__conductor__GetTerminalOutput',
-  'mcp__conductor__AskUserQuestion',
-  'mcp__conductor__DiffComment',
-  'mcp__time__get_current_time',
-  'mcp__time__convert_time'
-]);
-
-const INTERACTIVE_TOOLS = new Set(['AskUserQuestion']);
-
-const MAX_TOOL_RESULT_CONTENT_CHARS = 20000;
-const ERROR_CONTENT_PREFIXES = ['API Error', 'API error', 'Error:', 'Error '];
-
-function truncateString(str, maxLen = 1000) {
-  if (!str || str.length <= maxLen) return str;
-  return str.substring(0, maxLen) + `... [truncated, total ${str.length} chars]`;
-}
-
-function truncateErrorContent(content, maxLen = 1000) {
-  if (!content || content.length <= maxLen) return content;
-  const isError = ERROR_CONTENT_PREFIXES.some(prefix => content.startsWith(prefix));
-  if (!isError) return content;
-  return content.substring(0, maxLen) + `... [truncated, total ${content.length} chars]`;
-}
-
-function truncateToolResultBlock(block) {
-  if (!block || !block.content) return block;
-  const content = block.content;
-  if (typeof content === 'string' && content.length > MAX_TOOL_RESULT_CONTENT_CHARS) {
-    const head = Math.floor(MAX_TOOL_RESULT_CONTENT_CHARS * 0.65);
-    const tail = MAX_TOOL_RESULT_CONTENT_CHARS - head;
-    return {
-      ...block,
-      content: content.substring(0, head) +
-        `\n...\n(truncated, original length: ${content.length} chars)\n...\n` +
-        content.substring(content.length - tail)
-    };
-  }
-  if (Array.isArray(content)) {
-    let changed = false;
-    const truncated = content.map(item => {
-      if (item && item.type === 'text' && typeof item.text === 'string' && item.text.length > MAX_TOOL_RESULT_CONTENT_CHARS) {
-        changed = true;
-        const head = Math.floor(MAX_TOOL_RESULT_CONTENT_CHARS * 0.65);
-        const tail = MAX_TOOL_RESULT_CONTENT_CHARS - head;
-        return {
-          ...item,
-          text: item.text.substring(0, head) +
-            `\n...\n(truncated, original length: ${item.text.length} chars)\n...\n` +
-            item.text.substring(item.text.length - tail)
-        };
-      }
-      return item;
-    });
-    return changed ? { ...block, content: truncated } : block;
-  }
-  return block;
-}
-
-function emitUsageTag(msg) {
-  if (msg.type === 'assistant' && msg.message?.usage) {
-    const {
-      input_tokens = 0,
-      output_tokens = 0,
-      cache_creation_input_tokens = 0,
-      cache_read_input_tokens = 0
-    } = msg.message.usage;
-    console.log('[USAGE]', JSON.stringify({
-      input_tokens,
-      output_tokens,
-      cache_creation_input_tokens,
-      cache_read_input_tokens
-    }));
-  }
-}
-
-function shouldAutoApproveTool(permissionMode, toolName) {
-  if (!toolName) return false;
-  if (INTERACTIVE_TOOLS.has(toolName)) return false;
-  if (permissionMode === 'bypassPermissions') return true;
-  // acceptEdits: auto-approve EDIT tools + READ_ONLY tools
-  if (permissionMode === 'acceptEdits') {
-    return ACCEPT_EDITS_AUTO_APPROVE_TOOLS.has(toolName) || READ_ONLY_TOOLS.has(toolName);
-  }
-  // default mode: READ_ONLY tools require explicit permission confirmation
-  return false;
-}
-
-function createPreToolUseHook(permissionModeState) {
-  const readPermissionMode = () => {
-    // Daemon runtimes are reused across turns. Keep hook mode in sync with
-    // runtime dynamic controls instead of capturing a stale value at creation time.
-    if (permissionModeState && typeof permissionModeState === 'object') {
-      const normalized = normalizePermissionMode(permissionModeState.value);
-      if (permissionModeState.value !== normalized) {
-        permissionModeState.value = normalized;
-      }
-      return normalized;
-    }
-    return normalizePermissionMode(permissionModeState);
-  };
-
-  return async (input) => {
-    let currentPermissionMode = readPermissionMode();
-    const toolName = input?.tool_name;
-
-    if (currentPermissionMode === 'plan') {
-      if (toolName === 'AskUserQuestion') {
-        return { decision: 'approve' };
-      }
-
-      if (toolName === 'Edit' || toolName === 'Bash') {
-        try {
-          const result = await canUseTool(toolName, input?.tool_input);
-          if (result?.behavior === 'allow') {
-            return { decision: 'approve', updatedInput: result.updatedInput ?? input?.tool_input };
-          }
-          return {
-            decision: 'block',
-            reason: result?.message || 'Permission denied'
-          };
-        } catch (error) {
-          return {
-            decision: 'block',
-            reason: 'Permission check failed: ' + (error?.message || String(error))
-          };
-        }
-      }
-
-      if (toolName === 'ExitPlanMode') {
-        try {
-          const result = await requestPlanApproval(input?.tool_input);
-          if (result?.approved) {
-            const nextMode = result.targetMode || 'default';
-            currentPermissionMode = nextMode;
-            if (permissionModeState && typeof permissionModeState === 'object') {
-              permissionModeState.value = nextMode;
-            }
-            return {
-              decision: 'approve',
-              updatedInput: {
-                ...input.tool_input,
-                approved: true,
-                targetMode: nextMode
-              }
-            };
-          }
-          return {
-            decision: 'block',
-            reason: result?.message || 'Plan was rejected by user'
-          };
-        } catch (error) {
-          return {
-            decision: 'block',
-            reason: 'Plan approval failed: ' + (error?.message || String(error))
-          };
-        }
-      }
-
-      if (PLAN_MODE_ALLOWED_TOOLS.has(toolName)) {
-        return { decision: 'approve' };
-      }
-
-      if (toolName?.startsWith('mcp__') && !toolName.includes('Write') && !toolName.includes('Edit')) {
-        return { decision: 'approve' };
-      }
-
-      return {
-        decision: 'block',
-        reason: `Tool "${toolName}" is not allowed in plan mode. Only read-only tools are permitted.`
-      };
-    }
-
-    if (toolName === 'AskUserQuestion') {
-      return { decision: 'approve' };
-    }
-
-    if (shouldAutoApproveTool(currentPermissionMode, toolName)) {
-      return { decision: 'approve' };
-    }
-
-    try {
-      const result = await canUseTool(toolName, input?.tool_input);
-      if (result?.behavior === 'allow') {
-        if (result?.updatedInput !== undefined) {
-          return { decision: 'approve', updatedInput: result.updatedInput };
-        }
-        return { decision: 'approve' };
-      }
-      if (result?.behavior === 'deny') {
-        return {
-          decision: 'block',
-          reason: result?.message || 'Permission denied'
-        };
-      }
-      return {};
-    } catch (error) {
-      return {
-        decision: 'block',
-        reason: 'Permission check failed: ' + (error?.message || String(error))
-      };
-    }
-  };
-}
-
-const VALID_PERMISSION_MODES = new Set(['default', 'plan', 'acceptEdits', 'bypassPermissions']);
-
-function normalizePermissionMode(permissionMode) {
-  if (!permissionMode || permissionMode === '') return 'default';
-  if (VALID_PERMISSION_MODES.has(permissionMode)) return permissionMode;
-  console.warn('[DAEMON] Unknown permission mode, falling back to default:', permissionMode);
-  return 'default';
-}
-
-function buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch) {
-  const material = {
-    cwd: options.cwd || '',
-    additionalDirectories: options.additionalDirectories || [],
-    systemPromptAppend: systemPromptAppend || '',
-    streamingEnabled: !!streamingEnabled,
-    runtimeSessionEpoch: runtimeSessionEpoch || '',
-    model: options.model || ''  // Include model in signature to force runtime recreation on model change
-  };
-  return JSON.stringify(material);
-}
-
-async function ensureQueryFn() {
-  if (cachedQueryFn) return cachedQueryFn;
-  const sdk = await loadClaudeSdk();
-  const queryFn = sdk?.query;
-  if (typeof queryFn !== 'function') {
-    throw new Error('Claude SDK query function not available. Please reinstall dependencies.');
-  }
-  cachedQueryFn = queryFn;
-  return cachedQueryFn;
-}
+import { normalizePermissionMode } from './permission-mode.js';
+import { truncateString } from './message-output-filter.js';
+import {
+  beginRuntimeTurn,
+  cleanupStaleAnonymousRuntimes,
+  cleanupStaleSessionRuntimes,
+  disposeRuntime,
+  registerRuntimeSession,
+  acquireRuntime,
+  buildRuntimeSignature,
+  endRuntimeTurn,
+  resetCachedQueryFn,
+  setCachedQueryFn,
+  touchRuntime,
+} from './runtime-lifecycle.js';
+import {
+  SESSION_CLEANUP_INTERVAL_MS,
+  clearActiveTurnRuntime,
+  clearActiveTurnRuntimeIf,
+  getActiveTurnRuntime,
+  getAllRuntimes,
+  getRuntimeForSession,
+  getSnapshot,
+  resetRegistryState,
+  setActiveTurnRuntime,
+} from './runtime-registry.js';
+import {
+  createTurnState,
+  emitUsageTag,
+  processMessageContent,
+  processStreamEvent,
+  processToolResultMessages,
+  shouldOutputMessage,
+} from './stream-event-processor.js';
 
 function resolveThinkingTokens(params, settings) {
   const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? true;
@@ -368,7 +128,7 @@ async function buildRequestContext(params, withAttachments) {
 
   const baseUrl = process.env.ANTHROPIC_BASE_URL || process.env.ANTHROPIC_API_URL || '';
   if (isCustomBaseUrl(baseUrl)) {
-    console.log('[DEBUG] Custom Base URL detected:', baseUrl);
+    console.debug('[DEBUG] Custom Base URL detected');
   }
 
   const requestedSessionId = (typeof params.sessionId === 'string' && params.sessionId.trim() !== '')
@@ -421,414 +181,13 @@ async function buildRequestContext(params, withAttachments) {
   };
 }
 
-function registerRuntimeSession(runtime, sessionId) {
-  if (!sessionId) return;
-  console.log('[LIFECYCLE] registerRuntimeSession sessionId=' + sessionId
-    + ' epoch=' + (runtime?.runtimeSessionEpoch || '(none)'));
-  for (const [signature, item] of anonymousRuntimesBySignature.entries()) {
-    if (item === runtime) {
-      anonymousRuntimesBySignature.delete(signature);
-    }
-  }
-  for (const [existingSessionId, existingRuntime] of runtimesBySessionId.entries()) {
-    if (existingRuntime === runtime && existingSessionId !== sessionId) {
-      runtimesBySessionId.delete(existingSessionId);
-      removeSession(existingSessionId);
-    }
-  }
-  runtime.sessionId = sessionId;
-  runtime.runtimeSessionEpoch = runtime.runtimeSessionEpoch || null;
-  runtimesBySessionId.set(sessionId, runtime);
-  anonymousRuntimes.delete(runtime);
-  registerActiveQueryResult(sessionId, runtime.query);
-}
-
-async function disposeRuntime(runtime) {
-  if (!runtime || runtime.closed) return;
-  console.log('[LIFECYCLE] disposeRuntime sessionId=' + (runtime.sessionId || '(new)')
-    + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
-    + ' signature=' + (runtime.runtimeSignature || '(none)'));
-  runtime.closed = true;
-  runtime.activeTurnCount = 0;
-
-  try {
-    runtime.inputStream.done();
-  } catch (_) {
-  }
-  try {
-    runtime.query?.close?.();
-  } catch (_) {
-  }
-
-  anonymousRuntimes.delete(runtime);
-  for (const [signature, item] of anonymousRuntimesBySignature.entries()) {
-    if (item === runtime) {
-      anonymousRuntimesBySignature.delete(signature);
-    }
-  }
-  for (const [sessionId, item] of runtimesBySessionId.entries()) {
-    if (item === runtime) {
-      runtimesBySessionId.delete(sessionId);
-      removeSession(sessionId);
-    }
-  }
-}
-
-async function createRuntime(requestContext) {
-  const queryFn = await ensureQueryFn();
-  const initialPermissionMode = normalizePermissionMode(requestContext.permissionMode);
-
-  const runtime = {
-    closed: false,
-    sessionId: requestContext.requestedSessionId || null,
-    runtimeSessionEpoch: requestContext.runtimeSessionEpoch || null,
-    runtimeSignature: requestContext.runtimeSignature,
-    currentModel: requestContext.sdkModelName || null,
-    currentPermissionMode: initialPermissionMode,
-    permissionModeState: { value: initialPermissionMode },
-    currentMaxThinkingTokens: requestContext.maxThinkingTokens ?? null,
-    createdAt: Date.now(),
-    lastUsedAt: Date.now(),
-    activeTurnCount: 0,
-    stderrLines: [],
-    query: null,
-    inputStream: new AsyncStream()
-  };
-
-  const options = {
-    ...requestContext.options,
-    stderr: (data) => {
-      try {
-        const text = (data ?? '').toString().trim();
-        if (!text) return;
-        runtime.stderrLines.push(text);
-        if (runtime.stderrLines.length > 200) {
-          runtime.stderrLines.shift();
-        }
-        console.error(`[SDK-STDERR] ${text}`);
-      } catch (_) {
-      }
-    }
-  };
-  options.hooks = {
-    ...(options.hooks || {}),
-    PreToolUse: [{
-      hooks: [createPreToolUseHook(runtime.permissionModeState)]
-    }]
-  };
-
-  runtime.query = queryFn({
-    prompt: runtime.inputStream,
-    options
-  });
-
-  if (requestContext.requestedSessionId) {
-    runtimesBySessionId.set(requestContext.requestedSessionId, runtime);
-    registerActiveQueryResult(requestContext.requestedSessionId, runtime.query);
-  } else {
-    anonymousRuntimes.add(runtime);
-    anonymousRuntimesBySignature.set(requestContext.runtimeSignature, runtime);
-  }
-
-  console.log('[LIFECYCLE] createRuntime sessionId=' + (runtime.sessionId || '(new)')
-    + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
-    + ' signature=' + runtime.runtimeSignature);
-
-  return runtime;
-}
-
-async function applyDynamicControls(runtime, requestContext) {
-  if (!runtime || runtime.closed) return;
-
-  const targetPermissionMode = normalizePermissionMode(requestContext.permissionMode);
-  if (runtime.currentPermissionMode !== targetPermissionMode) {
-    if (typeof runtime.query?.setPermissionMode === 'function') {
-      try {
-        await runtime.query.setPermissionMode(targetPermissionMode);
-      } catch (error) {
-        console.error('[DAEMON] setPermissionMode failed:', error.message);
-      }
-    }
-    runtime.currentPermissionMode = targetPermissionMode;
-    if (runtime.permissionModeState) {
-      runtime.permissionModeState.value = targetPermissionMode;
-    }
-  }
-
-  const targetModel = requestContext.sdkModelName || null;
-  if (runtime.currentModel !== targetModel && typeof runtime.query?.setModel === 'function') {
-    try {
-      await runtime.query.setModel(targetModel || undefined);
-      runtime.currentModel = targetModel;
-    } catch (error) {
-      console.error('[DAEMON] setModel failed:', error.message);
-    }
-  }
-
-  const targetThinking = requestContext.maxThinkingTokens ?? null;
-  if (runtime.currentMaxThinkingTokens !== targetThinking && typeof runtime.query?.setMaxThinkingTokens === 'function') {
-    try {
-      await runtime.query.setMaxThinkingTokens(targetThinking);
-      runtime.currentMaxThinkingTokens = targetThinking;
-    } catch (error) {
-      console.error('[DAEMON] setMaxThinkingTokens failed:', error.message);
-    }
-  }
-}
-
-function assertRuntimeOwnership(runtime, requestContext) {
-  if (!runtime || runtime.closed) {
-    const err = new Error('Runtime is closed');
-    err.runtimeTerminated = true;
-    throw err;
-  }
-
-  if (requestContext.runtimeSessionEpoch && runtime.runtimeSessionEpoch !== requestContext.runtimeSessionEpoch) {
-    const err = new Error(
-      `Runtime ownership mismatch: expected epoch ${requestContext.runtimeSessionEpoch}, got ${runtime.runtimeSessionEpoch || '(none)'}`
-    );
-    err.runtimeTerminated = true;
-    throw err;
-  }
-
-  if (requestContext.requestedSessionId && runtime.sessionId && runtime.sessionId !== requestContext.requestedSessionId) {
-    const err = new Error(
-      `Runtime ownership mismatch: expected session ${requestContext.requestedSessionId}, got ${runtime.sessionId}`
-    );
-    err.runtimeTerminated = true;
-    throw err;
-  }
-}
-
-/**
- * Mark runtime as executing a turn for idle cleanup to skip active sessions.
- * @param {object} runtime
- */
-function beginRuntimeTurn(runtime) {
-  if (!runtime) return;
-  runtime.activeTurnCount = (runtime.activeTurnCount || 0) + 1;
-}
-
-/**
- * Clean up runtime execution state to avoid stale state after exception or explicit termination.
- * @param {object} runtime
- */
-function endRuntimeTurn(runtime) {
-  if (!runtime) return;
-  runtime.activeTurnCount = Math.max((runtime.activeTurnCount || 0) - 1, 0);
-}
-
-/**
- * Refresh runtime lease time to extend its lifetime.
- * @param {object} runtime
- */
-function touchRuntime(runtime) {
-  if (!runtime || runtime.closed) return;
-  runtime.lastUsedAt = Date.now();
-}
-
-/**
- * Unified idle cleanup check: only reclaim truly idle and timed-out runtimes.
- * @param {object} runtime
- * @param {number} now Current timestamp
- * @param {number} maxIdleMs Maximum idle time in milliseconds
- * @returns {boolean}
- */
-function canDisposeIdleRuntime(runtime, now, maxIdleMs) {
-  if (!runtime || runtime.closed) return false;
-  if (now - runtime.createdAt > RUNTIME_MAX_ABSOLUTE_LIFETIME_MS) return true;
-  if ((runtime.activeTurnCount || 0) > 0) return false;
-  return now - runtime.lastUsedAt > maxIdleMs;
-}
-
-const RUNTIME_MAX_ABSOLUTE_LIFETIME_MS = 6 * 60 * 60 * 1000; // 6 hours
-const ANONYMOUS_RUNTIME_MAX_IDLE_MS = 10 * 60 * 1000; // 10 minutes
-const SESSION_RUNTIME_MAX_IDLE_MS = 30 * 60 * 1000; // 30 minutes
-const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-async function cleanupStaleAnonymousRuntimes() {
-  const now = Date.now();
-  const snapshot = [...anonymousRuntimes];
-  for (const runtime of snapshot) {
-    if (runtime.closed) {
-      anonymousRuntimes.delete(runtime);
-      continue;
-    }
-    if (canDisposeIdleRuntime(runtime, now, ANONYMOUS_RUNTIME_MAX_IDLE_MS)) {
-      console.log(`[DAEMON] Disposing stale anonymous runtime (idle ${Math.round((now - runtime.lastUsedAt) / 1000)}s)`);
-      await disposeRuntime(runtime);
-    }
-  }
-}
-
-/**
- * Clean up timed-out session runtimes, skipping runtimes still executing.
- */
-async function cleanupStaleSessionRuntimes() {
-  const now = Date.now();
-  for (const [sessionId, runtime] of runtimesBySessionId.entries()) {
-    if (runtime.closed) {
-      runtimesBySessionId.delete(sessionId);
-      continue;
-    }
-    if (canDisposeIdleRuntime(runtime, now, SESSION_RUNTIME_MAX_IDLE_MS)) {
-      console.log(`[DAEMON] Disposing stale session runtime ${sessionId} (idle ${Math.round((now - runtime.lastUsedAt) / 1000)}s)`);
-      await disposeRuntime(runtime);
-    }
-  }
-}
-
 // Background cleanup of idle session runtimes, decoupled from the request hot path.
 // Runs every 5 minutes instead of on every acquireRuntime call to avoid O(n) scans.
 const _sessionCleanupTimer = setInterval(async () => {
-  await cleanupStaleSessionRuntimes();
+  await cleanupStaleSessionRuntimes({ registerActiveQueryResult, removeSession });
 }, SESSION_CLEANUP_INTERVAL_MS);
 // unref() so the timer does not prevent natural process exit
 _sessionCleanupTimer.unref();
-
-async function acquireRuntime(requestContext) {
-  // Periodically clean up idle anonymous runtimes to prevent memory leaks
-  await cleanupStaleAnonymousRuntimes();
-
-  let runtime = null;
-  if (requestContext.requestedSessionId) {
-    runtime = runtimesBySessionId.get(requestContext.requestedSessionId) || null;
-  } else {
-    runtime = anonymousRuntimesBySignature.get(requestContext.runtimeSignature) || null;
-  }
-
-  if (runtime && runtime.runtimeSignature !== requestContext.runtimeSignature) {
-    await disposeRuntime(runtime);
-    runtime = null;
-  }
-
-  if (runtime && requestContext.runtimeSessionEpoch && runtime.runtimeSessionEpoch !== requestContext.runtimeSessionEpoch) {
-    console.log('[LIFECYCLE] disposeRuntimeForEpochMismatch existing=' + (runtime.runtimeSessionEpoch || '(none)')
-      + ' requested=' + requestContext.runtimeSessionEpoch);
-    await disposeRuntime(runtime);
-    runtime = null;
-  }
-
-  if (!runtime) {
-    runtime = await createRuntime(requestContext);
-  } else {
-    console.log('[LIFECYCLE] reuseRuntime sessionId=' + (runtime.sessionId || '(new)')
-      + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
-      + ' signature=' + runtime.runtimeSignature);
-  }
-
-  assertRuntimeOwnership(runtime, requestContext);
-  await applyDynamicControls(runtime, requestContext);
-  touchRuntime(runtime);
-  return runtime;
-}
-
-function processStreamEvent(msg, turnState) {
-  const event = msg.event;
-  if (!event) return;
-
-  // Usage tracking during streaming (following CLI's accumulation logic):
-  // - message_start: ACCUMULATE usage across all turns (not reset!)
-  // - message_delta: incremental output_tokens updates
-  // - The accumulatedUsage represents the cumulative total across all turns in multi-turn tool use.
-  if (event.type === 'message_start' && event.message?.usage) {
-    // IMPORTANT: Must use mergeUsage(turnState.accumulatedUsage, ...) to accumulate across turns.
-    // Using mergeUsage(null, ...) would reset and only show the last turn's usage.
-    turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.message.usage);
-  }
-
-  // Handle message_delta: accumulate output_tokens and emit [USAGE] tag for real-time feedback
-  if (event.type === 'message_delta' && event.usage) {
-    turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.usage);
-    emitAccumulatedUsage(turnState.accumulatedUsage);
-  }
-
-  // Handle content_block_delta: text and thinking deltas
-  if (event.type === 'content_block_delta' && event.delta) {
-    if (event.delta.type === 'text_delta' && event.delta.text) {
-      process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(event.delta.text)}\n`);
-      turnState.lastAssistantContent += event.delta.text;
-    } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
-      process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(event.delta.thinking)}\n`);
-      turnState.lastThinkingContent += event.delta.thinking;
-    }
-  }
-}
-
-function processMessageContent(msg, turnState) {
-  if (msg.type !== 'assistant') return;
-  const content = msg.message?.content;
-
-  if (Array.isArray(content)) {
-    for (const block of content) {
-      if (block.type === 'text') {
-        const currentText = block.text || '';
-        if (turnState.streamingEnabled && !turnState.hasStreamEvents && currentText.length > turnState.lastAssistantContent.length) {
-          const delta = currentText.substring(turnState.lastAssistantContent.length);
-          if (delta) {
-            process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
-          }
-          turnState.lastAssistantContent = currentText;
-        } else if (turnState.streamingEnabled && turnState.hasStreamEvents) {
-          if (currentText.length > turnState.lastAssistantContent.length) {
-            turnState.lastAssistantContent = currentText;
-          }
-        } else if (!turnState.streamingEnabled) {
-          console.log('[CONTENT]', truncateErrorContent(currentText));
-        }
-      } else if (block.type === 'thinking') {
-        const thinkingText = block.thinking || block.text || '';
-        if (turnState.streamingEnabled && !turnState.hasStreamEvents && thinkingText.length > turnState.lastThinkingContent.length) {
-          const delta = thinkingText.substring(turnState.lastThinkingContent.length);
-          if (delta) {
-            process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
-          }
-          turnState.lastThinkingContent = thinkingText;
-        } else if (turnState.streamingEnabled && turnState.hasStreamEvents) {
-          if (thinkingText.length > turnState.lastThinkingContent.length) {
-            turnState.lastThinkingContent = thinkingText;
-          }
-        } else if (!turnState.streamingEnabled) {
-          console.log('[THINKING]', thinkingText);
-        }
-      }
-    }
-  } else if (typeof content === 'string') {
-    if (turnState.streamingEnabled && !turnState.hasStreamEvents && content.length > turnState.lastAssistantContent.length) {
-      const delta = content.substring(turnState.lastAssistantContent.length);
-      if (delta) {
-        process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
-      }
-      turnState.lastAssistantContent = content;
-    } else if (turnState.streamingEnabled && turnState.hasStreamEvents) {
-      if (content.length > turnState.lastAssistantContent.length) {
-        turnState.lastAssistantContent = content;
-      }
-    } else if (!turnState.streamingEnabled) {
-      console.log('[CONTENT]', truncateErrorContent(content));
-    }
-  }
-}
-
-function processToolResultMessages(msg) {
-  if (msg.type !== 'user') return;
-  const content = msg.message?.content ?? msg.content;
-  if (!Array.isArray(content)) return;
-  for (const block of content) {
-    if (block.type === 'tool_result') {
-      console.log('[TOOL_RESULT]', JSON.stringify(truncateToolResultBlock(block)));
-    }
-  }
-}
-
-function shouldOutputMessage(msg, turnState) {
-  if (!(turnState.streamingEnabled && msg.type === 'assistant')) {
-    return true;
-  }
-  const msgContent = msg.message?.content;
-  const hasToolUse = Array.isArray(msgContent) && msgContent.some(block => block.type === 'tool_use');
-  return !!hasToolUse;
-}
 
 async function executeTurn(runtime, requestContext, turnMeta) {
   if (!runtime || runtime.closed) {
@@ -837,20 +196,11 @@ async function executeTurn(runtime, requestContext, turnMeta) {
     throw err;
   }
 
-  activeTurnRuntime = runtime;
+  setActiveTurnRuntime(runtime);
   console.log('[LIFECYCLE] executeTurn sessionId=' + (requestContext.requestedSessionId || runtime.sessionId || '(new)')
     + ' epoch=' + (requestContext.runtimeSessionEpoch || runtime.runtimeSessionEpoch || '(none)'));
 
-  const turnState = {
-    streamingEnabled: requestContext.streamingEnabled,
-    streamStarted: false,
-    streamEnded: false,
-    hasStreamEvents: false,
-    lastAssistantContent: '',
-    lastThinkingContent: '',
-    finalSessionId: requestContext.requestedSessionId || runtime.sessionId || '',
-    accumulatedUsage: null
-  };
+  const turnState = createTurnState(requestContext, runtime);
   if (turnMeta) {
     turnMeta.state = turnState;
   }
@@ -906,7 +256,7 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       if (msg?.type === 'system' && msg.session_id) {
         turnState.finalSessionId = msg.session_id;
         console.log('[SESSION_ID]', msg.session_id);
-        registerRuntimeSession(runtime, msg.session_id);
+        registerRuntimeSession(runtime, msg.session_id, { registerActiveQueryResult, removeSession });
       }
 
       if (msg?.type === 'result') {
@@ -927,7 +277,7 @@ async function executeTurn(runtime, requestContext, turnMeta) {
 
     const finalSessionId = turnState.finalSessionId || runtime.sessionId || requestContext.requestedSessionId || '';
     if (finalSessionId) {
-      registerRuntimeSession(runtime, finalSessionId);
+      registerRuntimeSession(runtime, finalSessionId, { registerActiveQueryResult, removeSession });
     }
 
     console.log('[MESSAGE_END]');
@@ -938,9 +288,7 @@ async function executeTurn(runtime, requestContext, turnMeta) {
   } finally {
     endRuntimeTurn(runtime);
     // Only clear if this runtime still owns the pointer (not cleared by abort)
-    if (activeTurnRuntime === runtime) {
-      activeTurnRuntime = null;
-    }
+    clearActiveTurnRuntimeIf(runtime);
   }
 }
 
@@ -974,13 +322,11 @@ async function sendInternal(params, withAttachments) {
   let requestContext = null;
   try {
     requestContext = await buildRequestContext(safeParams, withAttachments);
-    runtime = await acquireRuntime(requestContext);
+    runtime = await acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
     await executeTurn(runtime, requestContext, turnMeta);
   } catch (error) {
     // Only clear if this runtime still owns the pointer (not cleared by abort)
-    if (activeTurnRuntime === runtime) {
-      activeTurnRuntime = null;
-    }
+    clearActiveTurnRuntimeIf(runtime);
     if (turnMeta.state?.streamingEnabled && turnMeta.state?.streamStarted && !turnMeta.state?.streamEnded) {
       // NOTE: Do NOT emit accumulatedUsage at stream end, even on error.
       // If an assistant message was received, emitUsageTag already sent the correct usage.
@@ -991,7 +337,7 @@ async function sendInternal(params, withAttachments) {
     emitSendError(runtime, error, requestContext);
     // Only dispose if not already disposed by abort
     if (runtime && !runtime.closed && error?.runtimeTerminated) {
-      await disposeRuntime(runtime);
+      await disposeRuntime(runtime, { removeSession });
     }
   }
 }
@@ -1008,7 +354,7 @@ export async function preconnectPersistent(params = {}) {
   const safeParams = params || {};
   const requestContext = await buildRequestContext(safeParams, false);
   console.log('[LIFECYCLE] preconnectPersistent epoch=' + (requestContext.runtimeSessionEpoch || '(none)'));
-  await acquireRuntime(requestContext);
+  await acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
 }
 
 export async function resetRuntimePersistent(params = {}) {
@@ -1018,19 +364,11 @@ export async function resetRuntimePersistent(params = {}) {
 
   console.log('[LIFECYCLE] resetRuntimePersistent targetEpoch=' + (runtimeSessionEpoch || '(all-runtimes)'));
 
-  const runtimes = new Set([
-    ...anonymousRuntimes,
-    ...anonymousRuntimesBySignature.values(),
-    ...runtimesBySessionId.values(),
-    activeTurnRuntime
-  ].filter(Boolean));
+  const runtimes = getAllRuntimes();
 
   for (const runtime of runtimes) {
     if (!runtimeSessionEpoch || runtime.runtimeSessionEpoch === runtimeSessionEpoch) {
-      await disposeRuntime(runtime);
-      if (activeTurnRuntime === runtime) {
-        activeTurnRuntime = null;
-      }
+      await disposeRuntime(runtime, { removeSession });
     }
   }
 }
@@ -1039,14 +377,14 @@ export async function abortCurrentTurn() {
   // Atomic swap: clear first to prevent double-disposal from rapid abort calls.
   // JS is single-threaded so assignment is atomic — only the first caller gets
   // a non-null runtime, subsequent callers see null and exit early.
-  const runtime = activeTurnRuntime;
+  const runtime = getActiveTurnRuntime();
   if (!runtime) return;
   console.log('[LIFECYCLE] abortCurrentTurn epoch=' + (runtime.runtimeSessionEpoch || '(none)'));
-  activeTurnRuntime = null;
+  clearActiveTurnRuntime();
 
   try {
     if (!runtime.closed) {
-      await disposeRuntime(runtime);
+      await disposeRuntime(runtime, { removeSession });
     }
   } catch (error) {
     // Best-effort — log but don't throw so abort always "succeeds"
@@ -1055,41 +393,36 @@ export async function abortCurrentTurn() {
 }
 
 export async function shutdownPersistentRuntimes() {
-  const all = new Set([
-    ...anonymousRuntimes,
-    ...runtimesBySessionId.values()
-  ]);
+  const all = getAllRuntimes();
   for (const runtime of all) {
-    await disposeRuntime(runtime);
+    await disposeRuntime(runtime, { removeSession });
   }
-  anonymousRuntimes.clear();
-  anonymousRuntimesBySignature.clear();
-  runtimesBySessionId.clear();
-  cachedQueryFn = null;
+  resetRegistryState();
+  resetCachedQueryFn();
 }
 
 export const __testing = {
   async resetState() {
     await shutdownPersistentRuntimes();
-    activeTurnRuntime = null;
+    clearActiveTurnRuntime();
   },
   setQueryFn(queryFn) {
-    cachedQueryFn = queryFn;
+    setCachedQueryFn(queryFn);
   },
   async buildRequestContext(params = {}, withAttachments = false) {
     return buildRequestContext(params, withAttachments);
   },
   async acquireRuntime(requestContext) {
-    return acquireRuntime(requestContext);
+    return acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
   },
   async executeTurn(runtime, requestContext, turnMeta = null) {
     return executeTurn(runtime, requestContext, turnMeta);
   },
   async cleanupAnonymousRuntimes() {
-    return cleanupStaleAnonymousRuntimes();
+    return cleanupStaleAnonymousRuntimes({ registerActiveQueryResult, removeSession });
   },
   async cleanupSessionRuntimes() {
-    return cleanupStaleSessionRuntimes();
+    return cleanupStaleSessionRuntimes({ registerActiveQueryResult, removeSession });
   },
   async resetRuntimePersistent(params = {}) {
     return resetRuntimePersistent(params);
@@ -1098,16 +431,12 @@ export const __testing = {
     return abortCurrentTurn();
   },
   setActiveTurnRuntime(runtime) {
-    activeTurnRuntime = runtime;
+    setActiveTurnRuntime(runtime);
   },
   getRuntimeForSession(sessionId) {
-    return runtimesBySessionId.get(sessionId) || null;
+    return getRuntimeForSession(sessionId);
   },
   getSnapshot() {
-    return {
-      anonymousRuntimeCount: anonymousRuntimes.size,
-      sessionRuntimeCount: runtimesBySessionId.size,
-      activeTurnEpoch: activeTurnRuntime?.runtimeSessionEpoch || null
-    };
+    return getSnapshot();
   }
 };

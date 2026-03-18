@@ -1,7 +1,7 @@
 import { STORAGE_KEYS } from '../types/provider';
 
 /**
- * Claude 模型映射配置。
+ * Claude model mapping configuration.
  */
 export interface ClaudeModelMapping {
   main?: string;
@@ -12,7 +12,7 @@ export interface ClaudeModelMapping {
 }
 
 /**
- * 读取 Claude 模型映射。
+ * Read the Claude model mapping.
  */
 export function readClaudeModelMapping(): ClaudeModelMapping {
   try {
@@ -28,14 +28,14 @@ export function readClaudeModelMapping(): ClaudeModelMapping {
 }
 
 /**
- * 判断映射里是否至少包含一个有效模型值。
+ * Check whether the mapping contains at least one valid model value.
  */
 function hasMappingValue(mapping: ClaudeModelMapping): boolean {
   return Object.values(mapping).some(value => value && value.trim().length > 0);
 }
 
 /**
- * 写入 Claude 模型映射，并主动通知同 tab 监听器刷新。
+ * Write the Claude model mapping and proactively notify listeners in the same tab to refresh.
  */
 export function writeClaudeModelMapping(mapping: ClaudeModelMapping): void {
   try {
@@ -45,11 +45,11 @@ export function writeClaudeModelMapping(mapping: ClaudeModelMapping): void {
       localStorage.removeItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING);
     }
 
-    // 同 tab 的 localStorage 写入不会触发原生 storage 事件，这里手动补发一次。
+    // localStorage writes in the same tab do not trigger the native storage event, so dispatch one manually here.
     window.dispatchEvent(new CustomEvent('localStorageChange', {
       detail: { key: STORAGE_KEYS.CLAUDE_MODEL_MAPPING },
     }));
   } catch {
-    // localStorage 不可用或写入失败时静默降级
+    // Gracefully degrade when localStorage is unavailable or the write fails
   }
 }

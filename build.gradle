@@ -461,19 +461,51 @@ tasks.matching { it.name.startsWith('prepareSandbox') }.configureEach {
             throw new GradleException('ai-bridge directory does not exist. Please ensure it has been pulled and dependencies installed.')
         }
         def sandboxRoot = sandboxRootProvider.get().asFile
-        def pluginDir = new File(sandboxRoot, "plugins/${pluginName}")
 
-        def extractedDir = new File(pluginDir, 'ai-bridge')
-        def archiveTarget = new File(pluginDir, 'ai-bridge.zip')
-        def hashTarget = new File(pluginDir, 'ai-bridge.hash')
+        // Find all plugin directories (including versioned ones like IC-2024.3.1/plugins/)
+        def pluginDirs = []
 
-        // Use ant tasks for delete and copy, avoiding project.* methods
-        ant.delete(dir: extractedDir, failonerror: false)
-        ant.delete(file: archiveTarget, failonerror: false)
-        ant.delete(file: hashTarget, failonerror: false)
-        ant.copy(file: archiveSource, todir: pluginDir)
-        if (hashSource.exists()) {
-            ant.copy(file: hashSource, todir: pluginDir)
+        // Direct plugins directory
+        def directPluginDir = new File(sandboxRoot, "plugins/${pluginName}")
+        if (directPluginDir.exists() || directPluginDir.parentFile.exists()) {
+            pluginDirs.add(directPluginDir)
+        }
+
+        // Versioned plugin directories (IC-*/plugins/, PC-*/plugins/, etc.)
+        sandboxRoot.listFiles()?.each { file ->
+            if (file.isDirectory() && file.name.matches(/[A-Z]+-\d+\.\d+\.\d+/)) {
+                def versionedPluginDir = new File(file, "plugins/${pluginName}")
+                if (versionedPluginDir.exists() || versionedPluginDir.parentFile.exists()) {
+                    pluginDirs.add(versionedPluginDir)
+                }
+            }
+        }
+
+        if (pluginDirs.isEmpty()) {
+            println "Warning: No plugin directories found in sandbox"
+        }
+
+        // Copy ai-bridge.zip to all found plugin directories
+        pluginDirs.each { pluginDir ->
+            println "Copying ai-bridge to: ${pluginDir.absolutePath}"
+
+            def extractedDir = new File(pluginDir, 'ai-bridge')
+            def archiveTarget = new File(pluginDir, 'ai-bridge.zip')
+            def hashTarget = new File(pluginDir, 'ai-bridge.hash')
+
+            // Ensure plugin directory exists
+            pluginDir.mkdirs()
+
+            // Use ant tasks for delete and copy, avoiding project.* methods
+            ant.delete(dir: extractedDir, failonerror: false)
+            ant.delete(file: archiveTarget, failonerror: false)
+            ant.delete(file: hashTarget, failonerror: false)
+            ant.copy(file: archiveSource, todir: pluginDir)
+            if (hashSource.exists()) {
+                ant.copy(file: hashSource, todir: pluginDir)
+            }
+
+            println "✓ ai-bridge.zip copied to: ${archiveTarget.absolutePath}"
         }
     }
 }

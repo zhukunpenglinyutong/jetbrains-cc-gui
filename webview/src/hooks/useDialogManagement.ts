@@ -118,6 +118,19 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
 
   // Open ask user question dialog
   const openAskUserQuestionDialog = useCallback((request: AskUserQuestionRequest) => {
+    // If an ask user question dialog is currently open, enqueue the new request instead of overriding.
+    // This avoids losing follow-up requests when multiple questions arrive in quick succession.
+    if (askUserQuestionDialogOpenRef.current || currentAskUserQuestionRequestRef.current) {
+      const currentId = currentAskUserQuestionRequestRef.current?.requestId;
+      const alreadyQueued = pendingAskUserQuestionRequestsRef.current.some(
+        (item) => item.requestId === request.requestId
+      );
+      if (request.requestId !== currentId && !alreadyQueued) {
+        pendingAskUserQuestionRequestsRef.current.push(request);
+      }
+      return;
+    }
+
     currentAskUserQuestionRequestRef.current = request;
     askUserQuestionDialogOpenRef.current = true;
     setCurrentAskUserQuestionRequest(request);
@@ -126,6 +139,19 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
 
   // Open plan approval dialog
   const openPlanApprovalDialog = useCallback((request: PlanApprovalRequest) => {
+    // If a plan approval dialog is currently open, enqueue the new request instead of overriding.
+    // This avoids losing follow-up requests when multiple plan approval requests arrive in quick succession.
+    if (planApprovalDialogOpenRef.current || currentPlanApprovalRequestRef.current) {
+      const currentId = currentPlanApprovalRequestRef.current?.requestId;
+      const alreadyQueued = pendingPlanApprovalRequestsRef.current.some(
+        (item) => item.requestId === request.requestId
+      );
+      if (request.requestId !== currentId && !alreadyQueued) {
+        pendingPlanApprovalRequestsRef.current.push(request);
+      }
+      return;
+    }
+
     currentPlanApprovalRequestRef.current = request;
     planApprovalDialogOpenRef.current = true;
     setCurrentPlanApprovalRequest(request);

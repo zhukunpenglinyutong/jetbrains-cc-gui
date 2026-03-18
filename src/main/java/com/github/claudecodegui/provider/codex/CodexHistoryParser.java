@@ -1,0 +1,157 @@
+package com.github.claudecodegui.provider.codex;
+
+import com.github.claudecodegui.util.TagExtractor;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Parses Codex history session files into DTOs used by the facade and collaborators.
+ */
+class CodexHistoryParser {
+
+    private static final Logger LOG = Logger.getInstance(CodexHistoryParser.class);
+
+    private final Gson gson;
+
+    CodexHistoryParser() {
+        this(new Gson());
+    }
+
+    CodexHistoryParser(Gson gson) {
+        this.gson = gson;
+    }
+
+    CodexHistoryReader.SessionInfo parseSessionFile(Path sessionFile) throws IOException {
+        CodexHistoryReader.SessionInfo session = new CodexHistoryReader.SessionInfo();
+
+        String fileName = sessionFile.getFileName().toString();
+        session.sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
+
+        List<CodexHistoryReader.CodexMessage> messages = new ArrayList<>();
+        int messageCount = 0;
+
+        try (BufferedReader reader = Files.newBufferedReader(sessionFile, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+
+                try {
+                    CodexHistoryReader.CodexMessage msg = gson.fromJson(line, CodexHistoryReader.CodexMessage.class);
+                    if (msg == null) {
+                        continue;
+                    }
+
+                    messages.add(msg);
+
+                    if ("session_meta".equals(msg.type) && msg.payload != null) {
+                        if (msg.payload.has("cwd")) {
+                            session.cwd = msg.payload.get("cwd").getAsString();
+                        }
+
+                        if (msg.payload.has("timestamp")) {
+                            String ts = msg.payload.get("timestamp").getAsString();
+                            session.firstTimestamp = parseTimestamp(ts);
+                            session.lastTimestamp = session.firstTimestamp;
+                        }
+                    }
+
+                    if ("response_item".equals(msg.type)) {
+                        messageCount++;
+                    }
+
+                    if (msg.timestamp != null) {
+                        long ts = parseTimestamp(msg.timestamp);
+                        if (ts > session.lastTimestamp) {
+                            session.lastTimestamp = ts;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.debug("[CodexHistoryReader] Failed to parse line: " + e.getMessage());
+                }
+            }
+        }
+
+        session.messageCount = messageCount;
+        session.title = generateTitle(messages);
+
+        return session;
+    }
+
+    String generateTitle(List<CodexHistoryReader.CodexMessage> messages) {
+        for (CodexHistoryReader.CodexMessage msg : messages) {
+            if (!"event_msg".equals(msg.type) || msg.payload == null) {
+                continue;
+            }
+            String title = extractUserMessageTitle(msg.payload);
+            if (title != null) {
+                return title;
+            }
+        }
+        return null;
+    }
+
+    boolean isValidSession(CodexHistoryReader.SessionInfo session) {
+        if (session.title == null || session.title.isEmpty()) {
+            return false;
+        }
+
+        return session.messageCount >= 1;
+    }
+
+    /**
+     * Extract the first user message title from a single message payload.
+     * Returns the truncated title or null if payload is not a user_message.
+     */
+    String extractUserMessageTitle(JsonObject payload) {
+        if (payload == null) {
+            return null;
+        }
+        if (!payload.has("type") || !"user_message".equals(payload.get("type").getAsString())) {
+            return null;
+        }
+        if (!payload.has("message")) {
+            return null;
+        }
+        String text = payload.get("message").getAsString();
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        text = TagExtractor.extractCommandMessageContent(text);
+        text = text.replace("\n", " ").trim();
+        if (text.length() > 45) {
+            text = text.substring(0, 45) + "...";
+        }
+        return text;
+    }
+
+    long parseTimestamp(String timestamp) {
+        try {
+            return Instant.parse(timestamp).toEpochMilli();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Check if a file is non-empty. Shared across index and aggregation services.
+     */
+    static boolean isNonEmptyFile(Path path) {
+        try {
+            return Files.size(path) > 0;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+}

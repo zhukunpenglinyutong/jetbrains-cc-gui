@@ -1,19 +1,19 @@
 /**
- * 路径处理工具模块 (CommonJS 版本)
- * 负责路径规范化、用户目录处理
+ * Path utility module (CommonJS version)
+ * Responsible for path normalization and home directory handling
  */
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// 缓存真实的用户目录路径，避免重复计算
+// Cache the resolved home directory path to avoid repeated lookups
 let cachedRealHomeDir = null;
 
 /**
- * 获取真实的用户目录路径.
- * 解决 Windows 上用户目录被移动或使用符号链接/Junction 的问题。
- * @returns {string} 真实的用户目录路径
+ * Get the resolved home directory path.
+ * Handles cases on Windows where the user directory is moved or uses a symlink/junction.
+ * @returns {string} Resolved home directory path
  */
 function getRealHomeDir() {
   if (cachedRealHomeDir) {
@@ -32,16 +32,16 @@ function getRealHomeDir() {
 }
 
 /**
- * 获取 .codemoss 配置目录路径.
- * @returns {string} ~/.codemoss 目录路径
+ * Get the .codemoss configuration directory path.
+ * @returns {string} ~/.codemoss directory path
  */
 function getCodemossDir() {
   return path.join(getRealHomeDir(), '.codemoss');
 }
 
 /**
- * 获取 .claude 配置目录路径.
- * @returns {string} ~/.claude 目录路径
+ * Get the .claude configuration directory path.
+ * @returns {string} ~/.claude directory path
  */
 function getClaudeDir() {
   return path.join(getRealHomeDir(), '.claude');

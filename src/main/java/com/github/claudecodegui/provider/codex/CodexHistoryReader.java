@@ -1,28 +1,17 @@
 package com.github.claudecodegui.provider.codex;
 
-import com.github.claudecodegui.cache.SessionIndexCache;
-import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.util.PlatformUtils;
-import com.github.claudecodegui.util.TagExtractor;
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Codex local history reader.
@@ -35,7 +24,23 @@ public class CodexHistoryReader {
     private static final String HOME_DIR = PlatformUtils.getHomeDirectory();
     private static final Path CODEX_SESSIONS_DIR = Paths.get(HOME_DIR, ".codex", "sessions");
 
-    private final Gson gson = new Gson();
+    private final Gson gson;
+    private final CodexHistoryParser parser;
+    private final CodexHistoryIndexService indexService;
+    private final CodexUsageAggregator usageAggregator;
+    private final CodexHistorySessionService sessionService;
+
+    public CodexHistoryReader() {
+        this(CODEX_SESSIONS_DIR, new Gson());
+    }
+
+    CodexHistoryReader(Path sessionsDir, Gson gson) {
+        this.gson = gson;
+        this.parser = new CodexHistoryParser(gson);
+        this.indexService = new CodexHistoryIndexService(sessionsDir, parser);
+        this.usageAggregator = new CodexUsageAggregator(sessionsDir, parser, gson);
+        this.sessionService = new CodexHistorySessionService(sessionsDir, gson);
+    }
 
     /**
      * Session info.
@@ -149,393 +154,7 @@ public class CodexHistoryReader {
      * Uses memory cache and file index for performance optimization.
      */
     public List<SessionInfo> readAllSessions() throws IOException {
-        return readAllSessionsWithCache("__all__");
-    }
-
-    /**
-     * Read all sessions with cache support.
-     *
-     * @param cacheKey cache key (used to distinguish cache entries for different projects)
-     */
-    private List<SessionInfo> readAllSessionsWithCache(String cacheKey) throws IOException {
-        List<SessionInfo> sessions = new ArrayList<>();
-
-        if (!Files.exists(CODEX_SESSIONS_DIR) || !Files.isDirectory(CODEX_SESSIONS_DIR)) {
-            LOG.info("[CodexHistoryReader] Codex sessions directory not found: " + CODEX_SESSIONS_DIR);
-            return sessions;
-        }
-
-        // 1. Check memory cache
-        SessionIndexCache cache = SessionIndexCache.getInstance();
-        List<SessionInfo> cachedSessions = cache.getCodexSessions(cacheKey, CODEX_SESSIONS_DIR);
-        if (cachedSessions != null) {
-            LOG.info("[CodexHistoryReader] Using memory cache for " + cacheKey + ", sessions: " + cachedSessions.size());
-            return cachedSessions;
-        }
-
-        // 2. Check index file and determine update type
-        SessionIndexManager indexManager = SessionIndexManager.getInstance();
-        SessionIndexManager.SessionIndex index = indexManager.readCodexIndex();
-        SessionIndexManager.ProjectIndex projectIndex = index.projects.get(cacheKey);
-        SessionIndexManager.UpdateType updateType = indexManager.getUpdateTypeRecursive(projectIndex, CODEX_SESSIONS_DIR);
-
-        if (updateType == SessionIndexManager.UpdateType.NONE) {
-            // Index is valid, restore from index
-            LOG.info("[CodexHistoryReader] Using file index for " + cacheKey + ", sessions: " + projectIndex.sessions.size());
-            sessions = restoreSessionsFromIndex(projectIndex);
-            // Update memory cache
-            cache.updateCodexCache(cacheKey, CODEX_SESSIONS_DIR, sessions);
-            return sessions;
-        }
-
-        long startTime = System.currentTimeMillis();
-
-        if (updateType == SessionIndexManager.UpdateType.INCREMENTAL && projectIndex != null) {
-            // 3a. Incremental update: only scan new files
-            LOG.info("[CodexHistoryReader] Incremental scan for Codex sessions");
-            sessions = incrementalScan(projectIndex);
-        } else {
-            // 3b. Full scan
-            LOG.info("[CodexHistoryReader] Full scan for Codex sessions");
-            sessions = scanAllSessions();
-
-            // 3c. Preserve existing titles from the old index.
-            // During a FULL scan, generateTitle() re-derives titles from the first
-            // user message.  If the old index already recorded a title for a session,
-            // keep it so that custom titles (overlaid later by enhanceHistoryWithTitles)
-            // and stable auto-generated titles are not needlessly overwritten.
-            if (projectIndex != null && !projectIndex.sessions.isEmpty()) {
-                Map<String, String> existingTitles = new HashMap<>();
-                for (SessionIndexManager.SessionIndexEntry entry : projectIndex.sessions) {
-                    if (entry.title != null && !entry.title.isEmpty()) {
-                        existingTitles.put(entry.sessionId, entry.title);
-                    }
-                }
-                if (!existingTitles.isEmpty()) {
-                    for (SessionInfo session : sessions) {
-                        String oldTitle = existingTitles.get(session.sessionId);
-                        if (oldTitle != null) {
-                            session.title = oldTitle;
-                        }
-                    }
-                    LOG.info("[CodexHistoryReader] Preserved " + existingTitles.size() + " existing titles from old index");
-                }
-            }
-        }
-
-        long scanTime = System.currentTimeMillis() - startTime;
-        LOG.info("[CodexHistoryReader] Scan completed in " + scanTime + "ms, sessions: " + sessions.size());
-
-        // 4. Update index
-        updateCodexIndex(index, cacheKey, sessions);
-        indexManager.saveCodexIndex(index);
-
-        // 5. Update memory cache
-        cache.updateCodexCache(cacheKey, CODEX_SESSIONS_DIR, sessions);
-
-        return sessions;
-    }
-
-    /**
-     * Incremental scan: only scan new files and merge with existing index.
-     */
-    private List<SessionInfo> incrementalScan(SessionIndexManager.ProjectIndex existingIndex) throws IOException {
-        // Get the set of already-indexed session IDs
-        Set<String> indexedIds = existingIndex.getIndexedSessionIds();
-
-        // Restore existing sessions from index
-        List<SessionInfo> sessions = restoreSessionsFromIndex(existingIndex);
-
-        // Scan new files
-        List<SessionInfo> newSessions = new ArrayList<>();
-        try (Stream<Path> paths = Files.walk(CODEX_SESSIONS_DIR)) {
-            List<Path> newFiles = paths
-                                          .filter(Files::isRegularFile)
-                                          .filter(path -> path.toString().endsWith(".jsonl"))
-                                          .filter(path -> {
-                                              String fileName = path.getFileName().toString();
-                                              String sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
-                                              return !indexedIds.contains(sessionId);
-                                          })
-                                          .filter(path -> {
-                                              try {
-                                                  return Files.size(path) > 0;
-                                              } catch (IOException e) {
-                                                  return false;
-                                              }
-                                          })
-                                          .collect(Collectors.toList());
-
-            LOG.info("[CodexHistoryReader] Found " + newFiles.size() + " new Codex session files");
-
-            for (Path sessionFile : newFiles) {
-                try {
-                    SessionInfo session = parseSessionFile(sessionFile);
-                    if (session != null && isValidSession(session)) {
-                        newSessions.add(session);
-                    }
-                } catch (Exception e) {
-                    LOG.warn("[CodexHistoryReader] Failed to parse new session file: " + sessionFile + " - " + e.getMessage());
-                }
-            }
-        }
-
-        LOG.info("[CodexHistoryReader] Incremental scan found " + newSessions.size() + " new valid sessions");
-
-        // Merge old and new sessions
-        sessions.addAll(newSessions);
-
-        // Sort by timestamp descending
-        sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
-
-        return sessions;
-    }
-
-    /**
-     * Restore session list from index.
-     */
-    private List<SessionInfo> restoreSessionsFromIndex(SessionIndexManager.ProjectIndex projectIndex) {
-        List<SessionInfo> sessions = new ArrayList<>();
-        for (SessionIndexManager.SessionIndexEntry entry : projectIndex.sessions) {
-            SessionInfo session = new SessionInfo();
-            session.sessionId = entry.sessionId;
-            session.title = entry.title;
-            session.messageCount = entry.messageCount;
-            session.lastTimestamp = entry.lastTimestamp;
-            session.firstTimestamp = entry.firstTimestamp;
-            session.cwd = entry.cwd;
-            sessions.add(session);
-        }
-        return sessions;
-    }
-
-    /**
-     * Update the Codex index.
-     */
-    private void updateCodexIndex(
-            SessionIndexManager.SessionIndex index,
-            String cacheKey,
-            List<SessionInfo> sessions
-    ) {
-        SessionIndexManager.ProjectIndex projectIndex = new SessionIndexManager.ProjectIndex();
-        projectIndex.lastDirScanTime = System.currentTimeMillis();
-        projectIndex.fileCount = sessions.size();
-
-        for (SessionInfo session : sessions) {
-            SessionIndexManager.SessionIndexEntry entry = new SessionIndexManager.SessionIndexEntry();
-            entry.sessionId = session.sessionId;
-            entry.title = session.title;
-            entry.messageCount = session.messageCount;
-            entry.lastTimestamp = session.lastTimestamp;
-            entry.firstTimestamp = session.firstTimestamp;
-            entry.cwd = session.cwd;
-            projectIndex.sessions.add(entry);
-        }
-
-        index.projects.put(cacheKey, projectIndex);
-    }
-
-    /**
-     * Scan all Codex sessions (original logic).
-     */
-    private List<SessionInfo> scanAllSessions() throws IOException {
-        List<SessionInfo> sessions = new ArrayList<>();
-
-        try (Stream<Path> paths = Files.walk(CODEX_SESSIONS_DIR)) {
-            List<Path> jsonlFiles = paths
-                                            .filter(Files::isRegularFile)
-                                            .filter(path -> path.toString().endsWith(".jsonl"))
-                                            .filter(path -> {
-                                                try {
-                                                    return Files.size(path) > 0;
-                                                } catch (IOException e) {
-                                                    return false;
-                                                }
-                                            })
-                                            .collect(Collectors.toList());
-
-            LOG.info("[CodexHistoryReader] Found " + jsonlFiles.size() + " Codex session files");
-
-            for (Path sessionFile : jsonlFiles) {
-                try {
-                    SessionInfo session = parseSessionFile(sessionFile);
-                    if (session != null && isValidSession(session)) {
-                        sessions.add(session);
-                    }
-                } catch (Exception e) {
-                    LOG.warn("[CodexHistoryReader] Failed to parse session file: " + sessionFile + " - " + e.getMessage());
-                }
-            }
-        }
-
-        sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
-
-        LOG.info("[CodexHistoryReader] Successfully loaded " + sessions.size() + " valid Codex sessions");
-        return sessions;
-    }
-
-    /**
-     * Parse a single session file.
-     */
-    private SessionInfo parseSessionFile(Path sessionFile) throws IOException {
-        SessionInfo session = new SessionInfo();
-
-        String fileName = sessionFile.getFileName().toString();
-        session.sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
-
-        List<CodexMessage> messages = new ArrayList<>();
-        String sessionMeta = null;
-        int messageCount = 0;
-
-        try (BufferedReader reader = Files.newBufferedReader(sessionFile, java.nio.charset.StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.trim().isEmpty()) continue;
-
-                try {
-                    CodexMessage msg = gson.fromJson(line, CodexMessage.class);
-                    if (msg != null) {
-                        messages.add(msg);
-
-                        if ("session_meta".equals(msg.type) && msg.payload != null) {
-                            sessionMeta = msg.payload.toString();
-
-                            if (msg.payload.has("cwd")) {
-                                session.cwd = msg.payload.get("cwd").getAsString();
-                            }
-
-                            if (msg.payload.has("timestamp")) {
-                                try {
-                                    String ts = msg.payload.get("timestamp").getAsString();
-                                    session.firstTimestamp = parseTimestamp(ts);
-                                    session.lastTimestamp = session.firstTimestamp;
-                                } catch (Exception e) {
-                                    // Ignore timestamp parse error
-                                }
-                            }
-                        }
-
-                        if ("response_item".equals(msg.type)) {
-                            messageCount++;
-                        }
-
-                        if (msg.timestamp != null) {
-                            try {
-                                long ts = parseTimestamp(msg.timestamp);
-                                if (ts > session.lastTimestamp) {
-                                    session.lastTimestamp = ts;
-                                }
-                            } catch (Exception e) {
-                                // Ignore timestamp parse error
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    LOG.debug("[CodexHistoryReader] Failed to parse line: " + e.getMessage());
-                }
-            }
-        }
-
-        session.messageCount = messageCount;
-        session.title = generateTitle(messages);
-
-        return session;
-    }
-
-    /**
-     * Generate session title.
-     * Extracts content from the first user_message event_msg.
-     */
-    private String generateTitle(List<CodexMessage> messages) {
-        for (CodexMessage msg : messages) {
-            if ("event_msg".equals(msg.type) && msg.payload != null) {
-                JsonObject payload = msg.payload;
-
-                if (payload.has("type") && "user_message".equals(payload.get("type").getAsString())) {
-                    if (payload.has("message")) {
-                        String text = payload.get("message").getAsString();
-                        if (text != null && !text.isEmpty()) {
-                            text = TagExtractor.extractCommandMessageContent(text);
-                            text = text.replace("\n", " ").trim();
-                            if (text.length() > 45) {
-                                text = text.substring(0, 45) + "...";
-                            }
-                            return text;
-                        }
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Extract text from content.
-     */
-    private String extractTextFromContent(JsonElement contentElem) {
-        if (contentElem == null) {
-            return null;
-        }
-
-        if (contentElem.isJsonPrimitive()) {
-            return contentElem.getAsString();
-        }
-
-        if (contentElem.isJsonArray()) {
-            JsonArray contentArray = contentElem.getAsJsonArray();
-            StringBuilder sb = new StringBuilder();
-
-            for (JsonElement item : contentArray) {
-                if (item.isJsonObject()) {
-                    JsonObject itemObj = item.getAsJsonObject();
-
-                    if (itemObj.has("type") && "text".equals(itemObj.get("type").getAsString())) {
-                        if (itemObj.has("text")) {
-                            if (sb.length() > 0) {
-                                sb.append(" ");
-                            }
-                            sb.append(itemObj.get("text").getAsString());
-                        }
-                    } else if (itemObj.has("type") && "input_text".equals(itemObj.get("type").getAsString())) {
-                        if (itemObj.has("text")) {
-                            if (sb.length() > 0) {
-                                sb.append(" ");
-                            }
-                            sb.append(itemObj.get("text").getAsString());
-                        }
-                    }
-                }
-            }
-
-            String result = sb.toString().trim();
-            return result.isEmpty() ? null : result;
-        }
-
-        return null;
-    }
-
-    /**
-     * Check if session is valid.
-     */
-    private boolean isValidSession(SessionInfo session) {
-        if (session.title == null || session.title.isEmpty()) {
-            return false;
-        }
-
-        return session.messageCount >= 1;
-    }
-
-    /**
-     * Parse timestamp (ISO 8601 format).
-     */
-    private long parseTimestamp(String timestamp) {
-        try {
-            java.time.Instant instant = java.time.Instant.parse(timestamp);
-            return instant.toEpochMilli();
-        } catch (Exception e) {
-            return 0;
-        }
+        return indexService.readAllSessions();
     }
 
     /**
@@ -637,113 +256,8 @@ public class CodexHistoryReader {
         return normalized;
     }
 
-    /**
-     * Check if command is a file/directory viewing operation.
-     */
-    private boolean isFileViewingCommand(String command) {
-        if (command == null || command.isEmpty()) {
-            return false;
-        }
-        String trimmed = command.trim();
-        return trimmed.matches("^(pwd|ls|cat|head|tail|tree|file|stat)\\b.*") ||
-                       trimmed.matches("^sed\\s+-n\\s+.*");
-    }
-
-    /**
-     * Transform Codex function_call to Claude compatible format.
-     * Converts file viewing shell_command to read tool.
-     */
-    private CodexMessage transformFunctionCall(CodexMessage msg) {
-        if (msg == null || !"response_item".equals(msg.type) || msg.payload == null) {
-            return msg;
-        }
-
-        JsonObject payload = msg.payload;
-
-        if (!payload.has("type") || !"function_call".equals(payload.get("type").getAsString())) {
-            return msg;
-        }
-
-        if (!payload.has("name") || !"shell_command".equals(payload.get("name").getAsString())) {
-            return msg;
-        }
-
-        if (!payload.has("arguments")) {
-            return msg;
-        }
-
-        try {
-            String argumentsStr = payload.get("arguments").getAsString();
-            JsonObject arguments = gson.fromJson(argumentsStr, JsonObject.class);
-
-            if (arguments != null && arguments.has("command")) {
-                String command = arguments.get("command").getAsString();
-
-                if (isFileViewingCommand(command)) {
-                    payload.addProperty("name", "read");
-                    LOG.debug("[CodexHistoryReader] Transformed shell_command to read for: " + command);
-                }
-            }
-        } catch (Exception e) {
-            LOG.debug("[CodexHistoryReader] Failed to parse arguments: " + e.getMessage());
-        }
-
-        return msg;
-    }
-
-    /**
-     * Read a single session's messages.
-     */
     public String getSessionMessagesAsJson(String sessionId) {
-        try {
-            Path sessionFile = findSessionFile(sessionId);
-            if (sessionFile == null) {
-                LOG.warn("[CodexHistoryReader] Session file not found for: " + sessionId);
-                return gson.toJson(new ArrayList<>());
-            }
-
-            List<CodexMessage> messages = new ArrayList<>();
-
-            try (BufferedReader reader = Files.newBufferedReader(sessionFile, java.nio.charset.StandardCharsets.UTF_8)) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.trim().isEmpty()) continue;
-
-                    try {
-                        CodexMessage msg = gson.fromJson(line, CodexMessage.class);
-                        if (msg != null) {
-                            msg = transformFunctionCall(msg);
-                            messages.add(msg);
-                        }
-                    } catch (Exception e) {
-                        LOG.debug("[CodexHistoryReader] Failed to parse message: " + e.getMessage());
-                    }
-                }
-            }
-
-            return gson.toJson(messages);
-        } catch (Exception e) {
-            LOG.error("[CodexHistoryReader] Failed to read session messages: " + e.getMessage(), e);
-            return gson.toJson(new ArrayList<>());
-        }
-    }
-
-    /**
-     * Find session file.
-     */
-    private Path findSessionFile(String sessionId) throws IOException {
-        if (!Files.exists(CODEX_SESSIONS_DIR)) {
-            return null;
-        }
-
-        try (Stream<Path> paths = Files.walk(CODEX_SESSIONS_DIR)) {
-            return paths
-                           .filter(Files::isRegularFile)
-                           .filter(path -> path.getFileName().toString().startsWith(sessionId))
-                           .filter(path -> path.toString().endsWith(".jsonl"))
-                           .findFirst()
-                           .orElse(null);
-        }
+        return sessionService.getSessionMessagesAsJson(sessionId);
     }
 
     /**
@@ -1072,5 +586,6 @@ public class CodexHistoryReader {
             stats.weeklyComparison.trends.tokens =
                     ((stats.weeklyComparison.currentWeek.tokens - stats.weeklyComparison.lastWeek.tokens) / (double) stats.weeklyComparison.lastWeek.tokens) * 100.0;
         }
+        return usageAggregator.getProjectStatistics(projectPath, cutoffTime);
     }
 }

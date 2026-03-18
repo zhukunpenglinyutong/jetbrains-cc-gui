@@ -92,10 +92,10 @@ function getProcesses() {
 
     if (!isClaude && !isDaemon && !isStreamJson) continue
 
-    // 排除 MCP 插件进程
+    // Exclude MCP plugin processes
     if (isMcp) continue
 
-    // 排除系统 daemon（cloudd, cfprefsd 等）
+    // Exclude system daemons (cloudd, cfprefsd, etc.)
     if (command.includes('cloudd') || command.includes('cfprefsd')) continue
 
     let type = '未知'
@@ -193,7 +193,7 @@ function ask(question) {
   return new Promise(resolve => rl.question(question, answer => { rl.close(); resolve(answer.trim()) }))
 }
 
-// --- 主流程 ---
+// --- Main flow ---
 console.log('\n  Claude 进程管理工具')
 console.log('  ==================\n')
 
@@ -217,7 +217,7 @@ if (answer.toLowerCase() === 'y') {
   }
 }
 
-// 关闭后再查一次
+// Check again after closing processes
 const remaining = getProcesses()
 if (remaining.length > 0) {
   console.log('  关闭后剩余进程:')

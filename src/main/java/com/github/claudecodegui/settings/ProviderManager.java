@@ -666,12 +666,12 @@ public class ProviderManager {
     }
 
     /**
-     * 归一化 Claude 当前 Provider。
-     * 首次启动或旧配置未设置 current 时，默认回退到本地 settings.json，
-     * 这样前端初始化时就能拿到稳定的模型映射来源。
+     * Normalize the current Claude provider.
+     * On first launch, or when older configs do not define current, default back to the local
+     * settings.json so the frontend initializes with a stable source for model mapping.
      *
-     * @param config 当前插件配置
-     * @return 可用的 current provider id
+     * @param config current plugin configuration
+     * @return available current provider id
      */
     private String normalizeCurrentClaudeProviderId(JsonObject config) {
         boolean changed = false;
@@ -696,7 +696,7 @@ public class ProviderManager {
             currentId = claude.get("current").getAsString();
         }
 
-        // current 为空，或指向了已删除的 provider 时，统一回退到本地 settings.json。
+        // If current is blank or points to a deleted provider, fall back to the local settings.json provider.
         if (currentId == null
                 || currentId.trim().isEmpty()
                 || (!LOCAL_SETTINGS_PROVIDER_ID.equals(currentId) && !providers.has(currentId))) {

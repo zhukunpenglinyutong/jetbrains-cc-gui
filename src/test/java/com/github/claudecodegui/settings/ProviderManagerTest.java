@@ -13,11 +13,11 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * ProviderManager 回归测试。
+ * Regression tests for ProviderManager.
  */
 public class ProviderManagerTest {
     /**
-     * current 为空时，应默认启用本地 settings.json Provider。
+     * When current is blank, the local settings.json provider should be enabled by default.
      */
     @Test
     public void shouldDefaultActiveProviderToLocalSettingsWhenCurrentIsBlank() {
@@ -35,7 +35,7 @@ public class ProviderManagerTest {
     }
 
     /**
-     * current 缺失时，Provider 列表里也应把本地 settings.json 标记为启用状态。
+     * When current is missing, the provider list should also mark the local settings.json provider as active.
      */
     @Test
     public void shouldMarkLocalProviderAsActiveWhenCurrentIsMissing() {
@@ -58,7 +58,7 @@ public class ProviderManagerTest {
     }
 
     /**
-     * 构造仅使用内存配置的 ProviderManager，避免测试依赖真实文件系统。
+     * Build a ProviderManager backed only by in-memory config to avoid depending on the real filesystem in tests.
      */
     private ProviderManager createProviderManager(AtomicReference<JsonObject> configRef) {
         Gson gson = new Gson();
@@ -81,7 +81,7 @@ public class ProviderManagerTest {
     }
 
     /**
-     * 构造最小 Claude 配置。
+     * Build the minimal Claude configuration.
      */
     private JsonObject createConfigWithCurrent(String current) {
         JsonObject config = new JsonObject();

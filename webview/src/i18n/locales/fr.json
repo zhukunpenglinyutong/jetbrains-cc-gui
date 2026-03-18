@@ -153,7 +153,7 @@
         "hint": "When enabled, AI responses will appear character by character in real-time, instead of waiting for the complete response. May consume more resources."
       },
       "autoOpenFile": {
-        "label": "Ouverture automatique des fichiers",
+        "label": "Envoyer le chemin du fichier ouvert",
         "enabled": "Activé",
         "disabled": "Désactivé",
         "hint": "Lorsqu'activé, sélectionner un fichier dans l'arborescence du projet enverra automatiquement son chemin à l'AI (note : seul le chemin du fichier est envoyé, pas son contenu). Lorsque désactivé, une action manuelle est requise."

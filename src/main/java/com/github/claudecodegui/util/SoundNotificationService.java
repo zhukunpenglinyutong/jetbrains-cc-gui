@@ -24,8 +24,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 声音通知服务
- * 负责在任务完成时播放提示音
+ * Sound notification service
+ * Responsible for playing notification sounds when a task completes
  */
 public class SoundNotificationService {
 
@@ -47,7 +47,7 @@ public class SoundNotificationService {
         SOUND_RESOURCES = Collections.unmodifiableMap(map);
     }
 
-    // 单例模式
+    // Singleton pattern
     private static volatile SoundNotificationService instance;
 
     private SoundNotificationService() {
@@ -130,7 +130,7 @@ public class SoundNotificationService {
     }
 
     /**
-     * 从资源文件播放音频
+     * Play audio from a bundled resource.
      */
     private void playFromResource(String resourcePath) throws Exception {
         try (InputStream rawStream = getClass().getResourceAsStream(resourcePath)) {
@@ -139,7 +139,7 @@ public class SoundNotificationService {
                 return;
             }
 
-            // 使用 BufferedInputStream 包装，因为 AudioSystem 需要 mark/reset 支持
+            // Wrap with BufferedInputStream because AudioSystem requires mark/reset support
             try (BufferedInputStream bufferedStream = new BufferedInputStream(rawStream);
                     AudioInputStream audioIn = AudioSystem.getAudioInputStream(bufferedStream)) {
                 playAudioStream(audioIn);
@@ -177,7 +177,7 @@ public class SoundNotificationService {
     }
 
     /**
-     * 从文件播放音频
+     * Play audio from a file.
      */
     private void playFromFile(String rawPath) throws Exception {
         String normalizedPath = normalizeSoundPath(rawPath);
@@ -194,13 +194,13 @@ public class SoundNotificationService {
 
         String fileName = file.getName().toLowerCase(Locale.ROOT);
 
-        // MP3 格式使用 JLayer 在后台线程解码播放
+        // Decode and play MP3 files with JLayer on a background thread
         if (fileName.endsWith(".mp3")) {
             playMp3(file);
             return;
         }
 
-        // WAV 和 AIFF 格式使用 Java 标准库播放
+        // Play WAV and AIFF files with the Java standard library
         try (AudioInputStream audioIn = AudioSystem.getAudioInputStream(file)) {
             playAudioStream(audioIn);
         }
@@ -213,7 +213,7 @@ public class SoundNotificationService {
     private static final int MP3_PLAYBACK_TIMEOUT_SECONDS = 30;
 
     /**
-     * 使用 JLayer 播放 MP3（后台线程调用，阻塞直到播放结束或超时）。
+     * Play MP3 with JLayer (called from a background thread and blocks until playback completes or times out).
      */
     private void playMp3(File file) throws Exception {
         try (BufferedInputStream bufferedStream = new BufferedInputStream(new FileInputStream(file))) {
@@ -265,15 +265,15 @@ public class SoundNotificationService {
     }
 
     /**
-     * 验证音频文件是否可用
+     * Validate whether an audio file is usable.
      *
-     * @param filePath 文件路径
-     * @return 验证结果，包含成功状态和错误信息
+     * @param filePath file path
+     * @return validation result, including success state and error information
      */
     public ValidationResult validateSoundFile(String filePath) {
         String normalizedPath = normalizeSoundPath(filePath);
         if (normalizedPath == null || normalizedPath.isEmpty()) {
-            return new ValidationResult(true, null); // 空路径表示使用默认声音
+            return new ValidationResult(true, null); // An empty path means the default sound should be used
         }
 
         File file = new File(normalizedPath);
@@ -291,7 +291,7 @@ public class SoundNotificationService {
             return new ValidationResult(false, "Only WAV, MP3, AIFF formats are supported");
         }
 
-        // MP3 使用 JLayer 播放，跳过 AudioSystem 格式校验
+        // MP3 playback uses JLayer, so skip AudioSystem format validation
         if (lowerPath.endsWith(".mp3")) {
             return new ValidationResult(true, null);
         }
@@ -307,7 +307,7 @@ public class SoundNotificationService {
     }
 
     /**
-     * 验证结果
+     * Validation result
      */
     public record ValidationResult(boolean valid, String errorMessage) {
     }
