@@ -1129,6 +1129,10 @@
         "label": "gpt-5.4",
         "description": "Dernier modèle de pointe avec des capacités améliorées."
       },
+      "gpt54mini": {
+        "label": "gpt-5.4-mini",
+        "description": "Modèle GPT-5.4 plus rapide et moins coûteux pour les tâches de codage quotidiennes."
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "Dernier modèle de codage agentique de pointe."

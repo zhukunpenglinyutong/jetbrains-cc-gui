@@ -291,6 +291,11 @@ export const CODEX_MODELS: ModelInfo[] = [
     description: 'Latest frontier model with enhanced capabilities.',
   },
   {
+    id: 'gpt-5.4-mini',
+    label: 'gpt-5.4-mini',
+    description: 'Faster, lower-cost GPT-5.4 model for everyday coding tasks.',
+  },
+  {
     id: 'gpt-5.2-codex',
     label: 'gpt-5.2-codex',
     description: 'Latest frontier agentic coding model.',

@@ -1134,6 +1134,10 @@
         "label": "gpt-5.4",
         "description": "拡張された能力を備えた最新の最先端モデル"
       },
+      "gpt54mini": {
+        "label": "gpt-5.4-mini",
+        "description": "日常的なコーディング作業向けの、より高速で低コストな GPT-5.4 モデル"
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "最新の最先端エージェントコーディングモデル"

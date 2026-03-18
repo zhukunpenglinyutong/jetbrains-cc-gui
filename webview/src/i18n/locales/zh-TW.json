@@ -1134,6 +1134,10 @@
         "label": "gpt-5.4",
         "description": "最新前沿模型，能力進一步增強"
       },
+      "gpt54mini": {
+        "label": "gpt-5.4-mini",
+        "description": "更快、成本更低的 GPT-5.4 模型，適合日常編碼任務"
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "最新前沿智慧編程模型"

@@ -1129,6 +1129,10 @@
         "label": "gpt-5.4",
         "description": "Último modelo de frontera con capacidades mejoradas."
       },
+      "gpt54mini": {
+        "label": "gpt-5.4-mini",
+        "description": "Modelo GPT-5.4 más rápido y de menor costo para tareas cotidianas de programación."
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "Último modelo de codificación agéntico de frontera."
