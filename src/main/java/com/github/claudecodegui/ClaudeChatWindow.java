@@ -1,6 +1,9 @@
 package com.github.claudecodegui;
 
 import com.github.claudecodegui.action.SendShortcutSync;
+import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
+import com.github.claudecodegui.bridge.CLIDetector;
+import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.handler.HandlerContext;
 import com.github.claudecodegui.handler.HistoryHandler;
 import com.github.claudecodegui.handler.MessageDispatcher;
@@ -8,7 +11,9 @@ import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.CLIDaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.settings.CLISettingsManager;
 import com.github.claudecodegui.session.SessionCallbackAdapter;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
@@ -41,6 +46,8 @@ public class ClaudeChatWindow {
     private final JPanel mainPanel;
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final CLIDaemonBridge cliDaemonBridge;
+    private final CLISettingsManager cliSettingsManager;
     private final Project project;
     private final CodemossSettingsService settingsService;
     private final HtmlLoader htmlLoader;
@@ -80,6 +87,14 @@ public class ClaudeChatWindow {
         this.project = project;
         this.claudeSDKBridge = new ClaudeSDKBridge();
         this.codexSDKBridge = new CodexSDKBridge();
+
+        // Initialize CLI components
+        CLIDetector cliDetector = CLIDetector.getInstance();
+        BridgeDirectoryResolver directoryResolver = new BridgeDirectoryResolver();
+        EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
+        this.cliDaemonBridge = new CLIDaemonBridge(cliDetector, directoryResolver, envConfigurator);
+        this.cliSettingsManager = new CLISettingsManager(cliDetector);
+
         this.settingsService = new CodemossSettingsService();
         this.htmlLoader = new HtmlLoader(getClass());
         this.mainPanel = new JPanel(new BorderLayout());
@@ -146,6 +161,16 @@ public class ClaudeChatWindow {
             @Override
             public CodexSDKBridge getCodexSDKBridge() {
                 return codexSDKBridge;
+            }
+
+            @Override
+            public CLIDaemonBridge getCliDaemonBridge() {
+                return cliDaemonBridge;
+            }
+
+            @Override
+            public CLISettingsManager getCliSettingsManager() {
+                return cliSettingsManager;
             }
 
             @Override
@@ -318,6 +343,14 @@ public class ClaudeChatWindow {
 
     public CodexSDKBridge getCodexSDKBridge() {
         return codexSDKBridge;
+    }
+
+    public CLIDaemonBridge getCliDaemonBridge() {
+        return cliDaemonBridge;
+    }
+
+    public CLISettingsManager getCliSettingsManager() {
+        return cliSettingsManager;
     }
 
     public String getSessionId() {
@@ -588,6 +621,15 @@ public class ClaudeChatWindow {
         }
 
         try {
+            if (cliDaemonBridge != null) {
+                LOG.info("Stopping CLI daemon bridge...");
+                cliDaemonBridge.stop();
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to stop CLI daemon bridge: " + e.getMessage());
+        }
+
+        try {
             if (browser != null) {
                 browser.dispose();
                 browser = null;
@@ -684,6 +726,16 @@ public class ClaudeChatWindow {
             public CodexSDKBridge getCodexSDKBridge() {
                 return codexSDKBridge;
             }   // Codex SDK bridge for AI communication
+
+            @Override
+            public CLIDaemonBridge getCliDaemonBridge() {
+                return cliDaemonBridge;
+            }   // CLI daemon bridge for CLI native commands
+
+            @Override
+            public CLISettingsManager getCliSettingsManager() {
+                return cliSettingsManager;
+            }   // CLI settings manager
 
             @Override
             public ClaudeSession getSession() {

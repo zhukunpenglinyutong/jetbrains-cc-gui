@@ -5,6 +5,7 @@ import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.CodemossSettingsService;
 import com.github.claudecodegui.handler.AgentHandler;
 import com.github.claudecodegui.handler.ClipboardHandler;
+import com.github.claudecodegui.handler.CLICommandHandler;
 import com.github.claudecodegui.handler.CodexMcpServerHandler;
 import com.github.claudecodegui.handler.DependencyHandler;
 import com.github.claudecodegui.handler.DiffHandler;
@@ -28,8 +29,10 @@ import com.github.claudecodegui.handler.WindowEventHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.CLIDaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.settings.CLISettingsManager;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
 import com.github.claudecodegui.util.JsUtils;
@@ -74,6 +77,8 @@ public class ChatWindowDelegate {
         Project getProject();
         ClaudeSDKBridge getClaudeSDKBridge();
         CodexSDKBridge getCodexSDKBridge();
+        CLIDaemonBridge getCliDaemonBridge();
+        CLISettingsManager getCliSettingsManager();
         ClaudeSession getSession();
         CodemossSettingsService getSettingsService();
         JPanel getMainPanel();
@@ -252,7 +257,8 @@ public class ChatWindowDelegate {
             }
         };
 
-        HandlerContext handlerContext = new HandlerContext(project, claudeSDKBridge, codexSDKBridge, settingsService, jsCallback);
+        HandlerContext handlerContext = new HandlerContext(project, claudeSDKBridge, codexSDKBridge,
+                host.getCliDaemonBridge(), settingsService, jsCallback);
         handlerContext.setSession(host.getSession());
         host.setHandlerContext(handlerContext);
 
@@ -277,6 +283,15 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new UndoFileHandler(handlerContext));
         messageDispatcher.registerHandler(new DependencyHandler(handlerContext));
         messageDispatcher.registerHandler(new ClipboardHandler(handlerContext));
+
+        // CLI command handler - register after built-in handlers but before PromptHandler
+        // This ensures CLI native commands are handled properly with fallback to API
+        CLICommandHandler cliCommandHandler = new CLICommandHandler(
+                handlerContext,
+                host.getCliDaemonBridge(),
+                host.getCliSettingsManager()
+        );
+        messageDispatcher.registerHandler(cliCommandHandler);
 
         // Window event handler
         messageDispatcher.registerHandler(new WindowEventHandler(handlerContext, new WindowEventHandler.Callback() {

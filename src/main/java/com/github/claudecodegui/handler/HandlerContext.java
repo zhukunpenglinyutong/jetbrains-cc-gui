@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler;
 import com.github.claudecodegui.ClaudeSession;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.CLIDaemonBridge;
 import com.github.claudecodegui.CodemossSettingsService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
@@ -19,6 +20,7 @@ public class HandlerContext {
     private final Project project;
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final CLIDaemonBridge cliDaemonBridge;
     private final CodemossSettingsService settingsService;
     private final JsCallback jsCallback;
 
@@ -44,9 +46,21 @@ public class HandlerContext {
             CodemossSettingsService settingsService,
             JsCallback jsCallback
     ) {
+        this(project, claudeSDKBridge, codexSDKBridge, null, settingsService, jsCallback);
+    }
+
+    private HandlerContext(
+            Project project,
+            ClaudeSDKBridge claudeSDKBridge,
+            CodexSDKBridge codexSDKBridge,
+            CLIDaemonBridge cliDaemonBridge,
+            CodemossSettingsService settingsService,
+            JsCallback jsCallback
+    ) {
         this.project = project;
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
+        this.cliDaemonBridge = cliDaemonBridge;
         this.settingsService = settingsService;
         this.jsCallback = jsCallback;
     }
@@ -62,6 +76,10 @@ public class HandlerContext {
 
     public CodexSDKBridge getCodexSDKBridge() {
         return codexSDKBridge;
+    }
+
+    public CLIDaemonBridge getCliDaemonBridge() {
+        return cliDaemonBridge;
     }
 
     public CodemossSettingsService getSettingsService() {

@@ -7,6 +7,8 @@ import com.github.claudecodegui.handler.HandlerContext;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.CLIDaemonBridge;
+import com.github.claudecodegui.settings.CLISettingsManager;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -40,6 +42,10 @@ public class SessionLifecycleManager {
         ClaudeSDKBridge getClaudeSDKBridge();
 
         CodexSDKBridge getCodexSDKBridge();
+
+        CLIDaemonBridge getCliDaemonBridge();
+
+        CLISettingsManager getCliSettingsManager();
 
         ClaudeSession getSession();
 

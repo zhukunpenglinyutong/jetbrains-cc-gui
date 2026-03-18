@@ -58,6 +58,28 @@ public final class SlashCommandRegistry {
     }
 
     /**
+     * A parsed command with name and arguments pre-extracted.
+     * Caches the split result to avoid redundant parsing.
+     */
+    public static record ParsedCommand(String name, String args) {
+        /**
+         * Parse a command string into name and args.
+         * @param command the command string (e.g., "/plan build feature")
+         * @return ParsedCommand with name and args
+         */
+        public static ParsedCommand parse(String command) {
+            if (command == null || command.isEmpty()) {
+                return new ParsedCommand("", "");
+            }
+            String trimmed = command.trim();
+            String[] parts = trimmed.split("\\s+", 2);
+            String name = parts.length > 0 ? parts[0] : "";
+            String args = parts.length > 1 ? parts[1] : "";
+            return new ParsedCommand(name, args);
+        }
+    }
+
+    /**
      * Installed plugin descriptor from installed_plugins.json.
      */
     private record InstalledPlugin(String pluginId, String installPath, String version) {
@@ -1424,5 +1446,95 @@ public final class SlashCommandRegistry {
             }
         }
         return new ArrayList<>(merged.values());
+    }
+
+    // ============================================================================
+    // CLI Native Command Detection
+    // ============================================================================
+
+    /**
+     * CLI native commands that should be routed to the CLI daemon.
+     */
+    private static final Set<String> CLI_NATIVE_COMMANDS = Set.of(
+            "/plan",
+            "/review",
+            "/commit",
+            "/babysit",
+            "/loop",
+            "/skills",
+            "/config",
+            "/providers",
+            "/mcp",
+            "/mode"
+    );
+
+    /**
+     * Built-in plugin commands that should NOT be routed to CLI.
+     */
+    private static final Set<String> BUILT_IN_COMMANDS = Set.of(
+            "/clear",
+            "/history",
+            "/export",
+            "/settings",
+            "/help",
+            "/provider",
+            "/model",
+            "/prompt"
+    );
+
+    /**
+     * Check if a command is a CLI native command.
+     *
+     * @param command the command string (e.g., "/plan build feature")
+     * @return true if the command should be routed to the CLI daemon
+     */
+    public static boolean isCLICommand(String command) {
+        ParsedCommand parsed = ParsedCommand.parse(command);
+        if (parsed.name().isEmpty()) {
+            return false;
+        }
+
+        // Built-in commands take priority
+        if (BUILT_IN_COMMANDS.contains(parsed.name())) {
+            return false;
+        }
+
+        // Check if it's a known CLI native command
+        if (CLI_NATIVE_COMMANDS.contains(parsed.name())) {
+            return true;
+        }
+
+        // For any other /command, treat as CLI native command
+        // This allows for future CLI commands to work without explicit listing
+        return true;
+    }
+
+    /**
+     * Extract the command name from a command string.
+     *
+     * @param command the command string (e.g., "/plan build feature")
+     * @return the command name (e.g., "/plan")
+     */
+    public static String getCommandName(String command) {
+        return ParsedCommand.parse(command).name();
+    }
+
+    /**
+     * Extract the arguments from a command string.
+     *
+     * @param command the command string (e.g., "/plan build feature")
+     * @return the arguments (e.g., "build feature")
+     */
+    public static String getCommandArgs(String command) {
+        return ParsedCommand.parse(command).args();
+    }
+
+    /**
+     * Get the list of CLI native commands.
+     *
+     * @return unmodifiable set of CLI native command names
+     */
+    public static Set<String> getCliNativeCommands() {
+        return Set.copyOf(CLI_NATIVE_COMMANDS);
     }
 }
