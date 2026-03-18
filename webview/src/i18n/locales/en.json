@@ -1263,6 +1263,10 @@
         "label": "gpt-5.4",
         "description": "Latest frontier model with enhanced capabilities."
       },
+      "gpt54mini": {
+        "label": "gpt-5.4-mini",
+        "description": "Faster, lower-cost GPT-5.4 model for everyday coding tasks."
+      },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
         "description": "Latest frontier agentic coding model."

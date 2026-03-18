@@ -956,10 +956,17 @@ public class CodexHistoryReader {
      * Calculate cost based on usage and model.
      */
     private double calculateCost(UsageData usage, String model) {
-        // GPT-5.1 pricing (estimated, based on typical OpenAI pricing)
+        // Keep the legacy estimate as the default, and override known models
+        // when we have an explicit pricing source.
         double inputCostPer1M = 3.0;
         double outputCostPer1M = 15.0;
         double cacheReadCostPer1M = 0.30;
+
+        if ("gpt-5.4-mini".equals(model)) {
+            inputCostPer1M = 0.75;
+            outputCostPer1M = 4.50;
+            cacheReadCostPer1M = 0.075;
+        }
 
         double inputCost = (usage.inputTokens / 1_000_000.0) * inputCostPer1M;
         double outputCost = (usage.outputTokens / 1_000_000.0) * outputCostPer1M;
