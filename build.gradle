@@ -29,8 +29,8 @@ checkstyle {
     configFile = file('checkstyle.xml')
 }
 
-group = 'com.github.jetbrains-long-gui'
-version = '0.3'
+group = 'com.github.jetbrains-claude-code-gui'
+version = '0.3-fix'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17

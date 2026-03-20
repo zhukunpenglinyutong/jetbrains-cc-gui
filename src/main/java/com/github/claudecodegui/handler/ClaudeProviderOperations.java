@@ -16,6 +16,7 @@ import java.nio.file.Paths;
  * Handles Claude provider CRUD operations and switching.
  */
 public class ClaudeProviderOperations {
+    private static final String DISABLED_PROVIDER_ID = "__disabled__";
 
     private static final Logger LOG = Logger.getInstance(ClaudeProviderOperations.class);
     private static final Gson GSON = new Gson();
@@ -225,6 +226,18 @@ public class ClaudeProviderOperations {
             JsonObject data = GSON.fromJson(content, JsonObject.class);
             String id = data.get("id").getAsString();
 
+            if (DISABLED_PROVIDER_ID.equals(id)) {
+                context.getSettingsService().deactivateClaudeProvider();
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    context.callJavaScript("window.showSwitchSuccess",
+                            context.escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerDisabled")));
+                    handleGetProviders();
+                    handleGetActiveProvider();
+                });
+                return;
+            }
+
             if ("__local_settings_json__".equals(id)) {
                 // Validate settings.json exists
                 Path settingsPath = Paths.get(PlatformUtils.getHomeDirectory(), ".claude", "settings.json");
@@ -266,7 +279,6 @@ public class ClaudeProviderOperations {
                     context.callJavaScript("window.showSwitchSuccess",
                             context.escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.localProviderSwitchSuccess")));
                     handleGetProviders();
-                    handleGetCurrentClaudeConfig();
                     handleGetActiveProvider();
                 });
                 return;
@@ -278,7 +290,6 @@ public class ClaudeProviderOperations {
             ApplicationManager.getApplication().invokeLater(() -> {
                 context.callJavaScript("window.showSwitchSuccess", context.escapeJs(com.github.claudecodegui.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + com.github.claudecodegui.ClaudeCodeGuiBundle.message("provider.switchSyncClaude")));
                 handleGetProviders();
-                handleGetCurrentClaudeConfig();
                 handleGetActiveProvider();
             });
         } catch (Exception e) {

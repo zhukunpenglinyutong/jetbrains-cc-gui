@@ -238,7 +238,7 @@ public class CodemossSettingsService {
         JsonObject claude = new JsonObject();
         JsonObject providers = new JsonObject();
 
-        claude.addProperty("current", ProviderManager.LOCAL_SETTINGS_PROVIDER_ID);
+        claude.addProperty("current", "");
         claude.add("providers", providers);
         config.add("claude", claude);
 
@@ -567,6 +567,10 @@ public class CodemossSettingsService {
 
     public void switchClaudeProvider(String id) throws IOException {
         providerManager.switchClaudeProvider(id);
+    }
+
+    public void deactivateClaudeProvider() throws IOException {
+        providerManager.deactivateClaudeProvider();
     }
 
     public List<JsonObject> parseProvidersFromCcSwitchDb(String dbPath) throws IOException {

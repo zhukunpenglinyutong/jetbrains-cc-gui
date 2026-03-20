@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig } from '../../types/provider';
-import { type ClaudeConfig } from './ConfigInfoDisplay';
 import { ToastContainer } from '../Toast';
 
 // Import split-out components
@@ -157,10 +156,6 @@ const SettingsView = ({
     onAutoOpenFileEnabledChangeProp,
   });
 
-  // Current Claude CLI configuration (from ~/.claude/settings.json)
-  const [claudeConfig, setClaudeConfig] = useState<ClaudeConfig | null>(null);
-  const [claudeConfigLoading, setClaudeConfigLoading] = useState(false);
-
   // Use provider management hook
   const {
     providers,
@@ -243,8 +238,6 @@ const SettingsView = ({
 
   // Register window callbacks for Java bridge communication
   useSettingsWindowCallbacks({
-    setClaudeConfig,
-    setClaudeConfigLoading,
     setNodePath,
     setNodeVersion,
     setMinNodeVersion,
@@ -435,8 +428,6 @@ const SettingsView = ({
           <div style={{ display: currentTab === 'providers' ? 'block' : 'none' }}>
             <ProviderTabSection
               currentProvider={currentProvider}
-              claudeConfig={claudeConfig}
-              claudeConfigLoading={claudeConfigLoading}
               providers={providers}
               loading={loading}
               onAddProvider={handleAddProvider}

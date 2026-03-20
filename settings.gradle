@@ -6,4 +6,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'jetbrains-long-gui'
+rootProject.name = 'jetbrains-claude-code-gui'

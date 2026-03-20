@@ -1,6 +1,6 @@
 <idea-plugin>
-    <id>com.github.jetbrains-long-gui</id>
-    <name>CC GUI（Claude and Codex）</name>
+    <id>com.github.jetbrains-claude-code-gui</id>
+    <name>Claude Code GUI</name>
     <vendor>Jordan</vendor>
 
     <!-- Resource bundle for i18n -->
@@ -13,6 +13,8 @@
             <li><strong>Claude Code</strong> Anthropic 官方 AI 编程助手（支持 Opus 4.6 等多模型）</li>
             <li><strong>OpenAI Codex</strong> - OpenAI 强大的代码生成引擎</li>
         </ul>
+
+        <p><strong>Connection disclosure / 连接说明：</strong> Claude provider management defaults to the official direct Anthropic API. Some optional third-party provider presets route requests through third-party/proxy endpoints instead of directly to Anthropic, and this is labeled in the plugin UI before use.</p>
 
         <h2>核心功能</h2>
         <ul>

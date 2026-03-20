@@ -25,6 +25,7 @@ export interface UseProviderManagementOptions {
 }
 
 export function useProviderManagement(options: UseProviderManagementOptions = {}) {
+  const DISABLED_PROVIDER_ID = '__disabled__';
   const { t } = useTranslation();
   const { onError, onSuccess } = options;
 
@@ -196,6 +197,12 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
   const handleSwitchProvider = useCallback(
     (id: string) => {
       const data = { id };
+      if (id === DISABLED_PROVIDER_ID) {
+        syncActiveProviderModelMapping(null);
+        sendToJava(`switch_provider:${JSON.stringify(data)}`);
+        setLoading(true);
+        return;
+      }
       const target = providers.find((p) => p.id === id);
       if (target) {
         syncActiveProviderModelMapping(target);
