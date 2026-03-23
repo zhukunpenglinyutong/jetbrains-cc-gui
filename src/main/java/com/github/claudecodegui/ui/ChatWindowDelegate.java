@@ -106,6 +106,7 @@ public class ChatWindowDelegate {
     private final DiagnosticManager diagnosticManager = new DiagnosticManager(); // F-007/F-010
 
     // Tab status state (owned by this delegate)
+    private static final String TAB_STATUS_INDICATOR_KEY = "claude.code.tab.status.indicator";
     private TabAnswerStatus currentTabStatus = TabAnswerStatus.IDLE;
     private ScheduledFuture<?> statusResetTask;
 
@@ -386,17 +387,19 @@ public class ChatWindowDelegate {
                 LOG.debug("[TabStatus] Detected external rename, updated originalTabName to: " + tabName);
             }
 
+            boolean indicatorEnabled = PropertiesComponent.getInstance().getBoolean(TAB_STATUS_INDICATOR_KEY, true);
             String displayName;
             switch (status) {
                 case ANSWERING:
-                    displayName = tabName + "...";
-                    LOG.debug("[TabStatus] Set answering state for tab: " + displayName);
+                    displayName = indicatorEnabled ? tabName + "..." : tabName;
                     break;
                 case COMPLETED:
-                    String completedText = ClaudeCodeGuiBundle.message("tab.status.completed");
-                    displayName = tabName + " (" + completedText + ")";
-                    LOG.debug("[TabStatus] Set completed state for tab: " + displayName);
-
+                    if (indicatorEnabled) {
+                        String completedText = ClaudeCodeGuiBundle.message("tab.status.completed");
+                        displayName = tabName + " (" + completedText + ")";
+                    } else {
+                        displayName = tabName;
+                    }
                     statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
                         ApplicationManager.getApplication().invokeLater(() -> {
                             updateTabStatus(TabAnswerStatus.IDLE);
@@ -406,7 +409,6 @@ public class ChatWindowDelegate {
                 case IDLE:
                 default:
                     displayName = tabName;
-                    LOG.debug("[TabStatus] Restored idle state for tab: " + displayName);
                     break;
             }
             parentContent.setDisplayName(displayName);

@@ -75,6 +75,8 @@ const SoundSelectUpward = ({
 export interface BehaviorTabProps {
   sendShortcut?: 'enter' | 'cmdEnter';
   onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
+  tabStatusIndicatorEnabled?: boolean;
+  onTabStatusIndicatorEnabledChange?: (enabled: boolean) => void;
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
   streamingRenderTables?: boolean;
@@ -99,6 +101,8 @@ export interface BehaviorTabProps {
 }
 
 const BehaviorTab = ({
+  tabStatusIndicatorEnabled = true,
+  onTabStatusIndicatorEnabledChange = () => {},
   sendShortcut = 'enter',
   onSendShortcutChange = () => {},
   streamingEnabled = true,
@@ -169,6 +173,32 @@ const BehaviorTab = ({
             <div className={styles.themeCardDesc}>{t('settings.basic.sendShortcut.cmdEnterDesc')}</div>
           </div>
         </div>
+      </div>
+
+      {/* Tab status indicator */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-browser" />
+          <span className={styles.fieldLabel}>{t('settings.basic.tabStatusIndicator.label', 'Tab status indicator')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={tabStatusIndicatorEnabled}
+            onChange={(e) => onTabStatusIndicatorEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {tabStatusIndicatorEnabled
+              ? t('settings.basic.tabStatusIndicator.enabled', 'Enabled')
+              : t('settings.basic.tabStatusIndicator.disabled', 'Disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.tabStatusIndicator.hint', 'Show "..." while streaming and "(Completed)" when done in the tab title')}</span>
+        </small>
       </div>
 
       {/* Streaming configuration */}

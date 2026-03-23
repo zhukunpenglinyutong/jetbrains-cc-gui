@@ -57,6 +57,8 @@ export interface UseSettingsBasicActionsReturn {
   trackerPathExists: boolean;
   // F-010: IPC Sniffer
   ipcSnifferEnabled: boolean;
+  // Tab status indicator
+  tabStatusIndicatorEnabled: boolean;
   // B-029: Streaming render settings
   streamingRenderTables: boolean;
   streamingRenderLists: boolean;
@@ -82,6 +84,8 @@ export interface UseSettingsBasicActionsReturn {
   handleSaveTrackerPath: () => void;
   // F-010: IPC Sniffer
   handleIpcSnifferEnabledChange: (enabled: boolean) => void;
+  // Tab status indicator
+  handleTabStatusIndicatorEnabledChange: (enabled: boolean) => void;
 
   // =========================================================================
   // @internal — State setters used only by useSettingsWindowCallbacks.
@@ -118,6 +122,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSavingTrackerPath: (saving: boolean) => void;
   /** @internal */ setTrackerPathExists: (exists: boolean) => void;
   /** @internal */ setIpcSnifferEnabled: (enabled: boolean) => void;
+  /** @internal */ setTabStatusIndicatorEnabled: (enabled: boolean) => void;
   /** @internal */ setStreamingRenderTables: (enabled: boolean) => void;
   /** @internal */ setStreamingRenderLists: (enabled: boolean) => void;
 }
@@ -199,6 +204,9 @@ export function useSettingsBasicActions({
     return saved !== 'false'; // Enabled by default
   });
 
+  // Tab status indicator (synced to Java via sendToJava, default ON)
+  const [tabStatusIndicatorEnabled, setTabStatusIndicatorEnabled] = useState<boolean>(true);
+
   // Streaming render: tables (localStorage-only, default ON)
   const [streamingRenderTables, setStreamingRenderTables] = useState<boolean>(() => {
     try { return localStorage.getItem('streamingRenderTables') !== 'false'; } catch { return true; }
@@ -219,6 +227,12 @@ export function useSettingsBasicActions({
       }
     } catch { /* ignore storage errors */ }
   }, [diffExpandedByDefault]);
+
+  // Tab status indicator — handler (not useEffect, to avoid overwriting persisted value on mount)
+  const handleTabStatusIndicatorEnabledChange = useCallback((enabled: boolean) => {
+    setTabStatusIndicatorEnabled(enabled);
+    sendToJava(`set_tab_status_indicator:${JSON.stringify({ tabStatusIndicatorEnabled: enabled })}`);
+  }, []);
 
   // Streaming render settings handlers
   useEffect(() => {
@@ -417,6 +431,10 @@ export function useSettingsBasicActions({
     ipcSnifferEnabled,
     setIpcSnifferEnabled,
     handleIpcSnifferEnabledChange,
+    // Tab status indicator
+    tabStatusIndicatorEnabled,
+    setTabStatusIndicatorEnabled,
+    handleTabStatusIndicatorEnabledChange,
     // B-029: streaming render settings
     streamingRenderTables,
     setStreamingRenderTables,

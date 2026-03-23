@@ -136,6 +136,12 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_streaming_enabled":
                 projectConfigHandler.handleSetStreamingEnabled(content);
                 return true;
+            case "get_tab_status_indicator":
+                projectConfigHandler.handleGetTabStatusIndicator();
+                return true;
+            case "set_tab_status_indicator":
+                projectConfigHandler.handleSetTabStatusIndicator(content);
+                return true;
             case "get_codex_sandbox_mode":
                 projectConfigHandler.handleGetCodexSandboxMode();
                 return true;

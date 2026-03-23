@@ -159,6 +159,10 @@ const SettingsView = ({
     ipcSnifferEnabled,
     setIpcSnifferEnabled,
     handleIpcSnifferEnabledChange,
+    // Tab status indicator
+    tabStatusIndicatorEnabled,
+    setTabStatusIndicatorEnabled,
+    handleTabStatusIndicatorEnabledChange,
     // B-029: streaming render settings
     streamingRenderTables,
     setStreamingRenderTables,
@@ -299,6 +303,8 @@ const SettingsView = ({
     setTrackerPathExists,
     // F-010: IPC Sniffer
     setIpcSnifferEnabled,
+    // Tab status indicator
+    setTabStatusIndicatorEnabled,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -444,6 +450,8 @@ const SettingsView = ({
               onSaveCustomSoundPath={handleSaveCustomSoundPath}
               onTestSound={handleTestSound}
               onBrowseSound={handleBrowseSound}
+              tabStatusIndicatorEnabled={tabStatusIndicatorEnabled}
+              onTabStatusIndicatorEnabledChange={handleTabStatusIndicatorEnabledChange}
               streamingRenderTables={streamingRenderTables}
               onStreamingRenderTablesChange={setStreamingRenderTables}
               streamingRenderLists={streamingRenderLists}

@@ -214,6 +214,7 @@ interface Window {
    * Update streaming enabled setting
    */
   updateStreamingEnabled?: (json: string) => void;
+  updateTabStatusIndicator?: (json: string) => void;
 
   /**
    * Update Codex sandbox mode setting

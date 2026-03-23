@@ -42,6 +42,8 @@ export interface SettingsWindowCallbacksDeps {
   setTrackerPathExists?: (exists: boolean) => void;
   // IPC Sniffer setter (F-010)
   setIpcSnifferEnabled?: (enabled: boolean) => void;
+  // Tab status indicator
+  setTabStatusIndicatorEnabled?: (enabled: boolean) => void;
 
   // Hook functions
   updateProviders: (providers: ProviderConfig[]) => void;
@@ -195,6 +197,16 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         }
       };
     }
+
+    // Tab status indicator callback
+    window.updateTabStatusIndicator = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setTabStatusIndicatorEnabled?.(data.tabStatusIndicatorEnabled ?? true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse tab status indicator config:', error);
+      }
+    };
 
     // Codex sandbox mode callback
     window.updateCodexSandboxMode = (jsonStr: string) => {
@@ -420,6 +432,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_sound_notification_config:');
     sendToJava('get_tracker_path:');
     sendToJava('get_ipc_sniffer_config:');
+    sendToJava('get_tab_status_indicator:');
 
     return () => {
       d().cleanupAgentsTimeout();
