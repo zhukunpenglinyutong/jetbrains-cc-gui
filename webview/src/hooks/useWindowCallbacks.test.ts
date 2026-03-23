@@ -252,6 +252,84 @@ describe('useWindowCallbacks integration', () => {
     expect(turnIdCounterRef.current).toBe(10);
   });
 
+  // ===== B-034: streaming placeholder preserved during tool_use update =====
+
+  it('B-034: preserves streaming placeholder when backend sends tool_use update without new assistant', () => {
+    const ts = new Date().toISOString();
+
+    // Previous state: [user1, assistant1(tool_use), user2, assistant2(streaming placeholder)]
+    const prevMessages: ClaudeMessage[] = [
+      { type: 'user', content: 'question 1', timestamp: ts },
+      {
+        type: 'assistant', content: 'response with tool', timestamp: ts,
+        raw: JSON.stringify({ content: [{ type: 'tool_use', id: 'tu1', name: 'read_file', input: {} }] }),
+      },
+      { type: 'user', content: 'question 2', timestamp: ts },
+      {
+        type: 'assistant', content: '', timestamp: ts,
+        isStreaming: true, __turnId: 2,
+      },
+    ];
+
+    // Backend sends update with only [user1, assistant1, user2] — no new assistant yet
+    const backendMessages: ClaudeMessage[] = [
+      prevMessages[0],
+      prevMessages[1],
+      prevMessages[2],
+    ];
+
+    // Run the updater function ourselves so we can inspect its return value
+    let updaterResult: ClaudeMessage[] | undefined;
+    const setMessagesSpy = vi.fn((updaterOrValue: unknown) => {
+      if (typeof updaterOrValue === 'function') {
+        updaterResult = (updaterOrValue as (prev: ClaudeMessage[]) => ClaudeMessage[])(prevMessages);
+      }
+    });
+
+    const streamingMessageIndexRef = { current: 3 };
+    const streamingTurnIdRef = { current: 2 };
+    const turnIdCounterRef = { current: 2 };
+    const isStreamingRef = { current: true };
+    const seenToolUseCountRef = { current: 0 };
+
+    const opts = createOptions({
+      setMessages: setMessagesSpy as any,
+      streamingMessageIndexRef,
+      streamingTurnIdRef,
+      turnIdCounterRef,
+      isStreamingRef,
+      seenToolUseCountRef,
+      extractRawBlocks: (raw: unknown) => {
+        if (!raw) return [];
+        const obj = typeof raw === 'string' ? JSON.parse(raw as string) : raw;
+        return (obj as { content?: unknown[] }).content || [];
+      },
+    });
+
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      (window as any).updateMessages(JSON.stringify(backendMessages));
+    });
+
+    expect(setMessagesSpy).toHaveBeenCalled();
+    expect(updaterResult).toBeDefined();
+
+    // The streaming placeholder (__turnId=2) must still be in the result
+    const streamingMsg = updaterResult!.find(
+      (m) => m.__turnId === 2 && m.type === 'assistant',
+    );
+    expect(streamingMsg).toBeDefined();
+    expect(streamingMsg!.isStreaming).toBe(true);
+
+    // streamingMessageIndexRef must point at the placeholder, not at assistant1
+    const placeholderIdx = updaterResult!.findIndex(
+      (m) => m.__turnId === 2 && m.type === 'assistant',
+    );
+    expect(placeholderIdx).toBeGreaterThan(2); // must be after user2
+    expect(streamingMessageIndexRef.current).toBe(placeholderIdx);
+  });
+
   // ===== Full failure scenario: load history fails, guard is released, new messages work =====
 
   it('full flow: history load failure releases guard so new messages can arrive', () => {
