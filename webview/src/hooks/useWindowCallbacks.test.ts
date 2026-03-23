@@ -287,4 +287,79 @@ describe('useWindowCallbacks integration', () => {
     });
     expect(opts.setMessages).toHaveBeenCalled();
   });
+
+  // ===== B-034: streaming placeholder preserved during tool_use updates =====
+
+  it('B-034: does not stamp __turnId on old assistant when streaming placeholder exists', () => {
+    const streamingMessageIndexRef = { current: 3 };
+    const streamingTurnIdRef = { current: 2 };
+    const isStreamingRef = { current: true };
+    const seenToolUseCountRef = { current: 0 };
+
+    // extractRawBlocks returns a tool_use block so the tool_use path is entered
+    const extractRawBlocks = (raw: any) =>
+      raw?.content ?? [];
+
+    // patchAssistantForStreaming stamps the message so we can detect it
+    const patchAssistantForStreaming = (msg: ClaudeMessage) => ({
+      ...msg,
+      __patched: true,
+    });
+
+    const opts = createOptions({
+      streamingMessageIndexRef,
+      streamingTurnIdRef,
+      isStreamingRef,
+      seenToolUseCountRef,
+      extractRawBlocks: extractRawBlocks as any,
+      patchAssistantForStreaming: patchAssistantForStreaming as any,
+    });
+
+    renderHook(() => useWindowCallbacks(opts));
+
+    // Previous state: [user1, assistant1(old), user2, assistant2(streaming, __turnId=2)]
+    const prevMessages: ClaudeMessage[] = [
+      { type: 'user', content: 'hello', timestamp: '2024-01-01T00:00:00Z' },
+      { type: 'assistant', content: 'hi', timestamp: '2024-01-01T00:00:01Z',
+        raw: { content: [{ type: 'tool_use', id: 'tu1', name: 'bash', input: {} }] } },
+      { type: 'user', content: 'do something', timestamp: '2024-01-01T00:00:02Z' },
+      { type: 'assistant', content: '', timestamp: '2024-01-01T00:00:03Z',
+        __turnId: 2, isStreaming: true },
+    ];
+
+    // Backend sends update with only the old assistant (tool_use result arrived),
+    // no new assistant placeholder yet — simulates the race condition.
+    const backendUpdate: ClaudeMessage[] = [
+      { type: 'user', content: 'hello', timestamp: '2024-01-01T00:00:00Z' },
+      { type: 'assistant', content: 'hi', timestamp: '2024-01-01T00:00:01Z',
+        raw: { content: [{ type: 'tool_use', id: 'tu1', name: 'bash', input: {} }] } },
+      { type: 'user', content: 'do something', timestamp: '2024-01-01T00:00:02Z' },
+    ];
+
+    // Trigger the update — need a new tool_use to enter the patching path
+    seenToolUseCountRef.current = 0;
+
+    act(() => {
+      (window as any).updateMessages(JSON.stringify(backendUpdate));
+    });
+
+    // setMessages should have been called with an updater function
+    expect(opts.setMessages).toHaveBeenCalled();
+    const updater = (opts.setMessages as any).mock.calls[0][0];
+    expect(typeof updater).toBe('function');
+
+    // Execute the updater with the previous state
+    const result = updater(prevMessages);
+
+    // The old assistant (index 1) should NOT have been stamped with __turnId=2
+    // because the streaming placeholder already exists at a different index
+    const oldAssistant = result.find(
+      (m: any) => m.type === 'assistant' && m.content === 'hi',
+    );
+    expect(oldAssistant?.__turnId).not.toBe(2);
+
+    // streamingMessageIndexRef should NOT have been changed to the old assistant's index
+    // (it should remain at 3 or be updated by ensureStreamingAssistantPreserved, not set to 1)
+    expect(streamingMessageIndexRef.current).not.toBe(1);
+  });
 });

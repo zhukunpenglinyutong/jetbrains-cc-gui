@@ -214,11 +214,19 @@ export function registerMessageCallbacks(
 
         const patchedAssistantIdx = findLastAssistantIndex(patched);
         if (patchedAssistantIdx >= 0 && patched[patchedAssistantIdx]?.type === 'assistant') {
-          streamingMessageIndexRef.current = patchedAssistantIdx;
-          patched[patchedAssistantIdx] = patchAssistantForStreaming({
-            ...patched[patchedAssistantIdx],
-            __turnId: streamingTurnIdRef.current,
-          });
+          // B-034: Only stamp __turnId if this assistant belongs to the current
+          // streaming turn. When backend sends a tool_use update for an earlier
+          // assistant, we must not steal the streaming placeholder's identity.
+          const prevStreamingIdx = prev.findIndex(
+            (m) => m.__turnId === streamingTurnIdRef.current && m.type === 'assistant',
+          );
+          if (prevStreamingIdx < 0 || prevStreamingIdx === patchedAssistantIdx) {
+            streamingMessageIndexRef.current = patchedAssistantIdx;
+            patched[patchedAssistantIdx] = patchAssistantForStreaming({
+              ...patched[patchedAssistantIdx],
+              __turnId: streamingTurnIdRef.current,
+            });
+          }
         }
 
         return ensureStreamingAssistantPreserved(prev, patched);
