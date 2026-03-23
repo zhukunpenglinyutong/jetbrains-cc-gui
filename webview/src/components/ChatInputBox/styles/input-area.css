@@ -7,6 +7,7 @@
   min-height: 20px;
   max-height: 240px;
   overflow-y: auto;
+  cursor: text;
 }
 
 /* Code snippet tag container */
@@ -162,6 +163,7 @@
   line-height: 1.5;
   word-wrap: break-word;
   white-space: pre-wrap;
+  cursor: text;
 }
 
 .input-editable:empty::before {

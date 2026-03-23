@@ -410,6 +410,75 @@ public class ClaudeChatWindow {
     }
 
     void handleJavaScriptMessage(String message) {
+        // Handle cursor change from JS cursor tracker (macOS JCEF fix)
+        if (message.startsWith("cursor_change:")) {
+            String cssCursor = message.substring("cursor_change:".length());
+            int swingCursorType;
+            switch (cssCursor) {
+                case "text":
+                    swingCursorType = java.awt.Cursor.TEXT_CURSOR;
+                    break;
+                case "pointer":
+                    swingCursorType = java.awt.Cursor.HAND_CURSOR;
+                    break;
+                case "crosshair":
+                    swingCursorType = java.awt.Cursor.CROSSHAIR_CURSOR;
+                    break;
+                case "wait":
+                case "progress":
+                    swingCursorType = java.awt.Cursor.WAIT_CURSOR;
+                    break;
+                case "move":
+                case "grab":
+                case "grabbing":
+                    swingCursorType = java.awt.Cursor.MOVE_CURSOR;
+                    break;
+                case "col-resize":
+                case "ew-resize":
+                case "e-resize":
+                case "w-resize":
+                    swingCursorType = java.awt.Cursor.E_RESIZE_CURSOR;
+                    break;
+                case "row-resize":
+                case "ns-resize":
+                case "n-resize":
+                case "s-resize":
+                    swingCursorType = java.awt.Cursor.N_RESIZE_CURSOR;
+                    break;
+                case "nesw-resize":
+                case "ne-resize":
+                case "sw-resize":
+                    swingCursorType = java.awt.Cursor.NE_RESIZE_CURSOR;
+                    break;
+                case "nwse-resize":
+                case "nw-resize":
+                case "se-resize":
+                    swingCursorType = java.awt.Cursor.NW_RESIZE_CURSOR;
+                    break;
+                case "not-allowed":
+                case "no-drop":
+                    swingCursorType = java.awt.Cursor.DEFAULT_CURSOR;
+                    break;
+                case "help":
+                    swingCursorType = java.awt.Cursor.HAND_CURSOR;
+                    break;
+                case "zoom-in":
+                case "zoom-out":
+                    swingCursorType = java.awt.Cursor.HAND_CURSOR;
+                    break;
+                default:
+                    swingCursorType = java.awt.Cursor.DEFAULT_CURSOR;
+                    break;
+            }
+            if (browser != null) {
+                javax.swing.JComponent comp = browser.getComponent();
+                if (comp != null) {
+                    comp.setCursor(java.awt.Cursor.getPredefinedCursor(swingCursorType));
+                }
+            }
+            return;
+        }
+
         // Handle console log forwarding (JSON format)
         if (message.startsWith("{\"type\":\"console.")) {
             try {
