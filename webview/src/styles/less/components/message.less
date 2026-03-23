@@ -7,7 +7,6 @@
     overscroll-behavior-y: contain;
     padding: 0;
     background: var(--bg-chat);
-    cursor: text;
 }
 
 /* Collapsed messages indicator */
@@ -378,6 +377,7 @@
     color: var(--text-primary);
     word-wrap: break-word;
     overflow-wrap: break-word;
+    cursor: text;
 }
 
 .message.user .markdown-content {
@@ -411,11 +411,17 @@
     line-height: var(--idea-editor-line-spacing, 1.5);
     max-width: 100%; /* 防止超出容器 */
     box-sizing: border-box; /* 包含 padding 在宽度内 */
+    cursor: default;
+
+    code {
+        cursor: text;
+    }
 }
 
 .code-block-wrapper {
     position: relative;
     margin: 10px 0;
+    cursor: default;
 
     pre {
         margin: 0;
@@ -600,6 +606,11 @@
     overflow-x: auto;
     max-width: 100%;
     margin: 10px 0;
+    cursor: default;
+}
+
+.markdown-content .table-wrapper table {
+    cursor: text;
 }
 
 .markdown-content table {
