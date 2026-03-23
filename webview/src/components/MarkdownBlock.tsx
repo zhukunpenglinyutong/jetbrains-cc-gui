@@ -129,8 +129,21 @@ function safeLang(lang: string): string {
   return lang.replace(/[^a-zA-Z0-9_.-]/g, '');
 }
 
+function getStreamingRenderSetting(key: string, defaultValue: boolean): boolean {
+  try {
+    const val = window.localStorage.getItem(key);
+    if (val === null) return defaultValue;
+    return val === 'true';
+  } catch {
+    return defaultValue;
+  }
+}
+
 function renderStreamingContent(content: string): string {
   if (!content) return '';
+
+  const renderTables = getStreamingRenderSetting('streamingRenderTables', true);
+  const renderLists = getStreamingRenderSetting('streamingRenderLists', false);
 
   const safeContent = makeStreamSafe(content);
 
@@ -218,7 +231,7 @@ function renderStreamingContent(content: string): string {
         const trimmed = line.trim();
 
         // Detect table: current line starts with |, next line is separator (|---|...)
-        if (trimmed.startsWith('|') && i + 1 < lines.length &&
+        if (renderTables && trimmed.startsWith('|') && i + 1 < lines.length &&
             /^\|[\s:]*-+[\s:]*/.test(lines[i + 1].trim())) {
           flushProse();
 
@@ -270,6 +283,41 @@ function renderStreamingContent(content: string): string {
               proseLines.push(lines[t] ?? tableLines[t - tableStart]);
             }
           }
+        // Detect list: unordered (- or *) or ordered (1. 2. etc.)
+        } else if (renderLists && (/^[-*]\s/.test(trimmed) || /^\d+\.\s/.test(trimmed))) {
+          flushProse();
+
+          const isOrdered = /^\d+\.\s/.test(trimmed);
+          const listPattern = isOrdered ? /^\d+\.\s/ : /^[-*]\s/;
+          const listStart = i;
+          const listItems: string[] = [];
+
+          while (i < lines.length && listPattern.test(lines[i].trim())) {
+            const item = lines[i].trim().replace(listPattern, '');
+            listItems.push(item);
+            i++;
+          }
+
+          // List is "complete" when followed by a non-list line
+          const listEnded = i < lines.length;
+
+          if (listEnded && listItems.length >= 1) {
+            const tag = isOrdered ? 'ol' : 'ul';
+            let listHtml = `<${tag}>`;
+            for (const item of listItems) {
+              let h = item.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+              h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+              listHtml += `<li>${h}</li>`;
+            }
+            listHtml += `</${tag}>`;
+            chunks.push(listHtml);
+          } else {
+            // List still streaming — show as raw text
+            for (let t = listStart; t < listStart + listItems.length; t++) {
+              proseLines.push(lines[t] ?? '');
+            }
+          }
         } else {
           proseLines.push(line);
           i++;
@@ -286,6 +334,7 @@ function renderStreamingContent(content: string): string {
     ALLOWED_TAGS: [
       'p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'ul', 'ol', 'li',
     ],
     ALLOWED_ATTR: ['class'],
   });
@@ -528,8 +577,29 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       const applyRefresh = () => {
         if (done || !containerRef.current) return;
         done = true;
-        containerRef.current.innerHTML = html;
+
+        // Lock height to prevent layout shift during renderer switch
+        const el = containerRef.current;
+        const prevHeight = el.offsetHeight;
+        el.style.minHeight = `${prevHeight}px`;
+        el.style.transition = 'none';
+
+        el.innerHTML = html;
         renderMermaidDiagrams();
+
+        // Release height lock after new content is painted
+        requestAnimationFrame(() => {
+          el.style.transition = 'min-height 150ms ease-out';
+          el.style.minHeight = '';
+          // Clean up transition after it completes
+          const cleanup = () => {
+            el.style.transition = '';
+            el.removeEventListener('transitionend', cleanup);
+          };
+          el.addEventListener('transitionend', cleanup);
+          // Fallback cleanup if no transition fires (content same height)
+          setTimeout(cleanup, 200);
+        });
       };
 
       // Use double requestAnimationFrame to ensure DOM is fully updated

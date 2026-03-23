@@ -77,6 +77,10 @@ export interface BehaviorTabProps {
   onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
+  streamingRenderTables?: boolean;
+  onStreamingRenderTablesChange?: (enabled: boolean) => void;
+  streamingRenderLists?: boolean;
+  onStreamingRenderListsChange?: (enabled: boolean) => void;
   autoOpenFileEnabled?: boolean;
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
   diffExpandedByDefault?: boolean;
@@ -99,6 +103,10 @@ const BehaviorTab = ({
   onSendShortcutChange = () => {},
   streamingEnabled = true,
   onStreamingEnabledChange = () => {},
+  streamingRenderTables = true,
+  onStreamingRenderTablesChange = () => {},
+  streamingRenderLists = false,
+  onStreamingRenderListsChange = () => {},
   autoOpenFileEnabled = true,
   onAutoOpenFileEnabledChange = () => {},
   diffExpandedByDefault = false,
@@ -188,6 +196,62 @@ const BehaviorTab = ({
           <span>{t('settings.basic.streaming.hint')}</span>
         </small>
       </div>
+
+      {/* Streaming: render tables during streaming */}
+      {streamingEnabled && (
+        <div className={styles.streamingSection}>
+          <div className={styles.fieldHeader}>
+            <span className="codicon codicon-table" />
+            <span className={styles.fieldLabel}>{t('settings.basic.streamingRender.tablesLabel', 'Render tables during streaming')}</span>
+          </div>
+          <label className={styles.toggleWrapper}>
+            <input
+              type="checkbox"
+              className={styles.toggleInput}
+              checked={streamingRenderTables}
+              onChange={(e) => onStreamingRenderTablesChange(e.target.checked)}
+            />
+            <span className={styles.toggleSlider} />
+            <span className={styles.toggleLabel}>
+              {streamingRenderTables
+                ? t('settings.basic.streamingRender.enabled', 'Enabled')
+                : t('settings.basic.streamingRender.disabled', 'Disabled')}
+            </span>
+          </label>
+          <small className={styles.formHint}>
+            <span className="codicon codicon-info" />
+            <span>{t('settings.basic.streamingRender.tablesHint', 'Render markdown tables as HTML once complete during streaming')}</span>
+          </small>
+        </div>
+      )}
+
+      {/* Streaming: render lists during streaming */}
+      {streamingEnabled && (
+        <div className={styles.streamingSection}>
+          <div className={styles.fieldHeader}>
+            <span className="codicon codicon-list-unordered" />
+            <span className={styles.fieldLabel}>{t('settings.basic.streamingRender.listsLabel', 'Render lists during streaming')}</span>
+          </div>
+          <label className={styles.toggleWrapper}>
+            <input
+              type="checkbox"
+              className={styles.toggleInput}
+              checked={streamingRenderLists}
+              onChange={(e) => onStreamingRenderListsChange(e.target.checked)}
+            />
+            <span className={styles.toggleSlider} />
+            <span className={styles.toggleLabel}>
+              {streamingRenderLists
+                ? t('settings.basic.streamingRender.enabled', 'Enabled')
+                : t('settings.basic.streamingRender.disabled', 'Disabled')}
+            </span>
+          </label>
+          <small className={styles.formHint}>
+            <span className="codicon codicon-info" />
+            <span>{t('settings.basic.streamingRender.listsHint', 'Render bullet and numbered lists as HTML once complete during streaming')}</span>
+          </small>
+        </div>
+      )}
 
       {/* Auto open file configuration */}
       <div className={styles.streamingSection}>

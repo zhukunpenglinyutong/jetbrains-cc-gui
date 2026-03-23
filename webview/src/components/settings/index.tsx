@@ -159,6 +159,11 @@ const SettingsView = ({
     ipcSnifferEnabled,
     setIpcSnifferEnabled,
     handleIpcSnifferEnabledChange,
+    // B-029: streaming render settings
+    streamingRenderTables,
+    setStreamingRenderTables,
+    streamingRenderLists,
+    setStreamingRenderLists,
   } = useSettingsBasicActions({
     streamingEnabledProp,
     onStreamingEnabledChangeProp,
@@ -439,6 +444,10 @@ const SettingsView = ({
               onSaveCustomSoundPath={handleSaveCustomSoundPath}
               onTestSound={handleTestSound}
               onBrowseSound={handleBrowseSound}
+              streamingRenderTables={streamingRenderTables}
+              onStreamingRenderTablesChange={setStreamingRenderTables}
+              streamingRenderLists={streamingRenderLists}
+              onStreamingRenderListsChange={setStreamingRenderLists}
               trackerPath={trackerPath}
               onTrackerPathChange={setTrackerPath}
               onSaveTrackerPath={handleSaveTrackerPath}

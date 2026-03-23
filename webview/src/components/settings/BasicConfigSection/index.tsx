@@ -69,6 +69,10 @@ interface BasicConfigSectionProps {
   onSaveCustomSoundPath?: () => void;
   onTestSound?: () => void;
   onBrowseSound?: () => void;
+  streamingRenderTables?: boolean;
+  onStreamingRenderTablesChange?: (enabled: boolean) => void;
+  streamingRenderLists?: boolean;
+  onStreamingRenderListsChange?: (enabled: boolean) => void;
 }
 
 const BasicConfigSection = (props: BasicConfigSectionProps) => {
@@ -130,6 +134,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onSaveCustomSoundPath={props.onSaveCustomSoundPath}
           onTestSound={props.onTestSound}
           onBrowseSound={props.onBrowseSound}
+          streamingRenderTables={props.streamingRenderTables}
+          onStreamingRenderTablesChange={props.onStreamingRenderTablesChange}
+          streamingRenderLists={props.streamingRenderLists}
+          onStreamingRenderListsChange={props.onStreamingRenderListsChange}
         />
       )}
 

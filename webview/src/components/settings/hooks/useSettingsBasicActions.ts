@@ -57,6 +57,9 @@ export interface UseSettingsBasicActionsReturn {
   trackerPathExists: boolean;
   // F-010: IPC Sniffer
   ipcSnifferEnabled: boolean;
+  // B-029: Streaming render settings
+  streamingRenderTables: boolean;
+  streamingRenderLists: boolean;
 
   // =========================================================================
   // Handler functions (public API for components)
@@ -115,6 +118,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSavingTrackerPath: (saving: boolean) => void;
   /** @internal */ setTrackerPathExists: (exists: boolean) => void;
   /** @internal */ setIpcSnifferEnabled: (enabled: boolean) => void;
+  /** @internal */ setStreamingRenderTables: (enabled: boolean) => void;
+  /** @internal */ setStreamingRenderLists: (enabled: boolean) => void;
 }
 
 export function useSettingsBasicActions({
@@ -194,6 +199,16 @@ export function useSettingsBasicActions({
     return saved !== 'false'; // Enabled by default
   });
 
+  // Streaming render: tables (localStorage-only, default ON)
+  const [streamingRenderTables, setStreamingRenderTables] = useState<boolean>(() => {
+    try { return localStorage.getItem('streamingRenderTables') !== 'false'; } catch { return true; }
+  });
+
+  // Streaming render: lists (localStorage-only, default OFF)
+  const [streamingRenderLists, setStreamingRenderLists] = useState<boolean>(() => {
+    try { return localStorage.getItem('streamingRenderLists') === 'true'; } catch { return false; }
+  });
+
   // Diff expanded by default handler
   useEffect(() => {
     try {
@@ -204,6 +219,15 @@ export function useSettingsBasicActions({
       }
     } catch { /* ignore storage errors */ }
   }, [diffExpandedByDefault]);
+
+  // Streaming render settings handlers
+  useEffect(() => {
+    try { localStorage.setItem('streamingRenderTables', String(streamingRenderTables)); } catch { /* ignore */ }
+  }, [streamingRenderTables]);
+
+  useEffect(() => {
+    try { localStorage.setItem('streamingRenderLists', String(streamingRenderLists)); } catch { /* ignore */ }
+  }, [streamingRenderLists]);
 
   const handleSaveNodePath = useCallback(() => {
     setSavingNodePath(true);
@@ -393,5 +417,10 @@ export function useSettingsBasicActions({
     ipcSnifferEnabled,
     setIpcSnifferEnabled,
     handleIpcSnifferEnabledChange,
+    // B-029: streaming render settings
+    streamingRenderTables,
+    setStreamingRenderTables,
+    streamingRenderLists,
+    setStreamingRenderLists,
   };
 }
