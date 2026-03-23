@@ -31,6 +31,8 @@ export interface SettingsWindowCallbacksDeps {
   setLoading: (loading: boolean) => void;
   setCodexLoading: (loading: boolean) => void;
   setCodexConfigLoading: (loading: boolean) => void;
+  // Tab status indicator setter
+  setTabStatusIndicatorEnabled?: (enabled: boolean) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
   setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
@@ -253,6 +255,16 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // Tab status indicator callback
+    window.updateTabStatusIndicator = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setTabStatusIndicatorEnabled?.(data.tabStatusIndicatorEnabled ?? true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse tab status indicator config:', error);
+      }
+    };
+
     // Agent callbacks
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
@@ -384,6 +396,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_codex_sandbox_mode:');
     sendToJava('get_commit_prompt:');
     sendToJava('get_sound_notification_config:');
+    sendToJava('get_tab_status_indicator:');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -408,6 +421,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
       window.updateCommitPrompt = undefined;
       window.updateSoundNotificationConfig = undefined;
+      window.updateTabStatusIndicator = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

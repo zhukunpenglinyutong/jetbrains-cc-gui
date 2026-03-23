@@ -129,6 +129,9 @@ const SettingsView = ({
     setSelectedSound,
     customSoundPath,
     setCustomSoundPath,
+    tabStatusIndicatorEnabled,
+    setTabStatusIndicatorEnabled,
+    handleTabStatusIndicatorEnabledChange,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
     historyCompletionEnabled,
@@ -272,6 +275,7 @@ const SettingsView = ({
     addToast,
     onStreamingEnabledChangeProp,
     onSendShortcutChangeProp,
+    setTabStatusIndicatorEnabled,
     setSoundNotificationEnabled,
     setSoundOnlyWhenUnfocused,
     setSelectedSound,
@@ -410,6 +414,8 @@ const SettingsView = ({
               onUserMsgColorChange={setUserMsgColor}
               diffExpandedByDefault={diffExpandedByDefault}
               onDiffExpandedByDefaultChange={setDiffExpandedByDefault}
+              tabStatusIndicatorEnabled={tabStatusIndicatorEnabled}
+              onTabStatusIndicatorEnabledChange={handleTabStatusIndicatorEnabledChange}
               soundNotificationEnabled={soundNotificationEnabled}
               onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
               soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}

@@ -44,6 +44,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_send_shortcut",
         "get_auto_open_file_enabled",
         "set_auto_open_file_enabled",
+        "get_tab_status_indicator",
+        "set_tab_status_indicator",
         "get_ide_theme",
         "get_commit_prompt",
         "set_commit_prompt",
@@ -153,6 +155,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_auto_open_file_enabled":
                 projectConfigHandler.handleSetAutoOpenFileEnabled(content);
+                return true;
+            case "get_tab_status_indicator":
+                projectConfigHandler.handleGetTabStatusIndicator();
+                return true;
+            case "set_tab_status_indicator":
+                projectConfigHandler.handleSetTabStatusIndicator(content);
                 return true;
             case "get_ide_theme":
                 projectConfigHandler.handleGetIdeTheme();

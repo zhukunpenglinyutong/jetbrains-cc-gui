@@ -81,6 +81,8 @@ export interface BehaviorTabProps {
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
+  tabStatusIndicatorEnabled?: boolean;
+  onTabStatusIndicatorEnabledChange?: (enabled: boolean) => void;
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
   soundOnlyWhenUnfocused?: boolean;
@@ -103,6 +105,8 @@ const BehaviorTab = ({
   onAutoOpenFileEnabledChange = () => {},
   diffExpandedByDefault = false,
   onDiffExpandedByDefaultChange = () => {},
+  tabStatusIndicatorEnabled = true,
+  onTabStatusIndicatorEnabledChange = () => {},
   soundNotificationEnabled = false,
   onSoundNotificationEnabledChange = () => {},
   soundOnlyWhenUnfocused = false,
@@ -161,6 +165,30 @@ const BehaviorTab = ({
             <div className={styles.themeCardDesc}>{t('settings.basic.sendShortcut.cmdEnterDesc')}</div>
           </div>
         </div>
+      </div>
+
+      {/* Tab status indicator */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-browser" />
+          <span className={styles.fieldLabel}>Tab status indicator</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={tabStatusIndicatorEnabled}
+            onChange={(e) => onTabStatusIndicatorEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {tabStatusIndicatorEnabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>Show "..." while streaming and "(Completed)" when done in the tab title</span>
+        </small>
       </div>
 
       {/* Streaming configuration */}

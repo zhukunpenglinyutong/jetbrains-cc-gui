@@ -57,6 +57,7 @@ public class ChatWindowDelegate {
     private static final Logger LOG = Logger.getInstance(ChatWindowDelegate.class);
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
+    private static final String TAB_STATUS_INDICATOR_KEY = "claude.code.tab.status.indicator";
     private static final int STATUS_RESET_DELAY_SECONDS = 5;
 
     /**
@@ -381,15 +382,21 @@ public class ChatWindowDelegate {
                 LOG.debug("[TabStatus] Detected external rename, updated originalTabName to: " + tabName);
             }
 
+            boolean indicatorEnabled = PropertiesComponent.getInstance().getBoolean(TAB_STATUS_INDICATOR_KEY, true);
+
             String displayName;
             switch (status) {
                 case ANSWERING:
-                    displayName = tabName + "...";
+                    displayName = indicatorEnabled ? tabName + "..." : tabName;
                     LOG.debug("[TabStatus] Set answering state for tab: " + displayName);
                     break;
                 case COMPLETED:
-                    String completedText = ClaudeCodeGuiBundle.message("tab.status.completed");
-                    displayName = tabName + " (" + completedText + ")";
+                    if (indicatorEnabled) {
+                        String completedText = ClaudeCodeGuiBundle.message("tab.status.completed");
+                        displayName = tabName + " (" + completedText + ")";
+                    } else {
+                        displayName = tabName;
+                    }
                     LOG.debug("[TabStatus] Set completed state for tab: " + displayName);
 
                     statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {

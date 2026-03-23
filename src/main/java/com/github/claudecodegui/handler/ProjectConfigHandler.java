@@ -344,6 +344,34 @@ public class ProjectConfigHandler {
         }
     }
 
+    private static final String TAB_STATUS_INDICATOR_KEY = "claude.code.tab.status.indicator";
+
+    public void handleGetTabStatusIndicator() {
+        boolean enabled = PropertiesComponent.getInstance().getBoolean(TAB_STATUS_INDICATOR_KEY, true);
+        ApplicationManager.getApplication().invokeLater(() -> {
+            JsonObject r = new JsonObject();
+            r.addProperty("tabStatusIndicatorEnabled", enabled);
+            context.callJavaScript("window.updateTabStatusIndicator", context.escapeJs(gson.toJson(r)));
+        });
+    }
+
+    public void handleSetTabStatusIndicator(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean enabled = json == null || !json.has("tabStatusIndicatorEnabled")
+                || json.get("tabStatusIndicatorEnabled").getAsBoolean();
+            PropertiesComponent.getInstance().setValue(TAB_STATUS_INDICATOR_KEY, enabled, true);
+            LOG.info("[ProjectConfigHandler] Set tab status indicator: " + enabled);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("tabStatusIndicatorEnabled", enabled);
+                context.callJavaScript("window.updateTabStatusIndicator", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set tab status indicator: " + e.getMessage(), e);
+        }
+    }
+
     /** Get usage statistics. Supports both Claude and Codex providers. */
     public void handleGetUsageStatistics(String content) {
         CompletableFuture.runAsync(() -> {

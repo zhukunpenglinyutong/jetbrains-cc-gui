@@ -51,6 +51,9 @@ interface BasicConfigSectionProps {
   // Diff expanded by default configuration
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
+  // Tab status indicator configuration
+  tabStatusIndicatorEnabled?: boolean;
+  onTabStatusIndicatorEnabledChange?: (enabled: boolean) => void;
   // Sound notification configuration
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
@@ -113,6 +116,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onAutoOpenFileEnabledChange={props.onAutoOpenFileEnabledChange}
           diffExpandedByDefault={props.diffExpandedByDefault}
           onDiffExpandedByDefaultChange={props.onDiffExpandedByDefaultChange}
+          tabStatusIndicatorEnabled={props.tabStatusIndicatorEnabled}
+          onTabStatusIndicatorEnabledChange={props.onTabStatusIndicatorEnabledChange}
           soundNotificationEnabled={props.soundNotificationEnabled}
           onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
           soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}

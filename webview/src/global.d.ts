@@ -241,6 +241,11 @@ interface Window {
   updateSoundNotificationConfig?: (json: string) => void;
 
   /**
+   * Update tab status indicator configuration
+   */
+  updateTabStatusIndicator?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;

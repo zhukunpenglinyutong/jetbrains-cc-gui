@@ -49,6 +49,7 @@ export interface UseSettingsBasicActionsReturn {
   soundOnlyWhenUnfocused: boolean;
   selectedSound: string;
   customSoundPath: string;
+  tabStatusIndicatorEnabled: boolean;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
 
@@ -61,6 +62,7 @@ export interface UseSettingsBasicActionsReturn {
   handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
   handleAutoOpenFileEnabledChange: (enabled: boolean) => void;
+  handleTabStatusIndicatorEnabledChange: (enabled: boolean) => void;
   handleSoundNotificationEnabledChange: (enabled: boolean) => void;
   handleSoundOnlyWhenUnfocusedChange: (enabled: boolean) => void;
   handleSelectedSoundChange: (soundId: string) => void;
@@ -99,6 +101,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSoundOnlyWhenUnfocused: (enabled: boolean) => void;
   /** @internal */ setSelectedSound: (soundId: string) => void;
   /** @internal */ setCustomSoundPath: (path: string) => void;
+  /** @internal */ setTabStatusIndicatorEnabled: (enabled: boolean) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
 }
@@ -156,6 +159,9 @@ export function useSettingsBasicActions({
   const [soundOnlyWhenUnfocused, setSoundOnlyWhenUnfocused] = useState<boolean>(false);
   const [selectedSound, setSelectedSound] = useState<string>('default');
   const [customSoundPath, setCustomSoundPath] = useState<string>('');
+
+  // Tab status indicator configuration
+  const [tabStatusIndicatorEnabled, setTabStatusIndicatorEnabled] = useState<boolean>(true);
 
   // Diff expanded by default configuration (localStorage-only)
   const [diffExpandedByDefault, setDiffExpandedByDefault] = useState<boolean>(() => {
@@ -239,6 +245,12 @@ export function useSettingsBasicActions({
       sendToJava(`set_auto_open_file_enabled:${JSON.stringify(payload)}`);
     }
   }, [onAutoOpenFileEnabledChangeProp]);
+
+  // Tab status indicator toggle change handler
+  const handleTabStatusIndicatorEnabledChange = useCallback((enabled: boolean) => {
+    setTabStatusIndicatorEnabled(enabled);
+    sendToJava(`set_tab_status_indicator:${JSON.stringify({ tabStatusIndicatorEnabled: enabled })}`);
+  }, []);
 
   // Sound notification toggle change handler
   const handleSoundNotificationEnabledChange = useCallback((enabled: boolean) => {
@@ -328,6 +340,8 @@ export function useSettingsBasicActions({
     setSelectedSound,
     customSoundPath,
     setCustomSoundPath,
+    tabStatusIndicatorEnabled,
+    setTabStatusIndicatorEnabled,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
     historyCompletionEnabled,
@@ -338,6 +352,7 @@ export function useSettingsBasicActions({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
+    handleTabStatusIndicatorEnabledChange,
     handleSoundNotificationEnabledChange,
     handleSoundOnlyWhenUnfocusedChange,
     handleSelectedSoundChange,
