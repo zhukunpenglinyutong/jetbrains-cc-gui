@@ -1,0 +1,263 @@
+package com.github.claudecodegui.session;
+
+import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.notifications.ClaudeNotifier;
+import com.github.claudecodegui.util.TokenUsageUtils;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Owns session-history loading and post-send message reconciliation.
+ */
+public class SessionMessageOrchestrator {
+
+    private static final Logger LOG = Logger.getInstance(SessionMessageOrchestrator.class);
+    private static final int MAX_UUID_SYNC_RETRIES = 3;
+
+    public interface SessionHistoryAccess {
+        List<JsonObject> getProviderSessionMessages(String provider, String sessionId, String cwd);
+
+        List<JsonObject> getClaudeSessionMessages(String sessionId, String cwd);
+    }
+
+    @FunctionalInterface
+    public interface UsageDisplay {
+        void show(int usedTokens, int maxTokens);
+    }
+
+    private final SessionState state;
+    private final MessageParser messageParser;
+    private final SessionCallbackFacade callbackFacade;
+    private final SessionHistoryAccess historyAccess;
+    private final UsageDisplay usageDisplay;
+    private final long initialUuidSyncDelayMs;
+    private final long uuidRetryDelayMs;
+
+    public SessionMessageOrchestrator(
+            Project project,
+            SessionState state,
+            MessageParser messageParser,
+            SessionCallbackFacade callbackFacade,
+            SessionHistoryAccess historyAccess
+    ) {
+        this(
+                state,
+                messageParser,
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens),
+                100,
+                50
+        );
+    }
+
+    SessionMessageOrchestrator(
+            SessionState state,
+            MessageParser messageParser,
+            SessionCallbackFacade callbackFacade,
+            SessionHistoryAccess historyAccess,
+            UsageDisplay usageDisplay,
+            long initialUuidSyncDelayMs,
+            long uuidRetryDelayMs
+    ) {
+        this.state = state;
+        this.messageParser = messageParser;
+        this.callbackFacade = callbackFacade;
+        this.historyAccess = historyAccess;
+        this.usageDisplay = usageDisplay;
+        this.initialUuidSyncDelayMs = initialUuidSyncDelayMs;
+        this.uuidRetryDelayMs = uuidRetryDelayMs;
+    }
+
+    public CompletableFuture<Void> syncUserMessageUuidsAfterSend() {
+        if ("codex".equals(state.getProvider())) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        return CompletableFuture.runAsync(() -> {
+            sleep(initialUuidSyncDelayMs);
+            updateUserMessageUuids();
+        });
+    }
+
+    void updateUserMessageUuids() {
+        String sessionId = state.getSessionId();
+        String cwd = state.getCwd();
+
+        if (sessionId == null || sessionId.isEmpty()) {
+            return;
+        }
+
+        for (int attempt = 1; attempt <= MAX_UUID_SYNC_RETRIES; attempt++) {
+            try {
+                List<JsonObject> historyMessages = historyAccess.getClaudeSessionMessages(sessionId, cwd);
+                if (historyMessages == null || historyMessages.isEmpty()) {
+                    if (attempt < MAX_UUID_SYNC_RETRIES) {
+                        sleep(uuidRetryDelayMs);
+                        continue;
+                    }
+                    return;
+                }
+
+                boolean updated = backfillUserMessageUuids(historyMessages, state.getMessagesReference());
+                if (updated) {
+                    callbackFacade.notifyMessageUpdate(state.getMessages());
+                }
+                return;
+            } catch (Exception e) {
+                LOG.warn("[Rewind] Failed to update user message UUIDs (attempt " + attempt + "): " + e.getMessage());
+                if (attempt < MAX_UUID_SYNC_RETRIES) {
+                    sleep(uuidRetryDelayMs);
+                }
+            }
+        }
+    }
+
+    public CompletableFuture<Void> loadFromServer() {
+        if (state.getSessionId() == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        state.setLoading(true);
+        callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+
+        return CompletableFuture.runAsync(() -> {
+            try {
+                String currentSessionId = state.getSessionId();
+                String currentCwd = state.getCwd();
+                String currentProvider = state.getProvider();
+
+                LOG.info("Loading session from server: sessionId=" + currentSessionId + ", cwd=" + currentCwd);
+                List<JsonObject> serverMessages =
+                        historyAccess.getProviderSessionMessages(currentProvider, currentSessionId, currentCwd);
+                if (serverMessages == null) {
+                    serverMessages = List.of();
+                }
+
+                LOG.debug("Received " + serverMessages.size() + " messages from server");
+
+                state.clearMessages();
+                for (JsonObject msg : serverMessages) {
+                    ClaudeSession.Message message = messageParser.parseServerMessage(msg);
+                    if (message != null) {
+                        state.addMessage(message);
+                    }
+                }
+
+                restoreTokenUsage(serverMessages);
+                callbackFacade.notifyMessageUpdate(state.getMessages());
+            } catch (Exception e) {
+                state.setError(e.getMessage());
+                LOG.error("Error loading session: " + e.getMessage(), e);
+            } finally {
+                state.setLoading(false);
+                callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+            }
+        });
+    }
+
+    private boolean backfillUserMessageUuids(List<JsonObject> historyMessages, List<ClaudeSession.Message> localMessages) {
+        boolean updated = false;
+
+        for (JsonObject historyMsg : historyMessages) {
+            if (!historyMsg.has("type") || !"user".equals(historyMsg.get("type").getAsString())) {
+                continue;
+            }
+            if (!historyMsg.has("uuid") || historyMsg.get("uuid").isJsonNull()) {
+                continue;
+            }
+
+            String historyContent = extractMessageContentForMatching(historyMsg);
+            if (historyContent == null || historyContent.isEmpty()) {
+                continue;
+            }
+
+            String uuid = historyMsg.get("uuid").getAsString();
+            for (ClaudeSession.Message localMsg : localMessages) {
+                if (localMsg.type != ClaudeSession.Message.Type.USER || localMsg.raw == null) {
+                    continue;
+                }
+                if (localMsg.raw.has("uuid") && !localMsg.raw.get("uuid").isJsonNull()) {
+                    continue;
+                }
+                if (historyContent.equals(localMsg.content)) {
+                    localMsg.raw.addProperty("uuid", uuid);
+                    updated = true;
+                    break;
+                }
+            }
+        }
+
+        return updated;
+    }
+
+    String extractMessageContentForMatching(JsonObject msg) {
+        if (!msg.has("message") || !msg.get("message").isJsonObject()) {
+            return null;
+        }
+        JsonObject message = msg.getAsJsonObject("message");
+        if (!message.has("content")) {
+            return null;
+        }
+
+        JsonElement contentElement = message.get("content");
+        if (contentElement.isJsonPrimitive()) {
+            return contentElement.getAsString();
+        }
+
+        if (contentElement.isJsonArray()) {
+            JsonArray contentArray = contentElement.getAsJsonArray();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < contentArray.size(); i++) {
+                JsonElement element = contentArray.get(i);
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject block = element.getAsJsonObject();
+                if (block.has("type") && "text".equals(block.get("type").getAsString()) && block.has("text")) {
+                    if (sb.length() > 0) {
+                        sb.append("\n");
+                    }
+                    sb.append(block.get("text").getAsString());
+                }
+            }
+            return sb.toString();
+        }
+
+        return null;
+    }
+
+    private void restoreTokenUsage(List<JsonObject> serverMessages) {
+        try {
+            JsonObject lastUsage = TokenUsageUtils.findLastUsageFromRawMessages(serverMessages);
+            if (lastUsage == null) {
+                return;
+            }
+
+            int usedTokens = TokenUsageUtils.extractUsedTokens(lastUsage, state.getProvider());
+            int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+            usageDisplay.show(usedTokens, maxTokens);
+            LOG.debug("Restored token usage from history: " + usedTokens + " / " + maxTokens);
+        } catch (Exception e) {
+            LOG.warn("Failed to extract token usage from history: " + e.getMessage());
+        }
+    }
+
+    private void sleep(long delayMs) {
+        if (delayMs <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

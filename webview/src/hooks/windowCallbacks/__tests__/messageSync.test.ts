@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { MutableRefObject } from 'react';
 import type { ClaudeMessage } from '../../../types';
 import {
   OPTIMISTIC_MESSAGE_TIME_WINDOW,
   appendOptimisticMessageIfMissing,
+  ensureStreamingAssistantInList,
   getRawUuid,
   preserveLastAssistantIdentity,
   preserveMessageIdentity,
@@ -463,5 +464,86 @@ describe('preserveLastAssistantIdentity — turn ID guards', () => {
 
     const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
     expect(result[0].timestamp).toBe(prevTs);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ensureStreamingAssistantInList — race condition & fallback
+// ---------------------------------------------------------------------------
+
+describe('ensureStreamingAssistantInList', () => {
+  // ---- Primary path (refs valid) ----
+
+  it('returns resultList unchanged when streaming assistant already in resultList', () => {
+    const prev = [makeAssistantMsg('streaming', { __turnId: 1, isStreaming: true })];
+    const result = [makeAssistantMsg('streaming', { __turnId: 1, isStreaming: true })];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, true, 1);
+    expect(list).toBe(result);
+    expect(streamingIndex).toBe(0);
+  });
+
+  it('appends streaming assistant from prev when missing from result (primary path)', () => {
+    const streamingMsg = makeAssistantMsg('streaming content', { __turnId: 1, isStreaming: true });
+    const prev = [makeUserMsg('q'), streamingMsg];
+    const result = [makeUserMsg('q')];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, true, 1);
+    expect(list).toHaveLength(2);
+    expect(list[1]).toBe(streamingMsg);
+    expect(streamingIndex).toBe(1);
+  });
+
+  // ---- Fallback path (refs cleared — race condition) ----
+
+  it('recovers streaming assistant from prevList when refs are already cleared', () => {
+    const streamingMsg = makeAssistantMsg('last streamed', { __turnId: 5, isStreaming: true });
+    const prev = [makeUserMsg('q'), streamingMsg];
+    const result = [makeUserMsg('q')];
+
+    // Simulate race: isStreaming=false, turnId=0 (cleared by onStreamEnd)
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, false, 0);
+    expect(list).toHaveLength(2);
+    expect(list[1]).toBe(streamingMsg);
+    expect(streamingIndex).toBe(1);
+  });
+
+  it('does NOT recover non-streaming assistant from prevList when refs are cleared', () => {
+    const finishedMsg = makeAssistantMsg('done', { __turnId: 5, isStreaming: false });
+    const prev = [makeUserMsg('q'), finishedMsg];
+    const result = [makeUserMsg('q')];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, false, 0);
+    expect(list).toBe(result);
+    expect(streamingIndex).toBe(-1);
+  });
+
+  it('does NOT recover assistant without __turnId from prevList when refs are cleared', () => {
+    const noTurnMsg = makeAssistantMsg('old msg', { isStreaming: true });
+    const prev = [makeUserMsg('q'), noTurnMsg];
+    const result = [makeUserMsg('q')];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, false, 0);
+    expect(list).toBe(result);
+    expect(streamingIndex).toBe(-1);
+  });
+
+  it('does not duplicate when resultList already contains the streaming assistant (fallback)', () => {
+    const streamingMsg = makeAssistantMsg('streaming', { __turnId: 3, isStreaming: true });
+    const prev = [streamingMsg];
+    const result = [makeAssistantMsg('streaming', { __turnId: 3 })];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, false, 0);
+    expect(list).toBe(result);
+    expect(streamingIndex).toBe(-1);
+  });
+
+  it('returns resultList unchanged when prevList has no streaming assistant and refs cleared', () => {
+    const prev = [makeUserMsg('q'), makeAssistantMsg('done', { isStreaming: false })];
+    const result = [makeUserMsg('q')];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, false, 0);
+    expect(list).toBe(result);
+    expect(streamingIndex).toBe(-1);
   });
 });

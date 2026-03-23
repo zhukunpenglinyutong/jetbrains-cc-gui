@@ -131,9 +131,10 @@ public class SessionIndexCache {
             return null;
         }
 
-        long currentDirModified = getDirModifiedTime(sessionsDir);
-        if (!entry.isValid(currentDirModified)) {
-            LOG.info("[SessionIndexCache] Codex cache invalid: expired or dir changed for " + projectPath);
+        // Codex sessions use nested year/month/day directories, so root directory
+        // timestamp is unreliable for detecting new files. Use TTL-only validation.
+        if (entry.isExpired()) {
+            LOG.info("[SessionIndexCache] Codex cache expired for " + projectPath);
             codexCache.remove(projectPath);
             return null;
         }

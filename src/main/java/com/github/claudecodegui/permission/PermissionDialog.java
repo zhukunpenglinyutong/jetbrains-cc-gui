@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import com.github.claudecodegui.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.intellij.openapi.diagnostic.Logger;
 /**
  * Permission request dialog.

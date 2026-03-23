@@ -54,4 +54,22 @@ describe('ModelSelect', () => {
 
     expect(screen.getByRole('button').textContent).toContain('glm-5');
   });
+
+  it('没有具体映射时应回退到全局 main 映射', () => {
+    localStorage.setItem(
+      STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
+      JSON.stringify({ main: 'glm-4.7' }),
+    );
+
+    render(
+      <ModelSelect
+        value={sonnetModel.id}
+        onChange={vi.fn()}
+        models={[sonnetModel]}
+        currentProvider="claude"
+      />,
+    );
+
+    expect(screen.getByRole('button').textContent).toContain('glm-4.7');
+  });
 });

@@ -1,7 +1,10 @@
 package com.github.claudecodegui.handler;
 
-import com.github.claudecodegui.ClaudeChatWindow;
-import com.github.claudecodegui.ClaudeSDKToolWindow;
+import com.github.claudecodegui.handler.core.BaseMessageHandler;
+import com.github.claudecodegui.handler.core.HandlerContext;
+
+import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
+import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.settings.TabStateService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;

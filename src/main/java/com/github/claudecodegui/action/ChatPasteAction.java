@@ -1,6 +1,6 @@
 package com.github.claudecodegui.action;
 
-import com.github.claudecodegui.ClaudeChatWindow;
+import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.google.gson.Gson;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;

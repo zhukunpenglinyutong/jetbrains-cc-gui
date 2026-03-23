@@ -1,6 +1,6 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.ClaudeSession.Message;
+import com.github.claudecodegui.session.ClaudeSession.Message;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -150,6 +150,13 @@ public class ClaudeMessageHandler implements MessageCallback {
         lastReportedError = error;
         textSegmentActive = false;
         thinkingSegmentActive = false;
+
+        // Reset thinking state if still active — same as onComplete() and handleStreamEnd()
+        if (isThinking) {
+            isThinking = false;
+            callbackHandler.notifyThinkingStatusChanged(false);
+        }
+
         state.setError(error);
         state.setBusy(false);
         state.setLoading(false);
@@ -177,11 +184,36 @@ public class ClaudeMessageHandler implements MessageCallback {
             lastReportedError = null;
             return;
         }
+
+        // If streaming was active but [STREAM_END] was never received (e.g., SDK error,
+        // timeout, or process interruption), we must explicitly end the stream here.
+        // Without this, the StreamMessageCoalescer remains in streamActive=true state,
+        // which causes SessionCallbackAdapter.onStateChange() to suppress showLoading(false),
+        // leaving the UI stuck in "responding" state forever.
+        // This mirrors the same pattern used in onError() above.
+        boolean wasStreaming = isStreaming;
+        isStreaming = false;
+        textSegmentActive = false;
+        thinkingSegmentActive = false;
+
+        // Reset thinking state if still active
+        if (isThinking) {
+            isThinking = false;
+            callbackHandler.notifyThinkingStatusChanged(false);
+        }
+
         errorReportedThisTurn = false;
         lastReportedError = null;
         state.setBusy(false);
         state.setLoading(false);
         state.updateLastModifiedTime();
+
+        if (wasStreaming) {
+            LOG.warn("onComplete called without prior stream_end — forcing stream cleanup");
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+            callbackHandler.notifyStreamEnd();
+        }
+
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
@@ -584,6 +616,16 @@ public class ClaudeMessageHandler implements MessageCallback {
         streamEndedThisTurn = true;
         textSegmentActive = false;
         thinkingSegmentActive = false;
+
+        // Reset thinking state — stream end is the definitive boundary for a turn.
+        // If thinking was active when the stream ended (e.g., extended thinking without
+        // subsequent content), it must be cleared here to prevent the frontend from being
+        // stuck in "thinking" state.
+        if (isThinking) {
+            isThinking = false;
+            callbackHandler.notifyThinkingStatusChanged(false);
+        }
+
         // After streaming ends, send a final message update to ensure the message list is in sync
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStreamEnd();

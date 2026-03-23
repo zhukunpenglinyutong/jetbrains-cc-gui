@@ -53,7 +53,7 @@ public class ErrorPanelBuilder {
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 20, 20));
         bottomPanel.setBackground(new Color(30, 30, 30));
 
-        JLabel nodeLabel = new JLabel(com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.nodePathLabel"));
+        JLabel nodeLabel = new JLabel(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("error.nodePathLabel"));
         nodeLabel.setForeground(Color.WHITE);
         nodeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -74,7 +74,7 @@ public class ErrorPanelBuilder {
             LOG.warn("Failed to preload Node.js path: " + e.getMessage());
         }
 
-        JButton saveAndRetryButton = new JButton(com.github.claudecodegui.ClaudeCodeGuiBundle.message("error.saveButton"));
+        JButton saveAndRetryButton = new JButton(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("error.saveButton"));
         saveAndRetryButton.setAlignmentX(Component.LEFT_ALIGNMENT);
         saveAndRetryButton.addActionListener(e -> {
             String manualPath = nodeField.getText();

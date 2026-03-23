@@ -4,7 +4,7 @@ import type { PromptConfig, PromptScope } from '../../../types/prompt';
 import styles from './style.module.less';
 
 interface PromptScopeSectionProps {
-  /** Section title (e.g., "全局提示词" or "项目提示词 - ProjectName") */
+  /** Section title (e.g., "Global Prompts" or "Project Prompts - ProjectName") */
   title: string;
   /** Prompt scope (global or project) */
   scope: PromptScope;

@@ -1,7 +1,80 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../types/provider';
-import { PROVIDER_PRESETS } from '../types/provider';
+import { CLAUDE_MODEL_MAPPING_ENV_KEYS, PROVIDER_PRESETS } from '../types/provider';
+
+const OFFICIAL_DIRECT_PRESET_ID = 'official_direct';
+const OFFICIAL_ANTHROPIC_URL = 'https://api.anthropic.com';
+const CUSTOM_PRESET_ID = 'custom';
+
+const isOfficialAnthropicEndpoint = (baseUrl?: string) => {
+  const normalized = (baseUrl || '').trim().toLowerCase();
+  return normalized === '' || normalized.includes('api.anthropic.com');
+};
+
+interface BuildConfigOptions {
+  envOverrides?: Record<string, string>;
+  defaultBaseUrl?: string;
+  includeModelMapping?: boolean;
+}
+
+const trimString = (value: unknown): string => (
+  typeof value === 'string' ? value.trim() : ''
+);
+
+export function normalizeProviderEnvForSave(
+  env: Record<string, unknown>,
+  options: { stripAllModelMappings?: boolean } = {}
+): Record<string, unknown> {
+  const nextEnv = { ...env };
+
+  if (options.stripAllModelMappings) {
+    for (const key of CLAUDE_MODEL_MAPPING_ENV_KEYS) {
+      delete nextEnv[key];
+    }
+    return nextEnv;
+  }
+
+  const mainModel = trimString(nextEnv.ANTHROPIC_MODEL);
+  if (!mainModel) {
+    delete nextEnv.ANTHROPIC_MODEL;
+    return nextEnv;
+  }
+
+  const specificModels = [
+    trimString(nextEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL),
+    trimString(nextEnv.ANTHROPIC_DEFAULT_SONNET_MODEL),
+    trimString(nextEnv.ANTHROPIC_DEFAULT_OPUS_MODEL),
+  ].filter(Boolean);
+
+  if (specificModels.length === 0 || specificModels.every(model => model === mainModel)) {
+    delete nextEnv.ANTHROPIC_MODEL;
+  }
+
+  return nextEnv;
+}
+
+export function sanitizeProviderJsonConfig(
+  rawJsonConfig: string,
+  options: { stripAllModelMappings?: boolean } = {}
+): string {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = rawJsonConfig ? JSON.parse(rawJsonConfig) : {};
+  } catch {
+    return rawJsonConfig;
+  }
+  const prevEnv = parsed.env && typeof parsed.env === 'object'
+    ? parsed.env as Record<string, unknown>
+    : {};
+  const nextEnv = normalizeProviderEnvForSave(prevEnv, options);
+
+  const nextConfig = Object.keys(nextEnv).length > 0
+    ? { ...parsed, env: nextEnv }
+    : Object.fromEntries(Object.entries(parsed).filter(([key]) => key !== 'env'));
+
+  return JSON.stringify(nextConfig, null, 2);
+}
 
 interface ProviderDialogProps {
   isOpen: boolean;
@@ -43,6 +116,32 @@ export default function ProviderDialog({
   const [showApiKey, setShowApiKey] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
   const [jsonError, setJsonError] = useState('');
+  const thirdPartyPresets = PROVIDER_PRESETS;
+  const isOfficialDirectMode = activePreset === OFFICIAL_DIRECT_PRESET_ID;
+  const showModelMappingSection = activePreset !== CUSTOM_PRESET_ID;
+
+  const buildConfig = ({
+    envOverrides = {},
+    defaultBaseUrl = OFFICIAL_ANTHROPIC_URL,
+    includeModelMapping = true,
+  }: BuildConfigOptions = {}) => {
+    const normalizedEnv = normalizeProviderEnvForSave(envOverrides, {
+      stripAllModelMappings: !includeModelMapping,
+    });
+
+    return {
+      env: {
+        ANTHROPIC_AUTH_TOKEN: '',
+        ANTHROPIC_BASE_URL: defaultBaseUrl,
+        ...(includeModelMapping ? {
+          ANTHROPIC_DEFAULT_SONNET_MODEL: '',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: '',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
+        } : {}),
+        ...normalizedEnv,
+      }
+    };
+  };
 
   const updateEnvField = (key: string, value: string) => {
     try {
@@ -58,47 +157,57 @@ export default function ProviderDialog({
         nextEnv = { ...prevEnv, [key]: value };
       }
 
-      const nextConfig = Object.keys(nextEnv).length > 0
-        ? { ...parsed, env: nextEnv }
+      const normalizedEnv = normalizeProviderEnvForSave(nextEnv, {
+        stripAllModelMappings: activePreset === CUSTOM_PRESET_ID,
+      });
+
+      const nextConfig = Object.keys(normalizedEnv).length > 0
+        ? { ...parsed, env: normalizedEnv }
         : Object.fromEntries(Object.entries(parsed).filter(([k]) => k !== 'env'));
 
       setJsonConfig(JSON.stringify(nextConfig, null, 2));
       setJsonError('');
     } catch (err) {
-      console.error('[ProviderDialog] Failed to update env field:', err);
+      // silently ignore – the JSON textarea will show a validation error
     }
   };
 
   // Apply preset configuration
   const handlePresetClick = (presetId: string) => {
-    const preset = PROVIDER_PRESETS.find(p => p.id === presetId);
-    if (!preset) return;
-
     setActivePreset(presetId);
 
-    if (presetId === 'custom') {
-      // Custom configuration: reset to empty config
-      const config = {
-        env: {
-          ANTHROPIC_AUTH_TOKEN: '',
-          ANTHROPIC_BASE_URL: '',
-          ANTHROPIC_MODEL: '',
-          ANTHROPIC_DEFAULT_SONNET_MODEL: '',
-          ANTHROPIC_DEFAULT_OPUS_MODEL: '',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
-        }
-      };
+    if (presetId === OFFICIAL_DIRECT_PRESET_ID) {
+      const config = buildConfig();
+      setJsonConfig(JSON.stringify(config, null, 2));
+      setApiKey('');
+      setApiUrl(OFFICIAL_ANTHROPIC_URL);
+      setHaikuModel('');
+      setSonnetModel('');
+      setOpusModel('');
+      setJsonError('');
+      return;
+    }
+
+    if (presetId === CUSTOM_PRESET_ID) {
+      const config = buildConfig({
+        defaultBaseUrl: '',
+        includeModelMapping: false,
+      });
       setJsonConfig(JSON.stringify(config, null, 2));
       setApiKey('');
       setApiUrl('');
       setHaikuModel('');
       setSonnetModel('');
       setOpusModel('');
+      setJsonError('');
       return;
     }
 
+    const preset = PROVIDER_PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+
     // Apply preset configuration
-    const config = { env: { ...preset.env } };
+    const config = buildConfig({ envOverrides: preset.env });
     setJsonConfig(JSON.stringify(config, null, 2));
 
     // Sync form fields with preset values
@@ -113,9 +222,14 @@ export default function ProviderDialog({
 
   // Auto-detect matching preset based on environment variables
   const detectMatchingPreset = (env: Record<string, string | undefined>): string => {
+    const baseUrl = env.ANTHROPIC_BASE_URL || '';
+
+    if (isOfficialAnthropicEndpoint(baseUrl)) {
+      return OFFICIAL_DIRECT_PRESET_ID;
+    }
+
     for (const preset of PROVIDER_PRESETS) {
       if (preset.id === 'custom') continue;
-      const baseUrl = env.ANTHROPIC_BASE_URL || '';
       const presetBaseUrl = preset.env.ANTHROPIC_BASE_URL || '';
       if (baseUrl && presetBaseUrl && baseUrl === presetBaseUrl) {
         return preset.id;
@@ -127,8 +241,9 @@ export default function ProviderDialog({
   // Format JSON
   const handleFormatJson = () => {
     try {
-      const parsed = JSON.parse(jsonConfig);
-      setJsonConfig(JSON.stringify(parsed, null, 2));
+      setJsonConfig(sanitizeProviderJsonConfig(jsonConfig, {
+        stripAllModelMappings: activePreset === CUSTOM_PRESET_ID,
+      }));
       setJsonError('');
     } catch (err) {
       setJsonError(t('settings.provider.dialog.jsonError'));
@@ -154,38 +269,20 @@ export default function ProviderDialog({
         setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
         setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
 
-        const config = provider.settingsConfig || {
-          env: {
-            ANTHROPIC_AUTH_TOKEN: '',
-            ANTHROPIC_BASE_URL: '',
-            ANTHROPIC_MODEL: '',
-            ANTHROPIC_DEFAULT_SONNET_MODEL: '',
-            ANTHROPIC_DEFAULT_OPUS_MODEL: '',
-            ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
-          }
-        };
+        const config = provider.settingsConfig || buildConfig();
         setJsonConfig(JSON.stringify(config, null, 2));
       } else {
         // Add mode
-        setActivePreset('custom');
+        setActivePreset(OFFICIAL_DIRECT_PRESET_ID);
         setProviderName('');
         setRemark('');
         setApiKey('');
-        setApiUrl('');
+        setApiUrl(OFFICIAL_ANTHROPIC_URL);
 
         setHaikuModel('');
         setSonnetModel('');
         setOpusModel('');
-        const config = {
-          env: {
-            ANTHROPIC_AUTH_TOKEN: '',
-            ANTHROPIC_BASE_URL: '',
-            ANTHROPIC_MODEL: '',
-            ANTHROPIC_DEFAULT_SONNET_MODEL: '',
-            ANTHROPIC_DEFAULT_OPUS_MODEL: '',
-            ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
-          }
-        };
+        const config = buildConfig();
         setJsonConfig(JSON.stringify(config, null, 2));
       }
       setShowApiKey(false);
@@ -216,9 +313,8 @@ export default function ProviderDialog({
     const newApiUrl = e.target.value;
     setApiUrl(newApiUrl);
     updateEnvField('ANTHROPIC_BASE_URL', newApiUrl);
+    setActivePreset(detectMatchingPreset({ ANTHROPIC_BASE_URL: newApiUrl }));
   };
-
-
 
   const handleHaikuModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -260,7 +356,7 @@ export default function ProviderDialog({
         setApiUrl('');
       }
 
-
+      setActivePreset(detectMatchingPreset(env));
 
       if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_DEFAULT_HAIKU_MODEL')) {
         setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
@@ -286,12 +382,51 @@ export default function ProviderDialog({
   };
 
   const handleSave = () => {
+    let finalJsonConfig = jsonConfig;
+    let finalApiUrl = apiUrl;
+
+    if (isOfficialDirectMode) {
+      try {
+        const parsed = jsonConfig ? JSON.parse(jsonConfig) : {};
+        const env = { ...(parsed.env || {}), ANTHROPIC_BASE_URL: OFFICIAL_ANTHROPIC_URL };
+        finalJsonConfig = JSON.stringify({ ...parsed, env }, null, 2);
+      } catch {
+        finalJsonConfig = JSON.stringify(buildConfig({
+          envOverrides: {
+            ANTHROPIC_AUTH_TOKEN: apiKey,
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel,
+            ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel,
+            ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel,
+          },
+        }), null, 2);
+      }
+      finalApiUrl = OFFICIAL_ANTHROPIC_URL;
+    }
+
+    try {
+      finalJsonConfig = sanitizeProviderJsonConfig(finalJsonConfig, {
+        stripAllModelMappings: activePreset === CUSTOM_PRESET_ID,
+      });
+    } catch {
+      finalJsonConfig = JSON.stringify(buildConfig({
+        envOverrides: {
+          ANTHROPIC_AUTH_TOKEN: apiKey,
+          ANTHROPIC_BASE_URL: finalApiUrl,
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel,
+          ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel,
+          ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel,
+        },
+        defaultBaseUrl: activePreset === CUSTOM_PRESET_ID ? '' : finalApiUrl,
+        includeModelMapping: activePreset !== CUSTOM_PRESET_ID,
+      }), null, 2);
+    }
+
     onSave({
       providerName,
       remark,
       apiKey,
-      apiUrl,
-      jsonConfig,
+      apiUrl: finalApiUrl,
+      jsonConfig: finalJsonConfig,
     });
   };
 
@@ -319,20 +454,39 @@ export default function ProviderDialog({
             {t('settings.provider.dialog.securityNotice')}
           </div>
 
-          {/* Preset configuration button group */}
-          <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.presetGroup')}>
-            {PROVIDER_PRESETS.map((preset) => (
+          <div className="form-group">
+            <label>{t('settings.provider.dialog.officialSectionTitle')}</label>
+            <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.officialSectionTitle')}>
               <button
-                key={preset.id}
                 type="button"
                 role="radio"
-                aria-checked={activePreset === preset.id}
-                className={`preset-btn ${activePreset === preset.id ? 'active' : ''}`}
-                onClick={() => handlePresetClick(preset.id)}
+                aria-checked={activePreset === OFFICIAL_DIRECT_PRESET_ID}
+                className={`preset-btn ${activePreset === OFFICIAL_DIRECT_PRESET_ID ? 'active' : ''}`}
+                onClick={() => handlePresetClick(OFFICIAL_DIRECT_PRESET_ID)}
               >
-                {t(preset.nameKey)}
+                {t('settings.provider.dialog.officialPreset')}
               </button>
-            ))}
+            </div>
+            <small className="form-hint">{t('settings.provider.dialog.officialSectionHint')}</small>
+          </div>
+
+          <div className="form-group">
+            <label>{t('settings.provider.dialog.proxySectionTitle')}</label>
+            <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.proxySectionTitle')}>
+              {thirdPartyPresets.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={activePreset === preset.id}
+                  className={`preset-btn ${activePreset === preset.id ? 'active' : ''}`}
+                  onClick={() => handlePresetClick(preset.id)}
+                >
+                  {t(preset.nameKey)}
+                </button>
+              ))}
+            </div>
+            <small className="form-hint">{t('settings.provider.dialog.proxySectionHint')}</small>
           </div>
 
           <div className="form-group">
@@ -400,52 +554,63 @@ export default function ProviderDialog({
               placeholder={t('settings.provider.dialog.apiUrlPlaceholder')}
               value={apiUrl}
               onChange={handleApiUrlChange}
+              readOnly={isOfficialDirectMode}
             />
             <small className="form-hint">
               <span className="codicon codicon-info" style={{ fontSize: '12px', marginRight: '4px' }} />
-              {t('settings.provider.dialog.apiUrlHint')}
+              {isOfficialDirectMode
+                ? t('settings.provider.dialog.apiUrlLockedHint')
+                : t('settings.provider.dialog.apiUrlHint')}
             </small>
+            {!isOfficialAnthropicEndpoint(apiUrl) && (
+              <div className="notice-box notice-box--warning" style={{ marginTop: '8px' }}>
+                <span className="codicon codicon-cloud" />
+                {t('settings.provider.dialog.proxyEndpointWarning')}
+              </div>
+            )}
           </div>
 
-          <div className="form-group">
-            <label>{t('settings.provider.dialog.modelMapping')}</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label htmlFor="sonnetModel">{t('settings.provider.dialog.sonnetModel')}</label>
-                <input
-                  id="sonnetModel"
-                  type="text"
-                  className="form-input"
-                  placeholder={t('settings.provider.dialog.sonnetModelPlaceholder')}
-                  value={sonnetModel}
-                  onChange={handleSonnetModelChange}
-                />
+          {showModelMappingSection && (
+            <div className="form-group">
+              <label>{t('settings.provider.dialog.modelMapping')}</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label htmlFor="sonnetModel">{t('settings.provider.dialog.sonnetModel')}</label>
+                  <input
+                    id="sonnetModel"
+                    type="text"
+                    className="form-input"
+                    placeholder={t('settings.provider.dialog.sonnetModelPlaceholder')}
+                    value={sonnetModel}
+                    onChange={handleSonnetModelChange}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="opusModel">{t('settings.provider.dialog.opusModel')}</label>
+                  <input
+                    id="opusModel"
+                    type="text"
+                    className="form-input"
+                    placeholder={t('settings.provider.dialog.opusModelPlaceholder')}
+                    value={opusModel}
+                    onChange={handleOpusModelChange}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="haikuModel">{t('settings.provider.dialog.haikuModel')}</label>
+                  <input
+                    id="haikuModel"
+                    type="text"
+                    className="form-input"
+                    placeholder={t('settings.provider.dialog.haikuModelPlaceholder')}
+                    value={haikuModel}
+                    onChange={handleHaikuModelChange}
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="opusModel">{t('settings.provider.dialog.opusModel')}</label>
-                <input
-                  id="opusModel"
-                  type="text"
-                  className="form-input"
-                  placeholder={t('settings.provider.dialog.opusModelPlaceholder')}
-                  value={opusModel}
-                  onChange={handleOpusModelChange}
-                />
-              </div>
-              <div>
-                <label htmlFor="haikuModel">{t('settings.provider.dialog.haikuModel')}</label>
-                <input
-                  id="haikuModel"
-                  type="text"
-                  className="form-input"
-                  placeholder={t('settings.provider.dialog.haikuModelPlaceholder')}
-                  value={haikuModel}
-                  onChange={handleHaikuModelChange}
-                />
-              </div>
+              <small className="form-hint">{t('settings.provider.dialog.modelMappingHint')}</small>
             </div>
-            <small className="form-hint">{t('settings.provider.dialog.modelMappingHint')}</small>
-          </div>
+          )}
 
           <details className="advanced-section" open>
             <summary className="advanced-toggle">

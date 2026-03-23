@@ -9,56 +9,89 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * ProviderManager 回归测试。
+ * Regression tests for ProviderManager.
  */
 public class ProviderManagerTest {
     /**
-     * current 为空时，应默认启用本地 settings.json Provider。
+     * When current is blank and there are no saved providers, Claude should remain inactive.
      */
     @Test
-    public void shouldDefaultActiveProviderToLocalSettingsWhenCurrentIsBlank() {
+    public void shouldLeaveClaudeInactiveWhenCurrentIsBlankAndNoProvidersExist() {
         AtomicReference<JsonObject> configRef = new AtomicReference<>(createConfigWithCurrent(""));
+        ProviderManager manager = createProviderManager(configRef);
+
+        JsonObject activeProvider = manager.getActiveClaudeProvider();
+
+        assertNull(activeProvider);
+        assertEquals("", configRef.get().getAsJsonObject("claude").get("current").getAsString());
+    }
+
+    /**
+     * When current is missing but explicit providers exist, the first saved provider should become active.
+     */
+    @Test
+    public void shouldSelectFirstSavedProviderWhenCurrentIsMissing() {
+        JsonObject config = new JsonObject();
+        JsonObject claude = new JsonObject();
+        JsonObject providersJson = new JsonObject();
+        providersJson.add("provider-a", createProvider("Provider A"));
+        providersJson.add("provider-b", createProvider("Provider B"));
+        claude.add("providers", providersJson);
+        config.add("claude", claude);
+
+        AtomicReference<JsonObject> configRef = new AtomicReference<>(config);
+        ProviderManager manager = createProviderManager(configRef);
+
+        JsonObject activeProvider = manager.getActiveClaudeProvider();
+        List<JsonObject> providers = manager.getClaudeProviders();
+
+        assertEquals(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID, providers.get(0).get("id").getAsString());
+        assertFalse(providers.get(0).get("isActive").getAsBoolean());
+        assertNotNull(activeProvider);
+        assertEquals("provider-a", activeProvider.get("id").getAsString());
+        assertEquals("provider-a", configRef.get().getAsJsonObject("claude").get("current").getAsString());
+    }
+
+    /**
+     * An explicit local settings selection should still be preserved.
+     */
+    @Test
+    public void shouldPreserveExplicitLocalSettingsSelection() {
+        AtomicReference<JsonObject> configRef = new AtomicReference<>(createConfigWithCurrent(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID));
         ProviderManager manager = createProviderManager(configRef);
 
         JsonObject activeProvider = manager.getActiveClaudeProvider();
 
         assertNotNull(activeProvider);
         assertEquals(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID, activeProvider.get("id").getAsString());
-        assertEquals(
-                ProviderManager.LOCAL_SETTINGS_PROVIDER_ID,
-                configRef.get().getAsJsonObject("claude").get("current").getAsString()
-        );
     }
 
     /**
-     * current 缺失时，Provider 列表里也应把本地 settings.json 标记为启用状态。
+     * Explicit deactivation should clear the active Claude provider.
      */
     @Test
-    public void shouldMarkLocalProviderAsActiveWhenCurrentIsMissing() {
-        JsonObject config = new JsonObject();
-        JsonObject claude = new JsonObject();
-        claude.add("providers", new JsonObject());
-        config.add("claude", claude);
-
+    public void shouldDeactivateClaudeProvider() throws Exception {
+        JsonObject config = createConfigWithCurrent("provider-a");
+        config.getAsJsonObject("claude")
+                .getAsJsonObject("providers")
+                .add("provider-a", createProvider("Provider A"));
         AtomicReference<JsonObject> configRef = new AtomicReference<>(config);
         ProviderManager manager = createProviderManager(configRef);
 
-        List<JsonObject> providers = manager.getClaudeProviders();
+        manager.deactivateClaudeProvider();
 
-        assertEquals(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID, providers.get(0).get("id").getAsString());
-        assertTrue(providers.get(0).get("isActive").getAsBoolean());
-        assertEquals(
-                ProviderManager.LOCAL_SETTINGS_PROVIDER_ID,
-                configRef.get().getAsJsonObject("claude").get("current").getAsString()
-        );
+        assertEquals("", configRef.get().getAsJsonObject("claude").get("current").getAsString());
+        assertNull(manager.getActiveClaudeProvider());
     }
 
     /**
-     * 构造仅使用内存配置的 ProviderManager，避免测试依赖真实文件系统。
+     * Build a ProviderManager backed only by in-memory config to avoid depending on the real filesystem in tests.
      */
     private ProviderManager createProviderManager(AtomicReference<JsonObject> configRef) {
         Gson gson = new Gson();
@@ -81,7 +114,7 @@ public class ProviderManagerTest {
     }
 
     /**
-     * 构造最小 Claude 配置。
+     * Build the minimal Claude configuration.
      */
     private JsonObject createConfigWithCurrent(String current) {
         JsonObject config = new JsonObject();
@@ -90,5 +123,12 @@ public class ProviderManagerTest {
         claude.add("providers", new JsonObject());
         config.add("claude", claude);
         return config;
+    }
+
+    private JsonObject createProvider(String name) {
+        JsonObject provider = new JsonObject();
+        provider.addProperty("name", name);
+        provider.add("settingsConfig", new JsonObject());
+        return provider;
     }
 }

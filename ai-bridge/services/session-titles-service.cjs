@@ -1,6 +1,6 @@
 /**
- * 会话标题服务模块
- * 负责管理会话自定义标题功能
+ * Session title service module
+ * Responsible for managing custom session titles
  */
 
 const fs = require('fs');
@@ -11,7 +11,7 @@ const TITLES_DIR = getCodemossDir();
 const TITLES_FILE = path.join(TITLES_DIR, 'session-titles.json');
 
 /**
- * 确保标题目录存在
+ * Ensure the title directory exists
  */
 function ensureTitlesDir() {
   if (!fs.existsSync(TITLES_DIR)) {
@@ -20,8 +20,8 @@ function ensureTitlesDir() {
 }
 
 /**
- * 加载标题数据
- * @returns {Object} 标题数据，格式: { "sessionId": { "customTitle": "标题", "updatedAt": timestamp } }
+ * Load title data
+ * @returns {Object} Title data in the format: { "sessionId": { "customTitle": "Title", "updatedAt": timestamp } }
  */
 function loadTitles() {
   try {
@@ -40,8 +40,9 @@ function loadTitles() {
 }
 
 /**
- * 保存标题数据（原子写入：先写临时文件再 rename，防止写入中途崩溃导致数据丢失）
- * @param {Object} titles - 标题数据
+ * Save title data using an atomic write:
+ * write to a temporary file first, then rename it to avoid data loss if a write crashes midway.
+ * @param {Object} titles - Title data
  */
 function saveTitles(titles) {
   try {
@@ -56,16 +57,16 @@ function saveTitles(titles) {
 }
 
 /**
- * 更新会话标题
- * @param {string} sessionId - 会话ID
- * @param {string} customTitle - 自定义标题
+ * Update a session title
+ * @param {string} sessionId - Session ID
+ * @param {string} customTitle - Custom title
  * @returns {Object} { success: boolean, title: string }
  */
 function updateTitle(sessionId, customTitle) {
   try {
     const titles = loadTitles();
 
-    // 验证标题长度（最多50个字符）
+    // Validate title length (maximum 50 characters)
     if (customTitle && customTitle.length > 50) {
       return {
         success: false,
@@ -94,9 +95,9 @@ function updateTitle(sessionId, customTitle) {
 }
 
 /**
- * 获取会话标题
- * @param {string} sessionId - 会话ID
- * @returns {string|null} 自定义标题，未设置返回 null
+ * Get the session title
+ * @param {string} sessionId - Session ID
+ * @returns {string|null} Custom title, or null if unset
  */
 function getTitle(sessionId) {
   const titles = loadTitles();
@@ -104,9 +105,9 @@ function getTitle(sessionId) {
 }
 
 /**
- * 删除会话标题
- * @param {string} sessionId - 会话ID
- * @returns {boolean} 是否成功
+ * Delete a session title
+ * @param {string} sessionId - Session ID
+ * @returns {boolean} Whether the operation succeeded
  */
 function deleteTitle(sessionId) {
   try {
@@ -129,16 +130,16 @@ function deleteTitle(sessionId) {
 }
 
 /**
- * 获取更新时间
- * @param {string} sessionId - 会话ID
- * @returns {number|null} 更新时间戳，未设置返回 null
+ * Get the last updated timestamp
+ * @param {string} sessionId - Session ID
+ * @returns {number|null} Updated timestamp, or null if unset
  */
 function getUpdatedAt(sessionId) {
   const titles = loadTitles();
   return titles[sessionId]?.updatedAt || null;
 }
 
-// 使用 CommonJS 导出
+// Export via CommonJS
 module.exports = {
   loadTitles,
   updateTitle,

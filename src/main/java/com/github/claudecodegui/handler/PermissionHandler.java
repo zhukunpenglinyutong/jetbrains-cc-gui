@@ -1,5 +1,8 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.handler.core.BaseMessageHandler;
+import com.github.claudecodegui.handler.core.HandlerContext;
+
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
 import com.google.gson.Gson;
@@ -167,8 +170,8 @@ public class PermissionHandler extends BaseMessageHandler {
             }
 
             // Get the window instance for the target project
-            com.github.claudecodegui.ClaudeChatWindow targetWindow =
-                com.github.claudecodegui.ClaudeSDKToolWindow.getChatWindow(targetProject);
+            com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow targetWindow =
+                com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow.getChatWindow(targetProject);
 
             if (targetWindow == null) {
                 LOG.error("[PermissionHandler] Error: cannot find window instance for project " + targetProject.getName());

@@ -1,7 +1,7 @@
 package com.github.claudecodegui.action;
 
-import com.github.claudecodegui.ClaudeChatWindow;
-import com.github.claudecodegui.ClaudeSDKToolWindow;
+import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
+import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;

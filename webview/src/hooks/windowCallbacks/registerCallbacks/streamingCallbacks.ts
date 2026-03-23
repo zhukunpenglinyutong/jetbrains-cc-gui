@@ -13,6 +13,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
   const {
     setMessages,
     setStreamingActive,
+    setLoading,
+    setLoadingStartTime,
+    setIsThinking,
     setExpandedThinking,
     streamingContentRef,
     isStreamingRef,
@@ -194,49 +197,64 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
       thinkingUpdateTimeoutRef.current = null;
     }
 
-    // Flush final content BEFORE marking stream as ended
+    // Snapshot keys that need collapsing BEFORE they are cleared inside the updater.
+    const keysToCollapse = new Set(autoExpandedThinkingKeysRef.current);
+
+    // Flush final content AND clear streaming refs inside the same updater.
+    // This ensures any previously queued setMessages updater (e.g. from
+    // updateMessages) still reads valid refs when it executes, because React
+    // processes updaters in enqueue order.
     setMessages((prev) => {
-      if (prev.length === 0) return prev;
+      let newMessages = prev;
       const idx = streamingMessageIndexRef.current;
-      if (idx < 0 || idx >= prev.length || prev[idx]?.type !== 'assistant') {
-        return prev;
+      if (prev.length > 0 && idx >= 0 && idx < prev.length && prev[idx]?.type === 'assistant') {
+        const finalContent = streamingContentRef.current;
+        newMessages = [...prev];
+        newMessages[idx] = {
+          ...newMessages[idx],
+          content: finalContent || newMessages[idx].content,
+          isStreaming: false,
+        };
       }
-      const finalContent = streamingContentRef.current;
-      const newMessages = [...prev];
-      newMessages[idx] = {
-        ...newMessages[idx],
-        content: finalContent || newMessages[idx].content,
-        isStreaming: false,
-      };
+
+      // Clear all streaming refs AFTER flushing content, inside the updater
+      isStreamingRef.current = false;
+      useBackendStreamingRenderRef.current = false;
+      streamingMessageIndexRef.current = -1;
+      streamingTurnIdRef.current = -1;
+      streamingContentRef.current = '';
+      streamingTextSegmentsRef.current = [];
+      activeTextSegmentIndexRef.current = -1;
+      streamingThinkingSegmentsRef.current = [];
+      activeThinkingSegmentIndexRef.current = -1;
+      seenToolUseCountRef.current = 0;
+      autoExpandedThinkingKeysRef.current.clear();
+
       return newMessages;
     });
 
-    // Mark streaming as ended AFTER flushing content
-    isStreamingRef.current = false;
-    useBackendStreamingRenderRef.current = false;
-
-    if (setExpandedThinking) {
+    // Collapse auto-expanded thinking blocks using the pre-clear snapshot
+    if (setExpandedThinking && keysToCollapse.size > 0) {
       setExpandedThinking((prev) => {
-        const keys = autoExpandedThinkingKeysRef.current;
-        if (keys.size === 0) return prev;
         const next = { ...prev };
-        keys.forEach((key) => {
+        keysToCollapse.forEach((key) => {
           next[key] = false;
         });
         return next;
       });
     }
 
-    streamingMessageIndexRef.current = -1;
-    streamingTurnIdRef.current = -1;
-    streamingContentRef.current = '';
-    streamingTextSegmentsRef.current = [];
-    activeTextSegmentIndexRef.current = -1;
-    streamingThinkingSegmentsRef.current = [];
-    activeThinkingSegmentIndexRef.current = -1;
-    seenToolUseCountRef.current = 0;
-    autoExpandedThinkingKeysRef.current.clear();
+    // React state (not ref) — React batches this with setMessages automatically
     setStreamingActive(false);
+
+    // FIX: onStreamEnd is the authoritative signal that streaming has ended.
+    // Reset loading state here to prevent race conditions where showLoading("false")
+    // arrives before onStreamEnd and gets ignored by the isStreamingRef guard,
+    // while the flush callback's showLoading("false") may be delayed or lost
+    // (e.g., due to slow message serialization or multi-hop async chains).
+    setLoading(false);
+    setLoadingStartTime(null);
+    setIsThinking(false);
   };
 
   // Permission denied callback — marks incomplete tool calls as "interrupted"

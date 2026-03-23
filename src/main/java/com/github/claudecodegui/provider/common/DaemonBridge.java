@@ -626,6 +626,7 @@ public class DaemonBridge {
 
         void onError(String error) {
             callback.onError(error);
+            future.completeExceptionally(new RuntimeException(error));
         }
 
         void onComplete(boolean success) {

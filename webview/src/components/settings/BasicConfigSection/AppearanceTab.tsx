@@ -202,6 +202,7 @@ const AppearanceTab = ({
     { value: 'fr', label: 'settings.basic.language.french' },
     { value: 'ja', label: 'settings.basic.language.japanese' },
     { value: 'ru', label: 'settings.basic.language.russian' },
+    { value: 'ko', label: 'settings.basic.language.korean' },
   ];
 
   const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {

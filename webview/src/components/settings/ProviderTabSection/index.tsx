@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig, CodexProviderConfig } from '../../../types/provider';
 import { STORAGE_KEYS } from '../../../types/provider';
-import type { ClaudeConfig } from '../ConfigInfoDisplay';
 import ProviderManageSection from '../ProviderManageSection';
 import CodexProviderSection from '../CodexProviderSection';
 import CustomModelDialog from '../CustomModelDialog';
@@ -12,8 +11,6 @@ import styles from './style.module.less';
 interface ProviderTabSectionProps {
   currentProvider: 'claude' | 'codex' | string;
   // Claude provider props
-  claudeConfig: ClaudeConfig | null;
-  claudeConfigLoading: boolean;
   providers: ProviderConfig[];
   loading: boolean;
   onAddProvider: () => void;
@@ -33,8 +30,6 @@ interface ProviderTabSectionProps {
 
 const ProviderTabSection = ({
   currentProvider,
-  claudeConfig,
-  claudeConfigLoading,
   providers,
   loading,
   onAddProvider,
@@ -131,8 +126,6 @@ const ProviderTabSection = ({
           </button>
         </div>
         <ProviderManageSection
-          claudeConfig={claudeConfig}
-          claudeConfigLoading={claudeConfigLoading}
           providers={providers}
           loading={loading}
           onAddProvider={onAddProvider}

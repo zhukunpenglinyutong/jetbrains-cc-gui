@@ -1,6 +1,6 @@
 package com.github.claudecodegui.ui;
 
-import com.github.claudecodegui.CodemossSettingsService;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.IgnoreRuleMatcher;
 import com.github.claudecodegui.util.JsUtils;
 import com.intellij.openapi.application.ApplicationManager;

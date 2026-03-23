@@ -264,14 +264,7 @@ public class SessionIndexManager {
         }
 
         try {
-            // For Codex, check the root directory's modification time
-            long currentDirModified = Files.getLastModifiedTime(sessionsDir).toMillis();
-
-            if (currentDirModified <= projectIndex.lastDirScanTime) {
-                return UpdateType.NONE;
-            }
-
-            // Directory timestamp changed; count current files
+            // Count files first (recursive walk for nested year/month/day structure)
             long currentFileCount;
             try (Stream<Path> paths = Files.walk(sessionsDir)) {
                 currentFileCount = paths
@@ -280,14 +273,13 @@ public class SessionIndexManager {
                     .count();
             }
 
-            if (currentFileCount > projectIndex.fileCount) {
+            if (currentFileCount == projectIndex.fileCount) {
+                return UpdateType.NONE;
+            } else if (currentFileCount > projectIndex.fileCount) {
                 LOG.info("[SessionIndexManager] Codex file count increased: " + projectIndex.fileCount + " -> " + currentFileCount + ", incremental update");
                 return UpdateType.INCREMENTAL;
-            } else if (currentFileCount < projectIndex.fileCount) {
-                LOG.info("[SessionIndexManager] Codex file count decreased, full update");
-                return UpdateType.FULL;
             } else {
-                // File count is the same but directory timestamp changed; content may have been updated
+                LOG.info("[SessionIndexManager] Codex file count decreased: " + projectIndex.fileCount + " -> " + currentFileCount + ", full update");
                 return UpdateType.FULL;
             }
         } catch (IOException e) {

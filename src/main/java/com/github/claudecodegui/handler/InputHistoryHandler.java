@@ -1,5 +1,7 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.handler.core.HandlerContext;
+
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 

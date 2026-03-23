@@ -1,6 +1,6 @@
 package com.github.claudecodegui.watcher;
 
-import com.github.claudecodegui.CodemossSettingsService;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.model.PromptScope;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;

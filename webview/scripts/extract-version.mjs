@@ -4,22 +4,22 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// 获取当前目录
+// Get the current directory
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 获取项目根目录 (webview 的父目录)
+// Get the project root directory (the parent of webview)
 const projectRoot = path.resolve(__dirname, '../..');
 const buildGradlePath = path.join(projectRoot, 'build.gradle');
 
-// 读取 build.gradle 文件
+// Read the build.gradle file
 const buildGradleContent = fs.readFileSync(buildGradlePath, 'utf8');
 
-// 提取版本号
-// 查找类似 version = '0.1.0-beta3' 这样的行
+// Extract the version number
+// Look for a line like: version = '0.1.0-beta3'
 let versionMatch = buildGradleContent.match(/^version\s*=\s*'(.+)'$/m);
 if (!versionMatch) {
-  // 如果上面的正则失败，尝试另一种方式
+  // If the regex above fails, try a fallback approach
   const lines = buildGradleContent.split('\n');
   const versionLine = lines.find(line => line.trim().startsWith('version ='));
   if (versionLine) {
@@ -37,7 +37,7 @@ if (!versionMatch) {
 const version = versionMatch[1];
 console.log(`Found version: ${version}`);
 
-// 创建版本文件供 webview 使用
+// Create the version file for the webview
 const versionDir = path.join(__dirname, '../src/version');
 if (!fs.existsSync(versionDir)) {
   fs.mkdirSync(versionDir, { recursive: true });

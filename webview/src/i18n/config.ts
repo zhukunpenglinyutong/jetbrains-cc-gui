@@ -8,6 +8,7 @@ import es from './locales/es.json';
 import fr from './locales/fr.json';
 import ja from './locales/ja.json';
 import ru from './locales/ru.json';
+import ko from './locales/ko.json';
 
 // Retrieve the saved language from localStorage; default to English if not set
 const getInitialLanguage = (): string => {
@@ -27,6 +28,7 @@ i18n
       fr: { translation: fr }, // French
       ja: { translation: ja }, // Japanese
       ru: { translation: ru }, // Russian
+      ko: { translation: ko }, // Korean
     },
     lng: getInitialLanguage(), // Initial language
     fallbackLng: 'en', // Fallback to English when a translation is missing

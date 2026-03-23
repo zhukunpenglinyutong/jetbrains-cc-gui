@@ -1,6 +1,9 @@
 package com.github.claudecodegui.handler;
 
-import com.github.claudecodegui.ClaudeSession;
+import com.github.claudecodegui.handler.core.BaseMessageHandler;
+import com.github.claudecodegui.handler.core.HandlerContext;
+
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
@@ -385,8 +388,8 @@ public class SessionHandler extends BaseMessageHandler {
         // (relative paths are resolved only when projectPath is valid).
         if (projectPath != null && new File(projectPath).exists()) {
             try {
-                com.github.claudecodegui.CodemossSettingsService settingsService =
-                        new com.github.claudecodegui.CodemossSettingsService();
+                com.github.claudecodegui.settings.CodemossSettingsService settingsService =
+                        new com.github.claudecodegui.settings.CodemossSettingsService();
                 String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
 
                 if (customWorkingDir != null && !customWorkingDir.isEmpty()) {

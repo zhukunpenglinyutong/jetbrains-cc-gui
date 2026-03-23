@@ -1,6 +1,6 @@
 package com.github.claudecodegui.action;
 
-import com.github.claudecodegui.ClaudeChatWindow;
+import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import org.jetbrains.annotations.NotNull;
 import com.intellij.openapi.project.Project;

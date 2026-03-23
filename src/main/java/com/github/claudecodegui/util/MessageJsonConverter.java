@@ -1,7 +1,7 @@
 package com.github.claudecodegui.util;
 
-import com.github.claudecodegui.ClaudeSession;
-import com.github.claudecodegui.handler.HandlerContext;
+import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;

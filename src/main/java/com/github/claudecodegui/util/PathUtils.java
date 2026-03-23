@@ -97,8 +97,14 @@ public class PathUtils {
     }
 
     /**
-     * Convert an MSYS2-style path to a Windows path.
-     * Examples: /c/Users/test -> C:\Users\test, /d/work -> D:\work
+     * Convert an MSYS2/Git Bash-style path to a Windows path.
+     * Handles the following path mappings:
+     * <ul>
+     *   <li>{@code /c/Users/test} → {@code C:\Users\test} (drive letter mapping)</li>
+     *   <li>{@code /home/user} or {@code ~} → {@code %USERPROFILE%} (home directory)</li>
+     *   <li>{@code /tmp} → {@code %TEMP%} (temporary directory)</li>
+     *   <li>{@code /dev/null} → {@code NUL} (null device)</li>
+     * </ul>
      * Returns the original path if conversion is not needed.
      *
      * @param path the original path
@@ -113,14 +119,57 @@ public class PathUtils {
             return path;
         }
 
-        if (!path.matches("^/[a-zA-Z](/.*)?$")) {
+        // Handle tilde (home directory shorthand)
+        if (path.equals("~") || path.startsWith("~/")) {
+            String home = PlatformUtils.getHomeDirectory();
+            if (home != null && !home.isEmpty()) {
+                String expanded = path.equals("~") ? home : home + path.substring(1);
+                return normalizeToPlatform(expanded);
+            }
+        }
+
+        // All remaining conversions require a leading slash
+        if (!path.startsWith("/")) {
             return path;
         }
 
-        char driveLetter = Character.toUpperCase(path.charAt(1));
-        String remainder = path.length() > 2 ? path.substring(2) : "";
-        String windowsPath = driveLetter + ":" + (remainder.isEmpty() ? "/" : remainder);
-        return normalizeToPlatform(windowsPath);
+        // /dev/null → NUL
+        if (path.equals("/dev/null")) {
+            return "NUL";
+        }
+
+        // Drive letter mapping: /c/... → C:\...
+        if (path.matches("^/[a-zA-Z](/.*)?$")) {
+            char driveLetter = Character.toUpperCase(path.charAt(1));
+            String remainder = path.length() > 2 ? path.substring(2) : "";
+            String windowsPath = driveLetter + ":" + (remainder.isEmpty() ? "/" : remainder);
+            return normalizeToPlatform(windowsPath);
+        }
+
+        // /home/<username>/... → %USERPROFILE%/... (Git Bash maps /home/<user> to Windows home)
+        if (path.startsWith("/home/")) {
+            String home = PlatformUtils.getHomeDirectory();
+            if (home != null && !home.isEmpty()) {
+                String afterHome = path.substring("/home/".length());
+                int slashIdx = afterHome.indexOf('/');
+                if (slashIdx < 0) {
+                    return normalizeToPlatform(home);
+                } else {
+                    return normalizeToPlatform(home + afterHome.substring(slashIdx));
+                }
+            }
+        }
+
+        // /tmp → system temp directory
+        if (path.equals("/tmp") || path.startsWith("/tmp/")) {
+            String tempDir = PlatformUtils.getTempDirectory();
+            if (!tempDir.isEmpty()) {
+                String remainder = path.length() > "/tmp".length() ? path.substring("/tmp".length()) : "";
+                return normalizeToPlatform(tempDir + remainder);
+            }
+        }
+
+        return path;
     }
 
     // ==================== Path Length Checks ====================
@@ -175,41 +224,27 @@ public class PathUtils {
     public static List<String> getTempPaths() {
         Set<String> paths = new HashSet<>();
 
-        // System temporary directory
+        // Primary temp directory from PlatformUtils (handles TEMP/TMP/TMPDIR/java.io.tmpdir)
+        String primaryTemp = PlatformUtils.getTempDirectory();
+        if (!primaryTemp.isEmpty()) {
+            paths.add(normalizeToUnix(primaryTemp).toLowerCase());
+        }
+
+        // java.io.tmpdir as additional fallback
         String javaTmpDir = System.getProperty("java.io.tmpdir");
         if (javaTmpDir != null && !javaTmpDir.isEmpty()) {
             paths.add(normalizeToUnix(javaTmpDir).toLowerCase());
         }
 
         if (PlatformUtils.isWindows()) {
-            // Windows-specific temporary directories
-            String temp = PlatformUtils.getEnvIgnoreCase("TEMP");
-            if (temp != null && !temp.isEmpty()) {
-                paths.add(normalizeToUnix(temp).toLowerCase());
-            }
-
-            String tmp = PlatformUtils.getEnvIgnoreCase("TMP");
-            if (tmp != null && !tmp.isEmpty()) {
-                paths.add(normalizeToUnix(tmp).toLowerCase());
-            }
-
             String localAppData = PlatformUtils.getEnvIgnoreCase("LOCALAPPDATA");
             if (localAppData != null && !localAppData.isEmpty()) {
                 paths.add(normalizeToUnix(localAppData + "\\Temp").toLowerCase());
             }
-
-            // Common Windows temp directory
-            paths.add("c:/windows/temp");
         } else {
-            // Unix system temporary directories
             paths.add("/tmp");
             paths.add("/var/tmp");
             paths.add("/private/tmp"); // macOS
-
-            String tmpDir = System.getenv("TMPDIR");
-            if (tmpDir != null && !tmpDir.isEmpty()) {
-                paths.add(normalizeToUnix(tmpDir).toLowerCase());
-            }
         }
 
         return new ArrayList<>(paths);
@@ -285,7 +320,7 @@ public class PathUtils {
     /**
      * Join two path segments.
      *
-     * @param basePath the base path
+     * @param basePath     the base path
      * @param relativePath the relative path to append
      * @return the combined path
      */

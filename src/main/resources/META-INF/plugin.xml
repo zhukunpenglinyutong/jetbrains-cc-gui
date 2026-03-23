@@ -1,6 +1,6 @@
 <idea-plugin>
-    <id>com.github.jetbrains-long-gui</id>
-    <name>CC GUI（Claude and Codex）</name>
+    <id>com.github.jetbrains-claude-code-gui</id>
+    <name>Claude Code GUI</name>
     <vendor>Jordan</vendor>
 
     <!-- Resource bundle for i18n -->
@@ -13,6 +13,8 @@
             <li><strong>Claude Code</strong> Anthropic 官方 AI 编程助手（支持 Opus 4.6 等多模型）</li>
             <li><strong>OpenAI Codex</strong> - OpenAI 强大的代码生成引擎</li>
         </ul>
+
+        <p><strong>Connection disclosure / 连接说明：</strong> Claude provider management defaults to the official direct Anthropic API. Some optional third-party provider presets route requests through third-party/proxy endpoints instead of directly to Anthropic, and this is labeled in the plugin UI before use.</p>
 
         <h2>核心功能</h2>
         <ul>
@@ -51,7 +53,7 @@
         <!-- CC GUI tool window (includes history feature) -->
         <toolWindow id="CCG"
                     anchor="right"
-                    factoryClass="com.github.claudecodegui.ClaudeSDKToolWindow"
+                    factoryClass="com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow"
                     icon="/icons/cc-gui-icon.svg"
                     canCloseContents="true"/>
 
@@ -75,7 +77,7 @@
     <actions>
         <!-- Action to send selected code to terminal -->
         <action id="ClaudeCodeGUI.SendSelectionToTerminalAction"
-                class="com.github.claudecodegui.SendSelectionToTerminalAction"
+                class="com.github.claudecodegui.action.editor.SendSelectionToTerminalAction"
                 icon="/icons/send-to-terminal.svg">
             <!-- Add to editor context menu (displayed at the top) -->
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
@@ -86,7 +88,7 @@
 
         <!-- Quick Fix with Claude Action -->
         <action id="ClaudeCodeGUI.QuickFixWithClaudeAction"
-                class="com.github.claudecodegui.QuickFixWithClaudeAction"
+                class="com.github.claudecodegui.action.editor.QuickFixWithClaudeAction"
                 icon="/icons/quick-fix.svg">
             <add-to-group group-id="EditorPopupMenu"
                            anchor="after"
@@ -98,27 +100,27 @@
 
         <!-- Create New Tab Action (can be invoked via Find Action or programmatically) -->
         <action id="ClaudeCodeGUI.CreateNewTabAction"
-                class="com.github.claudecodegui.CreateNewTabAction"
+                class="com.github.claudecodegui.action.tab.CreateNewTabAction"
                 icon="AllIcons.General.Add"/>
 
         <!-- Rename Tab Action -->
         <action id="ClaudeCodeGUI.RenameTabAction"
-                class="com.github.claudecodegui.RenameTabAction"
+                class="com.github.claudecodegui.action.tab.RenameTabAction"
                 icon="AllIcons.Actions.Edit"/>
 
         <!-- Detach Tab Action -->
         <action id="ClaudeCodeGUI.DetachTabAction"
-                class="com.github.claudecodegui.DetachTabAction"
+                class="com.github.claudecodegui.action.tab.DetachTabAction"
                 icon="AllIcons.Actions.MoveToWindow"/>
 
         <!-- Open DevTools Action for JCEF debugging -->
         <action id="ClaudeCodeGUI.OpenDevToolsAction"
-                class="com.github.claudecodegui.OpenDevToolsAction"
+                class="com.github.claudecodegui.action.dev.OpenDevToolsAction"
                 icon="AllIcons.Xml.Browsers.Chromium"/>
 
         <!-- Action to send file path from the file tree to the input box -->
         <action id="ClaudeCodeGUI.SendFilePathToInputAction"
-                class="com.github.claudecodegui.SendFilePathToInputAction"
+                class="com.github.claudecodegui.action.editor.SendFilePathToInputAction"
                 icon="/icons/send-to-terminal.svg">
             <!-- Add to project file tree context menu -->
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
@@ -126,7 +128,7 @@
 
         <!-- Generate Commit Message with AI Action -->
         <action id="ClaudeCodeGUI.GenerateCommitMessageAction"
-                class="com.github.claudecodegui.GenerateCommitMessageAction"
+                class="com.github.claudecodegui.action.vcs.GenerateCommitMessageAction"
                 icon="/icons/logo-16.png">
             <!-- Add to VCS Commit toolbar -->
             <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>

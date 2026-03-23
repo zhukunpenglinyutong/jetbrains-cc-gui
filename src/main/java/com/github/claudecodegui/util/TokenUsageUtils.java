@@ -1,6 +1,6 @@
 package com.github.claudecodegui.util;
 
-import com.github.claudecodegui.ClaudeSession;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.JsonObject;
 
 import java.util.List;

@@ -205,6 +205,71 @@ export const preserveStreamingAssistantContent = (
 };
 
 // ---------------------------------------------------------------------------
+// Streaming assistant preservation
+// ---------------------------------------------------------------------------
+
+/**
+ * Ensure a streaming assistant message is not lost when updateMessages replaces
+ * the entire message list.  Returns the (possibly amended) result list and the
+ * index of the streaming assistant inside it.
+ *
+ * The function has two paths:
+ * 1. Primary — refs are valid (normal streaming).
+ * 2. Fallback — refs already cleared (race condition). Uses message-level
+ *    `isStreaming` + `__turnId` markers to recover.
+ */
+export const ensureStreamingAssistantInList = (
+  prevList: ClaudeMessage[],
+  resultList: ClaudeMessage[],
+  isStreaming: boolean,
+  streamingTurnId: number,
+): { list: ClaudeMessage[]; streamingIndex: number } => {
+  // Primary path: refs are still valid
+  if (isStreaming && streamingTurnId > 0) {
+    const existingIdx = resultList.findIndex(
+      (m) => m.__turnId === streamingTurnId && m.type === 'assistant',
+    );
+    if (existingIdx >= 0) {
+      return { list: resultList, streamingIndex: existingIdx };
+    }
+
+    let streamingAssistant: ClaudeMessage | undefined;
+    for (let i = prevList.length - 1; i >= 0; i--) {
+      if (prevList[i].__turnId === streamingTurnId && prevList[i].type === 'assistant') {
+        streamingAssistant = prevList[i];
+        break;
+      }
+    }
+
+    if (streamingAssistant) {
+      const result = [...resultList, streamingAssistant];
+      return { list: result, streamingIndex: result.length - 1 };
+    }
+
+    return { list: resultList, streamingIndex: -1 };
+  }
+
+  // Fallback path: refs already cleared (race condition).
+  // Only consider the most recent streaming assistant in prevList.
+  for (let i = prevList.length - 1; i >= 0; i--) {
+    const msg = prevList[i];
+    if (msg.type === 'assistant' && msg.isStreaming && msg.__turnId && msg.__turnId > 0) {
+      const alreadyPresent = resultList.some(
+        (m) => m.type === 'assistant' && m.__turnId === msg.__turnId,
+      );
+      if (!alreadyPresent) {
+        const result = [...resultList, msg];
+        return { list: result, streamingIndex: result.length - 1 };
+      }
+      // Already in resultList — no recovery needed
+      break;
+    }
+  }
+
+  return { list: resultList, streamingIndex: -1 };
+};
+
+// ---------------------------------------------------------------------------
 // Re-export ClaudeRawMessage so callers can use it without an extra import
 // ---------------------------------------------------------------------------
 export type { ClaudeRawMessage };

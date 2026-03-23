@@ -17,8 +17,8 @@ export function getMessageKey(message: ClaudeMessage, index: number): string {
  * Returns the combined content: "command-message content command-args content"
  *
  * Example:
- *   Input: "<command-message>aimax:auto</command-message>\n<command-name>/aimax:auto</command-name>\n<command-args>你好啊</command-args>"
- *   Output: "aimax:auto 你好啊"
+ *   Input: "<command-message>aimax:auto</command-message>\n<command-name>/aimax:auto</command-name>\n<command-args>hello there</command-args>"
+ *   Output: "aimax:auto hello there"
  */
 export function extractCommandMessageContent(text: string): string {
   if (!text) return text;

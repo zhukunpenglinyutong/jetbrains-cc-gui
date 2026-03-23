@@ -1,6 +1,6 @@
 package com.github.claudecodegui.notifications;
 
-import com.github.claudecodegui.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.util.SoundNotificationService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
@@ -26,7 +26,7 @@ public class ClaudeNotifier {
     public static void showSuccess(@NotNull Project project, String message) {
         show(project, "Claude ✓", message, 5000);
 
-        // 播放任务完成提示音
+        // Play the task completion notification sound
         SoundNotificationService.getInstance().playTaskCompleteSound();
     }
 

@@ -471,6 +471,19 @@
   }
 }
 
+.btnDanger {
+  padding: 6px 16px;
+  border: none;
+  background: #c2410c;
+  color: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.92;
+  }
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -548,6 +561,30 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.revokeButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, #c2410c 45%, transparent);
+  background: color-mix(in srgb, #c2410c 14%, transparent);
+  color: #f97316;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: color-mix(in srgb, #c2410c 22%, transparent);
+    transform: translateY(-1px);
+  }
+
   &:active {
     transform: translateY(0);
   }

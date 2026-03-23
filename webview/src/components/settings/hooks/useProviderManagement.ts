@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../../types/provider';
+import { writeClaudeModelMapping } from '../../../utils/claudeModelMapping';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -25,6 +26,7 @@ export interface UseProviderManagementOptions {
 }
 
 export function useProviderManagement(options: UseProviderManagementOptions = {}) {
+  const DISABLED_PROVIDER_ID = '__disabled__';
   const { t } = useTranslation();
   const { onError, onSuccess } = options;
 
@@ -46,13 +48,8 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
 
   // Sync active provider model mapping to localStorage
   const syncActiveProviderModelMapping = useCallback((provider?: ProviderConfig | null) => {
-    if (typeof window === 'undefined' || !window.localStorage) return;
     if (!provider || !provider.settingsConfig || !provider.settingsConfig.env) {
-      try {
-        window.localStorage.removeItem('claude-model-mapping');
-      } catch {
-        // ignore
-      }
+      writeClaudeModelMapping({});
       return;
     }
     const env = provider.settingsConfig.env as Record<string, any>;
@@ -62,16 +59,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
       sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? '',
       opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? '',
     };
-    const hasValue = Object.values(mapping).some((v) => v && String(v).trim().length > 0);
-    try {
-      if (hasValue) {
-        window.localStorage.setItem('claude-model-mapping', JSON.stringify(mapping));
-      } else {
-        window.localStorage.removeItem('claude-model-mapping');
-      }
-    } catch {
-      // ignore
-    }
+    writeClaudeModelMapping(mapping);
   }, []);
 
   // Load provider list
@@ -196,6 +184,12 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
   const handleSwitchProvider = useCallback(
     (id: string) => {
       const data = { id };
+      if (id === DISABLED_PROVIDER_ID) {
+        syncActiveProviderModelMapping(null);
+        sendToJava(`switch_provider:${JSON.stringify(data)}`);
+        setLoading(true);
+        return;
+      }
       const target = providers.find((p) => p.id === id);
       if (target) {
         syncActiveProviderModelMapping(target);

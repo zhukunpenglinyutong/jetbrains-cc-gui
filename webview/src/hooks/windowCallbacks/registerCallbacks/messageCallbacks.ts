@@ -12,6 +12,7 @@ import type { ClaudeMessage } from '../../../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import {
   appendOptimisticMessageIfMissing,
+  ensureStreamingAssistantInList,
   preserveLastAssistantIdentity,
   preserveStreamingAssistantContent,
 } from '../messageSync';
@@ -49,31 +50,16 @@ export function registerMessageCallbacks(
   } = options;
 
   const ensureStreamingAssistantPreserved = (prevList: ClaudeMessage[], resultList: ClaudeMessage[]): ClaudeMessage[] => {
-    if (!isStreamingRef.current || streamingTurnIdRef.current <= 0) return resultList;
-
-    // Check if result already contains the current streaming assistant
-    const turnId = streamingTurnIdRef.current;
-    const existingIdx = resultList.findIndex((m) => m.__turnId === turnId && m.type === 'assistant');
-    if (existingIdx >= 0) {
-      streamingMessageIndexRef.current = existingIdx;
-      return resultList;
+    const { list, streamingIndex } = ensureStreamingAssistantInList(
+      prevList,
+      resultList,
+      isStreamingRef.current,
+      streamingTurnIdRef.current,
+    );
+    if (streamingIndex >= 0) {
+      streamingMessageIndexRef.current = streamingIndex;
     }
-
-    // Find the streaming assistant in prev (reverse search for efficiency)
-    let streamingAssistant: ClaudeMessage | undefined;
-    for (let i = prevList.length - 1; i >= 0; i--) {
-      if (prevList[i].__turnId === turnId && prevList[i].type === 'assistant') {
-        streamingAssistant = prevList[i];
-        break;
-      }
-    }
-
-    if (!streamingAssistant) return resultList;
-
-    // Append the streaming assistant to result
-    const result = [...resultList, streamingAssistant];
-    streamingMessageIndexRef.current = result.length - 1;
-    return result;
+    return list;
   };
 
   window.updateMessages = (json) => {
