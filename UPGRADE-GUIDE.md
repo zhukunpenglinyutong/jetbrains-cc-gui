@@ -99,29 +99,39 @@ Die Diagnostic-Schicht ist als **Single-Entry-Point-Architektur** aufgebaut. Jed
 
 Jede Modifikation ist mit `// F-007`, `// F-010` o.ae. markiert und kann per Grep gefunden werden.
 
-**Java (5 Dateien, ~26 Zeilen total):**
+**Java (7 Dateien, ~40 Zeilen total):**
 
-| Datei (v0.3.1 Pfad) | Aenderung | Zeilen |
-|----------------------|-----------|--------|
-| `ui/ChatWindowDelegate.java` | 1 Import + 1 Feld `DiagnosticManager` + `init()` in `initializeHandlers()` + `dispose()` in `dispose()` | ~6 |
-| `provider/common/BaseSDKBridge.java` | 1 protected Feld `DiagnosticManager` + `setDiagnosticManager()` + shutdown in `cleanupAllProcesses()` | ~6 |
-| `provider/claude/ClaudeProcessInvoker.java` | Constructor-Parameter `DiagnosticManager` + 2 log-Aufrufe (outbound + inbound) | ~6 |
-| `provider/claude/ClaudeDaemonRequestExecutor.java` | Constructor-Parameter `DiagnosticManager` + 2 log-Aufrufe (outbound + inbound) | ~6 |
-| `ui/toolwindow/ClaudeSDKToolWindow.java` | `getAllWindows()` static method (B-026) | ~3 |
+| Datei (v0.3.1 Pfad) | Aenderung | Zeilen | Feature |
+|----------------------|-----------|--------|---------|
+| `ui/ChatWindowDelegate.java` | 1 Import + 1 Feld `DiagnosticManager` + `init()` in `initializeHandlers()` + `dispose()` in `dispose()` | ~6 | F-007 |
+| `ui/ChatWindowDelegate.java` | `TAB_STATUS_INDICATOR_KEY` Konstante + `updateTabStatus()` liest `PropertiesComponent` + bedingte Suffixe | ~12 | F-014 ⚡ |
+| `provider/common/BaseSDKBridge.java` | 1 protected Feld `DiagnosticManager` + `setDiagnosticManager()` + shutdown in `cleanupAllProcesses()` | ~6 | F-010 |
+| `provider/claude/ClaudeProcessInvoker.java` | Constructor-Parameter `DiagnosticManager` + 2 log-Aufrufe (outbound + inbound) | ~6 | F-010 |
+| `provider/claude/ClaudeDaemonRequestExecutor.java` | Constructor-Parameter `DiagnosticManager` + 2 log-Aufrufe (outbound + inbound) | ~6 | F-010 |
+| `ui/toolwindow/ClaudeSDKToolWindow.java` | `getAllWindows()` static method (B-026) | ~3 | B-026 |
+| `handler/ProjectConfigHandler.java` | `handleGet/SetTabStatusIndicator()` via `PropertiesComponent` | ~25 | F-014 ⚡ |
+| `handler/SettingsHandler.java` | Routing fuer `get/set_tab_status_indicator` | ~4 | F-014 ⚡ |
 
-**Webview (8 Dateien, ~30 Zeilen total):**
+**Webview (13 Dateien, ~90 Zeilen total):**
 
-| Datei | Aenderung | Zeilen |
-|-------|-----------|--------|
-| `App.tsx` | 2 Imports + diagnostics state + `useDiagnosticRingBuffer()` + `useDiagnostics()` + `/report` check + ChatHeader-Props | ~8 |
-| `useScrollBehavior.ts` | `onDiagnosticEvent` in Options + Ref + 2 Event-Emissionen | ~12 |
-| `windowCallbacks/registerStreamingCallbacks.ts` | `onDiagnosticEvent` Ref + 3 Events (onStreamStart, onContentDelta, onStreamEnd) | ~8 |
-| `windowCallbacks/registerMessageCallbacks.ts` | `onDiagnosticEvent` Ref + 1 Event (updateMessages) | ~4 |
-| `ChatHeader.tsx` | BugDropdown import + 4 Props + Dropdown-Logik | ~30 |
-| `global.d.ts` | 6 Window-Typ-Deklarationen | ~6 |
-| `settings/index.tsx` | TrackerPath + IPC Sniffer State/Props | ~15 |
-| `settings/hooks/useSettingsWindowCallbacks.ts` | Callbacks + Init-Requests | ~20 |
-| `settings/BasicConfigSection/EnvironmentTab.tsx` | Tracker-Path Input UI | ~15 |
+| Datei | Aenderung | Zeilen | Feature |
+|-------|-----------|--------|---------|
+| `App.tsx` | 2 Imports + diagnostics state + `useDiagnosticRingBuffer()` + `useDiagnostics()` + `/report` check + ChatHeader-Props | ~8 | F-007 |
+| `useScrollBehavior.ts` | `onDiagnosticEvent` in Options + Ref + 2 Event-Emissionen | ~12 | F-007 |
+| `windowCallbacks/registerStreamingCallbacks.ts` | `onDiagnosticEvent` Ref + 3 Events (onStreamStart, onContentDelta, onStreamEnd) | ~8 | F-007 |
+| `windowCallbacks/registerMessageCallbacks.ts` | `onDiagnosticEvent` Ref + 1 Event (updateMessages) + `__turnId` Index-Guard | ~8 | F-007, B-034 ⚡ |
+| `ChatHeader.tsx` | BugDropdown import + 4 Props + Dropdown-Logik | ~30 | F-007 |
+| `global.d.ts` | 6 Window-Typ-Deklarationen + `updateTabStatusIndicator` | ~7 | F-007, F-014 ⚡ |
+| `settings/index.tsx` | TrackerPath + IPC Sniffer + TabStatusIndicator State/Props | ~20 | F-008, F-010, F-014 ⚡ |
+| `settings/hooks/useSettingsWindowCallbacks.ts` | Callbacks + Init-Requests (Tracker, Sniffer, TabStatus) | ~25 | F-008, F-010, F-014 ⚡ |
+| `settings/hooks/useSettingsBasicActions.ts` | TabStatusIndicator state + handler + streamingRenderTables/Lists (localStorage) | ~25 | F-014 ⚡, B-029 ⚡ |
+| `settings/BasicConfigSection/EnvironmentTab.tsx` | Tracker-Path Input UI | ~15 | F-008 |
+| `settings/BasicConfigSection/BehaviorTab.tsx` | TabStatusIndicator Toggle + StreamingRender Toggles (Tables/Lists) | ~20 | F-014 ⚡, B-029 ⚡ |
+| `settings/BasicConfigSection/index.tsx` | Props-Plumbing fuer TabStatusIndicator + StreamingRender | ~8 | F-014 ⚡, B-029 ⚡ |
+| `components/MarkdownBlock.tsx` | Streaming-Tabellen-Parser + `.table-wrapper` DOMParser-Wrapping + `div` in ALLOWED_TAGS + `minHeight`-Lock bei Stream-Ende | ~80 | B-029 ⚡, B-037 ⚡ |
+| `styles/less/components/message.less` | `.table-wrapper` CSS + `table-layout: auto` + `margin-top: 0` auf `p` + Cursor-Regeln (B-038) | ~15 | B-029 ⚡, B-038 ⚡ |
+
+> ⚡ = Upstream-PR offen. Falls gemergt, entfaellt der Integrationspunkt beim naechsten Upgrade.
 
 ---
 
@@ -457,10 +467,19 @@ Dateien die bei Upgrades **typischerweise** kollidieren:
 | `provider/claude/ClaudeProcessInvoker.java` | IPC outbound/inbound (Process-Mode) | Supplier-Parameter + 2 log-Aufrufe |
 | `provider/claude/ClaudeDaemonRequestExecutor.java` | IPC outbound/inbound (Daemon-Mode) | Supplier-Parameter + 2 log-Aufrufe |
 | `windowCallbacks/registerStreamingCallbacks.ts` | Diagnostics-Events in Streaming-Callbacks | Ref durchreichen, 3 Events einfuegen |
-| `windowCallbacks/registerMessageCallbacks.ts` | Diagnostics-Event in updateMessages | 1 Event einfuegen |
+| `windowCallbacks/registerMessageCallbacks.ts` | Diagnostics-Event + B-034 `__turnId`-Guard | 1 Event + Index-Vergleich einfuegen |
 | `useScrollBehavior.ts` | Diagnostics-Events in Scroll-Callbacks | Options erweitern, 2 Events einfuegen |
 | `ChatHeader.tsx` | Bug-Button + Props | Diagnostics-Props am Ende der Prop-Liste |
-| `settings/index.tsx` | Tracker-Path + Sniffer State | State-Block am Anfang der Komponente |
+| `settings/index.tsx` | Tracker-Path + Sniffer + TabStatus State | State-Block am Anfang der Komponente |
+| `components/MarkdownBlock.tsx` | B-029 Streaming-Tabellen + B-037 minHeight-Lock ⚡ | Tabellen-Parser in `renderStreamingContent`, DOMParser-Wrapping, `minHeight`-Lock in `applyRefresh` |
+| `styles/less/components/message.less` | B-029 table-layout + B-038 Cursor ⚡ | `.table-wrapper` CSS, `table-layout: auto`, Cursor-Regeln |
+| `ui/ChatWindowDelegate.java` | F-014 Tab-Status-Indicator ⚡ | `TAB_STATUS_INDICATOR_KEY` + `updateTabStatus()` Logik |
+| `handler/ProjectConfigHandler.java` | F-014 Get/Set-Handler ⚡ | 2 Methoden + `PropertiesComponent` |
+| `handler/SettingsHandler.java` | F-014 Routing ⚡ | 2 Cases in handle() |
+| `settings/BasicConfigSection/BehaviorTab.tsx` | F-014 + B-029 Toggles ⚡ | TabStatusIndicator + StreamingRender Toggles |
+| `settings/hooks/useSettingsBasicActions.ts` | F-014 + B-029 State ⚡ | TabStatusIndicator state/handler + localStorage Toggles |
+
+> ⚡ = Upstream-PR offen. Falls gemergt, entfaellt der Konflikt beim naechsten Upgrade.
 
 ---
 
@@ -474,6 +493,10 @@ Dateien die bei Upgrades **typischerweise** kollidieren:
 | B-005, B-011..B-014 | #457, #462 | Title persistence fixes | merged |
 | B-033 | #636 | SessionHandler cwd fix | **merged** (v0.2.9) |
 | B-035 | #634 | Zombie Node.js processes | **merged** (v0.2.9) |
+| B-029+B-037 | #765 | Streaming table render + minHeight-Lock | **open** (jh.13) |
+| B-034 | #764 | Streaming placeholder guard (`__turnId`) | **open** (jh.13) |
+| F-014 | #766 | Tab status indicator toggle | **open** (jh.13) |
+| B-038 | #767 | Cursor arrow on scrollbars | **open** (jh.13) |
 
 ---
 
@@ -517,6 +540,16 @@ Dateien die bei Upgrades **typischerweise** kollidieren:
 **Problem (v0.3.1):** ClaudeSDKBridge ist in viele Helper-Klassen aufgeteilt (ClaudeProcessInvoker, ClaudeDaemonRequestExecutor). Die Helper sind package-private und werden im Constructor erstellt, aber `diagnosticManager` wird erst spaeter via `setDiagnosticManager()` gesetzt.
 **Loesung:** Feld in `BaseSDKBridge` (protected, volatile). Helper-Klassen bekommen `Supplier<DiagnosticManager>` als Constructor-Parameter (`() -> diagnosticManager`), damit sie zum Zeitpunkt des Aufrufs den aktuellen Wert lesen.
 
+### I. Worktree-Builds fehlt die ai-bridge (jh.13)
+
+**Problem:** `gradlew buildPlugin` in git-Worktrees erzeugt 4.7 MB ZIPs statt 13 MB — die ai-bridge wird nicht korrekt gepackt (nur 131 KB statt mehrere MB, node_modules fehlen).
+**Lesson:** Fuer PR-Builds NICHT Worktrees verwenden. Stattdessen die Branches sequentiell im Hauptrepo auschecken und bauen. Die ai-bridge-Packlogik im Gradle-Build setzt voraus, dass `ai-bridge/node_modules/` vollstaendig vorhanden ist.
+
+### J. Upstream-PRs: Konflikt-Freiheit zwischen PRs sicherstellen (jh.13)
+
+**Problem:** PR4 (B-038 Cursor) setzte Tabellen-Cursor-Regeln auf die alte CSS-Struktur. PR1 (B-029) aenderte die Tabellen-CSS komplett (`.table-wrapper`). Falls PR1 zuerst mergt, waeren die Cursor-Regeln in PR4 falsch.
+**Lesson:** Bei mehreren parallelen Upstream-PRs pruefen, ob sie sich gegenseitig beeinflussen. Abhaengige Aenderungen in den jeweiligen PR aufnehmen (z.B. Tabellen-Cursor in PR1 statt in PR4).
+
 ---
 
 ## 8. Manual Test Checklist
@@ -535,5 +568,12 @@ Nach jedem Upgrade folgende Punkte manuell pruefen:
 - [ ] IPC Sniffer: Zweiten Tab oeffnen → Sniffer-State synchron
 - [ ] Projektfremde Datei im Editor oeffnen → Session funktioniert trotzdem (B-033)
 - [ ] `cd webview && npx vitest run` — alle eigenen Tests gruen
-- [ ] **NEU:** Provider wechseln → Session funktioniert (v0.3.1 Provider-Refactoring)
-- [ ] **NEU:** CLI Login Provider testen (falls OAuth konfiguriert)
+- [ ] Provider wechseln → Session funktioniert (v0.3.1 Provider-Refactoring)
+- [ ] CLI Login Provider testen (falls OAuth konfiguriert)
+- [ ] **jh.13:** Tabelle im Stream → wird als HTML gerendert sobald vollstaendig (B-029)
+- [ ] **jh.13:** Tabellen-Spaltenbreiten passen sich Inhalt an, breite Tabellen horizontal scrollbar (B-029)
+- [ ] **jh.13:** Settings → Behavior → "Render tables during streaming" Toggle funktioniert (B-029)
+- [ ] **jh.13:** Layout-Shift am Stream-Ende reduziert (B-037)
+- [ ] **jh.13:** Bestehende Session mit tool_use: neuer Prompt → Antwort verschwindet nicht (B-034)
+- [ ] **jh.13:** Settings → Behavior → "Tab status indicator" Toggle: ein/aus, persistiert (F-014)
+- [ ] **jh.13:** Cursor ueber Scrollbalken (Code-Block, Chat) zeigt Pfeil, nicht I-beam (B-038)
