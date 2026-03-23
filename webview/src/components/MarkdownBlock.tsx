@@ -71,6 +71,7 @@ marked.setOptions({
   gfm: true,
 });
 
+
 interface MarkdownBlockProps {
   content?: string;
   isStreaming?: boolean;
@@ -277,7 +278,7 @@ export function renderStreamingContent(content: string): string {
               tableHtml += '</tr>';
             }
             tableHtml += '</tbody></table>';
-            chunks.push(tableHtml);
+            chunks.push(`<div class="table-wrapper">${tableHtml}</div>`);
           } else {
             // Table still streaming — show as raw text (prose)
             for (let t = tableStart; t < tableStart + tableLines.length; t++) {
@@ -334,7 +335,7 @@ export function renderStreamingContent(content: string): string {
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: [
       'p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'ul', 'ol', 'li',
     ],
     ALLOWED_ATTR: ['class'],
@@ -526,6 +527,17 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       }
 
       const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+
+      // Wrap tables in scrollable container (same pattern as code-block-wrapper below)
+      doc.querySelectorAll('table').forEach((table) => {
+        const parent = table.parentElement;
+        if (parent && parent.classList.contains('table-wrapper')) return;
+        const wrapper = doc.createElement('div');
+        wrapper.className = 'table-wrapper';
+        table.parentNode?.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+      });
+
       const pres = doc.querySelectorAll('pre');
       const copySuccessText = t('markdown.copySuccess');
       const copyCodeTitle = t('markdown.copyCode');

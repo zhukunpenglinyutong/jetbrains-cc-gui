@@ -595,22 +595,17 @@
     text-decoration: none;
 }
 
-/* 表格容器 - 处理溢出 */
+/* Table wrapper — enables horizontal scroll without breaking table layout */
+.markdown-content .table-wrapper {
+    overflow-x: auto;
+    max-width: 100%;
+    margin: 10px 0;
+}
+
 .markdown-content table {
     border-collapse: collapse;
     width: 100%;
-    margin: 10px 0;
-    display: block; /* 使表格可以滚动 */
-    max-width: 100%;
-    overflow-x: auto; /* 表格内部滚动 */
-}
-
-.markdown-content thead,
-.markdown-content tbody,
-.markdown-content tr {
-    display: table;
-    width: 100%;
-    table-layout: fixed; /* 固定表格布局 */
+    table-layout: auto;
 }
 
 .markdown-content th, .markdown-content td {
