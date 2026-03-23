@@ -92,6 +92,8 @@ export interface BehaviorTabProps {
   onSaveCustomSoundPath?: () => void;
   onTestSound?: () => void;
   onBrowseSound?: () => void;
+  streamingRenderTables?: boolean;
+  onStreamingRenderTablesChange?: (enabled: boolean) => void;
 }
 
 const BehaviorTab = ({
@@ -114,6 +116,8 @@ const BehaviorTab = ({
   onSaveCustomSoundPath = () => {},
   onTestSound = () => {},
   onBrowseSound = () => {},
+  streamingRenderTables = true,
+  onStreamingRenderTablesChange = () => {},
 }: BehaviorTabProps) => {
   const { t } = useTranslation();
 
@@ -186,6 +190,32 @@ const BehaviorTab = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.streaming.hint')}</span>
+        </small>
+      </div>
+
+      {/* Streaming table render configuration */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-table" />
+          <span className={styles.fieldLabel}>{t('settings.basic.streamingRenderTables.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={streamingRenderTables}
+            onChange={(e) => onStreamingRenderTablesChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {streamingRenderTables
+              ? t('settings.basic.streamingRenderTables.enabled')
+              : t('settings.basic.streamingRenderTables.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.streamingRenderTables.hint')}</span>
         </small>
       </div>
 

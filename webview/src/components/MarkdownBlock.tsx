@@ -124,15 +124,21 @@ function makeStreamSafe(content: string): string {
  * without the heavy marked.parse() + DOMPurify + DOMParser pipeline.
  * Full markdown parsing is deferred to when streaming ends.
  */
+/** Read a boolean streaming-render setting from localStorage (webview-only persistence). */
+function getStreamingRenderSetting(key: string, defaultValue: boolean): boolean {
+  try { return localStorage.getItem(key) !== (defaultValue ? 'false' : 'true') ? defaultValue : !defaultValue; } catch { return defaultValue; }
+}
+
 /** Sanitize code language identifier — only allow safe characters for HTML class attribute. */
 function safeLang(lang: string): string {
   return lang.replace(/[^a-zA-Z0-9_.-]/g, '');
 }
 
-function renderStreamingContent(content: string): string {
+export function renderStreamingContent(content: string): string {
   if (!content) return '';
 
   const safeContent = makeStreamSafe(content);
+  const renderTables = getStreamingRenderSetting('streamingRenderTables', true);
 
   // Split by code fence blocks, keeping delimiters
   const segments: string[] = [];
@@ -188,32 +194,89 @@ function renderStreamingContent(content: string): string {
       // Already wrapped in <pre> — pass through
       if (seg.startsWith('<pre>')) return seg;
 
-      let html = seg
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+      const lines = seg.split('\n');
+      const chunks: string[] = [];
 
-      // Inline code
-      html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-      // Bold
-      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      // Headings (# ... ######)
-      html = html.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes: string, text: string) => {
-        const level = hashes.length;
-        return `<h${level}>${text}</h${level}>`;
-      });
-      // Paragraph breaks
-      html = html.replace(/\n\n/g, '</p><p>');
-      // Single line breaks
-      html = html.replace(/\n/g, '<br/>');
+      const escLine = (s: string) => {
+        let html = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/^(#{1,6})\s+(.+)$/, (_m, hashes: string, text: string) => {
+          const level = hashes.length;
+          return `<h${level}>${text}</h${level}>`;
+        });
+        return html;
+      };
 
-      return `<p>${html}</p>`;
+      const escCell = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const parseRow = (row: string) => {
+        const inner = row.replace(/^\|/, '').replace(/\|$/, '');
+        return inner.split('|').map((c) => c.trim());
+      };
+
+      let i = 0;
+      let pendingLines: string[] = [];
+
+      const flushPending = () => {
+        if (pendingLines.length === 0) return;
+        const text = pendingLines.map(escLine).join('\n');
+        let html = text.replace(/\n\n/g, '</p><p>');
+        html = html.replace(/\n/g, '<br/>');
+        chunks.push(`<p>${html}</p>`);
+        pendingLines = [];
+      };
+
+      while (i < lines.length) {
+        const trimmed = lines[i].trim();
+
+        if (renderTables && trimmed.startsWith('|') && i + 1 < lines.length &&
+            /^\|[\s:]*-+[\s:]*/.test(lines[i + 1].trim())) {
+          flushPending();
+          const tableStart = i;
+          const tableLines: string[] = [];
+          while (i < lines.length && lines[i].trim().startsWith('|')) {
+            tableLines.push(lines[i].trim());
+            i++;
+          }
+          const tableEnded = i < lines.length;
+          if (tableEnded && tableLines.length >= 3) {
+            const headerCells = parseRow(tableLines[0]);
+            let tableHtml = '<table><thead><tr>';
+            for (const cell of headerCells) {
+              tableHtml += `<th>${escCell(cell)}</th>`;
+            }
+            tableHtml += '</tr></thead><tbody>';
+            for (let r = 2; r < tableLines.length; r++) {
+              const cells = parseRow(tableLines[r]);
+              tableHtml += '<tr>';
+              for (const cell of cells) {
+                tableHtml += `<td>${escCell(cell)}</td>`;
+              }
+              tableHtml += '</tr>';
+            }
+            tableHtml += '</tbody></table>';
+            chunks.push(`<div class="table-wrapper">${tableHtml}</div>`);
+          } else {
+            for (let t = tableStart; t < tableStart + tableLines.length; t++) {
+              pendingLines.push(lines[t]);
+            }
+          }
+        } else if (trimmed === '') {
+          pendingLines.push('');
+          i++;
+        } else {
+          pendingLines.push(lines[i]);
+          i++;
+        }
+      }
+      flushPending();
+      return chunks.join('');
     })
     .join('');
 
   // Sanitize the assembled HTML to prevent XSS even during streaming
   return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: ['p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    ALLOWED_TAGS: ['p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
     ALLOWED_ATTR: ['class'],
   });
 }
@@ -403,6 +466,15 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       }
 
       const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+      doc.querySelectorAll('table').forEach((table) => {
+        const parent = table.parentElement;
+        if (parent && parent.classList.contains('table-wrapper')) return;
+        const wrapper = doc.createElement('div');
+        wrapper.className = 'table-wrapper';
+        table.parentNode?.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+      });
+
       const pres = doc.querySelectorAll('pre');
       const copySuccessText = t('markdown.copySuccess');
       const copyCodeTitle = t('markdown.copyCode');
@@ -455,8 +527,22 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       const applyRefresh = () => {
         if (done || !containerRef.current) return;
         done = true;
-        containerRef.current.innerHTML = html;
+        const el = containerRef.current;
+        const prevHeight = el.offsetHeight;
+        el.style.minHeight = `${prevHeight}px`;
+        el.style.transition = 'none';
+        el.innerHTML = html;
         renderMermaidDiagrams();
+        requestAnimationFrame(() => {
+          el.style.transition = 'min-height 150ms ease-out';
+          el.style.minHeight = '';
+          const cleanup = () => {
+            el.style.transition = '';
+            el.removeEventListener('transitionend', cleanup);
+          };
+          el.addEventListener('transitionend', cleanup);
+          setTimeout(cleanup, 200);
+        });
       };
 
       // Use double requestAnimationFrame to ensure DOM is fully updated

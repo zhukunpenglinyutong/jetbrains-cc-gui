@@ -165,6 +165,12 @@
         "disabled": "Colapsado",
         "hint": "Cuando está habilitado, las diferencias de código en el chat se expandirán por defecto. Cuando está deshabilitado, las diferencias comienzan colapsadas."
       },
+      "streamingRenderTables": {
+        "label": "Renderizar tablas durante streaming",
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado",
+        "hint": "Cuando está habilitado, las tablas Markdown se renderizan como tablas HTML mientras la respuesta se está transmitiendo. Cuando está deshabilitado, las tablas aparecen como texto plano hasta que finalice la transmisión."
+      },
       "sendShortcut": {
         "label": "Atajo de envío",
         "enter": "Enter para enviar",

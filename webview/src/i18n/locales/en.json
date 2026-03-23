@@ -165,6 +165,12 @@
         "disabled": "Collapsed",
         "hint": "When enabled, code diffs in chat will be expanded by default. When disabled, diffs start collapsed and can be expanded by clicking."
       },
+      "streamingRenderTables": {
+        "label": "Render Tables During Streaming",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, Markdown tables are rendered as HTML tables while the response is still streaming. When disabled, tables appear as plain text until streaming completes."
+      },
       "sendShortcut": {
         "label": "Send Shortcut",
         "enter": "Enter to Send",

@@ -165,6 +165,12 @@
         "disabled": "접힘",
         "hint": "활성화하면 채팅의 코드 diff가 기본적으로 펼쳐집니다. 비활성화하면 접힌 상태로 시작하며 클릭하여 펼칠 수 있습니다."
       },
+      "streamingRenderTables": {
+        "label": "스트리밍 중 테이블 렌더링",
+        "enabled": "활성화됨",
+        "disabled": "비활성화됨",
+        "hint": "활성화하면 응답 스트리밍 중 Markdown 테이블이 HTML 테이블로 렌더링됩니다. 비활성화하면 스트리밍이 완료될 때까지 일반 텍스트로 표시됩니다."
+      },
       "sendShortcut": {
         "label": "전송 단축키",
         "enter": "Enter로 전송",

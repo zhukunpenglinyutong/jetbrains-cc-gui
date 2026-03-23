@@ -165,6 +165,12 @@
         "disabled": "已折叠",
         "hint": "开启后，聊天中的代码差异将默认展开显示。关闭后，差异默认折叠，可点击展开。"
       },
+      "streamingRenderTables": {
+        "label": "流式传输时渲染表格",
+        "enabled": "已启用",
+        "disabled": "已禁用",
+        "hint": "启用后，Markdown 表格在响应流式传输期间将渲染为 HTML 表格。禁用后，表格以纯文本显示，直到流式传输完成。"
+      },
       "sendShortcut": {
         "label": "发送快捷键",
         "enter": "Enter 发送",

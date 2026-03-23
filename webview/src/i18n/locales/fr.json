@@ -165,6 +165,12 @@
         "disabled": "Réduit",
         "hint": "Lorsque activé, les différences de code dans le chat seront développées par défaut. Lorsque désactivé, les différences commencent réduites."
       },
+      "streamingRenderTables": {
+        "label": "Afficher les tableaux pendant le streaming",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "hint": "Lorsqu'activé, les tableaux Markdown sont rendus en tant que tableaux HTML pendant la diffusion de la réponse. Lorsque désactivé, les tableaux apparaissent en texte brut jusqu'à la fin de la diffusion."
+      },
       "sendShortcut": {
         "label": "Raccourci d'envoi",
         "enter": "Entrée pour envoyer",

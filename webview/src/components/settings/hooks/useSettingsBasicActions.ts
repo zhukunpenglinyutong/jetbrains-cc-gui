@@ -50,6 +50,7 @@ export interface UseSettingsBasicActionsReturn {
   selectedSound: string;
   customSoundPath: string;
   diffExpandedByDefault: boolean;
+  streamingRenderTables: boolean;
   historyCompletionEnabled: boolean;
 
   // =========================================================================
@@ -100,6 +101,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSelectedSound: (soundId: string) => void;
   /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
+  /** @internal */ setStreamingRenderTables: (enabled: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
 }
 
@@ -165,6 +167,15 @@ export function useSettingsBasicActions({
       return false;
     }
   });
+
+  // Streaming table render toggle (localStorage-only, default: true)
+  const [streamingRenderTables, setStreamingRenderTables] = useState<boolean>(() => {
+    try { return localStorage.getItem('streamingRenderTables') !== 'false'; } catch { return true; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('streamingRenderTables', String(streamingRenderTables)); } catch {}
+  }, [streamingRenderTables]);
 
   // History completion toggle configuration
   const [historyCompletionEnabled, setHistoryCompletionEnabled] = useState<boolean>(() => {
@@ -330,6 +341,8 @@ export function useSettingsBasicActions({
     setCustomSoundPath,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
+    streamingRenderTables,
+    setStreamingRenderTables,
     historyCompletionEnabled,
     setHistoryCompletionEnabled,
     handleSaveNodePath,

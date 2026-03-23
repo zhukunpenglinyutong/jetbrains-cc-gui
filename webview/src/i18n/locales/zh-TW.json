@@ -165,6 +165,12 @@
         "disabled": "已折疊",
         "hint": "開啟後，聊天中的程式碼差異將預設展開顯示。關閉後，差異預設摺疊，可點擊展開。"
       },
+      "streamingRenderTables": {
+        "label": "串流時渲染表格",
+        "enabled": "已啟用",
+        "disabled": "已停用",
+        "hint": "啟用後，Markdown 表格在回應串流期間將渲染為 HTML 表格。停用後，表格以純文字顯示，直到串流完成。"
+      },
       "sendShortcut": {
         "label": "發送快捷鍵",
         "enter": "Enter 發送",

@@ -131,6 +131,8 @@ const SettingsView = ({
     setCustomSoundPath,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
+    streamingRenderTables,
+    setStreamingRenderTables,
     historyCompletionEnabled,
     setHistoryCompletionEnabled,
     handleSaveNodePath,
@@ -421,6 +423,8 @@ const SettingsView = ({
               onSaveCustomSoundPath={handleSaveCustomSoundPath}
               onTestSound={handleTestSound}
               onBrowseSound={handleBrowseSound}
+              streamingRenderTables={streamingRenderTables}
+              onStreamingRenderTablesChange={setStreamingRenderTables}
             />
           </div>
 

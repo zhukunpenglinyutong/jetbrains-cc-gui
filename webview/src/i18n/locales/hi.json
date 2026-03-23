@@ -165,6 +165,12 @@
         "disabled": "संक्षिप्त",
         "hint": "सक्षम होने पर, चैट में कोड अंतर डिफ़ॉल्ट रूप से विस्तारित होंगे। अक्षम होने पर, अंतर संक्षिप्त शुरू होते हैं।"
       },
+      "streamingRenderTables": {
+        "label": "Render Tables During Streaming",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, Markdown tables are rendered as HTML tables while the response is still streaming. When disabled, tables appear as plain text until streaming completes."
+      },
       "sendShortcut": {
         "label": "भेजने का शॉर्टकट",
         "enter": "Enter से भेजें",
