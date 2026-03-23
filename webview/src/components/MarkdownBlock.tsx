@@ -139,7 +139,8 @@ function getStreamingRenderSetting(key: string, defaultValue: boolean): boolean 
   }
 }
 
-function renderStreamingContent(content: string): string {
+/** @internal exported for testing */
+export function renderStreamingContent(content: string): string {
   if (!content) return '';
 
   const renderTables = getStreamingRenderSetting('streamingRenderTables', true);
