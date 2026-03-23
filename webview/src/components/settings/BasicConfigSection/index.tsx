@@ -28,6 +28,12 @@ interface BasicConfigSectionProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  // F-008: Tracker path
+  trackerPath?: string;
+  onTrackerPathChange?: (path: string) => void;
+  onSaveTrackerPath?: () => void;
+  savingTrackerPath?: boolean;
+  trackerPathExists?: boolean;
   editorFontConfig?: {
     fontFamily: string;
     fontSize: number;
@@ -139,6 +145,11 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onWorkingDirectoryChange={props.onWorkingDirectoryChange}
           onSaveWorkingDirectory={props.onSaveWorkingDirectory}
           savingWorkingDirectory={props.savingWorkingDirectory}
+          trackerPath={props.trackerPath}
+          onTrackerPathChange={props.onTrackerPathChange}
+          onSaveTrackerPath={props.onSaveTrackerPath}
+          savingTrackerPath={props.savingTrackerPath}
+          trackerPathExists={props.trackerPathExists}
         />
       )}
     </div>

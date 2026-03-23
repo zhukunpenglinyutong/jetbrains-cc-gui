@@ -148,16 +148,15 @@ describe('useInputHistory', () => {
   });
 
   it('handles localStorage quota by dropping older entries and retrying', () => {
-    // vi.spyOn does not reliably intercept jsdom's localStorage.setItem,
-    // so we patch it via the Storage prototype instead.
-    const proto = Object.getPrototypeOf(window.localStorage) as Storage;
-    const originalSetItem = proto.setItem;
-    proto.setItem = function (key: string, value: string) {
+    // Patch the instance method directly — Storage.prototype patches do not
+    // reliably intercept jsdom's localStorage in newer Node.js versions.
+    const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
+    window.localStorage.setItem = function (key: string, value: string) {
       const str = String(value);
       if (key === STORAGE_KEY && str.length > SIMULATED_QUOTA_LIMIT) {
         throw new DOMException('quota', 'QuotaExceededError');
       }
-      return originalSetItem.call(this, key, str);
+      return originalSetItem(key, str);
     };
 
     try {
@@ -178,7 +177,7 @@ describe('useInputHistory', () => {
       expect(stored).toHaveLength(1);
       expect(stored[0]).toBe('c'.repeat(100));
     } finally {
-      proto.setItem = originalSetItem;
+      window.localStorage.setItem = originalSetItem;
     }
   });
 

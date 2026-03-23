@@ -12,6 +12,11 @@ export interface EnvironmentTabProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  trackerPath?: string;
+  onTrackerPathChange?: (path: string) => void;
+  onSaveTrackerPath?: () => void;
+  savingTrackerPath?: boolean;
+  trackerPathExists?: boolean;
 }
 
 const EnvironmentTab = ({
@@ -25,6 +30,11 @@ const EnvironmentTab = ({
   onWorkingDirectoryChange = () => {},
   onSaveWorkingDirectory = () => {},
   savingWorkingDirectory = false,
+  trackerPath = '',
+  onTrackerPathChange = () => {},
+  onSaveTrackerPath = () => {},
+  savingTrackerPath = false,
+  trackerPathExists,
 }: EnvironmentTabProps) => {
   const { t } = useTranslation();
 
@@ -122,6 +132,44 @@ const EnvironmentTab = ({
           <span>
             {t('settings.basic.workingDirectory.hint')}
           </span>
+        </small>
+      </div>
+      {/* Bug tracker file configuration (F-008) */}
+      <div className={styles.workingDirSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-bug" />
+          <span className={styles.fieldLabel}>Bug Tracker File</span>
+          {trackerPath && trackerPathExists !== undefined && (
+            <span className={`${styles.versionBadge} ${trackerPathExists ? styles.versionBadgeOk : styles.versionBadgeError}`}>
+              <span className={`codicon ${trackerPathExists ? 'codicon-check' : 'codicon-warning'}`} />
+              {trackerPathExists ? ' Found' : ' Not found'}
+            </span>
+          )}
+        </div>
+        <div className={styles.nodePathInputWrapper}>
+          <input
+            type="text"
+            className={styles.nodePathInput}
+            placeholder="e.g. D:\project\docs\TRACKER.md"
+            value={trackerPath}
+            onChange={(e) => onTrackerPathChange(e.target.value)}
+          />
+          <button
+            className={styles.saveBtn}
+            onClick={onSaveTrackerPath}
+            disabled={savingTrackerPath}
+          >
+            {savingTrackerPath && (
+              <span
+                className="codicon codicon-loading codicon-modifier-spin"
+              />
+            )}
+            {t('common.save')}
+          </button>
+        </div>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>Path to bug tracker markdown file. Leave empty for auto-discovery.</span>
         </small>
       </div>
     </div>

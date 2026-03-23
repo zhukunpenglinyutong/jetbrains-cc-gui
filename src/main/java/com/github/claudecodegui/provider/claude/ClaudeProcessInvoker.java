@@ -4,6 +4,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.diagnostics.DiagnosticManager; // F-010
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.Gson;
@@ -37,6 +38,7 @@ class ClaudeProcessInvoker {
     private final ClaudeRequestParamsBuilder requestParamsBuilder;
     private final ClaudeLogSanitizer logSanitizer;
     private final ClaudeStreamAdapter streamAdapter;
+    private final Supplier<DiagnosticManager> diagnosticManagerSupplier; // F-010
 
     ClaudeProcessInvoker(
             Logger log,
@@ -47,7 +49,8 @@ class ClaudeProcessInvoker {
             EnvironmentConfigurator envConfigurator,
             ClaudeRequestParamsBuilder requestParamsBuilder,
             ClaudeLogSanitizer logSanitizer,
-            ClaudeStreamAdapter streamAdapter
+            ClaudeStreamAdapter streamAdapter,
+            Supplier<DiagnosticManager> diagnosticManagerSupplier // F-010
     ) {
         this.log = log;
         this.gson = gson;
@@ -58,6 +61,7 @@ class ClaudeProcessInvoker {
         this.requestParamsBuilder = requestParamsBuilder;
         this.logSanitizer = logSanitizer;
         this.streamAdapter = streamAdapter;
+        this.diagnosticManagerSupplier = diagnosticManagerSupplier; // F-010
     }
 
     CompletableFuture<SDKResult> sendMessage(
@@ -114,6 +118,10 @@ class ClaudeProcessInvoker {
                 String stdinJson = gson.toJson(stdinInput);
                 String preview = logSanitizer.buildPreview(stdinJson, 500);
                 log.debug("[PROMPT] Sending to Node.js (" + stdinJson.length() + " chars):\n" + preview);
+
+                // F-010: IPC sniffer — log outbound
+                DiagnosticManager dm = diagnosticManagerSupplier.get();
+                if (dm != null) { dm.logOutbound(sessionId, channelId, model, "per-process", preview); }
 
                 boolean hasAttachments = stdinInput.has("attachments");
                 List<String> command = new ArrayList<>();
@@ -225,6 +233,10 @@ class ClaudeProcessInvoker {
 
             String line;
             while ((line = reader.readLine()) != null) {
+                // F-010: IPC sniffer — log inbound
+                DiagnosticManager dmIn = diagnosticManagerSupplier.get();
+                if (dmIn != null) { dmIn.logInbound("per-process", line); }
+
                 if (line.startsWith("[UNCAUGHT_ERROR]")
                         || line.startsWith("[UNHANDLED_REJECTION]")
                         || line.startsWith("[COMMAND_ERROR]")

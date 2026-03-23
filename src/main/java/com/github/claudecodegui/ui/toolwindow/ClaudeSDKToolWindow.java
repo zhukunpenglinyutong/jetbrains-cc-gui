@@ -81,6 +81,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         return TAB_NAME_PREFIX + (maxNumber + 1);
     }
 
+    /**
+     * F-010 / B-026: Return all open ClaudeChatWindow instances (for multi-tab sniffer propagation).
+     */
+    public static java.util.Collection<ClaudeChatWindow> getAllWindows() {
+        return contentToWindowMap.values();
+    }
+
     // Package-private static helpers for ClaudeChatWindow map access
 
     static void registerWindow(Project project, ClaudeChatWindow window) {

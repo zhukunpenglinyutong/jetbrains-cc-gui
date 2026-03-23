@@ -7,6 +7,7 @@ import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.diagnostics.DiagnosticManager; // F-010
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -38,6 +39,10 @@ public abstract class BaseSDKBridge {
     protected final NodeDetector nodeDetector = NodeDetector.getInstance();
     protected final ProcessManager processManager = new ProcessManager();
     protected final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
+    protected volatile DiagnosticManager diagnosticManager; // F-010
+
+    /** F-010: Set the diagnostic manager for IPC logging. */
+    public void setDiagnosticManager(DiagnosticManager dm) { this.diagnosticManager = dm; }
 
     /**
      * Get the shared BridgeDirectoryResolver from BridgePreloader.
@@ -98,6 +103,7 @@ public abstract class BaseSDKBridge {
      */
     public void cleanupAllProcesses() {
         processManager.cleanupAllProcesses();
+        if (diagnosticManager != null) { diagnosticManager.shutdownSniffer(); } // F-010
     }
 
     /**

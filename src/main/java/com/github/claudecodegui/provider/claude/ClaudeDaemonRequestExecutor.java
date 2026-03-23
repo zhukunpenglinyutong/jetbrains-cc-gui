@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.diagnostics.DiagnosticManager; // F-010
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
@@ -21,17 +22,20 @@ class ClaudeDaemonRequestExecutor {
     private final ClaudeRequestParamsBuilder requestParamsBuilder;
     private final ClaudeStreamAdapter streamAdapter;
     private final ClaudeJsonOutputExtractor outputExtractor;
+    private final java.util.function.Supplier<DiagnosticManager> diagnosticManagerSupplier; // F-010
 
     ClaudeDaemonRequestExecutor(
             Logger log,
             ClaudeRequestParamsBuilder requestParamsBuilder,
             ClaudeStreamAdapter streamAdapter,
-            ClaudeJsonOutputExtractor outputExtractor
+            ClaudeJsonOutputExtractor outputExtractor,
+            java.util.function.Supplier<DiagnosticManager> diagnosticManagerSupplier // F-010
     ) {
         this.log = log;
         this.requestParamsBuilder = requestParamsBuilder;
         this.streamAdapter = streamAdapter;
         this.outputExtractor = outputExtractor;
+        this.diagnosticManagerSupplier = diagnosticManagerSupplier; // F-010
     }
 
     CompletableFuture<SDKResult> sendMessageViaDaemon(
@@ -77,12 +81,20 @@ class ClaudeDaemonRequestExecutor {
                 String method = hasAttachments ? "claude.sendWithAttachments" : "claude.send";
                 log.info("[DaemonExecutor] Sending via daemon: " + method);
 
+                // F-010: IPC sniffer — log outbound
+                DiagnosticManager dm = diagnosticManagerSupplier.get();
+                if (dm != null) { dm.logOutbound(sessionId, null, model, "daemon", method); }
+
                 CompletableFuture<Boolean> cmdFuture = daemon.sendCommand(
                         method,
                         params,
                         new DaemonBridge.DaemonOutputCallback() {
                             @Override
                             public void onLine(String line) {
+                                // F-010: IPC sniffer — log inbound
+                                DiagnosticManager dmIn = diagnosticManagerSupplier.get();
+                                if (dmIn != null) { dmIn.logInbound("daemon", line); }
+
                                 if (line.startsWith("[UNCAUGHT_ERROR]")
                                         || line.startsWith("[UNHANDLED_REJECTION]")
                                         || line.startsWith("[COMMAND_ERROR]")

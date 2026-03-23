@@ -54,6 +54,8 @@ class OtherSettingsErrorBoundary extends Component<
 interface OtherSettingsSectionProps {
   historyCompletionEnabled: boolean;
   onHistoryCompletionEnabledChange: (enabled: boolean) => void;
+  ipcSnifferEnabled: boolean;
+  onIpcSnifferEnabledChange: (enabled: boolean) => void;
 }
 
 interface EditorState {
@@ -94,6 +96,8 @@ const formatRelativeTime = (timestamp: string | undefined, t: (key: string, opti
 const OtherSettingsSection = ({
   historyCompletionEnabled,
   onHistoryCompletionEnabledChange,
+  ipcSnifferEnabled,
+  onIpcSnifferEnabledChange,
 }: OtherSettingsSectionProps) => {
   const { t } = useTranslation();
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
@@ -326,6 +330,32 @@ const OtherSettingsSection = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* F-010: IPC Sniffer toggle */}
+      <div className={styles.historyCompletionSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-debug-console" />
+          <span className={styles.fieldLabel}>{t('settings.other.ipcSniffer.label', 'IPC Traffic Logger')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={ipcSnifferEnabled}
+            onChange={(e) => onIpcSnifferEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {ipcSnifferEnabled
+              ? t('settings.other.ipcSniffer.enabled', 'Enabled')
+              : t('settings.other.ipcSniffer.disabled', 'Disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.other.ipcSniffer.hint', 'Logs all IPC traffic between plugin and AI bridge to JSONL files in ~/.codemoss/diagnostics/ipc-sniffer/. Useful for debugging.')}</span>
+        </small>
       </div>
 
       {/* Editor Dialog */}

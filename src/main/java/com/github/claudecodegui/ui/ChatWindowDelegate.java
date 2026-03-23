@@ -33,6 +33,7 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
+import com.github.claudecodegui.diagnostics.DiagnosticManager; // F-007/F-010
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
@@ -102,6 +103,7 @@ public class ChatWindowDelegate {
     }
 
     private final DelegateHost host;
+    private final DiagnosticManager diagnosticManager = new DiagnosticManager(); // F-007/F-010
 
     // Tab status state (owned by this delegate)
     private TabAnswerStatus currentTabStatus = TabAnswerStatus.IDLE;
@@ -316,6 +318,9 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(historyHandler);
 
         LOG.info("Registered " + messageDispatcher.getHandlerCount() + " message handlers");
+
+        // F-007/F-010: Initialize diagnostic layer (snapshots, IPC sniffer, file watcher)
+        diagnosticManager.init(handlerContext, messageDispatcher, claudeSDKBridge);
     }
 
     public void initializeStatusBar() {
@@ -499,6 +504,7 @@ public class ChatWindowDelegate {
      * Cancel any pending tasks owned by this delegate.
      */
     public void dispose() {
+        diagnosticManager.dispose(); // F-007/F-010
         if (statusResetTask != null && !statusResetTask.isDone()) {
             statusResetTask.cancel(false);
             statusResetTask = null;

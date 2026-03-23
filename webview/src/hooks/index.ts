@@ -15,6 +15,8 @@ export { useMessageProcessing } from './useMessageProcessing';
 export { useMessageSender } from './useMessageSender';
 export { useFileChangesManagement } from './useFileChangesManagement';
 export { useModelProviderState } from './useModelProviderState';
+export { useDiagnostics } from './useDiagnostics'; // F-007
+export { useDiagnosticRingBuffer } from './useDiagnosticRingBuffer'; // F-007
 export type { UseWindowCallbacksOptions, ContextInfo } from './useWindowCallbacks';
 export type { UseRewindHandlersOptions, UseRewindHandlersReturn } from './useRewindHandlers';
 export type { UseHistoryLoaderOptions } from './useHistoryLoader';

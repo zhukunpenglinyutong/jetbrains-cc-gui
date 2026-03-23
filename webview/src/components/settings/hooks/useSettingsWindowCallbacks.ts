@@ -36,6 +36,12 @@ export interface SettingsWindowCallbacksDeps {
   setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
   setSelectedSound?: (soundId: string) => void;
   setCustomSoundPath?: (path: string) => void;
+  // Tracker path setters (F-008)
+  setTrackerPath?: (path: string) => void;
+  setSavingTrackerPath?: (saving: boolean) => void;
+  setTrackerPathExists?: (exists: boolean) => void;
+  // IPC Sniffer setter (F-010)
+  setIpcSnifferEnabled?: (enabled: boolean) => void;
 
   // Hook functions
   updateProviders: (providers: ProviderConfig[]) => void;
@@ -253,6 +259,34 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // Tracker path callback (F-008)
+    window.updateTrackerPath = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setTrackerPath?.(data.path || '');
+        d().setTrackerPathExists?.(data.exists ?? false);
+        d().setSavingTrackerPath?.(false);
+        if (data.saved) {
+          d().addToast(t('toast.saveSuccess'), 'success');
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse tracker path:', error);
+        d().setSavingTrackerPath?.(false);
+      }
+    };
+
+    // IPC Sniffer config callback (F-010)
+    window.updateIpcSnifferConfig = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        if (data.enabled !== undefined) {
+          d().setIpcSnifferEnabled?.(data.enabled);
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse IPC sniffer config:', error);
+      }
+    };
+
     // Agent callbacks
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
@@ -384,6 +418,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_codex_sandbox_mode:');
     sendToJava('get_commit_prompt:');
     sendToJava('get_sound_notification_config:');
+    sendToJava('get_tracker_path:');
+    sendToJava('get_ipc_sniffer_config:');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -408,6 +444,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
       window.updateCommitPrompt = undefined;
       window.updateSoundNotificationConfig = undefined;
+      window.updateTrackerPath = undefined;
+      window.updateIpcSnifferConfig = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

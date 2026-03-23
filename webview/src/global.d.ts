@@ -643,6 +643,23 @@ interface Window {
    */
   __pendingLoadingState?: boolean;
 
+  // ============================================================================
+  // F-007: Diagnostic Callbacks
+  // ============================================================================
+
+  /** F-007: Update diagnostics enabled state (from Java) */
+  updateDiagnosticsEnabled?: (json: string) => void;
+  /** F-007: Trigger diagnostic snapshot collection (from Java file watcher) */
+  collectDiagnosticSnapshot?: (bugId: string) => void;
+  /** F-007: Receive known bugs list (from Java TRACKER.md parser) */
+  setKnownBugs?: (json: string) => void;
+  /** F-007: Diagnostic snapshot result callback */
+  onDiagnosticSnapshotResult?: (json: string) => void;
+  /** F-010: Update IPC sniffer config */
+  updateIpcSnifferConfig?: (json: string) => void;
+  /** F-008: Update tracker path config */
+  updateTrackerPath?: (json: string) => void;
+
   /**
    * Execute context action from IDEA shortcut (copy/cut/send)
    */

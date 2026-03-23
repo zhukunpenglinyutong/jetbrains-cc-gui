@@ -47,7 +47,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         );
         this.processInvoker = new ClaudeProcessInvoker(
                 LOG, gson, nodeDetector, sdkDirSupplier, processManager,
-                envConfigurator, requestParamsBuilder, logSanitizer, streamAdapter
+                envConfigurator, requestParamsBuilder, logSanitizer, streamAdapter,
+                () -> diagnosticManager // F-010
         );
         this.queryExecutor = new ClaudeQueryExecutor(
                 gson, nodeDetector, sdkDirSupplier, processManager,
@@ -66,7 +67,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 envConfigurator, jsonOutputExtractor
         );
         this.daemonRequestExecutor = new ClaudeDaemonRequestExecutor(
-                LOG, requestParamsBuilder, streamAdapter, jsonOutputExtractor
+                LOG, requestParamsBuilder, streamAdapter, jsonOutputExtractor,
+                () -> diagnosticManager // F-010
         );
     }
 

@@ -31,6 +31,7 @@
     display: flex;
     align-items: center;
     flex-shrink: 0; /* Prevent buttons from shrinking */
+    position: relative;
 }
 
 .new-chat-button {
@@ -226,4 +227,121 @@
     &:active {
         transform: scale(0.92);
     }
+}
+
+/* F-009: Session context menu (right-click on title) */
+.session-context-menu {
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 200;
+    min-width: 180px;
+    padding: 4px;
+    overflow: hidden;
+}
+
+.session-context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: background 0.1s;
+    white-space: nowrap;
+
+    .codicon {
+        font-size: 14px;
+        color: var(--text-tertiary);
+    }
+
+    &:hover {
+        background: var(--bg-hover);
+    }
+}
+
+/* F-007: Bug report dropdown */
+.bug-dropdown {
+    position: absolute;
+    top: 45px;
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    width: 360px;
+    overflow: hidden;
+}
+
+.bug-dropdown-filter {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 13px;
+    border: none;
+    border-bottom: 1px solid var(--border-primary);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    outline: none;
+    box-sizing: border-box;
+
+    &::placeholder {
+        color: var(--text-tertiary);
+    }
+}
+
+.bug-dropdown-list {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.bug-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.1s;
+}
+
+.bug-dropdown-item:hover,
+.bug-dropdown-item.active {
+    background: var(--bg-hover);
+}
+
+.bug-dropdown-item-id {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-primary);
+    white-space: nowrap;
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    flex-shrink: 0;
+
+    &.testing {
+        color: #e0a020;
+        background: rgba(255, 165, 0, 0.2);
+    }
+}
+
+.bug-dropdown-item-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bug-dropdown-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 13px;
 }

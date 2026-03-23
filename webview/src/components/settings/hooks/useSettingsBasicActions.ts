@@ -51,6 +51,12 @@ export interface UseSettingsBasicActionsReturn {
   customSoundPath: string;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
+  // F-008: Tracker path
+  trackerPath: string;
+  savingTrackerPath: boolean;
+  trackerPathExists: boolean;
+  // F-010: IPC Sniffer
+  ipcSnifferEnabled: boolean;
 
   // =========================================================================
   // Handler functions (public API for components)
@@ -69,6 +75,10 @@ export interface UseSettingsBasicActionsReturn {
   handleTestSound: () => void;
   handleBrowseSound: () => void;
   handleSaveCommitPrompt: () => void;
+  // F-008: Tracker path
+  handleSaveTrackerPath: () => void;
+  // F-010: IPC Sniffer
+  handleIpcSnifferEnabledChange: (enabled: boolean) => void;
 
   // =========================================================================
   // @internal — State setters used only by useSettingsWindowCallbacks.
@@ -101,6 +111,10 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
+  /** @internal */ setTrackerPath: (path: string) => void;
+  /** @internal */ setSavingTrackerPath: (saving: boolean) => void;
+  /** @internal */ setTrackerPathExists: (exists: boolean) => void;
+  /** @internal */ setIpcSnifferEnabled: (enabled: boolean) => void;
 }
 
 export function useSettingsBasicActions({
@@ -156,6 +170,14 @@ export function useSettingsBasicActions({
   const [soundOnlyWhenUnfocused, setSoundOnlyWhenUnfocused] = useState<boolean>(false);
   const [selectedSound, setSelectedSound] = useState<string>('default');
   const [customSoundPath, setCustomSoundPath] = useState<string>('');
+
+  // F-008: Tracker path configuration
+  const [trackerPath, setTrackerPath] = useState('');
+  const [savingTrackerPath, setSavingTrackerPath] = useState(false);
+  const [trackerPathExists, setTrackerPathExists] = useState(false);
+
+  // F-010: IPC Sniffer toggle configuration
+  const [ipcSnifferEnabled, setIpcSnifferEnabled] = useState(false);
 
   // Diff expanded by default configuration (localStorage-only)
   const [diffExpandedByDefault, setDiffExpandedByDefault] = useState<boolean>(() => {
@@ -283,6 +305,19 @@ export function useSettingsBasicActions({
     sendToJava('browse_sound_file:');
   }, []);
 
+  // F-008: Save tracker path
+  const handleSaveTrackerPath = useCallback(() => {
+    setSavingTrackerPath(true);
+    const payload = { path: (trackerPath || '').trim() };
+    sendToJava(`set_tracker_path:${JSON.stringify(payload)}`);
+  }, [trackerPath]);
+
+  // F-010: IPC Sniffer toggle handler
+  const handleIpcSnifferEnabledChange = useCallback((enabled: boolean) => {
+    setIpcSnifferEnabled(enabled);
+    sendToJava(`set_ipc_sniffer_enabled:${JSON.stringify({ enabled })}`);
+  }, []);
+
   // Commit AI prompt save handler
   const handleSaveCommitPrompt = useCallback(() => {
     setSavingCommitPrompt(true);
@@ -346,5 +381,17 @@ export function useSettingsBasicActions({
     handleTestSound,
     handleBrowseSound,
     handleSaveCommitPrompt,
+    // F-008
+    trackerPath,
+    setTrackerPath,
+    savingTrackerPath,
+    setSavingTrackerPath,
+    trackerPathExists,
+    setTrackerPathExists,
+    handleSaveTrackerPath,
+    // F-010
+    ipcSnifferEnabled,
+    setIpcSnifferEnabled,
+    handleIpcSnifferEnabledChange,
   };
 }

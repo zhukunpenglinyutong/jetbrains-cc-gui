@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 
 import { BackIcon } from '../Icons';
+import { BugDropdown } from './BugDropdown'; // F-007
 
 export interface ChatHeaderProps {
   currentView: 'chat' | 'history' | 'settings';
@@ -14,6 +15,12 @@ export interface ChatHeaderProps {
   onSettings: () => void;
   onTitleChange?: (newTitle: string) => void;
   titleEditable?: boolean;
+  // F-007: Diagnostics
+  diagnosticsEnabled?: boolean;
+  bugDropdownOpen?: boolean;
+  onBugDropdownOpenChange?: (open: boolean) => void;
+  onBugReport?: (bugId: string) => void;
+  bugButtonRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
 export function ChatHeader({
@@ -27,6 +34,11 @@ export function ChatHeader({
   onSettings,
   onTitleChange,
   titleEditable = false,
+  diagnosticsEnabled,
+  bugDropdownOpen,
+  onBugDropdownOpenChange,
+  onBugReport,
+  bugButtonRef,
 }: ChatHeaderProps): React.ReactElement | null {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -147,6 +159,24 @@ export function ChatHeader({
             >
               <span className="codicon codicon-history" />
             </button>
+            {diagnosticsEnabled && onBugReport && onBugDropdownOpenChange && (
+              <>
+                <button
+                  ref={bugButtonRef}
+                  className="icon-button"
+                  onClick={() => onBugDropdownOpenChange(!bugDropdownOpen)}
+                  data-tooltip="Report Bug"
+                >
+                  <span className="codicon codicon-bug" />
+                </button>
+                <BugDropdown
+                  open={!!bugDropdownOpen}
+                  anchorRef={bugButtonRef ?? { current: null }}
+                  onSelect={onBugReport}
+                  onClose={() => onBugDropdownOpenChange(false)}
+                />
+              </>
+            )}
             <button
               className="icon-button"
               onClick={onSettings}

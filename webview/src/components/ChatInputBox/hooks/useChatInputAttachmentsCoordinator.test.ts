@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import type { Attachment } from '../types.js';
 import { useChatInputAttachmentsCoordinator } from './useChatInputAttachmentsCoordinator.js';
 
@@ -61,13 +61,17 @@ describe('useChatInputAttachmentsCoordinator', () => {
       const file = createFile('a.txt', 'text/plain');
       const list = { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) } as unknown as FileList;
 
-      result.current.handleAddAttachment(list);
+      act(() => {
+        result.current.handleAddAttachment(list);
+      });
 
       expect(mockReadAsDataURL).toHaveBeenCalled();
       expect(result.current.attachments).toHaveLength(1);
 
       const attachment = result.current.attachments[0] as Attachment;
-      result.current.handleRemoveAttachment(attachment.id);
+      act(() => {
+        result.current.handleRemoveAttachment(attachment.id);
+      });
 
       expect(result.current.attachments).toHaveLength(0);
     } finally {

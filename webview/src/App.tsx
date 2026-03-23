@@ -23,6 +23,8 @@ import {
   useMessageSender,
   useFileChangesManagement,
   useModelProviderState,
+  useDiagnosticRingBuffer, // F-007
+  useDiagnostics, // F-007
 } from './hooks';
 import type { ContextInfo, ViewMode } from './hooks';
 import { formatTime } from './utils/helpers';
@@ -117,10 +119,16 @@ const App = () => {
   useThemeInit();
   useContextActions();
 
+  // ── F-007: Diagnostics state & ring buffer ──
+  const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(() => {
+    try { return localStorage.getItem('diagnosticsEnabled') === 'true'; } catch { return false; }
+  });
+  const ringBuffer = useDiagnosticRingBuffer(diagnosticsEnabled);
+
   // ── Scroll behavior ──
   const {
     messagesContainerRef, messagesEndRef, inputAreaRef,
-    isUserAtBottomRef, userPausedRef,
+    isUserAtBottomRef, isAutoScrollingRef, userPausedRef,
   } = useScrollBehavior({ currentView, messages, loading, streamingActive });
 
   // ── Streaming messages ──
@@ -134,6 +142,10 @@ const App = () => {
     findLastAssistantIndex, extractRawBlocks,
     getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
   } = useStreamingMessages();
+
+  // ── F-007: Bug dropdown state ──
+  const [bugDropdownOpen, setBugDropdownOpen] = useState(false);
+  const bugButtonRef = useRef<HTMLButtonElement>(null);
 
   // ── Toast helpers ──
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
@@ -168,6 +180,32 @@ const App = () => {
     handleStreamingEnabledChange, handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
   } = useModelProviderState({ addToast, t });
+
+  // ── F-007: Diagnostics (snapshot collection, window callbacks, /report) ──
+  const diagnostics = useDiagnostics({
+    diagnosticsEnabled,
+    ringBuffer,
+    messagesContainerRef,
+    isUserAtBottomRef,
+    isAutoScrollingRef,
+    userPausedRef,
+    isStreamingRef,
+    streamingMessageIndexRef,
+    streamingContentRef,
+    streamingTextSegmentsRef,
+    streamingThinkingSegmentsRef,
+    seenToolUseCountRef,
+    useBackendStreamingRenderRef,
+    messageCount: messages.length,
+    loading,
+    isThinking,
+    streamingActive,
+    currentSessionId,
+    currentView,
+    currentProvider,
+    selectedModel,
+    onDiagnosticsToggle: setDiagnosticsEnabled,
+  });
 
   // ── Global drag event interception ──
   useEffect(() => {
@@ -453,6 +491,11 @@ const App = () => {
             updateHistoryTitle(currentSessionId, newTitle);
           }
         }}
+        diagnosticsEnabled={diagnosticsEnabled}
+        bugDropdownOpen={bugDropdownOpen}
+        onBugDropdownOpenChange={setBugDropdownOpen}
+        onBugReport={diagnostics.handleBugReport}
+        bugButtonRef={bugButtonRef}
       />
 
       {currentView === 'settings' ? (

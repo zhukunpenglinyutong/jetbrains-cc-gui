@@ -147,6 +147,18 @@ const SettingsView = ({
     handleTestSound,
     handleBrowseSound,
     handleSaveCommitPrompt,
+    // F-008: Tracker path
+    trackerPath,
+    setTrackerPath,
+    savingTrackerPath,
+    setSavingTrackerPath,
+    trackerPathExists,
+    setTrackerPathExists,
+    handleSaveTrackerPath,
+    // F-010: IPC Sniffer
+    ipcSnifferEnabled,
+    setIpcSnifferEnabled,
+    handleIpcSnifferEnabledChange,
   } = useSettingsBasicActions({
     streamingEnabledProp,
     onStreamingEnabledChangeProp,
@@ -276,6 +288,12 @@ const SettingsView = ({
     setSoundOnlyWhenUnfocused,
     setSelectedSound,
     setCustomSoundPath,
+    // F-008: Tracker path setters
+    setTrackerPath,
+    setSavingTrackerPath,
+    setTrackerPathExists,
+    // F-010: IPC Sniffer
+    setIpcSnifferEnabled,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -421,6 +439,11 @@ const SettingsView = ({
               onSaveCustomSoundPath={handleSaveCustomSoundPath}
               onTestSound={handleTestSound}
               onBrowseSound={handleBrowseSound}
+              trackerPath={trackerPath}
+              onTrackerPathChange={setTrackerPath}
+              onSaveTrackerPath={handleSaveTrackerPath}
+              savingTrackerPath={savingTrackerPath}
+              trackerPathExists={trackerPathExists}
             />
           </div>
 
@@ -516,6 +539,8 @@ const SettingsView = ({
                 // Dispatch custom event for same-tab sync (localStorage 'storage' event only fires for cross-tab)
                 window.dispatchEvent(new CustomEvent('historyCompletionChanged', { detail: { enabled } }));
               }}
+              ipcSnifferEnabled={ipcSnifferEnabled}
+              onIpcSnifferEnabledChange={handleIpcSnifferEnabledChange}
             />
           </div>
 
