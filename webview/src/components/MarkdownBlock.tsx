@@ -188,32 +188,105 @@ function renderStreamingContent(content: string): string {
       // Already wrapped in <pre> — pass through
       if (seg.startsWith('<pre>')) return seg;
 
-      let html = seg
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+      // Split into table blocks and non-table blocks
+      const lines = seg.split('\n');
+      const chunks: string[] = [];
+      let proseLines: string[] = [];
 
-      // Inline code
-      html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-      // Bold
-      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      // Headings (# ... ######)
-      html = html.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes: string, text: string) => {
-        const level = hashes.length;
-        return `<h${level}>${text}</h${level}>`;
-      });
-      // Paragraph breaks
-      html = html.replace(/\n\n/g, '</p><p>');
-      // Single line breaks
-      html = html.replace(/\n/g, '<br/>');
+      const flushProse = () => {
+        if (proseLines.length === 0) return;
+        const text = proseLines.join('\n');
+        let html = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes: string, txt: string) => {
+          const level = hashes.length;
+          return `<h${level}>${txt}</h${level}>`;
+        });
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = html.replace(/\n/g, '<br/>');
+        chunks.push(`<p>${html}</p>`);
+        proseLines = [];
+      };
 
-      return `<p>${html}</p>`;
+      let i = 0;
+      while (i < lines.length) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Detect table: current line starts with |, next line is separator (|---|...)
+        if (trimmed.startsWith('|') && i + 1 < lines.length &&
+            /^\|[\s:]*-+[\s:]*/.test(lines[i + 1].trim())) {
+          flushProse();
+
+          // Collect all consecutive table lines
+          const tableStart = i;
+          const tableLines: string[] = [];
+          while (i < lines.length && lines[i].trim().startsWith('|')) {
+            tableLines.push(lines[i].trim());
+            i++;
+          }
+
+          // Table is "complete" when followed by a non-pipe line (or end of non-streaming content).
+          // During streaming the last segment may still be growing — if no trailing
+          // non-pipe line exists, keep the table as raw text to avoid column flicker.
+          const tableEnded = i < lines.length; // a non-pipe line follows
+
+          if (tableEnded && tableLines.length >= 3) {
+            // Render as HTML table
+            const parseRow = (row: string): string[] =>
+              row.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+
+            const escCell = (c: string): string => {
+              let h = c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+              h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+              return h;
+            };
+
+            const headerCells = parseRow(tableLines[0]);
+            let tableHtml = '<table><thead><tr>';
+            for (const cell of headerCells) {
+              tableHtml += `<th>${escCell(cell)}</th>`;
+            }
+            tableHtml += '</tr></thead><tbody>';
+
+            for (let r = 2; r < tableLines.length; r++) {
+              const cells = parseRow(tableLines[r]);
+              tableHtml += '<tr>';
+              for (const cell of cells) {
+                tableHtml += `<td>${escCell(cell)}</td>`;
+              }
+              tableHtml += '</tr>';
+            }
+            tableHtml += '</tbody></table>';
+            chunks.push(tableHtml);
+          } else {
+            // Table still streaming — show as raw text (prose)
+            for (let t = tableStart; t < tableStart + tableLines.length; t++) {
+              proseLines.push(lines[t] ?? tableLines[t - tableStart]);
+            }
+          }
+        } else {
+          proseLines.push(line);
+          i++;
+        }
+      }
+      flushProse();
+
+      return chunks.join('');
     })
     .join('');
 
   // Sanitize the assembled HTML to prevent XSS even during streaming
   return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: ['p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    ALLOWED_TAGS: [
+      'p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    ],
     ALLOWED_ATTR: ['class'],
   });
 }
