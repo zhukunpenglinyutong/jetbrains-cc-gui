@@ -61,6 +61,7 @@ class PermissionRequestWatcher {
     void stop() {
         running = false;
         if (watchThread != null) {
+            watchThread.interrupt();
             try {
                 watchThread.join(1000);
             } catch (InterruptedException e) {
@@ -100,6 +101,9 @@ class PermissionRequestWatcher {
                 dispatchFiles(planApprovalFiles, "PLAN_APPROVAL_FOUND", handler::handlePlanApprovalRequest);
 
                 Thread.sleep(POLL_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             } catch (Exception e) {
                 debugLog.accept("POLL_ERROR", "Error in poll loop: " + e.getMessage());
                 LOG.error("Error occurred", e);
