@@ -38,6 +38,8 @@ import java.util.concurrent.TimeoutException;
 public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     private static final Logger LOG = Logger.getInstance(ClaudeSDKToolWindow.class);
+    public static final String TOOL_WINDOW_ID = "CCG";
+    public static final String TOOL_WINDOW_DISPLAY_NAME = "CC GUI";
     private static final Map<Project, ClaudeChatWindow> instances = new ConcurrentHashMap<>();
     // Map to store Content -> ClaudeChatWindow mapping for multi-tab support
     private static final Map<Content, ClaudeChatWindow> contentToWindowMap = new ConcurrentHashMap<>();
@@ -137,6 +139,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
      */
     public static ClaudeChatWindow getChatWindowForContent(Content content) {
         return content != null ? contentToWindowMap.get(content) : null;
+    }
+
+    @Override
+    public void init(@NotNull ToolWindow toolWindow) {
+        toolWindow.setTitle(TOOL_WINDOW_DISPLAY_NAME);
+        toolWindow.setStripeTitle(TOOL_WINDOW_DISPLAY_NAME);
     }
 
     @Override

@@ -32,6 +32,7 @@ describe('useWindowCallbacks integration', () => {
     setUsageMaxTokens: vi.fn(),
     setPermissionMode: vi.fn(),
     setClaudePermissionMode: vi.fn(),
+    setCodexPermissionMode: vi.fn(),
     setSelectedClaudeModel: vi.fn(),
     setSelectedCodexModel: vi.fn(),
     setProviderConfigVersion: vi.fn(),
@@ -171,6 +172,63 @@ describe('useWindowCallbacks integration', () => {
 
     // setMessages SHOULD be called
     expect(opts.setMessages).toHaveBeenCalled();
+  });
+
+  it('patchMessageUuid updates the latest unresolved user message using raw text fallback', () => {
+    const opts = createOptions({
+      extractRawBlocks: (raw) => {
+        if (!raw || typeof raw !== 'object') return [];
+        const content = (raw as any).message?.content;
+        return Array.isArray(content) ? content : [];
+      },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      (window as any).patchMessageUuid?.('Generated attachment summary', 'uuid-123');
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (messages: ClaudeMessage[]) => ClaudeMessage[];
+    const previous: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: 'older',
+        timestamp: new Date().toISOString(),
+        raw: {},
+      },
+      {
+        type: 'user',
+        content: '',
+        timestamp: new Date().toISOString(),
+        raw: {
+          message: {
+            content: [
+              { type: 'attachment', fileName: 'trace.log' },
+              { type: 'text', text: 'Generated attachment summary' },
+            ],
+          },
+        } as any,
+      },
+    ];
+
+    const next = updater(previous);
+
+    expect((next[0].raw as any)?.uuid).toBeUndefined();
+    expect((next[1].raw as any)?.uuid).toBe('uuid-123');
+  });
+
+  it('patchMessageUuid is ignored while __sessionTransitioning is true', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    (window as any).__sessionTransitioning = true;
+
+    act(() => {
+      (window as any).patchMessageUuid?.('hello', 'uuid-guarded');
+    });
+
+    expect(opts.setMessages).not.toHaveBeenCalled();
   });
 
   it('updateStatus does not release an active transition token', () => {

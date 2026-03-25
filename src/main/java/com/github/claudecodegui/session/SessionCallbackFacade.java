@@ -85,4 +85,8 @@ public class SessionCallbackFacade {
     public void notifyUsageUpdate(int usedTokens, int maxTokens) {
         callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
     }
+
+    public void notifyUserMessageUuidPatched(String content, String uuid) {
+        callbackHandler.notifyUserMessageUuidPatched(content, uuid);
+    }
 }

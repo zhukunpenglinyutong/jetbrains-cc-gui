@@ -1329,7 +1329,7 @@
   },
   "error": {
     "providerNotConfigured": "Fournisseur non configuré",
-    "providerNotConfiguredDesc": "Aucun fournisseur IA n'est configuré. Veuillez ajouter une clé API dans les paramètres du fournisseur avant de commencer une conversation.",
-    "goToProviderSettings": "Aller aux paramètres du fournisseur"
+    "providerNotConfiguredDesc": "Aucun fournisseur IA n'est encore configuré, ou l'utilisation de la configuration locale n'a pas été autorisée. Veuillez terminer la configuration dans les paramètres de gestion des fournisseurs avant de commencer une conversation.",
+    "goToProviderSettings": "Aller aux paramètres"
   }
 }

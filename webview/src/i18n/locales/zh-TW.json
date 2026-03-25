@@ -1334,7 +1334,7 @@
   },
   "error": {
     "providerNotConfigured": "供應商未設定",
-    "providerNotConfiguredDesc": "尚未設定 AI 供應商，請先在供應商設定中新增 API Key 才能開始對話。",
-    "goToProviderSettings": "前往供應商設定"
+    "providerNotConfiguredDesc": "尚未設定 AI 供應商或未授權使用本機設定，請先在供應商管理設定中完成設定後再開始對話。",
+    "goToProviderSettings": "前往設定"
   }
 }

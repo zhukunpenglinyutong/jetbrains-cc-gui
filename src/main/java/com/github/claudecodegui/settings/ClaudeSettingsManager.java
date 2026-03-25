@@ -321,7 +321,9 @@ public class ClaudeSettingsManager {
                 authType = "api_key_helper";
             }
 
-            result.addProperty("apiKey", apiKey);
+            // Mask credentials – never expose full API keys to the webview.
+            // Show only a safe prefix/suffix so the user can identify the key.
+            result.addProperty("apiKey", maskCredential(apiKey));
             result.addProperty("authType", authType);  // Add auth type identifier
             result.addProperty("baseUrl", baseUrl);
         } else {
@@ -339,6 +341,21 @@ public class ClaudeSettingsManager {
         }
 
         return result;
+    }
+
+    /**
+     * Mask a credential string for safe display.
+     * Shows the first 4 and last 4 characters with asterisks in between.
+     * Returns empty string for null/empty input.
+     */
+    private static String maskCredential(String credential) {
+        if (credential == null || credential.isEmpty()) {
+            return "";
+        }
+        if (credential.length() <= 8) {
+            return "****";
+        }
+        return credential.substring(0, 4) + "****" + credential.substring(credential.length() - 4);
     }
 
     /**

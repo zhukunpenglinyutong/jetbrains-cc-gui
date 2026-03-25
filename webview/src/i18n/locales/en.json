@@ -1471,7 +1471,7 @@
   },
   "error": {
     "providerNotConfigured": "Provider Not Configured",
-    "providerNotConfiguredDesc": "No AI provider is set up yet. Please add an API key in provider settings before starting a conversation.",
-    "goToProviderSettings": "Go to Provider Settings"
+    "providerNotConfiguredDesc": "No AI provider is configured yet, or access to the local configuration has not been authorized. Please complete setup in Provider Management settings before starting a conversation.",
+    "goToProviderSettings": "Go to Settings"
   }
 }

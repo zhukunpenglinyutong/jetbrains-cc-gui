@@ -13,6 +13,7 @@ import { sendBridgeEvent } from '../../../utils/bridge';
 import {
   appendOptimisticMessageIfMissing,
   ensureStreamingAssistantInList,
+  getRawUuid,
   preserveLastAssistantIdentity,
   preserveStreamingAssistantContent,
 } from '../messageSync';
@@ -263,6 +264,45 @@ export function registerMessageCallbacks(
 
   window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
   window.setHistoryData = (data) => setHistoryData(data);
+
+  window.patchMessageUuid = (content, uuid) => {
+    if (window.__sessionTransitioning) return;
+    if (!content || !uuid) return;
+
+    setMessages((prev) => {
+      for (let i = prev.length - 1; i >= 0; i -= 1) {
+        const message = prev[i];
+        if (message.type !== 'user') continue;
+        if (getRawUuid(message)) continue;
+
+        const rawText = extractRawBlocks(message.raw)
+          .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+          .map((block) => String(block.text))
+          .join('\n');
+        if ((message.content || '') !== content && rawText !== content) continue;
+
+        const raw: ClaudeMessage['raw'] =
+          typeof message.raw === 'object' && message.raw
+            ? { ...message.raw, uuid }
+            : {
+                uuid,
+                message: {
+                  content: [{ type: 'text' as const, text: message.content || content }],
+                },
+              };
+
+        const next = [...prev];
+        next[i] = {
+          ...message,
+          raw,
+        };
+        return next;
+      }
+
+      console.debug('[patchMessageUuid] no matching unresolved user message found for content:', content);
+      return prev;
+    });
+  };
 
   window.clearMessages = () => {
     window.__deniedToolIds?.clear();

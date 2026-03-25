@@ -5,7 +5,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { getClaudeDir, getManagedSettingsPath } from '../utils/path-utils.js';
+import { getClaudeDir, getCodemossDir, getManagedSettingsPath } from '../utils/path-utils.js';
 
 // Conditional debug logging: set CLAUDE_DEBUG=1 to enable verbose diagnostics
 const DEBUG = process.env.CLAUDE_DEBUG === '1' || process.env.CLAUDE_DEBUG === 'true';
@@ -33,12 +33,88 @@ const NETWORK_ENV_VARS = [
   'NODE_TLS_REJECT_UNAUTHORIZED',
 ];
 
+const LOCAL_SETTINGS_PROVIDER_ID = '__local_settings_json__';
+const CLI_LOGIN_PROVIDER_ID = '__cli_login__';
+const injectedNetworkEnvVars = new Map();
+
+function clearInjectedNetworkEnvVars() {
+  for (const [varName, injectedValue] of injectedNetworkEnvVars.entries()) {
+    if (process.env[varName] === injectedValue) {
+      delete process.env[varName];
+    }
+  }
+  injectedNetworkEnvVars.clear();
+}
+
+function clearRuntimeAuthEnv() {
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_AUTH_TOKEN;
+  delete process.env.ANTHROPIC_BASE_URL;
+  delete process.env.ANTHROPIC_API_URL;
+}
+
+function readJsonFile(filePath) {
+  try {
+    if (!existsSync(filePath)) {
+      return null;
+    }
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    debugLog('[DEBUG] Failed to read JSON file:', filePath, error.message);
+    return null;
+  }
+}
+
+function readClaudeSettingsFromDisk() {
+  return readJsonFile(join(getClaudeDir(), 'settings.json'));
+}
+
+function loadCodemossConfig() {
+  return readJsonFile(join(getCodemossDir(), 'config.json'));
+}
+
+export function getClaudeRuntimeState() {
+  const config = loadCodemossConfig();
+  const claude = config?.claude && typeof config.claude === 'object' ? config.claude : null;
+  const providers = claude?.providers && typeof claude.providers === 'object' ? claude.providers : {};
+  const providerIds = Object.keys(providers);
+  const hasExplicitCurrent = !!claude && Object.prototype.hasOwnProperty.call(claude, 'current') && claude.current !== null;
+  const currentId = hasExplicitCurrent ? String(claude.current).trim() : '';
+
+  if (currentId === LOCAL_SETTINGS_PROVIDER_ID) {
+    return { access: 'local', currentId };
+  }
+
+  if (currentId === CLI_LOGIN_PROVIDER_ID) {
+    return { access: 'cli_login', currentId };
+  }
+
+  if (currentId && Object.prototype.hasOwnProperty.call(providers, currentId)) {
+    return { access: 'managed', currentId };
+  }
+
+  if (!hasExplicitCurrent && providerIds.length > 0) {
+    return { access: 'managed', currentId: providerIds[0] };
+  }
+
+  return { access: 'inactive', currentId };
+}
+
+function canReadClaudeSettings(runtimeState) {
+  return runtimeState.access !== 'inactive';
+}
+
+function canUseLocalProxySettings(runtimeState) {
+  return runtimeState.access === 'local' || runtimeState.access === 'cli_login';
+}
+
 /**
  * Inject network-related environment variables from settings.json into process.env.
  *
  * This includes proxy settings AND TLS configuration. It must be called as early
  * as possible in every Node.js entry point — before any HTTPS connection is made
- * (including SDK preloading) — so that corporate proxies and custom CA setups work.
+ * (including SDK preloading) — so that authorized Local settings / CLI Login
+ * modes can use corporate proxies and custom CA setups safely.
  *
  * Users behind corporate SSL-inspection proxies should prefer setting:
  *   { "env": { "NODE_EXTRA_CA_CERTS": "/path/to/ca-bundle.pem" } }
@@ -49,7 +125,15 @@ const NETWORK_ENV_VARS = [
  * @param {Object} [settings] - Parsed settings object. If omitted, loads from disk.
  */
 export function injectNetworkEnvVars(settings) {
-  const resolvedSettings = settings || loadClaudeSettings();
+  const runtimeState = getClaudeRuntimeState();
+  clearInjectedNetworkEnvVars();
+
+  if (!canUseLocalProxySettings(runtimeState)) {
+    debugLog('[DEBUG] Skipping local proxy/TLS env sync for provider mode:', runtimeState.access);
+    return;
+  }
+
+  const resolvedSettings = settings || readClaudeSettingsFromDisk();
   for (const varName of NETWORK_ENV_VARS) {
     const value = resolvedSettings?.env?.[varName];
     if (value === undefined || value === null || process.env[varName]) {
@@ -66,7 +150,9 @@ export function injectNetworkEnvVars(settings) {
       }
     }
 
-    process.env[varName] = String(value);
+    const stringValue = String(value);
+    process.env[varName] = stringValue;
+    injectedNetworkEnvVars.set(varName, stringValue);
     debugLog(`[DEBUG] Set ${varName} from settings.json`);
 
     if (varName === 'NODE_TLS_REJECT_UNAUTHORIZED' && String(value) === '0') {
@@ -96,16 +182,17 @@ export function loadManagedSettings() {
 }
 
 /**
- * Read Claude Code configuration.
+ * Read Claude Code configuration only when an active Claude provider is authorized.
+ * Managed providers read the plugin-synced settings.json copy; local/CLI modes
+ * read the user's local Claude settings directly.
  */
 export function loadClaudeSettings() {
-  try {
-    const settingsPath = join(getClaudeDir(), 'settings.json');
-    const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
-    return settings;
-  } catch (error) {
+  const runtimeState = getClaudeRuntimeState();
+  if (!canReadClaudeSettings(runtimeState)) {
+    debugLog('[DEBUG] Skipping ~/.claude/settings.json read: Claude provider is inactive');
     return null;
   }
+  return readClaudeSettingsFromDisk();
 }
 
 /**
@@ -115,14 +202,16 @@ export function loadClaudeSettings() {
 export function setupApiKey() {
   debugLog('[DIAG-CONFIG] ========== setupApiKey() START ==========');
 
+  const runtimeState = getClaudeRuntimeState();
   const settings = loadClaudeSettings();
+  injectNetworkEnvVars(settings);
+  clearRuntimeAuthEnv();
+
+  debugLog('[DIAG-CONFIG] Runtime provider access:', runtimeState.access, runtimeState.currentId || '(none)');
   debugLog('[DIAG-CONFIG] Settings loaded:', settings ? 'yes' : 'no');
   if (settings?.env) {
     debugLog('[DIAG-CONFIG] Settings env keys:', Object.keys(settings.env));
   }
-
-  // Network env vars are already injected at module top-level in each entry
-  // point (channel-manager.js, daemon.js) before any network activity occurs.
 
   let apiKey;
   let baseUrl;
@@ -144,9 +233,9 @@ export function setupApiKey() {
   const cliLoginAuthorized = settings?.env?.CCGUI_CLI_LOGIN_AUTHORIZED === '1';
   if (cliLoginAuthorized) {
     debugLog('[INFO] CLI login authorized by user - delegating auth to Claude SDK native OAuth flow');
-    // Clear ALL API Key env vars so the SDK uses its built-in OAuth auth exclusively.
-    // Use empty string assignment instead of delete to avoid irreversible global side effects
-    // (delete on process.env permanently removes the key from the process for the lifetime of the node).
+
+    // Use empty string assignment instead of delete so the SDK falls through to
+    // its native OAuth flow without inheriting stale values from prior requests.
     process.env.ANTHROPIC_API_KEY = '';
     process.env.ANTHROPIC_AUTH_TOKEN = '';
 
@@ -188,10 +277,6 @@ export function setupApiKey() {
         ? 'managed-settings.json (apiKeyHelper)'
         : 'settings.json (apiKeyHelper)';
 
-      // Clear all API Key environment variables so the SDK uses apiKeyHelper
-      delete process.env.ANTHROPIC_API_KEY;
-      delete process.env.ANTHROPIC_AUTH_TOKEN;
-
       if (baseUrl) {
         process.env.ANTHROPIC_BASE_URL = baseUrl;
       }
@@ -211,15 +296,9 @@ export function setupApiKey() {
   // Set the corresponding environment variables based on auth type
   if (authType === 'auth_token') {
     process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
-    // Clear ANTHROPIC_API_KEY to avoid confusion
-    delete process.env.ANTHROPIC_API_KEY;
   } else if (authType === 'aws_bedrock') {
-    delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_AUTH_TOKEN;
   } else {
     process.env.ANTHROPIC_API_KEY = apiKey;
-    // Clear ANTHROPIC_AUTH_TOKEN to avoid confusion
-    delete process.env.ANTHROPIC_AUTH_TOKEN;
   }
 
   if (baseUrl) {

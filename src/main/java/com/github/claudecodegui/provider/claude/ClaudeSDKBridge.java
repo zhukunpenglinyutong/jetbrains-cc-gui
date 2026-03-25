@@ -373,6 +373,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         return sessionQueryService.getSessionMessages(sessionId, cwd);
     }
 
+    public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
+        return sessionQueryService.getLatestUserMessage(sessionId, cwd);
+    }
+
     /**
      * Get MCP server connection status.
      */

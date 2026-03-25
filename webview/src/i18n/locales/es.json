@@ -1329,7 +1329,7 @@
   },
   "error": {
     "providerNotConfigured": "Proveedor no configurado",
-    "providerNotConfiguredDesc": "No se ha configurado ningún proveedor de IA. Agrega una clave API en la configuración del proveedor antes de iniciar una conversación.",
-    "goToProviderSettings": "Ir a la configuración del proveedor"
+    "providerNotConfiguredDesc": "Todavía no hay ningún proveedor de IA configurado o no se ha autorizado el uso de la configuración local. Completa la configuración en Gestión de proveedores antes de iniciar una conversación.",
+    "goToProviderSettings": "Ir a Configuración"
   }
 }

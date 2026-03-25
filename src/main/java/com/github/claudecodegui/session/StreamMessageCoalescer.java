@@ -20,6 +20,8 @@ public class StreamMessageCoalescer {
 
     private static final Logger LOG = Logger.getInstance(StreamMessageCoalescer.class);
     private static final int UPDATE_INTERVAL_MS = 50;
+    private static final int LARGE_UPDATE_PAYLOAD_CHARS = 150_000;
+    private static final long SLOW_PAYLOAD_BUILD_MS = 25L;
 
     private final Object lock = new Object();
     private final Alarm updateAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD);
@@ -195,9 +197,26 @@ public class StreamMessageCoalescer {
         }
 
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            final int payloadChars;
+            final long payloadBuildMs;
             final String escapedMessagesJson;
             try {
-                escapedMessagesJson = JsUtils.escapeJs(MessageJsonConverter.convertMessagesToJson(messages));
+                long buildStartedAt = System.nanoTime();
+                String messagesJson = MessageJsonConverter.convertMessagesToJson(messages);
+                payloadChars = messagesJson.length();
+                escapedMessagesJson = JsUtils.escapeJs(messagesJson);
+                payloadBuildMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - buildStartedAt);
+                if (payloadChars >= LARGE_UPDATE_PAYLOAD_CHARS || payloadBuildMs >= SLOW_PAYLOAD_BUILD_MS) {
+                    LOG.info("[WebviewTransport] updateMessages payload chars=" + payloadChars
+                            + ", messages=" + messages.size()
+                            + ", buildMs=" + payloadBuildMs
+                            + ", sequence=" + sequence);
+                } else if (LOG.isDebugEnabled()) {
+                    LOG.debug("[WebviewTransport] updateMessages payload chars=" + payloadChars
+                            + ", messages=" + messages.size()
+                            + ", buildMs=" + payloadBuildMs
+                            + ", sequence=" + sequence);
+                }
             } catch (Exception e) {
                 LOG.warn("Failed to serialize messages for streaming update: " + e.getMessage(), e);
                 if (afterSendOnEdt != null) {

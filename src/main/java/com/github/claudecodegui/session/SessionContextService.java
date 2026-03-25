@@ -7,6 +7,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
 
@@ -71,6 +72,8 @@ public class SessionContextService {
             LOG.info("[ClaudeSession] Created user message: content="
                     + (userDisplayText.length() > 50 ? userDisplayText.substring(0, 50) + "..." : userDisplayText)
                     + ", hasRaw=true, contentBlocks=" + contentArr.size());
+        } catch (ProcessCanceledException e) {
+            throw e;
         } catch (Exception e) {
             LOG.warn("Failed to build user message raw: " + e.getMessage());
         }
@@ -257,6 +260,8 @@ public class SessionContextService {
                     }
                 }
                 LOG.debug("[Terminal] No matching terminal found for: " + safeName);
+            } catch (ProcessCanceledException e) {
+                throw e;
             } catch (Exception e) {
                 LOG.error("[Terminal] Error resolving terminal content: " + e.getMessage(), e);
             }
@@ -288,6 +293,8 @@ public class SessionContextService {
                     }
                 }
                 LOG.debug("[Service] No matching service found for: " + safeName);
+            } catch (ProcessCanceledException e) {
+                throw e;
             } catch (Exception e) {
                 LOG.error("[Service] Error resolving service content: " + e.getMessage(), e);
             }

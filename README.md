@@ -263,9 +263,11 @@ If this project is helpful to you, you can invite the author to have a KFC or a 
 
 ---
 
-## AtomGit
+## Friendship Link
 
-https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui
+Thanks for the support and feedback from the friends at [LINUX DO](https://linux.do/). 
+
+Thank you for [AtomGit](https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui) platform G-Star certification
 
 ---
 

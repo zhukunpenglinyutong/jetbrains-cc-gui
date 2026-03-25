@@ -434,21 +434,32 @@ public class ClaudeMessageHandler implements MessageCallback {
                 return;
             }
 
-            // Find the last user message and update its raw field with the uuid
-            List<Message> messages = state.getMessages();
+            String userText = messageParser.extractMessageContent(userMsg);
+            if (userText == null || userText.isEmpty()) {
+                LOG.debug("User message from SDK has no text content, skipping uuid patch");
+                return;
+            }
+
+            // Find the latest unresolved matching user message and patch its uuid.
+            List<Message> messages = state.getMessagesReference();
             for (int i = messages.size() - 1; i >= 0; i--) {
                 Message msg = messages.get(i);
-                if (msg.type == Message.Type.USER && msg.raw != null) {
-                    // Check if this message already has a uuid
-                    if (!msg.raw.has("uuid")) {
-                        // Update the raw field with the uuid
-                        msg.raw.addProperty("uuid", uuid);
-                        LOG.info("Updated user message with uuid: " + uuid);
-                        // Notify frontend of the update
-                        callbackHandler.notifyMessageUpdate(messages);
-                        break;
-                    }
+                if (msg.type != Message.Type.USER) {
+                    continue;
                 }
+                if (!userText.equals(msg.content)) {
+                    continue;
+                }
+                if (msg.raw == null) {
+                    msg.raw = new JsonObject();
+                }
+                if (msg.raw.has("uuid") && !msg.raw.get("uuid").isJsonNull()) {
+                    continue;
+                }
+                msg.raw.addProperty("uuid", uuid);
+                LOG.info("Updated user message with uuid: " + uuid);
+                callbackHandler.notifyUserMessageUuidPatched(msg.content != null ? msg.content : "", uuid);
+                break;
             }
         } catch (Exception e) {
             LOG.warn("Failed to parse user message from SDK: " + e.getMessage());

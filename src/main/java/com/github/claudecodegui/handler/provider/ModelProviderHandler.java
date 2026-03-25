@@ -269,7 +269,11 @@ public class ModelProviderHandler {
             return mappedOpus != null ? mappedOpus : baseModel;
         }
         if (lowerBaseModel.contains("haiku")) {
-            String mappedHaiku = readConfiguredEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL");
+            // Prefer ANTHROPIC_SMALL_FAST_MODEL; fall back to legacy ANTHROPIC_DEFAULT_HAIKU_MODEL
+            String mappedHaiku = readConfiguredEnvValue(env, "ANTHROPIC_SMALL_FAST_MODEL");
+            if (mappedHaiku == null) {
+                mappedHaiku = readConfiguredEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL");
+            }
             return mappedHaiku != null ? mappedHaiku : baseModel;
         }
         if (lowerBaseModel.contains("sonnet")) {

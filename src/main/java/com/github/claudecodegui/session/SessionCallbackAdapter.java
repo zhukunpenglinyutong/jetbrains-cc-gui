@@ -19,6 +19,8 @@ import java.util.function.BooleanSupplier;
 public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
 
     private static final Logger LOG = Logger.getInstance(SessionCallbackAdapter.class);
+    /** Throttle interval targeting ~30fps to balance responsiveness with UI thread load. */
+    private static final int DELTA_THROTTLE_MS = 33;
 
     /**
      * Callback interface for JavaScript calls from session events.
@@ -32,6 +34,8 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     private final PermissionHandler permissionHandler;
     private final BooleanSupplier slashCommandsFetchedSupplier;
     private final Runnable streamEndCallback;
+    private final StreamDeltaThrottler contentDeltaThrottler;
+    private final StreamDeltaThrottler thinkingDeltaThrottler;
     private volatile boolean active = true;
 
     public SessionCallbackAdapter(
@@ -46,10 +50,28 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         this.permissionHandler = permissionHandler;
         this.slashCommandsFetchedSupplier = slashCommandsFetchedSupplier;
         this.streamEndCallback = streamEndCallback;
+        this.contentDeltaThrottler = new StreamDeltaThrottler(
+                DELTA_THROTTLE_MS,
+                delta -> {
+                    if (!isInactive()) {
+                        jsTarget.callJavaScript("onContentDelta", JsUtils.escapeJs(delta));
+                    }
+                }
+        );
+        this.thinkingDeltaThrottler = new StreamDeltaThrottler(
+                DELTA_THROTTLE_MS,
+                delta -> {
+                    if (!isInactive()) {
+                        jsTarget.callJavaScript("onThinkingDelta", JsUtils.escapeJs(delta));
+                    }
+                }
+        );
     }
 
     public void deactivate() {
         active = false;
+        contentDeltaThrottler.dispose();
+        thinkingDeltaThrottler.dispose();
     }
 
     private boolean isInactive() {
@@ -178,6 +200,8 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         if (isInactive()) {
             return;
         }
+        contentDeltaThrottler.reset();
+        thinkingDeltaThrottler.reset();
         streamCoalescer.onStreamStart();
         ApplicationManager.getApplication().invokeLater(() -> {
             if (isInactive()) {
@@ -194,6 +218,8 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         if (isInactive()) {
             return;
         }
+        contentDeltaThrottler.flushNow();
+        thinkingDeltaThrottler.flushNow();
         streamCoalescer.onStreamEnd();
         streamCoalescer.flush(() -> {
             if (isInactive()) {
@@ -213,7 +239,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         if (isInactive()) {
             return;
         }
-        jsTarget.callJavaScript("onContentDelta", JsUtils.escapeJs(delta));
+        contentDeltaThrottler.append(delta);
     }
 
     @Override
@@ -221,7 +247,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         if (isInactive()) {
             return;
         }
-        jsTarget.callJavaScript("onThinkingDelta", JsUtils.escapeJs(delta));
+        thinkingDeltaThrottler.append(delta);
     }
 
     @Override
@@ -241,10 +267,18 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         });
     }
 
+    @Override
+    public void onUserMessageUuidPatched(String content, String uuid) {
+        if (isInactive()) {
+            return;
+        }
+        jsTarget.callJavaScript("patchMessageUuid", JsUtils.escapeJs(content), JsUtils.escapeJs(uuid));
+    }
+
     /**
      * Dispose internal resources. Call when the parent window is disposed.
      */
     public void dispose() {
-        // No-op: no resources to dispose currently
+        deactivate();
     }
 }

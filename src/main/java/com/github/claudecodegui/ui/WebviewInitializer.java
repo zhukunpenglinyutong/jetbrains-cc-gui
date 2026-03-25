@@ -299,30 +299,6 @@ public class WebviewInitializer {
                     cefBrowser.executeJavaScript(languageConfigInjection, cefBrowser.getURL(), 0);
                     LOG.info("[LanguageSync] Language config injected into frontend");
 
-                    // Fix cursor display in JCEF on macOS: track CSS cursor changes via JS
-                    // and send them to Java through the bridge. JCEF native rendering on macOS
-                    // does not propagate CSS cursor styles to the host Swing component.
-                    String cursorTracker =
-                        "(function() {"
-                        + "  var lastCursor = '';"
-                        + "  var pending = false;"
-                        + "  document.addEventListener('mousemove', function(e) {"
-                        + "    if (pending) return;"
-                        + "    pending = true;"
-                        + "    requestAnimationFrame(function() {"
-                        + "      pending = false;"
-                        + "      var c = window.getComputedStyle(e.target).cursor;"
-                        + "      if (c !== lastCursor) {"
-                        + "        lastCursor = c;"
-                        + "        if (window.sendToJava) {"
-                        + "          window.sendToJava('cursor_change:' + c);"
-                        + "        }"
-                        + "      }"
-                        + "    });"
-                        + "  }, {passive: true});"
-                        + "})();";
-                    cefBrowser.executeJavaScript(cursorTracker, cefBrowser.getURL(), 0);
-
                     LOG.debug("onLoadEnd completed, waiting for frontend_ready signal");
                 }
             }, browser.getCefBrowser());
