@@ -10,6 +10,39 @@ import { useContextMenu, copySelection } from '../hooks/useContextMenu.js';
 /** Always render at least this many recent messages. Earlier messages are collapsed. */
 const VISIBLE_MESSAGE_WINDOW = 15;
 
+function extractToolResultPreview(result: ToolResultBlock | null | undefined): string {
+  if (!result) return 'pending';
+
+  let text = '';
+  if (typeof result.content === 'string') {
+    text = result.content;
+  } else if (Array.isArray(result.content)) {
+    text = result.content
+      .map((item) => (item && typeof item.text === 'string' ? item.text : ''))
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  const preview = text.length > 200 ? text.slice(0, 200) : text;
+  return `${result.is_error === true ? 'error' : 'ok'}:${text.length}:${preview}`;
+}
+
+function getMessageToolResultSignature(
+  message: ClaudeMessage,
+  messageIndex: number,
+  getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[],
+  findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined,
+): string {
+  const toolUses = getContentBlocks(message).filter(
+    (block): block is Extract<ClaudeContentBlock, { type: 'tool_use' }> => block.type === 'tool_use',
+  );
+  if (toolUses.length === 0) return '';
+
+  return toolUses
+    .map((block) => `${block.id ?? 'unknown'}:${extractToolResultPreview(findToolResult(block.id, messageIndex))}`)
+    .join('|');
+}
+
 interface MessageListProps {
   messages: ClaudeMessage[];
   streamingActive: boolean;
@@ -101,6 +134,7 @@ export const MessageList = memo(function MessageList({
       {visibleMessages.map((message, visibleIndex) => {
         const messageIndex = shouldCollapse ? visibleIndex + collapsedCount : visibleIndex;
         const messageKey = getMessageKey(message, messageIndex);
+        const toolResultSignature = getMessageToolResultSignature(message, messageIndex, getContentBlocks, findToolResult);
 
         return (
           <MessageItem
@@ -118,6 +152,7 @@ export const MessageList = memo(function MessageList({
             extractMarkdownContent={extractMarkdownContent}
             onNodeRef={onMessageNodeRef}
             onNavigateToProviderSettings={onNavigateToProviderSettings}
+            toolResultSignature={toolResultSignature}
           />
         );
       })}

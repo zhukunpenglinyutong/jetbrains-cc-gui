@@ -538,6 +538,27 @@ describe('ensureStreamingAssistantInList', () => {
     expect(streamingIndex).toBe(-1);
   });
 
+  it('does not re-append the old streaming assistant when the final assistant already exists without __turnId', () => {
+    const streamingMsg = makeAssistantMsg('streaming tool blocks', {
+      __turnId: 7,
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [{ type: 'tool_use', id: 'tool-1', name: 'read_file', input: { path: 'text.md' } }],
+        },
+      } as any,
+    });
+    const prev = [makeUserMsg('q'), streamingMsg];
+    const finalAssistant = makeAssistantMsg('final answer');
+    const result = [makeUserMsg('q'), finalAssistant];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, false, 0);
+    expect(list).toBe(result);
+    expect(list).toHaveLength(2);
+    expect(list[1]).toBe(finalAssistant);
+    expect(streamingIndex).toBe(-1);
+  });
+
   it('returns resultList unchanged when prevList has no streaming assistant and refs cleared', () => {
     const prev = [makeUserMsg('q'), makeAssistantMsg('done', { isStreaming: false })];
     const result = [makeUserMsg('q')];

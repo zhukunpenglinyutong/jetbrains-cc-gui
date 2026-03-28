@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock, SubagentInfo, SubagentStatus } from '../types';
+import { normalizeToolInput } from '../utils/toolInputNormalization';
+import { normalizeToolName } from '../utils/toolConstants';
 
 interface UseSubagentsParams {
   messages: ClaudeMessage[];
@@ -39,12 +41,13 @@ export function useSubagents({
       blocks.forEach((block) => {
         if (block.type !== 'tool_use') return;
 
-        const toolName = block.name?.toLowerCase() ?? '';
+        const toolName = normalizeToolName(block.name ?? '');
 
-        // Only process Task/Agent tool calls
-        if (toolName !== 'task' && toolName !== 'agent') return;
+        // Only process task/agent-style subagent tool calls.
+        if (toolName !== 'task' && toolName !== 'agent' && toolName !== 'spawn_agent') return;
 
-        const input = block.input as Record<string, unknown> | undefined;
+        const rawInput = block.input as Record<string, unknown> | undefined;
+        const input = rawInput ? normalizeToolInput(block.name, rawInput) as Record<string, unknown> : undefined;
         if (!input) return;
 
         // Defensive: ensure all string values are actually strings

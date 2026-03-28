@@ -43,18 +43,216 @@ function textMsg(text) {
   return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } };
 }
 
-/** @typedef {Object} EventProcessingState - see createInitialEventState for fields */
+function normalizeMcpToolName(server, tool) {
+  const serverName = String(server || '').toLowerCase();
+  const toolName = String(tool || '').toLowerCase();
+
+  if (serverName === 'filesystem') {
+    if (toolName === 'edit_file') return 'edit_file';
+    if (toolName === 'write_file') return 'write_to_file';
+    if (toolName === 'read_text_file' || toolName === 'read_multiple_files') return 'read_file';
+    if (toolName === 'search_files') return 'search';
+  }
+
+  return `mcp__${server}__${tool}`;
+}
+
+function normalizeMcpToolInput(server, tool, args) {
+  const serverName = String(server || '').toLowerCase();
+  const toolName = String(tool || '').toLowerCase();
+  const input = (args && typeof args === 'object') ? { ...args } : {};
+
+  if (serverName !== 'filesystem') {
+    return input;
+  }
+
+  if (typeof input.path === 'string') {
+    input.file_path = input.path;
+  }
+
+  if (toolName === 'edit_file') {
+    const edits = Array.isArray(input.edits) ? input.edits : [];
+    const firstEdit = edits[0] && typeof edits[0] === 'object' ? edits[0] : null;
+    if (firstEdit) {
+      if (typeof firstEdit.oldText === 'string') input.old_string = firstEdit.oldText;
+      if (typeof firstEdit.newText === 'string') input.new_string = firstEdit.newText;
+      if (typeof firstEdit.oldText === 'string') input.oldString = firstEdit.oldText;
+      if (typeof firstEdit.newText === 'string') input.newString = firstEdit.newText;
+    }
+  } else if (toolName === 'write_file' && typeof input.content === 'string') {
+    input.old_string = '';
+    input.new_string = input.content;
+    input.oldString = '';
+    input.newString = input.content;
+  }
+
+  return input;
+}
+
+function safeJsonParse(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function isObjectRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizePlanStatus(status) {
+  const value = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  if (value === 'completed' || value === 'done') return 'completed';
+  if (value === 'in_progress' || value === 'in-progress' || value === 'active' || value === 'running') return 'in_progress';
+  return 'pending';
+}
+
+function normalizeUpdatePlanInput(input) {
+  const normalized = isObjectRecord(input) ? { ...input } : {};
+  const plan = Array.isArray(normalized.plan) ? normalized.plan : [];
+  normalized.plan = plan
+    .map((item) => {
+      if (!isObjectRecord(item)) return null;
+      const content =
+        (typeof item.content === 'string' && item.content.trim()) ? item.content.trim() :
+        (typeof item.step === 'string' && item.step.trim()) ? item.step.trim() :
+        (typeof item.title === 'string' && item.title.trim()) ? item.title.trim() :
+        (typeof item.text === 'string' && item.text.trim()) ? item.text.trim() :
+        '';
+      if (!content) return null;
+      return {
+        ...item,
+        content,
+        step: content,
+        status: normalizePlanStatus(item.status),
+      };
+    })
+    .filter(Boolean);
+  return normalized;
+}
+
+function parseFunctionCallArguments(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  if (isObjectRecord(payload.arguments)) return payload.arguments;
+  return safeJsonParse(payload.arguments);
+}
+
+function normalizeFunctionCallTool(toolName, parsedArguments) {
+  if (typeof toolName !== 'string' || !toolName) {
+    return { name: toolName, input: isObjectRecord(parsedArguments) ? parsedArguments : {} };
+  }
+
+  const mcpMatch = toolName.match(/^mcp__([^_]+)__(.+)$/);
+  if (mcpMatch) {
+    const [, server, tool] = mcpMatch;
+    const normalizedInput = normalizeMcpToolInput(server, tool, isObjectRecord(parsedArguments) ? parsedArguments : {});
+    return {
+      name: normalizeMcpToolName(server, tool),
+      input: normalizedInput,
+    };
+  }
+
+  return {
+    name: toolName,
+    input: toolName === 'update_plan'
+      ? normalizeUpdatePlanInput(parsedArguments)
+      : (isObjectRecord(parsedArguments) ? parsedArguments : {}),
+  };
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
+    return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function buildToolInvocationSignature(name, input) {
+  if (typeof name !== 'string' || !name) return '';
+  return `${name}::${stableStringify(input && typeof input === 'object' ? input : {})}`;
+}
+
+function rememberToolInvocation(state, toolUseId, toolName, toolInput) {
+  const signature = buildToolInvocationSignature(toolName, toolInput);
+  if (!signature) return '';
+  state.toolCallSignatureById.set(toolUseId, signature);
+  if (!state.toolUseIdBySignature.has(signature)) {
+    state.toolUseIdBySignature.set(signature, toolUseId);
+  }
+  return signature;
+}
+
+function findMatchingToolUseId(state, toolName, toolInput) {
+  const signature = buildToolInvocationSignature(toolName, toolInput);
+  if (!signature) return null;
+  return state.toolUseIdBySignature.get(signature) ?? null;
+}
+
+function handleFunctionCallPayload(payload, state) {
+  if (!payload || payload.type !== 'function_call') return false;
+
+  const rawToolName = typeof payload.name === 'string' ? payload.name : '';
+  if (!rawToolName) return false;
+
+  const parsedArguments = parseFunctionCallArguments(payload);
+  const normalizedTool = normalizeFunctionCallTool(rawToolName, parsedArguments);
+  const toolName = normalizedTool.name;
+  const toolInput = normalizedTool.input;
+  const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
+  const toolUseId = matchedToolUseId || (typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : randomUUID());
+
+  if (!state.emittedToolUseIds.has(toolUseId)) {
+    state.emitMessage(toolUseMsg(toolUseId, toolName, toolInput));
+    state.emittedToolUseIds.add(toolUseId);
+  }
+  rememberToolInvocation(state, toolUseId, toolName, toolInput);
+  state.lastFunctionCallToolUseId = toolUseId;
+  return true;
+}
+
+function handleFunctionCallOutputPayload(payload, state) {
+  if (!payload || payload.type !== 'function_call_output') return false;
+  let toolUseId = typeof payload.call_id === 'string' ? payload.call_id : '';
+  if ((!toolUseId || !state.emittedToolUseIds.has(toolUseId)) && state.lastFunctionCallToolUseId) {
+    toolUseId = state.lastFunctionCallToolUseId;
+  }
+  if (!toolUseId || state.emittedToolResultIds.has(toolUseId) || !state.emittedToolUseIds.has(toolUseId)) return false;
+
+  const output = typeof payload.output === 'string' ? payload.output : JSON.stringify(payload.output ?? '(no output)');
+  const isError = typeof output === 'string' && /failed to parse|error|denied/i.test(output);
+  const truncatedResult = truncateForDisplay(output, MAX_TOOL_RESULT_CHARS);
+  state.emitMessage(toolResultMsg(toolUseId, isError, truncatedResult && truncatedResult.trim() ? truncatedResult : '(no output)'));
+  state.emittedToolResultIds.add(toolUseId);
+  return true;
+}
+
 
 /** Creates the initial mutable state bag consumed by processCodexEventStream. */
 export function createInitialEventState(emitMessage) {
   return {
     pendingToolUseIds: new Map(),
     emittedToolUseIds: new Set(),
+    emittedToolResultIds: new Set(),
+    toolCallSignatureById: new Map(),
+    toolUseIdBySignature: new Map(),
+    lastFunctionCallToolUseId: null,
     deniedCommandToolUseIds: new Set(),
     emittedDeniedCommandToolResultIds: new Set(),
     sessionFilePath: null,
     sessionLineCursor: 0,
+    sessionFunctionCursor: 0,
+    sessionTurnStartCursor: 0,
     processedPatchCallIds: new Set(),
+    processedSessionFunctionCallIds: new Set(),
+    processedSessionFunctionOutputIds: new Set(),
     reasoningTextCache: new Map(),
     reasoningObserved: false,
     commandApprovalAbortRequested: false,
@@ -100,6 +298,11 @@ function ensureSessionFilePath(state, threadId) {
   if (!threadId) return null;
   state.sessionFilePath = findSessionFileByThreadId(threadId);
   return state.sessionFilePath;
+}
+
+function countSessionJsonlLines(content) {
+  if (typeof content !== 'string' || !content.length) return 0;
+  return content.split('\n').filter((line) => line.trim()).length;
 }
 
 async function readLatestTurnContextFromSession(state, threadId) {
@@ -164,6 +367,64 @@ async function collectPatchOperationsFromSession(state, config) {
   }
   state.sessionLineCursor = lines.length;
   return batches;
+}
+
+async function replayMissingFunctionCallsFromSession(state, config) {
+  const sessionPath = ensureSessionFilePath(state, config.threadId);
+  if (!sessionPath) return { toolUses: 0, toolResults: 0 };
+
+  let content = '';
+  try { content = await readFile(sessionPath, 'utf8'); } catch (error) {
+    logDebug('SESSION_REPLAY', 'Failed to read session file for function replay:', error?.message || error);
+    return { toolUses: 0, toolResults: 0 };
+  }
+  if (!content.trim()) return { toolUses: 0, toolResults: 0 };
+
+  const lines = content.split('\n');
+  const candidateStartIndexes = [
+    state.sessionFunctionCursor > 0 ? state.sessionFunctionCursor : null,
+    state.sessionTurnStartCursor > 0 ? state.sessionTurnStartCursor : null,
+    Math.max(0, lines.length - SESSION_PATCH_SCAN_MAX_LINES),
+  ].filter((value) => Number.isInteger(value) && value >= 0);
+  const startIndex = candidateStartIndexes.length > 0
+    ? Math.max(...candidateStartIndexes)
+    : Math.max(0, lines.length - SESSION_PATCH_SCAN_MAX_LINES);
+
+  let toolUses = 0;
+  let toolResults = 0;
+
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line || !line.trim()) continue;
+
+    let parsed;
+    try { parsed = JSON.parse(line); } catch { continue; }
+    if (parsed?.type !== 'response_item' || !parsed.payload || typeof parsed.payload !== 'object') continue;
+
+    const payload = parsed.payload;
+    const payloadType = payload.type;
+    if (payloadType === 'function_call') {
+      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : `line_${i}`;
+      if (state.processedSessionFunctionCallIds.has(callId)) continue;
+      state.processedSessionFunctionCallIds.add(callId);
+      if (handleFunctionCallPayload(payload, state)) {
+        toolUses += 1;
+      }
+      continue;
+    }
+
+    if (payloadType === 'function_call_output') {
+      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : `line_${i}`;
+      if (state.processedSessionFunctionOutputIds.has(callId)) continue;
+      state.processedSessionFunctionOutputIds.add(callId);
+      if (handleFunctionCallOutputPayload(payload, state)) {
+        toolResults += 1;
+      }
+    }
+  }
+
+  state.sessionFunctionCursor = lines.length;
+  return { toolUses, toolResults };
 }
 
 function buildPermissionInputForPatchOperation(operation) {
@@ -282,6 +543,7 @@ function emitSyntheticPatchOperations(state, patchBatches, isError, deniedCallId
 function emitDeniedCommandToolResultOnce(state, toolUseId, messageText = 'Command denied by user') {
   if (!toolUseId || state.emittedDeniedCommandToolResultIds.has(toolUseId)) return;
   state.emitMessage(toolResultMsg(toolUseId, true, messageText));
+  state.emittedToolResultIds.add(toolUseId);
   state.emittedDeniedCommandToolResultIds.add(toolUseId);
 }
 
@@ -401,6 +663,7 @@ function handleCommandExecution(item, state) {
     state.emittedToolUseIds.add(toolUseId);
   }
   state.emitMessage(toolResultMsg(toolUseId, isError, outputStr && outputStr.trim() ? outputStr : '(no output)'));
+  state.emittedToolResultIds.add(toolUseId);
 }
 
 async function handleFileChange(item, state, config) {
@@ -436,14 +699,17 @@ async function handleFileChange(item, state, config) {
 }
 
 function handleMcpToolCall(item, state) {
-  const toolUseId = item.id || randomUUID();
-  const toolName = `mcp__${item.server}__${item.tool}`;
+  const toolName = normalizeMcpToolName(item.server, item.tool);
+  const toolInput = normalizeMcpToolInput(item.server, item.tool, item.arguments || {});
+  const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
+  const toolUseId = matchedToolUseId || item.id || randomUUID();
   const isError = item.status === 'failed' || !!item.error;
   console.log('[DEBUG] MCP tool call completed:', toolName, 'id:', toolUseId, 'error:', isError);
   if (!state.emittedToolUseIds.has(toolUseId)) {
-    state.emitMessage(toolUseMsg(toolUseId, toolName, item.arguments || {}));
+    state.emitMessage(toolUseMsg(toolUseId, toolName, toolInput));
     state.emittedToolUseIds.add(toolUseId);
   }
+  rememberToolInvocation(state, toolUseId, toolName, toolInput);
   let resultContent = '(no output)';
   if (item.error) {
     resultContent = item.error.message || 'MCP tool call failed';
@@ -459,6 +725,7 @@ function handleMcpToolCall(item, state) {
   }
   const truncatedResult = truncateForDisplay(resultContent, MAX_TOOL_RESULT_CHARS);
   state.emitMessage(toolResultMsg(toolUseId, isError, truncatedResult && truncatedResult.trim() ? truncatedResult : '(no output)'));
+  state.emittedToolResultIds.add(toolUseId);
 }
 
 /**
@@ -485,14 +752,30 @@ export async function processCodexEventStream(events, state, config) {
         state.currentThreadId = event.thread_id;
         state.sessionFilePath = null;
         state.sessionLineCursor = 0;
+        state.sessionFunctionCursor = 0;
+        state.sessionTurnStartCursor = 0;
         state.processedPatchCallIds.clear();
+        state.processedSessionFunctionCallIds.clear();
+        state.processedSessionFunctionOutputIds.clear();
         console.log('[THREAD_ID]', state.currentThreadId);
         break;
       }
 
-      case 'turn.started':
+      case 'turn.started': {
+        const sessionPath = ensureSessionFilePath(state, config.threadId);
+        if (sessionPath && existsSync(sessionPath)) {
+          try {
+            const content = await readFile(sessionPath, 'utf8');
+            state.sessionTurnStartCursor = countSessionJsonlLines(content);
+          } catch {
+            state.sessionTurnStartCursor = state.sessionFunctionCursor;
+          }
+        } else {
+          state.sessionTurnStartCursor = state.sessionFunctionCursor;
+        }
         console.log('[DEBUG] Turn started');
         break;
+      }
 
       case 'item.started': {
         maybeEmitReasoning(state, event.item);
@@ -503,6 +786,7 @@ export async function processCodexEventStream(events, state, config) {
           const description = smartDescription(command);
           state.emitMessage(toolUseMsg(toolUseId, toolName, { command, description }));
           state.emittedToolUseIds.add(toolUseId);
+          rememberToolInvocation(state, toolUseId, toolName, { command, description });
           const allowed = await maybeRequestCommandApprovalViaBridge(
             state, config, { toolUseId, command, smartTool: toolName, description }
           );
@@ -511,11 +795,16 @@ export async function processCodexEventStream(events, state, config) {
             throw new Error(COMMAND_DENIED_ABORT_ERROR);
           }
         } else if (event.item && event.item.type === 'mcp_tool_call') {
-          const toolUseId = event.item.id || randomUUID();
-          const toolName = `mcp__${event.item.server}__${event.item.tool}`;
+          const toolName = normalizeMcpToolName(event.item.server, event.item.tool);
+          const toolInput = normalizeMcpToolInput(event.item.server, event.item.tool, event.item.arguments || {});
+          const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
+          const toolUseId = matchedToolUseId || event.item.id || randomUUID();
           console.log('[DEBUG] MCP tool call started:', toolName, 'id:', toolUseId);
-          state.emitMessage(toolUseMsg(toolUseId, toolName, event.item.arguments || {}));
-          state.emittedToolUseIds.add(toolUseId);
+          if (!state.emittedToolUseIds.has(toolUseId)) {
+            state.emitMessage(toolUseMsg(toolUseId, toolName, toolInput));
+            state.emittedToolUseIds.add(toolUseId);
+          }
+          rememberToolInvocation(state, toolUseId, toolName, toolInput);
         }
         break;
       }
@@ -532,6 +821,10 @@ export async function processCodexEventStream(events, state, config) {
 
       case 'turn.completed': {
         console.log('[DEBUG] Turn completed');
+        const replayed = await replayMissingFunctionCallsFromSession(state, config);
+        if (replayed.toolUses > 0 || replayed.toolResults > 0) {
+          console.log('[DEBUG] Replayed session function calls:', JSON.stringify(replayed));
+        }
         if (event.usage) {
           console.log('[DEBUG] Token usage:', event.usage);
           const claudeUsage = {
@@ -582,6 +875,26 @@ export async function processCodexEventStream(events, state, config) {
       default: {
         const payloadType = event.payload?.type;
         console.log('[DEBUG] Unknown event type:', event.type, 'payload.type:', payloadType);
+
+        if (event.type === 'response_item') {
+          const payload = event.payload;
+          const payloadCallId = typeof payload?.call_id === 'string' && payload.call_id
+            ? payload.call_id
+            : null;
+          if (handleFunctionCallPayload(payload, state)) {
+            if (payloadCallId) {
+              state.processedSessionFunctionCallIds.add(payloadCallId);
+            }
+            break;
+          }
+          if (handleFunctionCallOutputPayload(payload, state)) {
+            if (payloadCallId) {
+              state.processedSessionFunctionOutputIds.add(payloadCallId);
+            }
+            break;
+          }
+        }
+
         if (event.type === 'event_msg' || payloadType === 'function_call' || payloadType === 'function_call_output') {
           console.log('[DEBUG] Full event:', JSON.stringify(event).substring(0, 500));
         }

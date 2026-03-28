@@ -32,6 +32,7 @@ export interface MessageItemProps {
   extractMarkdownContent: (message: ClaudeMessage) => string;
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
+  toolResultSignature?: string;
 }
 
 type GroupedBlock =
@@ -207,6 +208,7 @@ export const MessageItem = memo(function MessageItem({
   extractMarkdownContent,
   onNodeRef,
   onNavigateToProviderSettings,
+  toolResultSignature: _toolResultSignature,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
@@ -368,6 +370,7 @@ export const MessageItem = memo(function MessageItem({
     }
 
     return groupedBlocks.map((grouped) => {
+
       if (grouped.type === 'read_group') {
         const readItems = grouped.blocks.map((b) => {
           const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
@@ -561,3 +564,6 @@ export const MessageItem = memo(function MessageItem({
     </div>
   );
 });
+
+
+

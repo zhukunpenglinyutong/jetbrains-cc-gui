@@ -50,6 +50,24 @@ describe('toolPresentation', () => {
     expect(getToolLineInfo({ file_path: 'text.md' }, undefined, result)).toEqual({ start: 19, end: 20 });
   });
 
+  it('uses the actual inserted line range instead of the full hunk context', () => {
+    const result: ToolResultBlock = {
+      type: 'tool_result',
+      content: `@@ -29,5 +29,6 @@\n line 29\n line 30\n line 31\n line 32\n+inserted line 33\n line 33`,
+    };
+
+    expect(getToolLineInfo({ file_path: 'text.md' }, undefined, result)).toEqual({ start: 33 });
+  });
+
+  it('uses the nearest surviving line for deletion-only hunks with context', () => {
+    const result: ToolResultBlock = {
+      type: 'tool_result',
+      content: `@@ -19,5 +19,4 @@\n line 19\n line 20\n-line 21\n line 22\n line 23`,
+    };
+
+    expect(getToolLineInfo({ file_path: 'text.md' }, undefined, result)).toEqual({ start: 21 });
+  });
+
   it('supports insertion-only hunks from tool result text', () => {
     const result: ToolResultBlock = {
       type: 'tool_result',

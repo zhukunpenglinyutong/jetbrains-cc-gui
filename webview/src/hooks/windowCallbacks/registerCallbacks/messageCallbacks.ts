@@ -176,27 +176,26 @@ export function registerMessageCallbacks(
           return ensureStreamingAssistantPreserved(prev, appendOptimisticMessageIfMissing(prev, smartMerged));
         }
 
-        // Streaming + !useBackendStreamingRender: only update on tool_use changes
-        const lastAssistantIdx = findLastAssistantIndex(parsed);
-        if (lastAssistantIdx < 0) {
-          return ensureStreamingAssistantPreserved(prev, parsed);
+        // Streaming + !useBackendStreamingRender: accept any snapshot that introduces or preserves tool_use blocks.
+        let totalToolUseCount = 0;
+        for (const message of parsed) {
+          if (message.type !== 'assistant') continue;
+          const blocks = extractRawBlocks(message.raw);
+          totalToolUseCount += blocks.filter((b) => b?.type === 'tool_use').length;
         }
 
-        const lastAssistant = parsed[lastAssistantIdx];
-        const lastAssistantBlocks = extractRawBlocks(lastAssistant.raw);
-        const toolUseCount = lastAssistantBlocks.filter((b) => b?.type === 'tool_use').length;
-        if (toolUseCount < seenToolUseCountRef.current) {
-          seenToolUseCountRef.current = toolUseCount;
+        if (totalToolUseCount < seenToolUseCountRef.current) {
+          seenToolUseCountRef.current = totalToolUseCount;
         }
-        const hasNewToolUse = toolUseCount > seenToolUseCountRef.current;
-        const hasToolUse = toolUseCount > 0;
+        const hasNewToolUse = totalToolUseCount > seenToolUseCountRef.current;
+        const hasToolUse = totalToolUseCount > 0;
 
         if (!hasNewToolUse && !hasToolUse) {
           return prev;
         }
 
         if (hasNewToolUse) {
-          seenToolUseCountRef.current = toolUseCount;
+          seenToolUseCountRef.current = totalToolUseCount;
           activeTextSegmentIndexRef.current = -1;
           activeThinkingSegmentIndexRef.current = -1;
         }

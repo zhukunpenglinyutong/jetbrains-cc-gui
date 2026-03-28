@@ -64,7 +64,14 @@ const parseUnifiedDiffFirstHunk = (text?: string): { start?: number; end?: numbe
     return {};
   }
 
-  const match = text.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/m);
+  const lines = text.split(/\r?\n/);
+  const hunkHeaderIndex = lines.findIndex((line) => /^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@/.test(line));
+  if (hunkHeaderIndex === -1) {
+    return {};
+  }
+
+  const header = lines[hunkHeaderIndex];
+  const match = header.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/);
   if (!match) {
     return {};
   }
@@ -73,6 +80,62 @@ const parseUnifiedDiffFirstHunk = (text?: string): { start?: number; end?: numbe
   const oldCount = match[2] ? Number(match[2]) : 1;
   const newStart = Number(match[3]);
   const newCount = match[4] ? Number(match[4]) : 1;
+
+  let oldLine = oldStart;
+  let newLine = newStart;
+  let contextLineCount = 0;
+  const addedLines: number[] = [];
+  const deletedLines: number[] = [];
+
+  for (let index = hunkHeaderIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@/.test(line)) {
+      break;
+    }
+    if (!line) {
+      continue;
+    }
+    if (line.startsWith('\\ No newline at end of file')) {
+      continue;
+    }
+    if (line.startsWith('+')) {
+      addedLines.push(newLine);
+      newLine += 1;
+      continue;
+    }
+    if (line.startsWith('-')) {
+      deletedLines.push(oldLine);
+      oldLine += 1;
+      continue;
+    }
+    if (line.startsWith(' ')) {
+      contextLineCount += 1;
+      oldLine += 1;
+      newLine += 1;
+    }
+  }
+
+  if (addedLines.length > 0 && deletedLines.length === 0) {
+    return {
+      start: addedLines[0],
+      end: addedLines.length > 1 ? addedLines[addedLines.length - 1] : undefined,
+    };
+  }
+
+  if (deletedLines.length > 0 && addedLines.length === 0) {
+    return {
+      start: deletedLines[0],
+      end: deletedLines.length > 1 ? deletedLines[deletedLines.length - 1] : undefined,
+    };
+  }
+
+  if (addedLines.length > 0 && deletedLines.length > 0 && contextLineCount > 0) {
+    return {
+      start: addedLines[0],
+      end: addedLines.length > 1 ? addedLines[addedLines.length - 1] : undefined,
+    };
+  }
+
   const start = oldCount > 0 ? oldStart : newStart;
   const effectiveCount = oldCount > 0 ? oldCount : newCount;
 

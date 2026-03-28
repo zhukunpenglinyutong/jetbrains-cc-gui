@@ -174,6 +174,178 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setMessages).toHaveBeenCalled();
   });
 
+  it('keeps parsed tool_use updates during streaming even when the last assistant has no tool_use block', () => {
+    const opts = createOptions({
+      isStreamingRef: { current: true },
+      streamingTurnIdRef: { current: 1 },
+      extractRawBlocks: (raw) => {
+        if (!raw || typeof raw !== 'object') return [];
+        const rawObj = raw as any;
+        const content = rawObj.content ?? rawObj.message?.content;
+        return Array.isArray(content) ? content : [];
+      },
+      patchAssistantForStreaming: (msg) => msg,
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    const parsedMessages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: 'run test',
+        timestamp: '2026-03-28T10:00:00.000Z',
+      },
+      {
+        type: 'assistant',
+        content: 'Tool: update_plan',
+        timestamp: '2026-03-28T10:00:01.000Z',
+        raw: {
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'plan-1',
+                name: 'update_plan',
+                input: {
+                  plan: [
+                    { step: '读取测试文件', status: 'completed' },
+                    { step: '汇报文件首行内容', status: 'in_progress' },
+                  ],
+                },
+              },
+            ],
+          },
+        } as any,
+      },
+      {
+        type: 'user',
+        content: '[tool_result]',
+        timestamp: '2026-03-28T10:00:02.000Z',
+        raw: {
+          message: {
+            content: [
+              { type: 'tool_result', tool_use_id: 'plan-1', content: 'Plan updated' },
+            ],
+          },
+        } as any,
+      },
+      {
+        type: 'assistant',
+        content: '首行是 # Diff Smoke Test',
+        timestamp: '2026-03-28T10:00:03.000Z',
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: '首行是 # Diff Smoke Test' },
+            ],
+          },
+        } as any,
+      },
+    ];
+
+    act(() => {
+      (window as any).updateMessages(JSON.stringify(parsedMessages));
+    });
+
+    expect(opts.setMessages).toHaveBeenCalled();
+    const updater = (opts.setMessages as any).mock.calls.at(-1)?.[0] as (messages: ClaudeMessage[]) => ClaudeMessage[];
+    const previous: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: 'run test',
+        timestamp: '2026-03-28T10:00:00.000Z',
+      },
+      {
+        type: 'assistant',
+        content: '',
+        timestamp: '2026-03-28T10:00:00.500Z',
+        isStreaming: true,
+        __turnId: 1,
+        raw: { message: { content: [] } } as any,
+      },
+    ];
+
+    const next = updater(previous);
+
+    expect(next).not.toBe(previous);
+    expect(next.some((message) => {
+      if (message.type !== 'assistant' || !message.raw || typeof message.raw !== 'object') {
+        return false;
+      }
+      const rawObj = message.raw as any;
+      const content = rawObj.content ?? rawObj.message?.content;
+      return Array.isArray(content) && content.some((block: any) => block?.type === 'tool_use' && block?.name === 'update_plan');
+    })).toBe(true);
+  });
+
+  it('does not append the old Codex streaming assistant after stream end when the final assistant already exists', () => {
+    const opts = createOptions({
+      isStreamingRef: { current: false },
+      streamingTurnIdRef: { current: -1 },
+      extractRawBlocks: (raw) => {
+        if (!raw || typeof raw !== 'object') return [];
+        const rawObj = raw as any;
+        const content = rawObj.content ?? rawObj.message?.content;
+        return Array.isArray(content) ? content : [];
+      },
+      patchAssistantForStreaming: (msg) => msg,
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    const parsedMessages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: 'run test',
+        timestamp: '2026-03-28T10:00:00.000Z',
+      },
+      {
+        type: 'assistant',
+        content: '最终回答',
+        timestamp: '2026-03-28T10:00:03.000Z',
+        raw: {
+          message: {
+            content: [{ type: 'text', text: '最终回答' }],
+          },
+        } as any,
+      },
+    ];
+
+    act(() => {
+      (window as any).updateMessages(JSON.stringify(parsedMessages));
+    });
+
+    expect(opts.setMessages).toHaveBeenCalled();
+    const updater = (opts.setMessages as any).mock.calls.at(-1)?.[0] as (messages: ClaudeMessage[]) => ClaudeMessage[];
+    const previous: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: 'run test',
+        timestamp: '2026-03-28T10:00:00.000Z',
+      },
+      {
+        type: 'assistant',
+        content: '',
+        timestamp: '2026-03-28T10:00:01.000Z',
+        isStreaming: true,
+        __turnId: 1,
+        raw: {
+          message: {
+            content: [
+              { type: 'tool_use', id: 'read-1', name: 'read_file', input: { path: 'text.md' } },
+            ],
+          },
+        } as any,
+      },
+    ];
+
+    const next = updater(previous);
+
+    expect(next).toHaveLength(2);
+    expect(next[1].content).toBe('最终回答');
+    expect(next[1].isStreaming).not.toBe(true);
+    const nextBlocks = opts.extractRawBlocks(next[1].raw);
+    expect(nextBlocks.some((block: any) => block?.type === 'tool_use')).toBe(false);
+  });
+
   it('patchMessageUuid updates the latest unresolved user message using raw text fallback', () => {
     const opts = createOptions({
       extractRawBlocks: (raw) => {

@@ -4,7 +4,7 @@
  */
 
 // Read/file viewing tools
-export const READ_TOOL_NAMES = new Set(['read', 'read_file']);
+export const READ_TOOL_NAMES = new Set(['read', 'read_file', 'read_multiple_files']);
 
 // Edit/file modification tools
 export const EDIT_TOOL_NAMES = new Set(['edit', 'edit_file', 'replace_string', 'write_to_file']);
@@ -13,7 +13,7 @@ export const EDIT_TOOL_NAMES = new Set(['edit', 'edit_file', 'replace_string', '
 export const BASH_TOOL_NAMES = new Set(['bash', 'run_terminal_cmd', 'execute_command', 'shell_command']);
 
 // Search/grep/glob tools
-export const SEARCH_TOOL_NAMES = new Set(['grep', 'glob', 'search', 'find']);
+export const SEARCH_TOOL_NAMES = new Set(['grep', 'glob', 'search', 'find', 'search_files']);
 
 // File modification tools (for rewind feature - includes write for new file creation)
 export const FILE_MODIFY_TOOL_NAMES = new Set([
@@ -39,3 +39,4 @@ export function normalizeToolName(toolName: string): string {
 export function isToolName(toolName: string | undefined, toolSet: Set<string>): boolean {
   return toolName !== undefined && toolSet.has(normalizeToolName(toolName));
 }
+

@@ -108,4 +108,33 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(result[0].__turnId).toBe(1);
     expect(result[2].__turnId).toBe(2);
   });
+
+  it('does not merge tool-use assistant messages into the final answer message', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '', {
+        raw: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'read-1',
+              name: 'mcp__filesystem__read_multiple_files',
+              input: { paths: ['/repo/a.ts', '/repo/b.ts'] },
+            },
+          ],
+        } as any,
+      }),
+      makeMsg('assistant', 'final answer', {
+        raw: { content: [{ type: 'text', text: 'final answer' }] } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+    expect(result).toHaveLength(2);
+    expect(result[0].raw).toMatchObject({
+      content: [
+        expect.objectContaining({ type: 'tool_use', id: 'read-1' }),
+      ],
+    });
+    expect(result[1].content).toBe('final answer');
+  });
 });

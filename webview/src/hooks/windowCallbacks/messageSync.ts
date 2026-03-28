@@ -254,10 +254,16 @@ export const ensureStreamingAssistantInList = (
   for (let i = prevList.length - 1; i >= 0; i--) {
     const msg = prevList[i];
     if (msg.type === 'assistant' && msg.isStreaming && msg.__turnId && msg.__turnId > 0) {
-      const alreadyPresent = resultList.some(
-        (m) => m.type === 'assistant' && m.__turnId === msg.__turnId,
-      );
-      if (!alreadyPresent) {
+      const alreadyPresent = resultList.some((m) => {
+        if (m.type !== 'assistant') return false;
+        if (m.__turnId === msg.__turnId) return true;
+        if (msg.timestamp && m.timestamp === msg.timestamp) return true;
+        return false;
+      });
+      const assistantAlreadyAtOrAfterPosition =
+        i < resultList.length && resultList.slice(i).some((m) => m.type === 'assistant');
+
+      if (!alreadyPresent && !assistantAlreadyAtOrAfterPosition) {
         const result = [...resultList, msg];
         return { list: result, streamingIndex: result.length - 1 };
       }
