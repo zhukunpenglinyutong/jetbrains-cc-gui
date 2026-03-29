@@ -33,6 +33,7 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
+import com.github.claudecodegui.diagnostics.DiagnosticConfig; // F-007
 import com.github.claudecodegui.diagnostics.DiagnosticManager; // F-007/F-010
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.JsonObject;
@@ -486,6 +487,9 @@ public class ChatWindowDelegate {
 
         host.getSessionLifecycleManager().sendCurrentPermissionMode();
 
+        // F-007: Push diagnostics enabled state from config.json
+        pushDiagnosticsEnabled();
+
         if (pendingQuickFixPrompt != null && pendingQuickFixCallback != null) {
             LOG.info("Processing pending QuickFix message after frontend ready");
             String prompt = pendingQuickFixPrompt;
@@ -498,6 +502,18 @@ public class ChatWindowDelegate {
         }
 
         host.getStreamCoalescer().flush(null);
+    }
+
+    // ==================== F-007: Diagnostics State Push ====================
+
+    private void pushDiagnosticsEnabled() {
+        boolean enabled = DiagnosticConfig.getDiagnosticsEnabled();
+        String json = "{\"diagnosticsEnabled\":" + enabled + "}";
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (!host.isDisposed() && host.getBrowser() != null) {
+                host.callJavaScript("window.updateDiagnosticsEnabled", JsUtils.escapeJs(json));
+            }
+        });
     }
 
     // ==================== Cleanup ====================

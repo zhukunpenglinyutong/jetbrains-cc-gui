@@ -9,9 +9,9 @@
 
 ### L-1: `./gradlew clean` löscht alle archivierten Builds
 
-**Kontext:** Gradle-Build des Plugins mit mehreren gespeicherten ZIP-Versionen in `build/distributions/`.
-**Pitfall:** `./gradlew clean` löscht das gesamte `build/`-Verzeichnis — nicht nur Compile-Artefakte, sondern auch alle manuell aufbewahrten ZIPs in `build/distributions/`.
-**Lösung:** Vor jedem Build (insbesondere vor `clean`): `cp build/distributions/*.zip build/releases/`. Das Verzeichnis `build/releases/` liegt außerhalb von Gradles Clean-Scope.
+**Kontext:** Gradle-Build des Plugins mit mehreren gespeicherten ZIP-Versionen.
+**Pitfall:** `./gradlew clean` löscht das gesamte `build/`-Verzeichnis — auch `build/releases/` und `build/distributions/`. Alles unter `build/` ist betroffen.
+**Lösung:** Builds werden in `releases/` im Projekt-Root gespeichert (nicht unter `build/`). Dieses Verzeichnis ist in `.gitignore` und wird von `gradlew clean` nicht gelöscht. Nach jedem Build: `cp build/distributions/*.zip releases/<name>-<suffix>.zip`.
 
 ### L-2: Keine destructive Git-Operationen im Hauptrepo für alternative Builds
 

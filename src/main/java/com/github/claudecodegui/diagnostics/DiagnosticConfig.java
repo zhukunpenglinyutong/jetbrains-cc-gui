@@ -24,6 +24,25 @@ public final class DiagnosticConfig {
     private DiagnosticConfig() {} // utility class
 
     // ========================================================================
+    // F-007: Diagnostics Enabled
+    // ========================================================================
+
+    public static boolean getDiagnosticsEnabled() {
+        JsonObject config = readConfig();
+        if (config.has("diagnosticsEnabled")) {
+            return config.get("diagnosticsEnabled").getAsBoolean();
+        }
+        return false;
+    }
+
+    public static void setDiagnosticsEnabled(boolean enabled) {
+        JsonObject config = readConfig();
+        config.addProperty("diagnosticsEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[DiagnosticConfig] Set diagnostics enabled: " + enabled);
+    }
+
+    // ========================================================================
     // F-008: Tracker Path
     // ========================================================================
 

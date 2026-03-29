@@ -120,6 +120,7 @@ const App = () => {
   useContextActions();
 
   // ── F-007: Diagnostics state & ring buffer ──
+  // Initial value from localStorage (fast, avoids flash); Java pushes authoritative value on frontend_ready.
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(() => {
     try { return localStorage.getItem('diagnosticsEnabled') === 'true'; } catch { return false; }
   });
@@ -204,7 +205,10 @@ const App = () => {
     currentView,
     currentProvider,
     selectedModel,
-    onDiagnosticsToggle: setDiagnosticsEnabled,
+    onDiagnosticsToggle: useCallback((enabled: boolean) => {
+      setDiagnosticsEnabled(enabled);
+      try { localStorage.setItem('diagnosticsEnabled', String(enabled)); } catch { /* ignore */ }
+    }, []),
   });
 
   // ── Global drag event interception ──

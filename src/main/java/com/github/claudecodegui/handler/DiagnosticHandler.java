@@ -189,8 +189,10 @@ public class DiagnosticHandler extends BaseMessageHandler {
     }
 
     private void handleGetDiagnosticsEnabled() {
-        // For now, diagnostics enabled state is managed on the webview side (localStorage).
-        // This handler exists for future Java-side settings integration.
+        boolean enabled = DiagnosticConfig.getDiagnosticsEnabled();
+        JsonObject response = new JsonObject();
+        response.addProperty("diagnosticsEnabled", enabled);
+        callJavaScript("window.updateDiagnosticsEnabled", escapeJs(gson.toJson(response)));
     }
 
     /**
@@ -223,9 +225,11 @@ public class DiagnosticHandler extends BaseMessageHandler {
     }
 
     private void handleSetDiagnosticsEnabled(String content) {
-        // For now, diagnostics enabled state is managed on the webview side (localStorage).
-        // This handler exists for future Java-side settings integration.
-        LOG.info("[DiagnosticHandler] set_diagnostics_enabled: " + content);
+        JsonObject json = JsonParser.parseString(content).getAsJsonObject();
+        boolean enabled = json.has("diagnosticsEnabled") && json.get("diagnosticsEnabled").getAsBoolean();
+        DiagnosticConfig.setDiagnosticsEnabled(enabled);
+        // No push-back to webview — it already has the correct state.
+        // Pushing back would cause an infinite loop: webview → Java → webview → …
     }
 
     private void handleSetIpcSnifferEnabled(String content) {
