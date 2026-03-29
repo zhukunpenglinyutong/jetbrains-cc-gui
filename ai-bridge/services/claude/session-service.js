@@ -3,11 +3,11 @@
  * Responsible for session persistence and history message management.
  */
 
-import fs from 'fs';
-import { existsSync } from 'fs';
+import { existsSync, createReadStream, mkdirSync, readFileSync, appendFileSync, statSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
+import { createInterface } from 'readline';
 import { getClaudeDir } from '../../utils/path-utils.js';
 
 /**
@@ -19,7 +19,7 @@ export function persistJsonlMessage(sessionId, cwd, obj) {
     const projectsDir = join(getClaudeDir(), 'projects');
     const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
     const projectHistoryDir = join(projectsDir, sanitizedCwd);
-    fs.mkdirSync(projectHistoryDir, { recursive: true });
+    mkdirSync(projectHistoryDir, { recursive: true });
     const sessionFile = join(projectHistoryDir, `${sessionId}.jsonl`);
 
     // Add necessary metadata fields to ensure compatibility with ClaudeHistoryReader
@@ -30,7 +30,7 @@ export function persistJsonlMessage(sessionId, cwd, obj) {
       timestamp: new Date().toISOString()
     };
 
-    fs.appendFileSync(sessionFile, JSON.stringify(enrichedObj) + '\n', 'utf8');
+    appendFileSync(sessionFile, JSON.stringify(enrichedObj) + '\n', 'utf8');
     console.log('[PERSIST] Message saved to:', sessionFile);
   } catch (e) {
     console.error('[PERSIST_ERROR]', e.message);
@@ -47,11 +47,11 @@ export function loadSessionHistory(sessionId, cwd) {
     const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
     const sessionFile = join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
 
-    if (!fs.existsSync(sessionFile)) {
+    if (!existsSync(sessionFile)) {
       return [];
     }
 
-    const content = fs.readFileSync(sessionFile, 'utf8');
+    const content = readFileSync(sessionFile, 'utf8');
     const lines = content.split('\n').filter(line => line.trim());
     const messages = [];
 
@@ -92,14 +92,7 @@ export function loadSessionHistory(sessionId, cwd) {
  */
 export async function getSessionMessages(sessionId, cwd = null) {
   try {
-    const projectsDir = join(getClaudeDir(), 'projects');
-
-    // Sanitize project path (same logic as ClaudeSessionService.ts)
-    const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
-    const projectHistoryDir = join(projectsDir, sanitizedCwd);
-
-    // Session file path
-    const sessionFile = join(projectHistoryDir, `${sessionId}.jsonl`);
+    const sessionFile = resolveSessionFile(sessionId, cwd);
 
     if (!existsSync(sessionFile)) {
       console.log(JSON.stringify({
@@ -135,4 +128,94 @@ export async function getSessionMessages(sessionId, cwd = null) {
       error: error.message
     }));
   }
+}
+
+export async function getLatestUserMessage(sessionId, cwd = null) {
+  try {
+    const sessionFile = resolveSessionFile(sessionId, cwd);
+
+    if (!existsSync(sessionFile)) {
+      console.log(JSON.stringify({
+        success: true,
+        message: null
+      }));
+      return;
+    }
+
+    // Read only the tail of the file for performance on large sessions
+    const TAIL_BYTES = 32 * 1024;
+    const stat = statSync(sessionFile);
+    const startByte = Math.max(0, stat.size - TAIL_BYTES);
+
+    let latestUserMessage = null;
+    const rl = createInterface({
+      input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
+      crlfDelay: Infinity
+    });
+
+    let firstLine = startByte > 0;
+    for await (const line of rl) {
+      // Skip potentially partial first line when reading from mid-file
+      if (firstLine) { firstLine = false; continue; }
+      if (!line.trim()) continue;
+      try {
+        const message = JSON.parse(line);
+        if (isUserTextMessage(message)) {
+          latestUserMessage = message;
+        }
+      } catch {
+        // Ignore malformed JSONL entries
+      }
+    }
+
+    console.log(JSON.stringify({
+      success: true,
+      message: latestUserMessage
+    }));
+  } catch (error) {
+    console.error('[GET_LATEST_USER_ERROR]', error.message);
+    console.log(JSON.stringify({
+      success: false,
+      error: error.message
+    }));
+  }
+}
+
+function isUserTextMessage(message) {
+  return Boolean(
+    message &&
+    message.type === 'user' &&
+    typeof message.uuid === 'string' &&
+    extractTextContent(message)?.trim()
+  );
+}
+
+function extractTextContent(message) {
+  const content = message?.message?.content;
+  if (!content) {
+    return '';
+  }
+
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
+    .join('\n');
+}
+
+function resolveSessionFile(sessionId, cwd = null) {
+  if (!sessionId || /[\/\\]/.test(sessionId)) {
+    throw new Error('Invalid session ID');
+  }
+  const projectsDir = join(getClaudeDir(), 'projects');
+  const sanitizedCwd = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, '-');
+  const projectHistoryDir = join(projectsDir, sanitizedCwd);
+  return join(projectHistoryDir, `${sessionId}.jsonl`);
 }

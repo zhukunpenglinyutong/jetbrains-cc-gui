@@ -21,7 +21,8 @@ export const STORAGE_KEYS = {
  */
 export const CLAUDE_MODEL_MAPPING_ENV_KEYS = [
   'ANTHROPIC_MODEL',
-  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL', // legacy – kept for backward compat
   'ANTHROPIC_DEFAULT_SONNET_MODEL',
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
 ] as const;
@@ -110,7 +111,7 @@ export interface ProviderConfig {
       ANTHROPIC_MODEL?: string;
       ANTHROPIC_DEFAULT_SONNET_MODEL?: string;
       ANTHROPIC_DEFAULT_OPUS_MODEL?: string;
-      ANTHROPIC_DEFAULT_HAIKU_MODEL?: string;
+      ANTHROPIC_SMALL_FAST_MODEL?: string;
       [key: string]: any;
     };
     alwaysThinkingEnabled?: boolean;
@@ -197,7 +198,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/api/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.7',
+      ANTHROPIC_SMALL_FAST_MODEL: 'glm-4.7',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.7',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.7',
     },
@@ -208,7 +209,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://api.moonshot.cn/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
+      ANTHROPIC_SMALL_FAST_MODEL: 'kimi-k2.5',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5',
     },
@@ -219,7 +220,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'DeepSeek-V3.2',
+      ANTHROPIC_SMALL_FAST_MODEL: 'DeepSeek-V3.2',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'DeepSeek-V3.2',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'DeepSeek-V3.2',
     },
@@ -235,7 +236,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M2.1',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.1',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.1',
+      ANTHROPIC_SMALL_FAST_MODEL: 'MiniMax-M2.1',
     },
   },
   {
@@ -244,7 +245,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://api.xiaomimimo.com/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'mimo-v2-flash',
+      ANTHROPIC_SMALL_FAST_MODEL: 'mimo-v2-flash',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'mimo-v2-flash',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'mimo-v2-flash',
     },
@@ -255,7 +256,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://dashscope.aliyuncs.com/apps/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3-max',
+      ANTHROPIC_SMALL_FAST_MODEL: 'qwen3-max',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3-max',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3-max',
     },
@@ -266,7 +267,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://openrouter.ai/api',
       ANTHROPIC_AUTH_TOKEN: '',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'anthropic/claude-haiku-4.5',
+      ANTHROPIC_SMALL_FAST_MODEL: 'anthropic/claude-haiku-4.5',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'anthropic/claude-sonnet-4.5',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'anthropic/claude-opus-4.5',
     },

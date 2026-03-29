@@ -37,6 +37,7 @@ public class DaemonBridge {
     private static final long DAEMON_START_TIMEOUT_MS = 30_000;
     private static final long HEARTBEAT_INTERVAL_MS = 15_000;
     private static final long HEARTBEAT_TIMEOUT_MS = 45_000; // 3 missed heartbeats = dead
+    private static final long ACTIVE_REQUEST_HEARTBEAT_TIMEOUT_MS = 180_000;
     private static final int MAX_RESTART_ATTEMPTS = 3;
     private static final long RESTART_WINDOW_MS = 30_000; // Reset restart counter after this period of stability
 
@@ -55,6 +56,8 @@ public class DaemonBridge {
     private final AtomicInteger restartAttempts = new AtomicInteger(0);
     private final AtomicLong lastSuccessfulStart = new AtomicLong(0);
     private final AtomicLong lastHeartbeatResponse = new AtomicLong(0);
+    private final AtomicLong lastDaemonActivity = new AtomicLong(0);
+    private final AtomicInteger activeRequestCount = new AtomicInteger(0);
     private final Object startLock = new Object();
 
     // Pending request handlers: requestId -> handler
@@ -126,6 +129,7 @@ public class DaemonBridge {
                 daemonProcess = pb.start();
                 isRunning.set(true);
                 lastSuccessfulStart.set(System.currentTimeMillis());
+                markDaemonActivity();
 
                 LOG.info("[DaemonBridge] Daemon process started, PID: " + daemonProcess.pid());
 
@@ -188,6 +192,7 @@ public class DaemonBridge {
             entry.getValue().onError("Daemon stopped");
         }
         pendingRequests.clear();
+        activeRequestCount.set(0);
 
         // Send shutdown command before closing stdin (allows daemon to flush)
         try {
@@ -262,6 +267,7 @@ public class DaemonBridge {
             entry.getValue().future.complete(false);
         }
         pendingRequests.clear();
+        activeRequestCount.set(0);
     }
 
     /**
@@ -308,12 +314,22 @@ public class DaemonBridge {
 
         String requestId = String.valueOf(requestIdCounter.incrementAndGet());
         CompletableFuture<Boolean> future = new CompletableFuture<>();
+        boolean countsAsActiveRequest = !"heartbeat".equals(method) && !"status".equals(method);
 
         RequestHandler handler = new RequestHandler(callback, future);
         pendingRequests.put(requestId, handler);
+        if (countsAsActiveRequest) {
+            activeRequestCount.incrementAndGet();
+        }
+        markDaemonActivity();
 
         // Ensure cleanup when future completes (e.g., via timeout or cancellation)
-        future.whenComplete((result, ex) -> pendingRequests.remove(requestId));
+        future.whenComplete((result, ex) -> {
+            pendingRequests.remove(requestId);
+            if (countsAsActiveRequest) {
+                activeRequestCount.updateAndGet(current -> Math.max(0, current - 1));
+            }
+        });
 
         // Build request JSON
         JsonObject request = new JsonObject();
@@ -379,7 +395,9 @@ public class DaemonBridge {
 
     private void startHeartbeatThread() {
         // Initialize heartbeat baseline so the first check doesn't trigger timeout
-        lastHeartbeatResponse.set(System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        lastHeartbeatResponse.set(now);
+        lastDaemonActivity.set(now);
 
         heartbeatThread = new Thread(() -> {
             while (isRunning.get()) {
@@ -388,10 +406,14 @@ public class DaemonBridge {
                     if (!isAlive()) break;
 
                     // Check if daemon is unresponsive (no heartbeat response for too long)
-                    long elapsed = System.currentTimeMillis() - lastHeartbeatResponse.get();
-                    if (elapsed > HEARTBEAT_TIMEOUT_MS) {
-                        LOG.warn("[DaemonBridge] Daemon unresponsive (no heartbeat response for "
-                                + elapsed + "ms), treating as dead");
+                    long currentTime = System.currentTimeMillis();
+                    long heartbeatAgeMs = currentTime - lastHeartbeatResponse.get();
+                    long activityAgeMs = currentTime - lastDaemonActivity.get();
+                    int activeRequests = activeRequestCount.get();
+                    if (shouldTreatAsUnresponsive(heartbeatAgeMs, activityAgeMs, activeRequests)) {
+                        LOG.warn("[DaemonBridge] Daemon unresponsive (heartbeatAgeMs=" + heartbeatAgeMs
+                                + ", activityAgeMs=" + activityAgeMs
+                                + ", activeRequests=" + activeRequests + "), treating as dead");
                         handleDaemonDeath();
                         break;
                     }
@@ -423,6 +445,7 @@ public class DaemonBridge {
     // =========================================================================
 
     private void handleDaemonOutput(String jsonLine) {
+        markDaemonActivity();
         // Skip non-JSON lines (SDK debug output, permission logs, etc.)
         String trimmed = jsonLine.trim();
         if (trimmed.isEmpty() || trimmed.charAt(0) != '{') {
@@ -447,6 +470,7 @@ public class DaemonBridge {
                 if ("heartbeat".equals(type)) {
                     // Heartbeat response — daemon is alive
                     lastHeartbeatResponse.set(System.currentTimeMillis());
+                    markDaemonActivity();
                     return;
                 }
 
@@ -553,6 +577,7 @@ public class DaemonBridge {
             entry.getValue().onError("Daemon process died unexpectedly");
         }
         pendingRequests.clear();
+        activeRequestCount.set(0);
 
         // Notify listener
         if (lifecycleListener != null) {
@@ -588,6 +613,18 @@ public class DaemonBridge {
 
     public boolean isSdkPreloaded() {
         return sdkPreloaded.get();
+    }
+
+    static boolean shouldTreatAsUnresponsive(long heartbeatAgeMs, long activityAgeMs, int activeRequestCount) {
+        if (activeRequestCount <= 0) {
+            return heartbeatAgeMs > HEARTBEAT_TIMEOUT_MS;
+        }
+        long livenessAgeMs = Math.min(heartbeatAgeMs, activityAgeMs);
+        return livenessAgeMs > ACTIVE_REQUEST_HEARTBEAT_TIMEOUT_MS;
+    }
+
+    private void markDaemonActivity() {
+        lastDaemonActivity.set(System.currentTimeMillis());
     }
 
     // =========================================================================

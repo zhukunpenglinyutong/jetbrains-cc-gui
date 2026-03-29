@@ -266,6 +266,14 @@ https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui
 
 ---
 
+## 友链
+
+感谢 [LINUX DO](https://linux.do/) 用户的支持与反馈
+
+感谢[AtomGit](https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui)平台G-Star认证
+
+---
+
 ## Star History
 
 [![Star History](https://api.star-history.com/svg?repos=zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)](https://www.star-history.com/#zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)

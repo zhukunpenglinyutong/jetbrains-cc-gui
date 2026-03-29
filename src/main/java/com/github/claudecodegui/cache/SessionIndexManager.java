@@ -1,6 +1,7 @@
 package com.github.claudecodegui.cache;
 
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.TextSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.intellij.openapi.diagnostic.Logger;
@@ -9,9 +10,11 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -170,7 +173,7 @@ public class SessionIndexManager {
         }
 
         try (Reader reader = Files.newBufferedReader(indexPath, StandardCharsets.UTF_8)) {
-            SessionIndex index = gson.fromJson(reader, SessionIndex.class);
+            SessionIndex index = this.gson.fromJson(reader, SessionIndex.class);
             if (index == null) {
                 return new SessionIndex();
             }
@@ -193,13 +196,61 @@ public class SessionIndexManager {
     private void saveIndex(Path indexPath, SessionIndex index) {
         ensureCacheDir();
         index.lastUpdated = System.currentTimeMillis();
+        sanitizeIndex(index);
 
-        try (Writer writer = Files.newBufferedWriter(indexPath, StandardCharsets.UTF_8)) {
-            gson.toJson(index, writer);
+        Path parent = indexPath.getParent();
+        if (parent == null) {
+            LOG.warn("[SessionIndexManager] Failed to save index because parent directory is null: " + indexPath);
+            return;
+        }
+
+        String prefix = indexPath.getFileName() != null ? indexPath.getFileName() + "-" : "session-index-";
+        Path tmp = null;
+        try {
+            tmp = Files.createTempFile(parent, prefix, ".tmp");
+            try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
+                gson.toJson(index, writer);
+            }
+            try {
+                Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING);
+            }
             LOG.info("[SessionIndexManager] Saved index to " + indexPath);
         } catch (Exception e) {
             LOG.error("[SessionIndexManager] Failed to save index: " + e.getMessage(), e);
+        } finally {
+            if (tmp != null) {
+                try {
+                    Files.deleteIfExists(tmp);
+                } catch (IOException e) {
+                    LOG.debug("[SessionIndexManager] Failed to cleanup temp file: " + tmp + " (" + e.getMessage() + ")");
+                }
+            }
         }
+    }
+
+    private void sanitizeIndex(SessionIndex index) {
+        if (index == null || index.projects == null || index.projects.isEmpty()) {
+            return;
+        }
+        Map<String, ProjectIndex> sanitizedProjects = new HashMap<>();
+        for (Map.Entry<String, ProjectIndex> projectEntry : index.projects.entrySet()) {
+            String sanitizedProjectPath = TextSanitizer.sanitizeInvalidSurrogates(projectEntry.getKey());
+            ProjectIndex projectIndex = projectEntry.getValue();
+            if (projectIndex != null && projectIndex.sessions != null) {
+                for (SessionIndexEntry sessionEntry : projectIndex.sessions) {
+                    if (sessionEntry == null) {
+                        continue;
+                    }
+                    sessionEntry.sessionId = TextSanitizer.sanitizeInvalidSurrogates(sessionEntry.sessionId);
+                    sessionEntry.title = TextSanitizer.sanitizeInvalidSurrogates(sessionEntry.title);
+                    sessionEntry.cwd = TextSanitizer.sanitizeInvalidSurrogates(sessionEntry.cwd);
+                }
+            }
+            sanitizedProjects.put(sanitizedProjectPath, projectIndex);
+        }
+        index.projects = sanitizedProjects;
     }
 
     /**

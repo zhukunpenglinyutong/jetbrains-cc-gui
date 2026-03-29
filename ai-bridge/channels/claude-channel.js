@@ -12,7 +12,10 @@ import {
 import {
   resetRuntimePersistent as claudeResetRuntimePersistent
 } from '../services/claude/persistent-query-service.js';
-import { getSessionMessages as claudeGetSessionMessages } from '../services/claude/session-service.js';
+import {
+  getSessionMessages as claudeGetSessionMessages,
+  getLatestUserMessage as claudeGetLatestUserMessage
+} from '../services/claude/session-service.js';
 
 /**
  * Execute a Claude specific command.
@@ -65,6 +68,10 @@ export async function handleClaudeCommand(command, args, stdinData) {
       await claudeGetSessionMessages(args[0], args[1]);
       break;
 
+    case 'getLatestUserMessage':
+      await claudeGetLatestUserMessage(args[0], args[1]);
+      break;
+
     case 'rewindFiles': {
       const sessionId = stdinData?.sessionId || args[0];
       const userMessageId = stdinData?.userMessageId || args[1];
@@ -103,5 +110,5 @@ export async function handleClaudeCommand(command, args, stdinData) {
 }
 
 export function getClaudeCommandList() {
-  return ['send', 'sendWithAttachments', 'getSession', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools', 'resetRuntime'];
+  return ['send', 'sendWithAttachments', 'getSession', 'getLatestUserMessage', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools', 'resetRuntime'];
 }

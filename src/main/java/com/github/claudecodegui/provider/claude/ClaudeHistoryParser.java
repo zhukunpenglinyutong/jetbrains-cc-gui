@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.util.TagExtractor;
+import com.github.claudecodegui.util.TextSanitizer;
 import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -36,7 +37,7 @@ class ClaudeHistoryParser {
                 if (line.trim().isEmpty()) continue;
 
                 try {
-                    ClaudeHistoryReader.ConversationMessage msg = gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
+                    ClaudeHistoryReader.ConversationMessage msg = this.gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
                     if (msg != null) {
                         messages.add(msg);
                     }
@@ -96,10 +97,7 @@ class ClaudeHistoryParser {
                 String text = extractTextFromContent(msg.message.content);
                 if (text != null && !text.isEmpty()) {
                     text = TagExtractor.extractCommandMessageContent(text);
-                    text = text.replace("\n", " ").trim();
-                    if (text.length() > 45) {
-                        text = text.substring(0, 45) + "...";
-                    }
+                    text = TextSanitizer.sanitizeAndTruncateSingleLine(text, 45);
                     return text;
                 }
             }

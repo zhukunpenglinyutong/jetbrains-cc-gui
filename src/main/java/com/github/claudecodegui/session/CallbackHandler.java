@@ -139,4 +139,13 @@ public class CallbackHandler {
             callback.onUsageUpdate(usedTokens, maxTokens);
         }
     }
+
+    /**
+     * Notify that a specific message received its provider UUID.
+     */
+    public void notifyUserMessageUuidPatched(String content, String uuid) {
+        if (callback != null) {
+            callback.onUserMessageUuidPatched(content, uuid);
+        }
+    }
 }

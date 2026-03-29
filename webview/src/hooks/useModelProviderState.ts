@@ -84,7 +84,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     const env = provider.settingsConfig.env as Record<string, any>;
     const mapping = {
       main: env.ANTHROPIC_MODEL ?? '',
-      haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? '',
+      haiku: env.ANTHROPIC_SMALL_FAST_MODEL ?? env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? '',
       sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? '',
       opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? '',
     };

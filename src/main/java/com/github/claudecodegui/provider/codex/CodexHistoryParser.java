@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.codex;
 
 import com.github.claudecodegui.util.TagExtractor;
+import com.github.claudecodegui.util.TextSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -48,7 +49,7 @@ class CodexHistoryParser {
                 }
 
                 try {
-                    CodexHistoryReader.CodexMessage msg = gson.fromJson(line, CodexHistoryReader.CodexMessage.class);
+                    CodexHistoryReader.CodexMessage msg = this.gson.fromJson(line, CodexHistoryReader.CodexMessage.class);
                     if (msg == null) {
                         continue;
                     }
@@ -57,7 +58,7 @@ class CodexHistoryParser {
 
                     if ("session_meta".equals(msg.type) && msg.payload != null) {
                         if (msg.payload.has("cwd")) {
-                            session.cwd = msg.payload.get("cwd").getAsString();
+                            session.cwd = TextSanitizer.sanitizeInvalidSurrogates(msg.payload.get("cwd").getAsString());
                         }
 
                         if (msg.payload.has("timestamp")) {
@@ -129,11 +130,7 @@ class CodexHistoryParser {
             return null;
         }
         text = TagExtractor.extractCommandMessageContent(text);
-        text = text.replace("\n", " ").trim();
-        if (text.length() > 45) {
-            text = text.substring(0, 45) + "...";
-        }
-        return text;
+        return TextSanitizer.sanitizeAndTruncateSingleLine(text, 45);
     }
 
     long parseTimestamp(String timestamp) {

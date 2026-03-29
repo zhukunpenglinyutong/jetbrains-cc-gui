@@ -29,9 +29,10 @@ import { handleCodexCommand } from './channels/codex-channel.js';
 import { getSdkStatus, isClaudeSdkAvailable, isCodexSdkAvailable } from './utils/sdk-loader.js';
 import { injectNetworkEnvVars } from './config/api-config.js';
 
-// Inject proxy and TLS settings from ~/.claude/settings.json BEFORE any
-// network activity.  Without this, users behind corporate SSL-inspection
-// proxies will get certificate verification errors.
+// Sync proxy/TLS settings from ~/.claude/settings.json BEFORE any network
+// activity, but only for explicitly authorized Local settings.json / CLI Login
+// modes. Without this, users behind corporate SSL-inspection proxies in those
+// modes will get certificate verification errors.
 injectNetworkEnvVars();
 
 // Diagnostic logging: startup info

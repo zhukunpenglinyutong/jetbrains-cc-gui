@@ -1451,7 +1451,7 @@
   },
   "error": {
     "providerNotConfigured": "제공자가 설정되지 않았습니다",
-    "providerNotConfiguredDesc": "아직 AI 제공자가 설정되지 않았습니다. 대화를 시작하기 전에 제공자 설정에서 API 키를 추가해주세요.",
-    "goToProviderSettings": "제공자 설정으로 이동"
+    "providerNotConfiguredDesc": "아직 AI 제공자가 구성되지 않았거나 로컬 구성 사용 권한이 승인되지 않았습니다. 대화를 시작하기 전에 제공자 관리 설정에서 구성을 완료해주세요.",
+    "goToProviderSettings": "설정으로 이동"
   }
 }

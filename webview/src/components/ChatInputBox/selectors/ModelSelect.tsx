@@ -74,7 +74,7 @@ const resolveMappedModelName = (
 
 /**
  * Resolve the display model name for icon matching.
- * For mapped models, returns the mapped name; otherwise the original ID.
+ * For mapped Claude models, returns the mapped name; otherwise the original ID.
  */
 const resolveModelIdForIcon = (
   modelId: string,
@@ -82,6 +82,9 @@ const resolveModelIdForIcon = (
   mappingKeyMap: Record<string, string>
 ): string => {
   const mappingKey = mappingKeyMap[modelId];
+  if (!mappingKey) {
+    return modelId;
+  }
   const mapped = resolveMappedModelName(mappingKey, modelMapping);
   if (mapped) {
     return mapped;
@@ -103,11 +106,13 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   const modelMapping = readClaudeModelMapping();
 
   const getModelLabel = (model: ModelInfo): string => {
-    // Check model mapping first (from local settings.json or provider config)
+    // Only apply Claude model mapping to Claude models (not Codex)
     const mappingKey = MODEL_ID_TO_MAPPING_KEY[model.id];
-    const mappedName = resolveMappedModelName(mappingKey, modelMapping);
-    if (mappedName) {
-      return mappedName;
+    if (mappingKey) {
+      const mappedName = resolveMappedModelName(mappingKey, modelMapping);
+      if (mappedName) {
+        return mappedName;
+      }
     }
 
     // Fall back to default logic when no mapping is found

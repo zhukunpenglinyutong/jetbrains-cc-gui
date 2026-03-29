@@ -23,6 +23,11 @@ interface Window {
   updateMessages?: (json: string) => void;
 
   /**
+   * Patch a single message UUID without re-sending the full message list.
+   */
+  patchMessageUuid?: (content: string, uuid: string) => void;
+
+  /**
    * Update status message
    */
   updateStatus?: (text: string) => void;

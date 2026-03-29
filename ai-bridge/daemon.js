@@ -41,9 +41,11 @@ import { injectNetworkEnvVars } from './config/api-config.js';
 // Network Environment Setup (must run before any HTTPS connection)
 // =============================================================================
 
-// Inject proxy and TLS settings from ~/.claude/settings.json BEFORE SDK
-// preloading or any other network activity.  Without this, users behind
-// corporate SSL-inspection proxies will get certificate verification errors.
+// Sync proxy and TLS settings from ~/.claude/settings.json BEFORE SDK
+// preloading or any other network activity, but only for explicitly
+// authorized Local settings.json / CLI Login modes. Without this, users behind
+// corporate SSL-inspection proxies in those modes will get certificate
+// verification errors.
 injectNetworkEnvVars();
 
 // =============================================================================

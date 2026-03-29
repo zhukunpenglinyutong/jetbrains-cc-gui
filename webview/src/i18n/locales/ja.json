@@ -1334,7 +1334,7 @@
   },
   "error": {
     "providerNotConfigured": "プロバイダー未設定",
-    "providerNotConfiguredDesc": "AIプロバイダーがまだ設定されていません。会話を開始する前に、プロバイダー設定でAPIキーを追加してください。",
-    "goToProviderSettings": "プロバイダー設定へ"
+    "providerNotConfiguredDesc": "AIプロバイダーがまだ設定されていないか、ローカル設定の使用が許可されていません。会話を開始する前に、プロバイダー管理設定でセットアップを完了してください。",
+    "goToProviderSettings": "設定へ"
   }
 }

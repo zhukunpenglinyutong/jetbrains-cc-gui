@@ -652,7 +652,9 @@ public class ProviderManager {
     }
 
     /**
-     * Create local provider object with internationalized name and description
+     * Create local provider object with internationalized name and description.
+     * When active, includes settingsConfig from ~/.claude/settings.json so the
+     * webview can sync model mapping (env vars) without an extra round-trip.
      *
      * @param isActive whether this provider is currently active
      * @return JsonObject representing the local provider
@@ -663,6 +665,40 @@ public class ProviderManager {
         localProvider.addProperty("name", ClaudeCodeGuiBundle.message("provider.local.name"));
         localProvider.addProperty("isActive", isActive);
         localProvider.addProperty("isLocalProvider", true);
+
+        // Include ONLY model-mapping env vars from ~/.claude/settings.json so the
+        // webview can display mapped model names. Credentials (ANTHROPIC_AUTH_TOKEN)
+        // are intentionally excluded to comply with Marketplace credential policies.
+        if (isActive) {
+            try {
+                JsonObject claudeSettings = claudeSettingsManager.readClaudeSettings();
+                if (claudeSettings != null && claudeSettings.has("env")) {
+                    JsonObject fullEnv = claudeSettings.getAsJsonObject("env");
+                    JsonObject safeEnv = new JsonObject();
+                    // Only copy model-mapping keys — never credentials
+                    String[] modelMappingKeys = {
+                        "ANTHROPIC_MODEL",
+                        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+                        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                        "ANTHROPIC_SMALL_FAST_MODEL"
+                    };
+                    for (String key : modelMappingKeys) {
+                        if (fullEnv.has(key) && !fullEnv.get(key).isJsonNull()) {
+                            safeEnv.add(key, fullEnv.get(key));
+                        }
+                    }
+                    if (safeEnv.size() > 0) {
+                        JsonObject settingsConfig = new JsonObject();
+                        settingsConfig.add("env", safeEnv);
+                        localProvider.add("settingsConfig", settingsConfig);
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("[ProviderManager] Failed to read settings.json for local provider: " + e.getMessage());
+            }
+        }
+
         return localProvider;
     }
 

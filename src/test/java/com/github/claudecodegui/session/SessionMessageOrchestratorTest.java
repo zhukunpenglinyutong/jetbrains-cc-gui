@@ -18,7 +18,7 @@ import static org.junit.Assert.assertTrue;
 public class SessionMessageOrchestratorTest {
 
     @Test
-    public void updateUserMessageUuidsBackfillsMatchingClaudeMessages() {
+    public void updateUserMessageUuidsBackfillsMatchingLatestClaudeUserMessage() {
         SessionState state = new SessionState();
         state.setProvider("claude");
         state.setSessionId("session-1");
@@ -33,7 +33,7 @@ public class SessionMessageOrchestratorTest {
         callbackFacade.setCallback(callback);
 
         RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
-        historyAccess.claudeHistory = List.of(createHistoryUserMessage("uuid-123", "Explain this diff"));
+        historyAccess.latestClaudeUserMessage = createHistoryUserMessage("uuid-123", "Explain this diff");
 
         SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
                 state,
@@ -48,12 +48,41 @@ public class SessionMessageOrchestratorTest {
 
         orchestrator.updateUserMessageUuids();
 
-        assertEquals(1, historyAccess.claudeHistoryRequests.get());
+        assertEquals(1, historyAccess.latestClaudeUserMessageRequests.get());
         assertTrue(localUserMessage.raw.has("uuid"));
         assertEquals("uuid-123", localUserMessage.raw.get("uuid").getAsString());
-        assertEquals(1, callback.messageUpdates.size());
-        assertEquals("uuid-123",
-                callback.messageUpdates.get(0).get(0).raw.get("uuid").getAsString());
+        assertEquals(0, callback.messageUpdates.size());
+        assertEquals(List.of("Explain this diff|uuid-123"), callback.messageUuidPatches);
+    }
+
+    @Test
+    public void updateUserMessageUuidsSkipsLookupWhenAllUserMessagesAlreadyHaveUuid() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject localRaw = new JsonObject();
+        localRaw.addProperty("uuid", "existing-uuid");
+        state.addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "Explain this diff", localRaw));
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateUserMessageUuids();
+
+        assertEquals(0, historyAccess.latestClaudeUserMessageRequests.get());
     }
 
     @Test
@@ -119,7 +148,7 @@ public class SessionMessageOrchestratorTest {
 
         orchestrator.syncUserMessageUuidsAfterSend().join();
 
-        assertEquals(0, historyAccess.claudeHistoryRequests.get());
+        assertEquals(0, historyAccess.latestClaudeUserMessageRequests.get());
     }
 
     @Test
@@ -142,8 +171,8 @@ public class SessionMessageOrchestratorTest {
                     }
 
                     @Override
-                    public List<JsonObject> getClaudeSessionMessages(String sessionId, String cwd) {
-                        return List.of();
+                    public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
+                        return null;
                     }
                 };
 
@@ -269,9 +298,9 @@ public class SessionMessageOrchestratorTest {
 
     private static final class RecordingHistoryAccess implements SessionMessageOrchestrator.SessionHistoryAccess {
         private final AtomicInteger providerHistoryRequests = new AtomicInteger();
-        private final AtomicInteger claudeHistoryRequests = new AtomicInteger();
+        private final AtomicInteger latestClaudeUserMessageRequests = new AtomicInteger();
         private List<JsonObject> providerHistory = List.of();
-        private List<JsonObject> claudeHistory = List.of();
+        private JsonObject latestClaudeUserMessage;
 
         @Override
         public List<JsonObject> getProviderSessionMessages(String provider, String sessionId, String cwd) {
@@ -280,15 +309,16 @@ public class SessionMessageOrchestratorTest {
         }
 
         @Override
-        public List<JsonObject> getClaudeSessionMessages(String sessionId, String cwd) {
-            claudeHistoryRequests.incrementAndGet();
-            return claudeHistory;
+        public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
+            latestClaudeUserMessageRequests.incrementAndGet();
+            return latestClaudeUserMessage;
         }
     }
 
     private static final class RecordingCallback implements ClaudeSession.SessionCallback {
         private final List<List<ClaudeSession.Message>> messageUpdates = new ArrayList<>();
         private final List<String> stateChanges = new ArrayList<>();
+        private final List<String> messageUuidPatches = new ArrayList<>();
 
         @Override
         public void onMessageUpdate(List<ClaudeSession.Message> messages) {
@@ -298,6 +328,11 @@ public class SessionMessageOrchestratorTest {
         @Override
         public void onStateChange(boolean busy, boolean loading, String error) {
             stateChanges.add(busy + ":" + loading + ":" + error);
+        }
+
+        @Override
+        public void onUserMessageUuidPatched(String content, String uuid) {
+            messageUuidPatches.add(content + "|" + uuid);
         }
 
         @Override

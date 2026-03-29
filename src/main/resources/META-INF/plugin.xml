@@ -19,13 +19,14 @@
             <li>By default, requests are sent <strong>directly</strong> to the official Anthropic API (or OpenAI API for Codex).</li>
             <li>Users may optionally configure a third-party or proxy endpoint in <em>Provider Settings</em>. When a non-official base URL is set, the plugin UI clearly labels the request route as proxied <strong>before</strong> it is used.</li>
             <li>Users can freely switch between direct and proxy modes at any time in the provider settings.</li>
+            <li>Only when users explicitly enable <em>Local settings.json</em> or <em>CLI Login</em> mode, the plugin may honor network proxy variables from <code>~/.claude/settings.json</code> (e.g. <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>) for API requests. Managed provider presets do not silently inherit these local proxy variables.</li>
         </ul>
-        <p>默认情况下，请求直接发送到 Anthropic（或 OpenAI）官方 API。用户可在供应商设置中选配第三方或代理端点，插件 UI 会在使用前明确标注请求路由方式。用户可随时在直连与代理模式间自由切换。</p>
+        <p>默认情况下，请求直接发送到 Anthropic（或 OpenAI）官方 API。用户可在供应商设置中选配第三方或代理端点，插件 UI 会在使用前明确标注请求路由方式。用户可随时在直连与代理模式间自由切换。只有当用户显式启用“本地 settings.json”或“CLI Login”模式时，插件才可能继承 <code>~/.claude/settings.json</code> 中的网络代理变量（如 HTTP_PROXY、HTTPS_PROXY）；普通托管供应商预设不会静默继承这些本地代理变量。</p>
 
         <p><strong>Credential &amp; file-access disclosure / 凭证与文件访问说明：</strong></p>
         <ul>
             <li><strong>No silent credential scanning.</strong> The plugin never silently scans your disk for API keys or tokens. All credential sources require <strong>explicit user authorization</strong> via a confirmation dialog in the plugin UI.</li>
-            <li><strong>Provider credentials</strong>: Users enter API keys manually in the provider settings UI, or explicitly authorize reading from <code>~/.claude/settings.json</code>, or explicitly authorize delegating to the Claude SDK's native OAuth flow (CLI Login).</li>
+            <li><strong>Provider credentials</strong>: Users enter API keys manually in the provider settings UI, or explicitly authorize reading from <code>~/.claude/settings.json</code>, or explicitly authorize delegating to the Claude SDK's native OAuth flow (CLI Login). If Claude provider access is revoked or disabled, the plugin does not continue using credentials from <code>~/.claude/settings.json</code>.</li>
             <li><strong>MCP server configuration</strong>: When the user opens the MCP settings page, the plugin reads MCP server definitions (server names, commands, arguments) from <code>~/.claude.json</code>. This file contains <strong>no credentials or tokens</strong> — only MCP server configuration metadata managed by the Claude CLI.</li>
         </ul>
         <p>插件不会静默扫描磁盘上的凭证。所有凭证来源均需用户在 UI 中显式授权确认。MCP 服务器配置仅在用户打开 MCP 设置页面时读取，该文件仅含服务器定义，不含任何凭证或令牌。</p>
@@ -89,10 +90,10 @@
     </extensions>
 
     <actions>
-        <!-- Action to send selected code to terminal -->
+        <!-- Action to send selected code to CC GUI -->
         <action id="ClaudeCodeGUI.SendSelectionToTerminalAction"
                 class="com.github.claudecodegui.action.editor.SendSelectionToTerminalAction"
-                icon="/icons/send-to-terminal.svg">
+                icon="/icons/cc-gui-icon.svg">
             <!-- Add to editor context menu (displayed at the top) -->
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt K"/>
@@ -103,7 +104,7 @@
         <!-- Quick Fix with Claude Action -->
         <action id="ClaudeCodeGUI.QuickFixWithClaudeAction"
                 class="com.github.claudecodegui.action.editor.QuickFixWithClaudeAction"
-                icon="/icons/quick-fix.svg">
+                icon="/icons/cc-gui-icon.svg">
             <add-to-group group-id="EditorPopupMenu"
                            anchor="after"
                            relative-to-action="ClaudeCodeGUI.SendSelectionToTerminalAction"/>
@@ -135,7 +136,7 @@
         <!-- Action to send file path from the file tree to the input box -->
         <action id="ClaudeCodeGUI.SendFilePathToInputAction"
                 class="com.github.claudecodegui.action.editor.SendFilePathToInputAction"
-                icon="/icons/send-to-terminal.svg">
+                icon="/icons/cc-gui-icon.svg">
             <!-- Add to project file tree context menu -->
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
         </action>

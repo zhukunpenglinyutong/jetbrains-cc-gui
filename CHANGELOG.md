@@ -1,3 +1,51 @@
+##### **2026年3月25日（v0.3.2）**
+
+English:
+
+✨ Features
+- Add provider runtime state detection: introduce getClaudeRuntimeState() to determine access mode (managed/local/cli_login/inactive); limit proxy/TLS env injection to local and cli_login modes only; track and clear injected env vars on each setupApiKey() call to prevent stale value leaks
+- Rename ANTHROPIC_DEFAULT_HAIKU_MODEL → ANTHROPIC_SMALL_FAST_MODEL across provider presets, ProviderDialog, types and model state hooks; keep legacy key in CLAUDE_MODEL_MAPPING_ENV_KEYS for backward compatibility
+
+🐛 Fixes
+- Fix provider model mapping section always hidden: set showModelMappingSection to always true; return CUSTOM_PROXY_PRESET_ID for unrecognized proxy endpoints to keep model mapping enabled for third-party configurations
+- Fix terminal monitor EDT threading and lifecycle leaks: avoid blocking widget discovery on EDT, bind monitor listeners to project and widget lifecycles to prevent leaks across disposal and multi-project usage #gadfly3173 (#774)
+- Fix scrollbar cursor showing I-beam instead of arrow: move cursor:text from .messages-container to .markdown-content; retain I-beam on code content via targeted rules on pre/code #jhaan83 (#767)
+- Fix session index corruption from invalid Unicode titles: prevent malformed session index writes when title contains invalid Unicode characters #gadfly3173 (#769)
+- Fix permission watcher thread not stopping promptly on disposal: interrupt watcher thread on stop and handle InterruptedException for clean shutdown (#781)
+
+⚡ Performance
+- Optimize streaming and UUID sync: add StreamDeltaThrottler to batch rapid stream deltas before forwarding to webview; replace full session history load with getLatestUserMessage for UUID sync; add patchMessageUuid webview callback for targeted UUID patching; add active request tracking in DaemonBridge with extended heartbeat timeout
+
+🔧 Improvements
+- Add unit tests for StreamDeltaThrottler, DaemonBridge, and MessageJsonConverter
+- Remove unused CursorHandler
+- Update action icons with unified cc-gui-icon.svg for SendSelection, QuickFix, and SendFilePath actions; redesign cc-gui-icon.svg with new visual style
+- Rename "Send to CCG" to "Send File Path to CC GUI" across all 9 languages; rename CCG → CC GUI in all i18n message strings
+
+中文：
+
+✨ Features
+- 新增 Provider 运行时状态检测：引入 getClaudeRuntimeState() 判断访问模式（managed/local/cli_login/inactive），仅在 local 和 cli_login 模式下注入代理/TLS 环境变量，每次 setupApiKey() 调用时清除已注入变量防止旧值泄漏
+- 重命名 ANTHROPIC_DEFAULT_HAIKU_MODEL → ANTHROPIC_SMALL_FAST_MODEL，覆盖 Provider 预设、ProviderDialog、类型和模型状态 hooks；在 CLAUDE_MODEL_MAPPING_ENV_KEYS 中保留旧 key 以兼容旧版
+
+🐛 Fixes
+- 修复 Provider 模型映射区域始终隐藏：强制 showModelMappingSection 为 true；对无法识别的代理端点返回 CUSTOM_PROXY_PRESET_ID，确保第三方代理配置下模型映射保持启用
+- 修复终端监控器 EDT 线程问题及生命周期泄漏：避免在 EDT 上阻塞 Widget 发现，将监控器监听器绑定至项目和 Widget 生命周期，防止多项目场景下的内存泄漏 #gadfly3173 (#774)
+- 修复滚动条光标显示为输入光标而非箭头：将 cursor:text 从 .messages-container 移至 .markdown-content，仅通过 pre/code 选择器在代码内容上保留输入光标 #jhaan83 (#767)
+- 修复会话索引因无效 Unicode 标题导致写入损坏：防止标题含无效 Unicode 字符时产生格式错误的会话索引写入 #gadfly3173 (#769)
+- 修复权限监视器线程在销毁时无法及时停止：停止时中断监视器线程并处理 InterruptedException，确保干净关闭 (#781)
+
+⚡ Performance
+- 优化流式传输和 UUID 同步：新增 StreamDeltaThrottler 批处理快速流增量后再转发至 webview；使用 getLatestUserMessage 替代全量历史加载进行 UUID 同步；新增 patchMessageUuid webview 回调实现精确 UUID 修补；DaemonBridge 新增活跃请求跟踪并延长心跳超时
+
+🔧 Improvements
+- 新增 StreamDeltaThrottler、DaemonBridge、MessageJsonConverter 单元测试
+- 移除未使用的 CursorHandler
+- 统一使用新版 cc-gui-icon.svg 更新 SendSelection、QuickFix、SendFilePath 操作图标；重新设计 cc-gui-icon.svg 视觉风格
+- 将"Send to CCG"重命名为"Send File Path to CC GUI"，9 种语言全部更新；将 i18n 消息字符串中 CCG 统一重命名为 CC GUI
+
+---
+
 ##### **2026年3月23日（v0.3.1）**
 
 English:

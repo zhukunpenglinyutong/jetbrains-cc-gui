@@ -117,6 +117,9 @@ public class ClaudeSession {
 
         default void onUsageUpdate(int usedTokens, int maxTokens) {
         }
+
+        default void onUserMessageUuidPatched(String content, String uuid) {
+        }
     }
 
     public ClaudeSession(Project project, ClaudeSDKBridge claudeSDKBridge, CodexSDKBridge codexSDKBridge) {
@@ -155,8 +158,8 @@ public class ClaudeSession {
                     }
 
                     @Override
-                    public List<JsonObject> getClaudeSessionMessages(String sessionId, String cwd) {
-                        return claudeSDKBridge.getSessionMessages(sessionId, cwd);
+                    public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
+                        return claudeSDKBridge.getLatestClaudeUserMessage(sessionId, cwd);
                     }
                 }
         );

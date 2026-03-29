@@ -24,7 +24,7 @@ public class SessionMessageOrchestrator {
     public interface SessionHistoryAccess {
         List<JsonObject> getProviderSessionMessages(String provider, String sessionId, String cwd);
 
-        List<JsonObject> getClaudeSessionMessages(String sessionId, String cwd);
+        JsonObject getLatestClaudeUserMessage(String sessionId, String cwd);
     }
 
     @FunctionalInterface
@@ -77,7 +77,7 @@ public class SessionMessageOrchestrator {
     }
 
     public CompletableFuture<Void> syncUserMessageUuidsAfterSend() {
-        if ("codex".equals(state.getProvider())) {
+        if ("codex".equals(state.getProvider()) || findLatestUnresolvedUserMessage() == null) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -95,10 +95,14 @@ public class SessionMessageOrchestrator {
             return;
         }
 
+        if (findLatestUnresolvedUserMessage() == null) {
+            return;
+        }
+
         for (int attempt = 1; attempt <= MAX_UUID_SYNC_RETRIES; attempt++) {
             try {
-                List<JsonObject> historyMessages = historyAccess.getClaudeSessionMessages(sessionId, cwd);
-                if (historyMessages == null || historyMessages.isEmpty()) {
+                JsonObject latestClaudeUserMessage = historyAccess.getLatestClaudeUserMessage(sessionId, cwd);
+                if (latestClaudeUserMessage == null) {
                     if (attempt < MAX_UUID_SYNC_RETRIES) {
                         sleep(uuidRetryDelayMs);
                         continue;
@@ -106,11 +110,18 @@ public class SessionMessageOrchestrator {
                     return;
                 }
 
-                boolean updated = backfillUserMessageUuids(historyMessages, state.getMessagesReference());
-                if (updated) {
-                    callbackFacade.notifyMessageUpdate(state.getMessages());
+                ClaudeSession.Message matchedMessage = patchMatchingUserMessage(latestClaudeUserMessage);
+                if (matchedMessage != null && matchedMessage.raw != null && matchedMessage.raw.has("uuid")) {
+                    callbackFacade.notifyUserMessageUuidPatched(
+                            matchedMessage.content != null ? matchedMessage.content : "",
+                            matchedMessage.raw.get("uuid").getAsString()
+                    );
+                    return;
                 }
-                return;
+
+                if (attempt < MAX_UUID_SYNC_RETRIES) {
+                    sleep(uuidRetryDelayMs);
+                }
             } catch (Exception e) {
                 LOG.warn("[Rewind] Failed to update user message UUIDs (attempt " + attempt + "): " + e.getMessage());
                 if (attempt < MAX_UUID_SYNC_RETRIES) {
@@ -163,39 +174,76 @@ public class SessionMessageOrchestrator {
         });
     }
 
-    private boolean backfillUserMessageUuids(List<JsonObject> historyMessages, List<ClaudeSession.Message> localMessages) {
-        boolean updated = false;
-
-        for (JsonObject historyMsg : historyMessages) {
-            if (!historyMsg.has("type") || !"user".equals(historyMsg.get("type").getAsString())) {
-                continue;
-            }
-            if (!historyMsg.has("uuid") || historyMsg.get("uuid").isJsonNull()) {
-                continue;
-            }
-
-            String historyContent = extractMessageContentForMatching(historyMsg);
-            if (historyContent == null || historyContent.isEmpty()) {
-                continue;
-            }
-
-            String uuid = historyMsg.get("uuid").getAsString();
-            for (ClaudeSession.Message localMsg : localMessages) {
-                if (localMsg.type != ClaudeSession.Message.Type.USER || localMsg.raw == null) {
-                    continue;
-                }
-                if (localMsg.raw.has("uuid") && !localMsg.raw.get("uuid").isJsonNull()) {
-                    continue;
-                }
-                if (historyContent.equals(localMsg.content)) {
-                    localMsg.raw.addProperty("uuid", uuid);
-                    updated = true;
-                    break;
-                }
-            }
+    private ClaudeSession.Message patchMatchingUserMessage(JsonObject historyMessage) {
+        if (!historyMessage.has("type") || !"user".equals(historyMessage.get("type").getAsString())) {
+            return null;
+        }
+        if (!historyMessage.has("uuid") || historyMessage.get("uuid").isJsonNull()) {
+            return null;
         }
 
-        return updated;
+        String historyContent = extractMessageContentForMatching(historyMessage);
+        if (historyContent == null || historyContent.isEmpty()) {
+            return null;
+        }
+
+        String uuid = historyMessage.get("uuid").getAsString();
+        List<ClaudeSession.Message> localMessages = state.getMessagesReference();
+        for (int i = localMessages.size() - 1; i >= 0; i--) {
+            ClaudeSession.Message localMsg = localMessages.get(i);
+            if (localMsg.type != ClaudeSession.Message.Type.USER) {
+                continue;
+            }
+            synchronized (localMsg) {
+                if (localMsg.raw != null && localMsg.raw.has("uuid") && !localMsg.raw.get("uuid").isJsonNull()) {
+                    continue;
+                }
+                if (!historyContent.equals(localMsg.content)) {
+                    continue;
+                }
+
+                if (localMsg.raw == null) {
+                    localMsg.raw = createDefaultUserRaw(localMsg.content);
+                }
+                localMsg.raw.addProperty("uuid", uuid);
+            }
+            return localMsg;
+        }
+
+        return null;
+    }
+
+    static JsonObject createDefaultUserRaw(String content) {
+        JsonObject raw = new JsonObject();
+        JsonObject message = new JsonObject();
+        JsonArray contentArray = new JsonArray();
+        JsonObject textBlock = new JsonObject();
+        textBlock.addProperty("type", "text");
+        textBlock.addProperty("text", content != null ? content : "");
+        contentArray.add(textBlock);
+        message.add("content", contentArray);
+        raw.add("message", message);
+        return raw;
+    }
+
+    private ClaudeSession.Message findLatestUnresolvedUserMessage() {
+        List<ClaudeSession.Message> messages = state.getMessagesReference();
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            ClaudeSession.Message message = messages.get(i);
+            if (message.type != ClaudeSession.Message.Type.USER) {
+                continue;
+            }
+            if (message.content == null || message.content.isEmpty() || "[tool_result]".equals(message.content)) {
+                continue;
+            }
+            if (message.raw == null) {
+                return message;
+            }
+            if (!message.raw.has("uuid") || message.raw.get("uuid").isJsonNull()) {
+                return message;
+            }
+        }
+        return null;
     }
 
     String extractMessageContentForMatching(JsonObject msg) {

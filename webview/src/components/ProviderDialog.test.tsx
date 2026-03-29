@@ -18,15 +18,30 @@ const createProvider = (): ProviderConfig => ({
       ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/api/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
       ANTHROPIC_MODEL: 'glm-4.7',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.7',
+      ANTHROPIC_SMALL_FAST_MODEL: 'glm-4.7',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.7',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.7',
     },
   },
 });
 
+const createCustomProxyProvider = (): ProviderConfig => ({
+  id: 'provider-custom',
+  name: 'My Proxy',
+  isActive: true,
+  settingsConfig: {
+    env: {
+      ANTHROPIC_BASE_URL: 'https://my-proxy.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'sk-test',
+      ANTHROPIC_SMALL_FAST_MODEL: 'custom-haiku',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'custom-sonnet',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'custom-opus',
+    },
+  },
+});
+
 describe('ProviderDialog', () => {
-  it('显示第三方自定义入口，选中后隐藏模型映射输入', () => {
+  it('add mode shows official preset selected by default with model mapping visible', () => {
     render(
       <ProviderDialog
         isOpen
@@ -37,15 +52,51 @@ describe('ProviderDialog', () => {
       />,
     );
 
-    expect(screen.getByRole('radio', { name: 'settings.provider.presets.custom' })).toBeTruthy();
+    // Official preset should be present and selected
+    expect(screen.getByRole('radio', { name: 'settings.provider.dialog.officialPreset' })).toBeTruthy();
+    // Model mapping should be visible
     expect(screen.getByText('settings.provider.dialog.modelMapping')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('radio', { name: 'settings.provider.presets.custom' }));
-
-    expect(screen.queryByText('settings.provider.dialog.modelMapping')).toBeNull();
   });
 
-  it('清空可见模型映射后，保存时应移除残留的全局 ANTHROPIC_MODEL', () => {
+  it('third-party preset still shows model mapping section', () => {
+    render(
+      <ProviderDialog
+        isOpen
+        provider={null}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        addToast={vi.fn()}
+      />,
+    );
+
+    // Click a third-party preset (zhipu)
+    const zhipuBtn = screen.getByRole('radio', { name: 'settings.provider.presets.zhipu' });
+    fireEvent.click(zhipuBtn);
+
+    // Model mapping should remain visible
+    expect(screen.getByText('settings.provider.dialog.modelMapping')).toBeTruthy();
+  });
+
+  it('editing provider with unrecognized proxy URL still shows model mapping', () => {
+    render(
+      <ProviderDialog
+        isOpen
+        provider={createCustomProxyProvider()}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        addToast={vi.fn()}
+      />,
+    );
+
+    // Model mapping should be visible even for unrecognized proxy URLs
+    expect(screen.getByText('settings.provider.dialog.modelMapping')).toBeTruthy();
+    // Should have the custom model values populated
+    expect((screen.getByLabelText('settings.provider.dialog.sonnetModel') as HTMLInputElement).value).toBe('custom-sonnet');
+    expect((screen.getByLabelText('settings.provider.dialog.opusModel') as HTMLInputElement).value).toBe('custom-opus');
+    expect((screen.getByLabelText('settings.provider.dialog.haikuModel') as HTMLInputElement).value).toBe('custom-haiku');
+  });
+
+  it('clearing model mapping fields should remove residual ANTHROPIC_MODEL on save', () => {
     const onSave = vi.fn();
 
     render(
@@ -80,6 +131,6 @@ describe('ProviderDialog', () => {
     expect(env.ANTHROPIC_MODEL).toBeUndefined();
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBeUndefined();
     expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBeUndefined();
-    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBeUndefined();
+    expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBeUndefined();
   });
 });

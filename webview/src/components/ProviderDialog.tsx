@@ -6,10 +6,18 @@ import { CLAUDE_MODEL_MAPPING_ENV_KEYS, PROVIDER_PRESETS } from '../types/provid
 const OFFICIAL_DIRECT_PRESET_ID = 'official_direct';
 const OFFICIAL_ANTHROPIC_URL = 'https://api.anthropic.com';
 const CUSTOM_PRESET_ID = 'custom';
+const CUSTOM_PROXY_PRESET_ID = 'custom_proxy';
 
 const isOfficialAnthropicEndpoint = (baseUrl?: string) => {
   const normalized = (baseUrl || '').trim().toLowerCase();
-  return normalized === '' || normalized.includes('api.anthropic.com');
+  if (normalized === '') return true;
+  try {
+    const url = new URL(normalized);
+    return url.hostname === 'api.anthropic.com';
+  } catch {
+    // Invalid URL cannot be an official endpoint
+    return false;
+  }
 };
 
 interface BuildConfigOptions {
@@ -42,7 +50,7 @@ export function normalizeProviderEnvForSave(
   }
 
   const specificModels = [
-    trimString(nextEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL),
+    trimString(nextEnv.ANTHROPIC_SMALL_FAST_MODEL ?? nextEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL),
     trimString(nextEnv.ANTHROPIC_DEFAULT_SONNET_MODEL),
     trimString(nextEnv.ANTHROPIC_DEFAULT_OPUS_MODEL),
   ].filter(Boolean);
@@ -118,7 +126,9 @@ export default function ProviderDialog({
   const [jsonError, setJsonError] = useState('');
   const thirdPartyPresets = PROVIDER_PRESETS;
   const isOfficialDirectMode = activePreset === OFFICIAL_DIRECT_PRESET_ID;
-  const showModelMappingSection = activePreset !== CUSTOM_PRESET_ID;
+  // Model mapping should always be shown – the 'custom' preset button was removed
+  // from the UI, so users can never explicitly opt out of model mapping.
+  const showModelMappingSection = true;
 
   const buildConfig = ({
     envOverrides = {},
@@ -136,7 +146,7 @@ export default function ProviderDialog({
         ...(includeModelMapping ? {
           ANTHROPIC_DEFAULT_SONNET_MODEL: '',
           ANTHROPIC_DEFAULT_OPUS_MODEL: '',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
+          ANTHROPIC_SMALL_FAST_MODEL: '',
         } : {}),
         ...normalizedEnv,
       }
@@ -214,7 +224,7 @@ export default function ProviderDialog({
     const env = preset.env;
     setApiUrl(env.ANTHROPIC_BASE_URL || '');
     setApiKey(env.ANTHROPIC_AUTH_TOKEN || '');
-    setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
+    setHaikuModel(env.ANTHROPIC_SMALL_FAST_MODEL || env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
     setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
     setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
     setJsonError('');
@@ -235,7 +245,9 @@ export default function ProviderDialog({
         return preset.id;
       }
     }
-    return 'custom';
+    // Unrecognized URL: treat as a custom third-party proxy.
+    // Return a non-'custom' value so model mapping stays enabled.
+    return CUSTOM_PROXY_PRESET_ID;
   };
 
   // Format JSON
@@ -265,7 +277,7 @@ export default function ProviderDialog({
         // Auto-detect matching preset
         setActivePreset(detectMatchingPreset(env));
 
-        setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
+        setHaikuModel(env.ANTHROPIC_SMALL_FAST_MODEL || env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
         setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || '');
         setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || '');
 
@@ -319,7 +331,7 @@ export default function ProviderDialog({
   const handleHaikuModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setHaikuModel(value);
-    updateEnvField('ANTHROPIC_DEFAULT_HAIKU_MODEL', value);
+    updateEnvField('ANTHROPIC_SMALL_FAST_MODEL', value);
   };
 
   const handleSonnetModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -358,8 +370,9 @@ export default function ProviderDialog({
 
       setActivePreset(detectMatchingPreset(env));
 
-      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_DEFAULT_HAIKU_MODEL')) {
-        setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
+      if (Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_SMALL_FAST_MODEL') ||
+          Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_DEFAULT_HAIKU_MODEL')) {
+        setHaikuModel(env.ANTHROPIC_SMALL_FAST_MODEL || env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '');
       } else {
         setHaikuModel('');
       }
@@ -394,7 +407,7 @@ export default function ProviderDialog({
         finalJsonConfig = JSON.stringify(buildConfig({
           envOverrides: {
             ANTHROPIC_AUTH_TOKEN: apiKey,
-            ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel,
+            ANTHROPIC_SMALL_FAST_MODEL: haikuModel,
             ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel,
             ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel,
           },

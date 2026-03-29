@@ -81,25 +81,18 @@ public class MessageJsonConverter {
      * Handles tool_result and error text blocks.
      */
     public static JsonObject truncateRawForTransport(JsonObject raw) {
-        JsonElement contentEl = null;
-        if (raw.has("content")) {
-            contentEl = raw.get("content");
-        } else if (raw.has("message") && raw.get("message").isJsonObject()) {
-            JsonObject message = raw.getAsJsonObject("message");
-            if (message.has("content")) {
-                contentEl = message.get("content");
-            }
-        }
+        JsonObject transport = buildTransportRaw(raw);
+        JsonElement contentEl = findContentElement(transport);
 
         if (contentEl == null) {
-            return raw;
+            return transport;
         }
 
         // Handle string content (frontend normalizeBlocks also handles this case)
         if (contentEl.isJsonPrimitive() && contentEl.getAsJsonPrimitive().isString()) {
             String s = contentEl.getAsString();
             if (s.length() > MAX_ERROR_CONTENT_CHARS && isErrorContent(s)) {
-                JsonObject copied = raw.deepCopy();
+                JsonObject copied = transport.deepCopy();
                 String truncated = truncateErrorContent(s);
                 if (copied.has("content")) {
                     copied.addProperty("content", truncated);
@@ -108,11 +101,11 @@ public class MessageJsonConverter {
                 }
                 return copied;
             }
-            return raw;
+            return transport;
         }
 
         if (!contentEl.isJsonArray()) {
-            return raw;
+            return transport;
         }
 
         JsonArray contentArr = contentEl.getAsJsonArray();
@@ -147,19 +140,11 @@ public class MessageJsonConverter {
         }
 
         if (!needsCopy) {
-            return raw;
+            return transport;
         }
 
-        JsonObject copied = raw.deepCopy();
-        JsonElement copiedContentEl = null;
-        if (copied.has("content")) {
-            copiedContentEl = copied.get("content");
-        } else if (copied.has("message") && copied.get("message").isJsonObject()) {
-            JsonObject message = copied.getAsJsonObject("message");
-            if (message.has("content")) {
-                copiedContentEl = message.get("content");
-            }
-        }
+        JsonObject copied = transport.deepCopy();
+        JsonElement copiedContentEl = findContentElement(copied);
 
         if (copiedContentEl == null || !copiedContentEl.isJsonArray()) {
             return copied;
@@ -200,6 +185,54 @@ public class MessageJsonConverter {
         }
 
         return copied;
+    }
+
+    private static JsonObject buildTransportRaw(JsonObject raw) {
+        JsonObject transport = new JsonObject();
+        copyFieldIfPresent(raw, transport, "uuid");
+        copyFieldIfPresent(raw, transport, "type");
+        copyFieldIfPresent(raw, transport, "isMeta");
+        copyFieldIfPresent(raw, transport, "text");
+
+        if (raw.has("content")) {
+            transport.add("content", raw.get("content").deepCopy());
+        }
+
+        if (raw.has("message") && raw.get("message").isJsonObject()) {
+            JsonObject sourceMessage = raw.getAsJsonObject("message");
+            JsonObject transportMessage = new JsonObject();
+            if (sourceMessage.has("content")) {
+                transportMessage.add("content", sourceMessage.get("content").deepCopy());
+            }
+            if (transportMessage.size() > 0) {
+                transport.add("message", transportMessage);
+            }
+        }
+
+        if (transport.size() > 0) {
+            return transport;
+        }
+        LOG.warn("buildTransportRaw: no recognized fields in raw JSON, returning empty object");
+        return new JsonObject();
+    }
+
+    private static JsonElement findContentElement(JsonObject raw) {
+        if (raw.has("content")) {
+            return raw.get("content");
+        }
+        if (raw.has("message") && raw.get("message").isJsonObject()) {
+            JsonObject message = raw.getAsJsonObject("message");
+            if (message.has("content")) {
+                return message.get("content");
+            }
+        }
+        return null;
+    }
+
+    private static void copyFieldIfPresent(JsonObject source, JsonObject target, String fieldName) {
+        if (source.has(fieldName)) {
+            target.add(fieldName, source.get(fieldName).deepCopy());
+        }
     }
 
     /**

@@ -7,6 +7,7 @@ import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 
 import java.util.HashMap;
@@ -62,6 +63,8 @@ class RuntimeContextCollector {
                         files.add(term);
                     }
                 }
+            } catch (ProcessCanceledException e) {
+                throw e;
             } catch (Throwable t) {
                 LOG.warn("[FileHandler] Failed to collect terminals: " + t.getMessage());
             }
@@ -96,6 +99,8 @@ class RuntimeContextCollector {
                         files.add(serviceObj);
                     }
                 }
+            } catch (ProcessCanceledException e) {
+                throw e;
             } catch (Throwable t) {
                 LOG.warn("[FileHandler] Failed to collect services: " + t.getMessage());
             }
