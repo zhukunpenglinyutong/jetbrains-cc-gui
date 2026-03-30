@@ -158,6 +158,28 @@ public class DetachedWindowManager {
     }
 
     /**
+     * Collect all ClaudeChatWindow instances from detached windows for a project.
+     *
+     * @param project The project
+     * @return a set of ClaudeChatWindow instances in detached windows for the project
+     */
+    @NotNull
+    public static Set<ClaudeChatWindow> getAllDetachedChatWindows(@NotNull Project project) {
+        Set<ClaudeChatWindow> windows = new HashSet<>();
+        Map<String, DetachedChatFrame> projectWindows = detachedWindows.get(projectKey(project));
+        if (projectWindows == null) {
+            return windows;
+        }
+        for (DetachedChatFrame frame : projectWindows.values()) {
+            ClaudeChatWindow chatWindow = frame.getChatWindow();
+            if (chatWindow != null) {
+                windows.add(chatWindow);
+            }
+        }
+        return windows;
+    }
+
+    /**
      * Collect all ClaudeChatWindow instances from detached windows across all projects.
      * Used by the shutdown hook to ensure all Node.js processes are cleaned up.
      *

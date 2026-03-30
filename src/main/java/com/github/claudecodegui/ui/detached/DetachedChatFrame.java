@@ -3,20 +3,23 @@ package com.github.claudecodegui.ui.detached;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
+import com.intellij.ide.ui.LafManager;
 import com.intellij.ide.ui.LafManagerListener;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.WindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.content.ContentManager;
-import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
+import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import java.awt.*;
@@ -37,8 +40,8 @@ public class DetachedChatFrame extends JFrame {
     private final String originalTabName;
     private final int originalTabIndex;
     private final JComponent originalContent;
+    private final Disposable frameDisposable = Disposer.newDisposable("DetachedChatFrame");
     private JPanel toolbar;
-    private MessageBusConnection themeBusConnection;
     private volatile boolean disposed = false;
 
     /**
@@ -59,7 +62,7 @@ public class DetachedChatFrame extends JFrame {
         }
 
         // Get original tab index before removing from ContentManager
-        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
+        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(ClaudeSDKToolWindow.TOOL_WINDOW_ID);
         if (toolWindow != null) {
             ContentManager contentManager = toolWindow.getContentManager();
             this.originalTabIndex = contentManager.getIndexOfContent(content);
@@ -156,10 +159,14 @@ public class DetachedChatFrame extends JFrame {
         updateThemeColors();
 
         // Listen for IDE theme changes to keep the detached window in sync
-        themeBusConnection = ApplicationManager.getApplication().getMessageBus().connect();
-        themeBusConnection.subscribe(LafManagerListener.TOPIC, source ->
-            ApplicationManager.getApplication().invokeLater(this::updateThemeColors)
-        );
+        ApplicationManager.getApplication().getMessageBus().connect(this.frameDisposable)
+                .subscribe(LafManagerListener.TOPIC,
+                        new LafManagerListener() {
+                            @Override
+                            public void lookAndFeelChanged(@NotNull LafManager source) {
+                                ApplicationManager.getApplication().invokeLater(DetachedChatFrame.this::updateThemeColors);
+                            }
+                        });
     }
 
     /**
@@ -213,20 +220,21 @@ public class DetachedChatFrame extends JFrame {
     public void reattachToToolWindow() {
         LOG.info("[DetachedChatFrame] Reattaching to tool window: " + originalTabName);
 
-        ApplicationManager.getApplication().invokeLater(() -> {
+        ToolWindowManager.getInstance(this.project).invokeLater(() -> {
             try {
                 // If project is disposed, cannot reattach — clean up instead
-                if (project.isDisposed()) {
+                if (this.project.isDisposed()) {
                     LOG.warn("[DetachedChatFrame] Project is disposed, cannot reattach");
                     disposeSession();
                     return;
                 }
 
-                ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
+                ToolWindow toolWindow = ToolWindowManager.getInstance(this.project)
+                        .getToolWindow(ClaudeSDKToolWindow.TOOL_WINDOW_ID);
                 if (toolWindow == null) {
                     LOG.error("[DetachedChatFrame] Tool window not found");
                     Messages.showErrorDialog(
-                            project,
+                            this.project,
                             ClaudeCodeGuiBundle.message("detachedWindow.reattach.error.noToolWindow"),
                             ClaudeCodeGuiBundle.message("detachedWindow.reattach.error.title")
                     );
@@ -242,7 +250,8 @@ public class DetachedChatFrame extends JFrame {
                 ContentFactory factory = ContentFactory.getInstance();
                 Content content = factory.createContent(originalContent, originalTabName, false);
                 content.setCloseable(true);
-                chatWindow.setParentContent(content);
+                content.setDisposer(this.chatWindow::dispose);
+                this.chatWindow.setParentContent(content);
 
                 // Add back to ContentManager at original index if possible
                 if (originalTabIndex >= 0 && originalTabIndex < contentManager.getContentCount()) {
@@ -260,7 +269,7 @@ public class DetachedChatFrame extends JFrame {
                 originalContent.repaint();
 
                 // Unregister from DetachedWindowManager before disposing the frame
-                DetachedWindowManager.unregisterDetached(project, chatWindow.getSessionId());
+                DetachedWindowManager.unregisterDetached(this.project, this.chatWindow.getSessionId());
 
                 // Close this window
                 dispose();
@@ -269,7 +278,7 @@ public class DetachedChatFrame extends JFrame {
             } catch (Exception e) {
                 LOG.error("[DetachedChatFrame] Error reattaching to tool window", e);
                 Messages.showErrorDialog(
-                        project,
+                        this.project,
                         ClaudeCodeGuiBundle.message("detachedWindow.reattach.error.failed") + ": " + e.getMessage(),
                         ClaudeCodeGuiBundle.message("detachedWindow.reattach.error.title")
                 );
@@ -283,39 +292,47 @@ public class DetachedChatFrame extends JFrame {
     private void disposeSession() {
         LOG.info("[DetachedChatFrame] Disposing session: " + originalTabName);
 
-        ApplicationManager.getApplication().invokeLater(() -> {
-            try {
-                // Unregister from DetachedWindowManager
-                DetachedWindowManager.unregisterDetached(project, chatWindow.getSessionId());
+        if (this.project.isDisposed()) {
+            disposeSessionImmediately(false);
+            return;
+        }
 
-                // Dispose the chat window (this will clean up all resources)
-                if (chatWindow != null) {
-                    chatWindow.dispose();
-                }
+        ToolWindowManager.getInstance(this.project).invokeLater(() -> disposeSessionImmediately(true));
+    }
 
-                // Sync TabStateService with the actual ContentManager tab count
-                // to prevent phantom tabs on next IDE restart
-                if (!project.isDisposed()) {
-                    try {
-                        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
-                        if (toolWindow != null) {
-                            int actualCount = toolWindow.getContentManager().getContentCount();
-                            com.github.claudecodegui.settings.TabStateService.getInstance(project)
-                                    .saveTabCount(actualCount);
-                        }
-                    } catch (Exception e) {
-                        LOG.warn("[DetachedChatFrame] Failed to sync tab state: " + e.getMessage());
-                    }
-                }
+    private void disposeSessionImmediately(boolean syncTabState) {
+        try {
+            // Unregister from DetachedWindowManager
+            DetachedWindowManager.unregisterDetached(this.project, this.chatWindow.getSessionId());
 
-                // Close this window
-                dispose();
+            // Dispose the chat window (this will clean up all resources)
+            this.chatWindow.dispose();
 
-                LOG.info("[DetachedChatFrame] Session disposed: " + originalTabName);
-            } catch (Exception e) {
-                LOG.error("[DetachedChatFrame] Error disposing session", e);
+            if (syncTabState && !this.project.isDisposed()) {
+                syncTabStateWithToolWindow();
             }
-        });
+
+            // Close this window
+            dispose();
+
+            LOG.info("[DetachedChatFrame] Session disposed: " + originalTabName);
+        } catch (Exception e) {
+            LOG.error("[DetachedChatFrame] Error disposing session", e);
+        }
+    }
+
+    private void syncTabStateWithToolWindow() {
+        try {
+            ToolWindow toolWindow = ToolWindowManager.getInstance(this.project)
+                    .getToolWindow(ClaudeSDKToolWindow.TOOL_WINDOW_ID);
+            if (toolWindow != null) {
+                int actualCount = toolWindow.getContentManager().getContentCount();
+                com.github.claudecodegui.settings.TabStateService.getInstance(this.project)
+                        .saveTabCount(actualCount);
+            }
+        } catch (Exception e) {
+            LOG.warn("[DetachedChatFrame] Failed to sync tab state: " + e.getMessage());
+        }
     }
 
     @Override
@@ -325,11 +342,7 @@ public class DetachedChatFrame extends JFrame {
 
         LOG.info("[DetachedChatFrame] Disposing window: " + originalTabName);
 
-        // Disconnect theme change listener
-        if (themeBusConnection != null) {
-            themeBusConnection.disconnect();
-            themeBusConnection = null;
-        }
+        Disposer.dispose(this.frameDisposable);
 
         // Remove all window listeners
         for (WindowListener listener : getWindowListeners()) {

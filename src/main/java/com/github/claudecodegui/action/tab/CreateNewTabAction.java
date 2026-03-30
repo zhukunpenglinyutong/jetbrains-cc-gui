@@ -44,7 +44,8 @@ public class CreateNewTabAction extends AnAction {
             return;
         }
 
-        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
+        ToolWindow toolWindow = ToolWindowManager.getInstance(project)
+                .getToolWindow(ClaudeSDKToolWindow.TOOL_WINDOW_ID);
         if (toolWindow == null) {
             LOG.error("[CreateNewTabAction] Tool window not found");
             return;
@@ -61,6 +62,7 @@ public class CreateNewTabAction extends AnAction {
         Content content = contentFactory.createContent(newChatWindow.getContent(), tabName, false);
         content.setCloseable(true);
         newChatWindow.setParentContent(content);
+        content.setDisposer(newChatWindow::dispose);
 
         ContentManager contentManager = toolWindow.getContentManager();
         contentManager.addContent(content);

@@ -28,6 +28,7 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentManager;
 import com.intellij.ui.jcef.JBCefBrowser;
@@ -239,14 +240,16 @@ public class ClaudeChatWindow {
 
         setupSessionCallbacks();
         initializeSessionInfo();
-        webviewInitializer.overrideBridgePathIfAvailable();
 
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (!disposed) {
-                webviewInitializer.createUIComponents();
+        // Delay JCEF browser creation to avoid service initialization conflicts
+        // during JBCefApp$Holder class init (ProxyMigrationService dependency).
+        // Operations that depend on browser readiness are also deferred.
+        ToolWindowManager.getInstance(this.project).invokeLater(() -> {
+            if (!this.disposed) {
+                this.webviewInitializer.createUIComponents();
                 registerSessionLoadListener();
                 this.initialized = true;
-                LOG.info("Window instance fully initialized, project: " + project.getName());
+                LOG.info("Window instance fully initialized, project: " + this.project.getName());
             }
         });
 
@@ -311,6 +314,15 @@ public class ClaudeChatWindow {
 
     public CodexSDKBridge getCodexSDKBridge() {
         return codexSDKBridge;
+    }
+
+    /**
+     * Get the project associated with this chat window.
+     *
+     * @return the current project.
+     */
+    public Project getProject() {
+        return this.project;
     }
 
     public String getSessionId() {
@@ -583,8 +595,9 @@ public class ClaudeChatWindow {
 
     // ==================== Dispose ====================
 
-    public void dispose() {
-        if (disposed) return;
+    public synchronized void dispose() {
+        if (this.disposed) return;
+        this.disposed = true;
 
         chatWindowDelegate.dispose();
         editorContextTracker.dispose();
@@ -609,7 +622,6 @@ public class ClaudeChatWindow {
 
         LOG.info("Starting window resource cleanup, project: " + project.getName());
 
-        disposed = true;
         handlerContext.setDisposed(true);
 
         if (parentContent != null) {

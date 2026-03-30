@@ -6,7 +6,6 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.settings.TabStateService;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
@@ -53,10 +52,11 @@ public class TabHandler extends BaseMessageHandler {
     private void handleCreateNewTab() {
         Project project = context.getProject();
 
-        ApplicationManager.getApplication().invokeLater(() -> {
+        ToolWindowManager.getInstance(project).invokeLater(() -> {
             try {
                 // Get the tool window
-                ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
+                ToolWindow toolWindow = ToolWindowManager.getInstance(project)
+                        .getToolWindow(ClaudeSDKToolWindow.TOOL_WINDOW_ID);
                 if (toolWindow == null) {
                     LOG.error("[TabHandler] Tool window not found");
                     callJavaScript("addErrorMessage", escapeJs("无法找到 CCG 工具窗口"));
@@ -88,6 +88,7 @@ public class TabHandler extends BaseMessageHandler {
                 Content content = contentFactory.createContent(newChatWindow.getContent(), tabName, false);
                 content.setCloseable(true);
                 newChatWindow.setParentContent(content);
+                content.setDisposer(newChatWindow::dispose);
 
                 contentManager.addContent(content);
                 contentManager.setSelectedContent(content);
