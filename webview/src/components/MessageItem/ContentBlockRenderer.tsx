@@ -9,7 +9,7 @@ import {
   GenericToolBlock,
   TaskExecutionBlock,
 } from '../toolBlocks';
-import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName, normalizeToolName } from '../../utils/toolConstants';
+import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName, isTransientInternalToolName, normalizeToolName } from '../../utils/toolConstants';
 
 /**
  * Get file icon class (consistent with AttachmentList)
@@ -170,6 +170,10 @@ export function ContentBlockRenderer({
     const toolName = normalizeToolName(block.name ?? '');
 
     if (toolName === 'todowrite' || toolName === 'update_plan') {
+      return null;
+    }
+
+    if (!isStreaming && isTransientInternalToolName(block.name)) {
       return null;
     }
 

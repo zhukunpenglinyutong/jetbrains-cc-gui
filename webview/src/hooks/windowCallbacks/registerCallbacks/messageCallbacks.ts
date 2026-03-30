@@ -15,6 +15,7 @@ import {
   ensureStreamingAssistantInList,
   getRawUuid,
   preserveLastAssistantIdentity,
+  preserveLatestMessagesOnShrink,
   preserveStreamingAssistantContent,
 } from '../messageSync';
 import { releaseSessionTransition } from '../sessionTransition';
@@ -99,7 +100,11 @@ export function registerMessageCallbacks(
               findLastAssistantIndex,
               patchAssistantForStreaming,
             );
-            const result = appendOptimisticMessageIfMissing(prev, smartMerged);
+            const result = preserveLatestMessagesOnShrink(
+              prev,
+              appendOptimisticMessageIfMissing(prev, smartMerged),
+              options.currentProviderRef.current,
+            );
 
             // FIX: In Claude mode, update streamingMessageIndexRef so that
             // onContentDelta knows which assistant message to update.
@@ -150,7 +155,14 @@ export function registerMessageCallbacks(
 
           const lastAssistantIdx = findLastAssistantIndex(parsed);
           if (lastAssistantIdx < 0) {
-            return ensureStreamingAssistantPreserved(prev, appendOptimisticMessageIfMissing(prev, parsed));
+            return ensureStreamingAssistantPreserved(
+              prev,
+              preserveLatestMessagesOnShrink(
+                prev,
+                appendOptimisticMessageIfMissing(prev, parsed),
+                options.currentProviderRef.current,
+              ),
+            );
           }
         }
 
@@ -173,6 +185,7 @@ export function registerMessageCallbacks(
           });
 
           smartMerged = preserveLastAssistantIdentity(prev, smartMerged, findLastAssistantIndex);
+          smartMerged = preserveLatestMessagesOnShrink(prev, smartMerged, options.currentProviderRef.current);
           return ensureStreamingAssistantPreserved(prev, appendOptimisticMessageIfMissing(prev, smartMerged));
         }
 
@@ -211,6 +224,7 @@ export function registerMessageCallbacks(
           findLastAssistantIndex,
           patchAssistantForStreaming,
         );
+        patched = preserveLatestMessagesOnShrink(prev, patched, options.currentProviderRef.current);
 
         const patchedAssistantIdx = findLastAssistantIndex(patched);
         if (patchedAssistantIdx >= 0 && patched[patchedAssistantIdx]?.type === 'assistant') {
@@ -227,6 +241,12 @@ export function registerMessageCallbacks(
       console.error('[Frontend] Failed to parse messages:', error);
     }
   };
+
+  const pendingMessages = (window as unknown as Record<string, unknown>).__pendingUpdateMessages;
+  if (typeof pendingMessages === 'string' && pendingMessages.length > 0) {
+    delete (window as unknown as Record<string, unknown>).__pendingUpdateMessages;
+    window.updateMessages(pendingMessages);
+  }
 
   window.updateStatus = (text) => {
     // Do not release the transition guard from generic status updates.
@@ -262,7 +282,35 @@ export function registerMessageCallbacks(
   };
 
   window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
+  window.showSummary = (summary) => {
+    if (!summary || !summary.trim()) return;
+    setStatus(summary);
+  };
   window.setHistoryData = (data) => setHistoryData(data);
+
+  const pendingStatus = (window as unknown as Record<string, unknown>).__pendingStatusText;
+  if (typeof pendingStatus === 'string' && pendingStatus.length > 0) {
+    delete (window as unknown as Record<string, unknown>).__pendingStatusText;
+    window.updateStatus?.(pendingStatus);
+  }
+
+  const pendingLoading = window.__pendingLoadingState;
+  if (typeof pendingLoading === 'boolean') {
+    delete window.__pendingLoadingState;
+    window.showLoading?.(pendingLoading);
+  }
+
+  const pendingUserMessage = window.__pendingUserMessage;
+  if (typeof pendingUserMessage === 'string' && pendingUserMessage.length > 0) {
+    delete window.__pendingUserMessage;
+    window.addUserMessage?.(pendingUserMessage);
+  }
+
+  const pendingSummary = (window as unknown as Record<string, unknown>).__pendingSummaryText;
+  if (typeof pendingSummary === 'string' && pendingSummary.length > 0) {
+    delete (window as unknown as Record<string, unknown>).__pendingSummaryText;
+    window.showSummary?.(pendingSummary);
+  }
 
   window.patchMessageUuid = (content, uuid) => {
     if (window.__sessionTransitioning) return;

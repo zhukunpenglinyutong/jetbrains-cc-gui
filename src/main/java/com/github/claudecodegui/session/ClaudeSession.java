@@ -203,6 +203,13 @@ public class ClaudeSession {
         return state.getMessages();
     }
 
+    /**
+     * 提供底层会话状态访问，用于历史恢复等需要直接重建会话内存态的场景。
+     */
+    public SessionState getState() {
+        return state;
+    }
+
     public String getSummary() {
         return state.getSummary();
     }

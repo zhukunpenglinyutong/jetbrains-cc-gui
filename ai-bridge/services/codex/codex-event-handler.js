@@ -254,6 +254,7 @@ export function createInitialEventState(emitMessage) {
     processedSessionFunctionCallIds: new Set(),
     processedSessionFunctionOutputIds: new Set(),
     reasoningTextCache: new Map(),
+    assistantTextCache: new Map(),
     reasoningObserved: false,
     commandApprovalAbortRequested: false,
     runtimePolicyLogged: false,
@@ -570,6 +571,24 @@ async function maybeRequestCommandApprovalViaBridge(state, config, { toolUseId, 
   return false;
 }
 
+function emitThinkingDelta(text) {
+  console.log('[THINKING_DELTA]', text);
+}
+
+function emitContentDelta(text) {
+  console.log('[CONTENT_DELTA]', text);
+}
+
+function extractAppendedDelta(previousText, nextText) {
+  const previous = typeof previousText === 'string' ? previousText : '';
+  const next = typeof nextText === 'string' ? nextText : '';
+  if (!next.trim()) return '';
+  if (!previous) return next;
+  if (next === previous) return '';
+  if (!next.startsWith(previous)) return '';
+  return next.slice(previous.length);
+}
+
 function emitThinkingBlock(state, text) {
   console.log('[THINKING]', text);
   state.emitMessage({
@@ -584,9 +603,14 @@ function maybeEmitReasoning(state, item) {
   const text = raw.trim();
   if (!text) return;
   const stableId = getStableItemId(item) ?? randomUUID();
-  if (state.reasoningTextCache.get(stableId) === text) return;
+  const previousText = state.reasoningTextCache.get(stableId) ?? '';
+  const delta = extractAppendedDelta(previousText, text);
+  if (!delta && previousText === text) return;
   state.reasoningTextCache.set(stableId, text);
   state.reasoningObserved = true;
+  if (delta) {
+    emitThinkingDelta(delta);
+  }
   emitThinkingBlock(state, text);
 }
 
@@ -637,8 +661,15 @@ function handleAgentMessage(item, state) {
   const text = item.text || '';
   console.log('[DEBUG] agent_message text length:', text.length);
   console.log('[DEBUG] agent_message text (first 100 chars):', text.substring(0, 100));
+  const stableId = getStableItemId(item) ?? 'agent_message';
+  const previousText = state.assistantTextCache.get(stableId) ?? '';
+  const delta = extractAppendedDelta(previousText, text);
   state.finalResponse = text;
-  state.assistantText += text;
+  state.assistantTextCache.set(stableId, text);
+  if (delta) {
+    state.assistantText += delta;
+    emitContentDelta(delta);
+  }
   if (text && text.trim()) {
     state.emitMessage(textMsg(text));
   }

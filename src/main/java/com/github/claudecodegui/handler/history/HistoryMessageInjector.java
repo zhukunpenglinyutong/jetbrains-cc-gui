@@ -2,8 +2,10 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.handler.core.HandlerContext;
-
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
+import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.SessionState;
+import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -11,6 +13,8 @@ import com.google.gson.JsonParser;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -73,26 +77,11 @@ class HistoryMessageInjector {
                 String cwd = sessionMeta[1];
 
                 context.getSession().setSessionInfo(threadIdToUse, cwd);
+                restoreCodexMessagesToSessionState(context.getSession().getState(), messages);
                 LOG.info("[HistoryHandler] 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
 
-                // Clear current messages and release session transition guard
-                // so that addHistoryMessage() calls below are not blocked.
-                // The guard was set by beginSessionTransition() in the frontend;
-                // for Claude sessions setSessionId() releases it, but Codex
-                // sessions inject messages directly via addHistoryMessage().
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    context.executeJavaScriptOnEDT(
-                        "if (window.clearMessages) { window.clearMessages(); } " +
-                        "window.__sessionTransitioning = false; " +
-                        "window.__sessionTransitionToken = null;"
-                    );
-                });
-
-                // Convert Codex messages to frontend format and inject one by one
-                for (int i = 0; i < messages.size(); i++) {
-                    JsonObject msg = messages.get(i).getAsJsonObject();
-                    processAndInjectCodexMessage(msg);
-                }
+                List<JsonObject> frontendMessages = convertCodexMessagesToFrontendBatch(messages);
+                injectBatchToFrontend(frontendMessages);
 
                 // Notify frontend that history messages have finished loading, trigger Markdown re-rendering
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -151,61 +140,115 @@ class HistoryMessageInjector {
     }
 
     /**
-     * Process and inject a single Codex message into the frontend.
+     * 将 Codex 历史消息批量转换为前端消息列表。
+     * 只统一前端注入协议，不改变 Codex 历史文件格式与标题数据来源。
      */
-    private void processAndInjectCodexMessage(JsonObject msg) {
-        if (!msg.has("type") || !"response_item".equals(msg.get("type").getAsString())) {
-            return;
+    static List<JsonObject> convertCodexMessagesToFrontendBatch(JsonArray messages) {
+        List<JsonObject> frontendMessages = new ArrayList<>();
+        for (int i = 0; i < messages.size(); i++) {
+            JsonObject msg = messages.get(i).getAsJsonObject();
+            JsonObject frontendMsg = convertCodexMessageToFrontend(msg);
+            if (frontendMsg != null) {
+                frontendMessages.add(frontendMsg);
+            }
         }
+        return frontendMessages;
+    }
 
-        JsonObject payload = msg.has("payload") ? msg.getAsJsonObject("payload") : null;
-        if (payload == null || !payload.has("type")) {
-            return;
-        }
-
-        String payloadType = payload.get("type").getAsString();
-        JsonObject frontendMsg = null;
-        String timestamp = msg.has("timestamp") ? msg.get("timestamp").getAsString() : null;
-
-        if ("message".equals(payloadType)) {
-            frontendMsg = CodexMessageConverter.convertCodexMessageToFrontend(payload, timestamp);
-        } else if ("function_call".equals(payloadType)) {
-            frontendMsg = CodexMessageConverter.convertFunctionCallToToolUse(payload, timestamp);
-        } else if ("function_call_output".equals(payloadType)) {
-            frontendMsg = CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, timestamp);
-        } else if ("custom_tool_call".equals(payloadType)) {
-            frontendMsg = CodexMessageConverter.convertCustomToolCallToToolUse(payload, timestamp);
-        }
-
-        if (frontendMsg != null) {
-            injectMessageToFrontend(frontendMsg);
+    /**
+     * 将 Codex 历史消息恢复到后端 SessionState，保证历史加载后继续发送时，
+     * 后端内存态与前端显示态使用同一份消息基线。
+     */
+    static void restoreCodexMessagesToSessionState(SessionState state, JsonArray messages) {
+        state.clearMessages();
+        List<JsonObject> frontendMessages = convertCodexMessagesToFrontendBatch(messages);
+        for (JsonObject frontendMsg : frontendMessages) {
+            ClaudeSession.Message restoredMessage = toSessionMessage(frontendMsg);
+            if (restoredMessage != null) {
+                state.addMessage(restoredMessage);
+            }
         }
     }
 
     /**
-     * Inject a message into the frontend.
+     * 将前端统一消息结构恢复为会话内存消息结构。
      */
-    private void injectMessageToFrontend(JsonObject frontendMsg) {
-        String msgJson = new Gson().toJson(frontendMsg);
-        String base64Json = java.util.Base64.getEncoder().encodeToString(
-                msgJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    private static ClaudeSession.Message toSessionMessage(JsonObject frontendMsg) {
+        if (frontendMsg == null || !frontendMsg.has("type")) {
+            return null;
+        }
+
+        String type = frontendMsg.get("type").getAsString();
+        ClaudeSession.Message.Type messageType;
+        switch (type) {
+            case "user":
+                messageType = ClaudeSession.Message.Type.USER;
+                break;
+            case "assistant":
+                messageType = ClaudeSession.Message.Type.ASSISTANT;
+                break;
+            case "system":
+                messageType = ClaudeSession.Message.Type.SYSTEM;
+                break;
+            case "error":
+                messageType = ClaudeSession.Message.Type.ERROR;
+                break;
+            default:
+                return null;
+        }
+
+        String content = frontendMsg.has("content") ? frontendMsg.get("content").getAsString() : "";
+        JsonObject raw = frontendMsg.has("raw") && frontendMsg.get("raw").isJsonObject()
+            ? frontendMsg.getAsJsonObject("raw")
+            : null;
+        return raw != null
+            ? new ClaudeSession.Message(messageType, content, raw.deepCopy())
+            : new ClaudeSession.Message(messageType, content);
+    }
+
+    /**
+     * 将单条 Codex 历史消息转换为前端消息。
+     */
+    private static JsonObject convertCodexMessageToFrontend(JsonObject msg) {
+        if (!msg.has("type") || !"response_item".equals(msg.get("type").getAsString())) {
+            return null;
+        }
+
+        JsonObject payload = msg.has("payload") ? msg.getAsJsonObject("payload") : null;
+        if (payload == null || !payload.has("type")) {
+            return null;
+        }
+
+        String payloadType = payload.get("type").getAsString();
+        String timestamp = msg.has("timestamp") ? msg.get("timestamp").getAsString() : null;
+
+        if ("message".equals(payloadType)) {
+            return CodexMessageConverter.convertCodexMessageToFrontend(payload, timestamp);
+        }
+        if ("function_call".equals(payloadType)) {
+            return CodexMessageConverter.convertFunctionCallToToolUse(payload, timestamp);
+        }
+        if ("function_call_output".equals(payloadType)) {
+            return CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, timestamp);
+        }
+        if ("custom_tool_call".equals(payloadType)) {
+            return CodexMessageConverter.convertCustomToolCallToToolUse(payload, timestamp);
+        }
+        return null;
+    }
+
+    /**
+     * 批量注入前端消息，复用 updateMessages 链路，避免长历史逐条追加导致最新消息显示滞后。
+     */
+    private void injectBatchToFrontend(List<JsonObject> frontendMessages) {
+        String messagesJson = new Gson().toJson(frontendMessages);
+        String escapedMessagesJson = JsUtils.escapeJs(messagesJson);
 
         ApplicationManager.getApplication().invokeLater(() -> {
-            String jsCode = "if (window.addHistoryMessage) { " +
-                                    "  try { " +
-                                    "    var base64Str = '" + base64Json + "'; " +
-                                    "    var binaryStr = atob(base64Str); " +
-                                    "    var bytes = new Uint8Array(binaryStr.length); " +
-                                    "    for (var i = 0; i < binaryStr.length; i++) { bytes[i] = binaryStr.charCodeAt(i); } " +
-                                    "    var msgStr = new TextDecoder('utf-8').decode(bytes); " +
-                                    "    var msg = JSON.parse(msgStr); " +
-                                    "    window.addHistoryMessage(msg); " +
-                                    "  } catch(e) { " +
-                                    "    console.error('[HistoryHandler] Failed to parse/add message:', e); " +
-                                    "  } " +
-                                    "} else { " +
-                                    "  console.warn('[HistoryHandler] addHistoryMessage not available'); " +
-                                    "}";
+            String jsCode = "if (window.clearMessages) { window.clearMessages(); } " +
+                                    "window.__sessionTransitioning = false; " +
+                                    "window.__sessionTransitionToken = null; " +
+                                    "if (window.updateMessages) { window.updateMessages('" + escapedMessagesJson + "'); }";
             context.executeJavaScriptOnEDT(jsCode);
         });
     }

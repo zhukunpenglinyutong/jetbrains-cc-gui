@@ -204,6 +204,32 @@ export const preserveStreamingAssistantContent = (
   return copy;
 };
 
+/**
+ * When Codex compacts or summarizes a long conversation, backend snapshots can
+ * briefly shrink and omit the newest in-memory turn. Preserve that trailing
+ * turn locally until the backend catches up, instead of wiping it from the UI.
+ */
+export const preserveLatestMessagesOnShrink = (
+  prevList: ClaudeMessage[],
+  nextList: ClaudeMessage[],
+  provider: string,
+): ClaudeMessage[] => {
+  if (provider !== 'codex') return nextList;
+  if (nextList.length >= prevList.length) return nextList;
+  if (prevList.length === 0 || nextList.length === 0) return nextList;
+
+  const preservedTail = prevList.slice(nextList.length);
+  if (preservedTail.length === 0) return nextList;
+
+  const hasStreamingTail = preservedTail.some((msg) => msg.type === 'assistant' && (msg.isStreaming || !!msg.__turnId));
+  const hasRecentUserTail = preservedTail.some((msg) => msg.type === 'user');
+  if (!hasStreamingTail && !hasRecentUserTail) {
+    return nextList;
+  }
+
+  return [...nextList, ...preservedTail];
+};
+
 // ---------------------------------------------------------------------------
 // Streaming assistant preservation
 // ---------------------------------------------------------------------------

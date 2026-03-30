@@ -296,6 +296,46 @@ if (window.__pendingLanguageConfig) {
   delete window.__pendingLanguageConfig;
 }
 
+// Pre-register updateMessages to handle backend message snapshots that arrive before React initializes
+if (typeof window !== 'undefined' && !window.updateMessages) {
+  console.log('[Main] Pre-registering updateMessages placeholder');
+  window.updateMessages = (json: string) => {
+    (window as unknown as Record<string, unknown>).__pendingUpdateMessages = json;
+  };
+}
+
+// Pre-register updateStatus to handle backend status text that arrives before React initializes
+if (typeof window !== 'undefined' && !window.updateStatus) {
+  console.log('[Main] Pre-registering updateStatus placeholder');
+  window.updateStatus = (text: string) => {
+    (window as unknown as Record<string, unknown>).__pendingStatusText = text;
+  };
+}
+
+// Pre-register showLoading to handle backend loading state that arrives before React initializes
+if (typeof window !== 'undefined' && !window.showLoading) {
+  console.log('[Main] Pre-registering showLoading placeholder');
+  window.showLoading = (value: string | boolean) => {
+    window.__pendingLoadingState = value === true || value === 'true';
+  };
+}
+
+// Pre-register addUserMessage to handle backend-inserted user messages before React initializes
+if (typeof window !== 'undefined' && !window.addUserMessage) {
+  console.log('[Main] Pre-registering addUserMessage placeholder');
+  window.addUserMessage = (content: string) => {
+    window.__pendingUserMessage = content;
+  };
+}
+
+// Pre-register showSummary to handle backend summary text that arrives before React initializes
+if (typeof window !== 'undefined' && !window.showSummary) {
+  console.log('[Main] Pre-registering showSummary placeholder');
+  window.showSummary = (summary: string) => {
+    (window as unknown as Record<string, unknown>).__pendingSummaryText = summary;
+  };
+}
+
 // Pre-register updateSlashCommands to handle backend calls that arrive before React initializes
 if (typeof window !== 'undefined' && !window.updateSlashCommands) {
   console.log('[Main] Pre-registering updateSlashCommands placeholder');

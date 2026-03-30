@@ -43,6 +43,11 @@ interface Window {
   showThinkingStatus?: (value: string | boolean) => void;
 
   /**
+   * Show conversation summary/compaction notice
+   */
+  showSummary?: (summary: string) => void;
+
+  /**
    * Set history data
    */
   setHistoryData?: (data: any) => void;
@@ -637,6 +642,21 @@ interface Window {
   __pendingAskUserQuestionDialogRequests?: string[];
 
   __pendingPlanApprovalDialogRequests?: string[];
+
+  /**
+   * Pending updateMessages payload before React initialization
+   */
+  __pendingUpdateMessages?: string;
+
+  /**
+   * Pending status text before React initialization
+   */
+  __pendingStatusText?: string;
+
+  /**
+   * Pending summary text before React initialization
+   */
+  __pendingSummaryText?: string;
 
   /**
    * Pending user message before addUserMessage is registered (for Quick Fix feature)

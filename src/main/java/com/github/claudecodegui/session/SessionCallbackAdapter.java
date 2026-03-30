@@ -186,6 +186,15 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     @Override
     public void onSummaryReceived(String summary) {
         LOG.debug("Summary received: " + (summary != null ? summary.substring(0, Math.min(50, summary.length())) : "null"));
+        if (isInactive() || summary == null || summary.trim().isEmpty()) {
+            return;
+        }
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
+            jsTarget.callJavaScript("showSummary", JsUtils.escapeJs(summary));
+        });
     }
 
     @Override
