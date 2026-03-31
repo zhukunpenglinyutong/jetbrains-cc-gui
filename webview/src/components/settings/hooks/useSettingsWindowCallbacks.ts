@@ -1,7 +1,7 @@
 // hooks/useSettingsWindowCallbacks.ts
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProviderConfig, CodexProviderConfig } from '../../../types/provider';
+import type { ProviderConfig, CodexProviderConfig, ProxyConfig, ProxyMode } from '../../../types/provider';
 import type { AgentConfig } from '../../../types/agent';
 import type { PromptConfig } from '../../../types/prompt';
 import type { AlertType } from '../../AlertDialog';
@@ -21,6 +21,10 @@ export interface SettingsWindowCallbacksDeps {
   setSavingNodePath: (saving: boolean) => void;
   setWorkingDirectory: (dir: string) => void;
   setSavingWorkingDirectory: (saving: boolean) => void;
+  setProxyMode: (mode: ProxyMode) => void;
+  setCustomProxyUrl: (url: string) => void;
+  setNoProxy: (value: string) => void;
+  setSavingProxyConfig: (saving: boolean) => void;
   setCommitPrompt: (prompt: string) => void;
   setSavingCommitPrompt: (saving: boolean) => void;
   setEditorFontConfig: (config: { fontFamily: string; fontSize: number; lineSpacing: number } | undefined) => void;
@@ -110,6 +114,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       d().setLoading(false);
       d().setSavingNodePath(false);
       d().setSavingWorkingDirectory(false);
+      d().setSavingProxyConfig(false);
       d().setSavingCommitPrompt(false);
     };
 
@@ -141,6 +146,19 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       } catch (error) {
         console.error('[SettingsView] Failed to parse working directory:', error);
         d().setSavingWorkingDirectory(false);
+      }
+    };
+
+    window.updateProxyConfig = (jsonStr: string) => {
+      try {
+        const data: ProxyConfig = JSON.parse(jsonStr);
+        d().setProxyMode(data.mode ?? 'none');
+        d().setCustomProxyUrl(data.customProxyUrl || '');
+        d().setNoProxy(data.noProxy || '');
+        d().setSavingProxyConfig(false);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse proxy config:', error);
+        d().setSavingProxyConfig(false);
       }
     };
 
@@ -379,6 +397,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     d().loadPrompts?.();
     sendToJava('get_node_path:');
     sendToJava('get_working_directory:');
+    sendToJava('get_proxy_config:');
     sendToJava('get_editor_font_config:');
     sendToJava('get_streaming_enabled:');
     sendToJava('get_codex_sandbox_mode:');
@@ -395,6 +414,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.showSwitchSuccess = undefined;
       window.updateNodePath = undefined;
       window.updateWorkingDirectory = undefined;
+      window.updateProxyConfig = undefined;
       window.showSuccess = undefined;
       window.showSuccessI18n = undefined;
       window.onEditorFontConfigReceived = undefined;

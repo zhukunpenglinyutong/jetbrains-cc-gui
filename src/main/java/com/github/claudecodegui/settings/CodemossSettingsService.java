@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +34,9 @@ public class CodemossSettingsService {
     private static final int CONFIG_VERSION = 2;
     private static final String CODEX_SANDBOX_MODE_WORKSPACE_WRITE = "workspace-write";
     private static final String CODEX_SANDBOX_MODE_DANGER_FULL_ACCESS = "danger-full-access";
+    private static final String PROXY_MODE_NONE = "none";
+    private static final String PROXY_MODE_IDE = "ide";
+    private static final String PROXY_MODE_CUSTOM = "custom";
 
     private final Gson gson;
 
@@ -241,8 +245,107 @@ public class CodemossSettingsService {
         claude.addProperty("current", "");
         claude.add("providers", providers);
         config.add("claude", claude);
+        config.add("proxy", createDefaultProxyConfig());
 
         return config;
+    }
+
+    private JsonObject createDefaultProxyConfig() {
+        JsonObject proxy = new JsonObject();
+        proxy.addProperty("mode", PROXY_MODE_NONE);
+        proxy.addProperty("customProxyUrl", "");
+        proxy.addProperty("noProxy", "");
+        return proxy;
+    }
+
+    private String normalizeProxyMode(String mode) {
+        if (mode == null) {
+            return PROXY_MODE_NONE;
+        }
+        String normalized = mode.trim().toLowerCase(Locale.ROOT);
+        if (PROXY_MODE_NONE.equals(normalized)
+                || PROXY_MODE_IDE.equals(normalized)
+                || PROXY_MODE_CUSTOM.equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("Invalid proxy mode: " + mode);
+    }
+
+    private String normalizeProxyModeOrDefault(String mode) {
+        try {
+            return normalizeProxyMode(mode);
+        } catch (IllegalArgumentException ignored) {
+            return PROXY_MODE_NONE;
+        }
+    }
+
+    private void validateCustomProxyUrl(String proxyUrl) {
+        if (proxyUrl == null || proxyUrl.trim().isEmpty()) {
+            throw new IllegalArgumentException("Custom proxy URL cannot be empty");
+        }
+
+        try {
+            java.net.URI uri = java.net.URI.create(proxyUrl.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+                throw new IllegalArgumentException("Proxy URL must use http or https");
+            }
+            if (uri.getHost() == null || uri.getHost().isBlank() || uri.getPort() <= 0) {
+                throw new IllegalArgumentException("Proxy URL must include host and port");
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid proxy URL");
+        }
+    }
+
+    public JsonObject getProxyConfig() throws IOException {
+        JsonObject config = readConfig();
+        JsonObject proxy = config.has("proxy") && config.get("proxy").isJsonObject()
+                ? config.getAsJsonObject("proxy").deepCopy()
+                : createDefaultProxyConfig();
+
+        String mode = normalizeProxyModeOrDefault(proxy.has("mode") ? proxy.get("mode").getAsString() : PROXY_MODE_NONE);
+        String customProxyUrl = proxy.has("customProxyUrl") && !proxy.get("customProxyUrl").isJsonNull()
+                ? proxy.get("customProxyUrl").getAsString().trim()
+                : "";
+        String noProxy = proxy.has("noProxy") && !proxy.get("noProxy").isJsonNull()
+                ? proxy.get("noProxy").getAsString().trim()
+                : "";
+
+        JsonObject normalized = createDefaultProxyConfig();
+        normalized.addProperty("mode", mode);
+        normalized.addProperty("customProxyUrl", customProxyUrl);
+        normalized.addProperty("noProxy", noProxy);
+        return normalized;
+    }
+
+    public void setProxyConfig(JsonObject proxyConfig) throws IOException {
+        String mode = normalizeProxyMode(
+                proxyConfig != null && proxyConfig.has("mode") && !proxyConfig.get("mode").isJsonNull()
+                        ? proxyConfig.get("mode").getAsString()
+                        : PROXY_MODE_NONE
+        );
+        String customProxyUrl = proxyConfig != null && proxyConfig.has("customProxyUrl") && !proxyConfig.get("customProxyUrl").isJsonNull()
+                ? proxyConfig.get("customProxyUrl").getAsString().trim()
+                : "";
+        String noProxy = proxyConfig != null && proxyConfig.has("noProxy") && !proxyConfig.get("noProxy").isJsonNull()
+                ? proxyConfig.get("noProxy").getAsString().trim()
+                : "";
+
+        if (PROXY_MODE_CUSTOM.equals(mode)) {
+            validateCustomProxyUrl(customProxyUrl);
+        }
+
+        JsonObject config = readConfig();
+        JsonObject proxy = createDefaultProxyConfig();
+        proxy.addProperty("mode", mode);
+        proxy.addProperty("customProxyUrl", customProxyUrl);
+        proxy.addProperty("noProxy", noProxy);
+        config.add("proxy", proxy);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Saved proxy config, mode=" + mode);
     }
 
     // ==================== Claude Settings Management ====================

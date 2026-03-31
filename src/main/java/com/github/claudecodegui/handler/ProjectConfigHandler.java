@@ -1,11 +1,10 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
-
-import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.Gson;
@@ -14,6 +13,7 @@ import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.io.File;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -53,6 +53,39 @@ public class ProjectConfigHandler {
             LOG.error("[ProjectConfigHandler] Failed to get working directory: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() ->
                 context.callJavaScript("window.showError", context.escapeJs("获取工作目录配置失败: " + e.getMessage())));
+        }
+    }
+
+    public void handleGetProxyConfig() {
+        try {
+            JsonObject proxyConfig = settingsService.getProxyConfig();
+            ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.updateProxyConfig", context.escapeJs(gson.toJson(proxyConfig))));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get proxy config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.showError", context.escapeJs("获取代理配置失败: " + e.getMessage())));
+        }
+    }
+
+    public void handleSetProxyConfig(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            settingsService.setProxyConfig(json);
+
+            JsonObject proxyConfig = settingsService.getProxyConfig();
+            proxyConfig.addProperty("saved", true);
+
+            restartClaudeDaemonForProxyChange();
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                context.callJavaScript("window.updateProxyConfig", context.escapeJs(gson.toJson(proxyConfig)));
+                context.callJavaScript("window.showSuccessI18n", "toast.saveSuccess");
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set proxy config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.showError", context.escapeJs("保存代理配置失败: " + e.getMessage())));
         }
     }
 
@@ -391,5 +424,43 @@ public class ProjectConfigHandler {
                     context.callJavaScript("window.showError", context.escapeJs("获取统计数据失败: " + e.getMessage())));
             }
         });
+    }
+
+    private void restartClaudeDaemonForProxyChange() {
+        try {
+            context.getClaudeSDKBridge().shutdownDaemon();
+            context.getClaudeSDKBridge().prewarmDaemonAsync(
+                    resolveWarmupWorkingDirectory(),
+                    context.getSession() != null ? context.getSession().getRuntimeSessionEpoch() : null
+            );
+        } catch (Exception e) {
+            LOG.warn("[ProjectConfigHandler] Failed to restart Claude daemon after proxy config change: " + e.getMessage());
+        }
+    }
+
+    private String resolveWarmupWorkingDirectory() {
+        String projectPath = context.getProject() != null ? context.getProject().getBasePath() : null;
+        if (projectPath == null || projectPath.isBlank()) {
+            return null;
+        }
+
+        try {
+            String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
+            if (customWorkingDir == null || customWorkingDir.isBlank()) {
+                return projectPath;
+            }
+
+            File workingDirFile = new File(customWorkingDir);
+            if (!workingDirFile.isAbsolute()) {
+                workingDirFile = new File(projectPath, customWorkingDir);
+            }
+            if (workingDirFile.exists() && workingDirFile.isDirectory()) {
+                return workingDirFile.getAbsolutePath();
+            }
+        } catch (Exception e) {
+            LOG.debug("[ProjectConfigHandler] Failed to resolve warmup working directory: " + e.getMessage());
+        }
+
+        return projectPath;
     }
 }

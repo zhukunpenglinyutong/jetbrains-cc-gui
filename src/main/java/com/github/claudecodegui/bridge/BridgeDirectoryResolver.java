@@ -25,6 +25,8 @@ import java.nio.file.Paths;
 import java.security.CodeSource;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -45,7 +47,7 @@ public class BridgeDirectoryResolver {
     private static final String BRIDGE_VERSION_FILE = ".bridge-version";
     private static final String BRIDGE_PATH_PROPERTY = "claude.bridge.path";
     private static final String BRIDGE_PATH_ENV = "CLAUDE_BRIDGE_PATH";
-    private static final String PLUGIN_DIR_NAME = "idea-claude-code-gui";
+    private static final String LEGACY_PLUGIN_DIR_NAME = "idea-claude-code-gui";
 
     private volatile File cachedSdkDir = null;
     /**
@@ -243,15 +245,17 @@ public class BridgeDirectoryResolver {
         try {
             String pluginsRoot = PathManager.getPluginsPath();
             if (!pluginsRoot.isEmpty()) {
-                addCandidate(possibleDirs, Paths.get(pluginsRoot, PLUGIN_DIR_NAME, SDK_DIR_NAME).toFile());
+                addCandidate(possibleDirs, Paths.get(pluginsRoot, LEGACY_PLUGIN_DIR_NAME, SDK_DIR_NAME).toFile());
                 addCandidate(possibleDirs, Paths.get(pluginsRoot, PlatformUtils.getPluginId(), SDK_DIR_NAME).toFile());
+                addDiscoveredPluginChildCandidates(possibleDirs, Paths.get(pluginsRoot).toFile(), SDK_DIR_NAME);
             }
 
             String systemPath = PathManager.getSystemPath();
             if (!systemPath.isEmpty()) {
                 Path sandboxPath = Paths.get(systemPath, "plugins");
-                addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_DIR_NAME).resolve(SDK_DIR_NAME).toFile());
+                addCandidate(possibleDirs, sandboxPath.resolve(LEGACY_PLUGIN_DIR_NAME).resolve(SDK_DIR_NAME).toFile());
                 addCandidate(possibleDirs, sandboxPath.resolve(PlatformUtils.getPluginId()).resolve(SDK_DIR_NAME).toFile());
+                addDiscoveredPluginChildCandidates(possibleDirs, sandboxPath.toFile(), SDK_DIR_NAME);
             }
         } catch (Throwable t) {
             LOG.debug("[BridgeResolver] Cannot infer from plugin path: " + t.getMessage());
@@ -270,7 +274,7 @@ public class BridgeDirectoryResolver {
             while (classDir != null && classDir.exists()) {
                 addCandidate(possibleDirs, new File(classDir, SDK_DIR_NAME));
                 String name = classDir.getName();
-                if (PLUGIN_DIR_NAME.equals(name) || PlatformUtils.getPluginId().equals(name)) {
+                if (LEGACY_PLUGIN_DIR_NAME.equals(name) || PlatformUtils.getPluginId().equals(name)) {
                     break;
                 }
                 if (isRootDirectory(classDir)) {
@@ -327,6 +331,36 @@ public class BridgeDirectoryResolver {
         // are loaded dynamically from ~/.codemoss/dependencies/, no need to check within ai-bridge
 
         return true;
+    }
+
+    private void addDiscoveredPluginChildCandidates(List<File> possibleDirs, File pluginsRoot, String childName) {
+        for (File candidate : findPluginChildren(pluginsRoot, childName)) {
+            addCandidate(possibleDirs, candidate);
+        }
+    }
+
+    static List<File> findPluginChildren(File pluginsRoot, String childName) {
+        List<File> candidates = new ArrayList<>();
+        if (pluginsRoot == null || childName == null || childName.isBlank()) {
+            return candidates;
+        }
+        if (!pluginsRoot.exists() || !pluginsRoot.isDirectory()) {
+            return candidates;
+        }
+
+        File[] pluginDirs = pluginsRoot.listFiles(File::isDirectory);
+        if (pluginDirs == null || pluginDirs.length == 0) {
+            return candidates;
+        }
+
+        Arrays.sort(pluginDirs, Comparator.comparing(File::getName));
+        for (File pluginDir : pluginDirs) {
+            File child = new File(pluginDir, childName);
+            if (child.exists()) {
+                candidates.add(child);
+            }
+        }
+        return candidates;
     }
 
     private void addCandidate(List<File> possibleDirs, File dir) {
@@ -418,20 +452,23 @@ public class BridgeDirectoryResolver {
 
                         File maybeTopPlugins = new File(parent, "plugins");
                         if (maybeTopPlugins.exists() && maybeTopPlugins.isDirectory()) {
-                            fallbackCandidates.add(new File(maybeTopPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeTopPlugins, LEGACY_PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
                             fallbackCandidates.add(new File(maybeTopPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
+                            addDiscoveredPluginChildCandidates(fallbackCandidates, maybeTopPlugins, SDK_ARCHIVE_NAME);
                         }
 
                         // system/config siblings under this parent
                         File maybeSystemPlugins = new File(parent, "system/plugins");
                         File maybeConfigPlugins = new File(parent, "config/plugins");
                         if (maybeSystemPlugins.exists() && maybeSystemPlugins.isDirectory()) {
-                            fallbackCandidates.add(new File(maybeSystemPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeSystemPlugins, LEGACY_PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
                             fallbackCandidates.add(new File(maybeSystemPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
+                            addDiscoveredPluginChildCandidates(fallbackCandidates, maybeSystemPlugins, SDK_ARCHIVE_NAME);
                         }
                         if (maybeConfigPlugins.exists() && maybeConfigPlugins.isDirectory()) {
-                            fallbackCandidates.add(new File(maybeConfigPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
+                            fallbackCandidates.add(new File(maybeConfigPlugins, LEGACY_PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
                             fallbackCandidates.add(new File(maybeConfigPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
+                            addDiscoveredPluginChildCandidates(fallbackCandidates, maybeConfigPlugins, SDK_ARCHIVE_NAME);
                         }
 
                         ancestor = parent;
@@ -1139,4 +1176,3 @@ public class BridgeDirectoryResolver {
         }
     }
 }
-

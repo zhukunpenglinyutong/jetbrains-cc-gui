@@ -1,7 +1,10 @@
 package com.github.claudecodegui.bridge;
 
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ShellExecutor;
+import com.google.gson.JsonObject;
+import com.intellij.util.net.HttpConfigurable;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
@@ -30,6 +33,13 @@ public class EnvironmentConfigurator {
     private static final String CLAUDE_PERMISSION_ENV = "CLAUDE_PERMISSION_DIR";
     private static final String CLAUDE_SESSION_ID_ENV = "CLAUDE_SESSION_ID";
     private static final String CODEX_HOME_ENV = "CODEX_HOME";
+    private static final String PROXY_MODE_NONE = "none";
+    private static final String PROXY_MODE_IDE = "ide";
+    private static final String PROXY_MODE_CUSTOM = "custom";
+    private static final String[] MANAGED_PROXY_ENV_VARS = {
+            "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
+            "http_proxy", "https_proxy", "no_proxy", "all_proxy"
+    };
 
     private volatile String cachedPermissionDir = null;
     private volatile String sessionId = null;
@@ -149,7 +159,189 @@ public class EnvironmentConfigurator {
             }
         }
 
+        configureProxyEnv(env);
         configurePermissionEnv(env);
+    }
+
+    public void configureProxyEnv(Map<String, String> env) {
+        if (env == null) {
+            return;
+        }
+
+        try {
+            JsonObject proxyConfig = loadProxyConfig();
+            if (proxyConfig == null) {
+                return;
+            }
+            configureProxyEnv(env, proxyConfig);
+        } catch (Exception e) {
+            LOG.warn("[EnvironmentConfigurator] Failed to load proxy config: " + e.getMessage());
+        }
+    }
+
+    JsonObject loadProxyConfig() throws java.io.IOException {
+        JsonObject config = new CodemossSettingsService().readConfig();
+        if (!config.has("proxy") || !config.get("proxy").isJsonObject()) {
+            return null;
+        }
+        return config.getAsJsonObject("proxy").deepCopy();
+    }
+
+    public void configureProxyEnv(Map<String, String> env, JsonObject proxyConfig) {
+        if (env == null) {
+            return;
+        }
+
+        String mode = readProxyString(proxyConfig, "mode");
+        if (mode.isEmpty()) {
+            mode = PROXY_MODE_NONE;
+        }
+
+        switch (mode) {
+            case PROXY_MODE_IDE:
+                configureIdeProxyEnv(env, HttpConfigurable.getInstance());
+                return;
+            case PROXY_MODE_CUSTOM:
+                configureCustomProxyEnv(env, proxyConfig);
+                return;
+            case PROXY_MODE_NONE:
+            default:
+                clearManagedProxyEnv(env);
+        }
+    }
+
+    void configureIdeProxyEnv(Map<String, String> env, HttpConfigurable httpConfigurable) {
+        clearManagedProxyEnv(env);
+        if (env == null || httpConfigurable == null) {
+            return;
+        }
+
+        if (!httpConfigurable.USE_HTTP_PROXY
+                || httpConfigurable.PROXY_HOST == null || httpConfigurable.PROXY_HOST.isBlank()
+                || httpConfigurable.PROXY_PORT <= 0
+                || isIdeSocksProxy(httpConfigurable)) {
+            return;
+        }
+
+        String proxyUrl = buildProxyUrl("http", httpConfigurable.PROXY_HOST, httpConfigurable.PROXY_PORT);
+        setManagedProxyEnv(env, proxyUrl, readIdeNoProxy(httpConfigurable));
+    }
+
+    private void configureCustomProxyEnv(Map<String, String> env, JsonObject proxyConfig) {
+        clearManagedProxyEnv(env);
+        String proxyUrl = readProxyString(proxyConfig, "customProxyUrl");
+        if (!isSupportedProxyUrl(proxyUrl)) {
+            LOG.warn("[EnvironmentConfigurator] Invalid custom proxy URL in config, skipping proxy injection");
+            return;
+        }
+        setManagedProxyEnv(env, proxyUrl, readProxyString(proxyConfig, "noProxy"));
+    }
+
+    private void setManagedProxyEnv(Map<String, String> env, String proxyUrl, String noProxy) {
+        env.put("HTTP_PROXY", proxyUrl);
+        env.put("HTTPS_PROXY", proxyUrl);
+        env.put("http_proxy", proxyUrl);
+        env.put("https_proxy", proxyUrl);
+
+        if (noProxy == null || noProxy.isBlank()) {
+            env.remove("NO_PROXY");
+            env.remove("no_proxy");
+        } else {
+            env.put("NO_PROXY", noProxy);
+            env.put("no_proxy", noProxy);
+        }
+    }
+
+    private void clearManagedProxyEnv(Map<String, String> env) {
+        for (String envVar : MANAGED_PROXY_ENV_VARS) {
+            env.remove(envVar);
+        }
+    }
+
+    private String readProxyString(JsonObject proxyConfig, String key) {
+        if (proxyConfig == null || !proxyConfig.has(key) || proxyConfig.get(key).isJsonNull()) {
+            return "";
+        }
+        return proxyConfig.get(key).getAsString().trim();
+    }
+
+    private boolean isSupportedProxyUrl(String proxyUrl) {
+        if (proxyUrl == null || proxyUrl.isBlank()) {
+            return false;
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(proxyUrl.trim());
+            String scheme = uri.getScheme();
+            return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && uri.getHost() != null && !uri.getHost().isBlank()
+                    && uri.getPort() > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String buildProxyUrl(String scheme, String host, int port) {
+        return scheme + "://" + host + ":" + port;
+    }
+
+    private String readIdeNoProxy(HttpConfigurable httpConfigurable) {
+        Object value = readReflectiveMember(httpConfigurable, "PROXY_EXCEPTIONS");
+        if (value instanceof String) {
+            return ((String) value).trim();
+        }
+        value = readReflectiveMember(httpConfigurable, "getProxyExceptions");
+        if (value instanceof String) {
+            return ((String) value).trim();
+        }
+        return "";
+    }
+
+    private boolean isIdeSocksProxy(HttpConfigurable httpConfigurable) {
+        Object value = readReflectiveMember(httpConfigurable, "PROXY_TYPE_IS_SOCKS");
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        value = readReflectiveMember(httpConfigurable, "PROXY_TYPE");
+        if (value instanceof Number) {
+            return ((Number) value).intValue() != 0;
+        }
+        return false;
+    }
+
+    private Object readReflectiveMember(HttpConfigurable httpConfigurable, String name) {
+        try {
+            try {
+                java.lang.reflect.Field field = httpConfigurable.getClass().getField(name);
+                return field.get(httpConfigurable);
+            } catch (NoSuchFieldException ignored) {
+                java.lang.reflect.Method method = httpConfigurable.getClass().getMethod(name);
+                return method.invoke(httpConfigurable);
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    JsonObject loadProxyConfigSafely() {
+        try {
+            return loadProxyConfig();
+        } catch (Exception e) {
+            LOG.debug("[EnvironmentConfigurator] Failed to load proxy config for Codex env sync: " + e.getMessage());
+            return null;
+        }
+    }
+
+    boolean shouldSkipCodexEnvKey(String envKeyName, JsonObject proxyConfig) {
+        return proxyConfig != null && isManagedProxyEnvVar(envKeyName);
+    }
+
+    private boolean isManagedProxyEnvVar(String envKeyName) {
+        for (String envVar : MANAGED_PROXY_ENV_VARS) {
+            if (envVar.equals(envKeyName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -342,9 +534,14 @@ public class EnvironmentConfigurator {
             }
 
             LOG.info("[Codex] Found env_key names in config.toml: " + envKeyNames);
+            JsonObject proxyConfig = loadProxyConfigSafely();
 
             // 2. Try to get values for each env_key from multiple sources
             for (String envKeyName : envKeyNames) {
+                if (shouldSkipCodexEnvKey(envKeyName, proxyConfig)) {
+                    LOG.debug("[Codex] Skip proxy env_key managed by plugin settings: " + envKeyName);
+                    continue;
+                }
                 // Skip if already set in environment
                 if (env.containsKey(envKeyName) && env.get(envKeyName) != null && !env.get(envKeyName).isEmpty()) {
                     LOG.debug("[Codex] Env var already set: " + envKeyName);

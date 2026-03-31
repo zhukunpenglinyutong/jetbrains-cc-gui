@@ -276,6 +276,11 @@ interface Window {
   updateWorkingDirectory?: (json: string) => void;
 
   /**
+   * Update proxy configuration
+   */
+  updateProxyConfig?: (json: string) => void;
+
+  /**
    * Show success message
    */
   showSuccess?: (message: string) => void;

@@ -1,5 +1,6 @@
 // hooks/useSettingsBasicActions.ts
 import { useState, useEffect, useCallback } from 'react';
+import type { ProxyMode } from '../../../types/provider';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -26,6 +27,10 @@ export interface UseSettingsBasicActionsReturn {
   savingNodePath: boolean;
   workingDirectory: string;
   savingWorkingDirectory: boolean;
+  proxyMode: ProxyMode;
+  customProxyUrl: string;
+  noProxy: string;
+  savingProxyConfig: boolean;
   editorFontConfig:
     | {
         fontFamily: string;
@@ -57,6 +62,7 @@ export interface UseSettingsBasicActionsReturn {
   // =========================================================================
   handleSaveNodePath: () => void;
   handleSaveWorkingDirectory: () => void;
+  handleSaveProxyConfig: () => void;
   handleStreamingEnabledChange: (enabled: boolean) => void;
   handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -80,6 +86,10 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSavingNodePath: (saving: boolean) => void;
   /** @internal */ setWorkingDirectory: (dir: string) => void;
   /** @internal */ setSavingWorkingDirectory: (saving: boolean) => void;
+  /** @internal */ setProxyMode: (mode: ProxyMode) => void;
+  /** @internal */ setCustomProxyUrl: (url: string) => void;
+  /** @internal */ setNoProxy: (value: string) => void;
+  /** @internal */ setSavingProxyConfig: (saving: boolean) => void;
   /** @internal */ setEditorFontConfig: (
     config:
       | {
@@ -120,6 +130,12 @@ export function useSettingsBasicActions({
   // Working directory configuration
   const [workingDirectory, setWorkingDirectory] = useState('');
   const [savingWorkingDirectory, setSavingWorkingDirectory] = useState(false);
+
+  // Proxy configuration
+  const [proxyMode, setProxyMode] = useState<ProxyMode>('none');
+  const [customProxyUrl, setCustomProxyUrl] = useState('');
+  const [noProxy, setNoProxy] = useState('');
+  const [savingProxyConfig, setSavingProxyConfig] = useState(false);
 
   // IDEA editor font configuration (read-only display)
   const [editorFontConfig, setEditorFontConfig] = useState<
@@ -194,6 +210,16 @@ export function useSettingsBasicActions({
     const payload = { customWorkingDir: (workingDirectory || '').trim() };
     sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
   }, [workingDirectory]);
+
+  const handleSaveProxyConfig = useCallback(() => {
+    setSavingProxyConfig(true);
+    const payload = {
+      mode: proxyMode,
+      customProxyUrl: (customProxyUrl || '').trim(),
+      noProxy: (noProxy || '').trim(),
+    };
+    sendToJava(`set_proxy_config:${JSON.stringify(payload)}`);
+  }, [proxyMode, customProxyUrl, noProxy]);
 
   // Streaming toggle change handler
   const handleStreamingEnabledChange = useCallback((enabled: boolean) => {
@@ -303,6 +329,14 @@ export function useSettingsBasicActions({
     setWorkingDirectory,
     savingWorkingDirectory,
     setSavingWorkingDirectory,
+    proxyMode,
+    setProxyMode,
+    customProxyUrl,
+    setCustomProxyUrl,
+    noProxy,
+    setNoProxy,
+    savingProxyConfig,
+    setSavingProxyConfig,
     editorFontConfig,
     setEditorFontConfig,
     localStreamingEnabled,
@@ -334,6 +368,7 @@ export function useSettingsBasicActions({
     setHistoryCompletionEnabled,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
+    handleSaveProxyConfig,
     handleStreamingEnabledChange,
     handleCodexSandboxModeChange,
     handleSendShortcutChange,

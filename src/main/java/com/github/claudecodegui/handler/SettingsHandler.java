@@ -32,6 +32,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_reasoning_effort",
         "get_node_path",
         "set_node_path",
+        "get_proxy_config",
+        "set_proxy_config",
         "get_usage_statistics",
         "get_working_directory",
         "set_working_directory",
@@ -116,6 +118,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_node_path":
                 nodePathHandler.handleSetNodePath(content);
+                return true;
+            case "get_proxy_config":
+                projectConfigHandler.handleGetProxyConfig();
+                return true;
+            case "set_proxy_config":
+                projectConfigHandler.handleSetProxyConfig(content);
                 return true;
             // Project configuration
             case "get_usage_statistics":

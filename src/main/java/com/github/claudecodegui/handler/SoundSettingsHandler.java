@@ -1,7 +1,6 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
-
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.SoundNotificationService;
 import com.google.gson.Gson;

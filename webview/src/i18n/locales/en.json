@@ -134,6 +134,17 @@
         "placeholder": "e.g. project1 or leave empty to use project root",
         "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
       },
+      "proxy": {
+        "label": "Proxy",
+        "hint": "Applies to both Claude Code and Codex. Only HTTP/HTTPS proxies are supported. If authentication is required, embed credentials in the proxy URL. Follow IDE only syncs the current IDEA HTTP proxy settings.",
+        "mode": {
+          "none": "None",
+          "ide": "Follow IDE",
+          "custom": "Custom"
+        },
+        "customProxyUrlPlaceholder": "Proxy URL, e.g. http://127.0.0.1:7897",
+        "noProxyPlaceholder": "NO_PROXY, optional, e.g. localhost,127.0.0.1,.company.local"
+      },
       "fontSize": {
         "label": "Font Size",
         "level1": "Small (80%)",

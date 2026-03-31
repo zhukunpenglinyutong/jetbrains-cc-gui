@@ -1,5 +1,6 @@
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
+import type { ProxyMode } from '../../../types/provider';
 
 export interface EnvironmentTabProps {
   nodePath: string;
@@ -12,6 +13,14 @@ export interface EnvironmentTabProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  proxyMode?: ProxyMode;
+  onProxyModeChange?: (mode: ProxyMode) => void;
+  customProxyUrl?: string;
+  onCustomProxyUrlChange?: (url: string) => void;
+  noProxy?: string;
+  onNoProxyChange?: (value: string) => void;
+  onSaveProxyConfig?: () => void;
+  savingProxyConfig?: boolean;
 }
 
 const EnvironmentTab = ({
@@ -25,6 +34,14 @@ const EnvironmentTab = ({
   onWorkingDirectoryChange = () => {},
   onSaveWorkingDirectory = () => {},
   savingWorkingDirectory = false,
+  proxyMode = 'none',
+  onProxyModeChange = () => {},
+  customProxyUrl = '',
+  onCustomProxyUrlChange = () => {},
+  noProxy = '',
+  onNoProxyChange = () => {},
+  onSaveProxyConfig = () => {},
+  savingProxyConfig = false,
 }: EnvironmentTabProps) => {
   const { t } = useTranslation();
 
@@ -122,6 +139,69 @@ const EnvironmentTab = ({
           <span>
             {t('settings.basic.workingDirectory.hint')}
           </span>
+        </small>
+      </div>
+
+      <div className={styles.proxySection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-globe" />
+          <span className={styles.fieldLabel}>{t('settings.basic.proxy.label')}</span>
+        </div>
+
+        <div className={styles.proxyModeGroup}>
+          {(['none', 'ide', 'custom'] as ProxyMode[]).map((mode) => (
+            <label key={mode} className={styles.proxyModeOption}>
+              <input
+                type="radio"
+                name="proxyMode"
+                value={mode}
+                checked={proxyMode === mode}
+                onChange={() => onProxyModeChange(mode)}
+              />
+              <span className={styles.proxyModeTitle}>{t(`settings.basic.proxy.mode.${mode}`)}</span>
+            </label>
+          ))}
+        </div>
+
+        {proxyMode === 'custom' && (
+          <div className={styles.proxyCustomFields}>
+            <div className={styles.nodePathInputWrapper}>
+              <input
+                type="text"
+                className={styles.nodePathInput}
+                placeholder={t('settings.basic.proxy.customProxyUrlPlaceholder')}
+                value={customProxyUrl}
+                onChange={(e) => onCustomProxyUrlChange(e.target.value)}
+              />
+            </div>
+            <div className={styles.nodePathInputWrapper}>
+              <input
+                type="text"
+                className={styles.nodePathInput}
+                placeholder={t('settings.basic.proxy.noProxyPlaceholder')}
+                value={noProxy}
+                onChange={(e) => onNoProxyChange(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className={styles.nodePathInputWrapper}>
+          <button
+            className={styles.saveBtn}
+            onClick={onSaveProxyConfig}
+            disabled={savingProxyConfig}
+          >
+            {savingProxyConfig && (
+              <span className="codicon codicon-loading codicon-modifier-spin" />
+            )}
+            {t('common.save')}
+          </button>
+        </div>
+
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.proxy.hint')}</span>
         </small>
       </div>
     </div>

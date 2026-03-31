@@ -134,6 +134,17 @@
         "placeholder": "例如 project1 或留空使用项目根目录",
         "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
       },
+      "proxy": {
+        "label": "代理设置",
+        "hint": "统一作用于 Claude Code 和 Codex。仅支持 HTTP/HTTPS 代理；如需认证，请将用户名和密码写入代理 URL。跟随 IDE 模式只同步 IDEA 当前的 HTTP 代理配置。",
+        "mode": {
+          "none": "无",
+          "ide": "跟随 IDE",
+          "custom": "自定义"
+        },
+        "customProxyUrlPlaceholder": "代理 URL，例如 http://127.0.0.1:7897",
+        "noProxyPlaceholder": "NO_PROXY，可选，例如 localhost,127.0.0.1,.company.local"
+      },
       "fontSize": {
         "label": "字体大小",
         "level1": "小（80%）",

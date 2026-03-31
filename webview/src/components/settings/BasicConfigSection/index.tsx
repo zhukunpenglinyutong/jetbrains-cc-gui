@@ -5,6 +5,7 @@ import type { DiffThemeMode } from '../../../utils/diffTheme';
 import AppearanceTab from './AppearanceTab';
 import BehaviorTab from './BehaviorTab';
 import EnvironmentTab from './EnvironmentTab';
+import type { ProxyMode } from '../../../types/provider';
 
 type BasicTab = 'appearance' | 'behavior' | 'environment';
 
@@ -29,6 +30,14 @@ interface BasicConfigSectionProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  proxyMode?: ProxyMode;
+  onProxyModeChange?: (mode: ProxyMode) => void;
+  customProxyUrl?: string;
+  onCustomProxyUrlChange?: (url: string) => void;
+  noProxy?: string;
+  onNoProxyChange?: (value: string) => void;
+  onSaveProxyConfig?: () => void;
+  savingProxyConfig?: boolean;
   editorFontConfig?: {
     fontFamily: string;
     fontSize: number;
@@ -145,6 +154,14 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onWorkingDirectoryChange={props.onWorkingDirectoryChange}
           onSaveWorkingDirectory={props.onSaveWorkingDirectory}
           savingWorkingDirectory={props.savingWorkingDirectory}
+          proxyMode={props.proxyMode}
+          onProxyModeChange={props.onProxyModeChange}
+          customProxyUrl={props.customProxyUrl}
+          onCustomProxyUrlChange={props.onCustomProxyUrlChange}
+          noProxy={props.noProxy}
+          onNoProxyChange={props.onNoProxyChange}
+          onSaveProxyConfig={props.onSaveProxyConfig}
+          savingProxyConfig={props.savingProxyConfig}
         />
       )}
     </div>

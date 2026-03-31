@@ -2,11 +2,10 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
-
-import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.model.ConflictStrategy;
 import com.github.claudecodegui.model.PromptScope;
 import com.github.claudecodegui.settings.AbstractPromptManager;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.watcher.PromptFileWatcher;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
