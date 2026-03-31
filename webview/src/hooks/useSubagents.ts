@@ -6,7 +6,7 @@ import { normalizeToolName } from '../utils/toolConstants';
 interface UseSubagentsParams {
   messages: ClaudeMessage[];
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
-  findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
+  findToolResult: (toolUseId?: string, messageIndex?: number, anchorMessage?: ClaudeMessage) => ToolResultBlock | null;
 }
 
 /**
@@ -57,7 +57,7 @@ export function useSubagents({
         const prompt = String((input.prompt as string) ?? '');
 
         // Check tool result to determine status
-        const result = findToolResult(block.id, messageIndex);
+        const result = findToolResult(block.id, messageIndex, message);
         const status = determineStatus(result);
 
         subagents.push({

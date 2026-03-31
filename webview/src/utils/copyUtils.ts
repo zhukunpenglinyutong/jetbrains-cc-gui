@@ -1,41 +1,11 @@
 import type { ClaudeMessage, ClaudeContentBlock, ClaudeRawMessage } from '../types';
+import { normalizeBlocks as normalizeBlocksForMessages } from './messageUtils';
 
 /**
  * Normalize raw message blocks to ClaudeContentBlock array
  */
 function normalizeBlocks(raw: ClaudeRawMessage | string | undefined): ClaudeContentBlock[] | null {
-  if (!raw) return null;
-
-  if (typeof raw === 'string') {
-    return [{ type: 'text', text: raw }];
-  }
-
-  // Check raw.content
-  if (Array.isArray(raw.content)) {
-    return raw.content.filter(
-      (block): block is ClaudeContentBlock =>
-        block.type === 'text' || block.type === 'thinking' || block.type === 'tool_use' || block.type === 'image'
-    );
-  }
-
-  if (typeof raw.content === 'string') {
-    return [{ type: 'text', text: raw.content }];
-  }
-
-  // Check raw.message?.content
-  const msgContent = raw.message?.content;
-  if (Array.isArray(msgContent)) {
-    return msgContent.filter(
-      (block): block is ClaudeContentBlock =>
-        block.type === 'text' || block.type === 'thinking' || block.type === 'tool_use' || block.type === 'image'
-    );
-  }
-
-  if (typeof msgContent === 'string') {
-    return [{ type: 'text', text: msgContent }];
-  }
-
-  return null;
+  return normalizeBlocksForMessages(raw, (text) => text, ((key: string) => key) as any);
 }
 
 /**

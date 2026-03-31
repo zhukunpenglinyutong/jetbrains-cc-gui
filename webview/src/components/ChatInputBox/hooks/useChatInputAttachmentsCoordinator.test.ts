@@ -34,18 +34,25 @@ describe('useChatInputAttachmentsCoordinator', () => {
     expect(onRemoveAttachment).toHaveBeenCalledWith('a1');
   });
 
-  it('manages internal attachments in uncontrolled mode', () => {
+  it('manages internal attachments in uncontrolled mode', async () => {
     const originalFileReader = globalThis.FileReader;
 
-    const mockReadAsDataURL = vi.fn(function (this: FileReader) {
-      (this as unknown as { result?: string }).result = 'data:text/plain;base64,SGVsbG8=';
-      this.onload?.(new ProgressEvent('load') as ProgressEvent<FileReader>);
-    });
-
+    // Create a proper mock FileReader that calls onload synchronously
     class MockFileReader {
-      public result: string | null = null;
+      public result: string | ArrayBuffer | null = null;
       public onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
-      readAsDataURL = mockReadAsDataURL as unknown as (blob: Blob) => void;
+      public onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+      public onabort: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+
+      readAsDataURL(_blob: Blob): void {
+        // Set result as a data URL format
+        this.result = 'data:text/plain;base64,SGVsbG8=';
+        // Call onload synchronously with a proper event object
+        if (this.onload) {
+          const event = new ProgressEvent('load') as ProgressEvent<FileReader>;
+          this.onload.call(this as unknown as FileReader, event);
+        }
+      }
     }
 
     // @ts-expect-error test override
@@ -65,7 +72,11 @@ describe('useChatInputAttachmentsCoordinator', () => {
         result.current.handleAddAttachment(list);
       });
 
-      expect(mockReadAsDataURL).toHaveBeenCalled();
+      // Wait for state update
+      await act(async () => {
+        await Promise.resolve();
+      });
+
       expect(result.current.attachments).toHaveLength(1);
 
       const attachment = result.current.attachments[0] as Attachment;

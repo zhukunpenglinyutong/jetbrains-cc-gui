@@ -6,8 +6,11 @@
  * dependencies and receive everything they need via parameters.
  */
 
-import type { MutableRefObject } from 'react';
 import type { ClaudeMessage, ClaudeRawMessage } from '../../types';
+import type { StreamingPatchState } from '../useStreamingMessages';
+
+/** Normalize CRLF / CR line endings to LF for consistent streaming comparisons. */
+export const normalizeStreamingNewlines = (value: string): string => value.replace(/\r\n?/g, '\n');
 
 /** Time window (ms) for matching optimistic messages with backend messages. */
 export const OPTIMISTIC_MESSAGE_TIME_WINDOW = 5000;
@@ -25,7 +28,7 @@ export const getRawUuid = (msg: ClaudeMessage | undefined): string | undefined =
 
 export const stripUuidFromRaw = (raw: unknown): unknown => {
   if (!raw || typeof raw !== 'object') return raw;
-  const rawObj = raw as any;
+  const rawObj = raw as Record<string, unknown>;
   if (!('uuid' in rawObj)) return raw;
   const { uuid: _uuid, ...rest } = rawObj;
   return rest;
@@ -57,7 +60,7 @@ export const preserveMessageIdentity = (
   if (!prevUuid && nextUuid) {
     return {
       ...nextWithStableTimestamp,
-      raw: stripUuidFromRaw(nextWithStableTimestamp.raw) as any,
+      raw: stripUuidFromRaw(nextWithStableTimestamp.raw) as ClaudeMessage['raw'],
     };
   }
 
@@ -79,10 +82,22 @@ export const appendOptimisticMessageIfMissing = (
 
   const optimisticMsg = lastPrev;
 
+  // Extract optimistic raw object once, reused for both matching and attachment merge (I4: js-cache-property-access).
+  // NOTE: `as Record<string, unknown>` casts are used because ClaudeMessage.raw
+  // is typed as `ClaudeRawMessage | string | undefined` and we need uniform property access.
+  const optimisticRawObj = (optimisticMsg.raw && typeof optimisticMsg.raw === 'object')
+    ? optimisticMsg.raw as Record<string, unknown>
+    : undefined;
+  const optimisticMsgField = optimisticRawObj?.message as Record<string, unknown> | undefined;
+  const optimisticContentBlocks: unknown[] = Array.isArray(optimisticMsgField?.content)
+    ? optimisticMsgField!.content as unknown[]
+    : [];
+  const optimisticFirstText = (optimisticContentBlocks[0] as Record<string, unknown> | undefined)?.text;
+
   const matchFn = (m: ClaudeMessage) =>
     m.type === 'user' &&
     (m.content === optimisticMsg.content ||
-      m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
+      m.content === optimisticFirstText) &&
     m.timestamp &&
     optimisticMsg.timestamp &&
     Math.abs(
@@ -97,27 +112,28 @@ export const appendOptimisticMessageIfMissing = (
   // Backend message matched the optimistic message.  Preserve attachment blocks
   // from the optimistic message into the backend message's raw data; otherwise
   // non-image file attachments won't be visible.
-  const optimisticRaw = optimisticMsg.raw as any;
-  const optimisticContent: unknown[] | undefined = optimisticRaw?.message?.content;
-  if (Array.isArray(optimisticContent)) {
-    const attachmentBlocks = optimisticContent.filter(
-      (b: any) => b && typeof b === 'object' && b.type === 'attachment',
+  if (optimisticContentBlocks.length > 0) {
+    const attachmentBlocks = optimisticContentBlocks.filter(
+      (b: unknown) => b && typeof b === 'object' && (b as Record<string, unknown>).type === 'attachment',
     );
     if (attachmentBlocks.length > 0) {
       const backendMsg = nextList[matchedIndex];
-      const backendRaw = (backendMsg.raw ?? {}) as any;
-      const backendContent: unknown[] = Array.isArray(backendRaw?.message?.content)
-        ? backendRaw.message.content
-        : Array.isArray(backendRaw?.content)
-          ? backendRaw.content
+      const backendRaw = (backendMsg.raw && typeof backendMsg.raw === 'object')
+        ? backendMsg.raw as Record<string, unknown>
+        : {} as Record<string, unknown>;
+      const backendMsgField = backendRaw.message as Record<string, unknown> | undefined;
+      const backendContent: unknown[] = Array.isArray(backendMsgField?.content)
+        ? backendMsgField!.content as unknown[]
+        : Array.isArray(backendRaw.content)
+          ? backendRaw.content as unknown[]
           : [];
       const mergedContent = [...attachmentBlocks, ...backendContent];
       const mergedRaw = {
         ...backendRaw,
-        message: { ...(backendRaw?.message ?? {}), content: mergedContent },
+        message: { ...(backendMsgField ?? {}), content: mergedContent },
       };
       const result = [...nextList];
-      result[matchedIndex] = { ...backendMsg, raw: mergedRaw };
+      result[matchedIndex] = { ...backendMsg, raw: mergedRaw as ClaudeMessage['raw'] };
       return result;
     }
   }
@@ -140,11 +156,12 @@ export const preserveLastAssistantIdentity = (
 
   const prevAssistant = prevList[prevAssistantIdx];
   const nextAssistant = nextList[nextAssistantIdx];
-  // Guard: do not merge identity across different streaming turns
-  // Only block when BOTH have __turnId and they differ; allow merge when either lacks __turnId (backward compat)
-  if (prevAssistant.__turnId !== undefined && nextAssistant.__turnId !== undefined &&
-      prevAssistant.__turnId !== nextAssistant.__turnId) {
-    return nextList;
+  // Guard: only preserve identity when both assistants prove they belong to the same turn.
+  // Missing nextAssistant.__turnId is treated as "cannot prove same turn", so fail closed.
+  if (prevAssistant.__turnId !== undefined) {
+    if (nextAssistant.__turnId === undefined || prevAssistant.__turnId !== nextAssistant.__turnId) {
+      return nextList;
+    }
   }
   const stabilized = preserveMessageIdentity(prevAssistant, nextAssistant);
   if (stabilized === nextAssistant) return nextList;
@@ -157,16 +174,19 @@ export const preserveLastAssistantIdentity = (
 /**
  * When streaming is active, prevent the backend from replacing the streamed
  * content with a shorter (stale) snapshot.
+ *
+ * Accepts primitive values (not refs) so callers can pass pre-snapshotted values,
+ * guaranteeing idempotent results under React StrictMode double-invocation.
  */
 export const preserveStreamingAssistantContent = (
   prevList: ClaudeMessage[],
   nextList: ClaudeMessage[],
-  isStreamingRef: MutableRefObject<boolean>,
-  streamingContentRef: MutableRefObject<string>,
+  isStreaming: boolean,
+  streamingContent: string,
   findLastAssistantIndex: (messages: ClaudeMessage[]) => number,
-  patchAssistantForStreaming: (msg: ClaudeMessage) => ClaudeMessage,
+  patchAssistantForStreaming: (msg: ClaudeMessage, patchState?: StreamingPatchState) => ClaudeMessage,
 ): ClaudeMessage[] => {
-  if (!isStreamingRef.current) return nextList;
+  if (!isStreaming) return nextList;
 
   const prevAssistantIdx = findLastAssistantIndex(prevList);
   const nextAssistantIdx = findLastAssistantIndex(nextList);
@@ -178,15 +198,16 @@ export const preserveStreamingAssistantContent = (
     return nextList;
   }
 
-  // Guard: do not merge content across different streaming turns
-  // Only block when BOTH have __turnId and they differ
-  if (prevAssistant.__turnId !== undefined && nextAssistant.__turnId !== undefined &&
-      prevAssistant.__turnId !== nextAssistant.__turnId) {
-    return nextList;
+  // Guard: only preserve streaming content when both assistants prove they belong to the same turn.
+  // Missing nextAssistant.__turnId is treated as "cannot prove same turn", so fail closed.
+  if (prevAssistant.__turnId !== undefined) {
+    if (nextAssistant.__turnId === undefined || prevAssistant.__turnId !== nextAssistant.__turnId) {
+      return nextList;
+    }
   }
 
   const previousContent = prevAssistant.content || '';
-  const bufferedContent = streamingContentRef.current || '';
+  const bufferedContent = streamingContent || '';
   const preferredContent =
     bufferedContent.length > previousContent.length ? bufferedContent : previousContent;
   const nextContent = nextAssistant.content || '';
@@ -200,6 +221,8 @@ export const preserveStreamingAssistantContent = (
     ...nextAssistant,
     content: preferredContent,
     isStreaming: true,
+  }, {
+    canonicalText: preferredContent,
   });
   return copy;
 };
@@ -236,13 +259,16 @@ export const preserveLatestMessagesOnShrink = (
 
 /**
  * Ensure a streaming assistant message is not lost when updateMessages replaces
- * the entire message list.  Returns the (possibly amended) result list and the
+ * the entire message list. Returns the (possibly amended) result list and the
  * index of the streaming assistant inside it.
  *
  * The function has two paths:
  * 1. Primary — refs are valid (normal streaming).
  * 2. Fallback — refs already cleared (race condition). Uses message-level
  *    `isStreaming` + `__turnId` markers to recover.
+ *
+ * Recovered assistants are inserted immediately after the latest user message in
+ * `resultList` so the current turn can never render assistant-before-user.
  */
 export const ensureStreamingAssistantInList = (
   prevList: ClaudeMessage[],
@@ -250,6 +276,19 @@ export const ensureStreamingAssistantInList = (
   isStreaming: boolean,
   streamingTurnId: number,
 ): { list: ClaudeMessage[]; streamingIndex: number } => {
+  const insertAfterLatestUser = (streamingAssistant: ClaudeMessage): { list: ClaudeMessage[]; streamingIndex: number } => {
+    for (let i = resultList.length - 1; i >= 0; i -= 1) {
+      if (resultList[i]?.type === 'user') {
+        const result = [...resultList];
+        result.splice(i + 1, 0, streamingAssistant);
+        return { list: result, streamingIndex: i + 1 };
+      }
+    }
+
+    const result = [...resultList, streamingAssistant];
+    return { list: result, streamingIndex: result.length - 1 };
+  };
+
   // Primary path: refs are still valid
   if (isStreaming && streamingTurnId > 0) {
     const existingIdx = resultList.findIndex(
@@ -260,7 +299,7 @@ export const ensureStreamingAssistantInList = (
     }
 
     let streamingAssistant: ClaudeMessage | undefined;
-    for (let i = prevList.length - 1; i >= 0; i--) {
+    for (let i = prevList.length - 1; i >= 0; i -= 1) {
       if (prevList[i].__turnId === streamingTurnId && prevList[i].type === 'assistant') {
         streamingAssistant = prevList[i];
         break;
@@ -268,8 +307,7 @@ export const ensureStreamingAssistantInList = (
     }
 
     if (streamingAssistant) {
-      const result = [...resultList, streamingAssistant];
-      return { list: result, streamingIndex: result.length - 1 };
+      return insertAfterLatestUser(streamingAssistant);
     }
 
     return { list: resultList, streamingIndex: -1 };
@@ -277,7 +315,7 @@ export const ensureStreamingAssistantInList = (
 
   // Fallback path: refs already cleared (race condition).
   // Only consider the most recent streaming assistant in prevList.
-  for (let i = prevList.length - 1; i >= 0; i--) {
+  for (let i = prevList.length - 1; i >= 0; i -= 1) {
     const msg = prevList[i];
     if (msg.type === 'assistant' && msg.isStreaming && msg.__turnId && msg.__turnId > 0) {
       const alreadyPresent = resultList.some((m) => {
@@ -286,12 +324,8 @@ export const ensureStreamingAssistantInList = (
         if (msg.timestamp && m.timestamp === msg.timestamp) return true;
         return false;
       });
-      const assistantAlreadyAtOrAfterPosition =
-        i < resultList.length && resultList.slice(i).some((m) => m.type === 'assistant');
-
-      if (!alreadyPresent && !assistantAlreadyAtOrAfterPosition) {
-        const result = [...resultList, msg];
-        return { list: result, streamingIndex: result.length - 1 };
+      if (!alreadyPresent) {
+        return insertAfterLatestUser(msg);
       }
       // Already in resultList — no recovery needed
       break;

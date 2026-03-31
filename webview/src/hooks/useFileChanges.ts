@@ -192,7 +192,7 @@ function isSuccessfulResult(result?: ToolResultBlock | null): boolean {
 interface UseFileChangesParams {
   messages: ClaudeMessage[];
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
-  findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
+  findToolResult: (toolUseId?: string, messageIndex?: number, anchorMessage?: ClaudeMessage) => ToolResultBlock | null;
   /** Start processing messages from this index (for Keep All feature) */
   startFromIndex?: number;
 }
@@ -235,7 +235,7 @@ export function useFileChanges({
         if (!filePath) return;
 
         // Check if operation completed successfully
-        const result = findToolResult(block.id, messageIndex);
+        const result = findToolResult(block.id, messageIndex, message);
         if (!isSuccessfulResult(result)) return;
 
         const { oldString, newString, replaceAll } = extractStrings(input);

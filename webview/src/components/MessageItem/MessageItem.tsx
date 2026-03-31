@@ -28,7 +28,7 @@ export interface MessageItemProps {
   t: TFunction;
   getMessageText: (message: ClaudeMessage) => string;
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
-  findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
+  findToolResult: (toolId: string | undefined, messageIndex: number, anchorMessage?: ClaudeMessage) => ToolResultBlock | null | undefined;
   extractMarkdownContent: (message: ClaudeMessage) => string;
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
@@ -376,7 +376,7 @@ export const MessageItem = memo(function MessageItem({
           return {
             name: block.name,
             input: block.input,
-            result: findToolResult(block.id, messageIndex),
+            result: findToolResult(block.id, messageIndex, message),
           };
         });
 
@@ -401,7 +401,7 @@ export const MessageItem = memo(function MessageItem({
           return {
             name: block.name,
             input: block.input,
-            result: findToolResult(block.id, messageIndex),
+            result: findToolResult(block.id, messageIndex, message),
           };
         });
 
@@ -430,7 +430,7 @@ export const MessageItem = memo(function MessageItem({
           return {
             name: block.name,
             input: block.input,
-            result: findToolResult(block.id, messageIndex),
+            result: findToolResult(block.id, messageIndex, message),
             toolId: block.id,
           };
         });
@@ -461,7 +461,7 @@ export const MessageItem = memo(function MessageItem({
           return {
             name: block.name,
             input: block.input,
-            result: findToolResult(block.id, messageIndex),
+            result: findToolResult(block.id, messageIndex, message),
           };
         });
 
@@ -470,6 +470,7 @@ export const MessageItem = memo(function MessageItem({
             <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
               <ContentBlockRenderer
                 block={grouped.blocks[0]}
+                message={message}
                 messageIndex={messageIndex}
                 messageType={message.type}
                 isStreaming={isMessageStreaming}
@@ -498,6 +499,7 @@ export const MessageItem = memo(function MessageItem({
         <div key={`${messageIndex}-${blockIndex}`} className="content-block">
           <ContentBlockRenderer
             block={block}
+            message={message}
             messageIndex={messageIndex}
             messageType={message.type}
             isStreaming={isMessageStreaming}

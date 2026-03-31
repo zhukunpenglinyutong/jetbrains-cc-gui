@@ -11,24 +11,38 @@ import { sendBridgeEvent } from '../../utils/bridge';
 const MAX_RETRIES = 30;
 
 /**
+ * Retry a callback until `window.sendToJava` is available.
+ * Guards against timer firing after test environment teardown (jsdom removed).
+ * Extracted to deduplicate the identical retry-with-timeout pattern (N2).
+ */
+const retryUntilBridgeReady = (action: () => void): void => {
+  let retryCount = 0;
+  const attempt = () => {
+    if (typeof window === 'undefined') return;
+    if (window.sendToJava) {
+      action();
+    } else {
+      retryCount += 1;
+      if (retryCount < MAX_RETRIES) {
+        setTimeout(attempt, 100);
+      }
+    }
+  };
+  setTimeout(attempt, 200);
+};
+
+/**
  * Fire the three settings queries to the backend.  Retries up to MAX_RETRIES
  * times (at 100 ms intervals) if window.sendToJava is not yet available.
  */
 export const startInitialSettingsRequest = (): void => {
-  let settingsRetryCount = 0;
-  const requestInitialSettings = () => {
-    if (window.sendToJava) {
-      window.sendToJava('get_streaming_enabled:');
-      window.sendToJava('get_send_shortcut:');
-      window.sendToJava('get_auto_open_file_enabled:');
-    } else {
-      settingsRetryCount++;
-      if (settingsRetryCount < MAX_RETRIES) {
-        setTimeout(requestInitialSettings, 100);
-      }
-    }
-  };
-  setTimeout(requestInitialSettings, 200);
+  retryUntilBridgeReady(() => {
+    // Non-null assertion safe: retryUntilBridgeReady only calls action() after
+    // confirming window.sendToJava is truthy.
+    window.sendToJava!('get_streaming_enabled:');
+    window.sendToJava!('get_send_shortcut:');
+    window.sendToJava!('get_auto_open_file_enabled:');
+  });
 };
 
 /**
@@ -36,54 +50,21 @@ export const startInitialSettingsRequest = (): void => {
  * available.
  */
 export const startActiveProviderRequest = (): void => {
-  let retryCount = 0;
-  const requestActiveProvider = () => {
-    if (window.sendToJava) {
-      sendBridgeEvent('get_active_provider');
-    } else {
-      retryCount++;
-      if (retryCount < MAX_RETRIES) {
-        setTimeout(requestActiveProvider, 100);
-      }
-    }
-  };
-  setTimeout(requestActiveProvider, 200);
+  retryUntilBridgeReady(() => sendBridgeEvent('get_active_provider'));
 };
 
 /**
  * Request the current permission mode from the backend.
  */
 export const startModeRequest = (): void => {
-  let modeRetryCount = 0;
-  const requestMode = () => {
-    if (window.sendToJava) {
-      sendBridgeEvent('get_mode');
-    } else {
-      modeRetryCount++;
-      if (modeRetryCount < MAX_RETRIES) {
-        setTimeout(requestMode, 100);
-      }
-    }
-  };
-  setTimeout(requestMode, 200);
+  retryUntilBridgeReady(() => sendBridgeEvent('get_mode'));
 };
 
 /**
  * Request the thinking-enabled setting from the backend.
  */
 export const startThinkingEnabledRequest = (): void => {
-  let thinkingRetryCount = 0;
-  const requestThinkingEnabled = () => {
-    if (window.sendToJava) {
-      sendBridgeEvent('get_thinking_enabled');
-    } else {
-      thinkingRetryCount++;
-      if (thinkingRetryCount < MAX_RETRIES) {
-        setTimeout(requestThinkingEnabled, 100);
-      }
-    }
-  };
-  setTimeout(requestThinkingEnabled, 200);
+  retryUntilBridgeReady(() => sendBridgeEvent('get_thinking_enabled'));
 };
 
 /**

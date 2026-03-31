@@ -1,16 +1,164 @@
 import type { TFunction } from 'i18next';
-import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
+import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage, ToolResultBlock } from '../types';
 
 /**
  * Generate a stable key for a message, used for React list keys and anchor navigation.
- * Prefer raw.uuid > __turnId > type-timestamp > fallback to type-index.
+ * Prefer raw.uuid > __turnId > __renderKey > type-timestamp > content signature fallback.
  */
 export function getMessageKey(message: ClaudeMessage, index: number): string {
   const rawObj = typeof message.raw === 'object' ? message.raw as Record<string, unknown> : null;
-  if (rawObj?.uuid) return rawObj.uuid as string;
-  if (message.__turnId !== undefined) return `turn-${message.__turnId}`;
-  return message.timestamp ? `${message.type}-${message.timestamp}` : `${message.type}-${index}`;
+  if (typeof rawObj?.uuid === 'string') return rawObj.uuid;
+  if (message.__turnId !== undefined) {
+    return `turn-${message.__turnId}`;
+  }
+  if (typeof message.__renderKey === 'string' && message.__renderKey.trim().length > 0) {
+    return message.__renderKey;
+  }
+  if (message.timestamp) {
+    return `${message.type}-${message.timestamp}`;
+  }
+
+  const rawContent = typeof message.raw === 'object'
+    ? (message.raw.content ?? message.raw.message?.content)
+    : message.raw;
+  const signatureSource = typeof rawContent === 'string'
+    ? rawContent
+    : Array.isArray(rawContent)
+      ? JSON.stringify(rawContent)
+      : message.content ?? '';
+  const normalizedSignature = signatureSource
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120) || 'empty';
+
+  return `${message.type}-${normalizedSignature}-${index}`;
 }
+
+export function findToolResultBlock(
+  messages: ClaudeMessage[],
+  toolUseId: string | undefined,
+  messageIndex: number,
+  anchorMessage?: ClaudeMessage,
+): ToolResultBlock | null {
+  if (!toolUseId || messageIndex < 0) return null;
+
+  const collectToolResults = (message: ClaudeMessage): ToolResultBlock[] => {
+    const raw = message.raw;
+    if (!raw || typeof raw === 'string') return [];
+    const content = raw.content ?? raw.message?.content;
+    if (!Array.isArray(content)) return [];
+    return content.filter(
+      (block): block is ToolResultBlock =>
+        Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
+    );
+  };
+
+  const resolveAnchorIndex = (): number => {
+    if (!anchorMessage) {
+      return messageIndex < messages.length ? messageIndex : -1;
+    }
+
+    const sourceRange = anchorMessage.__sourceRange;
+    if (sourceRange) {
+      return sourceRange.start >= 0 && sourceRange.start < messages.length ? sourceRange.start : -1;
+    }
+
+    const rawObj = typeof anchorMessage.raw === 'object' ? anchorMessage.raw as Record<string, unknown> : null;
+    const anchorUuid = typeof rawObj?.uuid === 'string' ? rawObj.uuid : undefined;
+    if (anchorUuid) {
+      const byUuid = messages.findIndex((message) => {
+        const candidateRaw = typeof message.raw === 'object' ? message.raw as Record<string, unknown> : null;
+        return candidateRaw?.uuid === anchorUuid;
+      });
+      if (byUuid >= 0) return byUuid;
+      return -1;
+    }
+
+    if (anchorMessage.__turnId !== undefined) {
+      const byTurnId = messages.findIndex(
+        (message) => message.type === 'assistant' && message.__turnId === anchorMessage.__turnId,
+      );
+      if (byTurnId >= 0) return byTurnId;
+      return -1;
+    }
+
+    if (messageIndex < messages.length) {
+      const indexedMessage = messages[messageIndex];
+      if (indexedMessage === anchorMessage) {
+        return messageIndex;
+      }
+
+      const indexedRaw = typeof indexedMessage?.raw === 'object' ? indexedMessage.raw as Record<string, unknown> : null;
+      const anchorRaw = typeof anchorMessage.raw === 'object' ? anchorMessage.raw as Record<string, unknown> : null;
+      if (indexedRaw && anchorRaw && indexedRaw === anchorRaw) {
+        return messageIndex;
+      }
+    }
+
+    return -1;
+  };
+
+  const resolveSearchRange = (anchorIndex: number): { start: number; end: number } => {
+    const anchor = anchorMessage ?? messages[anchorIndex];
+    const anchorTurnId = anchor?.__turnId;
+
+    if (anchorTurnId !== undefined) {
+      let start = anchorIndex;
+      let end = anchorIndex;
+      while (start > 0 && messages[start - 1]?.__turnId === anchorTurnId) {
+        start -= 1;
+      }
+      while (end + 1 < messages.length && messages[end + 1]?.__turnId === anchorTurnId) {
+        end += 1;
+      }
+      return { start, end };
+    }
+
+    if (anchor?.__sourceRange) {
+      return {
+        start: Math.max(0, anchor.__sourceRange.start),
+        end: Math.min(messages.length - 1, anchor.__sourceRange.end),
+      };
+    }
+
+    return { start: anchorIndex, end: anchorIndex };
+  };
+
+  const scanToolResultInRange = (
+    start: number,
+    end: number,
+    stopAtAssistantBoundary: boolean,
+  ): ToolResultBlock | null => {
+    for (let i = start; i <= end; i += 1) {
+      const result = collectToolResults(messages[i])[0];
+      if (result) return result;
+    }
+
+    for (let i = end + 1; i < messages.length; i += 1) {
+      const candidate = messages[i];
+      if (stopAtAssistantBoundary && candidate?.type === 'assistant') break;
+      const result = collectToolResults(candidate)[0];
+      if (result) return result;
+    }
+
+    for (let i = start - 1; i >= 0; i -= 1) {
+      const candidate = messages[i];
+      if (stopAtAssistantBoundary && candidate?.type === 'assistant') break;
+      const result = collectToolResults(candidate)[0];
+      if (result) return result;
+    }
+
+    return null;
+  };
+
+  const anchorIndex = resolveAnchorIndex();
+  if (anchorIndex < 0 || anchorIndex >= messages.length) return null;
+
+  const searchRange = resolveSearchRange(anchorIndex);
+  const anchor = anchorMessage ?? messages[anchorIndex];
+  return scanToolResultInRange(searchRange.start, searchRange.end, anchor?.__turnId === undefined);
+}
+
 
 /**
  * Extract content from <command-message> and <command-args> tags if present.
@@ -356,7 +504,8 @@ export function getContentBlocks(
 ): ClaudeContentBlock[] {
   const rawBlocks = normalizeBlocksFn(message.raw);
   if (rawBlocks && rawBlocks.length > 0) {
-    // Streaming/tool scenario: if raw doesn't have text but message.content has text, still need to show text
+    // Streaming/tool scenario: if raw doesn't have text but message.content has text,
+    // append the final assistant text after existing blocks so tool anchoring stays intact.
     const hasTextBlock = rawBlocks.some(
       (block) => block.type === 'text' && typeof (block as any).text === 'string' && String((block as any).text).trim().length > 0,
     );
@@ -384,43 +533,66 @@ export function mergeConsecutiveAssistantMessages(
 ): ClaudeMessage[] {
   if (messages.length === 0) return [];
 
-  const getStableId = (message: ClaudeMessage, index: number): string => {
-    const rawObj = typeof message.raw === 'object' ? (message.raw as Record<string, unknown> | null) : null;
-    const uuid = rawObj?.uuid;
-    if (typeof uuid === 'string' && uuid) return uuid;
-    if (message.timestamp) return `${message.type}-${message.timestamp}`;
-    return `${message.type}-${index}`;
+  const getStableId = (message: ClaudeMessage, index: number): string => getMessageKey(message, index);
+
+  const getRenderableBlocks = (message: ClaudeMessage): ClaudeContentBlock[] =>
+    normalizeBlocksFn(message.raw) || [];
+
+  const hasToolResultBlock = (message: ClaudeMessage): boolean => {
+    const raw = message.raw;
+    if (!raw || typeof raw !== 'object') return false;
+    const content = raw.content ?? raw.message?.content;
+    return Array.isArray(content) && content.some((block) => block && typeof block === 'object' && (block as Record<string, unknown>).type === 'tool_result');
   };
 
-  const getAssistantBlockSummary = (message: ClaudeMessage): { hasToolUse: boolean; hasText: boolean } => {
-    const blocks = normalizeBlocksFn(message.raw) || [];
-    return {
-      hasToolUse: blocks.some((block) => block.type === 'tool_use'),
-      hasText: blocks.some((block) => block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0)
-        || Boolean(message.content && message.content.trim()),
-    };
-  };
+  const hasMeaningfulRenderableBlocks = (message: ClaudeMessage): boolean =>
+    getRenderableBlocks(message).some((block) => {
+      if (block.type === 'text') {
+        return Boolean(block.text && block.text.trim().length > 0);
+      }
+      if (block.type === 'thinking') {
+        const thinkingText = block.thinking ?? block.text ?? '';
+        return thinkingText.trim().length > 0;
+      }
+      return true;
+    });
 
-  const shouldMergeAssistantMessage = (previous: ClaudeMessage, next: ClaudeMessage): boolean => {
-    const previousSummary = getAssistantBlockSummary(previous);
-    const nextSummary = getAssistantBlockSummary(next);
+  const hasFallbackMergeAnchor = (message: ClaudeMessage): boolean =>
+    getRenderableBlocks(message).some((block) => {
+      if (block.type === 'thinking') {
+        const thinkingText = block.thinking ?? block.text ?? '';
+        return thinkingText.trim().length > 0;
+      }
+      return block.type === 'tool_use';
+    });
 
-    // Keep tool-execution assistant messages separated from the final answer.
-    if (previousSummary.hasToolUse !== nextSummary.hasToolUse) {
+  const canMergeAssistantPair = (left: ClaudeMessage, right: ClaudeMessage): boolean => {
+    if (left.type !== 'assistant' || right.type !== 'assistant') return false;
+    if (left.isStreaming || right.isStreaming) return false;
+
+    if (left.__turnId !== undefined || right.__turnId !== undefined) {
+      return left.__turnId !== undefined && right.__turnId !== undefined && left.__turnId === right.__turnId;
+    }
+
+    if (hasToolResultBlock(left) || hasToolResultBlock(right)) {
       return false;
     }
 
-    return true;
+    if (!hasFallbackMergeAnchor(left) && !hasFallbackMergeAnchor(right)) {
+      return false;
+    }
+
+    return hasMeaningfulRenderableBlocks(left) || hasMeaningfulRenderableBlocks(right);
   };
 
-  const buildMergedAssistantMessage = (group: ClaudeMessage[]): ClaudeMessage => {
+  const buildMergedAssistantMessage = (group: ClaudeMessage[], startIndex: number, endIndex: number): ClaudeMessage => {
     const first = group[0];
 
     const combinedBlocks: ClaudeContentBlock[] = [];
     const contentParts: string[] = [];
 
     for (const msg of group) {
-      const blocks = normalizeBlocksFn(msg.raw) || [];
+      const blocks = getRenderableBlocks(msg);
       if (blocks.length > 0) {
         combinedBlocks.push(...blocks);
       }
@@ -435,19 +607,26 @@ export function mergeConsecutiveAssistantMessages(
     const rawBase: ClaudeRawMessage =
       (typeof first.raw === 'object' && first.raw ? { ...(first.raw as ClaudeRawMessage) } : ({} as ClaudeRawMessage));
 
+    const mergedContent = contentParts.join('\n');
+    const mergedBlocks: ClaudeRawMessage['message'] extends { content?: infer T } ? Exclude<T, string | undefined> : ClaudeContentBlock[] = combinedBlocks.length > 0
+      ? combinedBlocks
+      : mergedContent
+        ? [{ type: 'text' as const, text: mergedContent }]
+        : [];
+
     const nextRaw: ClaudeRawMessage = {
       ...rawBase,
-      content: combinedBlocks,
-      message: rawBase.message ? { ...rawBase.message, content: combinedBlocks } : rawBase.message,
+      content: mergedBlocks,
+      message: rawBase.message ? { ...rawBase.message, content: mergedBlocks } : { content: mergedBlocks },
     };
-
-    const mergedContent = contentParts.join('\n');
 
     return {
       ...first,
       content: mergedContent,
       raw: nextRaw,
       __turnId: first.__turnId,
+      __sourceRange: { start: startIndex, end: endIndex },
+      __renderKey: `${getStableId(group[0], startIndex)}..${getStableId(group[group.length - 1], endIndex)}#${group.length}`,
     };
   };
 
@@ -462,7 +641,10 @@ export function mergeConsecutiveAssistantMessages(
     }
 
     let j = i + 1;
-    while (j < messages.length && messages[j].type === 'assistant' && shouldMergeAssistantMessage(messages[j - 1], messages[j])) {
+    while (
+      j < messages.length &&
+      canMergeAssistantPair(messages[j - 1], messages[j])
+    ) {
       j += 1;
     }
 
@@ -489,7 +671,7 @@ export function mergeConsecutiveAssistantMessages(
       }
     }
 
-    const merged = buildMergedAssistantMessage(group);
+    const merged = buildMergedAssistantMessage(group, i, j - 1);
     if (cache) {
       cache.set(groupKey, { source: group, merged });
       if (cache.size > MESSAGE_MERGE_CACHE_LIMIT) {

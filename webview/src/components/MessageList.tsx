@@ -31,7 +31,7 @@ function getMessageToolResultSignature(
   message: ClaudeMessage,
   messageIndex: number,
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[],
-  findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined,
+  findToolResult: (toolId: string | undefined, messageIndex: number, anchorMessage?: ClaudeMessage) => ToolResultBlock | null | undefined,
 ): string {
   const toolUses = getContentBlocks(message).filter(
     (block): block is Extract<ClaudeContentBlock, { type: 'tool_use' }> => block.type === 'tool_use',
@@ -39,7 +39,7 @@ function getMessageToolResultSignature(
   if (toolUses.length === 0) return '';
 
   return toolUses
-    .map((block) => `${block.id ?? 'unknown'}:${extractToolResultPreview(findToolResult(block.id, messageIndex))}`)
+    .map((block) => `${block.id ?? 'unknown'}:${extractToolResultPreview(findToolResult(block.id, messageIndex, message))}`)
     .join('|');
 }
 
@@ -52,7 +52,7 @@ interface MessageListProps {
   t: TFunction;
   getMessageText: (message: ClaudeMessage) => string;
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
-  findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
+  findToolResult: (toolId: string | undefined, messageIndex: number, anchorMessage?: ClaudeMessage) => ToolResultBlock | null | undefined;
   extractMarkdownContent: (message: ClaudeMessage) => string;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   onMessageNodeRef?: (id: string, node: HTMLDivElement | null) => void;
@@ -88,15 +88,15 @@ export const MessageList = memo(function MessageList({
     }
   }, [ctxMenu.open]);
 
-  // Reset showAll when a new session starts (first message ID changes)
-  const firstMsgIdRef = useRef(messages[0]?.id);
+  // Reset showAll when a new session starts (first rendered message identity changes)
+  const firstMessageKey = messages[0] ? getMessageKey(messages[0], 0) : undefined;
+  const firstMsgIdRef = useRef(firstMessageKey);
   useEffect(() => {
-    const currentFirstId = messages[0]?.id;
-    if (currentFirstId !== firstMsgIdRef.current) {
+    if (firstMessageKey !== firstMsgIdRef.current) {
       setShowAll(false);
     }
-    firstMsgIdRef.current = currentFirstId;
-  }, [messages]);
+    firstMsgIdRef.current = firstMessageKey;
+  }, [firstMessageKey]);
 
   const shouldCollapse = !showAll && messages.length > VISIBLE_MESSAGE_WINDOW;
   const collapsedCount = shouldCollapse ? messages.length - VISIBLE_MESSAGE_WINDOW : 0;

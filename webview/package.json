@@ -8,7 +8,7 @@
     "prebuild": "node scripts/extract-version.mjs",
     "build": "tsc && vite build",
     "postbuild": "node scripts/copy-dist.mjs",
-    "test": "vitest run && tsc -p tsconfig.test.json --noEmit",
+    "test": "node scripts/run-tests.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import type { ClaudeContentBlock, ToolResultBlock } from '../../types';
+import type { ClaudeContentBlock, ClaudeMessage, ToolResultBlock } from '../../types';
 
 import MarkdownBlock from '../MarkdownBlock';
 import CollapsibleTextBlock from '../CollapsibleTextBlock';
@@ -34,6 +34,7 @@ function getExtension(fileName?: string): string {
 
 export interface ContentBlockRendererProps {
   block: ClaudeContentBlock;
+  message: ClaudeMessage;
   messageIndex: number;
   messageType: string;
   isStreaming: boolean;
@@ -43,11 +44,12 @@ export interface ContentBlockRendererProps {
   isLastBlock?: boolean;
   t: TFunction;
   onToggleThinking: () => void;
-  findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
+  findToolResult: (toolId: string | undefined, messageIndex: number, anchorMessage?: ClaudeMessage) => ToolResultBlock | null | undefined;
 }
 
 export function ContentBlockRenderer({
   block,
+  message,
   messageIndex,
   messageType,
   isStreaming,
@@ -182,7 +184,7 @@ export function ContentBlockRenderer({
         <TaskExecutionBlock
           name={block.name}
           input={block.input}
-          result={findToolResult(block.id, messageIndex)}
+          result={findToolResult(block.id, messageIndex, message)}
         />
       );
     }
@@ -192,7 +194,7 @@ export function ContentBlockRenderer({
         <EditToolBlock
           name={block.name}
           input={block.input}
-          result={findToolResult(block.id, messageIndex)}
+          result={findToolResult(block.id, messageIndex, message)}
           toolId={block.id}
         />
       );
@@ -203,7 +205,7 @@ export function ContentBlockRenderer({
         <BashToolBlock
           name={block.name}
           input={block.input}
-          result={findToolResult(block.id, messageIndex)}
+          result={findToolResult(block.id, messageIndex, message)}
           toolId={block.id}
         />
       );
@@ -213,7 +215,7 @@ export function ContentBlockRenderer({
       <GenericToolBlock
         name={block.name}
         input={block.input}
-        result={findToolResult(block.id, messageIndex)}
+        result={findToolResult(block.id, messageIndex, message)}
         toolId={block.id}
       />
     );

@@ -18,7 +18,6 @@ export interface ResetTransientUiStateOptions {
 
   // Streaming refs
   isStreamingRef: MutableRefObject<boolean>;
-  useBackendStreamingRenderRef: MutableRefObject<boolean>;
   streamingMessageIndexRef: MutableRefObject<number>;
   streamingContentRef: MutableRefObject<string>;
   streamingTextSegmentsRef: MutableRefObject<string[]>;
@@ -48,7 +47,6 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
     opts.setIsThinking(false);
     opts.setStreamingActive(false);
     opts.isStreamingRef.current = false;
-    opts.useBackendStreamingRenderRef.current = false;
     opts.streamingMessageIndexRef.current = -1;
     opts.streamingContentRef.current = '';
     opts.streamingTextSegmentsRef.current = [];

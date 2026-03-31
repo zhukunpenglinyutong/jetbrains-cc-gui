@@ -29,6 +29,7 @@ import { formatTime } from './utils/helpers';
 import { extractMarkdownContent } from './utils/copyUtils';
 import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
 import { extractTodosFromToolUse } from './utils/todoToolNormalization';
+import { findToolResultBlock } from './utils/messageUtils';
 import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/types';
 import { StatusPanel, StatusPanelErrorBoundary } from './components/StatusPanel';
 import { ToastContainer, type ToastMessage } from './components/Toast';
@@ -132,14 +133,14 @@ const App = () => {
 
   // ── Streaming messages ──
   const {
-    streamingContentRef, isStreamingRef, useBackendStreamingRenderRef,
+    streamingContentRef, isStreamingRef,
     streamingMessageIndexRef, streamingTextSegmentsRef, activeTextSegmentIndexRef,
     streamingThinkingSegmentsRef, activeThinkingSegmentIndexRef,
     seenToolUseCountRef, contentUpdateTimeoutRef, thinkingUpdateTimeoutRef,
     lastContentUpdateRef, lastThinkingUpdateRef, autoExpandedThinkingKeysRef,
     streamingTurnIdRef, turnIdCounterRef,
     findLastAssistantIndex, extractRawBlocks,
-    getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
+    findStreamingAssistantIndex, patchAssistantForStreaming,
   } = useStreamingMessages();
 
   // ── Toast helpers ──
@@ -237,7 +238,7 @@ const App = () => {
     setContextInfo, setSelectedAgent,
     currentProviderRef, messagesContainerRef, isUserAtBottomRef, userPausedRef,
     suppressNextStatusToastRef,
-    streamingContentRef, isStreamingRef, useBackendStreamingRenderRef,
+    streamingContentRef, isStreamingRef,
     autoExpandedThinkingKeysRef,
     streamingTextSegmentsRef, activeTextSegmentIndexRef,
     streamingThinkingSegmentsRef, activeThinkingSegmentIndexRef,
@@ -246,7 +247,7 @@ const App = () => {
     lastContentUpdateRef, contentUpdateTimeoutRef,
     lastThinkingUpdateRef, thinkingUpdateTimeoutRef,
     findLastAssistantIndex, extractRawBlocks,
-    getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
+    findStreamingAssistantIndex, patchAssistantForStreaming,
     syncActiveProviderModelMapping,
     openPermissionDialog, openAskUserQuestionDialog, openPlanApprovalDialog,
     customSessionTitleRef, currentSessionIdRef, updateHistoryTitle,
@@ -261,22 +262,9 @@ const App = () => {
   // Find tool result (stable ref to avoid re-renders)
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
-  const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
+  const findToolResult = useCallback((toolUseId?: string, messageIndex?: number, anchorMessage?: ClaudeMessage): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') return null;
-    const currentMessages = messagesRef.current;
-    for (let i = 0; i < currentMessages.length; i += 1) {
-      const candidate = currentMessages[i];
-      const raw = candidate.raw;
-      if (!raw || typeof raw === 'string') continue;
-      const content = raw.content ?? raw.message?.content;
-      if (!Array.isArray(content)) continue;
-      const resultBlock = content.find(
-        (block): block is ToolResultBlock =>
-          Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
-      );
-      if (resultBlock) return resultBlock;
-    }
-    return null;
+    return findToolResultBlock(messagesRef.current, toolUseId, messageIndex, anchorMessage);
   }, []);
 
   // ── Message sender ──

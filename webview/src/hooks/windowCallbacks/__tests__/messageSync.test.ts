@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { MutableRefObject } from 'react';
 import type { ClaudeMessage } from '../../../types';
 import {
   OPTIMISTIC_MESSAGE_TIME_WINDOW,
@@ -15,8 +14,6 @@ import {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const ref = <T>(value: T): MutableRefObject<T> => ({ current: value });
 
 const findLastAssistantIndex = (msgs: ClaudeMessage[]): number =>
   msgs.reduce((acc, m, i) => (m.type === 'assistant' ? i : acc), -1);
@@ -291,12 +288,33 @@ describe('preserveLastAssistantIdentity', () => {
 // ---------------------------------------------------------------------------
 
 describe('preserveStreamingAssistantContent', () => {
+  it('preserves longer backend-upgraded canonical content across later shorter snapshots', () => {
+    const localPatchAssistantForStreaming = (msg: ClaudeMessage): ClaudeMessage => ({
+      ...msg,
+      isStreaming: true,
+    });
+    const prev = [makeAssistantMsg('abcdef')];
+    const shorterNext = [makeAssistantMsg('abc')];
+
+    const result = preserveStreamingAssistantContent(
+      prev,
+      shorterNext,
+      true,
+      'abcdef',
+      findLastAssistantIndex,
+      localPatchAssistantForStreaming,
+    );
+
+    expect(result[0].content).toBe('abcdef');
+    expect(result[0].isStreaming).toBe(true);
+  });
+
   it('returns nextList unchanged when not streaming', () => {
     const prev = [makeAssistantMsg('streamed long content here')];
     const next = [makeAssistantMsg('short')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(false), ref('streamed long content here'),
+      prev, next, false, 'streamed long content here',
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result).toBe(next);
@@ -307,7 +325,7 @@ describe('preserveStreamingAssistantContent', () => {
     const next = [makeAssistantMsg('response')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(''),
+      prev, next, true, '',
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result).toBe(next);
@@ -318,7 +336,7 @@ describe('preserveStreamingAssistantContent', () => {
     const next = [makeUserMsg('user reply')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(''),
+      prev, next, true, '',
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result).toBe(next);
@@ -329,7 +347,7 @@ describe('preserveStreamingAssistantContent', () => {
     const next = [makeAssistantMsg('longer backend content')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref('short'),
+      prev, next, true, 'short',
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result).toBe(next);
@@ -341,7 +359,7 @@ describe('preserveStreamingAssistantContent', () => {
     const next = [makeAssistantMsg('short stale')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(longStreamed),
+      prev, next, true, longStreamed,
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result).not.toBe(next);
@@ -356,7 +374,7 @@ describe('preserveStreamingAssistantContent', () => {
     const next = [makeAssistantMsg('stale short')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(bufferedContent),
+      prev, next, true, bufferedContent,
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result[0].content).toBe(bufferedContent);
@@ -368,7 +386,7 @@ describe('preserveStreamingAssistantContent', () => {
     const next = [makeAssistantMsg('short stale')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(''),
+      prev, next, true, '',
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result[0].content).toBe(prevContent);
@@ -380,7 +398,7 @@ describe('preserveStreamingAssistantContent', () => {
     const next = [makeUserMsg('q'), makeAssistantMsg('stale snapshot')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(longContent),
+      prev, next, true, longContent,
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result[0]).toBe(next[0]); // user message unchanged
@@ -393,34 +411,52 @@ describe('preserveStreamingAssistantContent', () => {
     const next = [makeAssistantMsg('short', { __turnId: 2 })];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(longContent),
+      prev, next, true, longContent,
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result).toBe(next);
   });
 
-  it('allows merge when both have same turn ID', () => {
-    const longContent = 'long streamed content';
+  it('does not merge content when next assistant is missing turn ID', () => {
+    const longContent = 'long content from turn 1';
     const prev = [makeAssistantMsg(longContent, { __turnId: 1 })];
-    const next = [makeAssistantMsg('short', { __turnId: 1 })];
-
-    const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(longContent),
-      findLastAssistantIndex, patchAssistantForStreaming,
-    );
-    expect(result[0].content).toBe(longContent);
-  });
-
-  it('allows merge when neither has turn ID (backward compat)', () => {
-    const longContent = 'long content without turn ID';
-    const prev = [makeAssistantMsg(longContent)];
     const next = [makeAssistantMsg('short')];
 
     const result = preserveStreamingAssistantContent(
-      prev, next, ref(true), ref(longContent),
+      prev, next, true, longContent,
       findLastAssistantIndex, patchAssistantForStreaming,
     );
-    expect(result[0].content).toBe(longContent);
+    expect(result).toBe(next);
+    expect(result[0].content).toBe('short');
+  });
+
+
+  it('prefers previous longer content when backend snapshot text is shorter during streaming', () => {
+    const prev = [
+      makeAssistantMsg('complete streamed answer', {
+        raw: {
+          message: {
+            content: [{ type: 'text', text: 'complete streamed answer' }],
+          },
+        } as any,
+      }),
+    ];
+    const next = [
+      makeAssistantMsg('partial', {
+        raw: {
+          message: {
+            content: [{ type: 'text', text: 'partial' }],
+          },
+        } as any,
+      }),
+    ];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, true, 'complete streamed answer',
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+
+    expect(result[0].content).toBe('complete streamed answer');
   });
 });
 
@@ -457,13 +493,14 @@ describe('preserveLastAssistantIdentity — turn ID guards', () => {
     expect(result[0].timestamp).toBe(prevTs);
   });
 
-  it('allows merge when only one has turn ID (Java message without turnId)', () => {
+  it('does not merge identity when next assistant is missing turn ID', () => {
     const prevTs = '2024-01-01T10:00:00.000Z';
     const prev = [makeAssistantMsg('a1', { timestamp: prevTs, __turnId: 1 })];
     const next = [makeAssistantMsg('a1', { timestamp: '2024-01-01T10:00:01.000Z' })];
 
     const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
-    expect(result[0].timestamp).toBe(prevTs);
+    expect(result).toBe(next);
+    expect(result[0].timestamp).toBe('2024-01-01T10:00:01.000Z');
   });
 });
 
@@ -492,6 +529,19 @@ describe('ensureStreamingAssistantInList', () => {
     expect(list).toHaveLength(2);
     expect(list[1]).toBe(streamingMsg);
     expect(streamingIndex).toBe(1);
+  });
+
+  it('repositions recovered streaming assistant after the latest user message in resultList', () => {
+    const previousUser = makeUserMsg('old user');
+    const currentUser = makeUserMsg('current user');
+    const streamingMsg = makeAssistantMsg('streaming content', { __turnId: 7, isStreaming: true });
+    const prev = [previousUser, streamingMsg];
+    const result = [previousUser, currentUser];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, true, 7);
+
+    expect(list).toEqual([previousUser, currentUser, streamingMsg]);
+    expect(streamingIndex).toBe(2);
   });
 
   // ---- Fallback path (refs cleared — race condition) ----

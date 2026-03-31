@@ -102,7 +102,7 @@ Manages streaming message state and rendering helpers.
 - `streamingContentRef`, `isStreamingRef` - Current streaming state
 - `findLastAssistantIndex()` - Find last assistant message
 - `extractRawBlocks()` - Extract content blocks from raw message
-- `getOrCreateStreamingAssistantIndex()` - Get/create streaming message index
+- `findStreamingAssistantIndex()` - Find streaming assistant message index
 - `patchAssistantForStreaming()` - Patch message with streaming segments
 
 ### useDialogManagement

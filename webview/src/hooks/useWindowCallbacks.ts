@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
 import type { MutableRefObject, RefObject } from 'react';
 import type { ClaudeMessage, ClaudeRawMessage, HistoryData } from '../types';
+import type { StreamingPatchState, ContentBlock } from './useStreamingMessages';
 import type { PermissionMode, SelectedAgent } from '../components/ChatInputBox/types';
 import type { ProviderConfig } from '../types/provider';
 import type { PermissionRequest } from '../components/PermissionDialog';
@@ -67,7 +68,6 @@ export interface UseWindowCallbacksOptions {
   // Streaming refs from useStreamingMessages
   streamingContentRef: MutableRefObject<string>;
   isStreamingRef: MutableRefObject<boolean>;
-  useBackendStreamingRenderRef: MutableRefObject<boolean>;
   autoExpandedThinkingKeysRef: MutableRefObject<Set<string>>;
   streamingTextSegmentsRef: MutableRefObject<string[]>;
   activeTextSegmentIndexRef: MutableRefObject<number>;
@@ -84,9 +84,9 @@ export interface UseWindowCallbacksOptions {
 
   // Functions from useStreamingMessages
   findLastAssistantIndex: (messages: ClaudeMessage[]) => number;
-  extractRawBlocks: (raw: ClaudeRawMessage | string | undefined) => Array<Record<string, unknown>>;
-  getOrCreateStreamingAssistantIndex: (messages: ClaudeMessage[]) => number;
-  patchAssistantForStreaming: (msg: ClaudeMessage) => ClaudeMessage;
+  extractRawBlocks: (raw: ClaudeRawMessage | string | undefined) => ContentBlock[];
+  findStreamingAssistantIndex: (messages: ClaudeMessage[]) => number;
+  patchAssistantForStreaming: (msg: ClaudeMessage, patchState?: StreamingPatchState) => ClaudeMessage;
 
   // Other functions
   syncActiveProviderModelMapping: (provider: ProviderConfig) => void;
@@ -113,6 +113,19 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
 
   useEffect(() => {
     registerWindowCallbacks(options, tRef);
+
+    // Cleanup pending streaming timeouts on unmount to prevent
+    // setMessages calls on an unmounted component (resource leak).
+    return () => {
+      if (options.contentUpdateTimeoutRef.current) {
+        clearTimeout(options.contentUpdateTimeoutRef.current);
+        options.contentUpdateTimeoutRef.current = null;
+      }
+      if (options.thinkingUpdateTimeoutRef.current) {
+        clearTimeout(options.thinkingUpdateTimeoutRef.current);
+        options.thinkingUpdateTimeoutRef.current = null;
+      }
+    };
     // Callbacks are registered once on mount; re-registration would cause duplicate handlers.
     // Options object reference is intentionally excluded from deps.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

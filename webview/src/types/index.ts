@@ -26,6 +26,11 @@ export interface ClaudeRawMessage {
   [key: string]: unknown;
 }
 
+export interface ClaudeMessageSourceRange {
+  start: number;
+  end: number;
+}
+
 /** Represents a single message in the chat conversation. */
 export interface ClaudeMessage {
   type: ClaudeRole;
@@ -36,6 +41,10 @@ export interface ClaudeMessage {
   isOptimistic?: boolean;
   /** Runtime-only: numeric turn identifier for streaming assistant isolation. */
   __turnId?: number;
+  /** Runtime-only: source raw message range merged into this rendered message. */
+  __sourceRange?: ClaudeMessageSourceRange;
+  /** Runtime-only: stable fallback render key for messages lacking persistent identity. */
+  __renderKey?: string;
   [key: string]: unknown;
 }
 
