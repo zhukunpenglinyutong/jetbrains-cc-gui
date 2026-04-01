@@ -1,12 +1,11 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig } from '../../../types/provider';
+import { SPECIAL_PROVIDER_IDS } from '../../../types/provider';
 import { sendToJava } from '../../../utils/bridge';
 import { useDragSort } from '../hooks/useDragSort';
 import sharedStyles from '../ProviderList/style.module.less';
 import styles from './style.module.less';
-
-const CODEX_CLI_LOGIN_PROVIDER_ID = '__codex_cli_login__';
 
 interface CodexProviderSectionProps {
   codexProviders: CodexProviderConfig[];
@@ -40,7 +39,7 @@ const CodexProviderSection = ({
 
   // Filter out CLI Login provider from drag-sort list
   const regularProviders = useMemo(
-    () => codexProviders.filter((p) => p.id !== CODEX_CLI_LOGIN_PROVIDER_ID),
+    () => codexProviders.filter((p) => p.id !== SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN),
     [codexProviders]
   );
 
@@ -59,7 +58,7 @@ const CodexProviderSection = ({
   });
 
   const cliLoginProvider = useMemo(
-    () => codexProviders.find((p) => p.id === CODEX_CLI_LOGIN_PROVIDER_ID),
+    () => codexProviders.find((p) => p.id === SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN),
     [codexProviders]
   );
   const isCliLoginActive = cliLoginProvider?.isActive === true;
@@ -98,7 +97,7 @@ const CodexProviderSection = ({
                 className={sharedStyles.btnPrimary}
                 onClick={() => {
                   setShowCliLoginConfirm(false);
-                  onSwitchCodexProvider(CODEX_CLI_LOGIN_PROVIDER_ID);
+                  onSwitchCodexProvider(SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN);
                 }}
               >
                 {t('settings.provider.authorizeAndEnable')}

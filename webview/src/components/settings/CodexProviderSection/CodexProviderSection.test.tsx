@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CodexProviderSection from './index';
+import { SPECIAL_PROVIDER_IDS } from '../../../types/provider';
 
 const translations: Record<string, string> = {
   'settings.codexProvider.title': 'Codex Provider Management',
@@ -60,7 +61,7 @@ describe('CodexProviderSection', () => {
       <CodexProviderSection
         codexProviders={[
           {
-            id: '__codex_cli_login__',
+            id: SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN,
             name: 'Virtual CLI Login',
             isActive: false,
           },
@@ -86,7 +87,7 @@ describe('CodexProviderSection', () => {
     expect(confirmButton).toBeTruthy();
     fireEvent.click(confirmButton as HTMLButtonElement);
 
-    expect(onSwitchCodexProvider).toHaveBeenCalledWith('__codex_cli_login__');
+    expect(onSwitchCodexProvider).toHaveBeenCalledWith(SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN);
   });
 
   it('does not show account info when CLI login is active', () => {
@@ -94,7 +95,7 @@ describe('CodexProviderSection', () => {
       <CodexProviderSection
         codexProviders={[
           {
-            id: '__codex_cli_login__',
+            id: SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN,
             name: 'Virtual CLI Login',
             isActive: true,
           },
@@ -117,7 +118,7 @@ describe('CodexProviderSection', () => {
       <CodexProviderSection
         codexProviders={[
           {
-            id: '__codex_cli_login__',
+            id: SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN,
             name: 'Virtual CLI Login',
             isActive: true,
           },

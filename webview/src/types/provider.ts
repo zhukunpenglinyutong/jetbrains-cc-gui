@@ -15,6 +15,8 @@ export const SPECIAL_PROVIDER_IDS = {
   LOCAL_SETTINGS: '__local_settings_json__',
   /** CLI login authentication mode */
   CLI_LOGIN: '__cli_login__',
+  /** Codex CLI login authentication mode */
+  CODEX_CLI_LOGIN: '__codex_cli_login__',
 } as const;
 
 /**
@@ -26,7 +28,8 @@ export function isSpecialProviderId(id: string): boolean {
   return (
     id === SPECIAL_PROVIDER_IDS.DISABLED ||
     id === SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS ||
-    id === SPECIAL_PROVIDER_IDS.CLI_LOGIN
+    id === SPECIAL_PROVIDER_IDS.CLI_LOGIN ||
+    id === SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN
   );
 }
 
