@@ -299,8 +299,17 @@ if (window.__pendingLanguageConfig) {
 // Pre-register updateMessages to handle backend message snapshots that arrive before React initializes
 if (typeof window !== 'undefined' && !window.updateMessages) {
   console.log('[Main] Pre-registering updateMessages placeholder');
-  window.updateMessages = (json: string) => {
-    (window as unknown as Record<string, unknown>).__pendingUpdateMessages = json;
+  window.updateMessages = (json: string, sequence?: string | number) => {
+    const parsedSequence =
+      typeof sequence === 'number'
+        ? sequence
+        : typeof sequence === 'string' && sequence.trim().length > 0
+          ? Number.parseInt(sequence, 10)
+          : null;
+    (window as unknown as Record<string, unknown>).__pendingUpdateMessages = {
+      json,
+      sequence: Number.isFinite(parsedSequence) ? parsedSequence : null,
+    };
   };
 }
 

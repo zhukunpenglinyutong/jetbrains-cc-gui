@@ -51,6 +51,8 @@ export interface UseSettingsBasicActionsReturn {
   customSoundPath: string;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
+  commitGenerationEnabled: boolean;
+  statusBarWidgetEnabled: boolean;
 
   // =========================================================================
   // Handler functions (public API for components)
@@ -69,6 +71,8 @@ export interface UseSettingsBasicActionsReturn {
   handleTestSound: () => void;
   handleBrowseSound: () => void;
   handleSaveCommitPrompt: () => void;
+  handleCommitGenerationEnabledChange: (enabled: boolean) => void;
+  handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
 
   // =========================================================================
   // @internal — State setters used only by useSettingsWindowCallbacks.
@@ -101,6 +105,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
+  /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
+  /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
 }
 
 export function useSettingsBasicActions({
@@ -171,6 +177,12 @@ export function useSettingsBasicActions({
     const saved = localStorage.getItem('historyCompletionEnabled');
     return saved !== 'false'; // Enabled by default
   });
+
+  // AI commit generation toggle (default: true)
+  const [commitGenerationEnabled, setCommitGenerationEnabled] = useState<boolean>(true);
+
+  // Status bar widget toggle (default: true)
+  const [statusBarWidgetEnabled, setStatusBarWidgetEnabled] = useState<boolean>(true);
 
   // Diff expanded by default handler
   useEffect(() => {
@@ -283,6 +295,20 @@ export function useSettingsBasicActions({
     sendToJava('browse_sound_file:');
   }, []);
 
+  // AI commit generation toggle change handler
+  const handleCommitGenerationEnabledChange = useCallback((enabled: boolean) => {
+    setCommitGenerationEnabled(enabled);
+    const payload = { commitGenerationEnabled: enabled };
+    sendToJava(`set_commit_generation_enabled:${JSON.stringify(payload)}`);
+  }, []);
+
+  // Status bar widget toggle change handler
+  const handleStatusBarWidgetEnabledChange = useCallback((enabled: boolean) => {
+    setStatusBarWidgetEnabled(enabled);
+    const payload = { statusBarWidgetEnabled: enabled };
+    sendToJava(`set_status_bar_widget_enabled:${JSON.stringify(payload)}`);
+  }, []);
+
   // Commit AI prompt save handler
   const handleSaveCommitPrompt = useCallback(() => {
     setSavingCommitPrompt(true);
@@ -346,5 +372,11 @@ export function useSettingsBasicActions({
     handleTestSound,
     handleBrowseSound,
     handleSaveCommitPrompt,
+    commitGenerationEnabled,
+    setCommitGenerationEnabled,
+    handleCommitGenerationEnabledChange,
+    statusBarWidgetEnabled,
+    setStatusBarWidgetEnabled,
+    handleStatusBarWidgetEnabledChange,
   };
 }

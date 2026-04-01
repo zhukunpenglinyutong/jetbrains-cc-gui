@@ -55,6 +55,12 @@ interface BasicConfigSectionProps {
   // Diff expanded by default configuration
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
+  // AI commit generation configuration
+  commitGenerationEnabled?: boolean;
+  onCommitGenerationEnabledChange?: (enabled: boolean) => void;
+  // Status bar widget configuration
+  statusBarWidgetEnabled?: boolean;
+  onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
   // Sound notification configuration
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
@@ -119,6 +125,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onAutoOpenFileEnabledChange={props.onAutoOpenFileEnabledChange}
           diffExpandedByDefault={props.diffExpandedByDefault}
           onDiffExpandedByDefaultChange={props.onDiffExpandedByDefaultChange}
+          commitGenerationEnabled={props.commitGenerationEnabled}
+          onCommitGenerationEnabledChange={props.onCommitGenerationEnabledChange}
+          statusBarWidgetEnabled={props.statusBarWidgetEnabled}
+          onStatusBarWidgetEnabledChange={props.onStatusBarWidgetEnabledChange}
           soundNotificationEnabled={props.soundNotificationEnabled}
           onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
           soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}

@@ -19,6 +19,7 @@ import {
   preserveStreamingAssistantContent,
 } from '../messageSync';
 import { releaseSessionTransition } from '../sessionTransition';
+import { parseSequence } from '../parseSequence';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
 
@@ -76,13 +77,23 @@ export function registerMessageCallbacks(
     cancelAnimationFrame(window.__pendingUpdateRaf);
     window.__pendingUpdateRaf = null;
     window.__pendingUpdateJson = null;
+    window.__pendingUpdateSequence = null;
   }
   let pendingUpdateJson: string | null = null;
   let pendingUpdateRaf: number | null = null;
+  let pendingUpdateSequence: number | null = null;
 
-  const processUpdateMessages = (json: string) => {
+  const processUpdateMessages = (json: string, sequence: number | null = null) => {
+    const minAcceptedSequence = window.__minAcceptedUpdateSequence ?? 0;
+    if (sequence != null && sequence < minAcceptedSequence) {
+      return;
+    }
+
     try {
       const parsed = JSON.parse(json) as ClaudeMessage[];
+      if (sequence != null) {
+        window.__minAcceptedUpdateSequence = Math.max(minAcceptedSequence, sequence);
+      }
 
       setMessages((prev) => {
         // If streaming is active, delegate to the streaming logic
@@ -201,7 +212,16 @@ export function registerMessageCallbacks(
           return ensureStreamingAssistantPreserved(prev, appendOptimisticMessageIfMissing(prev, smartMerged));
         }
 
-        // Streaming + !useBackendStreamingRender: accept any snapshot that introduces or preserves tool_use blocks.
+        // Streaming + !useBackendStreamingRender: always accept the backend snapshot
+        // but preserve the streaming assistant's text content (which arrives via
+        // onContentDelta and is more up-to-date than the coalesced snapshot).
+        //
+        // Previously this branch only accepted snapshots containing tool_use blocks,
+        // which caused ALL updateMessages to be silently dropped during pure-text
+        // streaming.  When onStreamEnd was subsequently lost (JCEF async chain),
+        // the UI appeared permanently frozen.
+
+        // Track tool_use for segment reset purposes
         let totalToolUseCount = 0;
         for (const message of parsed) {
           if (message.type !== 'assistant') continue;
@@ -209,20 +229,12 @@ export function registerMessageCallbacks(
           totalToolUseCount += blocks.filter((b) => b?.type === 'tool_use').length;
         }
 
-        if (totalToolUseCount < seenToolUseCountRef.current) {
-          seenToolUseCountRef.current = totalToolUseCount;
-        }
-        const hasNewToolUse = totalToolUseCount > seenToolUseCountRef.current;
-        const hasToolUse = totalToolUseCount > 0;
-
-        if (!hasNewToolUse && !hasToolUse) {
-          return prev;
-        }
-
-        if (hasNewToolUse) {
+        if (totalToolUseCount > seenToolUseCountRef.current) {
           seenToolUseCountRef.current = totalToolUseCount;
           activeTextSegmentIndexRef.current = -1;
           activeThinkingSegmentIndexRef.current = -1;
+        } else if (totalToolUseCount < seenToolUseCountRef.current) {
+          seenToolUseCountRef.current = totalToolUseCount;
         }
 
         let patched = [...parsed];
@@ -247,6 +259,15 @@ export function registerMessageCallbacks(
           });
         }
 
+        // Only update if there is a structural change (new messages, type changes,
+        // or timestamp changes) to avoid unnecessary re-renders during rapid
+        // streaming updates where only the assistant text content differs.
+        const hasStructuralChange = patched.length !== prev.length ||
+          patched.some((msg, i) => i >= prev.length || msg.type !== prev[i].type || msg.timestamp !== prev[i].timestamp);
+        if (!hasStructuralChange) {
+          return prev;
+        }
+
         return ensureStreamingAssistantPreserved(prev, patched);
       });
     } catch (error) {
@@ -254,10 +275,15 @@ export function registerMessageCallbacks(
     }
   };
 
-  window.updateMessages = (json) => {
+  window.updateMessages = (json, sequenceArg) => {
     // During session transition, ignore message updates from stale session
     // callbacks to prevent cleared messages from being restored
     if (window.__sessionTransitioning) return;
+    const sequence = parseSequence(sequenceArg);
+    const minAcceptedSequence = window.__minAcceptedUpdateSequence ?? 0;
+    if (sequence != null && sequence < minAcceptedSequence) {
+      return;
+    }
 
     // FIX: Bump stream stall watchdog — receiving updateMessages proves the
     // backend→frontend bridge is alive even between content deltas (e.g.,
@@ -273,16 +299,21 @@ export function registerMessageCallbacks(
     // payload and yield to the browser between frames.
     if (isStreamingRef.current) {
       pendingUpdateJson = json;
+      pendingUpdateSequence = sequence;
       window.__pendingUpdateJson = json;
+      window.__pendingUpdateSequence = sequence;
       if (pendingUpdateRaf === null) {
         const rafId = requestAnimationFrame(() => {
           pendingUpdateRaf = null;
           window.__pendingUpdateRaf = null;
           const latestJson = pendingUpdateJson;
+          const latestSequence = pendingUpdateSequence;
           pendingUpdateJson = null;
+          pendingUpdateSequence = null;
           window.__pendingUpdateJson = null;
+          window.__pendingUpdateSequence = null;
           if (latestJson) {
-            processUpdateMessages(latestJson);
+            processUpdateMessages(latestJson, latestSequence);
           }
         });
         pendingUpdateRaf = rafId;
@@ -291,13 +322,21 @@ export function registerMessageCallbacks(
       return;
     }
 
-    processUpdateMessages(json);
+    processUpdateMessages(json, sequence);
   };
 
   const pendingMessages = (window as unknown as Record<string, unknown>).__pendingUpdateMessages;
   if (typeof pendingMessages === 'string' && pendingMessages.length > 0) {
     delete (window as unknown as Record<string, unknown>).__pendingUpdateMessages;
     window.updateMessages(pendingMessages);
+  } else if (
+    pendingMessages &&
+    typeof pendingMessages === 'object' &&
+    typeof (pendingMessages as { json?: unknown }).json === 'string'
+  ) {
+    delete (window as unknown as Record<string, unknown>).__pendingUpdateMessages;
+    const payload = pendingMessages as { json: string; sequence?: number | null };
+    window.updateMessages(payload.json, payload.sequence ?? undefined);
   }
 
   window.updateStatus = (text) => {
@@ -410,8 +449,10 @@ export function registerMessageCallbacks(
       cancelAnimationFrame(pendingUpdateRaf);
       pendingUpdateRaf = null;
       pendingUpdateJson = null;
+      pendingUpdateSequence = null;
       window.__pendingUpdateRaf = null;
       window.__pendingUpdateJson = null;
+      window.__pendingUpdateSequence = null;
     }
     window.__deniedToolIds?.clear();
     resetTransientUiState();

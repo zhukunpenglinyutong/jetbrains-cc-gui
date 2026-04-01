@@ -8,14 +8,21 @@
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
+import { parseSequence } from '../parseSequence';
 
 /**
  * Timeout (ms) for detecting a stalled stream.  If no content/thinking delta
  * arrives for this duration while isStreamingRef is still true, the frontend
  * auto-recovers by forcing the stream-end cleanup.  This guards against the
  * backend onStreamEnd signal being silently dropped by JCEF.
+ *
+ * Set to 60s to avoid false positives during long tool execution phases
+ * (e.g., command execution, file operations) where no content deltas arrive
+ * but the backend is still actively processing.  The backend heartbeat
+ * mechanism in StreamMessageCoalescer keeps __lastStreamActivityAt bumped
+ * via periodic updateMessages re-pushes.
  */
-const STREAM_STALL_TIMEOUT_MS = 45_000;
+const STREAM_STALL_TIMEOUT_MS = 60_000;
 const STREAM_STALL_CHECK_INTERVAL_MS = 5_000;
 
 export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): void {
@@ -238,9 +245,13 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     }
   };
 
-  window.onStreamEnd = () => {
+  window.onStreamEnd = (sequence?: string | number) => {
     if (window.__sessionTransitioning) return;
     clearStallWatchdog();
+    const parsedSequence = parseSequence(sequence);
+    if (parsedSequence != null) {
+      window.__minAcceptedUpdateSequence = Math.max(window.__minAcceptedUpdateSequence ?? 0, parsedSequence);
+    }
     // Notify backend about stream completion for tab status indicator
     sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'completed' }));
 
@@ -312,6 +323,14 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     setLoading(false);
     setLoadingStartTime(null);
     setIsThinking(false);
+  };
+
+  // Streaming heartbeat — lightweight signal from backend during tool execution
+  // phases where no content deltas arrive.  Keeps the stall watchdog alive.
+  window.onStreamingHeartbeat = () => {
+    if (isStreamingRef.current && window.__lastStreamActivityAt !== undefined) {
+      window.__lastStreamActivityAt = Date.now();
+    }
   };
 
   // Permission denied callback — marks incomplete tool calls as "interrupted"

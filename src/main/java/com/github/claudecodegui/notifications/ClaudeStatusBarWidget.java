@@ -1,6 +1,7 @@
 package com.github.claudecodegui.notifications;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.CustomStatusBarWidget;
@@ -260,7 +261,12 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
 
         @Override
         public boolean isAvailable(@NotNull Project project) {
-            return project != null;
+            if (project == null) return false;
+            try {
+                return new CodemossSettingsService().getStatusBarWidgetEnabled();
+            } catch (Exception e) {
+                return true;
+            }
         }
 
         @Override

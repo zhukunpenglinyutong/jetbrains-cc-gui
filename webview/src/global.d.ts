@@ -20,7 +20,7 @@ interface Window {
   /**
    * Update messages from backend
    */
-  updateMessages?: (json: string) => void;
+  updateMessages?: (json: string, sequence?: string | number) => void;
 
   /**
    * Patch a single message UUID without re-sending the full message list.
@@ -249,6 +249,16 @@ interface Window {
    * Update sound notification configuration
    */
   updateSoundNotificationConfig?: (json: string) => void;
+
+  /**
+   * Update AI commit generation enabled state
+   */
+  updateCommitGenerationEnabled?: (json: string) => void;
+
+  /**
+   * Update status bar widget enabled state
+   */
+  updateStatusBarWidgetEnabled?: (json: string) => void;
 
   /**
    * Update current Claude config
@@ -507,7 +517,13 @@ interface Window {
   /**
    * Stream end callback - called when streaming ends
    */
-  onStreamEnd?: () => void;
+  onStreamEnd?: (sequence?: string | number) => void;
+
+  /**
+   * Streaming heartbeat callback - lightweight signal from backend during
+   * tool execution phases to prevent the stall watchdog from falsely triggering.
+   */
+  onStreamingHeartbeat?: () => void;
 
   /**
    * Permission denied callback - called when permission is denied.
@@ -560,6 +576,8 @@ interface Window {
    */
   __pendingUpdateRaf?: number | null;
   __pendingUpdateJson?: string | null;
+  __pendingUpdateSequence?: number | null;
+  __minAcceptedUpdateSequence?: number;
 
   /**
    * Rewind result callback - returns the result of a rewind operation
@@ -675,7 +693,7 @@ interface Window {
   /**
    * Pending updateMessages payload before React initialization
    */
-  __pendingUpdateMessages?: string;
+  __pendingUpdateMessages?: string | { json: string; sequence?: number | null };
 
   /**
    * Pending status text before React initialization

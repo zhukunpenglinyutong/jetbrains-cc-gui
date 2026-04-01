@@ -182,6 +182,14 @@ public class ClaudeMessageHandler implements MessageCallback {
             streamEndedThisTurn = false;
             errorReportedThisTurn = false;
             lastReportedError = null;
+            // Safety net: ensure loading state is cleared even when stream_end
+            // was received normally.  handleStreamEnd() already calls
+            // notifyStateChange, but the async JCEF chain may drop it.
+            // This redundant call is harmless (idempotent) and prevents the UI
+            // from getting stuck in "responding" state.
+            state.setBusy(false);
+            state.setLoading(false);
+            callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             return;
         }
 

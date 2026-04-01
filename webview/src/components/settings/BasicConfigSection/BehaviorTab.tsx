@@ -81,6 +81,10 @@ export interface BehaviorTabProps {
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
+  commitGenerationEnabled?: boolean;
+  onCommitGenerationEnabledChange?: (enabled: boolean) => void;
+  statusBarWidgetEnabled?: boolean;
+  onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
   soundOnlyWhenUnfocused?: boolean;
@@ -103,6 +107,10 @@ const BehaviorTab = ({
   onAutoOpenFileEnabledChange = () => {},
   diffExpandedByDefault = false,
   onDiffExpandedByDefaultChange = () => {},
+  commitGenerationEnabled = true,
+  onCommitGenerationEnabledChange = () => {},
+  statusBarWidgetEnabled = true,
+  onStatusBarWidgetEnabledChange = () => {},
   soundNotificationEnabled = false,
   onSoundNotificationEnabledChange = () => {},
   soundOnlyWhenUnfocused = false,
@@ -238,6 +246,58 @@ const BehaviorTab = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.diffExpanded.hint')}</span>
+        </small>
+      </div>
+
+      {/* AI commit generation toggle */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-git-commit" />
+          <span className={styles.fieldLabel}>{t('settings.basic.commitGeneration.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={commitGenerationEnabled}
+            onChange={(e) => onCommitGenerationEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {commitGenerationEnabled
+              ? t('settings.basic.commitGeneration.enabled')
+              : t('settings.basic.commitGeneration.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.commitGeneration.hint')}</span>
+        </small>
+      </div>
+
+      {/* Status bar widget toggle */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-layout-statusbar" />
+          <span className={styles.fieldLabel}>{t('settings.basic.statusBarWidget.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={statusBarWidgetEnabled}
+            onChange={(e) => onStatusBarWidgetEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {statusBarWidgetEnabled
+              ? t('settings.basic.statusBarWidget.enabled')
+              : t('settings.basic.statusBarWidget.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.statusBarWidget.hint')}</span>
         </small>
       </div>
 

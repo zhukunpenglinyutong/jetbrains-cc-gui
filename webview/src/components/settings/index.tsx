@@ -149,6 +149,12 @@ const SettingsView = ({
     handleTestSound,
     handleBrowseSound,
     handleSaveCommitPrompt,
+    commitGenerationEnabled,
+    setCommitGenerationEnabled,
+    handleCommitGenerationEnabledChange,
+    statusBarWidgetEnabled,
+    setStatusBarWidgetEnabled,
+    handleStatusBarWidgetEnabledChange,
   } = useSettingsBasicActions({
     streamingEnabledProp,
     onStreamingEnabledChangeProp,
@@ -279,6 +285,8 @@ const SettingsView = ({
     setSoundOnlyWhenUnfocused,
     setSelectedSound,
     setCustomSoundPath,
+    setCommitGenerationEnabled,
+    setStatusBarWidgetEnabled,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -415,6 +423,16 @@ const SettingsView = ({
               onDiffThemeChange={setDiffTheme}
               diffExpandedByDefault={diffExpandedByDefault}
               onDiffExpandedByDefaultChange={setDiffExpandedByDefault}
+              commitGenerationEnabled={commitGenerationEnabled}
+              onCommitGenerationEnabledChange={(enabled) => {
+                handleCommitGenerationEnabledChange(enabled);
+                addToast(t('toast.restartRequired'), 'warning');
+              }}
+              statusBarWidgetEnabled={statusBarWidgetEnabled}
+              onStatusBarWidgetEnabledChange={(enabled) => {
+                handleStatusBarWidgetEnabledChange(enabled);
+                addToast(t('toast.restartRequired'), 'warning');
+              }}
               soundNotificationEnabled={soundNotificationEnabled}
               onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
               soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}

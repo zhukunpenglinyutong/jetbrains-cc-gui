@@ -3,6 +3,7 @@ package com.github.claudecodegui.action.vcs;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.service.GitCommitMessageService;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -244,6 +245,15 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
     public void update(@NotNull AnActionEvent e) {
         Project project = e.getProject();
         boolean enabled = project != null;
+
+        // Check if commit generation feature is enabled in settings
+        if (enabled) {
+            try {
+                enabled = new CodemossSettingsService().getCommitGenerationEnabled();
+            } catch (Exception ex) {
+                LOG.debug("Failed to check commit generation enabled setting: " + ex.getMessage());
+            }
+        }
 
         // Debug: log when update is called
         if (LOG.isDebugEnabled()) {

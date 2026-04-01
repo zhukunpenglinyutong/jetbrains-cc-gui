@@ -31,6 +31,9 @@ export interface SettingsWindowCallbacksDeps {
   setLoading: (loading: boolean) => void;
   setCodexLoading: (loading: boolean) => void;
   setCodexConfigLoading: (loading: boolean) => void;
+  // AI feature toggle setters
+  setCommitGenerationEnabled?: (enabled: boolean) => void;
+  setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
   setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
@@ -232,6 +235,26 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // AI commit generation config callback
+    window.updateCommitGenerationEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setCommitGenerationEnabled?.(data.commitGenerationEnabled ?? true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse commit generation config:', error);
+      }
+    };
+
+    // Status bar widget config callback
+    window.updateStatusBarWidgetEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setStatusBarWidgetEnabled?.(data.statusBarWidgetEnabled ?? true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse status bar widget config:', error);
+      }
+    };
+
     // Sound notification config callback
     window.updateSoundNotificationConfig = (jsonStr: string) => {
       try {
@@ -384,6 +407,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_codex_sandbox_mode:');
     sendToJava('get_commit_prompt:');
     sendToJava('get_sound_notification_config:');
+    sendToJava('get_commit_generation_enabled:');
+    sendToJava('get_status_bar_widget_enabled:');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -408,6 +433,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
       window.updateCommitPrompt = undefined;
       window.updateSoundNotificationConfig = undefined;
+      window.updateCommitGenerationEnabled = undefined;
+      window.updateStatusBarWidgetEnabled = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

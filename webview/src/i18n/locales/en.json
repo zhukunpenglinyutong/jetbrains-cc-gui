@@ -165,6 +165,18 @@
         "disabled": "Collapsed",
         "hint": "When enabled, code diffs in chat will be expanded by default. When disabled, diffs start collapsed and can be expanded by clicking."
       },
+      "commitGeneration": {
+        "label": "AI Commit Message Generation",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, shows the 'AI Generate Commit Message' button in the commit dialog. When disabled, the button is hidden."
+      },
+      "statusBarWidget": {
+        "label": "Status Bar Info Display",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, shows current model and mode info in the IDE status bar (e.g. GUI [Opus] {Auto}). When disabled, the widget is hidden."
+      },
       "sendShortcut": {
         "label": "Send Shortcut",
         "enter": "Enter to Send",
@@ -842,6 +854,7 @@
     "thinkingDisabled": "Thinking disabled",
     "configLoading": "Configuration loading, please try again",
     "saveSuccess": "Saved successfully",
+    "restartRequired": "Please restart IDEA for this setting to take effect",
     "saveFailed": "Save failed",
     "deleteSuccess": "Deleted successfully",
     "operationFailed": "Operation failed",

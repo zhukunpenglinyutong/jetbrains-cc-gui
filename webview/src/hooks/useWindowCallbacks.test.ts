@@ -345,4 +345,38 @@ describe('useWindowCallbacks integration', () => {
     });
     expect(opts.setMessages).toHaveBeenCalled();
   });
+
+  it('ignores stale updateMessages snapshots that arrive after stream end', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      (window as any).onStreamStart?.();
+    });
+
+    act(() => {
+      (window as any).onStreamEnd?.('10');
+    });
+
+    opts.isStreamingRef.current = false;
+    (opts.setMessages as any).mockClear();
+
+    act(() => {
+      (window as any).updateMessages(
+        JSON.stringify([{ type: 'assistant', content: 'stale backlog', timestamp: new Date().toISOString() }]),
+        '9',
+      );
+    });
+
+    expect(opts.setMessages).not.toHaveBeenCalled();
+
+    act(() => {
+      (window as any).updateMessages(
+        JSON.stringify([{ type: 'assistant', content: 'final snapshot', timestamp: new Date().toISOString() }]),
+        '10',
+      );
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+  });
 });

@@ -234,7 +234,19 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         safeRun("contentDeltaThrottler.flushNow", contentDeltaThrottler::flushNow);
         safeRun("thinkingDeltaThrottler.flushNow", thinkingDeltaThrottler::flushNow);
         safeRun("streamCoalescer.onStreamEnd", streamCoalescer::onStreamEnd);
-        streamCoalescer.flush(() -> {
+
+        // Flush pending messages first (fire-and-forget — do NOT nest onStreamEnd
+        // inside the flush callback).  Previously the JS onStreamEnd signal was
+        // chained inside flush's 3-layer async pipeline:
+        //   flush → executeOnPooledThread → invokeLater(1) → callback → callJavaScript → invokeLater(2)
+        // Any failure in that chain silently swallowed the signal, leaving the
+        // frontend permanently stuck in streaming state.
+        streamCoalescer.flush(null);
+
+        // Send onStreamEnd independently via a single invokeLater.
+        // This guarantees the signal reaches the frontend even if the flush
+        // payload is rejected by JCEF (large payload, disposed browser, etc.).
+        ApplicationManager.getApplication().invokeLater(() -> {
             if (isInactive()) {
                 return;
             }
@@ -243,7 +255,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
             if (streamEndCallback != null) {
                 safeRun("streamEndCallback", streamEndCallback);
             }
-            LOG.debug("Stream ended - flushed messages before notifying frontend");
+            LOG.debug("Stream ended - notified frontend independently of flush");
         });
     }
 

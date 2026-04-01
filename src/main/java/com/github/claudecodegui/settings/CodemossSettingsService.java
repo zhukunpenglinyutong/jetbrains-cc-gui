@@ -1042,6 +1042,62 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set selected sound: " + soundId);
     }
 
+    // ==================== AI Feature Toggle Management ====================
+
+    /**
+     * Get whether AI commit message generation is enabled.
+     *
+     * @return whether commit generation is enabled, default is true
+     */
+    public boolean getCommitGenerationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (config.has("commitGenerationEnabled") && !config.get("commitGenerationEnabled").isJsonNull()) {
+            return config.get("commitGenerationEnabled").getAsBoolean();
+        }
+
+        return true;
+    }
+
+    /**
+     * Set whether AI commit message generation is enabled.
+     *
+     * @param enabled whether to enable
+     */
+    public void setCommitGenerationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("commitGenerationEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set commit generation enabled: " + enabled);
+    }
+
+    /**
+     * Get whether status bar widget is enabled.
+     *
+     * @return whether status bar widget is enabled, default is true
+     */
+    public boolean getStatusBarWidgetEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (config.has("statusBarWidgetEnabled") && !config.get("statusBarWidgetEnabled").isJsonNull()) {
+            return config.get("statusBarWidgetEnabled").getAsBoolean();
+        }
+
+        return true;
+    }
+
+    /**
+     * Set whether status bar widget is enabled.
+     *
+     * @param enabled whether to enable
+     */
+    public void setStatusBarWidgetEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("statusBarWidgetEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set status bar widget enabled: " + enabled);
+    }
+
     // ==================== Codex Provider Management ====================
 
     public List<JsonObject> getCodexProviders() throws IOException {
