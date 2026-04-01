@@ -63,7 +63,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - 新增 Codex 对话压缩时保留最新消息（preserveLatestMessagesOnShrink）
 
 🐛 Fixes
-- 修复长会话流式可靠性及 UI 卡顿：StreamMessageCoalescer 自适应 JCEF 节流（500ms–5s），45s 流卡死看门狗，rAF 防抖 scroll-to-bottom
+- 修复长会话流式可靠性及 UI 卡顿：StreamMessageCoalescer 自适应 JCEF 节流（500ms–5s），45s Stream Watchdog，rAF 防抖 scroll-to-bottom
 - 修复流式传输期间看门狗误判并重载 WebView：流式过程中心跳超时延长至 3 分钟；WebView 重载后重放 onStreamStart；会话切换守卫添加 15s 安全超时
 - 修复流结束后 rAF updateMessages 过期快照覆盖最终状态：新增取消机制，去除 __turnId
 - 修复不同流式轮次的助手消息被错误合并
