@@ -2,15 +2,12 @@ package com.github.claudecodegui.handler.diff;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.ContentRebuildResult;
 import com.github.claudecodegui.util.ContentRebuildUtil;
-import com.github.claudecodegui.util.EditorFileUtils;
+import com.github.claudecodegui.util.LineSeparatorUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.intellij.diff.DiffContentFactory;
-import com.intellij.diff.DiffManager;
-import com.intellij.diff.contents.DiffContent;
-import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileTypes.FileType;
@@ -25,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * Handles non-interactive diff display requests.
  * This handler is thin: it parses JSON, delegates reconstruction to
- * {@link DiffReconstructionService}, and shows the diff.
+ * {@link DiffReconstructionService}, and shows via {@link AdjustableDiffManager}.
  */
 public class SimpleDiffDisplayHandler implements DiffActionHandler {
 
@@ -88,30 +85,22 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
                     String fileName = new File(filePath).getName();
-                    FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
-
-                    // Delegate reconstruction to the service (no replaceAll for show_diff)
                     DiffReconstructionResult result = DiffReconstructionService.reconstruct(
                             filePath, oldContent, newContent, false);
 
-                    String beforeContent = result.getBeforeContent();
-                    String afterContent = result.getAfterContent();
-
-                    DiffContent leftContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), beforeContent, fileType);
-                    DiffContent rightContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), afterContent, fileType);
+                    // Use disk content from reconstruction result — same read that built the diff
+                    String diskSnapshot = result.getDiskContent();
 
                     String diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.fileChange", fileName);
-                    SimpleDiffRequest diffRequest = new SimpleDiffRequest(
+                    AdjustableDiffRequest request = new AdjustableDiffRequest(
+                            filePath,
+                            result.getBeforeContent(),
+                            result.getAfterContent(),
                             diffTitle,
-                            leftContent,
-                            rightContent,
-                            ClaudeCodeGuiBundle.message("diff.editBefore", fileName),
-                            ClaudeCodeGuiBundle.message("diff.editAfter", fileName)
+                            result.isFullFile(),
+                            diskSnapshot
                     );
-
-                    DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
+                    AdjustableDiffManager.show(context.getProject(), request, fileOperations);
                     LOG.info("Diff view opened for: " + filePath
                             + (result.isFullFile() ? " (full file)" : " (fragment fallback)"));
                 } catch (Exception e) {
@@ -141,14 +130,9 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                 try {
                     String afterContent = currentContent;
                     if (afterContent == null) {
-                        File file = new File(filePath);
-                        if (file.exists()) {
-                            VirtualFile virtualFile = EditorFileUtils.refreshAndFindFileSync(file);
-                            if (virtualFile != null) {
-                                virtualFile.refresh(false, false);
-                                afterContent = new String(virtualFile.contentsToByteArray(), StandardCharsets.UTF_8);
-                            }
-                        }
+                        // Use charset-aware read — same method Apply uses for stale-check,
+                        // so non-UTF-8 files won't false-positive as externally modified
+                        afterContent = DiffReconstructionService.readFileContent(filePath);
                     }
 
                     if (afterContent == null) {
@@ -156,26 +140,25 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                         return;
                     }
 
-                    String beforeContent = ContentRebuildUtil.rebuildBeforeContent(afterContent, edits);
-
+                    ContentRebuildResult rebuildResult = ContentRebuildUtil.rebuildBeforeContent(afterContent, edits);
+                    String beforeContent = rebuildResult.getContent();
+                    boolean canApply = rebuildResult.isExact();
                     String fileName = new File(filePath).getName();
-                    FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
-
-                    DiffContent leftContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), beforeContent, fileType);
-                    DiffContent rightContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), afterContent, fileType);
-
                     String diffTitle = ClaudeCodeGuiBundle.message("diff.tabName", fileName, edits.size());
-                    SimpleDiffRequest diffRequest = new SimpleDiffRequest(
-                            diffTitle,
-                            leftContent,
-                            rightContent,
-                            ClaudeCodeGuiBundle.message("diff.editBefore", fileName),
-                            ClaudeCodeGuiBundle.message("diff.editAfter", fileName)
-                    );
+                    if (!canApply) {
+                        diffTitle += " " + ClaudeCodeGuiBundle.message("diff.editOnly");
+                    }
 
-                    DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
+                    // afterContent IS the current disk content — use it as snapshot directly
+                    AdjustableDiffRequest request = new AdjustableDiffRequest(
+                            filePath,
+                            beforeContent,
+                            afterContent,
+                            diffTitle,
+                            canApply, // only allow Apply when all reverse operations matched exactly
+                            canApply ? afterContent : null
+                    );
+                    AdjustableDiffManager.show(context.getProject(), request, fileOperations);
                     LOG.info("Multi-edit diff view opened for: " + filePath);
                 } catch (Exception e) {
                     LOG.error("Failed to show multi-edit diff: " + e.getMessage(), e);
@@ -228,8 +211,6 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                         boolean replaceAll = edit.has("replaceAll") && edit.get("replaceAll").getAsBoolean();
 
                         if (oldString.isEmpty()) {
-                            // Pure insertion without position info, or replaceAll with empty old.
-                            // Both are unsafe to apply — skip silently.
                             if (!newString.isEmpty()) {
                                 LOG.info("Preview: skipping pure insertion edit (no position info)");
                             }
@@ -251,23 +232,17 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     }
 
                     String fileName = new File(filePath).getName();
-                    FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
-
-                    DiffContent leftContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), currentContent, fileType);
-                    DiffContent rightContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), afterContent, fileType);
-
                     String diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.editPreview", fileName);
-                    SimpleDiffRequest diffRequest = new SimpleDiffRequest(
-                            diffTitle,
-                            leftContent,
-                            rightContent,
-                            ClaudeCodeGuiBundle.message("diff.editPreviewCurrent", fileName),
-                            ClaudeCodeGuiBundle.message("diff.editPreviewAfter", fileName)
-                    );
 
-                    DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
+                    AdjustableDiffRequest request = new AdjustableDiffRequest(
+                            filePath,
+                            currentContent,
+                            afterContent,
+                            diffTitle,
+                            false, // preview may be incomplete (skipped insertions, failed edits) — not safe to Apply
+                            null
+                    );
+                    AdjustableDiffManager.show(context.getProject(), request, fileOperations);
                     LOG.info("Edit preview diff view opened for: " + filePath);
                 } catch (Exception e) {
                     LOG.error("Failed to show edit preview diff: " + e.getMessage(), e);
@@ -304,44 +279,29 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     }
 
                     String fileName = new File(filePath).getName();
-                    FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
-
-                    // Delegate reconstruction to the service
                     DiffReconstructionResult result = DiffReconstructionService.reconstruct(
                             filePath, oldString, newString, replaceAll, originalContent);
 
-                    String beforeContent = result.getBeforeContent();
-                    String afterContent = result.getAfterContent();
-
-                    DiffContent leftContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), beforeContent, fileType);
-                    DiffContent rightContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), afterContent, fileType);
+                    // Use disk content from reconstruction result — same read that built the diff
+                    String diskSnapshot = result.getDiskContent();
 
                     String diffTitle;
-                    String leftLabel;
-                    String rightLabel;
-
                     if (!result.isFullFile()) {
                         diffTitle = (title != null ? title : ClaudeCodeGuiBundle.message("diff.edit", fileName))
                                 + " " + ClaudeCodeGuiBundle.message("diff.editOnly");
-                        leftLabel = "old_string";
-                        rightLabel = "new_string";
                     } else {
                         diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.edit", fileName);
-                        leftLabel = ClaudeCodeGuiBundle.message("diff.editBefore", fileName);
-                        rightLabel = ClaudeCodeGuiBundle.message("diff.editAfter", fileName);
                     }
 
-                    SimpleDiffRequest diffRequest = new SimpleDiffRequest(
+                    AdjustableDiffRequest request = new AdjustableDiffRequest(
+                            filePath,
+                            result.getBeforeContent(),
+                            result.getAfterContent(),
                             diffTitle,
-                            leftContent,
-                            rightContent,
-                            leftLabel,
-                            rightLabel
+                            result.isFullFile(),
+                            diskSnapshot
                     );
-
-                    DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
+                    AdjustableDiffManager.show(context.getProject(), request, fileOperations);
                     LOG.info("Edit full diff view opened for: " + filePath
                             + (result.isFullFile() ? " (full file)" : " (fragment fallback)"));
                 } catch (Exception e) {
