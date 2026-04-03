@@ -32,11 +32,6 @@ import com.intellij.util.concurrency.annotations.RequiresEdt;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.swing.BorderFactory;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JPanel;
-import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -125,10 +120,10 @@ public class AdjustableDiffManager {
         // Toolbar actions
         List<AnAction> actions = new ArrayList<>();
 
-        // Cancel action (toolbar)
+        // Close action (toolbar)
         actions.add(new AnAction(
-                ClaudeCodeGuiBundle.message("diff.reject"),
-                ClaudeCodeGuiBundle.message("diff.reject.description"),
+                ClaudeCodeGuiBundle.message("diff.close"),
+                ClaudeCodeGuiBundle.message("diff.close.description"),
                 AllIcons.Actions.Cancel
         ) {
             @Override
@@ -144,11 +139,11 @@ public class AdjustableDiffManager {
             }
         });
 
-        // Apply action (toolbar) — only for full-file mode
+        // Save action (toolbar) — only for full-file mode
         if (request.isFullFile()) {
             actions.add(new AnAction(
-                    ClaudeCodeGuiBundle.message("diff.apply"),
-                    ClaudeCodeGuiBundle.message("diff.apply.description"),
+                    ClaudeCodeGuiBundle.message("diff.save"),
+                    ClaudeCodeGuiBundle.message("diff.save.description"),
                     AllIcons.Actions.Checked
             ) {
                 @Override
@@ -168,38 +163,6 @@ public class AdjustableDiffManager {
         }
 
         diffRequest.putUserData(DiffUserDataKeysEx.CONTEXT_ACTIONS, actions);
-
-        // Bottom panel with buttons
-        JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-
-        JButton cancelButton = new JButton(ClaudeCodeGuiBundle.message("diff.reject"));
-        cancelButton.setIcon(AllIcons.Actions.Cancel);
-        cancelButton.addActionListener(e -> {
-            if (actionTaken.compareAndSet(false, true)) {
-                closeDiffView(project, chain);
-            }
-        });
-        buttonsPanel.add(cancelButton);
-
-        if (request.isFullFile()) {
-            JButton applyButton = new JButton(ClaudeCodeGuiBundle.message("diff.apply"));
-            applyButton.setIcon(AllIcons.Actions.Checked);
-            applyButton.addActionListener(e -> {
-                if (actionTaken.compareAndSet(false, true)) {
-                    if (!applyContent(project, request, finalRightContent, rightFile, fileOperations, chain)) {
-                        actionTaken.set(false); // unlock so user can retry or cancel
-                    }
-                }
-            });
-            buttonsPanel.add(applyButton);
-        }
-
-        JPanel bottomPanel = new JPanel();
-        bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
-        bottomPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 10, 0));
-        buttonsPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        bottomPanel.add(buttonsPanel);
-        chain.putUserData(DiffUserDataKeysEx.BOTTOM_PANEL, bottomPanel);
 
         // Show the diff
         DiffManagerEx.getInstance().showDiffBuiltin(project, chain, DiffDialogHints.DEFAULT);
